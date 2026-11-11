@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -28,22 +29,23 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public LibraryItemViewModel(
         CollectionItem item,
         LibrarySource source,
-        Func<CollectionItem, LibraryLoadState>? loadState = null,
-        ILibraryDownloader? downloader = null,
-        string? collectionName = null,
-        Func<LibraryItemViewModel, Task>? download = null,
-        TimeProvider? time = null,
-        Func<TimeFormat>? timeFormat = null)
+        Func<CollectionItem, LibraryLoadState>? loadState,
+        ILibraryDownloader? downloader,
+        string? collectionName,
+        Func<LibraryItemViewModel, Task>? download,
+        TimeProvider time,
+        Func<TimeFormat>? timeFormat)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(time);
         Item = item;
         Source = source;
         _loadState = loadState;
         _downloader = downloader;
         _collectionName = collectionName;
         _download = download;
-        _time = time ?? TimeProvider.System;
+        _time = time;
         _timeFormat = timeFormat;
         RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
             () => _download?.Invoke(this) ?? Task.CompletedTask);
@@ -116,13 +118,23 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
     /// (or its group, once unpacked) is named by its description instead.
     /// </summary>
-    public string Name => IsModelHeader ? Item.Name
+    public string Name => IsModelHeader || IsAmlSection ? Item.Name
+        : IsStorm ? StormItemText.Name(Item)
         : IsPackageEntry || IsGroupHeader
         ? Item.Title is { } title ? PackageTitles.Clean(title) : Item.Name
         : Item.Name;
 
     /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
-    public bool IsNameMono => IsModelHeader || (!IsPackageEntry && !IsGroupHeader);
+    public bool IsNameMono => IsModelHeader || (!IsPackageEntry && !IsGroupHeader && !IsStorm);
+
+    /// <summary>True when the row shows the outline swatch: not for a group header or a storm, which shows its class symbol.</summary>
+    public bool ShowsOutlineSwatch => !IsGroupHeader && !IsStorm;
+
+    /// <summary>True for an NHC storm (V27): named by the storm, with its class symbol as the swatch.</summary>
+    public bool IsStorm => StormItemText.IsStorm(Item);
+
+    /// <summary>The storm's class symbol, drawn as the row's swatch (V27); <see langword="null"/> for other items.</summary>
+    public Avalonia.Media.IImage? StormGlyph => IsStorm ? StormGlyphs.For(StormItemText.Symbol(Item)) : null;
 
     /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
     /// <remarks>A dataset under an unpacked package drops a title that only repeats the package's.</remarks>
@@ -130,6 +142,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             // A downloaded SECOM exchange set that only cancels warnings (#916).
             ? Item.Properties.ContainsKey("contents") ? Strings.Library_PackageEmptyHint : Strings.Library_PackageHint
         : IsModelHeader ? Item.Title
+        : IsStorm ? StormItemText.Subtitle(Item, EffectiveItem, ShownRun, IsNewerRunListed, FormatRun)
         : IsForecastTile ? null
         : IsGroupHeader ? null
         : _isGroupChild && Item.Title is { } title && Item.Properties.TryGetValue("packageTitle", out var package) && title == package ? null
@@ -172,7 +185,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _groupCount, value))
+            {
                 OnPropertyChanged(nameof(Summary));
+                OnPropertyChanged(nameof(SectionHeader));
+            }
         }
     }
 
@@ -196,7 +212,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// description, tagged "Unpacked", with its dataset count.
     /// </summary>
     internal static LibraryItemViewModel ForPackageGroup(
-        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle,
+        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time,
         DateTimeOffset? publishedAt = null, string productSpec = "S-57")
     {
         var item = new CollectionItem
@@ -209,7 +225,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Properties = new Dictionary<string, string> { ["package"] = package },
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source)
+        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
         {
             IsGroupHeader = true,
             GroupKey = (source.Id, package),
@@ -228,8 +244,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForModelGroup(
         LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle,
-        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider? time,
-        Func<TimeFormat>? timeFormat = null)
+        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider time,
+        Func<TimeFormat>? timeFormat)
     {
         var first = members[0].Item;
         var model = ForecastRuns.ModelOf(first) ?? first.Name;
@@ -242,7 +258,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Bounds = GeoBounds.UnionAll(members.Select(m => m.Item.Bounds).OfType<GeoBounds>()),
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, loadState, downloader, time: time, timeFormat: timeFormat)
+        header = new LibraryItemViewModel(item, source, loadState, downloader, null, null, time, timeFormat)
         {
             IsGroupHeader = true,
             IsModelHeader = true,
@@ -254,6 +270,85 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         header._isExpanded = isExpanded;
         return header;
     }
+
+    /// <summary>
+    /// Creates the header row of a source's NATO Additional Military Layers
+    /// cells (#1370, decision 5): "Additional Military Layers · 19", listed
+    /// below the source's charts and expandable to its cells.
+    /// </summary>
+    internal static LibraryItemViewModel ForAmlSection(
+        LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time)
+    {
+        var item = new CollectionItem
+        {
+            Key = AmlSectionKey,
+            ProductSpec = AmlDatasetInfo.SpecName,
+            Name = Strings.Aml_Heading,
+            Location = NoItemLocation.Instance,
+        };
+        LibraryItemViewModel? header = null;
+        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
+        {
+            IsGroupHeader = true,
+            IsAmlSection = true,
+            GroupKey = (source.Id, AmlSectionKey),
+            ToggleCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => toggle(header!)),
+        };
+        header._members = members;
+        header._groupCount = members.Count;
+        header._isExpanded = isExpanded;
+        return header;
+    }
+
+    /// <summary>The key of a source's AML section header (never an item key: items have no colon prefix like it).</summary>
+    internal const string AmlSectionKey = "section:aml";
+
+    /// <summary>True for the header row of a source's AML cells.</summary>
+    public bool IsAmlSection { get; private init; }
+
+    /// <summary>For the AML section header: "ADDITIONAL MILITARY LAYERS · 19".</summary>
+    public string? SectionHeader => IsAmlSection
+        ? string.Format(CultureInfo.CurrentCulture, "{0} · {1:N0}", Item.Name.ToUpper(CultureInfo.CurrentCulture), GroupCount)
+        : null;
+
+    private AmlDatasetInfo? _aml;
+    private bool _amlRead;
+
+    /// <summary>The cell's AML facts, for a NATO Additional Military Layers item; otherwise <see langword="null"/>.</summary>
+    internal AmlDatasetInfo? Aml
+    {
+        get
+        {
+            if (!_amlRead)
+            {
+                _aml = IsGroupHeader ? null : AmlLibraryProperties.Read(Item.Properties, Item.Name);
+                _amlRead = true;
+            }
+
+            return _aml;
+        }
+    }
+
+    /// <summary>True for a NATO Additional Military Layers cell.</summary>
+    public bool IsAml => Aml is not null;
+
+    /// <summary>
+    /// The protective marking the row shows before its AML tag: only above
+    /// UNCLASSIFIED (decision 4), so the one that matters isn't buried.
+    /// </summary>
+    public string? AmlRowMarking => Aml is { IsMarkedAboveUnclassified: true } aml ? aml.ProtectiveMarking : null;
+
+    /// <summary>True when the row shows <see cref="AmlRowMarking"/>.</summary>
+    public bool HasAmlRowMarking => AmlRowMarking is not null;
+
+    /// <summary>
+    /// The note at the top of an AML item's details (decision 6), following
+    /// whether SoundCharts draws it; <see langword="null"/> for other items.
+    /// </summary>
+    public string? AmlNote => Aml is { } aml ? AmlLibraryRows.ItemNote(aml, AmlLibraryRows.IsDrawn(aml)) : null;
+
+    /// <summary>True when the details show <see cref="AmlNote"/>.</summary>
+    public bool HasAmlNote => AmlNote is not null;
 
     /// <summary>For a model row, its tiles (in the latest run listed).</summary>
     internal IReadOnlyList<LibraryItemViewModel> Members
@@ -296,9 +391,21 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the row's downloaded run can be pinned (a weather run, downloaded, not already a pin).</summary>
     public bool CanPinRun => CanLoadLatestRun && LocalRun is not null;
 
-    /// <summary>"Run 2026-10-25 00Z is over 12 hours old" for a stale weather run; otherwise null.</summary>
+    /// <summary>
+    /// "Run 2026-10-25 00Z is over 12 hours old" for a stale weather run (or
+    /// "Analysis … is over 6 hours old" for a surface analysis, with the
+    /// source's own limit); otherwise null.
+    /// </summary>
     public string? StaleRunText => IsStaleRun && ShownRun is { } run
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StaleRunFormat, FormatRun(run))
+        ? IsStorm && StormItemText.ShownAdvisory(Item, EffectiveItem) is { } advisory
+            ? StormItemText.StaleText(advisory, EncDotNet.S100.Collections.Weather.WeatherRuns.StaleAfterOf(Item))
+            : string.Format(
+            CultureInfo.CurrentCulture,
+            Item.Properties.GetValueOrDefault(EncDotNet.S100.Collections.Weather.WeatherFeedIndexer.BulletinKindProperty) == "analysis"
+                ? Strings.Library_StaleAnalysisFormat
+                : Strings.Library_StaleRunFormat,
+            FormatRun(run),
+            (int)Math.Round(EncDotNet.S100.Collections.Weather.WeatherRuns.StaleAfterOf(Item).TotalHours))
         : null;
 
     /// <summary>
@@ -320,6 +427,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>The run shown: the downloaded copy's, else the catalogue's latest.</summary>
     private DateTimeOffset? ShownRun => LocalRun ?? S100ForecastFeedIndexer.RunOf(Item);
+
+    /// <summary>True when the catalogue lists a newer run than the downloaded copy's (a storm's next advisory).</summary>
+    private bool IsNewerRunListed => LocalRun is { } local && S100ForecastFeedIndexer.RunOf(Item) is { } listed && listed > local;
 
     /// <summary>The end of the shown run's valid window.</summary>
     private DateTimeOffset? ShownValidTo => ForecastRuns.ShownWindow(Item, LocalRun)?.ValidTo;
@@ -370,6 +480,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         if (!IsForecast)
             return;
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(Details));
     }
 
@@ -398,6 +509,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(TimeLeftText));
         OnPropertyChanged(nameof(IsWindowEnded));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(PrimaryAvailability));
     }
@@ -405,6 +517,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>"S-111 · run 30.09.2026 12:00Z · to 02.10.2026 12:00Z · 23 tiles · 12 MB" (a tile: its size).</summary>
     private string ForecastSummary()
     {
+        if (IsStorm)
+            return StormItemText.Summary(Item, ShownValidTo, FormatRun);
         var c = CultureInfo.CurrentCulture;
         var parts = new List<string>(5) { Item.ProductSpec };
         if (IsForecastRunRow)
@@ -416,6 +530,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             if (IsModelHeader)
                 parts.Add(string.Format(c, Strings.Library_Forecast_TilesFormat, _members.Count));
         }
+
+        // Where the data covers, when narrower than its area (WPC's domain, V36).
+        if (EncDotNet.S100.Collections.Weather.WeatherRuns.CoverageOf(Item) is { } coverage)
+            parts.Add(coverage);
 
         var bytes = IsModelHeader
             ? _members.Sum(m => (m.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)
@@ -453,6 +571,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         {
             if (IsForecast)
                 return ForecastSummary();
+            if (IsAmlSection)
+                return string.Empty;
             if (IsGroupHeader)
             {
                 // "116 datasets · published 23.10.2025 15:17" — the package number is already in its name.
@@ -591,6 +711,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 return tags;
             }
 
+            if (IsAmlSection)
+                return [];
+
             if (IsGroupHeader)
             {
                 return
@@ -606,7 +729,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>A core tag as the row shows it; a failed download's tag retries it when clicked.</summary>
     private LibraryItemTag Tag(LibraryTag tag) =>
-        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null);
+        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null, tag.ToolTip);
 
     /// <summary>The row as the Library core describes it (#792): tags and details in shared words.</summary>
     private LibraryItemTextInput TextInput => new(Item, Source, Availability, EffectiveItem)
@@ -705,6 +828,15 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         get
         {
+            if (IsAmlSection)
+            {
+                var source = new List<LibraryDetailField>();
+                if (!string.IsNullOrWhiteSpace(_collectionName))
+                    source.Add(new LibraryDetailField(Strings.Library_Field_Collection, _collectionName));
+                source.Add(new LibraryDetailField(Strings.Aml_Field_Cells, GroupCount.ToString("N0", CultureInfo.CurrentCulture)));
+                return [new LibraryDetailGroup(Strings.Aml_Heading, source)];
+            }
+
             if (IsGroupHeader && !IsModelHeader)
             {
                 // An unpacked package: where it came from and what it held.
@@ -727,5 +859,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// True when the item matches a free-text filter (name, title, spec, or a
     /// property value such as a state code), case-insensitively.
     /// </summary>
-    public bool Matches(string filter) => State.Matches(filter);
+    /// <remarks>An AML cell also matches its tag ("AML 3.0 · CLB"), so "AML" or a product code finds it (decision 5).</remarks>
+    public bool Matches(string filter) =>
+        State.Matches(filter) || (Aml?.TagText.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
 }

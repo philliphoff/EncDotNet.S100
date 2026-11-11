@@ -73,7 +73,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     public async Task Selecting_an_s124_finding_opens_its_card_at_the_eta_and_a_new_departure_re_judges_it()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc()) { RouteFindings = s.Findings };
+        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
         var list = new RouteFindingsViewModel(s.Findings);
@@ -128,7 +128,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     public async Task Open_in_navigational_warnings_selects_the_warning_in_the_panel()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc()) { RouteFindings = s.Findings };
+        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
         var list = new RouteFindingsViewModel(s.Findings);
@@ -150,7 +150,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     {
         // The oracle's "near" is the routes' 100 m cross-track limit.
         using var s = WarningsRouteCheck.Create(fixture, options: new RouteWarningOptions { NearDistanceMeters = RouteWarnings.NearDistanceMeters });
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc()) { RouteFindings = s.Findings };
+        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
         Assert.False(panel.IsRouteScopeAvailable);
         panel.Scope = NavigationalWarningsScope.Route;
         Assert.True(panel.IsAllScope);
@@ -195,7 +195,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     public async Task List_navigational_warnings_gives_the_route_scope_and_each_warnings_relation()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc()) { RouteFindings = s.Findings };
+        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
         var tool = new ListNavigationalWarningsTool(panel, s.Warnings, new InlineInvoker());
         var ct = TestContext.Current.CancellationToken;
 
@@ -260,8 +260,8 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        using var warnings = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc()) { RouteFindings = s.Findings };
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        using var warnings = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 1600);
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
@@ -298,7 +298,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc()) { RouteFindings = s.Findings };
+        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
         using var host = ViewHost.Show(new NavigationalWarningsView { DataContext = panel }, width: 360, height: 900);
         Assert.False(host.IsShown("NavigationalWarnings.Scope.Route"));
 

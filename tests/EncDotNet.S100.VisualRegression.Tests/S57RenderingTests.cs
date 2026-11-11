@@ -16,12 +16,20 @@ public sealed class S57RenderingTests
     [Fact]
     public Task EncCell_DayPalette() => RenderCell(EcdisDisplayCategory.Standard);
 
-    // No display-mode filter ("All"), so the translated soundings, names and
-    // quality-of-data coverage stay guarded.
+    // No display-mode filter ("All"), so the translated names and
+    // quality-of-data coverage stay guarded. The whole cell draws at about
+    // 1:50 000, smaller than the soundings' SCAMIN (1:21 999), so its
+    // soundings are hidden here (#1219).
     [Fact]
     public Task EncCell_DayPalette_AllDisplayCategories() => RenderCell(null);
 
-    private static Task RenderCell(EcdisDisplayCategory? displayCategory)
+    // Zoomed in to about 1:15 000, inside the soundings' SCAMIN, so the
+    // translated soundings and their scaleMinimum stay guarded (#1219).
+    [Fact]
+    public Task EncCell_DayPalette_SoundingsInsideScaleMinimum()
+        => RenderCell(null, new GeographicBounds(West: -70.3325, South: 41.2775, East: -70.2925, North: 41.2975));
+
+    private static Task RenderCell(EcdisDisplayCategory? displayCategory, GeographicBounds? viewport = null)
     {
         var path = Path.Combine(
             TestHelpers.DatasetsRoot,
@@ -34,6 +42,7 @@ public sealed class S57RenderingTests
             Width = 800,
             Height = 600,
             DisplayCategory = displayCategory,
+            Viewport = viewport,
         });
 
         // S-57 is translated in-memory to S-101 and rendered through the full

@@ -26,7 +26,7 @@ public class DataMaintenanceServiceTests
 
         Assert.Contains(paths.PatternClipCacheDirectory, service.CacheDirectories);
         Assert.Contains(paths.PortrayalInstructionCacheDirectory, service.CacheDirectories);
-        // The third entry is the renderer's effective tile-cache directory.
+        Assert.Contains(paths.TileDiskCacheDirectory, service.CacheDirectories);
         Assert.Equal(3, service.CacheDirectories.Count);
     }
 

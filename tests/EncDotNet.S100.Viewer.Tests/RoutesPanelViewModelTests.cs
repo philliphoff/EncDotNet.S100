@@ -10,8 +10,8 @@ public class RoutesPanelViewModelTests
 {
     private static (RoutesService Service, RoutesPanelViewModel Vm) Create()
     {
-        var svc = new RoutesService();
-        var vm = new RoutesPanelViewModel(svc);
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var vm = new RoutesPanelViewModel(svc, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
         return (svc, vm);
     }
 

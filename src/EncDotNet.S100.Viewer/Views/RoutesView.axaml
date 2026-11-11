@@ -791,7 +791,7 @@
                         AutomationProperties.Name="{x:Static loc:Strings.Label_PromoteMeasurement}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PromoteMeasurement}"
                         Classes="Icon"
-                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).PromoteMeasurementToRouteCommand}"
+                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapTools.PromoteMeasurementToRouteCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
                     <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                 </Button>
@@ -1334,7 +1334,7 @@
                                            FontSize="11.5"
                                            Opacity="0.7"
                                            TextWrapping="Wrap" />
-                                <!-- B3: Clearance / Route / Warnings. Each row filters the findings list. -->
+                                <!-- B3: Clearance / Route / Warnings / Weather (#1093). Each row filters the findings list. -->
                                 <ItemsControl AutomationProperties.AutomationId="Routes.Check.Summary"
                                               ItemsSource="{Binding SummaryRows}"
                                               Margin="0,4,0,0">
@@ -1345,8 +1345,8 @@
                                                         Classes="summaryRow"
                                                         AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Summary.{0}'}"
                                                         AutomationProperties.Name="{Binding Label}"
-                                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CheckSummaryRow}"
-                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckSummaryRow}"
+                                                        AutomationProperties.HelpText="{Binding Tooltip}"
+                                                        ToolTip.Tip="{Binding Tooltip}"
                                                         Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).SelectSummaryCommand}"
                                                         CommandParameter="{Binding}">
                                                     <Grid ColumnDefinitions="66,*,Auto" Margin="0,0,4,0">

@@ -15,7 +15,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
     public void Dispose() => _context.Dispose();
 
     private LibraryDownloadService Create() =>
-        new(new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "noaa-enc")));
+        new(new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "noaa-enc")), notifications: null);
 
     internal static CollectionItem Cell(int update = 1, string name = "US4OH1MK", CollectionItemStatus status = CollectionItemStatus.Active) => new()
     {
@@ -85,7 +85,8 @@ public sealed class LibraryDownloadServiceTests : IDisposable
             "ienccloud.us" => usace,
             "example.test" => noaa,
             _ => null,
-        });
+        },
+        notifications: null);
         var usaceItem = Cell() with { Location = new RemoteItemLocation(new Uri("https://ienccloud.us/x/US4OH1MK.zip")) };
         var elsewhere = Cell() with { Location = new RemoteItemLocation(new Uri("https://unknown.test/US4OH1MK.zip")) };
 
@@ -107,7 +108,8 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         {
             folders.Add(remote.DownloadFolder ?? "(host)");
             return new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, remote.DownloadFolder ?? "noaa-enc"));
-        });
+        },
+        notifications: null);
         CollectionItem Member(string name, DateTimeOffset? at = null) => new()
         {
             Key = "Base1/" + name,
@@ -134,7 +136,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
     {
         var server = new GatedServer(File.ReadAllBytes(
             LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
-        var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")));
+        var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")), notifications: null);
         var items = Enumerable.Range(0, LibraryDownloadService.MaxConcurrentDownloads + 1)
             .Select(i => Cell() with { Key = $"k{i}", Location = new RemoteItemLocation(new Uri($"https://example.test/{i}/US4OH1MK.zip"), 10_279) })
             .ToArray();
@@ -166,7 +168,8 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         var server = new GatedServer(File.ReadAllBytes(
             LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
         var service = new LibraryDownloadService(remote => new EncCellDownloader(
-            new HttpClient(server), Path.Combine(_context.Root, remote.Uri.Segments[1].TrimEnd('/'))));
+            new HttpClient(server), Path.Combine(_context.Root, remote.Uri.Segments[1].TrimEnd('/'))),
+            notifications: null);
         var first = Cell() with { Location = new RemoteItemLocation(new Uri("https://example.test/a/US4OH1MK.zip"), 10_279) };
         var second = Cell() with { Key = "b", Location = new RemoteItemLocation(new Uri("https://example.test/b/US4OH1MK.zip"), 10_279) };
 
@@ -186,7 +189,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
     {
         var server = new GatedServer(File.ReadAllBytes(
             LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
-        var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")));
+        var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")), notifications: null);
 
         var download = service.DownloadAsync([Cell()], TestContext.Current.CancellationToken);
         await server.WaitForRequestsAsync(1);

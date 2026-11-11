@@ -8,8 +8,12 @@ namespace EncDotNet.S100.Datasets.Pipelines.Sampling;
 /// Samples a weather grid (<see cref="WeatherGridSet"/>): every known
 /// parameter at the grid node nearest the point and the time step nearest the
 /// requested time, as a <see cref="CoverageFieldsSample"/> whose fields carry
-/// their quantity and unit. Wind speed and direction are derived from U and V
-/// when the file has only the components. Shared by
+/// their quantity and unit. Wind and current speed and direction are derived
+/// from U and V when the file has only the components; wind and current speed
+/// are repeated in knots, sea surface and air temperature (stored in kelvin)
+/// in degrees Celsius, and visibility in nautical miles. When the grid has
+/// the wind, the air temperature and a sea (or skin) temperature, the freezing
+/// spray predictor and class are added (<see cref="FreezingSpray"/>). Shared by
 /// <see cref="WeatherGridProcessorBase"/> (picks) and its catalog payload
 /// (<c>sample_coverage</c>).
 /// </summary>
@@ -31,6 +35,10 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     private readonly DateTime? _run;
     private readonly bool _deriveWindSpeed;
     private readonly bool _deriveWindDirection;
+    private readonly bool _deriveCurrentSpeed;
+    private readonly bool _deriveCurrentDirection;
+    private readonly string? _sprayWater;
+    private readonly bool _sprayLand;
     private readonly object _cacheGate = new();
     private readonly LinkedList<(WeatherParameter Parameter, int Step, float[] Values)> _cache = new();
 
@@ -64,10 +72,33 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         bool components = has(WeatherParameters.WindU) && has(WeatherParameters.WindV);
         _deriveWindSpeed = components && !has(WeatherParameters.WindSpeed);
         _deriveWindDirection = components && !has(WeatherParameters.WindFromDirection);
+        bool currentComponents = has(WeatherParameters.CurrentU) && has(WeatherParameters.CurrentV);
+        _deriveCurrentSpeed = currentComponents && !has(WeatherParameters.CurrentSpeed);
+        _deriveCurrentDirection = currentComponents && !has(WeatherParameters.CurrentToDirection);
+
+        // The freezing spray inputs, as WeatherCoverageSource.CreateFreezingSpray takes them.
+        if (has(WeatherParameters.AirTemperature) && (components || has(WeatherParameters.WindSpeed)))
+        {
+            _sprayWater = has(WeatherParameters.SeaSurfaceTemperature) ? WeatherParameters.SeaSurfaceTemperature
+                : has(WeatherParameters.SurfaceTemperature) ? WeatherParameters.SurfaceTemperature
+                : null;
+            _sprayLand = _sprayWater == WeatherParameters.SurfaceTemperature && has(WeatherParameters.LandCover);
+        }
     }
 
     /// <summary>The union of the parameters' valid times, in time order.</summary>
     public IReadOnlyList<DateTime> Times => _times;
+
+    /// <summary>The grid set sampled.</summary>
+    internal WeatherGridSet GridSet => _gridSet;
+
+    /// <summary>The model run's reference time, or <see langword="null"/>.</summary>
+    internal DateTime? Run => _run;
+
+    /// <summary>One decoded step of a parameter, from the same recent-steps cache the picks use.</summary>
+    /// <param name="parameter">A parameter of the grid set.</param>
+    /// <param name="step">Index into the parameter's steps.</param>
+    internal float[] ReadStep(WeatherParameter parameter, int step) => GetStep(parameter, step);
 
     /// <inheritdoc />
     public CoverageSiteSearch FindSites(CoverageSampleQuery query)
@@ -131,7 +162,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     public CoverageFieldsSample? Read(GridNode node, int timeIndex, DateTimeOffset? requestedTime)
     {
         var fields = new List<SampledField>(_parameters.Length + 3);
-        float? u = null, v = null;
+        float? u = null, v = null, cu = null, cv = null;
+        double? storedSpeed = null, air = null, water = null, land = null;
         bool any = false;
         for (int p = 0; p < _parameters.Length; p++)
         {
@@ -144,11 +176,33 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 u = reading is null ? null : value;
             if (parameter.Id == WeatherParameters.WindV)
                 v = reading is null ? null : value;
+            if (parameter.Id == WeatherParameters.CurrentU)
+                cu = reading is null ? null : value;
+            if (parameter.Id == WeatherParameters.CurrentV)
+                cv = reading is null ? null : value;
+            if (parameter.Id == WeatherParameters.WindSpeed)
+                storedSpeed = reading;
+            if (parameter.Id == WeatherParameters.AirTemperature)
+                air = reading;
+            if (parameter.Id == _sprayWater)
+                water = reading;
+            if (parameter.Id == WeatherParameters.LandCover)
+                land = reading;
 
             var (quantity, unit) = Describe(parameter.Id);
             fields.Add(new SampledField(parameter.Id, quantity, unit, reading));
             if (parameter.Id == WeatherParameters.WindSpeed)
                 fields.Add(Knots(reading));
+            if (parameter.Id == WeatherParameters.SeaSurfaceTemperature)
+                fields.Add(Celsius(reading));
+            if (parameter.Id == WeatherParameters.CurrentSpeed)
+                fields.Add(CurrentKnots(reading));
+            if (parameter.Id == WeatherParameters.Visibility)
+                fields.Add(NauticalMiles(reading));
+            if (parameter.Id == WeatherParameters.AirTemperature)
+                fields.Add(new SampledField(WeatherParameters.AirTemperature + ".degc", "air_temperature", "degC", ToCelsius(reading)));
+            if (parameter.Id == WeatherParameters.PrecipitationRate)
+                fields.Add(MillimetresPerHour(reading));
         }
 
         if (_deriveWindSpeed)
@@ -166,6 +220,40 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 ? WindComponents.GetFromDirection(Speed.FromMetresPerSecond(du), Speed.FromMetresPerSecond(dv)).TotalDegrees
                 : null;
             fields.Add(new SampledField(WeatherParameters.WindFromDirection, "wind_from_direction", "deg", direction));
+        }
+
+        if (_deriveCurrentSpeed)
+        {
+            double? speed = cu is { } su && cv is { } sv
+                ? CurrentComponents.GetSpeed(Speed.FromMetresPerSecond(su), Speed.FromMetresPerSecond(sv)).TotalMetresPerSecond
+                : null;
+            fields.Add(new SampledField(WeatherParameters.CurrentSpeed, "sea_water_speed", "m/s", speed));
+            fields.Add(CurrentKnots(speed));
+        }
+
+        if (_deriveCurrentDirection)
+        {
+            double? direction = cu is { } du && cv is { } dv
+                ? CurrentComponents.GetToDirection(Speed.FromMetresPerSecond(du), Speed.FromMetresPerSecond(dv)).TotalDegrees
+                : null;
+            fields.Add(new SampledField(WeatherParameters.CurrentToDirection, "sea_water_velocity_to_direction", "deg", direction));
+        }
+
+        if (_sprayWater is not null)
+        {
+            double? speed = storedSpeed ?? (u is { } su && v is { } sv
+                ? WindComponents.GetSpeed(Speed.FromMetresPerSecond(su), Speed.FromMetresPerSecond(sv)).TotalMetresPerSecond
+                : null);
+            // With a land mask, only a cell it marks as water has a predictor.
+            bool overWater = !_sprayLand || land is < 0.5;
+            double? predictor = speed is { } s && air is { } a && water is { } w && overWater
+                ? FreezingSpray.Predictor(Speed.FromMetresPerSecond(s), a - SeaTemperatureStyle.CelsiusZero, w - SeaTemperatureStyle.CelsiusZero)
+                : null;
+            if (predictor is { } p && double.IsNaN(p))
+                predictor = null;
+            fields.Add(new SampledField(WeatherParameters.FreezingSprayPredictor, "freezing_spray_predictor", null, predictor));
+            fields.Add(new SampledField(WeatherParameters.FreezingSprayPredictor + ".class", "freezing_spray_class", null,
+                predictor is { } pr ? (double?)(int)FreezingSpray.Classify(pr)!.Value : null));
         }
 
         if (!any)
@@ -200,6 +288,18 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.WindSeaDirection => ("wind_wave_from_direction", "deg"),
         WeatherParameters.SwellHeight => ("swell_wave_significant_height", "m"),
         WeatherParameters.PressureMsl => ("air_pressure_at_mean_sea_level", "Pa"),
+        WeatherParameters.SeaSurfaceTemperature => ("sea_surface_temperature", "K"),
+        WeatherParameters.CurrentU => ("eastward_sea_water_velocity", "m/s"),
+        WeatherParameters.CurrentV => ("northward_sea_water_velocity", "m/s"),
+        WeatherParameters.CurrentSpeed => ("sea_water_speed", "m/s"),
+        WeatherParameters.CurrentToDirection => ("sea_water_velocity_to_direction", "deg"),
+        WeatherParameters.Visibility => ("visibility_in_air", "m"),
+        WeatherParameters.AirTemperature => ("air_temperature", "K"),
+        WeatherParameters.SurfaceTemperature => ("surface_temperature", "K"),
+        WeatherParameters.LandCover => ("land_binary_mask", "1"),
+        WeatherParameters.PrecipitationRate => ("precipitation_flux", "kg m-2 s-1"),
+        WeatherParameters.Cape => ("atmosphere_convective_available_potential_energy", "J/kg"),
+        WeatherParameters.CloudCover => ("cloud_area_fraction", "%"),
         _ => (id, null),
     };
 
@@ -207,6 +307,28 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     private static SampledField Knots(double? metresPerSecond) =>
         new(WeatherParameters.WindSpeed + ".kn", "wind_speed", "kn",
             metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
+
+    // The current speed again in knots, the unit mariners read it in.
+    private static SampledField CurrentKnots(double? metresPerSecond) =>
+        new(WeatherParameters.CurrentSpeed + ".kn", "sea_water_speed", "kn",
+            metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
+
+    private static double? ToCelsius(double? kelvin) => kelvin is { } k ? SeaTemperatureStyle.ToCelsius(k) : null;
+
+    // The precipitation rate again in millimetres an hour, the unit radar and forecasts give it in.
+    private static SampledField MillimetresPerHour(double? kilogramsPerSquareMetrePerSecond) =>
+        new(WeatherParameters.PrecipitationRate + ".mmh", "precipitation_flux", "mm/h",
+            kilogramsPerSquareMetrePerSecond is { } r ? PrecipitationStyle.ToMillimetresPerHour(r) : null);
+
+    // The visibility again in nautical miles, the unit marine forecasts give it in.
+    private static SampledField NauticalMiles(double? metres) =>
+        new(WeatherParameters.Visibility + ".nmi", "visibility_in_air", "nmi",
+            metres is { } m ? Length.FromMetres(m).TotalNauticalMiles : null);
+
+    // The sea surface temperature again in degrees Celsius, the unit mariners read it in.
+    private static SampledField Celsius(double? kelvin) =>
+        new(WeatherParameters.SeaSurfaceTemperature + ".degc", "sea_surface_temperature", "degC",
+            kelvin is { } k ? SeaTemperatureStyle.ToCelsius(k) : null);
 
     private float[] GetStep(WeatherParameter parameter, int step)
     {

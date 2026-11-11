@@ -24,4 +24,19 @@ public enum WeatherUnit
 
     /// <summary>Pascals (air pressure).</summary>
     Pascals,
+
+    /// <summary>Kelvin (sea surface, air and skin temperatures).</summary>
+    Kelvin,
+
+    /// <summary>A proportion from 0 to 1 (the land cover mask).</summary>
+    Proportion,
+
+    /// <summary>Kilograms per square metre per second (precipitation rate): millimetres of water a second.</summary>
+    KilogramsPerSquareMetrePerSecond,
+
+    /// <summary>Joules per kilogram (convective available potential energy).</summary>
+    JoulesPerKilogram,
+
+    /// <summary>Percent, from 0 to 100 (cloud cover).</summary>
+    Percent,
 }

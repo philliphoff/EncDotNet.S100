@@ -408,7 +408,7 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
     {
         var covering = cells.Where(c => c.Covers(position)).ToList();
         return !covering.Contains(cell, ReferenceEqualityComparer.Instance)
-            || CellScaleRanking.FinestBand(covering, c => c.RankingScale).Contains(cell, ReferenceEqualityComparer.Instance);
+            || CellScaleRanking.FinestBand(covering, c => c.Rank).Contains(cell, ReferenceEqualityComparer.Instance);
     }
 
     // The end of a date range: its time of day, or the end of its day.

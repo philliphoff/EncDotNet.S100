@@ -97,7 +97,7 @@ public sealed class IdentitiesTabSourcesTests : IDisposable
         _indexer.Waiting.UnionWith(["KHRA S-124", "KHOA S-128"]);
         _library.Refresh();
         await _library.WhenIdle();
-        var dialog = new ImportIdentityDialogViewModel(_keys.Identities, () => Task.FromResult<string?>(_keys.IdentityFile("bridge")), time: _keys.Time);
+        var dialog = new ImportIdentityDialogViewModel(_keys.Identities, () => Task.FromResult<string?>(_keys.IdentityFile("bridge")), time: _keys.Time, replacing: null);
         Assert.True(await dialog.PickFileAsync());
         dialog.Password = "secret";
         dialog.Primary();

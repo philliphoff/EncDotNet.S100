@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Services.Secom;
 /// With <c>--mcp-test-hooks</c> only: a file to answer pickers with instead
 /// of showing them (scripted UI automation cannot drive a native picker).
 /// </param>
-internal sealed class KeysDialogs(DialogManager dialogs, IFileDialogService files, Func<string?>? testPick = null) : IKeysDialogs
+internal sealed class KeysDialogs(DialogManager dialogs, IFileDialogService files, Func<string?>? testPick) : IKeysDialogs
 {
     /// <summary>The variable naming the file pickers answer with under <c>--mcp-test-hooks</c>.</summary>
     public const string TestPickVariable = "SOUNDCHARTS_TEST_PICK_FILE";

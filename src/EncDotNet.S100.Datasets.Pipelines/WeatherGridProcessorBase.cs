@@ -1,13 +1,16 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
@@ -52,8 +55,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="NotForNavigationNotice"/>.
 /// </description></item>
 /// <item><description>
-/// <b>Headless rendering</b> (<see cref="IHeadlessImageRenderer"/>) through the
-/// <see cref="HeadlessCompositor"/>, and the catalog payload
+/// <b>Headless rendering</b> (<see cref="IHeadlessImageRenderer"/>) in S-98
+/// order through the shared coverage lowering, and the catalog payload
 /// (<see cref="WeatherGridDatasetData"/>) through
 /// <see cref="ILoadedDatasetProjection"/>.
 /// </description></item>
@@ -62,8 +65,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// It lives in <c>EncDotNet.S100.Datasets.Pipelines</c> rather than
 /// <c>EncDotNet.S100.Datasets.Weather</c> because the capabilities it
 /// implements (<see cref="IHeadlessImageRenderer"/>,
-/// <see cref="ILoadedDatasetProjection"/>, <see cref="HeadlessCompositor"/>)
-/// are defined here, and this project already references every dataset
+/// <see cref="ILoadedDatasetProjection"/>) are defined here, and this project already references every dataset
 /// project; the format readers don't reference it, or each other.
 /// </para>
 /// </remarks>
@@ -314,17 +316,55 @@ public abstract class WeatherGridProcessorBase :
                 new MercatorBounds(minX, minY, maxX, maxY), widthPixels, heightPixels, padding: 0.05);
         }
 
-        return new HeadlessCompositor(_crsTransformFactory).Render(
-            [HeadlessCompositeInput.ForCoverage(portrayal)],
-            new HeadlessCompositeOptions
+        return RenderOrdered(
+            portrayal,
+            viewport,
+            background ?? new RgbaColor(255, 255, 255, 255),
+            context?.Mariner,
+            context?.Basemap ?? BasemapKind.None);
+    }
+
+    /// <summary>
+    /// Paints the coverage's sub-layers in S-98 order, after the inter-product
+    /// rules, over an optional land basemap.
+    /// </summary>
+    private SKBitmap RenderOrdered(
+        CoveragePortrayalResult portrayal,
+        Viewport viewport,
+        RgbaColor background,
+        MarinerSettings? mariner,
+        BasemapKind basemap)
+    {
+        var items = portrayal.SubLayers
+            .Select(sub => new SubLayerStackItem(
+                new CoverageStackPayload(portrayal, sub),
+                sub.Plane,
+                sub.WithinPlanePriority,
+                portrayal.SourceDatasetId,
+                sub.SourceFeatureType))
+            .ToList();
+        var authority = new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes);
+        var ruled = authority.ApplyRules(
+            LayerStackBuilder.Build(authority, [items]),
+            [new LoadedDatasetInfo(portrayal.SourceDatasetId, portrayal.Spec.Name, Active: true)],
+            mariner);
+
+        var layers = new List<CompositeLayer>(ruled.Count + 1);
+        if (basemap == BasemapKind.Offline)
+            layers.Add(new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false));
+
+        var settings = new CoverageLayerLowering.Settings(
+            DrawingInstructionCategory.None, HonorScaleVisibility: false, EnableSeamWrap: true, KeepAreaSymbolsInView: true);
+        foreach (var item in ruled)
+        {
+            if (item.Payload is CoverageStackPayload coverage
+                && CoverageLayerLowering.TryLower(coverage.SubLayer, _crsTransformFactory, settings, out var layer, out _, out _, out _, out _))
             {
-                Width = widthPixels,
-                Height = heightPixels,
-                Background = background ?? new RgbaColor(255, 255, 255, 255),
-                Viewport = viewport,
-                Mariner = context?.Mariner,
-                Basemap = context?.Basemap ?? BasemapKind.None,
-            });
+                layers.Add(layer);
+            }
+        }
+
+        return new HeadlessCompositeRenderer { Background = background }.Render(viewport, layers);
     }
 
     /// <summary>Always <see langword="null"/>: a weather grid has no discrete features; see <see cref="GetCoverageInfo"/>.</summary>
@@ -338,7 +378,14 @@ public abstract class WeatherGridProcessorBase :
     /// <see cref="PickAttribute.NavigationNotice"/> row), then the
     /// model run and valid time, then each value with its unit: wave heights
     /// in metres, wind speed in knots (raw value in m/s), directions in
-    /// degrees ("from"), periods in seconds.
+    /// degrees ("from"; current direction "to"), periods in seconds, sea
+    /// surface temperature in degrees Celsius (raw value in kelvin), current
+    /// speed in knots (raw value in m/s), visibility in nautical miles (raw
+    /// value in metres), air and surface temperature in degrees Celsius (raw
+    /// value in kelvin), the freezing spray class with its predictor, the
+    /// precipitation rate in millimetres an hour (raw value in kg m⁻² s⁻¹)
+    /// with its intensity, CAPE in J/kg with the thunderstorm risk, and the
+    /// total cloud cover in percent.
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -430,6 +477,33 @@ public abstract class WeatherGridProcessorBase :
         source.SelectOverviewLevel(Math.Clamp(level, 0, source.AvailableOverviewLevels.Count - 1));
     }
 
+    // Visibility in nautical miles, as marine forecasts give it, with the
+    // metres too under 1000 m (very poor, fog), where a tenth of a mile is coarse.
+    private static string VisibilityText(double metres)
+    {
+        var length = Length.FromMetres(metres);
+        string miles = length.TotalNauticalMiles.ToString("0.0", CultureInfo.InvariantCulture) + " nm";
+        return metres < VisibilityStyle.VeryPoorLimit.TotalMetres
+            ? $"{miles} ({metres.ToString("0", CultureInfo.InvariantCulture)} m)"
+            : miles;
+    }
+
+    // The rate in mm/h, with its intensity from 0.1 mm/h: "3.1 mm/h (moderate)".
+    private static string PrecipitationText(double kilogramsPerSquareMetrePerSecond)
+    {
+        double rate = PrecipitationStyle.ToMillimetresPerHour(kilogramsPerSquareMetrePerSecond);
+        string text = rate.ToString("0.0", CultureInfo.InvariantCulture) + " mm/h";
+        var band = PrecipitationStyle.Bands.FirstOrDefault(b => kilogramsPerSquareMetrePerSecond >= b.Minimum && kilogramsPerSquareMetrePerSecond < b.Maximum);
+        return band.Label is { } label ? $"{text} ({label[..label.IndexOf(',', StringComparison.Ordinal)].ToLowerInvariant()})" : text;
+    }
+
+    // CAPE in J/kg, with the thunderstorm risk from 1000 J/kg: "1850 J/kg (moderate thunderstorm risk)".
+    private static string CapeText(double joulesPerKilogram)
+    {
+        string text = joulesPerKilogram.ToString("0", CultureInfo.InvariantCulture) + " J/kg";
+        return ThunderstormRiskStyle.Classify(joulesPerKilogram) is { } risk ? $"{text} ({risk} thunderstorm risk)" : text;
+    }
+
     private static PickAttribute? Pick(SampledField field)
     {
         string Number(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
@@ -450,7 +524,23 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.WindU => new() { Code = field.Name, Name = "Wind, eastward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.WindV => new() { Code = field.Name, Name = "Wind, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.PressureMsl => new() { Code = field.Name, Name = "Mean sea level pressure", RawValue = raw, DisplayValue = Display(x => $"{Number(x / 100, "0.#")} hPa") },
-            // The knots copy of the wind speed is already in the speed's display value.
+            WeatherParameters.SeaSurfaceTemperature => new() { Code = field.Name, Name = "Sea surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
+            WeatherParameters.CurrentSpeed => new() { Code = field.Name, Name = "Current speed", RawValue = raw, DisplayValue = Display(x => $"{Number(Speed.FromMetresPerSecond(x).TotalKnots, "0.0")} kn") },
+            WeatherParameters.CurrentToDirection => new() { Code = field.Name, Name = "Current direction (to)", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")}°") },
+            WeatherParameters.CurrentU => new() { Code = field.Name, Name = "Current, eastward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
+            WeatherParameters.CurrentV => new() { Code = field.Name, Name = "Current, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
+            WeatherParameters.Visibility => new() { Code = field.Name, Name = "Visibility", RawValue = raw, DisplayValue = Display(VisibilityText) },
+            WeatherParameters.AirTemperature => new() { Code = field.Name, Name = "Air temperature at 2 m", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
+            WeatherParameters.SurfaceTemperature => new() { Code = field.Name, Name = "Surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
+            WeatherParameters.FreezingSprayPredictor => new() { Code = field.Name, Name = "Freezing spray", RawValue = raw, DisplayValue = Display(x => $"{FreezingSpray.GetLabel(FreezingSpray.Classify(x)!.Value)} (predictor {Number(x, "0")})") },
+            WeatherParameters.PrecipitationRate => new() { Code = field.Name, Name = "Precipitation rate", RawValue = raw, DisplayValue = Display(PrecipitationText) },
+            WeatherParameters.Cape => new() { Code = field.Name, Name = "CAPE (convective energy)", RawValue = raw, DisplayValue = Display(CapeText) },
+            WeatherParameters.CloudCover => new() { Code = field.Name, Name = "Total cloud cover", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")} %") },
+            // The knots copies of the wind and current speeds, the Celsius
+            // copies of the sea and air temperatures, the nautical-mile copy
+            // of the visibility, the mm/h copy of the precipitation rate and
+            // the freezing spray class are already in their display values;
+            // the land cover mask isn't shown.
             _ => null,
         };
     }

@@ -10,23 +10,23 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 internal sealed class LibraryTimelineLink
 {
-    public LibraryTimelineLink(LibraryPanelViewModel library, TimelineViewModel timeline, GlobalTimeService time, MainViewModel main)
+    public LibraryTimelineLink(LibraryPanelViewModel library, TimelineViewModel timeline, GlobalTimeService time, ShellLayoutViewModel layout)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(time);
-        ArgumentNullException.ThrowIfNull(main);
+        ArgumentNullException.ThrowIfNull(layout);
         library.ShowOnTimelineRequested += (_, window) =>
         {
-            main.IsBottomDockOpen = true;
+            layout.IsBottomDockOpen = true;
             timeline.IsCollapsedToStrip = false;
             timeline.SetWindow(window.Start, window.End);
         };
         library.GoToTimeRequested += (_, at) =>
         {
-            main.IsBottomDockOpen = true;
+            layout.IsBottomDockOpen = true;
             time.SetCurrentTime(at);
         };
-        library.Revealed += (_, _) => main.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+        library.Revealed += (_, _) => layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
     }
 }

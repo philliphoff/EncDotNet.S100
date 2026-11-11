@@ -28,7 +28,6 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 {
     private readonly ICrsTransformFactory? _transforms;
     private readonly IDatasetProcessorFactory _factory;
-    private readonly bool _ownsFactory;
     private readonly object _gate = new();
     private readonly List<Entry> _entries = [];
     private readonly HashSet<string> _usedIds = new(StringComparer.Ordinal);
@@ -51,7 +50,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 
     private sealed record Entry(LoadedDataset Loaded, IDatasetProcessor Processor);
 
-    /// <summary>Creates the catalog with an optional CRS transform factory.</summary>
+    /// <summary>Creates the catalog.</summary>
     /// <param name="transforms">
     /// CRS transform factory used to reproject projected-CRS coverage extents into
     /// the WGS-84 bounds the query tools expect; may be <c>null</c>.
@@ -59,16 +58,14 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// <param name="factory">
     /// Shared processor factory the session builds every dataset processor from,
     /// so the bundled feature / portrayal catalogue parse caches are reused across
-    /// datasets. When <c>null</c> a bundled all-products factory is created and
-    /// owned (disposed with this catalog).
+    /// datasets (the CLI passes a <see cref="BundledDatasetProcessorFactory"/>).
+    /// The caller owns it and disposes it after this catalog.
     /// </param>
-    public HeadlessMutableCatalog(
-        ICrsTransformFactory? transforms = null,
-        IDatasetProcessorFactory? factory = null)
+    public HeadlessMutableCatalog(ICrsTransformFactory? transforms, IDatasetProcessorFactory factory)
     {
+        ArgumentNullException.ThrowIfNull(factory);
         _transforms = transforms;
-        _factory = factory ?? BundledDatasetProcessorFactory.Create();
-        _ownsFactory = factory is null;
+        _factory = factory;
     }
 
     /// <inheritdoc />
@@ -446,13 +443,6 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
                     resolution.Dispose();
                 }
                 _resolutions.Clear();
-            }
-
-            // Release the shared factory (and its catalogue caches) after every
-            // processor built from it, but only when this catalog created it.
-            if (_ownsFactory && _factory is IDisposable disposableFactory)
-            {
-                disposableFactory.Dispose();
             }
         }
         finally

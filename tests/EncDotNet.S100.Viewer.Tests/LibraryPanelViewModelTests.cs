@@ -26,7 +26,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, _downloader, action => action());
+    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, _downloader, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
 
     private async Task<DatasetCollection> AddS57CollectionAsync(string name = "Charts")
     {
@@ -462,7 +462,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var item = LibraryDownloadServiceTests.Cell();
         var source = new LibrarySource(new NoaaEncFeedSource(Guid.NewGuid(), null, NoaaEncFeedSource.DefaultCatalogUri, NoaaEncFilter.All),
             new SourceIndex(Guid.NewGuid(), DateTimeOffset.UnixEpoch, "fp", [item], []), LibrarySourceState.Ready);
-        var vmItem = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader);
+        var vmItem = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, collectionName: null, download: null, time: TimeProvider.System, timeFormat: null);
 
         Assert.Equal(LibraryAvailability.Online, vmItem.Availability);
         Assert.True(vmItem.CanDownload);
@@ -569,7 +569,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Community", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         vm.SelectedItem = vm.Items.Single();
         var indexed = indexer.Calls;
 
@@ -591,7 +591,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Shared", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         vm.SelectedItem = vm.Items.Single();
         var indexed = indexer.Calls;
 
@@ -625,7 +625,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var order = new List<string>();
         _loader.Closing = () => order.Add("close");
         _downloader.Downloading = () => order.Add("download");
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         vm.SelectedItem = vm.Items.Single();
 
         (load ? vm.DownloadCommand : vm.DownloadOnlyCommand).Execute(null);
@@ -648,7 +648,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Romania", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/RO_IENC_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
 
         // Base1 is unpacked (a collapsed group); Base2 is still a package.
         Assert.Equal(2, vm.Items.Count);

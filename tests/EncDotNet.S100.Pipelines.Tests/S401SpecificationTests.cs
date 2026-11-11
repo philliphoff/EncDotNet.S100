@@ -4,8 +4,8 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -60,7 +60,7 @@ public class S401SpecificationTests
             using var features = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);
             var factory = new DatasetPipelineFactory(
                 portrayal,
-                new MoonSharpLuaEngine(),
+                TestLuaEngine.Create(),
                 new ProjNetCrsTransformFactory(),
                 features,
                 new DisplayPlaneAuthorityProvider());
@@ -119,7 +119,7 @@ public class S401SpecificationTests
             using var features = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);
             var factory = new DatasetPipelineFactory(
                 portrayal,
-                new MoonSharpLuaEngine(),
+                TestLuaEngine.Create(),
                 new ProjNetCrsTransformFactory(),
                 features,
                 new DisplayPlaneAuthorityProvider());

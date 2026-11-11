@@ -61,7 +61,7 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
     private readonly LibraryLoader _loader;
     private readonly INotificationService? _notifications;
 
-    public LibraryLoadService(IExchangeSetService exchangeSets, DatasetsViewModel datasets, INotificationService? notifications = null)
+    public LibraryLoadService(IExchangeSetService exchangeSets, DatasetsViewModel datasets, INotificationService? notifications)
     {
         _opener = new ExchangeSetOpener(exchangeSets, datasets);
         _loader = new LibraryLoader(_opener);
@@ -236,7 +236,9 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
                 item.MinimumDisplayScale,
                 item.MaximumDisplayScale,
                 item.Properties.TryGetValue("notForNavigation", out var nfn)
-                    && string.Equals(nfn, "true", StringComparison.OrdinalIgnoreCase));
+                    && string.Equals(nfn, "true", StringComparison.OrdinalIgnoreCase),
+                item.CompilationScale,
+                item.Coverage);
         }
 
         private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)

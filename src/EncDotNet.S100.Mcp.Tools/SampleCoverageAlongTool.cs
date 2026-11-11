@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Time;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools;
 
@@ -106,10 +107,12 @@ public sealed class SampleCoverageAlongTool
     private readonly SampleCoverageTool _sampler;
 
     /// <summary>Creates a new <see cref="SampleCoverageAlongTool"/>.</summary>
-    public SampleCoverageAlongTool(IDatasetCatalog catalog)
+    /// <param name="catalog">The catalog of loaded datasets to sample from.</param>
+    /// <param name="transforms">Reprojects sample points into each coverage's native CRS.</param>
+    public SampleCoverageAlongTool(IDatasetCatalog catalog, ICrsTransformFactory transforms)
     {
         ArgumentNullException.ThrowIfNull(catalog);
-        _sampler = new SampleCoverageTool(catalog);
+        _sampler = new SampleCoverageTool(catalog, transforms);
     }
 
     /// <summary>Executes the tool.</summary>

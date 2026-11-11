@@ -53,7 +53,7 @@ public class SampleCoverageToolS104StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         // Request very close to station A (51.5, -0.1).
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -74,7 +74,7 @@ public class SampleCoverageToolS104StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var requested = new DateTimeOffset(2023, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -93,7 +93,7 @@ public class SampleCoverageToolS104StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var requested = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -112,7 +112,7 @@ public class SampleCoverageToolS104StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         // 01:40 → rounds to 02:00 (index 2).
         var requested = new DateTimeOffset(2024, 1, 1, 1, 40, 0, TimeSpan.Zero);
@@ -132,7 +132,7 @@ public class SampleCoverageToolS104StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         // Far away from every station — should still pick the closest
         // (no max-distance cap).

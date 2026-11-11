@@ -64,68 +64,76 @@ internal sealed class NativeMenuBuilder
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
-            initiallyChecked: _viewModel.IsLeftDockOpen,
-            execute: () => _viewModel.TogglePrimarySideBarCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsLeftDockOpen),
-            checkedSelector: () => _viewModel.IsLeftDockOpen);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsLeftDockOpen,
+            execute: () => _viewModel.Layout.TogglePrimarySideBarCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsLeftDockOpen),
+            checkedSelector: () => _viewModel.Layout.IsLeftDockOpen);
 
         var statusBarItem = BuildToggleItem(
             Strings.Menu_StatusBar,
-            initiallyChecked: _viewModel.IsStatusBarVisible,
-            execute: () => _viewModel.ToggleStatusBarCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsStatusBarVisible),
-            checkedSelector: () => _viewModel.IsStatusBarVisible);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsStatusBarVisible,
+            execute: () => _viewModel.Layout.ToggleStatusBarCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsStatusBarVisible),
+            checkedSelector: () => _viewModel.Layout.IsStatusBarVisible);
 
         var timelineItem = BuildToggleItem(
             Strings.Menu_Timeline,
-            initiallyChecked: _viewModel.IsBottomDockOpen,
-            execute: () => _viewModel.ToggleTimelineCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsBottomDockOpen),
-            checkedSelector: () => _viewModel.IsBottomDockOpen);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsBottomDockOpen,
+            execute: () => _viewModel.Layout.ToggleTimelineCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsBottomDockOpen),
+            checkedSelector: () => _viewModel.Layout.IsBottomDockOpen);
 
         var pickPanelItem = BuildToggleItem(
             Strings.Menu_PickReport,
-            initiallyChecked: _viewModel.IsRightDockOpen,
-            execute: () => _viewModel.TogglePickPanelCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsRightDockOpen),
-            checkedSelector: () => _viewModel.IsRightDockOpen);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsRightDockOpen,
+            execute: () => _viewModel.Layout.TogglePickPanelCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsRightDockOpen),
+            checkedSelector: () => _viewModel.Layout.IsRightDockOpen);
 
         var pickModeItem = BuildToggleItem(
             Strings.Menu_PickMode,
-            initiallyChecked: _viewModel.IsPickModeActive,
-            execute: () => _viewModel.TogglePickModeCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsPickModeActive),
-            checkedSelector: () => _viewModel.IsPickModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsPickModeActive,
+            execute: () => _viewModel.MapTools.TogglePickModeCommand.Execute(null),
+            propertyName: nameof(MapToolsViewModel.IsPickModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsPickModeActive,
             gesture: new KeyGesture(Key.I));
 
         var measureModeItem = BuildToggleItem(
             Strings.Menu_MeasureMode,
-            initiallyChecked: _viewModel.IsMeasureModeActive,
-            execute: () => _viewModel.ToggleMeasureModeCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsMeasureModeActive),
-            checkedSelector: () => _viewModel.IsMeasureModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsMeasureModeActive,
+            execute: () => _viewModel.MapTools.ToggleMeasureModeCommand.Execute(null),
+            propertyName: nameof(MapToolsViewModel.IsMeasureModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsMeasureModeActive,
             gesture: new KeyGesture(Key.M, KeyModifiers.Meta));
 
         var rangeBearingModeItem = BuildToggleItem(
             Strings.Menu_RangeBearingMode,
-            initiallyChecked: _viewModel.IsRangeBearingModeActive,
-            execute: () => _viewModel.ToggleRangeBearingModeCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsRangeBearingModeActive),
-            checkedSelector: () => _viewModel.IsRangeBearingModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsRangeBearingModeActive,
+            execute: () => _viewModel.MapTools.ToggleRangeBearingModeCommand.Execute(null),
+            propertyName: nameof(MapToolsViewModel.IsRangeBearingModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsRangeBearingModeActive,
             gesture: new KeyGesture(Key.R, KeyModifiers.Meta));
 
         // ⌘E is also handled by Tools.RouteEditorKeys; the menu's copy of the
         // shortcut must not fire while a text field has focus either.
         var routeEditModeItem = BuildToggleItem(
             Strings.Menu_RouteEditMode,
-            initiallyChecked: _viewModel.IsRouteEditModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsRouteEditModeActive,
             execute: () =>
             {
                 if (!Tools.RouteEditorKeys.IsTextInputFocused(window))
-                    _viewModel.ToggleRouteEditModeCommand.Execute(null);
+                    _viewModel.MapTools.ToggleRouteEditModeCommand.Execute(null);
             },
-            propertyName: nameof(MainViewModel.IsRouteEditModeActive),
-            checkedSelector: () => _viewModel.IsRouteEditModeActive,
+            propertyName: nameof(MapToolsViewModel.IsRouteEditModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsRouteEditModeActive,
             gesture: new KeyGesture(Key.E, KeyModifiers.Meta));
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
@@ -141,18 +149,18 @@ internal sealed class NativeMenuBuilder
         var fileMenu = BuildFileMenu();
 
         var reportFeedbackItem = new NativeMenuItem(Strings.Menu_ReportFeedback);
-        reportFeedbackItem.Click += (_, _) => _viewModel.ShowFeedbackCommand.Execute(null);
+        reportFeedbackItem.Click += (_, _) => _viewModel.AppCommands.ShowFeedbackCommand.Execute(null);
 
         // On macOS the About item lives in the application menu (see
         // App.ConfigureMacApplicationMenu); elsewhere it belongs in Help.
         var showLogsItem = new NativeMenuItem(Strings.Menu_ShowLogs);
-        showLogsItem.Click += (_, _) => _viewModel.ShowLogsCommand.Execute(null);
+        showLogsItem.Click += (_, _) => _viewModel.Layout.ShowLogsCommand.Execute(null);
 
         var helpSubMenu = new NativeMenu { reportFeedbackItem, showLogsItem };
         if (!OperatingSystem.IsMacOS())
         {
             var aboutItem = new NativeMenuItem(Strings.Menu_About);
-            aboutItem.Click += (_, _) => _viewModel.ShowAboutCommand.Execute(null);
+            aboutItem.Click += (_, _) => _viewModel.AppCommands.ShowAboutCommand.Execute(null);
             helpSubMenu.Add(aboutItem);
         }
         var helpMenu = new NativeMenuItem(Strings.Menu_Help)
@@ -167,8 +175,9 @@ internal sealed class NativeMenuBuilder
         _recentFiles.Changed += RebuildOpenRecentMenu;
     }
 
-    private NativeMenuItem BuildToggleItem(
+    private static NativeMenuItem BuildToggleItem(
         string label,
+        System.ComponentModel.INotifyPropertyChanged source,
         bool initiallyChecked,
         Action execute,
         string propertyName,
@@ -184,7 +193,7 @@ internal sealed class NativeMenuBuilder
             item.Gesture = gesture;
         item.Click += (_, _) => execute();
 
-        _viewModel.PropertyChanged += (_, e) =>
+        source.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != propertyName) return;
             item.IsChecked = checkedSelector();
@@ -279,7 +288,7 @@ internal sealed class NativeMenuBuilder
                 IsEnabled = File.Exists(path) || Directory.Exists(path),
             };
             var captured = path;
-            item.Click += (_, _) => _viewModel.OpenRecentCommand.Execute(captured);
+            item.Click += (_, _) => _viewModel.DatasetOpening.OpenRecentCommand.Execute(captured);
             _openRecentMenu.Items.Add(item);
         }
 

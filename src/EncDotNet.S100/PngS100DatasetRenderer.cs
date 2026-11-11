@@ -1,8 +1,11 @@
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
+using EncDotNet.S100.Scripting;
 using SkiaSharp;
 
 namespace EncDotNet.S100;
@@ -20,8 +23,22 @@ namespace EncDotNet.S100;
 /// </remarks>
 public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100CompositeRenderer<byte[]>, IDisposable
 {
+    private readonly LuaEngineKind _luaEngine;
     private S100PipelineHost? _bundledHost;
     private bool _disposed;
+
+    /// <summary>Creates a renderer that runs Lua portrayal on the default engine.</summary>
+    public PngS100DatasetRenderer()
+        : this(LuaEngineKinds.Default)
+    {
+    }
+
+    /// <summary>Creates a renderer that runs Lua portrayal on the given engine.</summary>
+    /// <param name="luaEngine">The Lua engine that runs the portrayal rules.</param>
+    public PngS100DatasetRenderer(LuaEngineKind luaEngine)
+    {
+        _luaEngine = luaEngine;
+    }
 
     /// <inheritdoc />
     public Task<byte[]> RenderAsync(
@@ -57,12 +74,13 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             host = S100PipelineHost.Create(
                 dataset.SpecName,
                 featureOverride: layer.FeatureCatalogue is { IsBundled: false } fc ? fc : null,
-                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null);
+                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null,
+                luaEngine: _luaEngine);
             disposeHost = true;
         }
         else
         {
-            host = _bundledHost ??= S100PipelineHost.Create();
+            host = _bundledHost ??= S100PipelineHost.Create(luaEngine: _luaEngine);
             disposeHost = false;
         }
 
@@ -154,29 +172,43 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         // path, then hand the processors to the shared compositing core. The
         // processors and override hosts are disposed once compositing completes;
         // the portrayal results the core captures are immutable snapshots.
-        var processors = new List<IDatasetProcessor>(layers.Count);
-        var toDispose = new List<IDisposable>(layers.Count * 2);
+        var hosts = new S100PipelineHost[layers.Count];
+        var toDispose = new List<IDisposable>(layers.Count);
+        var parses = new Task<IDatasetProcessor>[layers.Count];
         try
         {
-            foreach (var layer in layers)
+            // Hosts resolve in order (the bundled host is created once); the
+            // cells then parse in parallel, each a Visible job on the scheduler.
+            for (int i = 0; i < layers.Count; i++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var host = ResolveHost(layer, out bool disposeHost);
+                hosts[i] = ResolveHost(layers[i], out bool disposeHost);
                 if (disposeHost)
-                    toDispose.Add(host);
-
-                var processor = layer.Dataset.CreateProcessor(host);
-                if (processor is IDisposable disposableProcessor)
-                    toDispose.Add(disposableProcessor);
-
-                processors.Add(processor);
+                    toDispose.Add(hosts[i]);
             }
 
+            for (int i = 0; i < layers.Count; i++)
+            {
+                var (dataset, host) = (layers[i].Dataset, hosts[i]);
+                parses[i] = WorkScheduler.Shared.RunAsync(
+                    WorkStage.Parse,
+                    _ => dataset.CreateProcessor(host),
+                    cancellationToken,
+                    WorkPriority.Visible(i));
+            }
+
+            var processors = await Task.WhenAll(parses).ConfigureAwait(false);
             return await CompositeAsync(processors, options, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            // Every parse has finished, failed or been cancelled before this
+            // runs, unless an earlier step threw; dispose the processors made.
+            foreach (var parse in parses)
+            {
+                if (parse is { IsCompletedSuccessfully: true, Result: IDisposable processor })
+                    processor.Dispose();
+            }
+
             for (int i = toDispose.Count - 1; i >= 0; i--)
                 toDispose[i].Dispose();
         }
@@ -192,48 +224,25 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         S100CompositeOptions options,
         CancellationToken cancellationToken)
     {
-        var mariner = options.Mariner ?? MarinerSettings.Default;
-
-        var inputs = new List<HeadlessCompositeInput>(processors.Count);
-        foreach (var processor in processors)
+        if (!double.IsFinite(options.PixelDensity) || options.PixelDensity <= 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var context = BuildCompositeContext(processor, options, mariner);
-
-            switch (processor)
-            {
-                case IVectorPortrayalSource vectorSource:
-                    {
-                        var result = await vectorSource
-                            .BuildVectorPortrayalAsync(context, cancellationToken)
-                            .ConfigureAwait(false);
-                        inputs.Add(HeadlessCompositeInput.ForVector(result));
-                        break;
-                    }
-
-                case ICoveragePortrayalSource coverageSource:
-                    {
-                        var result = await coverageSource
-                            .BuildCoveragePortrayalAsync(context, cancellationToken)
-                            .ConfigureAwait(false);
-                        inputs.Add(HeadlessCompositeInput.ForCoverage(result));
-                        break;
-                    }
-
-                default:
-                    throw new NotSupportedException(
-                        $"Headless compositing is not supported for {processor.Spec.Name}: "
-                        + "the processor implements neither IVectorPortrayalSource nor "
-                        + "ICoveragePortrayalSource.");
-            }
+            throw new ArgumentOutOfRangeException(
+                nameof(options), options.PixelDensity, "The pixel density must be positive and finite.");
         }
 
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-        var compositeOptions = new HeadlessCompositeOptions
+        var mariner = options.Mariner ?? MarinerSettings.Default;
+
+        // Each dataset portrays as its own job on the chart engine's scheduler,
+        // so several cells portray in parallel.
+        var requests = new List<ChartPortrayalRequest>(processors.Count);
+        foreach (var processor in processors)
+            requests.Add(new ChartPortrayalRequest(processor, BuildCompositeContext(processor, options, mariner)));
+
+        var compositeOptions = new ChartCompositeOptions
         {
             Width = options.Width,
             Height = options.Height,
+            DeviceScale = (float)options.PixelDensity,
             Background = options.Background ?? new RgbaColor(255, 255, 255, 255),
             Viewport = options.Viewport,
             Mariner = mariner,
@@ -241,9 +250,18 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             Basemap = options.Basemap,
         };
 
-        using var bitmap = compositor.Render(inputs, compositeOptions);
+        using var bitmap = await ChartRenderer
+            .RenderAsync(requests, CreateCompositor(), compositeOptions, scheduler: null, cancellationToken)
+            .ConfigureAwait(false);
         return EncodePng(bitmap);
     }
+
+    /// <summary>
+    /// A chart compositor over ProjNet reprojection and the S-98 authority of
+    /// the bundled product registry.
+    /// </summary>
+    internal static ChartCompositor CreateCompositor() =>
+        new(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
 
     /// <summary>
     /// Resolves the pipeline host for a layer: a per-layer override host when the
@@ -261,11 +279,12 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             return S100PipelineHost.Create(
                 layer.Dataset.SpecName,
                 featureOverride: layer.FeatureCatalogue is { IsBundled: false } fc ? fc : null,
-                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null);
+                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null,
+                luaEngine: _luaEngine);
         }
 
         disposeHost = false;
-        return _bundledHost ??= S100PipelineHost.Create();
+        return _bundledHost ??= S100PipelineHost.Create(luaEngine: _luaEngine);
     }
 
     internal static RenderContext BuildCompositeContext(

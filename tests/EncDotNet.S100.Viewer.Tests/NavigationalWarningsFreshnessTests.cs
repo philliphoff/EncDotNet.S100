@@ -74,7 +74,7 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
 
     private sealed class RecordingPick : IPickService
     {
-        public void HandlePick(Mapsui.MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null) { }
+        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
         public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
@@ -138,9 +138,9 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
             if (withKhra)
                 Sources.ByEntry[KhraEntry] = new NavigationalWarningSource(KhraId, "KHRA", Oct(14, 8, 5), IsStale: false);
             Seen = new NavigationalWarningSeenStore(seenPath);
-            Service = new NavigationalWarningsService(Loader, sources: Sources, seen: Seen, clock: Clock, ownShip: ownShip);
+            Service = new NavigationalWarningsService(Loader, sources: Sources, seen: Seen, clock: Clock, ownShip: ownShip, datasets: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
             Panel = new NavigationalWarningsViewModel(
-                Service, new RecordingPick(), timeFormat: new Utc(), loader: Loader, clock: Clock);
+                Service, new RecordingPick(), timeFormat: new Utc(), loader: Loader, clock: Clock, pickReport: null, viewTime: null, viewport: null);
         }
 
         /// <summary>AMSA refreshes at <paramref name="at"/>, now listing <paramref name="parts"/>.</summary>
@@ -236,7 +236,7 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
         var files = new FakeDatasetLoaderService();
         var file = new DatasetEntry("/tmp/opened.gml", "S-124");
         files.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [file] = new FakeProcessor(Warning("NAVAREA X", "105/26", Oct(10))) };
-        var panel = new NavigationalWarningsViewModel(new NavigationalWarningsService(files, sources: new FakeSources()), clock: new Clock(Now));
+        var panel = new NavigationalWarningsViewModel(new NavigationalWarningsService(files, sources: new FakeSources(), datasets: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), clock: new Clock(Now), pick: null, pickReport: null, viewTime: null, timeFormat: null, viewport: null, loader: null);
         Assert.False(panel.CanRefresh);
         Assert.False(panel.RefreshCommand.CanExecute(null));
         Assert.Equal(0, panel.RefreshSources());
@@ -516,7 +516,7 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
         f.Refresh(Oct(14, 10), Warning("NAVAREA X", "113/26", Oct(14, 9)), Warning("NAVAREA X", "112/26", Oct(13, 6)));
         f.Panel.Open(f.Row("113/26"));
         Assert.Equal(0, f.Panel.BadgeCount);
-        var options = new NavigationalWarningNewOptionsViewModel(f.Service, clock: f.Clock);
+        var options = new NavigationalWarningNewOptionsViewModel(f.Service, clock: f.Clock, settings: null);
         // Handover at 14:00: 113/26 came at 10:00, 112/26 with the 09:00 baseline.
         f.Clock.SetUtcNow(Oct(14, 14));
 

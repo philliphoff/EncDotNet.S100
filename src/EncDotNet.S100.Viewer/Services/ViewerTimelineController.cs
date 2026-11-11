@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -21,17 +20,18 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
         TimelineViewModel timeline,
         DatasetsViewModel datasets,
         TimeProvider clock,
-        Func<Action, Task>? dispatch = null)
+        Func<Action, Task> dispatch)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _time = time;
         _timeline = timeline;
         _datasets = datasets;
         _clock = clock;
-        _dispatch = dispatch ?? (action => Dispatcher.UIThread.InvokeAsync(action).GetTask());
+        _dispatch = dispatch;
     }
 
     /// <inheritdoc />
@@ -215,6 +215,10 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
                 Library = lane.IsKnown,
                 NewRun = lane.IsNewRun,
                 Windows = [.. lane.Entries.Select(e => new TimelineLibraryWindow(e.ItemId, e.State, e.Start, e.End, e.Run, e.IsNewRun, e.IsExpired))],
+                Sub = lane.Sub,
+                Issued = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.Issued) ? lane.Dataset?.IssueTime : null,
+                NextIssue = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.NextIssue) ? lane.Dataset?.NextIssueTime : null,
+                StepTicks = lane.Marks.Count(m => m.Kind == TimelineLaneMarkKind.Step),
             };
         var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => State(lane, g.Title, true)));
         var folded = _timeline.HasOutsideLanes
@@ -250,6 +254,8 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Time = entry.LayerTime?.Text,
             Hidden = entry.IsLayerHidden,
             Drawing = entry.IsLayerDrawing,
+            StaleHours = entry.LayerTime?.StaleAge is { } age ? (int)age.TotalHours : null,
+            Tag = entry.IsLayerWarning ? entry.LayerTagText : null,
         };
     }
 }

@@ -36,8 +36,8 @@ public sealed class RoutePassageCardTests : IDisposable
     private static (RoutesService Service, Route Route, RoutesPanelViewModel Vm) Create(
         DepthUnit unit = DepthUnit.Metres, TimeFormat time = TimeFormat.Utc)
     {
-        var service = new RoutesService();
-        var vm = new RoutesPanelViewModel(service, marinerSettings: new Mariner(unit), timeFormat: new Clock(time));
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var vm = new RoutesPanelViewModel(service, marinerSettings: new Mariner(unit), timeFormat: new Clock(time), viewport: null, check: null, findings: null, exchange: null, dialogs: null);
         var route = service.Routes.CreateRoute("Solent");
         route.AppendWaypoint(new GeoPosition(50.70, -1.10));
         route.AppendWaypoint(new GeoPosition(50.75, -1.20));
@@ -102,8 +102,8 @@ public sealed class RoutePassageCardTests : IDisposable
     [Fact]
     public void Card_opens_for_a_route_that_already_has_passage_values()
     {
-        var service = new RoutesService();
-        var vm = new RoutesPanelViewModel(service);
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var vm = new RoutesPanelViewModel(service, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
         var casual = service.Routes.CreateRoute("Casual");
         Assert.False(vm.Passage.IsExpanded);
 

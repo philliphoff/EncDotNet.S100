@@ -38,6 +38,8 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(CheckStateDto))]
 [JsonSerializable(typeof(RouteFindingsDto))]
 [JsonSerializable(typeof(MapLegendDto))]
+[JsonSerializable(typeof(WeatherDisplayDto))]
+[JsonSerializable(typeof(RouteWeatherSettingsDto))]
 [JsonSerializable(typeof(MeasureDto))]
 [JsonSerializable(typeof(ClearanceStateDto))]
 [JsonSerializable(typeof(NavigationalWarningsDto))]
@@ -47,6 +49,9 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(SetDisplayCombinationDto))]
 [JsonSerializable(typeof(DepthBasisDto))]
 [JsonSerializable(typeof(RangeBearingDto))]
+[JsonSerializable(typeof(SettleStateDto))]
+[JsonSerializable(typeof(ProcessMetricsDto))]
+[JsonSerializable(typeof(PortrayalPrewarmDto))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]

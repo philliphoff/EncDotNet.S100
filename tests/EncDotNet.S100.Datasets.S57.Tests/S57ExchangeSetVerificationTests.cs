@@ -152,6 +152,39 @@ public sealed class S57ExchangeSetVerificationTests
             () => S57ExchangeSetVerification.VerifyAsync(string.Empty, cancellationToken: TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task VerifyAsync_ChecksAnExchangeSetHoldingOnlyUpdates()
+    {
+        // S-64 §2.2.1 delivers updates with no base cell; their CRCs must
+        // still be checked.
+        var root = Directory.CreateTempSubdirectory("s57-updates-");
+        try
+        {
+            byte[] good = [1, 2, 3];
+            byte[] corrupt = [4, 5, 6];
+            await File.WriteAllBytesAsync(Path.Combine(root.FullName, "GB5X01SW.001"), good, TestContext.Current.CancellationToken);
+            await File.WriteAllBytesAsync(Path.Combine(root.FullName, "GB5X01SW.002"), corrupt, TestContext.Current.CancellationToken);
+            S57CatalogWriter.WriteToFile(Path.Combine(root.FullName, "CATALOG.031"), new S57Catalog
+            {
+                Entries =
+                [
+                    new S57CatalogEntry { RecordId = 1, FileName = "CATALOG.031", Implementation = "ASC" },
+                    new S57CatalogEntry { RecordId = 2, FileName = "GB5X01SW.001", Implementation = "BIN", CrcChecksum = S57CatalogWriter.ComputeCrc(good) },
+                    new S57CatalogEntry { RecordId = 3, FileName = "GB5X01SW.002", Implementation = "BIN", CrcChecksum = S57CatalogWriter.ComputeCrc(good) },
+                ],
+            });
+
+            var result = await S57ExchangeSetVerification.VerifyAsync(root.FullName, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(VerificationOutcome.Ok, Assert.Single(result.FileResults, r => r.FileName == "GB5X01SW.001").ChecksumOutcome);
+            Assert.Equal(VerificationOutcome.ChecksumMismatch, Assert.Single(result.FileResults, r => r.FileName == "GB5X01SW.002").ChecksumOutcome);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
     /// <summary>
     /// End-to-end verification against a real S-57 exchange set, when one is
     /// available via the <c>ENCDOTNET_S57_EXCHANGE_SET</c> environment variable

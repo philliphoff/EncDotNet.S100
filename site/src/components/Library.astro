@@ -1,4 +1,5 @@
 ---
+import Permalink from './Permalink.astro';
 import Shot from './Shot.astro';
 
 const sizes = '(max-width: 900px) 100vw, 690px';
@@ -7,7 +8,7 @@ const sizes = '(max-width: 900px) 100vw, 690px';
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Library</span>
-      <h2 id="library-title">Find data, not files.</h2>
+      <div class="anchored"><h2 id="library-title">Find data, not files.</h2><Permalink to="library" label="Library" /></div>
       <p class="lede">
         The Library indexes local folders, collection manifests and online catalogues, so everything you can load is in
         one place. Whatever you load is checked against its product's rules and drawn with the display controls you'd
@@ -16,10 +17,10 @@ const sizes = '(max-width: 900px) 100vw, 690px';
     </div>
 
     <div class="features">
-      <div class="feature">
+      <div id="library-browse" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Browse</span>
-          <h3>See coverage before you download.</h3>
+          <div class="anchored"><h3>See coverage before you download.</h3><Permalink to="library-browse" label="Browse" /></div>
           <p>
             Online catalogues include NOAA's charts, high-resolution bathymetry, and water-level and current forecasts.
             You can browse coverage on the map before you download anything, and keep it up to date afterwards.
@@ -28,12 +29,12 @@ const sizes = '(max-width: 900px) 100vw, 690px';
         <Shot id="F5" alt="The Library panel browsing NOAA S-102 coverage areas" sizes={sizes} />
       </div>
 
-      <div class="feature flip">
+      <div id="library-catalogues" class="feature flip">
         <div class="feature-copy">
           <span class="eyebrow">Catalogues</span>
-          <h3>Charts from around the world.</h3>
+          <div class="anchored"><h3>Charts from around the world.</h3><Permalink to="library-catalogues" label="Catalogues" /></div>
           <p>
-            Add online catalogue lists the sources SoundCharts knows, grouped by region: NOAA's charts, depths, water
+            Add online source lists the sources SoundCharts knows, grouped by region: NOAA's charts, depths, water
             levels and currents, USACE inland charts, Canada's navigational warnings over SECOM, and inland charts for
             Europe's rivers from the Danube to the Rhine.
           </p>
@@ -44,8 +45,8 @@ const sizes = '(max-width: 900px) 100vw, 690px';
         </div>
         <Shot
           id="F13"
-          alt="The Add online catalogue directory, with catalogues grouped by region"
-          title="Add online catalogue"
+          alt="The Add online source directory, with catalogues grouped by region"
+          title="Add online source"
           detail="Directory grouped by region · NOAA, USACE, Canada S-124 (SECOM), European inland ENC · SECOM registry"
           sizes={sizes}
         />
@@ -53,17 +54,17 @@ const sizes = '(max-width: 900px) 100vw, 690px';
     </div>
 
     <div class="minis">
-      <div class="mini">
+      <div id="library-validation" class="mini">
         <Shot id="F8" alt="Validation findings with map markers" title="Validation panel" detail="Findings + map markers" sizes="(max-width: 900px) 100vw, 380px" />
         <div class="body">
-          <h3>Validation built in</h3>
+          <div class="anchored"><h3>Validation built in</h3><Permalink to="library-validation" label="Validation" /></div>
           <p>Normative rule packs for every S-100 product. Click a finding to jump to it on the map.</p>
         </div>
       </div>
-      <div class="mini">
+      <div id="library-ecdis" class="mini">
         <Shot id="F9" alt="ECDIS display controls" title="ECDIS display controls" detail="Display category, safety contour" sizes="(max-width: 900px) 100vw, 380px" />
         <div class="body">
-          <h3>ECDIS-style controls</h3>
+          <div class="anchored"><h3>ECDIS-style controls</h3><Permalink to="library-ecdis" label="ECDIS-style controls" /></div>
           <p>Display categories, viewing groups, safety contour, four-shade depths and simplified symbols.</p>
         </div>
       </div>

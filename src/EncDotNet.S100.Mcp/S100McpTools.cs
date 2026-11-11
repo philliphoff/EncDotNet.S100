@@ -1,6 +1,7 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
 using ModelContextProtocol.Server;
 
@@ -32,32 +33,37 @@ public static class S100McpTools
     /// The route-check sources shared with the host's own checks, or
     /// <c>null</c> for the tool's own cache over ProjNet.
     /// </param>
+    /// <param name="mapDrawState">
+    /// What the host's map draws, so <c>identify_features</c> with no time
+    /// matches it, or <c>null</c> when the host has no map.
+    /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
     /// the corresponding <c>EncDotNet.S100.Mcp.Tools</c> types (e.g.
     /// <c>list_datasets</c>, <c>describe_feature</c>, <c>sample_coverage</c>);
     /// host-supplied tools must not collide with them.
     /// </returns>
-    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null)
+    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null, IMapDrawState? mapDrawState = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
-        routeCheckSources ??= new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
+        var transforms = new ProjNetCrsTransformFactory();
+        routeCheckSources ??= new RouteCheckSourceCache(transforms);
 
         return S100McpServerToolFactory.CreateTools(
             new ListDatasetsTool(catalog),
             new DescribeFeatureTool(catalog),
             new DescribeFeatureTypeTool(),
-            new SampleCoverageTool(catalog),
+            new SampleCoverageTool(catalog, transforms),
             new FindAtTool(catalog),
-            new IdentifyFeaturesTool(catalog),
+            mapDrawState is null ? new IdentifyFeaturesTool(catalog) : new IdentifyFeaturesTool(catalog, mapDrawState),
             new NearestFeaturesTool(catalog),
             new QueryFeaturesTool(catalog),
             new CountFeaturesTool(catalog),
             new SearchFeaturesTool(catalog),
-            new SampleCoverageAlongTool(catalog),
-            new ListSpecsTool(catalog),
+            new SampleCoverageAlongTool(catalog, transforms),
+            new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
-            new CheckRouteTool(catalog, passageRoutes, routeCheckSources))
+            new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))
             .ToList();
     }
 }

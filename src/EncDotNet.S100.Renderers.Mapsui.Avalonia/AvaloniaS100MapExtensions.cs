@@ -27,6 +27,8 @@ public static class AvaloniaS100MapExtensions
     /// a CRS transform factory (or a prebuilt renderer). When its
     /// <see cref="S100MapsuiOptions.RedrawMarshal"/> is <see langword="null"/>, a
     /// UI-thread marshal is supplied automatically; a host-set marshal is kept.
+    /// The same holds for <see cref="S100MapsuiOptions.StackMarshal"/>, so the
+    /// layer stack composes off the UI thread.
     /// </param>
     /// <returns>
     /// The owned, disposable session and the attached adapter. The caller disposes
@@ -63,8 +65,17 @@ public static class AvaloniaS100MapExtensions
             };
         }
 
+        if (options.StackMarshal is null)
+        {
+            options = options with
+            {
+                StackMarshal = static action => Dispatcher.UIThread.Post(action),
+            };
+        }
+
         var session = map.AddS100(options);
         var adapter = AvaloniaMapsuiMapAdapter.Attach(mapControl);
+        adapter.ForecastFlings(session.Navigator);
         return (session, adapter);
     }
 }

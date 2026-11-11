@@ -21,6 +21,8 @@ internal sealed class EcdisDisplayState
     private readonly Dictionary<string, bool> _layerVisibility = new(StringComparer.Ordinal);
     private EcdisDisplayCategory _category = EcdisDisplayCategory.Standard;
     private bool _showNavigationalWarnings = true;
+    private readonly HashSet<string> _hiddenAmlProducts = new(StringComparer.OrdinalIgnoreCase);
+    private bool _followAmlScaleBands = true;
 
     /// <summary>Raised after any mutation completes.</summary>
     public event Action? Changed;
@@ -59,6 +61,87 @@ internal sealed class EcdisDisplayState
             _showNavigationalWarnings = show;
         }
         if (changed) NavigationalWarningsChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Raised after <see cref="HiddenAmlProducts"/> or
+    /// <see cref="FollowAmlScaleBands"/> changes. Not <see cref="Changed"/>:
+    /// the AML switches only hide whole AML cells, which
+    /// <c>AmlDisplayService</c> does without re-rendering every vector dataset.
+    /// </summary>
+    public event Action? AmlDisplayChanged;
+
+    /// <summary>
+    /// The AML products (by code, such as <c>CLB</c>, or <c>3.0</c> for the
+    /// AML 3.0 integrated product) the Additional Military Layers section has
+    /// switched off (AML handoff decision 24). Empty by default.
+    /// </summary>
+    public IReadOnlySet<string> HiddenAmlProducts
+    {
+        get { lock (_gate) return new HashSet<string>(_hiddenAmlProducts, StringComparer.OrdinalIgnoreCase); }
+    }
+
+    /// <summary>
+    /// Whether AML scale bands drive which AML cells show at the map scale
+    /// (AML handoff decision 26). On by default; off shows every AML cell at
+    /// every scale.
+    /// </summary>
+    public bool FollowAmlScaleBands
+    {
+        get { lock (_gate) return _followAmlScaleBands; }
+    }
+
+    /// <summary>
+    /// Shows or hides every cell of the AML product <paramref name="product"/>
+    /// and raises <see cref="AmlDisplayChanged"/> when that changes anything.
+    /// </summary>
+    /// <param name="product">The product code, such as <c>CLB</c>.</param>
+    /// <param name="visible">Whether the product's cells show.</param>
+    public void SetAmlProductVisible(string product, bool visible)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(product);
+        bool changed;
+        lock (_gate)
+            changed = visible ? _hiddenAmlProducts.Remove(product) : _hiddenAmlProducts.Add(product);
+        if (changed) AmlDisplayChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Sets <see cref="FollowAmlScaleBands"/> and raises
+    /// <see cref="AmlDisplayChanged"/> when it differs.
+    /// </summary>
+    /// <param name="follow">Whether the scale bands apply.</param>
+    public void SetFollowAmlScaleBands(bool follow)
+    {
+        bool changed;
+        lock (_gate)
+        {
+            changed = _followAmlScaleBands != follow;
+            _followAmlScaleBands = follow;
+        }
+        if (changed) AmlDisplayChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Replaces the AML switches (on viewer startup, from the saved settings)
+    /// and raises <see cref="AmlDisplayChanged"/> once.
+    /// </summary>
+    /// <param name="hiddenProducts">The product codes switched off.</param>
+    /// <param name="followScaleBands">Whether the scale bands apply.</param>
+    public void HydrateAml(IEnumerable<string> hiddenProducts, bool followScaleBands)
+    {
+        ArgumentNullException.ThrowIfNull(hiddenProducts);
+        lock (_gate)
+        {
+            _hiddenAmlProducts.Clear();
+            foreach (var product in hiddenProducts)
+            {
+                if (!string.IsNullOrWhiteSpace(product))
+                    _hiddenAmlProducts.Add(product.Trim());
+            }
+            _followAmlScaleBands = followScaleBands;
+        }
+        AmlDisplayChanged?.Invoke();
     }
 
     /// <summary>

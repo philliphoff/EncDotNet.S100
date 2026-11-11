@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Avalonia;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using Spectre.Console.Cli;
 
 namespace EncDotNet.S100.Viewer;
@@ -54,6 +54,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [CommandOption("--data-dir <PATH>")]
     [Description("Redirect all settings AND disk caches under this folder (also honoured via the S100_DATA_DIR env var). Point at an empty temp directory for a guaranteed-fresh instance; --settings still overrides just the settings file.")]
     public string? DataDir { get; set; }
+
+    [CommandOption("--cache-dir <PATH>")]
+    [Description("Redirect only the render caches (portrayal instructions, pattern clips, tiles) under this folder (also S100_CACHE_DIR). Settings and the Library stay put, so a performance run can start cold without clearing the real caches.")]
+    public string? CacheDir { get; set; }
 
     [CommandOption("--ephemeral")]
     [Description("Run against a throwaway settings file that is never persisted, leaving the user's profile untouched.")]
@@ -272,10 +276,10 @@ internal sealed class ViewerCommand : Command<ViewerCommandSettings>
     /// <summary>
     /// Sizes the GPU resource cache so the tiles every drawing layer blits stay
     /// resident between frames instead of being re-uploaded on each paint
-    /// (see <see cref="RenderingOptimizations.SkiaGpuResourceMb"/>).
+    /// (see <see cref="ChartSessionOptions.SkiaGpuResourceMb"/>).
     /// </summary>
     internal static SkiaOptions CreateSkiaOptions() => new()
     {
-        MaxGpuResourceSizeBytes = (long)(RenderingOptimizations.SkiaGpuResourceMb * 1024 * 1024),
+        MaxGpuResourceSizeBytes = (long)(ChartEngine.Options.SkiaGpuResourceMb * 1024 * 1024),
     };
 }

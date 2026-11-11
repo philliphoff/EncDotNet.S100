@@ -45,7 +45,7 @@ public class SampleCoverageToolTimeRangeTests
     private static Task<ToolResult<SampleCoverageResult>> SampleS111(
         FakeDatasetCatalog catalog, DateTimeOffset? time = null, TimeQuery? times = null,
         TimeOutOfRangePolicy outOfRange = TimeOutOfRangePolicy.Error) =>
-        new SampleCoverageTool(catalog).InvokeAsync(new SampleCoverageRequest(
+        new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()).InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, time, times, outOfRange),
             TestContext.Current.CancellationToken);
 
@@ -244,7 +244,7 @@ public class SampleCoverageToolTimeRangeTests
         var catalog = new FakeDatasetCatalog();
         catalog.Add(S104Run("early", Hourly(0, 4)));
         catalog.Add(S104Run("late", Hourly(24, 4)));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: At(25)),
@@ -385,7 +385,7 @@ public class SampleCoverageToolTimeRangeTests
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("early", StationRun(Day, 1.0f, "20261005")));
         catalog.Add(LoadedDatasetFactory.S111Stations("late", StationRun(Day.AddHours(24), 2.0f, "20261006")));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 37.82, Longitude: -122.48, Time: At(25)),
@@ -402,7 +402,7 @@ public class SampleCoverageToolTimeRangeTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("run", StationRun(Day, 1.0f, "20261005")));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 37.82, Longitude: -122.48, Time: At(50)),
@@ -422,7 +422,7 @@ public class SampleCoverageToolTimeRangeTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(S111Run("run", Hourly(0, 4)));
-        var tool = new SampleCoverageAlongTool(catalog);
+        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             LoadedDatasetFactory.S111Spec, Route((0.01, 0.01), (0.02, 0.02)), Time: At(50)),
@@ -441,7 +441,7 @@ public class SampleCoverageToolTimeRangeTests
         catalog.Add(S111Run("here", Hourly(0, 48)));
         var elsewhere = S111Synth.Dataset(originLat: 1.0, originLon: 1.0, times: Hourly(0, 4));
         catalog.Add(LoadedDatasetFactory.S111("there", LoadedDatasetFactory.Box(1, 1, 1.04, 1.04), new S111CoverageSource(elsewhere)));
-        var tool = new SampleCoverageAlongTool(catalog);
+        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             LoadedDatasetFactory.S111Spec, Route((0.02, 0.02), (1.02, 1.02)), Time: At(30)),

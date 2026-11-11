@@ -15,15 +15,15 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// This is the Core seam through which the generic
 /// <see cref="Lua.LuaRuleExecutor"/> obtains everything it needs from a
 /// catalogue: the manifest-declared list of Lua rule files and the raw
-/// source for each one (for the MoonSharp <c>require()</c> loader and
+/// source for each one (for the engine's <c>require()</c> loader and
 /// <c>main.lua</c>), plus the declared context-parameter set (to initialise
 /// the Lua side and to filter mariner overrides). It deliberately does not
 /// expose a compiled script type, preserving per-render sandbox isolation.
 /// </para>
 /// <para>
 /// The interface is purely asynchronous so the catalogue stays an
-/// unopinionated data source. The MoonSharp <c>require()</c> module loader
-/// is itself synchronous (we do not own MoonSharp), so the executor — not
+/// unopinionated data source. The <see cref="Scripting.ILuaContext"/> module
+/// loader is synchronous, so the executor — not
 /// the catalogue — is responsible for awaiting all source files into a
 /// local snapshot dictionary before invoking the Lua engine, and capturing
 /// that dictionary inside the sync loader callback.
@@ -37,7 +37,7 @@ public interface ILuaRuleSource
     /// portrayal catalogue manifest. The returned list is intended to be
     /// memoized by the catalogue; the executor uses it to drive
     /// <see cref="GetLuaSourceAsync"/> calls before kicking off the
-    /// synchronous MoonSharp engine.
+    /// synchronous Lua engine.
     /// </summary>
     ValueTask<IReadOnlyList<string>> GetLuaSourceNamesAsync(CancellationToken cancellationToken = default);
 
@@ -45,7 +45,7 @@ public interface ILuaRuleSource
     /// Returns the raw Lua source for the given bare file name inside the
     /// portrayal catalogue's <c>Rules/</c> directory (e.g. <c>"main.lua"</c>,
     /// <c>"S100Scripting.lua"</c>), or <see langword="null"/> if the file is
-    /// not present — honouring the MoonSharp module loader's
+    /// not present — honouring the <see cref="Scripting.ILuaContext.SetModuleLoader"/>
     /// "missing module → return null" contract.
     /// </summary>
     ValueTask<string?> GetLuaSourceAsync(string fileName, CancellationToken cancellationToken = default);

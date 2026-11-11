@@ -1,5 +1,6 @@
 import sys
 clauses, notconv, out = sys.argv[1], sys.argv[2], sys.argv[3]
+classdrops = [l.rstrip('\n').split('\t') for l in open(sys.argv[4])] if len(sys.argv) > 4 else []
 rows = [l.rstrip('\n').split('\t') for l in open(clauses)]
 nc = [l.rstrip('\n').split('\t') for l in open(notconv)]
 def block(kind, name):
@@ -31,5 +32,7 @@ s += '    /// <summary>Clause per S-101 information type code (Annex C §24).</s
 s += '    /// <summary>Clause per S-101 simple attribute code (Annex C §27–§28).</summary>\n' + block('simpleAttribute', 'SimpleAttributes') + '\n'
 s += '    /// <summary>Clause per S-101 complex attribute code (Annex C §29).</summary>\n' + block('complexAttribute', 'ComplexAttributes') + '\n'
 s += '    /// <summary>\n    /// Simple attributes whose Annex C clause says, without exception, that\n    /// they will not be converted (enhancements with no S-57 encoding).\n    /// </summary>\n'
-s += '    public static readonly FrozenDictionary<string, string> NotConverted = new Dictionary<string, string>(StringComparer.Ordinal)\n    {\n' + '\n'.join(f'        ["{c}"] = "{n}",' for c, n in nc) + '\n    }.ToFrozenDictionary(StringComparer.Ordinal);\n}\n'
+s += '    public static readonly FrozenDictionary<string, string> NotConverted = new Dictionary<string, string>(StringComparer.Ordinal)\n    {\n' + '\n'.join(f'        ["{c}"] = "{n}",' for c, n in nc) + '\n    }.ToFrozenDictionary(StringComparer.Ordinal);\n'
+s += '\n    /// <summary>\n    /// Attributes a feature or information type clause (§3–§24) says will not\n    /// be converted on that class, keyed by (S-101 class, S-101 attribute).\n    /// </summary>\n'
+s += '    public static readonly FrozenDictionary<(string Class, string Attribute), string> NotConvertedOnClass = new Dictionary<(string, string), string>\n    {\n' + '\n'.join(f'        [("{c}", "{a}")] = "{n}",' for c, a, n in classdrops) + '\n    }.ToFrozenDictionary();\n}\n'
 open(out, 'w').write(s)

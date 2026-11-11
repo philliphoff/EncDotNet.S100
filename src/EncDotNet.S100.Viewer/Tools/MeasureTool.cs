@@ -56,16 +56,6 @@ internal sealed class MeasureTool : IMapTool
         _session = session;
     }
 
-    /// <summary>Test-only ctor that uses a stub appearance provider returning the default appearance.</summary>
-    internal MeasureTool() : this(new StaticAppearanceProvider(MeasureOverlayAppearance.Default), new MeasureSession()) { }
-
-    private sealed class StaticAppearanceProvider : IMeasureOverlayAppearanceProvider
-    {
-        public MeasureOverlayAppearance Current { get; }
-        public event EventHandler? Changed { add { } remove { } }
-        public StaticAppearanceProvider(MeasureOverlayAppearance value) => Current = value;
-    }
-
     /// <summary>Exposed for tests.</summary>
     internal MeasurePathState State => _session.State;
 

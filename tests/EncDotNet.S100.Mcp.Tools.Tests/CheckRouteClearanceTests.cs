@@ -50,7 +50,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task A_polyline_and_draft_check_the_passage()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 3, Departure: Midnight, IncludeSamples: true));
 
         Assert.Equal("meets_settings", value.Clearance!.Verdict);
@@ -78,8 +78,8 @@ public class CheckRouteClearanceTests
 
         // Every check ran; without safety settings the chart check's depth
         // checks didn't, and with no cells the route leaves chart coverage.
-        Assert.Equal(["chart", "areas", "warnings", "clearance"], value.Checks.Select(c => c.Name));
-        Assert.Equal(["partial", "ran", "ran", "ran"], value.Checks.Select(c => c.State));
+        Assert.Equal(["chart", "areas", "warnings", "clearance", "weather"], value.Checks.Select(c => c.Name));
+        Assert.Equal(["partial", "ran", "ran", "ran", "skipped"], value.Checks.Select(c => c.State));
         Assert.Equal(RouteCheckReasons.SafetySettingsMissing, value.Checks[0].Reason);
         Assert.All(value.Findings, f => Assert.Equal(RouteFindingCodes.OutsideChartCoverage.Value, f.Code));
         Assert.Equal("check", value.Verdict.Kind);
@@ -92,7 +92,7 @@ public class CheckRouteClearanceTests
     {
         // #939: the S-102 declares no vertical datum, so every sample is
         // datum_unconfirmed, but still meets the setting.
-        var value = await Ok(new CheckRouteTool(Catalog(depthDatum: null)), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog(depthDatum: null)), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 3, Departure: Midnight,
             IncludeSamples: true, IncludeWindow: true, WindowFrom: Midnight, WindowTo: Midnight.AddMinutes(30)));
 
@@ -121,7 +121,7 @@ public class CheckRouteClearanceTests
     public async Task Below_the_setting_is_counted_and_located()
     {
         // Column 2 (0,02–0,03° E) is 9 m deep.
-        var value = await Ok(new CheckRouteTool(Catalog((r, c) => c == 2 ? 9f : 12.5f)), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog((r, c) => c == 2 ? 9f : 12.5f)), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 1, Departure: Midnight, IncludeSamples: true));
 
         Assert.Equal("below_setting", value.Clearance!.Verdict);
@@ -146,7 +146,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Unset_required_ukc_says_no_margin_is_set()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, Departure: Midnight, IncludeSamples: true));
 
         Assert.True(value.Clearance!.NoMarginSet);
@@ -158,7 +158,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Arrival_past_the_s104_end_gives_the_neutral_verdict()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, Departure: Midnight.AddMinutes(110), IncludeSamples: true));
 
         Assert.Equal("water_level_ends_before_arrival", value.Clearance!.Verdict);
@@ -172,7 +172,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Samples_are_thinned_but_keep_the_minimum()
     {
-        var value = await Ok(new CheckRouteTool(Catalog((r, c) => c == 2 ? 9f : 12.5f)), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog((r, c) => c == 2 ? 9f : 12.5f)), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, Departure: Midnight, IncludeSamples: true, MaxSamples: 5));
 
         Assert.True(value.Clearance!.SamplesThinned);
@@ -184,7 +184,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task The_window_sweeps_departures()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 3, Departure: Midnight,
             IncludeWindow: true, WindowFrom: Midnight, WindowTo: Midnight.AddHours(2), WindowStepMinutes: 30));
 
@@ -200,7 +200,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Include_window_sweeps_the_s104_range_and_reports_the_late_arrivals()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 3, Departure: Midnight, IncludeWindow: true));
 
         var window = Assert.IsType<CheckRouteWindow>(value.Clearance!.Window);
@@ -219,7 +219,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Without_a_draft_the_clearance_check_is_skipped()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(Polyline: Polyline, IncludeWindow: true));
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(Polyline: Polyline, IncludeWindow: true));
 
         Assert.Null(value.Clearance);
         var clearance = value.Checks.Single(c => c.Name == "clearance");
@@ -234,7 +234,7 @@ public class CheckRouteClearanceTests
     [InlineData(10.0, null, -0.5)]
     public async Task Invalid_values_are_rejected(double draft, double? speed, double? required)
     {
-        var error = await Err(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var error = await Err(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: draft, SpeedKnots: speed, RequiredUkcMeters: required));
 
         Assert.IsType<InvalidArgument>(error);
@@ -243,7 +243,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Window_bounds_need_include_window()
     {
-        var error = await Err(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var error = await Err(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, DraftMeters: 10, WindowFrom: Midnight, WindowTo: Midnight.AddHours(1)));
 
         Assert.Equal("includeWindow", Assert.IsType<InvalidArgument>(error).Parameter);
@@ -252,7 +252,7 @@ public class CheckRouteClearanceTests
     [Fact]
     public async Task Without_routes_a_polyline_is_required()
     {
-        var error = await Err(new CheckRouteTool(Catalog()), new CheckRouteRequest(DraftMeters: 10));
+        var error = await Err(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(DraftMeters: 10));
 
         Assert.Equal("polyline", Assert.IsType<InvalidArgument>(error).Parameter);
     }
@@ -269,7 +269,7 @@ public class CheckRouteClearanceTests
             ],
             Midnight.AddMinutes(30)));
 
-        var value = await Ok(new CheckRouteTool(Catalog(), routes), new CheckRouteRequest(RequiredUkcMeters: 1, IncludeSamples: true));
+        var value = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(RequiredUkcMeters: 1, IncludeSamples: true));
 
         Assert.Null(routes.LastRouteId);
         Assert.Equal("r1", value.RouteId);
@@ -282,7 +282,7 @@ public class CheckRouteClearanceTests
         Assert.All(value.Clearance!.Legs!, l => Assert.Equal(1, l.RequiredUkcMeters));
         Assert.False(value.Clearance!.NoMarginSet);
 
-        var overridden = await Ok(new CheckRouteTool(Catalog(), routes), new CheckRouteRequest(
+        var overridden = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(
             RouteId: "r1", DraftMeters: 12, SpeedKnots: 3, Departure: Midnight, IncludeSamples: true));
         Assert.Equal("r1", routes.LastRouteId);
         Assert.All(overridden.Clearance!.Legs!, l =>
@@ -301,18 +301,18 @@ public class CheckRouteClearanceTests
             [new PassageRouteLeg([new GeoPosition(0.005, 0.005), new GeoPosition(0.005, 0.02)], LegGeometry.Rhumb, null, 6, null, null, null)],
             Midnight));
 
-        var skipped = await Ok(new CheckRouteTool(Catalog(), routes), new CheckRouteRequest());
+        var skipped = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest());
         Assert.Null(skipped.Clearance);
         Assert.Equal(RouteCheckReasons.DraftMissing, skipped.Checks.Single(c => c.Name == "clearance").Reason);
 
-        var value = await Ok(new CheckRouteTool(Catalog(), routes), new CheckRouteRequest(DraftMeters: 10, IncludeSamples: true));
+        var value = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(DraftMeters: 10, IncludeSamples: true));
         Assert.Equal(10, value.Clearance!.Legs![0].DraftMeters);
     }
 
     [Fact]
     public async Task Route_lookup_errors_pass_through()
     {
-        var error = await Err(new CheckRouteTool(Catalog(), new FakeRoutes(null)), new CheckRouteRequest(RouteId: "nope"));
+        var error = await Err(CheckRouteTools.Create(Catalog(), routes: new FakeRoutes(null), time: TimeProvider.System), new CheckRouteRequest(RouteId: "nope"));
 
         Assert.Equal("invalid_argument", error.Code);
     }

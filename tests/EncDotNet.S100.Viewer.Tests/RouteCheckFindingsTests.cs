@@ -117,14 +117,17 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     private async Task<Setup> Start(Route route)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         route.SetDeparture(Now);
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog,
-            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post);
-        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
+            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(),
+            warnings: null,
+            mariner: null,
+            options: null);
+        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), viewport: null, mariner: null, warnings: null);
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
         return new Setup(routes, route, check, findings, catalog);
@@ -221,15 +224,15 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         route.AppendWaypoint(new DataModel.GeoPosition(0, 0.01));
         route.SetPassageValue(RoutePassageField.Draft, 5);
 
-        var input = PassageCheckService.CheckInput.For(route, Now, settings)!;
+        var input = PassageCheckService.CheckInput.For(route, Now, null, TropicalCycloneCheckSettings.Default, settings)!;
         var checkSettings = input.Settings;
 
         Assert.Equal((10.0, 8.0), (checkSettings.SafetyContour!.Value.TotalMetres, checkSettings.SafetyDepth!.Value.TotalMetres));
         Assert.True(checkSettings.ChecksDepths);
         Assert.Equal(Now, checkSettings.At);
-        Assert.False(PassageCheckService.CheckInput.For(route, Now)!.Settings.ChecksDepths);
+        Assert.False(PassageCheckService.CheckInput.For(route, Now, null, TropicalCycloneCheckSettings.Default)!.Settings.ChecksDepths);
         // A change to the mariner's depths is a new input; the legs are the same.
-        var other = PassageCheckService.CheckInput.For(route, Now, settings with { SafetyDepth = Depth.FromMetres(9) })!;
+        var other = PassageCheckService.CheckInput.For(route, Now, null, TropicalCycloneCheckSettings.Default, settings with { SafetyDepth = Depth.FromMetres(9) })!;
         Assert.False(input.SameAs(other));
         Assert.True(input.SameLegs(other));
         Assert.Equal("Crosses land", new ViewerFindingFormatter(DepthUnit.Metres, TimeFormat.Utc, Now).Title(new RouteFinding("x", RouteFindingCodes.CrossesLand)));
@@ -247,7 +250,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     public async Task Check_route_returns_the_findings_list_route_checks()
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
-        var tool = new CheckRouteTool(s.Catalog, new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()));
+        var tool = new CheckRouteTool(s.Catalog, routes: new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()), sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
 
         var result = await tool.InvokeAsync(new CheckRouteRequest(), TestContext.Current.CancellationToken);
 

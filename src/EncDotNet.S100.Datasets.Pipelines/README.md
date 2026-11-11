@@ -70,8 +70,6 @@ more detail.
 - **`MapPresentationState`** and **`MapDataset`**: renderer-neutral snapshots
   of a map's display settings and of each dataset on it. See
   [Map presentation](#map-presentation).
-- **`HeadlessCompositor`**: draws several datasets into one image with the
-  S-98 rules. See [S-98 interoperability](#s-98-interoperability).
 - **`ValidationRunner`**: runs any processor's validation for a host. See
   [Validation](#validation).
 - The pick services in the `.Query` namespace and the dataset catalog in
@@ -99,11 +97,14 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `S131DatasetProcessor` | S-131 | Vector, Lua |
 | `S201DatasetProcessor` | S-201 | Vector, XSLT |
 | `S411DatasetProcessor` | S-411 | Vector, XSLT |
+| `S412DatasetProcessor` | S-412 (draft) | Vector, XSLT; time-aware, drawing the warnings in force at the time step |
 | `S421DatasetProcessor` | S-421 | Vector, XSLT |
 | `S57DatasetProcessor` | S-57 | Translated to S-101 (maritime ENC) or S-401 (inland ENC), then drawn by the S-101 vector pipeline with that product's catalogues |
 | `GribDatasetProcessor` | GRIB2 wind and wave grids: GFS, GFS-Wave, ECMWF (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `CapDatasetProcessor` | CAP 1.2 marine weather warnings: CAP XML, Atom, NWS GeoJSON (not S-100) | Vector: SoundCharts CAP style (see [CAP weather warnings](#cap-weather-warnings)) |
+| `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | `TropicalCycloneStyle`, in code (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
+| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Vector: SoundCharts fronts style (`SurfaceAnalysisStyle`), one `weather.fronts` sub-layer on Other chart overlays at priority 92 |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
 S-401 catalogues.
@@ -168,7 +169,7 @@ names for:
 
 | Trait | Meaning | Read by |
 |---|---|---|
-| `IsS100` | `false` for a product that isn't S-100 (GRIB2, NetCDF, CAP) | MCP `list_specs`, the viewer's "Not an S-100 product" badge and pick-report notice |
+| `IsS100` | `false` for a product that isn't S-100 (GRIB2, NetCDF, CAP) | MCP `list_specs` and the viewer's pick-report notice |
 | `Portrayal` | `PortrayalBasis.Catalogue`, or `PortrayalBasis.Application("S-104 Ed 2.0.0")` for a portrayal drawn in code | `list_specs`, `describe_feature`, `s100 info`, the viewer's portrayal note |
 | `PortrayalSpec` | The spec whose portrayal applies, when it isn't the product's own (`S-101` for S-57) | `ProductRegistry.PortrayalSpecFor` / `PortrayalSpecName` |
 | `ReadMetadata` | Cheap path-based metadata reader | The viewer's Library probe (`CachingDatasetMetadataReader`) |
@@ -233,8 +234,8 @@ from it and only open the file. It implements:
   `wind.speed.kn` in `kn`, directions in `deg`), and the catalog payload
   (`WeatherGridDatasetData`) does the same, so `sample_coverage` and
   `sample_coverage_along` work with no MCP change.
-- **Headless rendering.** `IHeadlessImageRenderer`, through the
-  `HeadlessCompositor`, framed on the grid.
+- **Headless rendering.** `IHeadlessImageRenderer`, framed on the grid,
+  with the sub-layers in S-98 order.
 - **Metadata.** The cells' WGS-84 extent, EPSG:4326 and the time coverage.
 - **Contents.** `Contents` lists what the file holds for `s100 info`: each
   parameter with its level and step count, whether it's used, and if not, why
@@ -312,6 +313,67 @@ namespace, and JSON from `api.weather.gov` naming an alert; `MatchGml` claims
 the same roots when an exchange set's `.xml` is read as GML. An S-100 GML
 dataset has a `DataSet` root, so CAP never claims S-124, and other GeoJSON
 isn't claimed.
+
+## Tropical cyclone advisories
+
+`TropicalCycloneDatasetProcessor` loads a tropical cyclone advisory from the
+National Hurricane Center's GIS shapefile zips, read by
+[`EncDotNet.S100.Datasets.TropicalCyclones`](../EncDotNet.S100.Datasets.TropicalCyclones/README.md).
+The dataset is the advisory's forecast zip (`al092022_5day_020.zip`), read
+with the wind radii (`al092022_fcst_020.zip`) and best track
+(`al092022_best_track.zip`) zips when they're beside it. It can also be a
+folder holding one storm's zips, in which case the latest advisory is read.
+Through an `IAssetSource`, the sibling zips are looked for beside the forecast
+zip in the source.
+
+The processor gives `Advisory`, the `TropicalCycloneAdvisory` model, and
+`Metadata`: the extent of the cone, tracks and forecast radii, and the time
+from the first past-track point to the last forecast point. The catalog
+payload is `TropicalCycloneDatasetData`.
+
+It draws the advisory with `TropicalCycloneStyle` from
+[`EncDotNet.S100.Datasets.Weather`](../EncDotNet.S100.Datasets.Weather/README.md#tropical-cyclones)
+as two sub-layers: the cone and wind radii fills (`weather.tc.areas`) on the
+On-demand surface plane at priority 10, and the lines, symbols and labels
+(`weather.tc.track`) on the Other chart overlays plane at priority 95, each
+with its legend. Labels are written in `RenderContext.DisplayTimeZone` (UTC
+when it's unset) and the current culture.
+
+The processor is an `ITimeAwareDatasetProcessor` with
+`TimeStepSelection.Continuous`: its `AvailableTimes` are the forecast points,
+the steps a host's ‹ › move between, but any time from the first best-track
+point (the `Validity` before tau 0) to the last forecast point draws. The
+cone, tracks and forecast points always draw; the storm and its wind radii
+are drawn at `RenderContext.TimeStep`, through
+`TropicalCycloneAdvisory.StormAt`: on a forecast point as it is, between
+two estimated (a dashed ring and "est." in the label), before the advisory
+on the best track, and outside the track and forecast not at all. Without a
+time step they're at the advisory's first forecast point. `IssueTime` is
+the advisory's, `NextIssueTime` NHC's next regular advisory, and
+`TimelineLabel` and `TimelineDetail` name the storm's lane (`IAN`,
+`adv 20`).
+
+Each drawn part is a feature: the storm (its id is the ATCF id, such as
+`AL092022`), the cone and its two parts, both tracks, every forecast and
+best-track point, and the radii (`AL092022 +24h`, `AL092022 34 kt`). Every
+part reports the storm when it's picked, with the same `FeatureRef`, class and
+attributes, and a **Picked part** row naming the part. `HitTestFeatures` gives
+one hit per storm, on the part nearest the pick. The attributes are the
+not-for-navigation notice, the storm's name, the advisory, its issue time, the
+next advisory due (the next of 03, 09, 15 and 21 UTC); after a portrayal
+with a time step, the **At view time** row and its **Basis** (on a forecast
+point, estimated between two, or the best track), or "Beyond the forecast"
+or "Before the track"; the position, wind, pressure and movement of the
+storm drawn, the part picked, the 64, 50 and 34 knot radii by
+quadrant, and NHC's caution about the cone. `FeatureAccessor` lists the parts
+for the catalog's identify and pick.
+
+`WeatherProducts.TropicalCyclone` registers the format as `TC/1.0.0`, not
+S-100, with an application portrayal (`NHC tropical cyclone GIS data`).
+`MatchBytes` claims a zip whose first entry is a layer of an NHC forecast zip,
+whatever the file is called, and `MatchFolder` claims a folder of NHC forecast
+zips for one storm. The wind radii and best track zips aren't claimed on their
+own.
 
 ## Processor lifetime
 
@@ -496,7 +558,7 @@ other:
 | `.Geometry` | Point, polyline and bounding box helpers for the pick services. |
 | `.Spec` | `FeatureDescriberRegistry`, which `DescribeFeatureService` uses to describe a feature per product, and the `FeatureAccessor`, `FeatureGeometryQuery` and `FeatureNames` helpers. |
 | `.Time` | `FeatureValidity` and the time window query helpers. |
-| `.Navigation` | `CatalogRouteCheckSources`, which builds the `RouteCheckSources` every route check in `EncDotNet.S100.Navigation` reads (S-101 charts and areas, S-102 depth with S-101 fallback, S-104 water level, S-122 protected areas and S-124 warnings) from a catalog snapshot, and `RouteCheckSourceCache`, which keeps one per snapshot; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
+| `.Navigation` | `CatalogRouteCheckSources`, which builds the `RouteCheckSources` every route check in `EncDotNet.S100.Navigation` reads (S-101 charts and areas, S-102 depth with S-101 fallback, S-104 water level, S-122 protected areas, S-124 warnings, and wind and waves from GRIB2 and NetCDF weather grids) from a catalog snapshot, and `RouteCheckSourceCache`, which keeps one per snapshot; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
 
 SoundCharts' `ViewerDatasetCatalog` and the headless `FileDatasetCatalog` both
 use `LoadedDatasetProjector`, so a pick from `s100` produces the same catalog
@@ -624,8 +686,9 @@ features, so the same decision drives both renderers:
 - **SoundCharts**: `DatasetLoaderService` orders and suppresses
   `SubLayerStackItem`s, then maps the result back to the Mapsui layers it has
   built.
-- **`HeadlessCompositor`**: runs the same engine and turns each ordered vector
-  or coverage sub-layer into a Skia `CompositeLayer`. It paints all datasets in
+- **`ChartCompositor`** (in `EncDotNet.S100.Rendering.Engine`): runs the same
+  engine and turns each ordered vector or coverage sub-layer into a Skia
+  `CompositeLayer`. It paints all datasets in
   one shared viewport without Mapsui, with the same order and depth suppression
   as SoundCharts, such as drawing S-101 under S-102 (S-98 Annex A §A-6.9.1).
   The public entry point is the `EncDotNet.S100` facade's

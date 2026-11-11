@@ -34,7 +34,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
     private AddOnlineCatalogueWizardViewModel CreateWizard(params KnownCatalogueSource[] sources) =>
         new(
-            new CatalogueDirectoryDialogViewModel(sources),
+            new CatalogueDirectoryDialogViewModel(sources, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
             () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (uri, _) =>
@@ -42,7 +42,9 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
                     _loads.Add(uri);
                     return Task.FromResult(_read(uri));
                 },
-            }));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
 
     private static Task NextAsync(AddOnlineCatalogueWizardViewModel wizard) =>
         ((IAsyncRelayCommand)wizard.NextCommand).ExecuteAsync(null);
@@ -59,7 +61,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         await NextAsync(wizard);
 
-        Assert.Equal(3, wizard.CurrentStep);  // a catalogue that isn't SECOM skips Connection
+        Assert.Equal(2, wizard.CurrentStep);  // a catalogue that isn't SECOM has no Connection step
         Assert.Single(_loads);
         Assert.Equal("B", wizard.Steps[0].Value);
         Assert.True(wizard.Steps[0].IsDone);
@@ -72,7 +74,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         await NextAsync(wizard);
 
-        Assert.Equal(3, wizard.CurrentStep);  // a catalogue that isn't SECOM skips Connection
+        Assert.Equal(2, wizard.CurrentStep);  // a catalogue that isn't SECOM has no Connection step
         Assert.Single(_loads);
     }
 
@@ -91,7 +93,10 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         Assert.NotSame(first, wizard.Scope);
         Assert.True(wizard.Scope!.IncludeAll);
-        Assert.Equal("Everything", wizard.Steps[2].Value);
+        Assert.Equal(string.Empty, wizard.Steps[1].Value);  // the current step says nothing yet
+
+        await NextAsync(wizard);
+        Assert.Equal("Everything", wizard.Steps[1].Value);
 
         wizard.ChangeCatalogueCommand.Execute(null);
         wizard.Directory.SelectedEntry = Entry(wizard, "a");
@@ -99,7 +104,8 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         Assert.Same(first, wizard.Scope);
         Assert.True(first.Choices("States").Single(s => s.Value == "AK").IsSelected);
-        Assert.Equal("Alaska", wizard.Steps[2].Value);
+        await NextAsync(wizard);
+        Assert.Equal("Alaska", wizard.Steps[1].Value);
         Assert.Equal(2, _loads.Count);
     }
 
@@ -123,33 +129,75 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task Only_completed_steps_can_be_clicked()
+    public async Task Only_completed_steps_can_be_clicked_and_say_what_was_chosen()
     {
         var wizard = CreateWizard(Source("a"));
         wizard.Start(null);
-        Assert.Equal("SECOM services", wizard.Steps[1].Value);
-        Assert.Equal("Choose a catalogue first", wizard.Steps[2].Value);
-        Assert.Equal("Collection", wizard.Steps[3].Value);
+        Assert.Equal(["Source", "What to include", "Add to"], wizard.Steps.Select(s => s.Label));
+        Assert.All(wizard.Steps, s => Assert.Equal(string.Empty, s.Value));  // no subtitles on current or upcoming steps
         Assert.All(wizard.Steps, s => Assert.False(s.GoToCommand.CanExecute(null)));
 
         await NextAsync(wizard);
         await NextAsync(wizard);
 
-        Assert.Equal(4, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(3, wizard.StepCount);
         Assert.True(wizard.IsLastStep);
-        Assert.Equal("Not needed", wizard.Steps[1].Value);
-        Assert.Equal("New collection", wizard.Steps[3].Value);
+        Assert.Equal(["A", "Everything", ""], wizard.Steps.Select(s => s.Value));
         Assert.True(wizard.Steps[0].GoToCommand.CanExecute(null));
-        Assert.False(wizard.Steps[1].GoToCommand.CanExecute(null));  // skipped: not a SECOM service
-        Assert.True(wizard.Steps[2].GoToCommand.CanExecute(null));
-        Assert.False(wizard.Steps[3].GoToCommand.CanExecute(null));
+        Assert.True(wizard.Steps[1].GoToCommand.CanExecute(null));
+        Assert.False(wizard.Steps[2].GoToCommand.CanExecute(null));
 
         wizard.BackCommand.Execute(null);
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(["A", "", ""], wizard.Steps.Select(s => s.Value));
         wizard.BackCommand.Execute(null);
-        Assert.Equal(1, wizard.CurrentStep);  // Back skips Connection too
-        Assert.True(wizard.Steps[2].IsUpcoming);
-        Assert.False(wizard.Steps[2].GoToCommand.CanExecute(null));
+        Assert.Equal(1, wizard.CurrentStep);
+        Assert.True(wizard.Steps[1].IsUpcoming);
+        Assert.False(wizard.Steps[1].GoToCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task A_done_step_goes_back_by_its_position()
+    {
+        var wizard = CreateWizard(Source("a"));
+        wizard.Start(null);
+        await NextAsync(wizard);
+        await NextAsync(wizard);
+
+        wizard.Steps[1].GoToCommand.Execute(null);
+
+        Assert.True(wizard.IsIncludeStep);
+        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal("Step 2 of 3", wizard.StepOfText);
+
+        wizard.Steps[0].GoToCommand.Execute(null);
+
+        Assert.True(wizard.IsCatalogueStep);
+    }
+
+    [Fact]
+    public void The_first_step_shows_the_selection_in_the_footer_and_has_no_back()
+    {
+        var wizard = CreateWizard(Source("a"), Source("b"));
+        wizard.Start(null);
+        wizard.Directory.SelectedEntry = Entry(wizard, "b");
+
+        Assert.False(wizard.BackCommand.CanExecute(null));
+        Assert.True(wizard.HasSelectionText);
+        Assert.Equal($"B · {Entry(wizard, "b").FormatText}", wizard.SelectionText);
+    }
+
+    [Fact]
+    public async Task The_footer_drops_the_selection_after_the_first_step()
+    {
+        var wizard = CreateWizard(Source("a"));
+        wizard.Start(null);
+        await NextAsync(wizard);
+
+        Assert.Null(wizard.SelectionText);
+        Assert.False(wizard.HasSelectionText);
+        Assert.True(wizard.BackCommand.CanExecute(null));
     }
 
     [Fact]
@@ -184,7 +232,9 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         await wizard.StartAtIncludeAsync(feed, null);
 
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(2, wizard.CurrentStep);
+        Assert.True(wizard.IsIncludeStep);
+        Assert.Equal(3, wizard.StepCount);
         Assert.True(wizard.Steps[0].IsDone);
         Assert.Equal("Shared", wizard.Steps[0].Value);
         Assert.Equal(feed.CatalogUri, Assert.Single(_loads));
@@ -211,6 +261,70 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
         var collection = Assert.Single(_library.Collections);
         Assert.Equal("A", collection.Definition.Name);
         Assert.True(Assert.IsType<NoaaEncFeedSource>(Assert.Single(collection.Sources).Definition).Filter.IsUnscoped);
+    }
+
+    [Fact]
+    public async Task A_single_download_skips_what_to_include()
+    {
+        var read = _read;
+        _read = uri => read(uri) is var full ? full with { Cells = [full.Cells[0]] } : null!;
+        var wizard = CreateWizard(Source("a"));
+        wizard.Start(null);
+
+        await NextAsync(wizard);
+
+        Assert.True(wizard.IsAddToStep);
+        Assert.Equal(3, wizard.CurrentStep);
+        Assert.True(wizard.Steps[1].IsDone);
+        Assert.Equal(wizard.Scope!.ScopeDescription, wizard.Steps[1].Value);
+        Assert.True(wizard.AddCommand.CanExecute(null));
+
+        // What to include is still there to read, and Next comes back.
+        wizard.BackCommand.Execute(null);
+        Assert.True(wizard.IsIncludeStep);
+        Assert.True(wizard.Scope.IsSingleEntry);
+        await NextAsync(wizard);
+        Assert.True(wizard.IsAddToStep);
+        Assert.Single(_loads);
+    }
+
+    [Fact]
+    public async Task Next_reads_the_catalogue_on_the_source_step_and_waits()
+    {
+        var gate = new TaskCompletionSource<NoaaEncProductCatalog>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var wizard = new AddOnlineCatalogueWizardViewModel(
+            new CatalogueDirectoryDialogViewModel([Source("a")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
+        wizard.Start(null);
+
+        var next = NextAsync(wizard);
+
+        Assert.True(wizard.IsCatalogueStep);
+        Assert.True(wizard.IsReadingCatalogue);
+        Assert.False(wizard.NextCommand.CanExecute(null));
+        Assert.Equal(Resources.Strings.Wizard_Loading, wizard.SelectionText);
+
+        gate.SetResult(_read(new Uri("https://a.test/catalog.xml")));
+        await next;
+
+        Assert.False(wizard.IsReadingCatalogue);
+        Assert.True(wizard.IsIncludeStep);
+    }
+
+    [Fact]
+    public async Task A_failed_read_on_next_shows_the_error_on_what_to_include()
+    {
+        _read = _ => throw new HttpRequestException("offline");
+        var wizard = CreateWizard(Source("a"));
+        wizard.Start(null);
+
+        await NextAsync(wizard);
+
+        Assert.True(wizard.IsIncludeStep);
+        Assert.True(wizard.Scope!.HasLoadError);
+        Assert.False(wizard.IsReadingCatalogue);
     }
 
     [Fact]

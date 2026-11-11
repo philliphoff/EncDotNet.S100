@@ -147,7 +147,8 @@ internal static class DatasetInputResolver
                 continue;
             }
 
-            // A folder holding one weather model run (GRIB2 files, one per forecast hour) is one dataset (#1075).
+            // A folder holding one weather model run (GRIB2 files, one per forecast hour) is one dataset (#1075),
+            // as is a folder of one storm's NHC advisory zips (#1294).
             var isRun = DatasetPipelineFactory.DetectProductSpec(directory) is { } runSpec
                 && (onlySpecs is null || onlySpecs.Contains(NormalizeOnlyToken(runSpec)));
             if (isRun)
@@ -163,6 +164,9 @@ internal static class DatasetInputResolver
                 var extension = Path.GetExtension(file);
                 if (string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase))
                 {
+                    // A tropical cyclone advisory folder's zips are the folder's dataset (#1294).
+                    if (isRun && EncDotNet.S100.Datasets.TropicalCyclones.NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(file), out _, out _, out _))
+                        continue;
                     warnings.Add($"Skipped archive in a folder (open it directly): {file}");
                     continue;
                 }

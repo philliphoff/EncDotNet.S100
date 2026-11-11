@@ -26,6 +26,16 @@
             <Setter Property="BorderBrush" Value="{DynamicResource DepthBasisInfoBorderBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource DepthBasisInfoForegroundBrush}" />
         </Style>
+        <Style Selector="Button#DepthBasisButton.adjusted">
+            <Setter Property="Background" Value="{DynamicResource DepthBasisAdjustedBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthBasisAdjustedBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource DepthBasisAdjustedForegroundBrush}" />
+        </Style>
+        <Style Selector="Button#DepthBasisButton.caution">
+            <Setter Property="Background" Value="{DynamicResource DepthBasisCautionBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthBasisCautionBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource DepthBasisCautionForegroundBrush}" />
+        </Style>
         <Style Selector="TextBlock.flyoutHeader">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -48,6 +58,8 @@
             AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DepthBasis}"
             AutomationProperties.LiveSetting="Polite"
             Classes.info="{Binding IsInfoTone}"
+            Classes.adjusted="{Binding IsAdjustedTone}"
+            Classes.caution="{Binding IsCautionTone}"
             HorizontalAlignment="Left"
             VerticalAlignment="Center"
             Margin="10,0,0,0"
@@ -58,7 +70,11 @@
         <StackPanel x:Name="PillContent" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="13"
                            Foreground="{Binding $parent[Button].Foreground}"
-                           IsVisible="{Binding ShowsIcon}"
+                           IsVisible="{Binding ShowsInfoIcon}"
+                           VerticalAlignment="Center" />
+            <ic:FluentIcon Icon="Warning" IconVariant="Regular" FontSize="13"
+                           Foreground="{Binding $parent[Button].Foreground}"
+                           IsVisible="{Binding IsCautionTone}"
                            VerticalAlignment="Center" />
             <TextBlock Text="{x:Static loc:Strings.Status_DepthBasisLabel}"
                        FontSize="11"

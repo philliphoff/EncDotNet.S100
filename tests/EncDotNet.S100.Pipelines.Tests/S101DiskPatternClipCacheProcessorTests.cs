@@ -3,8 +3,9 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -45,13 +46,13 @@ public class S101DiskPatternClipCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var sharedCache = new DiskPatternClipCache(cacheDir, maxBytes: 256L * 1024 * 1024);
+            var sharedCache = new DiskPatternClipCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPatternClipCache.KindOptions));
 
             var catalogueManager = CreateCatalogueManager();
             var fcManager = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);
             var factory = new DatasetPipelineFactory(
                 catalogueManager,
-                new MoonSharpLuaEngine(),
+                TestLuaEngine.Create(),
                 new ProjNetCrsTransformFactory(),
                 fcManager,
                 new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());

@@ -87,6 +87,37 @@ public sealed class CoverageContoursTests
         Assert.Equal(["1012"], labels);
     }
 
+    [Fact]
+    public void A_global_isoline_at_harbour_scale_labels_only_the_visible_stretch()
+    {
+        // A pole-to-pole isobar drawn at about 1:180 is over 10⁸ screen pixels
+        // long; anchoring it end to end hung the viewer (millions of anchors fed
+        // to a quadratic declutter).
+        var (x, south) = WebMercator.FromLonLat(-122.5, -80);
+        var (_, north) = WebMercator.FromLonLat(-122.5, 80);
+        var (_, centreY) = WebMercator.FromLonLat(-122.5, 47.5);
+        using var scene = new IsolineScene(
+            [new IsolinePolyline("1012", [x, south, x, centreY, x, north])],
+            new IsolineAppearance { Ink = SKColors.Black, LabelHalo = SKColors.White });
+
+        const double pixelsPerMetre = 20;
+        SKPoint ToScreen(double mx, double my) =>
+            new((float)((mx - x) * pixelsPerMetre + 500), (float)((centreY - my) * pixelsPerMetre + 500));
+        var matrix = scene.LocalToScreen(ToScreen);
+        var view = new SKRect(0, 0, 1000, 1000);
+
+        var anchors = scene.LabelAnchors(matrix, view).ToList();
+
+        Assert.InRange(anchors.Count, 1, 5);
+        Assert.All(anchors, a => Assert.True(view.Contains(a.Point)));
+
+        using var bitmap = new SKBitmap(1000, 1000);
+        using var canvas = new SKCanvas(bitmap);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        scene.Draw(canvas, ToScreen);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"Draw took {watch.Elapsed}");
+    }
+
     private static ContourStyle Contour(double value, bool showLabel = true) => new()
     {
         Value = value,

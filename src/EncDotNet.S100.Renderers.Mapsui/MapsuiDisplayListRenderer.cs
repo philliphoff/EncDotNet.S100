@@ -6,13 +6,14 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using MapsuiColor = Mapsui.Styles.Color;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics;
 using Scene = EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -163,7 +164,7 @@ public sealed class MapsuiDisplayListRenderer
     /// Optional captured Mapsui rendering configuration. When
     /// <see langword="null"/>, settings that have not been overridden directly
     /// are read from the legacy process-global
-    /// <see cref="RenderingOptimizations"/> store.
+    /// <see cref="ChartSessionOptions"/> store.
     /// </summary>
     public S100MapsuiOptions? Options { get; init; }
 
@@ -210,9 +211,9 @@ public sealed class MapsuiDisplayListRenderer
         // All S-100 Part 9 correctness (draw ordering, colour / mm→px / symbol /
         // line-style / pattern / text-anchor resolution, and the lat/lon →
         // EPSG:3857 projection half) lives in VectorSceneBuilder. The tiled
-        // renderer paints this scene; the Mapsui features built from it below
-        // only carry pick identity for hit-testing, so every painted op —
-        // pattern fills included — is a pick target (issue #604).
+        // renderer paints and picks this scene; only the single-surface arm
+        // builds Mapsui features from it, for pick identity, so every painted
+        // op — pattern fills included — is a pick target (issue #604).
         var sceneBuilder = new Scene.VectorSceneBuilder
         {
             ResolveColor = Scene.ColorResolver.Create(Palette),
@@ -227,64 +228,49 @@ public sealed class MapsuiDisplayListRenderer
         };
         var scene = sceneBuilder.Build(instructions, geometryProvider);
 
-        var mapFeatures = new List<IFeature>(scene.Ops.Count);
-        // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
-        // already been given a pick-target rectangle, so composite point
-        // symbology emits exactly one rectangle per anchor (see the build loop).
-        var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
-
-        // Build Mapsui features from the IR, in Part 9 draw order. These features
-        // carry the pick identity used for hit-testing; the layer itself is
-        // painted by the TiledScene renderer from the same VectorScene, bound to
-        // the layer below.
-        foreach (var op in scene.Ops)
-        {
-            // A composite point symbol (e.g. a multi-digit sounding) emits one
-            // PointPaintOp per glyph, all sharing the same feature reference and
-            // EPSG:3857 anchor. Each op would otherwise carry its own faint
-            // pick-target rectangle; stacked, those rectangles darken into a
-            // visible box. Emit the rectangle only for the first symbol at each
-            // (feature, anchor) so picking still works without the artifact.
-            var includePointHitRect = true;
-            if (op is Scene.PointPaintOp { Symbol: not null } point)
-                includePointHitRect = pointHitRectKeys.Add(
-                    (point.FeatureReference, point.World.X, point.World.Y));
-
-            var mapFeature = CreateMapFeature(op, includePointHitRect);
-            if (mapFeature is null)
-                continue;
-
-            mapFeatures.Add(mapFeature);
-        }
-
-        S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
-        S100Diag.Telemetry.FrameDuration.Record(
-            (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
-
         // The layer is portrayed by the TiledScene renderer rasterising the
         // VectorScene IR on a worker, so bind the scene to the layer. The Phase-2
         // tiled renderer is the default; S100_VECTOR_SCENE_MODE=single selects
         // the Phase-1 single-surface arm. Both consume the same scene.
-        var tiledRendererName = TiledSceneModeIsTiled
-            ? S100VectorTileRenderer.RendererName
-            : S100VectorSceneRenderer.RendererName;
-
-        var layer = new InstrumentedMemoryLayer(Product)
-        {
-            Name = LayerName,
-            Features = mapFeatures,
-            Style = null,
-            CustomLayerRendererName = tiledRendererName,
-            RepeatsAcrossWorldCopies = TiledSceneModeIsTiled,
-        };
-
+        //
+        // A tiled layer is drawn and picked through the chart session from the
+        // bound scene, so it carries no Mapsui features: its extent comes from
+        // the scene. The single-surface arm still picks through Mapsui, so it
+        // keeps one pick-identity feature per paint op.
+        InstrumentedMemoryLayer layer;
         if (TiledSceneModeIsTiled)
         {
+            layer = new InstrumentedMemoryLayer(Product)
+            {
+                Name = LayerName,
+                Style = null,
+                CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+                SceneExtent = SceneExtent(scene),
+            };
+
+            S100Diag.Telemetry.FrameDuration.Record(
+                (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
+
             var (productLayerSet, styleStateHash) = DiskCacheKey(instructions);
             S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
+            LastTiledScene = (scene, productLayerSet, styleStateHash);
         }
         else
         {
+            var mapFeatures = BuildPickFeatures(scene);
+
+            S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
+            S100Diag.Telemetry.FrameDuration.Record(
+                (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
+
+            layer = new InstrumentedMemoryLayer(Product)
+            {
+                Name = LayerName,
+                Features = mapFeatures,
+                Style = null,
+                CustomLayerRendererName = S100VectorSceneRenderer.RendererName,
+            };
+
             S100VectorSceneRenderer.BindScene(layer, scene);
         }
 
@@ -324,7 +310,22 @@ public sealed class MapsuiDisplayListRenderer
             TextScale = TextScale,
         }.Build(instructions, geometryProvider);
 
+        return BuildPickFeatures(scene);
+    }
+
+    /// <summary>
+    /// Builds one self-styled Mapsui feature per paint op of
+    /// <paramref name="scene"/>, in Part 9 draw order.
+    /// </summary>
+    private List<IFeature> BuildPickFeatures(Scene.VectorScene scene)
+    {
         var features = new List<IFeature>(scene.Ops.Count);
+        // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
+        // already been given a pick-target rectangle. A composite point symbol
+        // (e.g. a multi-digit sounding) emits one PointPaintOp per glyph, all
+        // sharing the same feature reference and anchor; stacked, their faint
+        // pick-target rectangles would darken into a visible box, so only the
+        // first symbol at each (feature, anchor) gets one.
         var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
         foreach (var op in scene.Ops)
         {
@@ -339,6 +340,56 @@ public sealed class MapsuiDisplayListRenderer
 
         return features;
     }
+
+    /// <summary>
+    /// The EPSG:3857 box around every op of <paramref name="scene"/>, or
+    /// <see langword="null"/> for a scene with no ops.
+    /// </summary>
+    internal static MRect? SceneExtent(Scene.VectorScene scene)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        void Add(double x, double y)
+        {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+
+        foreach (var op in scene.Ops)
+        {
+            switch (op)
+            {
+                case Scene.PointPaintOp p:
+                    Add(p.World.X, p.World.Y);
+                    break;
+                case Scene.TextPaintOp t:
+                    Add(t.World.X, t.World.Y);
+                    break;
+                case Scene.LinePaintOp l:
+                    foreach (var (x, y) in l.World) Add(x, y);
+                    break;
+                case Scene.AreaPaintOp a:
+                    foreach (var (x, y) in a.WorldShell) Add(x, y);
+                    break;
+                case Scene.PatternAreaPaintOp pa:
+                    foreach (var (x, y) in pa.WorldShell) Add(x, y);
+                    break;
+            }
+        }
+
+        return minX <= maxX ? new MRect(minX, minY, maxX, maxY) : null;
+    }
+
+    /// <summary>
+    /// The scene the last <see cref="Render"/> bound to a tiled layer, with the
+    /// pair that keys its tile disk namespace, or <see langword="null"/> when
+    /// it drew single-surface. Read by <see cref="MapsuiDatasetRenderer"/> to
+    /// store the cell's scene.
+    /// </summary>
+    internal (Scene.VectorScene Scene, string? ProductLayerSet, string? StyleStateHash)? LastTiledScene { get; private set; }
 
     /// <summary>
     /// The <c>(productLayerSet, styleStateHash)</c> pair that keys this layer's
@@ -420,10 +471,10 @@ public sealed class MapsuiDisplayListRenderer
     /// Whether the TiledScene subsystem uses the Phase-2 tiled renderer (default)
     /// or the Phase-1 single-surface renderer. Explicit
     /// <see cref="S100MapsuiOptions"/> take precedence; otherwise the mode is
-    /// sourced live from <see cref="RenderingOptimizations.SceneMode"/>.
+    /// sourced live from <see cref="ChartSessionOptions.SceneMode"/>.
     /// </summary>
     private bool TiledSceneModeIsTiled =>
-        (Options?.SceneMode ?? RenderingOptimizations.SceneMode)
+        (Options?.SceneMode ?? ChartEngine.Options.SceneMode)
             == VectorSceneMode.Tiled;
 
     private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
@@ -496,31 +547,21 @@ public sealed class MapsuiDisplayListRenderer
     /// </summary>
     public const double DenomToResolutionMetres = 0.00028;
 
-    /// <summary>Earth radius (m) of the EPSG:3857 web-mercator sphere, matching
-    /// <see cref="Scene.WebMercator.EarthRadius"/>.</summary>
-    private const double WebMercatorEarthRadius = 6378137.0;
-
     /// <summary>
     /// Converts an EPSG:3857 northing (metres) to its geodetic latitude in
     /// radians, used to undo web-mercator scale distortion when mapping an
     /// S-100 true-scale denominator to a Mapsui resolution.
     /// </summary>
     internal static double WebMercatorYToLatitudeRadians(double y)
-        => 2.0 * Math.Atan(Math.Exp(y / WebMercatorEarthRadius)) - Math.PI / 2.0;
+        => ScaleResolution.WebMercatorYToLatitudeRadians(y);
 
     /// <summary>
     /// Converts an S-100 Part 9 §11.1 scale denominator (a <i>true-scale</i>
     /// value, e.g. SCAMIN / <c>minimumDisplayScale</c>) to the equivalent Mapsui
     /// EPSG:3857 resolution (metres/pixel at the equator) at
-    /// <paramref name="latitudeRadians"/>. Because web-mercator inflates ground
-    /// distances by <c>1/cos φ</c>, the equator-referenced resolution that
-    /// corresponds to a true-scale denominator is
-    /// <c>denom × 0.00028 / cos φ</c>. Omitting the <c>cos φ</c> term (the prior
-    /// behaviour) is only correct on the equator and biases scale-visibility
-    /// cutoffs toward hiding detail at finer zooms as latitude increases — at
-    /// φ ≈ 50.8° (≈ 1/cos φ = 1.58) a cell's detail was suppressed roughly
-    /// two-thirds of a zoom level too early. Matches the Skia headless backend,
-    /// which already applies <c>cos(midLat)</c> (see
+    /// <paramref name="latitudeRadians"/>: <c>denom × 0.00028 / cos φ</c>,
+    /// because web-mercator inflates ground distances by <c>1/cos φ</c>. Matches
+    /// the Skia headless backend, which applies <c>cos(midLat)</c> too (see
     /// <see cref="EncDotNet.S100.Renderers.Skia.Scene.HeadlessVectorRenderer"/>).
     /// </summary>
     /// <param name="scaleDenominator">The S-100 true-scale denominator.</param>
@@ -530,17 +571,7 @@ public sealed class MapsuiDisplayListRenderer
     /// </param>
     /// <returns>The Mapsui EPSG:3857 resolution (m/px at the equator).</returns>
     internal static double DenominatorToResolution(double scaleDenominator, double latitudeRadians)
-    {
-        var cos = Math.Cos(latitudeRadians);
-        if (cos < 1e-6)
-        {
-            // Guard against the poles / invalid latitudes (EPSG:3857 is clamped
-            // to ±85.06°, where cos ≈ 0.087, so this only trips on bad input).
-            cos = 1e-6;
-        }
-
-        return scaleDenominator * DenomToResolutionMetres / cos;
-    }
+        => ScaleResolution.DenominatorToResolution(scaleDenominator, latitudeRadians);
 
     /// <summary>
     /// The representative latitude (radians) of a feature, taken from the centre
@@ -977,16 +1008,26 @@ public sealed class MapsuiDisplayListRenderer
         if (PatternClipCache is not { } cache || PatternClipCacheKey is not { } key)
             return null;
 
-        return compute => cache
-            .GetOrCompute(key, () =>
-            {
-                var clipped = compute();
-                var tuples = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
-                foreach (var c in clipped)
-                    tuples.Add((c.PatternRef, c.Priority, c.Geometry));
-                return tuples;
-            })
-            .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
-            .ToList();
+        return compute =>
+        {
+            // One span per clip lookup, tagged hit or miss, so a warm cell
+            // load's trace shows whether the clip came from the cache.
+            using var activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.cell.pattern_clip");
+            var missed = false;
+            var result = cache
+                .GetOrCompute(key, () =>
+                {
+                    missed = true;
+                    var clipped = compute();
+                    var tuples = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
+                    foreach (var c in clipped)
+                        tuples.Add((c.PatternRef, c.Priority, c.Geometry));
+                    return tuples;
+                })
+                .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
+                .ToList();
+            activity?.SetTag(TelemetryTags.CacheResult, missed ? "miss" : "hit");
+            return result;
+        };
     }
 }

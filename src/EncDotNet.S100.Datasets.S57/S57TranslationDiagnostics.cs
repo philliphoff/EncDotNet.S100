@@ -21,6 +21,15 @@ public readonly record struct S57AttributeDrop(ushort ObjectClass, ushort Attrib
 public readonly record struct S57EnumValueDrop(string S101Attribute, string Value);
 
 /// <summary>
+/// Identifies an S-57 master/slave pair the translator couldn't convert to a
+/// <c>StructureEquipment</c> association, because the destination Feature
+/// Catalogue doesn't let the structure's class carry the equipment's class.
+/// </summary>
+/// <param name="Structure">The S-101 class of the master (<c>theStructure</c>).</param>
+/// <param name="Equipment">The S-101 class of the slave (<c>theEquipment</c>).</param>
+public readonly record struct S57StructureEquipmentPair(string Structure, string Equipment);
+
+/// <summary>
 /// Optional, opt-in diagnostics collector for
 /// <see cref="S57ToS101Translator.Translate(EncDotNet.S57.S57Document, S57TranslationDiagnostics?)"/>.
 /// It records — as compact aggregate counters rather than per-instance events —
@@ -53,6 +62,7 @@ public sealed class S57TranslationDiagnostics
     private readonly Dictionary<S57AttributeDrop, int> _unmappedAttributes = new();
     private readonly Dictionary<ushort, int> _ruleDroppedAttributes = new();
     private readonly Dictionary<S57EnumValueDrop, int> _droppedEnumValues = new();
+    private readonly Dictionary<S57StructureEquipmentPair, int> _unboundStructureEquipment = new();
 
     /// <summary>
     /// Number of non-sounding S-57 feature records the translator iterated,
@@ -181,6 +191,36 @@ public sealed class S57TranslationDiagnostics
     public int BridgeCollectionsUnjoined { get; internal set; }
 
     /// <summary>
+    /// Number of S-57 master/slave relationships (a master's <c>FFPT</c> with
+    /// the slave relationship indicator, S-57 UOC 12.1.1) converted to
+    /// <c>StructureEquipment</c> associations: a buoy, beacon or other
+    /// structure and its light, fog signal, radar reflector and so on.
+    /// </summary>
+    public int StructureEquipmentLinked { get; internal set; }
+
+    /// <summary>
+    /// Number of coverage-available M_COVR objects cut into several Data
+    /// Coverage features by the M_CSCL objects over them (S-65 Annex B
+    /// §2.2.6), each piece with its own optimum display scale.
+    /// </summary>
+    public int DataCoverageCuts { get; internal set; }
+
+    /// <summary>
+    /// Number of coverage-available M_COVR objects with an M_CSCL over them
+    /// that were not cut, because the M_COVR and M_CSCL edges don't form
+    /// faces covering the M_COVR (an edge crossing another between nodes).
+    /// Such a Data Coverage keeps the cell's compilation scale throughout.
+    /// </summary>
+    public int DataCoverageNotCut { get; internal set; }
+
+    /// <summary>
+    /// S-57 master/slave pairs not converted because the target Feature
+    /// Catalogue doesn't bind the slave's class as <c>theEquipment</c> of the
+    /// master's class, keyed by the S-101 pair → occurrence count.
+    /// </summary>
+    public IReadOnlyDictionary<S57StructureEquipmentPair, int> UnboundStructureEquipment => _unboundStructureEquipment;
+
+    /// <summary>
     /// Number of S-101 <c>Sounding</c> features emitted (a SOUNDG feature with at
     /// least one depth triple yields exactly one).
     /// </summary>
@@ -249,6 +289,8 @@ public sealed class S57TranslationDiagnostics
 
     internal void RecordFeatureWithoutGeometry(string s101Code) => Increment(_noGeometry, s101Code);
 
+    internal void RecordDataCoverageNotCut() => DataCoverageNotCut++;
+
     internal void RecordUnmappedAttribute(ushort objl, ushort attl)
         => Increment(_unmappedAttributes, new S57AttributeDrop(objl, attl));
 
@@ -256,6 +298,9 @@ public sealed class S57TranslationDiagnostics
 
     internal void RecordDroppedEnumValue(string s101Attribute, string value)
         => Increment(_droppedEnumValues, new S57EnumValueDrop(s101Attribute, value));
+
+    internal void RecordUnboundStructureEquipment(string structure, string equipment)
+        => Increment(_unboundStructureEquipment, new S57StructureEquipmentPair(structure, equipment));
 
     private static void Increment<TKey>(Dictionary<TKey, int> map, TKey key) where TKey : notnull
         => map[key] = map.TryGetValue(key, out var n) ? n + 1 : 1;

@@ -38,7 +38,8 @@ src/
   EncDotNet.S100.Portrayals/         # Portrayal Catalogue XML parser (S-100 Part 9)
   EncDotNet.S100.Specifications/     # Bundles official FCs and PCs as embedded resources
   EncDotNet.S100.Hdf5.PureHdf/       # IHdf5File implementation using PureHDF (no native deps)
-  EncDotNet.S100.Scripting.MoonSharp/ # ILuaEngine implementation using MoonSharp (Lua 5.2)
+  EncDotNet.S100.Scripting.LuaCSharp/ # ILuaEngine implementation using Lua-CSharp (Lua 5.2) — the default
+  EncDotNet.S100.Scripting.MoonSharp/ # ILuaEngine implementation using MoonSharp (Lua 5.2) — selectable
   EncDotNet.S100.Datasets.S101/      # S-101 ENC reader + Lua portrayal pipeline
   EncDotNet.S100.Datasets.S102/      # S-102 bathymetry reader + coverage pipeline
   EncDotNet.S100.Datasets.S104/      # S-104 water level reader + coverage pipeline
@@ -57,6 +58,7 @@ src/
   EncDotNet.S100.Datasets.Grib/      # Managed GRIB2 decoder (templates 3.0, 4.0/4.8, 5.0/5.2/5.3/5.41) for the weather readers
   EncDotNet.S100.Datasets.Weather/   # Shared wind and wave grid model + coverage source (GRIB2, NetCDF)
   EncDotNet.S100.Datasets.Cap/       # CAP 1.2 marine weather warnings (CAP XML, Atom, NWS GeoJSON) + NWS marine zones
+  EncDotNet.S100.Datasets.TropicalCyclones/ # NHC tropical cyclone advisories (GIS shapefile zips) + managed SHP/DBF reader
   EncDotNet.S100.Routes.Rtz/         # RTZ (IEC 61174 Annex S) route plan reader + writer
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
   EncDotNet.S100.Renderers.Mapsui/   # Mapsui layer renderer with CRS projection (ProjNet/EPSG:3857)
@@ -73,6 +75,7 @@ tests/
   EncDotNet.S100.Datasets.Grib.Tests/
   EncDotNet.S100.Datasets.Weather.Tests/
   EncDotNet.S100.Datasets.Cap.Tests/
+  EncDotNet.S100.Datasets.TropicalCyclones.Tests/
   EncDotNet.S100.ExchangeSets.Tests/
   EncDotNet.S100.Pipelines.Tests/    # Pipeline integration tests (S-101, S-102, coverage, vector, Skia)
 tools/EncDotNet.S100.Cli/            # `s100` CLI; exposes complete agent guidance via `s100 --skill`
@@ -89,7 +92,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 | Map rendering | [Mapsui](https://mapsui.com/) 5 |
 | 2-D rasterisation | [SkiaSharp](https://github.com/mono/SkiaSharp) 3, Svg.Skia |
 | HDF5 | [PureHDF](https://github.com/Apollo3zehn/PureHDF) (fully managed, cross-platform) |
-| Lua scripting | [MoonSharp](https://github.com/moonsharp-devs/moonsharp) 2 (Lua 5.2, sandboxed) |
+| Lua scripting | [Lua-CSharp](https://github.com/nuskey8/Lua-CSharp) 0.5 (Lua 5.2, sandboxed; default) and [MoonSharp](https://github.com/moonsharp-devs/moonsharp) 2 (selectable with `LuaEngineKind`) |
 | ISO 8211 | `EncDotNet.Iso8211` NuGet package |
 | CRS projection | [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) |
 | CLI tools | Spectre.Console.Cli |
@@ -100,7 +103,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 
 ## Architecture patterns
 
-- **Abstraction-first**: concrete I/O implementations (`PureHdfFile`, `MoonSharpLuaEngine`, `FileSystemAssetSource`, `ZipAssetSource`) are hidden behind interfaces defined in `EncDotNet.S100.Core` and injected by callers.
+- **Abstraction-first**: concrete I/O implementations (`PureHdfFile`, `LuaCSharpLuaEngine`, `MoonSharpLuaEngine`, `FileSystemAssetSource`, `ZipAssetSource`) are hidden behind interfaces defined in `EncDotNet.S100.Core` and injected by callers.
 - **Two pipeline types**:
   - *Coverage pipeline* — `ICoverageSource` → `CoveragePipeline` → `ICoverageRenderer<T>` (used by S-102, S-104, S-111).
   - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-125, S-127, S-131, S-201, S-421).
@@ -119,7 +122,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 - Conceptual guides live under `docs/` in DocFX Markdown. Add or update pages there for user-facing features.
 
 ### Naming and style
-- **The normative C# style guide is [`docs/coding-style.md`](../docs/coding-style.md); read it and make generated code comply.** It is encoded in the repository [`.editorconfig`](../.editorconfig). Because `EnforceCodeStyleInBuild` is off (nearly every project multi-targets `net8.0;net10.0`), a plain `dotnet build` does **not** flag most style rules — so you must apply the guide yourself rather than assume the build will catch violations.
+- **The normative C# style guide is [`docs/coding-style.md`](../docs/coding-style.md); read it and make generated code comply.** It is encoded in the repository [`.editorconfig`](../.editorconfig). Because `EnforceCodeStyleInBuild` is off, a plain `dotnet build` does **not** flag most style rules — so you must apply the guide yourself rather than assume the build will catch violations.
 - Key rules (see the guide for the full set): `PascalCase` for types/methods/properties, `camelCase` for locals and parameters, `_camelCase` for private fields; file-scoped namespaces, 4-space indents, Allman braces; `System.*` usings first with no unused usings.
 - Nullable reference types are enabled everywhere — avoid `!` suppression; prefer null-checks or `ArgumentNullException.ThrowIfNull`.
 - All public APIs must carry XML doc comments (`<summary>`, `<param>`, `<returns>`).

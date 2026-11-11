@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57;
 
@@ -20,7 +21,79 @@ public sealed record S101ToS57FeatureRule(
     ushort Objl,
     string S57Acronym,
     string Clause,
-    IReadOnlyDictionary<string, string> FixedAttributes);
+    IReadOnlyDictionary<string, string> FixedAttributes)
+{
+    /// <summary>
+    /// Conditions under which the feature converts to another S-57 class
+    /// instead, tried in order; the first that matches wins (e.g. a
+    /// <c>Landmark</c> with <c>categoryOfLandmark</c> 26 becomes a
+    /// <c>BRIDGE</c>, §7.2).
+    /// </summary>
+    public IReadOnlyList<S101ToS57FeatureRedirect> Redirects { get; init; } = [];
+
+    /// <summary>
+    /// Further S-57 objects created at the feature's position when their
+    /// condition matches (e.g. a <c>PILPNT</c> for a landmark standing in the
+    /// water, §30). They take the rule's fixed attributes and the feature's
+    /// <c>SCAMIN</c>.
+    /// </summary>
+    public IReadOnlyList<S101ToS57FeatureRedirect> Companions { get; init; } = [];
+
+    /// <summary>How the S-57 object's geometric primitive differs from the S-101 feature's (Annex C Table 2-1).</summary>
+    public S101ToS57PrimitiveChange PrimitiveChange { get; init; }
+}
+
+/// <summary>
+/// How <see cref="S101ToS57Translator"/> changes a feature's geometric
+/// primitive where S-57 doesn't allow the S-101 one (Annex C Table 2-1).
+/// </summary>
+public enum S101ToS57PrimitiveChange
+{
+    /// <summary>The primitive is kept.</summary>
+    None,
+
+    /// <summary>
+    /// A curve becomes a narrow area along it, 0.3 mm wide at the compilation
+    /// scale (e.g. a curve <c>CollisionRegulationsLimit</c> → <c>CTNARE</c>, §16.27).
+    /// </summary>
+    CurveToArea,
+
+    /// <summary>A surface becomes a point at its centre (e.g. <c>CGUSTA</c>, §22.3).</summary>
+    SurfaceToPoint,
+
+    /// <summary>A curve isn't converted (e.g. a curve <c>LandRegion</c>, §5.11).</summary>
+    DropCurve,
+}
+
+/// <summary>
+/// A condition under which an S-101 feature converts to another S-57 object
+/// class (see <see cref="S101ToS57FeatureRule.Redirects"/>), or creates a
+/// further object (see <see cref="S101ToS57FeatureRule.Companions"/>).
+/// </summary>
+/// <param name="Target">The rule to apply when the condition matches.</param>
+/// <param name="Attribute">
+/// The top-level S-101 simple attribute tested, or <c>null</c> to test the
+/// primitive only.
+/// </param>
+/// <param name="Values">
+/// The attribute values that match; empty to match a Boolean attribute that is
+/// true.
+/// </param>
+/// <param name="Primitives">The S-101 primitives that match; empty for any.</param>
+public sealed record S101ToS57FeatureRedirect(
+    S101ToS57FeatureRule Target,
+    string? Attribute,
+    IReadOnlyList<string> Values,
+    IReadOnlyList<S57GeometricPrimitive> Primitives)
+{
+    /// <summary>
+    /// Whether the tested attribute is used up by the redirect rather than
+    /// converted as well (true for most: <c>categoryOfLandmark</c> 22 chooses
+    /// <c>CTRPNT</c> and has no <c>CATLMK</c> there; false for a <c>Lake</c>
+    /// whose <c>status</c> 5 makes it a <c>RIVERS</c> with <c>STATUS</c> 5).
+    /// </summary>
+    public bool ConsumesAttribute { get; init; } = true;
+}
 
 /// <summary>
 /// How an S-101 simple attribute converts to an S-57 attribute in
@@ -39,7 +112,22 @@ public sealed record S101ToS57AttributeRule(
     ushort Attl,
     string S57Acronym,
     string Clause,
-    IReadOnlyDictionary<string, string?> ValueRemap);
+    IReadOnlyDictionary<string, string?> ValueRemap)
+{
+    /// <summary>
+    /// S-101 values that S-57 lacks and that fold into <c>INFORM</c> as the
+    /// given text instead of converting (Annex C Table A-2), e.g.
+    /// <c>categoryOfHulk</c> 6 → "Casino".
+    /// </summary>
+    public IReadOnlyDictionary<string, string> InformText { get; init; } = FrozenDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// When set, the whole value folds into <c>INFORM</c> as this composite
+    /// format with the value as <c>{0}</c> (e.g. "Maximum draught permitted =
+    /// {0} metres", §27.125), and <see cref="Attl"/> is not written.
+    /// </summary>
+    public string? InformFormat { get; init; }
+}
 
 /// <summary>
 /// The rule tables for <see cref="S101ToS57Translator"/>: S-101 feature
@@ -61,7 +149,7 @@ public sealed record S101ToS57AttributeRule(
 /// <see cref="WithFeatureRule"/> and <see cref="WithAttributeRule"/>.
 /// </para>
 /// </remarks>
-public sealed class S101ToS57Rules
+public sealed partial class S101ToS57Rules
 {
     private readonly FrozenDictionary<string, S101ToS57FeatureRule> _features;
     private readonly FrozenDictionary<string, S101ToS57AttributeRule> _attributes;
@@ -127,6 +215,8 @@ public sealed class S101ToS57Rules
     }
 
     private static IReadOnlyDictionary<string, string> NoFixedAttributes => FrozenDictionary<string, string>.Empty;
+
+    internal static IReadOnlyDictionary<string, string> NoFixedAttributesValue => NoFixedAttributes;
     private static IReadOnlyDictionary<string, string?> NoRemap => FrozenDictionary<string, string?>.Empty;
 
     /// <summary>
@@ -197,49 +287,51 @@ public sealed class S101ToS57Rules
 
         // Classes a forward redirect reaches, which the inversion above can't
         // see (only defaults invert). The class implies the S-57 category.
-        AddFeature(features, "LightSectored", 75, "LIGHTS");
-        AddFeature(features, "LocalDirectionOfBuoyage", 306, "M_NSYS");
-        AddFeature(features, "Bollard", 84, "MORFAC", ("CATMOR", "3"));
-        AddFeature(features, "MooringBuoy", 84, "MORFAC", ("CATMOR", "7"));
+        AddFeature(features, "LightSectored", "LIGHTS");
+        AddFeature(features, "LocalDirectionOfBuoyage", "M_NSYS");
+        AddFeature(features, "Bollard", "MORFAC", ("CATMOR", "3"));
+        AddFeature(features, "MooringBuoy", "MORFAC", ("CATMOR", "7"));
 
         // §2.4.2 / §2.4.11 and §27: Boolean attributes become S-57 enumerations.
         // The forward mapping carries the S-57 code through unchanged, so the
         // general rules above would pass "true"/"false" on; these replace them.
-        AddBoolean(attributes, "radarConspicuous", 82, "CONRAD", "27.146", whenTrue: "1", whenFalse: "2");
-        AddBoolean(attributes, "basedOnFixedMarks", 54, "CATTRK", "27.1", whenTrue: "1", whenFalse: "2");
-        AddBoolean(attributes, "iMOAdopted", 67, "CATTSS", "27.112", whenTrue: "1", whenFalse: "2");
-        AddBoolean(attributes, "distanceMarkVisible", 21, "CATDIS", "27.90", whenTrue: "4", whenFalse: "1");
-        AddBoolean(attributes, "openingBridge", 9, "CATBRG", "27.140", whenTrue: "2", whenFalse: "1");
+        AddBoolean(attributes, "radarConspicuous", "CONRAD", "27.146", whenTrue: "1", whenFalse: "2");
+        AddBoolean(attributes, "basedOnFixedMarks", "CATTRK", "27.1", whenTrue: "1", whenFalse: "2");
+        AddBoolean(attributes, "iMOAdopted", "CATTSS", "27.112", whenTrue: "1", whenFalse: "2");
+        AddBoolean(attributes, "distanceMarkVisible", "CATDIS", "27.90", whenTrue: "4", whenFalse: "1");
+        AddBoolean(attributes, "openingBridge", "CATBRG", "27.140", whenTrue: "2", whenFalse: "1");
 
         // §27.142: pictorialRepresentation → PICREP (first value only, §2.4.12.2).
         // §27.154: reportedDate → SORDAT. §27.156: scaleMinimum → SCAMIN.
-        AddAttribute(attributes, "reportedDate", 147, "SORDAT");
+        AddAttribute(attributes, "reportedDate", "SORDAT");
         // categoryOfOpeningBridge keeps the S-57 CATBRG codes (forward § 4.8.10).
-        AddAttribute(attributes, "categoryOfOpeningBridge", 9, "CATBRG");
+        AddAttribute(attributes, "categoryOfOpeningBridge", "CATBRG");
+
+        AddAnnexC(forward, features, attributes, featureAttributes);
 
         return new S101ToS57Rules(features, attributes, featureAttributes);
     }
 
     private static void AddFeature(
         Dictionary<string, S101ToS57FeatureRule> features,
-        string s101Code, ushort objl, string acronym, params (string Acronym, string Value)[] fixedAttributes)
+        string s101Code, string acronym, params (string Acronym, string Value)[] fixedAttributes)
     {
         features[s101Code] = new S101ToS57FeatureRule(
-            s101Code, objl, acronym, FeatureClause(s101Code),
+            s101Code, S57Objl(acronym), acronym, FeatureClause(s101Code),
             fixedAttributes.Length == 0
                 ? NoFixedAttributes
                 : fixedAttributes.ToDictionary(a => a.Acronym, a => a.Value, StringComparer.Ordinal));
     }
 
     private static void AddAttribute(
-        Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, ushort attl, string acronym)
-        => attributes[s101Code] = new S101ToS57AttributeRule(s101Code, attl, acronym, AttributeClause(s101Code), NoRemap);
+        Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, string acronym)
+        => attributes[s101Code] = new S101ToS57AttributeRule(s101Code, S57Attl(acronym), acronym, AttributeClause(s101Code), NoRemap);
 
     private static void AddBoolean(
         Dictionary<string, S101ToS57AttributeRule> attributes,
-        string s101Code, ushort attl, string acronym, string clause, string whenTrue, string whenFalse)
+        string s101Code, string acronym, string clause, string whenTrue, string whenFalse)
         => attributes[s101Code] = new S101ToS57AttributeRule(
-            s101Code, attl, acronym, clause,
+            s101Code, S57Attl(acronym), acronym, clause,
             new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 [BooleanTrue] = whenTrue,
@@ -262,6 +354,20 @@ public sealed class S101ToS57Rules
         }
         return inverse;
     }
+
+    /// <summary>
+    /// The Annex C clause under which an S-101 attribute isn't converted on a
+    /// feature class: one the class's clause names, one Annex C never
+    /// converts, or (for those it doesn't name) a §2.6 enhancement; otherwise
+    /// <c>null</c>. Attributes a value remap drops are not included.
+    /// </summary>
+    /// <param name="s101FeatureCode">The S-101 feature or information type code.</param>
+    /// <param name="s101AttributeCode">The S-101 attribute code.</param>
+    public static string? NotConvertedClause(string s101FeatureCode, string s101AttributeCode)
+        => S101ToS57AnnexCClauses.NotConvertedOnClass.GetValueOrDefault((s101FeatureCode, s101AttributeCode))
+            ?? NotConvertedOnClass.GetValueOrDefault((s101FeatureCode, s101AttributeCode))
+            ?? S101ToS57AnnexCClauses.NotConverted.GetValueOrDefault(s101AttributeCode)
+            ?? NotConverted.GetValueOrDefault(s101AttributeCode);
 
     internal static string FeatureClause(string s101Code)
         => S101ToS57AnnexCClauses.FeatureTypes.GetValueOrDefault(s101Code, "2.1");
@@ -309,31 +415,19 @@ public sealed class S101ToS57Rules
 
     /// <summary>
     /// Whether the S-57 attribute is of type List (comma-separated values)
-    /// rather than Enumerated, per S-57 Ed 3.1 Appendix A.
+    /// rather than Enumerated, per the IHO S-57 Edition 3.1 Object Catalogue
+    /// (<see cref="S57ObjectCatalogue.Iho"/>). Several S-101 values join into
+    /// a List attribute (§2.4.1); an Enumerated one keeps the first value only.
     /// </summary>
     /// <param name="s57Acronym">The S-57 attribute acronym, e.g. <c>COLOUR</c>.</param>
-    public static bool IsS57ListAttribute(string s57Acronym) => S57ListAttributes.Contains(s57Acronym);
-
-    /// <summary>
-    /// S-57 attributes of type List (S-57 Ed 3.1 Appendix A, Chapter 2): their
-    /// values are comma-separated, so several S-101 values join (§2.4.1). Any
-    /// other enumerated S-57 attribute is of type Enumerated and keeps the
-    /// first value only. <c>EncDotNet.S57</c> 0.8.1 ships no attribute
-    /// catalogue, so the list is held here.
-    /// </summary>
-    internal static readonly FrozenSet<string> S57ListAttributes = new[]
-    {
-        "CATACH", "CATAIR", "CATBRG", "CATDPG", "CATHAF", "CATHLK", "CATLMK", "CATLND",
-        "CATLIT", "CATMPA", "CATOFP", "CATPIP", "CATREA", "CATROS", "CATRSC", "CATSCF",
-        "CATSIT", "CATSIW", "CATSPM", "CATVEG", "COLOUR", "COLPAT", "FUNCTN", "LITVIS",
-        "NATCON", "NATQUA", "NATSUR", "PRODCT", "QUASOU", "RESTRN", "STATUS", "SURTYP",
-        "TECSOU",
-    }.ToFrozenSet(StringComparer.Ordinal);
+    public static bool IsS57ListAttribute(string s57Acronym)
+        => S57ObjectCatalogue.Iho.TryGetAttribute(s57Acronym, out var definition) && definition.Type == S57AttributeType.List;
 
     /// <summary>
     /// S-57 attributes that an ENC must populate on an object class (S-57
     /// Appendix B.1 Annex A, and S-58), written empty when the S-101 source has
-    /// no value (§2.4.1, §2.4.3). Limited to the classes Phase 1 converts.
+    /// no value (§2.4.1, §2.4.3), for the classes whose Annex C clause names
+    /// a mandatory attribute.
     /// </summary>
     internal static readonly FrozenDictionary<string, string[]> S57MandatoryAttributes =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -343,60 +437,42 @@ public sealed class S101ToS57Rules
             ["DEPCNT"] = ["VALDCO"],
             ["M_COVR"] = ["CATCOV"],
             ["M_QUAL"] = ["CATZOC"],
+            ["M_CSCL"] = ["CSCALE"],
+            ["NEWOBJ"] = ["CLSDEF", "CLSNAM", "SYMINS"],
+            ["CTRPNT"] = ["CATCTR"],
+            ["BCNSPP"] = ["BCNSHP", "CATSPM", "COLOUR"],
+            ["CTNARE"] = ["INFORM"],
+            ["LNDMRK"] = ["CATLMK", "CONVIS"],
+            ["MORFAC"] = ["CATMOR"],
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
-    /// S-57 acronym → ATTL for the attributes the translator assembles itself
-    /// (from complex attributes, information types and Boolean values), where
-    /// the forward mapping has no flat rule to invert.
+    /// The object class code (OBJL) of an S-57 acronym in the IHO S-57
+    /// Edition 3.1 Object Catalogue (<see cref="S57ObjectCatalogue.Iho"/>).
     /// </summary>
-    internal static readonly FrozenDictionary<string, ushort> S57AttributeCodes =
-        new Dictionary<string, ushort>(StringComparer.Ordinal)
-        {
-            ["CATBRG"] = 9,
-            ["CATZOC"] = 72,
-            ["COLOUR"] = 75,
-            ["COLPAT"] = 76,
-            ["CURVEL"] = 84,
-            ["DATEND"] = 85,
-            ["DATSTA"] = 86,
-            ["HORCLR"] = 98,
-            ["INFORM"] = 102,
-            ["LITCHR"] = 107,
-            ["LITVIS"] = 108,
-            ["MLTYLT"] = 110,
-            ["NATSUR"] = 113,
-            ["NATQUA"] = 114,
-            ["OBJNAM"] = 116,
-            ["ORIENT"] = 117,
-            ["PEREND"] = 118,
-            ["PERSTA"] = 119,
-            ["PICREP"] = 120,
-            ["RADWAL"] = 126,
-            ["SECTR1"] = 136,
-            ["SECTR2"] = 137,
-            ["SIGGRP"] = 141,
-            ["SIGPER"] = 142,
-            ["SIGSEQ"] = 143,
-            ["SORDAT"] = 147,
-            ["SORIND"] = 148,
-            ["SUREND"] = 151,
-            ["SURSTA"] = 152,
-            ["TXTDSC"] = 158,
-            ["TOPSHP"] = 171,
-            ["VALLMA"] = 175,
-            ["VALNMR"] = 178,
-            ["VERACC"] = 180,
-            ["VERCLR"] = 181,
-            ["VERCCL"] = 182,
-            ["VERCOP"] = 183,
-            ["VERCSA"] = 184,
-            ["CATCOV"] = 18,
-            ["NINFOM"] = 300,
-            ["NOBJNM"] = 301,
-            ["NTXTDS"] = 304,
-            ["DRVAL1"] = 87,
-            ["DRVAL2"] = 88,
-            ["VALDCO"] = 174,
-        }.ToFrozenDictionary(StringComparer.Ordinal);
+    /// <exception cref="KeyNotFoundException">The catalogue has no such class.</exception>
+    internal static ushort S57Objl(string acronym)
+        => S57ObjectCatalogue.Iho.TryGetObjectClass(acronym, out var definition)
+            ? (ushort)definition.Code
+            : throw new KeyNotFoundException($"No S-57 object class {acronym}.");
+
+    /// <summary>
+    /// The attribute code (ATTL) of an S-57 acronym in the IHO S-57 Edition
+    /// 3.1 Object Catalogue (<see cref="S57ObjectCatalogue.Iho"/>).
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The catalogue has no such attribute.</exception>
+    internal static ushort S57Attl(string acronym)
+        => TryGetS57Attl(acronym, out var attl) ? attl : throw new KeyNotFoundException($"No S-57 attribute {acronym}.");
+
+    /// <summary>The ATTL of an S-57 attribute acronym, when the IHO catalogue defines it.</summary>
+    internal static bool TryGetS57Attl(string acronym, out ushort attl)
+    {
+        var found = S57ObjectCatalogue.Iho.TryGetAttribute(acronym, out var definition);
+        attl = found ? (ushort)definition!.Code : (ushort)0;
+        return found;
+    }
+
+    /// <summary>The acronym of an S-57 attribute code, when the IHO catalogue defines it.</summary>
+    internal static string? S57AttributeAcronym(int attl)
+        => S57ObjectCatalogue.Iho.TryGetAttribute(attl, out var definition) ? definition.Acronym : null;
 }

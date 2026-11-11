@@ -49,7 +49,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
 
     // The kind is the report's (RouteCheckVerdict.From); the card words it.
     private static RouteCheckCard Build(bool hasDraft, params RouteFinding[] findings) =>
-        RouteCheckCard.Build(RouteCheckVerdict.From(findings, null).Kind, hasDraft, null, findings, warningsChecked: true, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
+        RouteCheckCard.Build(RouteCheckVerdict.From(findings, null).Kind, hasDraft, null, findings, warningsChecked: true, weather: null, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
 
     [Fact]
     public void Must_review_titles_name_the_worst_kind_in_order()
@@ -125,7 +125,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         Assert.Equal(("2 in force on route · 1 near", "3", CheckTone.Destructive), (verdict.Rows[2].Text, verdict.Rows[2].Chip, verdict.Rows[2].ChipTone));
         Assert.Equal("Not for navigation · computed from S-101, S-124 for your settings", verdict.Footer);
 
-        var nothing = RouteCheckCard.Build(RouteCheckVerdictKind.Clear, false, null, [], warningsChecked: false, [], DepthUnit.Metres, TimeFormat.Utc);
+        var nothing = RouteCheckCard.Build(RouteCheckVerdictKind.Clear, false, null, [], warningsChecked: false, weather: null, [], DepthUnit.Metres, TimeFormat.Utc);
         Assert.Equal(2, nothing.Rows.Count); // no Warnings row when no warnings were checked
         Assert.Equal(("Nothing found", "0", CheckTone.Success), (nothing.Rows[1].Text, nothing.Rows[1].Chip, nothing.Rows[1].ChipTone));
         Assert.Equal("Not for navigation · no data loaded for this route", nothing.Footer);
@@ -135,7 +135,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     public async Task Without_a_draft_the_scenario_has_one_warning_to_review_and_two_near()
     {
         using var s = Create();
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         Assert.True(panel.CanCheckPassage);
         panel.IsCheckingPassage = true;
         await s.Findings.WhenIdle();
@@ -193,7 +193,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = Create(Post);
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 
         // A1: the toggle is "Check route", enabled with two waypoints.
@@ -280,7 +280,7 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
     public static WarningsRouteCheck Create(WarningsScenarioFixture fixture, Action<Action>? post = null, RouteWarningOptions? options = null)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = RouteS421Mapping.FromS421(fixture.S421Route());
         route.SetPassageValue(RoutePassageField.Draft, null);
         route.SetDeparture(new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero));
@@ -295,12 +295,13 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
                     g => new DatasetEntry($"/tmp/{g.Key}.gml", "S-124"),
                     g => (IDatasetProcessor)new WarningProcessor(g.ToList())),
         };
-        var warnings = new NavigationalWarningsService(loader);
+        var warnings = new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
             checks: () => [new WarningCheck(), new ClearanceCheck()],
-            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(),
+            mariner: null);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings, mariner: null);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }
 

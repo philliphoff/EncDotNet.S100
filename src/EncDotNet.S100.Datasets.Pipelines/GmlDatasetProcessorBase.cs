@@ -677,8 +677,15 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             Extent = env.Any
                 ? new BoundingBox(env.MinLat, env.MinLon, env.MaxLat, env.MaxLon)
                 : null,
+            TimeCoverage = TimeCoverage,
         };
     }
+
+    /// <summary>
+    /// The time the dataset's content covers, for <see cref="Metadata"/>, or
+    /// <c>null</c> (the default) for none. S-412 reports its warnings' span.
+    /// </summary>
+    protected virtual TimeCoverage? TimeCoverage => null;
 
     /// <summary>
     /// Scans every feature's coordinates once to produce the raw (unpadded)

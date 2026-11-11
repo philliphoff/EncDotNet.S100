@@ -1,6 +1,6 @@
 #:project ../../src/EncDotNet.S100.Datasets.S101/EncDotNet.S100.Datasets.S101.csproj
 #:project ../../src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj
-#:project ../../src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj
+#:project ../../src/EncDotNet.S100.Scripting.LuaCSharp/EncDotNet.S100.Scripting.LuaCSharp.csproj
 
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
@@ -8,7 +8,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting.LuaCSharp;
 
 if (args.Length < 3)
 {
@@ -64,7 +64,7 @@ var mariner = MarinerSettings.Default;
 // Run Lua portrayal
 Console.WriteLine();
 Console.WriteLine("Running S-101 Lua portrayal pipeline...");
-var luaEngine = new MoonSharpLuaEngine();
+var luaEngine = new LuaCSharpLuaEngine();
 var catalogue = new S101PortrayalCatalogue(provider, luaEngine);
 var portrayal = new S101LuaRuleExecutor(luaEngine, dataset, catalogue, fc);
 

@@ -91,6 +91,7 @@ every product with a ✅ below ships a normative validation rule pack.
 | **S-131** | Marine Harbour Infrastructure | GML | Lua (Part 9A) | ✅ |
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ |
 | **S-411** | Sea Ice Information | GML | XSLT | ✅ |
+| **S-412** *(draft)* | Marine Weather Warnings | GML | XSLT | ✅ |
 | **S-421** | Route Plans | GML | XSLT | ✅ |
 | **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) |
@@ -240,7 +241,8 @@ split into focused packages.
 | Package | Description |
 |---|---|
 | **EncDotNet.S100.Hdf5.PureHdf** | HDF5 reader implementation using [PureHDF](https://github.com/Apollo3zehn/PureHDF) (fully managed, no native dependencies). |
-| **EncDotNet.S100.Scripting.MoonSharp** | Lua 5.2 scripting engine using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). |
+| **EncDotNet.S100.Scripting.LuaCSharp** | Lua 5.2 scripting engine using [Lua-CSharp](https://github.com/nuskey8/Lua-CSharp). The default engine for Lua portrayal. |
+| **EncDotNet.S100.Scripting.MoonSharp** | Lua 5.2 scripting engine using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). Selectable instead of Lua-CSharp. |
 | **EncDotNet.S100.Crs.ProjNet** | CRS transform backend (`ICrsTransformFactory`) using [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) — WGS84 UTM zones and EPSG:4326 ↔ EPSG:3857. Mapsui-free, so headless consumers (the facade and the `s100` CLI) can reproject coverage products without linking a map renderer. |
 
 ### Product datasets
@@ -260,11 +262,14 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S131** | S-131 marine harbour infrastructure reader, Lua portrayal pipeline (GML+Lua hybrid), validation pack. |
 | **EncDotNet.S100.Datasets.S201** | S-201 aids to navigation information (IALA) reader, XSLT portrayal pipeline, typed AtoN inventory data model, validation pack. |
 | **EncDotNet.S100.Datasets.S411** | S-411 sea ice reader, XSLT portrayal pipeline, validation pack. |
+| **EncDotNet.S100.Datasets.S412** | S-412 marine weather warnings reader (draft specification), typed warnings model, XSLT portrayal, validation pack. |
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model; pre-translation rules + delegation to the S-101 validation pack. |
 | **EncDotNet.S100.Datasets.Grib** | Managed GRIB2 decoder for wind and wave grids: regular latitude/longitude grids, analysis, forecast and time-interval products, and simple, complex, spatially differenced and PNG packing with bitmaps. Indexes fields on open, decodes on demand, and reads a whole file (or appended files) into a weather grid set. Drawn by `GribDatasetProcessor` in Datasets.Pipelines. No native dependencies. Not for navigation. |
 | **EncDotNet.S100.Datasets.Weather** | Shared in-memory model for GRIB2 and NetCDF-CF wind and wave grids: the canonical parameter table, normalisation to the coverage grid order, and an `ICoverageSource` with lazily decoded time steps, overview levels and wind speed and direction derived from U and V. Not for navigation. |
 | **EncDotNet.S100.Datasets.Cap** | CAP 1.2 marine weather warnings: one CAP alert, an Atom feed of them, or the NWS GeoJSON from `api.weather.gov/alerts`. Polygons, circles and NWS marine zone codes (resolved against a bundled, simplified NWS marine zone layer) become outlines, drawn while in force with hatching and outlines by severity. Drawn by `CapDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
+| **EncDotNet.S100.Datasets.TropicalCyclones** | Tropical cyclone advisories from NHC's GIS shapefile zips: the storm, the advisory, every forecast point with its intensity and 34/50/64 kt radii by quadrant, the cone (split at 72 hours) and the past track. Loaded by `TropicalCycloneDatasetProcessor` in Datasets.Pipelines under the format name `TC`. Not for navigation. |
+| **EncDotNet.S100.Datasets.Aml** | SoundCharts' own portrayal of NATO Additional Military Layers (AML) cells read with EncDotNet.S57: dash-dot lines on a halo, unfilled ticked areas, framed point symbols and italic labels in four colour families (air, operational, seabed, environmental), on the *Additional military layers* display plane. Draws the RAL air and operational classes so far. Not the official AML portrayal; never used for depths or route checks. Not for navigation. |
 | **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. |
 | **EncDotNet.S100.Datasets.NetCdf** | Managed NetCDF-CF reader for wind and wave grids: NetCDF-3 (classic, 64-bit offset) and NetCDF-4 (on PureHDF, deflate and shuffle), with the CF interpretation that builds a weather grid set. Drawn by `NetCdfDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 

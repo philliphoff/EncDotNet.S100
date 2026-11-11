@@ -1,12 +1,12 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using SkiaSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -140,6 +140,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [Description("Comma-separated list of drawing-instruction categories to suppress: text, points, lines, areas (e.g. --hide text,points). Combines additively with --no-text. In the composite form the suppression is global (applies to every layer).")]
         public string? Hide { get; init; }
 
+        [CommandOption("--show-layer <KEYS>")]
+        [Description("Single-dataset form only: comma-separated sub-layer keys to draw even when they're off by default, as the viewer's Display controls switches do, e.g. --show-layer weather.precipitation,weather.cape,weather.cloud. 's100 info' lists a dataset's layer keys.")]
+        public string? ShowLayer { get; init; }
+
         [CommandOption("--debug")]
         [Description("Show full stack traces on error, and surface host/Lua portrayal diagnostics on stderr.")]
         public bool Debug { get; init; }
@@ -153,6 +157,11 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [Description("Draw a basemap beneath the chart data: none (default) or offline. 'offline' composites the bundled Natural Earth 1:10m land layer (public domain) under all chart layers, registered with the chart's own viewport. Online tile basemaps are not supported in the headless renderer. Applies to both the single-dataset and --layer composite forms.")]
         [DefaultValue("none")]
         public string Basemap { get; init; } = "none";
+
+        [CommandOption(LuaEngineOption.Template)]
+        [Description(LuaEngineOption.Description)]
+        [DefaultValue(LuaEngineOption.Default)]
+        public string LuaEngine { get; init; } = LuaEngineOption.Default;
 
         [CommandOption("--display-mode <MODE>")]
         [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod (stage of development) or ice-navigational (PROVISIONAL preview derived from total concentration — NOT a POLARIS/RIO navigational-risk computation). A single dataset carries the full WMO egg code, so the same data can be shown in any mode. Supplying this option for any other product specification is a validation error.")]
@@ -226,6 +235,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return ValidationResult.Error(
                     $"Invalid --basemap value '{Basemap}'. Use none or offline.");
 
+            if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
+                return luaEngineError;
+
             if (DisplayMode is not null && !TryParseDisplayMode(DisplayMode, out _))
                 return ValidationResult.Error(
                     $"Invalid --display-mode value '{DisplayMode}'. Use ice-concentration, ice-sod or ice-navigational.");
@@ -233,6 +245,12 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (IsComposite && IsExplicitExchangeSet)
                 return ValidationResult.Error(
                     "--layer and --exchange-set/--from cannot be combined. Use one or the other.");
+
+            if (ShowLayer is not null && (IsComposite || IsExchangeSetComposite))
+                return ValidationResult.Error("--show-layer applies only to the single-dataset form.");
+
+            if (ShowLayer is not null && ParseLayerKeys(ShowLayer).Length == 0)
+                return ValidationResult.Error("--show-layer must be a comma-separated list of sub-layer keys (e.g. weather.precipitation).");
 
             if (Only is not null && !IsExchangeSetComposite)
                 return ValidationResult.Error(
@@ -388,7 +406,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         var datasetPath = settings.Input!;
         var outputPath = settings.ResolveOutputPath()!;
-        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
+        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build(LuaEngineOption.Resolve(settings.LuaEngine));
         try
         {
             var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath);
@@ -426,6 +444,16 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
                 ResolveBasemap(settings), displayModeId, viewport);
+            if (settings.ShowLayer is { } shown)
+            {
+                renderContext = renderContext with
+                {
+                    EcdisDisplay = (renderContext.EcdisDisplay ?? new EcdisDisplaySettings()) with
+                    {
+                        LayerVisibility = ParseLayerKeys(shown).ToDictionary(key => key, _ => true, StringComparer.Ordinal),
+                    },
+                };
+            }
 
             TryResolveOutput(settings.Format, outputPath, out var outputKind, out var imageFormat, out _);
 
@@ -500,10 +528,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 subLayer => subLayer is GridCoverageSubLayer or ArrowCoverageSubLayer or GlyphCoverageSubLayer);
             if (hasRenderableCoverage)
             {
-                var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-                return compositor.Render(
-                    [HeadlessCompositeInput.ForCoverage(portrayal)],
-                    new HeadlessCompositeOptions
+                return ChartCompositorFactory.Create().Render(
+                    [ChartCompositeInput.ForCoverage(portrayal)],
+                    new ChartCompositeOptions
                     {
                         Width = width,
                         Height = height,
@@ -623,7 +650,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 DisplayModeId = displayModeId,
             };
 
-            using var renderer = new PngS100DatasetRenderer();
+            using var renderer = new PngS100DatasetRenderer(LuaEngineOption.Resolve(settings.LuaEngine));
             byte[] png = renderer.RenderAsync(layers, options).GetAwaiter().GetResult();
 
             TryResolveFormat(settings.Format, outputPath, out var format, out _);
@@ -645,6 +672,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 dataset.Dispose();
         }
     }
+
+    // The sub-layer keys of --show-layer, trimmed, without empty entries.
+    internal static string[] ParseLayerKeys(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static RgbaColor? ResolveBackground(Settings settings)
     {

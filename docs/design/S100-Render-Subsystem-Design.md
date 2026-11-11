@@ -11,6 +11,26 @@
 > (Tiled vs Single) selection axis remains. (The orphaned line-LOD pyramid
 > producer was retired under #601.)
 
+> **Update (#607, map rendering slice 7): the subsystem moved out of
+> `Renderers.Mapsui`.** The compositors (`S100VectorTileRenderer`,
+> `S100VectorSceneRenderer`), the tile grid and caches, `TileMemoryPool`,
+> `TileDiskCache`, the pattern-clip caches, `OverlaySpatialIndex`, the overscale
+> curtain model, `CoverageClip`, `HiddenCoverage`, `OverlapSuppression`,
+> `LayerExtentCulling`, `WorldCopies`, `MachineProfile`, `IdleMemoryCompactor`
+> and the `s100.render.*` telemetry now live in the host-neutral
+> `EncDotNet.S100.Rendering.Engine` package, which has no Mapsui reference. The
+> engine keys per-layer state on an opaque owner token (the Mapsui adapter
+> passes the `ILayer`) instead of `ILayer`, takes a `ViewState` instead of
+> Mapsui's `Viewport`, and asks the host to repaint through `LayerRepaint`.
+> `RenderingOptimizations` became `ChartSessionOptions` (process-wide instance
+> `ChartEngine.Options`). `Renderers.Mapsui` keeps a thin adapter,
+> `MapsuiChartLayers`, that registers the Mapsui custom layer renderers and
+> converts Mapsui's viewport and layer each frame. The telemetry meter and
+> activity source are now named `EncDotNet.S100.Rendering.Engine`. Type and
+> package names in the sections below are as they were when written. See
+> [map-render-architecture.md](map-render-architecture.md), "Staged migration",
+> slice 7.
+
 **Status:** v0.2 draft · clean-sheet rendering core, now the sole base-plane path (A retired, #600)
 **Scope:** `EncDotNet.S100` interactive viewer · base-plane portrayal rendering
 **Primary goal:** maximize pan smoothness · **Secondary:** zoom smoothness · **Means:** async-first, deferred work, anticipatory pre-warming

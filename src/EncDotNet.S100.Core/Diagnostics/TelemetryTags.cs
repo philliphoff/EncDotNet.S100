@@ -113,4 +113,11 @@ public static class TelemetryTags
     /// counters so hit/miss ratios can be attributed per zoom band.
     /// </summary>
     public const string LodBucket = "s100.geometry.lod.bucket";
+
+    /// <summary>
+    /// Cache lookup outcome on a cache-read span: <c>hit</c> or <c>miss</c>.
+    /// Used by <c>s100.portrayal.cache.read</c> and <c>s100.cell.pattern_clip</c>,
+    /// which split a warm cell load by stage.
+    /// </summary>
+    public const string CacheResult = "s100.cache.result";
 }

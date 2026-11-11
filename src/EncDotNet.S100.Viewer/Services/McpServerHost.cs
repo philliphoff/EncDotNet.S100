@@ -1,14 +1,12 @@
 using System.Net;
 using System.Net.Sockets;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp;
-using EncDotNet.S100.Mcp.Library;
-using EncDotNet.S100.Mcp.Tools.Library;
-using EncDotNet.S100.Viewer.McpTools;
-using EncDotNet.S100.Viewer.Services.McpCapabilities;
+using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Viewer.McpTools.Groups;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
-using SharedMutableTools = EncDotNet.S100.Mcp.MutableTools.S100MutableTools;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -26,138 +24,47 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class McpServerHost : IAsyncDisposable
 {
-    private readonly EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog _catalog;
+    private readonly IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
-    private readonly ICapabilityAccessor<IImageRenderer>? _imageAccessor;
-    private readonly ICapabilityAccessor<IMapViewportController>? _viewportAccessor;
-    private readonly ICapabilityAccessor<IMapCoordinateConverter>? _coordinateAccessor;
-    private readonly IRenderStateControllerAccessor? _renderStateAccessor;
-    private readonly MapPresentationStateProjection? _presentationProjection;
-    private readonly GlobalTimeService? _globalTime;
-    private readonly IRenderActivityMonitor? _renderActivityMonitor;
-    private readonly IDatasetLoadGateway? _loadGateway;
-    private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? _ownShipHelm;
-    private readonly RoutesService? _routesService;
-    private readonly IGeographicPickPresenter? _pickPresenter;
-    private readonly IViewerUiControllerAccessor? _uiControllerAccessor;
-    private readonly IAppScreenshotProvider? _appScreenshot;
-    private readonly IViewerTimelineController? _timeline;
-    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
-    private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? _clearance;
-    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
-    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? _routeCheckLegend;
-    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? _followPassage;
-    private readonly RouteExchangeService? _routeExchange;
-    private readonly IViewerDatasetStateController? _datasetState;
-    private readonly IViewerNotificationController? _notifications;
-    private readonly AdjustableTimeProvider? _testClock;
-    private readonly ILibraryReader? _library;
-    private readonly ILibraryEditor? _libraryEditor;
-    private readonly EncDotNet.S100.Collections.Secom.SecomRegistry? _secomRegistry;
-    private readonly EncDotNet.S100.Collections.Secom.SecomServerTrust? _secomServerTrust;
-    private readonly ISecomIdentityReferences? _secomIdentities;
-    private readonly IViewerUiAutomation? _uiAutomation;
+    private readonly IPassageRouteProvider _passageRoutes;
+    private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache _routeCheckSources;
+    private readonly IMapDrawState _mapDrawState;
+    private readonly IReadOnlyList<IViewerMcpToolGroup> _toolGroups;
     private readonly ILoggerFactory? _loggers;
     private readonly ILogger _logger;
-    private readonly EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? _navigationalWarnings;
-    private readonly NavigationalWarningsService? _navigationalWarningsService;
-    private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
-    private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
-    private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? _displayCombinations;
-    private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? _depthBasis;
-    private readonly MeasureSession? _measure;
-    private readonly EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? _measureCard;
-    private readonly EncDotNet.S100.Viewer.Tools.RangeBearingState? _rangeBearing;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
     private bool _disposed;
 
+    /// <param name="catalog">The viewer's dataset catalog the server's shared tools query.</param>
+    /// <param name="settings">Whether MCP is on, and its port, bind address and test hooks.</param>
+    /// <param name="passageRoutes">The viewer's routes, as the shared passage tools read them.</param>
+    /// <param name="routeCheckSources">The route-check sources shared with the viewer's own route checks.</param>
+    /// <param name="mapDrawState">What the map draws now, so the server's queries match the map.</param>
+    /// <param name="toolGroups">The viewer's own tools, created afresh each time the server starts.</param>
+    /// <param name="loggers">Logs the server's start, stop and port conflicts.</param>
     public McpServerHost(
-        EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog catalog,
+        IDatasetCatalog catalog,
         ViewerSettings settings,
-        ICapabilityAccessor<IImageRenderer>? imageAccessor = null,
-        ICapabilityAccessor<IMapViewportController>? viewportAccessor = null,
-        ICapabilityAccessor<IMapCoordinateConverter>? coordinateAccessor = null,
-        ILoggerFactory? loggers = null,
-        IRenderStateControllerAccessor? renderStateAccessor = null,
-        GlobalTimeService? globalTime = null,
-        IRenderActivityMonitor? renderActivityMonitor = null,
-        IDatasetLoadGateway? loadGateway = null,
-        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null,
-        RoutesService? routesService = null,
-        IGeographicPickPresenter? pickPresenter = null,
-        IViewerUiControllerAccessor? uiControllerAccessor = null,
-        IAppScreenshotProvider? appScreenshot = null,
-        MapPresentationStateProjection? presentationProjection = null,
-        IViewerTimelineController? timeline = null,
-        IViewerDatasetStateController? datasetState = null,
-        IViewerNotificationController? notifications = null,
-        AdjustableTimeProvider? testClock = null,
-        ILibraryReader? library = null,
-        ILibraryEditor? libraryEditor = null,
-        IViewerUiAutomation? uiAutomation = null,
-        EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null,
-        EncDotNet.S100.Collections.Secom.SecomServerTrust? secomServerTrust = null,
-        ISecomIdentityReferences? secomIdentities = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? passageCheck = null,
-        EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? clearance = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? routeFindings = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? followPassage = null,
-        EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? navigationalWarnings = null,
-        NavigationalWarningsService? navigationalWarningsService = null,
-        RouteExchangeService? routeExchange = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null,
-        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
-        EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null,
-        EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? depthBasis = null,
-        EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null,
-        MeasureSession? measure = null,
-        EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? measureCard = null,
-        EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null)
+        IPassageRouteProvider passageRoutes,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache routeCheckSources,
+        IMapDrawState mapDrawState,
+        IReadOnlyList<IViewerMcpToolGroup> toolGroups,
+        ILoggerFactory? loggers = null)
     {
-        _rangeBearing = rangeBearing;
-        _depthBasis = depthBasis;
-        _logBuffer = logBuffer;
-        _displayCombinations = displayCombinations;
-        _measure = measure;
-        _measureCard = measureCard;
-        _routeCheckSources = routeCheckSources;
-        _routeCheckLegend = routeCheckLegend;
-        _routeExchange = routeExchange;
-        _navigationalWarnings = navigationalWarnings;
-        _navigationalWarningsService = navigationalWarningsService;
-        _followPassage = followPassage;
-        _passageCheck = passageCheck;
-        _clearance = clearance;
-        _routeFindings = routeFindings;
-        _secomRegistry = secomRegistry;
-        _secomServerTrust = secomServerTrust;
-        _secomIdentities = secomIdentities;
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(passageRoutes);
+        ArgumentNullException.ThrowIfNull(routeCheckSources);
+        ArgumentNullException.ThrowIfNull(mapDrawState);
+        ArgumentNullException.ThrowIfNull(toolGroups);
         _catalog = catalog;
         _settings = settings;
-        _imageAccessor = imageAccessor;
-        _viewportAccessor = viewportAccessor;
-        _coordinateAccessor = coordinateAccessor;
-        _renderStateAccessor = renderStateAccessor;
-        _presentationProjection = presentationProjection;
-        _globalTime = globalTime;
-        _renderActivityMonitor = renderActivityMonitor;
-        _loadGateway = loadGateway;
-        _ownShipHelm = ownShipHelm;
-        _routesService = routesService;
-        _pickPresenter = pickPresenter;
-        _uiControllerAccessor = uiControllerAccessor;
-        _appScreenshot = appScreenshot;
-        _timeline = timeline;
-        _datasetState = datasetState;
-        _notifications = notifications;
-        _testClock = testClock;
-        _library = library;
-        _libraryEditor = libraryEditor;
-        _uiAutomation = uiAutomation;
+        _passageRoutes = passageRoutes;
+        _routeCheckSources = routeCheckSources;
+        _mapDrawState = mapDrawState;
+        _toolGroups = toolGroups;
         _loggers = loggers;
         _logger = loggers?.CreateLogger<McpServerHost>()
             ?? (ILogger)Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
@@ -233,10 +140,9 @@ internal sealed class McpServerHost : IAsyncDisposable
             BindAddress = bindAddress,
             Port = port,
             AdditionalTools = additionalTools,
-            PassageRoutes = _routesService is null
-                ? null
-                : new ViewerPassageRouteProvider(_routesService, new DispatcherRouteEditInvoker()),
+            PassageRoutes = _passageRoutes,
             RouteCheckSources = _routeCheckSources,
+            MapDrawState = _mapDrawState,
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try
@@ -364,6 +270,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
     }
 
+    /// <summary>The viewer's own tools: every group's, in group order.</summary>
+    internal IReadOnlyList<McpServerTool> BuildAdditionalTools() =>
+        [.. _toolGroups.SelectMany(group => group.CreateTools())];
+
     /// <summary>
     /// Detects the various ways Kestrel surfaces an "address in use"
     /// error. Kestrel typically wraps the underlying
@@ -374,239 +284,6 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// <see cref="SocketError.AddressAlreadyInUse"/> as well as the
     /// .NET 10 <c>AddressInUseException</c> wrapper.
     /// </summary>
-    internal System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
-    {
-        var tools = new System.Collections.Generic.List<McpServerTool>();
-        if (_viewportAccessor is not null)
-        {
-            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_viewportAccessor)));
-        }
-        if (_coordinateAccessor is not null)
-        {
-            tools.Add(PickFeaturesMcpAdapter.Create(
-                new PickFeaturesTool(_coordinateAccessor, _catalog, _pickPresenter)));
-        }
-        // Presentation (set_palette / set_display_category / set_display_mode)
-        // and time (set_time_step) now come from the shared, renderer-neutral
-        // S100MutableTools factory. The viewer adapts its own services onto the
-        // shared capability seams (ViewerPresentationController,
-        // ViewerTimeController) instead of carrying duplicate tool classes.
-        AddSharedMutableTools(tools);
-
-        if (_renderActivityMonitor is not null)
-        {
-            tools.Add(AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivityMonitor)));
-            tools.Add(GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivityMonitor)));
-        }
-        if (_ownShipHelm is not null)
-        {
-            tools.Add(SetOwnShipMcpAdapter.Create(new SetOwnShipTool(_ownShipHelm)));
-        }
-        if (_uiControllerAccessor is not null)
-        {
-            tools.Add(ListPanelsMcpAdapter.Create(new ListPanelsTool(_uiControllerAccessor)));
-            tools.Add(SetPanelMcpAdapter.Create(new SetPanelTool(_uiControllerAccessor)));
-        }
-        if (_appScreenshot is not null)
-        {
-            var combinations = _displayCombinations;
-            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(
-                _appScreenshot,
-                _uiControllerAccessor,
-                combinations is null ? null : () => (combinations.Active?.Id, combinations.IsModified))));
-        }
-        if (_timeline is not null)
-        {
-            tools.Add(ViewerStateMcpAdapters.Create(new GetTimelineStateTool(_timeline)));
-            tools.Add(ViewerStateMcpAdapters.Create(new SetViewTimeTool(_timeline)));
-            tools.Add(ViewerStateMcpAdapters.Create(new StepTimeTool(_timeline)));
-            tools.Add(ViewerStateMcpAdapters.Create(new SetTimelineViewTool(_timeline)));
-        }
-        if (_datasetState is not null)
-        {
-            tools.Add(ViewerStateMcpAdapters.Create(new SetDatasetStateTool(_datasetState)));
-            tools.Add(ViewerStateMcpAdapters.Create(new SelectDatasetTool(_datasetState)));
-        }
-        if (_notifications is not null)
-        {
-            tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
-            tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
-        }
-        if (_displayCombinations is not null)
-        {
-            tools.Add(DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations)));
-            tools.Add(DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations)));
-        }
-        if (_logBuffer is not null)
-        {
-            tools.Add(GetRecentLogsMcpAdapter.Create(new GetRecentLogsTool(_logBuffer)));
-        }
-        if (_depthBasis is not null)
-        {
-            tools.Add(DepthBasisMcpAdapter.Create(new GetDepthBasisTool(_depthBasis, new DispatcherRouteEditInvoker())));
-        }
-        tools.AddRange(LibraryMcpTools.Create(_library, _libraryEditor, _secomRegistry, _secomServerTrust, _secomIdentities));
-        // Test hooks only: set_test_clock exists only when the viewer was
-        // started with --mcp-test-hooks, which makes its clock adjustable.
-        if (_testClock is not null && _settings.McpTestHooks)
-        {
-            tools.Add(ViewerStateMcpAdapters.Create(new SetTestClockTool(_testClock)));
-        }
-
-        // Test hooks only: the ui_* tools can click anything in the UI, so they
-        // are for scripted testing and never offered to someone who just turns
-        // the MCP server on in Settings.
-        if (_uiAutomation is not null && _settings.McpTestHooks)
-        {
-            tools.Add(UiAutomationMcpAdapters.Create(new UiTreeTool(_uiAutomation)));
-            foreach (var action in Enum.GetValues<UiAction>())
-                tools.Add(UiAutomationMcpAdapters.Create(new UiActionTool(_uiAutomation, action)));
-        }
-        if (_navigationalWarnings is not null && _navigationalWarningsService is not null)
-        {
-            var warningsInvoker = new DispatcherRouteEditInvoker();
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new ListNavigationalWarningsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new SelectNavigationalWarningTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new RefreshNavigationalWarningsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new MarkNavigationalWarningsNewTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new GetWarningCardsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new FollowWarningLinkTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new PreviewWarningCardTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new SetNavigationalWarningDisplayTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new SetNavigationalWarningClassificationTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-        }
-        if (_routesService is not null)
-        {
-            var invoker = new DispatcherRouteEditInvoker();
-            tools.Add(CreateRouteMcpAdapter.Create(new CreateRouteTool(_routesService, invoker)));
-            tools.Add(ListRoutesMcpAdapter.Create(new ListRoutesTool(_routesService, invoker)));
-            tools.Add(GetRouteMcpAdapter.Create(new GetRouteTool(_routesService, invoker)));
-            tools.Add(DeleteRouteMcpAdapter.Create(new DeleteRouteTool(_routesService, invoker)));
-            tools.Add(AppendWaypointMcpAdapter.Create(new AppendWaypointTool(_routesService, invoker)));
-            tools.Add(InsertWaypointMcpAdapter.Create(new InsertWaypointTool(_routesService, invoker)));
-            tools.Add(MoveWaypointMcpAdapter.Create(new MoveWaypointTool(_routesService, invoker)));
-            tools.Add(DeleteWaypointMcpAdapter.Create(new DeleteWaypointTool(_routesService, invoker)));
-            tools.Add(SetLegAttributesMcpAdapter.Create(new SetLegAttributesTool(_routesService, invoker)));
-            tools.Add(SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(_routesService, invoker)));
-            if (_passageCheck is not null)
-            {
-                tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
-                tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
-                tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
-                tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
-                if (_followPassage is not null && _timeline is not null)
-                    tools.Add(PassageCheckMcpAdapters.Create(new SetFollowPassageTool(_followPassage, _passageCheck, invoker, _timeline)));
-                if (_routeFindings is not null)
-                {
-                    tools.Add(RouteFindingsMcpAdapters.Create(new GetFindingsTool(_routesService, invoker, _passageCheck, _routeFindings)));
-                    tools.Add(RouteFindingsMcpAdapters.Create(new SelectFindingTool(_routesService, invoker, _passageCheck, _routeFindings)));
-                    tools.Add(RouteFindingsMcpAdapters.Create(new SetFindingsViewTool(_routesService, invoker, _passageCheck, _routeFindings)));
-                }
-                if (_routeCheckLegend is not null)
-                {
-                    tools.Add(RouteCheckMapMcpAdapters.Create(new GetMapLegendTool(_routeCheckLegend, _routesService, _passageCheck, invoker)));
-                    tools.Add(RouteCheckMapMcpAdapters.Create(new SetMapLegendTool(_routeCheckLegend, _routesService, _passageCheck, invoker)));
-                }
-            }
-            if (_clearance is not null)
-            {
-                var clearanceTools = new ClearanceTools(_clearance, invoker);
-                tools.Add(clearanceTools.CreateGet());
-                tools.Add(clearanceTools.CreateSet());
-            }
-            tools.Add(UndoRouteEditMcpAdapter.Create(new UndoRouteEditTool(_routesService, invoker)));
-            tools.Add(RedoRouteEditMcpAdapter.Create(new RedoRouteEditTool(_routesService, invoker)));
-            tools.Add(SetRouteEditModeMcpAdapter.Create(new SetRouteEditModeTool(_routesService, invoker)));
-            tools.Add(ReceivedRouteMcpAdapters.Create(new SetRouteDisplayModeTool(_routesService, invoker)));
-            if (_routeExchange is not null)
-            {
-                tools.Add(ReceivedRouteMcpAdapters.Create(new ImportRouteTool(_routesService, invoker, _routeExchange)));
-                tools.Add(ReceivedRouteMcpAdapters.Create(new CopyRouteTool(_routesService, invoker, _routeExchange)));
-                tools.Add(ReceivedRouteMcpAdapters.Create(new ExportRouteTool(_routesService, invoker, _routeExchange)));
-            }
-            tools.Add(SelectRouteItemMcpAdapter.Create(new SelectRouteItemTool(_routesService, invoker)));
-            tools.Add(SetPassageCardMcpAdapter.Create(new SetPassageCardTool(_routesService, invoker)));
-            tools.Add(GetPassageMcpAdapter.Create(new GetPassageTool(_routesService, invoker)));
-            tools.Add(SetPassageMcpAdapter.Create(new SetPassageTool(_routesService, invoker)));
-        }
-        if (_measure is not null && _measureCard is not null)
-        {
-            var measureInvoker = new DispatcherRouteEditInvoker();
-            tools.Add(MeasureMcpAdapters.Create(new GetMeasureTool(_measure, _measureCard, measureInvoker)));
-            tools.Add(MeasureMcpAdapters.Create(new SetMeasureTool(_measure, _measureCard, measureInvoker)));
-        }
-        if (_rangeBearing is not null)
-        {
-            var rangeBearingInvoker = new DispatcherRouteEditInvoker();
-            tools.Add(RangeBearingMcpAdapters.Create(new SetRangeBearingTool(_rangeBearing, _settings, rangeBearingInvoker)));
-            tools.Add(RangeBearingMcpAdapters.Create(new GetRangeBearingTool(_rangeBearing, rangeBearingInvoker)));
-        }
-        return tools.Count == 0 ? null : tools;
-    }
-
-    /// <summary>
-    /// Appends the shared, renderer-neutral mutating tools the viewer can back —
-    /// presentation (<c>set_palette</c> / <c>set_display_category</c> /
-    /// <c>set_display_mode</c>), time (<c>set_time_step</c>), rendering
-    /// (<c>render_to_image</c>), and the dataset catalog (<c>open_dataset</c> /
-    /// <c>close_dataset</c> / <c>close_all_datasets</c>) — bound to the viewer's
-    /// services through capability adapters. Each capability is
-    /// <see langword="null"/> when its backing service is unavailable, so the
-    /// factory omits the corresponding tools.
-    /// </summary>
-    private void AddSharedMutableTools(System.Collections.Generic.List<McpServerTool> tools)
-    {
-        ICapabilityAccessor<IPresentationController>? presentation =
-            _renderStateAccessor is not null && _presentationProjection is not null
-                ? new DelegatingCapabilityAccessor<IPresentationController>(() =>
-                    _renderStateAccessor.Current is { } controller
-                        ? new ViewerPresentationController(
-                            controller, _presentationProjection.CreateSnapshot)
-                        : null)
-                : null;
-
-        ICapabilityAccessor<ITimeController>? time =
-            _globalTime is not null
-                ? new StaticCapabilityAccessor<ITimeController>(
-                    new ViewerTimeController(_globalTime))
-                : null;
-
-        // render_to_image: the viewer's live map host implements the shared
-        // IImageRenderer directly — RenderToPngAsync snapshots the live Mapsui map
-        // and PreferredSize reports the live on-screen viewport size for the
-        // unsized-capture default and the echoed viewport dimensions.
-        ICapabilityAccessor<IImageRenderer>? renderer = _imageAccessor;
-
-        // open_dataset / close_dataset / close_all_datasets: the viewer's
-        // read-only catalog plus its UI-thread load gateway, presented as the
-        // shared mutable-catalog seam. Passed directly (not via an accessor)
-        // because the catalog exists for the whole session; readiness of the
-        // load path is handled inside the adapter.
-        IMutableDatasetCatalog? catalog = _loadGateway is not null
-            ? new ViewerMutableDatasetCatalog(_catalog, _loadGateway)
-            : null;
-
-        if (presentation is null && time is null && renderer is null && catalog is null)
-        {
-            return;
-        }
-
-        foreach (var tool in SharedMutableTools.Create(
-            presentation: presentation, time: time, renderer: renderer, catalog: catalog))
-        {
-            tools.Add(tool);
-        }
-    }
-
     private static bool IsPortInUse(Exception ex)
     {
         for (var e = ex; e is not null; e = e.InnerException!)

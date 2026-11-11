@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
@@ -106,14 +105,15 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
     private IReadOnlyList<LibraryTimedEntry>? _entries;
     private bool _changePosted;
 
-    public LibraryTimeSource(LibraryPanelViewModel panel, CollectionLibrary library, ILibraryLoader loader, TimeProvider clock, Action<Action>? dispatch = null)
+    public LibraryTimeSource(LibraryPanelViewModel panel, CollectionLibrary library, ILibraryLoader loader, TimeProvider clock, Action<Action> dispatch)
     {
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _panel = panel;
-        _dispatch = dispatch ?? PostLater;
+        _dispatch = dispatch;
         library.Changed += (_, _) => Invalidate();
         loader.Changed += (_, _) => Invalidate();
         panel.Downloader.Changed += (_, _) => Invalidate();
@@ -242,9 +242,4 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
             };
         }
     }
-
-    // Always defers, even on the UI thread, so Invalidate's coalescing works:
-    // a burst of changes raised there (a pass that evicts or loads many cells)
-    // raises Changed once, and the Timeline rebuilds once, instead of per cell.
-    private static void PostLater(Action action) => Dispatcher.UIThread.Post(action);
 }

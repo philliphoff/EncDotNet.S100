@@ -197,25 +197,64 @@ internal sealed partial class ViewerSettings
     public bool? IgnoreScaleMinimum { get; set; }
 
     /// <summary>
+    /// Chart-wide water level adjustment (#1132): "Off" or "AtViewTime".
+    /// Null (older files) is Off.
+    /// </summary>
+    public string? WaterLevelAdjustment { get; set; }
+
+    /// <summary>
+    /// Whether chart-wide adjustment applies water level where either
+    /// vertical datum isn't declared (#1132 Q2). Null is false.
+    /// </summary>
+    public bool? WaterLevelApplyUndeclaredDatum { get; set; }
+
+    /// <summary>
+    /// Check route's wind limit in knots for the weather check (#1093), or
+    /// null when wind isn't checked (the default).
+    /// </summary>
+    public double? RouteMaxWindKnots { get; set; }
+
+    /// <summary>
+    /// Check route's significant wave height limit in metres for the weather
+    /// check (#1093), or null when waves aren't checked (the default).
+    /// </summary>
+    public double? RouteMaxWaveHeightMetres { get; set; }
+
+    /// <summary>
+    /// The tropical cyclone wind radius Check route tests (#1299): 34, 50 or
+    /// 64 knots. Null is 34.
+    /// </summary>
+    public int? RouteCycloneCheckAgainstKnots { get; set; }
+
+    /// <summary>Whether Check route reports the closest approach to each tropical cyclone (#1299). Null is on.</summary>
+    public bool? RouteCycloneReportClosestApproach { get; set; }
+
+    /// <summary>
+    /// The weakest tropical cyclone radius whose findings are Must review
+    /// (#1299): 34, 50 or 64 knots, or 0 for never. Null is 50.
+    /// </summary>
+    public int? RouteCycloneMustReviewInsideKnots { get; set; }
+
+    /// <summary>
     /// The base-plane scene mode (issue #331).
     /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
-    /// matching <see cref="Renderers.Mapsui.VectorSceneMode"/>.
+    /// matching <see cref="Rendering.Engine.VectorSceneMode"/>.
     /// <see langword="null"/> → best default ("Tiled"). Mirrors
-    /// <c>RenderingOptimizations.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
+    /// <c>ChartEngine.Options.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
     /// </summary>
     public string? VectorSceneMode { get; set; }
 
     /// <summary>
     /// Tiled-base-plane gutter, in DIP (issue #331). <see langword="null"/> →
-    /// best default. Mirrors <c>RenderingOptimizations.TileGutterDip</c> /
+    /// best default. Mirrors <c>ChartEngine.Options.TileGutterDip</c> /
     /// <c>S100_VECTOR_TILE_GUTTER</c>.
     /// </summary>
     public double? TileGutterDip { get; set; }
 
     /// <summary>
-    /// Per-layer hot-cache native budget, in MB (issue #331).
+    /// Process-wide hot-cache native budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
-    /// <c>RenderingOptimizations.TileBudgetMb</c> /
+    /// <c>ChartEngine.Options.TileBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
     /// </summary>
     public double? TileBudgetMb { get; set; }
@@ -223,7 +262,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether tiled-base-plane speculative prediction / pre-warm is enabled
     /// (issue #331). <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TilePredictionEnabled</c> /
+    /// <c>ChartEngine.Options.TilePredictionEnabled</c> /
     /// <c>S100_VECTOR_TILE_PREDICT</c>.
     /// </summary>
     public bool? TilePredictionEnabled { get; set; }
@@ -232,7 +271,7 @@ internal sealed partial class ViewerSettings
     /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
     /// <see langword="null"/> → best default (on, except off by default on the
     /// LowEnd tier; an explicit opt-in is still honoured there). Mirrors
-    /// <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
+    /// <c>ChartEngine.Options.TileCrossBandPrewarmEnabled</c> /
     /// <c>S100_VECTOR_TILE_XBAND</c>.
     /// </summary>
     public bool? TileCrossBandPrewarmEnabled { get; set; }
@@ -241,7 +280,7 @@ internal sealed partial class ViewerSettings
     /// Whether adjacent cold tile misses may be rasterised as a 2&#215;2
     /// metatile and sliced into tile-granular cache entries (issue&#160;#427).
     /// <see langword="null"/> → conservative default (off). Mirrors
-    /// <c>RenderingOptimizations.TileMetatileEnabled</c> /
+    /// <c>ChartEngine.Options.TileMetatileEnabled</c> /
     /// <c>S100_VECTOR_TILE_METATILE</c>.
     /// </summary>
     public bool? TileMetatileEnabled { get; set; }
@@ -249,14 +288,14 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether the warm disk tile cache is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /
+    /// <c>ChartEngine.Options.TileDiskCacheEnabled</c> /
     /// <c>S100_VECTOR_TILE_DISK</c>.
     /// </summary>
     public bool? TileDiskCacheEnabled { get; set; }
 
     /// <summary>
     /// Warm disk tile-cache budget, in MB (issue #331). <see langword="null"/> →
-    /// best default. Mirrors <c>RenderingOptimizations.TileDiskMb</c> /
+    /// best default. Mirrors <c>ChartEngine.Options.TileDiskMb</c> /
     /// <c>S100_VECTOR_TILE_DISK_MB</c>.
     /// </summary>
     public double? TileDiskMb { get; set; }
@@ -264,32 +303,24 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether tiled-base-plane GPU texture residency is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TileGpuResidencyEnabled</c> /
+    /// <c>ChartEngine.Options.TileGpuResidencyEnabled</c> /
     /// <c>S100_VECTOR_TILE_GPU</c>.
     /// </summary>
     public bool? TileGpuResidencyEnabled { get; set; }
 
     /// <summary>
-    /// Per-layer GPU-residency budget, in MB (issue #331).
+    /// Process-wide GPU-residency budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
-    /// <c>RenderingOptimizations.TileGpuBudgetMb</c> /
+    /// <c>ChartEngine.Options.TileGpuBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_GPU_MB</c>.
     /// </summary>
     public double? TileGpuBudgetMb { get; set; }
 
     /// <summary>
-    /// Number of concurrent tile-rasterisation workers per layer.
-    /// <see langword="null"/> → best default for the resolved profile (one on
-    /// low-end hosts, scaling with cores on high-end). Mirrors
-    /// <c>RenderingOptimizations.TileWorkerCount</c> / <c>S100_VECTOR_TILE_WORKERS</c>.
-    /// </summary>
-    public int? TileWorkerCount { get; set; }
-
-    /// <summary>
     /// Overall performance profile that sets the default tile budgets + worker
     /// cap. One of <c>Auto</c> / <c>HighEnd</c> / <c>Balanced</c> / <c>LowEnd</c>;
     /// <see langword="null"/> → Auto (derive from cores + RAM). Mirrors
-    /// <c>RenderingOptimizations.Profile</c> / <c>S100_PERF_PROFILE</c>.
+    /// <c>ChartEngine.Options.Profile</c> / <c>S100_PERF_PROFILE</c>.
     /// </summary>
     public string? PerformanceProfile { get; set; }
 
@@ -319,11 +350,31 @@ internal sealed partial class ViewerSettings
     public bool EcdisShowNavigationalWarnings { get; set; } = true;
 
     /// <summary>
+    /// The AML products the display panel's Additional Military Layers section
+    /// has switched off, as a comma-separated list of product codes
+    /// (<c>CLB</c>, <c>RAL</c>, …, <c>3.0</c>). Empty by default: every
+    /// product shows (AML handoff decision 24).
+    /// </summary>
+    public string EcdisHiddenAmlProducts { get; set; } = "";
+
+    /// <summary>
+    /// The Additional Military Layers section's Follow AML scale bands switch
+    /// (AML handoff decision 26). On by default.
+    /// </summary>
+    public bool EcdisFollowAmlScaleBands { get; set; } = true;
+
+    /// <summary>
     /// The Display controls' map-wide switches for optional product layers,
     /// keyed by the processor's sub-layer key: today the Weather section's
     /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
-    /// <c>weather.wave.direction</c> (#1072). A missing key follows the
-    /// layer's default (isobars on, the wind speed fill and wave arrows off).
+    /// <c>weather.wave.direction</c> (#1072), and
+    /// <c>weather.sea.temperature.isotherms</c> (#1227),
+    /// <c>weather.current.arrows</c> (#1228) and
+    /// <c>weather.air.temperature.isotherms</c> (#1231), and
+    /// <c>weather.precipitation</c>, <c>weather.cape</c> and
+    /// <c>weather.cloud</c> (#1230). A missing key follows the layer's default
+    /// (isobars and currents on; the wind speed fill, wave arrows, both kinds
+    /// of isotherms, precipitation, thunderstorm risk and cloud cover off).
     /// </summary>
     public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
         = new(StringComparer.Ordinal);
@@ -397,6 +448,37 @@ internal sealed partial class ViewerSettings
     /// then never drop out on zoom-out.
     /// </summary>
     public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
+
+    /// <summary>
+    /// Whether cells of load-as-you-pan sets are portrayed in the background,
+    /// while the map is idle, so panning to them later is quick (#1266). On by
+    /// default; turning it off stops the background work at once.
+    /// </summary>
+    public bool PortrayalPrewarmEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The Lua engine that runs the portrayal rules: <c>luacsharp</c> or
+    /// <c>moonsharp</c> (see <see cref="Scripting.LuaEngineKinds"/>).
+    /// <see langword="null"/> or an unknown name means the default,
+    /// Lua-CSharp. The <c>S100_LUA_ENGINE</c> environment variable overrides
+    /// it. Read when the viewer starts, so a change applies after a restart.
+    /// </summary>
+    public string? LuaEngine { get; set; }
+
+    /// <summary>
+    /// The Lua engine this session runs: the one <c>S100_LUA_ENGINE</c> names
+    /// when it's set, otherwise <see cref="LuaEngine"/>.
+    /// </summary>
+    /// <returns>The engine.</returns>
+    public Scripting.LuaEngineKind ResolveLuaEngine()
+    {
+        if (ViewerLuaEngine.IsPinnedByEnvironment)
+        {
+            return Scripting.LuaEngineKinds.FromEnvironment();
+        }
+
+        return Scripting.LuaEngineKinds.TryParse(LuaEngine, out var kind) ? kind : Scripting.LuaEngineKinds.Default;
+    }
 
     /// <summary>
     /// Whether the on-chart overscale "curtain" (a subtle vertical-line pattern,

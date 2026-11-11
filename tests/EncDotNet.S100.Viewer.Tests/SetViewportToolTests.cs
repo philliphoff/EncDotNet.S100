@@ -49,7 +49,7 @@ public class SetViewportToolTests
         {
             Current = hostOverride ?? host,
         };
-        return (new SetViewportTool(accessor), host);
+        return (new SetViewportTool(accessor, onApplied: null), host);
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public class SetViewportToolTests
     public async Task Map_not_ready_when_accessor_returns_null()
     {
         var accessor = new MapCapabilityAccessor<IMapViewportController>();
-        var tool = new SetViewportTool(accessor);
+        var tool = new SetViewportTool(accessor, onApplied: null);
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
             South: 50, West: -4, North: 51, East: -3), TestContext.Current.CancellationToken);

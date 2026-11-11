@@ -57,7 +57,7 @@ public sealed class SecomLibraryIdentityTests : IDisposable
     {
         var bridge = Import("bridge", "Bridge PC", "urn:mrn:mcp:vessel:mcc:soundcharts:bridge", daysLeft: 12);
         var dev = Import("dev", "Dev laptop", "urn:mrn:mcp:device:mcc-test:soundcharts:dev");
-        var picker = new IdentityPickerViewModel(_directory) { Setting = "default" };
+        var picker = new IdentityPickerViewModel(_directory, manage: null) { Setting = "default" };
 
         Assert.Equal(["default", "none", bridge.Id, dev.Id], picker.Items.Select(i => i.Setting));
         Assert.Equal("Default · Bridge PC", picker.Name);
@@ -161,7 +161,7 @@ public sealed class SecomLibraryIdentityTests : IDisposable
 
     private LibraryPanelViewModel Panel()
     {
-        var panel = new LibraryPanelViewModel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action())
+        var panel = new LibraryPanelViewModel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null)
         {
             OpenKeys = _opened.Add,
         };

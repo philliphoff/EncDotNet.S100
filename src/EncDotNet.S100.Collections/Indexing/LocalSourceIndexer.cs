@@ -247,7 +247,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
         }
 
         var isCell = string.Equals(Path.GetExtension(loose.Path), ".000", StringComparison.OrdinalIgnoreCase);
-        var header = isCell && metadata?.Spec.Name is null or "S-57" ? TryReadHeader(loose.Path) : null;
+        var header = isCell && metadata?.Spec.Name is null or "S-57" or AmlDatasetInfo.SpecName ? TryReadHeader(loose.Path) : null;
         var latest = header is not null && loose.UpdatePaths.Count > 0 ? TryReadHeader(loose.UpdatePaths[^1]) : null;
 
         if (metadata is null && header is null)
@@ -257,7 +257,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
             return null;
         }
 
-        var spec = metadata?.Spec.Name ?? "S-57";
+        var spec = header?.Aml is not null ? AmlDatasetInfo.SpecName : metadata?.Spec.Name ?? "S-57";
         var version = metadata is { Spec.Edition: var edition } && edition != default ? edition.ToString() : null;
 
         GeoBounds? bounds = null;
@@ -285,6 +285,8 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
         }
         if (header?.ProducingAgency is { } agency)
             properties["producingAgency"] = agency.ToString(CultureInfo.InvariantCulture);
+        if (header?.Aml is { } aml)
+            AmlLibraryProperties.Write(aml, properties);
 
         var directory = Path.GetDirectoryName(loose.Path)!;
         var name = Path.GetFileNameWithoutExtension(loose.Path);

@@ -4,14 +4,14 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using ShadUI;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class SettingsViewModel : ViewModelBase
+internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLevelAdjustmentSettings, Services.PassageCheck.IRouteWeatherLimits
 {
     private readonly ViewerSettings _settings;
     private readonly IDataMaintenanceService? _dataMaintenance;
@@ -333,6 +333,8 @@ internal sealed class SettingsViewModel : ViewModelBase
                 OnPropertyChanged(nameof(SafetyDepthDisplay));
                 OnPropertyChanged(nameof(ShallowContourDisplay));
                 OnPropertyChanged(nameof(DeepContourDisplay));
+                OnPropertyChanged(nameof(RouteMaxWaveDisplay));
+                OnPropertyChanged(nameof(RouteMaxWaveLabel));
                 RaiseMarinerChanged();
             }
         }
@@ -487,9 +489,277 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _ignoreScaleMinimum, value)) { _settings.IgnoreScaleMinimum = value; RaiseMarinerChanged(); } }
     }
 
+    // ── Chart-wide water level adjustment (#1132) ──────────────────────────
+    // A viewer setting, not a MarinerSettings member: which water level to
+    // add to the charted depths is a host decision
+    // (docs/design/chart-wide-water-level-adjustment.md §6).
+
+    /// <summary>The water level adjustment choices.</summary>
+    public IReadOnlyList<WaterLevelAdjustmentOption> AvailableWaterLevelAdjustments { get; } =
+    [
+        new(Services.Depth.WaterLevelAdjustmentMode.Off, Strings.Settings_WaterLevelAdjustment_Off),
+        new(Services.Depth.WaterLevelAdjustmentMode.AtViewTime, Strings.Settings_WaterLevelAdjustment_AtViewTime),
+    ];
+
+    private Services.Depth.WaterLevelAdjustmentMode _waterLevelAdjustment;
+
+    /// <inheritdoc />
+    public Services.Depth.WaterLevelAdjustmentMode WaterLevelAdjustment
+    {
+        get => _waterLevelAdjustment;
+        set
+        {
+            if (SetProperty(ref _waterLevelAdjustment, value))
+            {
+                _settings.WaterLevelAdjustment = value.ToString();
+                OnPropertyChanged(nameof(IsWaterLevelAdjustmentOn));
+                RaiseWaterLevelAdjustmentChanged();
+            }
+        }
+    }
+
+    /// <summary>True when chart-wide water level adjustment is on.</summary>
+    public bool IsWaterLevelAdjustmentOn => _waterLevelAdjustment != Services.Depth.WaterLevelAdjustmentMode.Off;
+
+    private bool _waterLevelApplyUndeclaredDatum;
+
+    /// <inheritdoc />
+    public bool WaterLevelApplyUndeclaredDatum
+    {
+        get => _waterLevelApplyUndeclaredDatum;
+        set
+        {
+            if (SetProperty(ref _waterLevelApplyUndeclaredDatum, value))
+            {
+                _settings.WaterLevelApplyUndeclaredDatum = value;
+                RaiseWaterLevelAdjustmentChanged();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public event Action? WaterLevelAdjustmentChanged;
+
+    private void RaiseWaterLevelAdjustmentChanged()
+    {
+        _settings.Save();
+        WaterLevelAdjustmentChanged?.Invoke();
+    }
+
+    // ── Weather on a route (#1093) ─────────────────────────────────────────
+    // Check route's weather limits: kept with the mariner settings, not with a
+    // route, and raised on their own event so a change re-runs the route check
+    // without re-portraying the chart.
+
+    private double? _routeMaxWindKnots;
+
+    /// <summary>The wind limit in knots, or <c>null</c> when wind isn't checked.</summary>
+    public double? RouteMaxWindKnots
+    {
+        get => _routeMaxWindKnots;
+        set
+        {
+            var v = value is { } x && double.IsFinite(x) && x > 0 ? x : (double?)null;
+            if (SetProperty(ref _routeMaxWindKnots, v))
+            {
+                _settings.RouteMaxWindKnots = v;
+                OnPropertyChanged(nameof(RouteMaxWindDisplay));
+                RaiseRouteWeatherLimitsChanged();
+            }
+        }
+    }
+
+    /// <summary>The wind limit as the Settings box shows it, in knots; empty when off.</summary>
+    public string RouteMaxWindDisplay
+    {
+        get => _routeMaxWindKnots is { } k ? k.ToString("0.#", System.Globalization.CultureInfo.CurrentCulture) : string.Empty;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                RouteMaxWindKnots = null;
+            else if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var k) && k > 0)
+                RouteMaxWindKnots = k;
+            else
+                OnPropertyChanged(nameof(RouteMaxWindDisplay));
+        }
+    }
+
+    private double? _routeMaxWaveHeightMetres;
+
+    /// <summary>The significant wave height limit in metres, or <c>null</c> when waves aren't checked.</summary>
+    public double? RouteMaxWaveHeightMetres
+    {
+        get => _routeMaxWaveHeightMetres;
+        set
+        {
+            var v = value is { } x && double.IsFinite(x) && x > 0 ? x : (double?)null;
+            if (SetProperty(ref _routeMaxWaveHeightMetres, v))
+            {
+                _settings.RouteMaxWaveHeightMetres = v;
+                OnPropertyChanged(nameof(RouteMaxWaveDisplay));
+                RaiseRouteWeatherLimitsChanged();
+            }
+        }
+    }
+
+    // Waves show in metres, or in feet for any other depth unit, as the findings do.
+    private bool WavesInMetres => _selectedDepthUnit == DepthUnit.Metres;
+
+    /// <summary>"Wave height limit (m)" or "(ft)", by the depth unit.</summary>
+    public string RouteMaxWaveLabel => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_RouteMaxWaveFormat, WavesInMetres ? "m" : "ft");
+
+    /// <summary>The wave limit as the Settings box shows it, in metres or feet; empty when off.</summary>
+    public string RouteMaxWaveDisplay
+    {
+        get => _routeMaxWaveHeightMetres is { } m
+            ? (WavesInMetres ? m : Quantities.Length.FromMetres(m).TotalFeet).ToString("0.#", System.Globalization.CultureInfo.CurrentCulture)
+            : string.Empty;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                RouteMaxWaveHeightMetres = null;
+            else if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var h) && h > 0)
+                RouteMaxWaveHeightMetres = WavesInMetres ? h : Quantities.Length.FromFeet(h).TotalMetres;
+            else
+                OnPropertyChanged(nameof(RouteMaxWaveDisplay));
+        }
+    }
+
+    /// <inheritdoc />
+    public EncDotNet.S100.Navigation.WeatherLimits? Limits =>
+        _routeMaxWindKnots is null && _routeMaxWaveHeightMetres is null
+            ? null
+            : new EncDotNet.S100.Navigation.WeatherLimits
+            {
+                MaxWind = _routeMaxWindKnots is { } k ? Quantities.Speed.FromKnots(k) : null,
+                MaxWaveHeight = _routeMaxWaveHeightMetres is { } m ? Quantities.Length.FromMetres(m) : null,
+            };
+
+    // ── Tropical cyclones on a route (#1299, design note V39) ─────────────
+    // The cyclone rule's settings: Check against (34/50/64 kt), Report closest
+    // approach, and Must review inside (64/50/34 kt or Never, never outside
+    // Check against). Raised on RouteWeatherLimitsChanged too.
+
+    private Navigation.TropicalCycloneRadius _cycloneCheckAgainst = Navigation.TropicalCycloneRadius.Knots34;
+    private bool _cycloneReportClosestApproach = true;
+    private Navigation.TropicalCycloneRadius? _cycloneMustReviewInside = Navigation.TropicalCycloneRadius.Knots50;
+
+    /// <summary>The Check against choices: the 34, 50 and 64 kt radii.</summary>
+    public IReadOnlyList<CycloneRadiusOption> AvailableCycloneCheckAgainst { get; } =
+        [.. Enum.GetValues<Navigation.TropicalCycloneRadius>().Order().Select(CycloneRadiusOption.Of)];
+
+    /// <summary>The Must review inside choices: 64 kt down to Check against, then Never.</summary>
+    public IReadOnlyList<CycloneRadiusOption> AvailableCycloneMustReviewInside =>
+    [
+        .. Enum.GetValues<Navigation.TropicalCycloneRadius>().Where(r => r >= _cycloneCheckAgainst).OrderDescending().Select(CycloneRadiusOption.Of),
+        new CycloneRadiusOption(0, Strings.Settings_CycloneNever),
+    ];
+
+    /// <summary>The radius checked against, in knots: 34, 50 or 64.</summary>
+    public int CycloneCheckAgainstKnots
+    {
+        get => (int)_cycloneCheckAgainst;
+        set
+        {
+            if (!Enum.IsDefined((Navigation.TropicalCycloneRadius)value) || (int)_cycloneCheckAgainst == value)
+                return;
+            _cycloneCheckAgainst = (Navigation.TropicalCycloneRadius)value;
+            _settings.RouteCycloneCheckAgainstKnots = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(AvailableCycloneMustReviewInside));
+
+            // Narrowing Check against past Must review inside moves it in too.
+            if (_cycloneMustReviewInside is { } inside && inside < _cycloneCheckAgainst)
+            {
+                _cycloneMustReviewInside = _cycloneCheckAgainst;
+                _settings.RouteCycloneMustReviewInsideKnots = value;
+            }
+
+            OnPropertyChanged(nameof(CycloneMustReviewInsideKnots));
+            OnPropertyChanged(nameof(CycloneMappingText));
+            RaiseRouteWeatherLimitsChanged();
+        }
+    }
+
+    /// <summary>Whether the closest approach to each storm is reported.</summary>
+    public bool CycloneReportClosestApproach
+    {
+        get => _cycloneReportClosestApproach;
+        set
+        {
+            if (SetProperty(ref _cycloneReportClosestApproach, value))
+            {
+                _settings.RouteCycloneReportClosestApproach = value;
+                RaiseRouteWeatherLimitsChanged();
+            }
+        }
+    }
+
+    /// <summary>The weakest radius that is Must review, in knots (34, 50 or 64), or 0 for never.</summary>
+    public int CycloneMustReviewInsideKnots
+    {
+        get => _cycloneMustReviewInside is { } r ? (int)r : 0;
+        set
+        {
+            Navigation.TropicalCycloneRadius? radius = value == 0 ? null : (Navigation.TropicalCycloneRadius)value;
+            if ((radius is { } r && (!Enum.IsDefined(r) || r < _cycloneCheckAgainst)) || radius == _cycloneMustReviewInside)
+                return;
+            _cycloneMustReviewInside = radius;
+            _settings.RouteCycloneMustReviewInsideKnots = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CycloneMappingText));
+            RaiseRouteWeatherLimitsChanged();
+        }
+    }
+
+    /// <summary>
+    /// The line under the rows that spells out the mapping: "Inside the 50 kt
+    /// and 64 kt radii: Must review. The 34 kt radius and the cone: Check."
+    /// </summary>
+    public string CycloneMappingText => CycloneMapping(Cyclones);
+
+    /// <summary>The mapping line for a set of cyclone settings.</summary>
+    /// <param name="settings">The settings.</param>
+    /// <returns>The line.</returns>
+    internal static string CycloneMapping(Navigation.TropicalCycloneCheckSettings settings)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var tested = settings.TestedRadii;
+        if (settings.EffectiveMustReviewInside is not { } inside)
+            return Strings.Settings_CycloneMappingNever;
+        static string Radii(IReadOnlyList<Navigation.TropicalCycloneRadius> radii) => radii.Count switch
+        {
+            1 => string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneOneRadiusFormat, (int)radii[0]),
+            2 => string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneTwoRadiiFormat, (int)radii[0], (int)radii[1]),
+            _ => string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneThreeRadiiFormat, (int)radii[0], (int)radii[1], (int)radii[2]),
+        };
+        var must = tested.Where(r => r >= inside).ToList();
+        var check = tested.Where(r => r < inside).ToList();
+        var rest = check.Count == 0 ? Strings.Settings_CycloneConeOnly : string.Format(culture, Strings.Settings_CycloneRestFormat, Radii(check));
+        return string.Format(culture, Strings.Settings_CycloneMappingFormat, Radii(must), rest);
+    }
+
+    /// <inheritdoc />
+    public Navigation.TropicalCycloneCheckSettings Cyclones => new()
+    {
+        CheckAgainst = _cycloneCheckAgainst,
+        ReportClosestApproach = _cycloneReportClosestApproach,
+        MustReviewInside = _cycloneMustReviewInside,
+    };
+
+    /// <inheritdoc />
+    public event Action? RouteWeatherLimitsChanged;
+
+    private void RaiseRouteWeatherLimitsChanged()
+    {
+        _settings.Save();
+        RouteWeatherLimitsChanged?.Invoke();
+    }
+
     // ── Base-plane tiled-pipeline knobs ────────────────────────────────────
     // The tiled base-plane renderer's scene-mode and cache/prediction knobs. All
-    // values mirror RenderingOptimizations (the renderer source of truth) and
+    // values mirror ChartEngine.Options (the renderer source of truth) and
     // persist to ViewerSettings; an explicit environment variable pins a knob (the
     // perf harness), in which case the matching *Editable flag is false and the
     // control is shown disabled.
@@ -516,7 +786,7 @@ internal sealed class SettingsViewModel : ViewModelBase
             if (SetProperty(ref _sceneMode, value))
             {
                 _settings.VectorSceneMode = value.ToString();
-                RenderingOptimizations.SceneMode = value;
+                ChartEngine.Options.SceneMode = value;
                 OnPropertyChanged(nameof(TiledModeActive));
                 RaiseMarinerChanged();
             }
@@ -524,7 +794,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the scene-mode selector is user-editable (not env-pinned).</summary>
-    public bool SceneModeEditable => !RenderingOptimizations.SceneModeEnvExplicit;
+    public bool SceneModeEditable => !ChartEngine.Options.SceneModeEnvExplicit;
 
     private double _tileGutterDip;
     /// <summary>
@@ -537,8 +807,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         get => _tileGutterDip;
         set
         {
-            RenderingOptimizations.TileGutterDip = value;
-            var effective = RenderingOptimizations.TileGutterDip;
+            ChartEngine.Options.TileGutterDip = value;
+            var effective = ChartEngine.Options.TileGutterDip;
             if (SetProperty(ref _tileGutterDip, effective))
             {
                 _settings.TileGutterDip = effective;
@@ -548,21 +818,21 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the gutter knob is user-editable (not env-pinned).</summary>
-    public bool TileGutterDipEditable => !RenderingOptimizations.TileGutterDipEnvExplicit;
+    public bool TileGutterDipEditable => !ChartEngine.Options.TileGutterDipEnvExplicit;
 
     private double _tileBudgetMb;
     /// <summary>
-    /// Per-layer hot-cache native budget, in MB. Captured per layer when its tile
-    /// state is created, so a change applies on the next dataset reload. Disabled
-    /// when pinned by <c>S100_VECTOR_TILE_BUDGET_MB</c>.
+    /// Process-wide hot-cache native budget, in MB, shared by every layer's
+    /// tiles. Applies at once. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
     /// </summary>
     public double TileBudgetMb
     {
         get => _tileBudgetMb;
         set
         {
-            RenderingOptimizations.TileBudgetMb = value;
-            var effective = RenderingOptimizations.TileBudgetMb;
+            ChartEngine.Options.TileBudgetMb = value;
+            var effective = ChartEngine.Options.TileBudgetMb;
             if (SetProperty(ref _tileBudgetMb, effective))
             {
                 _settings.TileBudgetMb = effective;
@@ -572,7 +842,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the in-memory budget knob is user-editable (not env-pinned).</summary>
-    public bool TileBudgetMbEditable => !RenderingOptimizations.TileBudgetMbEnvExplicit;
+    public bool TileBudgetMbEditable => !ChartEngine.Options.TileBudgetMbEnvExplicit;
 
     private bool _tilePredictionEnabled;
     /// <summary>
@@ -587,7 +857,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         {
             if (SetProperty(ref _tilePredictionEnabled, value))
             {
-                RenderingOptimizations.TilePredictionEnabled = value;
+                ChartEngine.Options.TilePredictionEnabled = value;
                 _settings.TilePredictionEnabled = value;
                 RaiseMarinerChanged();
             }
@@ -595,7 +865,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the prediction knob is user-editable (not env-pinned).</summary>
-    public bool TilePredictionEditable => !RenderingOptimizations.TilePredictionEnvExplicit;
+    public bool TilePredictionEditable => !ChartEngine.Options.TilePredictionEnvExplicit;
 
     private bool _tileCrossBandPrewarmEnabled;
     /// <summary>
@@ -609,8 +879,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         get => _tileCrossBandPrewarmEnabled;
         set
         {
-            RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
-            var effective = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+            ChartEngine.Options.TileCrossBandPrewarmEnabled = value;
+            var effective = ChartEngine.Options.TileCrossBandPrewarmEnabled;
             if (SetProperty(ref _tileCrossBandPrewarmEnabled, effective))
             {
                 _settings.TileCrossBandPrewarmEnabled = effective;
@@ -620,7 +890,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the cross-band pre-warm knob is user-editable (not env-pinned).</summary>
-    public bool TileCrossBandPrewarmEditable => !RenderingOptimizations.TileCrossBandPrewarmEnvExplicit;
+    public bool TileCrossBandPrewarmEditable => !ChartEngine.Options.TileCrossBandPrewarmEnvExplicit;
 
     private bool _tileMetatileEnabled;
     /// <summary>
@@ -633,8 +903,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         get => _tileMetatileEnabled;
         set
         {
-            RenderingOptimizations.TileMetatileEnabled = value;
-            var effective = RenderingOptimizations.TileMetatileEnabled;
+            ChartEngine.Options.TileMetatileEnabled = value;
+            var effective = ChartEngine.Options.TileMetatileEnabled;
             if (SetProperty(ref _tileMetatileEnabled, effective))
             {
                 _settings.TileMetatileEnabled = effective;
@@ -644,7 +914,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the metatile knob is user-editable (not env-pinned).</summary>
-    public bool TileMetatileEditable => !RenderingOptimizations.TileMetatileEnvExplicit;
+    public bool TileMetatileEditable => !ChartEngine.Options.TileMetatileEnvExplicit;
 
     private bool _tileDiskCacheEnabled;
     /// <summary>
@@ -659,7 +929,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         {
             if (SetProperty(ref _tileDiskCacheEnabled, value))
             {
-                RenderingOptimizations.TileDiskCacheEnabled = value;
+                ChartEngine.Options.TileDiskCacheEnabled = value;
                 _settings.TileDiskCacheEnabled = value;
                 RaiseMarinerChanged();
             }
@@ -667,7 +937,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the disk-cache knob is user-editable (not env-pinned).</summary>
-    public bool TileDiskCacheEditable => !RenderingOptimizations.TileDiskCacheEnvExplicit;
+    public bool TileDiskCacheEditable => !ChartEngine.Options.TileDiskCacheEnvExplicit;
 
     private double _tileDiskMb;
     /// <summary>
@@ -680,8 +950,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         get => _tileDiskMb;
         set
         {
-            RenderingOptimizations.TileDiskMb = value;
-            var effective = RenderingOptimizations.TileDiskMb;
+            ChartEngine.Options.TileDiskMb = value;
+            var effective = ChartEngine.Options.TileDiskMb;
             if (SetProperty(ref _tileDiskMb, effective))
             {
                 _settings.TileDiskMb = effective;
@@ -691,7 +961,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the disk-budget knob is user-editable (not env-pinned).</summary>
-    public bool TileDiskMbEditable => !RenderingOptimizations.TileDiskMbEnvExplicit;
+    public bool TileDiskMbEditable => !ChartEngine.Options.TileDiskMbEnvExplicit;
 
     private bool _tileGpuResidencyEnabled;
     /// <summary>
@@ -706,7 +976,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         {
             if (SetProperty(ref _tileGpuResidencyEnabled, value))
             {
-                RenderingOptimizations.TileGpuResidencyEnabled = value;
+                ChartEngine.Options.TileGpuResidencyEnabled = value;
                 _settings.TileGpuResidencyEnabled = value;
                 RaiseMarinerChanged();
             }
@@ -714,21 +984,21 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the GPU-residency knob is user-editable (not env-pinned).</summary>
-    public bool TileGpuResidencyEditable => !RenderingOptimizations.TileGpuResidencyEnvExplicit;
+    public bool TileGpuResidencyEditable => !ChartEngine.Options.TileGpuResidencyEnvExplicit;
 
     private double _tileGpuBudgetMb;
     /// <summary>
-    /// Per-layer GPU-residency budget, in MB. Sized when the resident-texture
-    /// cache is first created, so a change applies on the next dataset reload.
-    /// Disabled when pinned by <c>S100_VECTOR_TILE_GPU_MB</c>.
+    /// Process-wide GPU-residency budget, in MB, shared by every layer's
+    /// textures. Applies at once. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_GPU_MB</c>.
     /// </summary>
     public double TileGpuBudgetMb
     {
         get => _tileGpuBudgetMb;
         set
         {
-            RenderingOptimizations.TileGpuBudgetMb = value;
-            var effective = RenderingOptimizations.TileGpuBudgetMb;
+            ChartEngine.Options.TileGpuBudgetMb = value;
+            var effective = ChartEngine.Options.TileGpuBudgetMb;
             if (SetProperty(ref _tileGpuBudgetMb, effective))
             {
                 _settings.TileGpuBudgetMb = effective;
@@ -738,32 +1008,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the GPU-budget knob is user-editable (not env-pinned).</summary>
-    public bool TileGpuBudgetMbEditable => !RenderingOptimizations.TileGpuBudgetMbEnvExplicit;
-
-    private int _tileWorkerCount;
-    /// <summary>
-    /// Concurrent tile-rasterisation workers per layer. More workers drain a cold
-    /// pan's visible-miss queue in parallel; sized by the profile (one on low-end
-    /// hosts). Applies on the next dataset reload. Disabled when pinned by
-    /// <c>S100_VECTOR_TILE_WORKERS</c>.
-    /// </summary>
-    public int TileWorkerCount
-    {
-        get => _tileWorkerCount;
-        set
-        {
-            RenderingOptimizations.TileWorkerCount = value;
-            var effective = RenderingOptimizations.TileWorkerCount;
-            if (SetProperty(ref _tileWorkerCount, effective))
-            {
-                _settings.TileWorkerCount = effective;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    /// <summary>Whether the worker-count knob is user-editable (not env-pinned).</summary>
-    public bool TileWorkerCountEditable => !RenderingOptimizations.TileWorkerCountEnvExplicit;
+    public bool TileGpuBudgetMbEditable => !ChartEngine.Options.TileGpuBudgetMbEnvExplicit;
 
     /// <summary>Selectable performance profiles for the profile dropdown.</summary>
     public IReadOnlyList<PerformanceProfile> PerformanceProfiles { get; } =
@@ -781,22 +1026,20 @@ internal sealed class SettingsViewModel : ViewModelBase
         get => _performanceProfile;
         set
         {
-            RenderingOptimizations.Profile = value;
+            ChartEngine.Options.Profile = value;
             if (SetProperty(ref _performanceProfile, value))
             {
                 _settings.PerformanceProfile = value.ToString();
-                _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
-                _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
-                _tileDiskMb = RenderingOptimizations.TileDiskMb;
-                _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
+                _tileBudgetMb = ChartEngine.Options.TileBudgetMb;
+                _tileGpuBudgetMb = ChartEngine.Options.TileGpuBudgetMb;
+                _tileDiskMb = ChartEngine.Options.TileDiskMb;
                 // ApplyProfile re-derives the cross-band pre-warm default from the
                 // new tier (off on LowEnd), so mirror it back or the toggle would
                 // drift from the renderer after a profile switch (issue #428).
-                _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+                _tileCrossBandPrewarmEnabled = ChartEngine.Options.TileCrossBandPrewarmEnabled;
                 OnPropertyChanged(nameof(TileBudgetMb));
                 OnPropertyChanged(nameof(TileGpuBudgetMb));
                 OnPropertyChanged(nameof(TileDiskMb));
-                OnPropertyChanged(nameof(TileWorkerCount));
                 OnPropertyChanged(nameof(TileCrossBandPrewarmEnabled));
                 OnPropertyChanged(nameof(ResolvedProfileLabel));
                 RaiseMarinerChanged();
@@ -805,10 +1048,10 @@ internal sealed class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>Whether the profile dropdown is user-editable (not env-pinned).</summary>
-    public bool PerformanceProfileEditable => !RenderingOptimizations.ProfileEnvExplicit;
+    public bool PerformanceProfileEditable => !ChartEngine.Options.ProfileEnvExplicit;
 
     /// <summary>The concrete tier Auto resolves to on this host, for display.</summary>
-    public string ResolvedProfileLabel => RenderingOptimizations.ResolvedProfile.ToString();
+    public string ResolvedProfileLabel => ChartEngine.Options.ResolvedProfile.ToString();
 
 
 
@@ -848,6 +1091,53 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// extent-indicator overlay can be rebuilt without a relaunch.
     /// </summary>
     public event Action? ExtentIndicatorsChanged;
+
+    private bool _portrayalPrewarmEnabled;
+    /// <summary>
+    /// Whether cells of load-as-you-pan sets are portrayed in the background so
+    /// panning to them later is quick (#1266). Persisted to
+    /// <see cref="ViewerSettings.PortrayalPrewarmEnabled"/>; the warmer reads the
+    /// setting on every pass, so the change applies at once.
+    /// </summary>
+    public bool PortrayalPrewarmEnabled
+    {
+        get => _portrayalPrewarmEnabled;
+        set
+        {
+            if (SetProperty(ref _portrayalPrewarmEnabled, value))
+            {
+                _settings.PortrayalPrewarmEnabled = value;
+                _settings.Save();
+            }
+        }
+    }
+
+    /// <summary>The Lua engines the Settings page offers.</summary>
+    public static Scripting.LuaEngineKind[] AvailableLuaEngines { get; } =
+        [Scripting.LuaEngineKind.LuaCSharp, Scripting.LuaEngineKind.MoonSharp];
+
+    private Scripting.LuaEngineKind _luaEngine;
+    /// <summary>
+    /// The Lua engine that runs the portrayal rules. Persisted to
+    /// <see cref="ViewerSettings.LuaEngine"/>; the pipeline factories are
+    /// built at startup, so a change applies after a restart. Disabled when
+    /// pinned by <c>S100_LUA_ENGINE</c>.
+    /// </summary>
+    public Scripting.LuaEngineKind SelectedLuaEngine
+    {
+        get => _luaEngine;
+        set
+        {
+            if (SetProperty(ref _luaEngine, value))
+            {
+                _settings.LuaEngine = Scripting.LuaEngineKinds.GetName(value);
+                _settings.Save();
+            }
+        }
+    }
+
+    /// <summary>Whether the Lua-engine selector is user-editable (not env-pinned).</summary>
+    public bool LuaEngineEditable => !ViewerLuaEngine.IsPinnedByEnvironment;
 
     private bool _showOutOfScaleExtentIndicators;
     /// <summary>
@@ -952,10 +1242,10 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     public SettingsViewModel(
         ViewerSettings settings,
-        IDataMaintenanceService? dataMaintenance = null,
-        IApplicationControlService? applicationControl = null,
-        DialogManager? dialogManager = null,
-        Keys.KeysAndCertificatesViewModel? keysAndCertificates = null)
+        IDataMaintenanceService? dataMaintenance,
+        IApplicationControlService? applicationControl,
+        DialogManager? dialogManager,
+        Keys.KeysAndCertificatesViewModel? keysAndCertificates)
     {
         _settings = settings;
         KeysAndCertificates = keysAndCertificates;
@@ -990,6 +1280,24 @@ internal sealed class SettingsViewModel : ViewModelBase
         _fullLightLines = settings.FullLightLines ?? def.FullLightLines;
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
+        _waterLevelAdjustment = Enum.TryParse<Services.Depth.WaterLevelAdjustmentMode>(settings.WaterLevelAdjustment, out var waterLevelAdjustment)
+            ? waterLevelAdjustment
+            : Services.Depth.WaterLevelAdjustmentMode.Off;
+        _waterLevelApplyUndeclaredDatum = settings.WaterLevelApplyUndeclaredDatum ?? false;
+        _routeMaxWindKnots = settings.RouteMaxWindKnots is { } wind && double.IsFinite(wind) && wind > 0 ? wind : null;
+        _routeMaxWaveHeightMetres = settings.RouteMaxWaveHeightMetres is { } wave && double.IsFinite(wave) && wave > 0 ? wave : null;
+        _cycloneCheckAgainst = settings.RouteCycloneCheckAgainstKnots is { } against && Enum.IsDefined((Navigation.TropicalCycloneRadius)against)
+            ? (Navigation.TropicalCycloneRadius)against
+            : Navigation.TropicalCycloneRadius.Knots34;
+        _cycloneReportClosestApproach = settings.RouteCycloneReportClosestApproach ?? true;
+        _cycloneMustReviewInside = settings.RouteCycloneMustReviewInsideKnots switch
+        {
+            0 => null,
+            { } inside when Enum.IsDefined((Navigation.TropicalCycloneRadius)inside) => (Navigation.TropicalCycloneRadius)inside,
+            _ => Navigation.TropicalCycloneRadius.Knots50,
+        };
+        if (_cycloneMustReviewInside is { } stored && stored < _cycloneCheckAgainst)
+            _cycloneMustReviewInside = _cycloneCheckAgainst;
 
         // Tiled base-plane scene mode: push the persisted preference into the
         // renderer (the write is ignored when pinned by an explicit env var — the
@@ -997,92 +1305,87 @@ internal sealed class SettingsViewModel : ViewModelBase
         // effective (env) value.
         if (Enum.TryParse<VectorSceneMode>(settings.VectorSceneMode, ignoreCase: true, out var sceneMode))
         {
-            RenderingOptimizations.SceneMode = sceneMode;
+            ChartEngine.Options.SceneMode = sceneMode;
         }
 
-        _sceneMode = RenderingOptimizations.SceneMode;
+        _sceneMode = ChartEngine.Options.SceneMode;
 
         // Apply the performance profile first so its derived budgets become the
         // baseline; an explicitly persisted budget/worker value below overrides.
         if (Enum.TryParse<PerformanceProfile>(settings.PerformanceProfile, ignoreCase: true, out var profile))
         {
-            RenderingOptimizations.Profile = profile;
+            ChartEngine.Options.Profile = profile;
         }
 
-        _performanceProfile = RenderingOptimizations.Profile;
+        _performanceProfile = ChartEngine.Options.Profile;
 
         if (settings.TileGutterDip is { } tileGutter)
         {
-            RenderingOptimizations.TileGutterDip = tileGutter;
+            ChartEngine.Options.TileGutterDip = tileGutter;
         }
 
-        _tileGutterDip = RenderingOptimizations.TileGutterDip;
+        _tileGutterDip = ChartEngine.Options.TileGutterDip;
 
         if (settings.TileBudgetMb is { } tileBudget)
         {
-            RenderingOptimizations.TileBudgetMb = tileBudget;
+            ChartEngine.Options.TileBudgetMb = tileBudget;
         }
 
-        _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
+        _tileBudgetMb = ChartEngine.Options.TileBudgetMb;
 
         if (settings.TilePredictionEnabled is { } tilePredict)
         {
-            RenderingOptimizations.TilePredictionEnabled = tilePredict;
+            ChartEngine.Options.TilePredictionEnabled = tilePredict;
         }
 
-        _tilePredictionEnabled = RenderingOptimizations.TilePredictionEnabled;
+        _tilePredictionEnabled = ChartEngine.Options.TilePredictionEnabled;
 
         if (settings.TileCrossBandPrewarmEnabled is { } tileXBand)
         {
-            RenderingOptimizations.TileCrossBandPrewarmEnabled = tileXBand;
+            ChartEngine.Options.TileCrossBandPrewarmEnabled = tileXBand;
         }
 
-        _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+        _tileCrossBandPrewarmEnabled = ChartEngine.Options.TileCrossBandPrewarmEnabled;
 
         if (settings.TileMetatileEnabled is { } tileMetatile)
         {
-            RenderingOptimizations.TileMetatileEnabled = tileMetatile;
+            ChartEngine.Options.TileMetatileEnabled = tileMetatile;
         }
 
-        _tileMetatileEnabled = RenderingOptimizations.TileMetatileEnabled;
+        _tileMetatileEnabled = ChartEngine.Options.TileMetatileEnabled;
 
         if (settings.TileDiskCacheEnabled is { } tileDisk)
         {
-            RenderingOptimizations.TileDiskCacheEnabled = tileDisk;
+            ChartEngine.Options.TileDiskCacheEnabled = tileDisk;
         }
 
-        _tileDiskCacheEnabled = RenderingOptimizations.TileDiskCacheEnabled;
+        _tileDiskCacheEnabled = ChartEngine.Options.TileDiskCacheEnabled;
 
         if (settings.TileDiskMb is { } tileDiskMb)
         {
-            RenderingOptimizations.TileDiskMb = tileDiskMb;
+            ChartEngine.Options.TileDiskMb = tileDiskMb;
         }
 
-        _tileDiskMb = RenderingOptimizations.TileDiskMb;
+        _tileDiskMb = ChartEngine.Options.TileDiskMb;
 
         if (settings.TileGpuResidencyEnabled is { } tileGpu)
         {
-            RenderingOptimizations.TileGpuResidencyEnabled = tileGpu;
+            ChartEngine.Options.TileGpuResidencyEnabled = tileGpu;
         }
 
-        _tileGpuResidencyEnabled = RenderingOptimizations.TileGpuResidencyEnabled;
+        _tileGpuResidencyEnabled = ChartEngine.Options.TileGpuResidencyEnabled;
 
         if (settings.TileGpuBudgetMb is { } tileGpuMb)
         {
-            RenderingOptimizations.TileGpuBudgetMb = tileGpuMb;
+            ChartEngine.Options.TileGpuBudgetMb = tileGpuMb;
         }
 
-        _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
-
-        if (settings.TileWorkerCount is { } tileWorkers)
-        {
-            RenderingOptimizations.TileWorkerCount = tileWorkers;
-        }
-
-        _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
+        _tileGpuBudgetMb = ChartEngine.Options.TileGpuBudgetMb;
 
         _basemapMode = settings.BasemapMode;
         _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;
+        _portrayalPrewarmEnabled = settings.PortrayalPrewarmEnabled;
+        _luaEngine = settings.ResolveLuaEngine();
         _showOverscaleIndication = settings.ShowOverscaleIndication;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
@@ -1528,4 +1831,17 @@ internal sealed class SettingsViewModel : ViewModelBase
             }
         }
     }
+}
+
+/// <summary>A water level adjustment choice in Mariner Settings.</summary>
+/// <param name="Mode">The setting.</param>
+/// <param name="DisplayName">Its label.</param>
+internal sealed record WaterLevelAdjustmentOption(Services.Depth.WaterLevelAdjustmentMode Mode, string DisplayName);
+
+/// <summary>A tropical cyclone radius choice in Settings (#1299): its knots (0 for Never) and "34 kt radius".</summary>
+internal sealed record CycloneRadiusOption(int Knots, string DisplayName)
+{
+    /// <summary>The choice of a radius.</summary>
+    public static CycloneRadiusOption Of(Navigation.TropicalCycloneRadius radius) =>
+        new((int)radius, string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneRadiusFormat, (int)radius));
 }

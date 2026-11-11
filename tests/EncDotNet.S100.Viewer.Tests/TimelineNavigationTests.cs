@@ -33,7 +33,7 @@ public sealed class TimelineNavigationTests
         var samples = runs.SelectMany(r => r.Samples).Order().ToArray();
         var service = new GlobalTimeService();
         var clock = new FakeTimeProvider(new DateTimeOffset(now));
-        var timeline = new TimelineViewModel(service, null, clock, action => action());
+        var timeline = new TimelineViewModel(service, null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
             Minimum = samples[0],
@@ -152,7 +152,7 @@ public sealed class TimelineNavigationTests
         var now = T0.AddHours(20);
         var run = Dataset("111US00_CBOFS_20260112T00Z_A", "S-111", Hourly(T0, 49));
         var service = new GlobalTimeService();
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(now)), action => action());
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(now)), action => action(), refresher: null, progress: null, scope: null, library: null);
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
             Minimum = run.First,

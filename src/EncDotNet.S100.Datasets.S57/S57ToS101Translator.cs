@@ -52,7 +52,7 @@ namespace EncDotNet.S100.Datasets.S57;
 /// cell keep it, so validation still reports the source duplicate.
 /// </para>
 /// </remarks>
-public sealed class S57ToS101Translator
+public sealed partial class S57ToS101Translator
 {
     private const byte S101RcnmPoint = 110;
     private const byte S101RcnmMultiPoint = 115;
@@ -268,6 +268,11 @@ public sealed class S57ToS101Translator
     // is emitted for them. `fixedDateRange` has no CATZOC-side source and is
     // always left unpopulated.
     private const ushort S57AttrCatzoc = 72;   // CATZOC — category of ZOC in data
+    // Where the M_QUAL itself carries POSACC / SOUACC, those take precedence
+    // over the CATZOC table: they become the fixed term of the horizontal /
+    // vertical uncertainty, which S-65 Annex C §3.1 / §3.2 convert back.
+    private const ushort S57AttrPosacc = 401;  // POSACC — positional accuracy
+    private const ushort S57AttrSouacc = 144;  // SOUACC — sounding accuracy
     private const string S101AttrZoneOfConfidence = "zoneOfConfidence";
     private const string S101AttrCategoryOfZocInData = "categoryOfZoneOfConfidenceInData";
     private const string S101AttrHorizontalPositionUncertainty = "horizontalPositionUncertainty";
@@ -377,6 +382,7 @@ public sealed class S57ToS101Translator
     private const ushort S57AttrColpat = 76;    // COLPAT — colour pattern (single value)
     private const string S101AttrTopmark = "topmark";
     private const string S101AttrTopmarkDaymarkShape = "topmarkDaymarkShape";
+    private const string S101AttrShapeInformation = "shapeInformation";
     private const string S101AttrColourPattern = "colourPattern";
 
     // S-57 HORCLR (Horizontal clearance, ATTL 98) maps to the mandatory
@@ -500,6 +506,39 @@ public sealed class S57ToS101Translator
     // BRIDGE objects emit only their spans. See BuildBridgeAggregations.
     private const ushort BridgeObjl = 11;          // BRIDGE (S-57 object class)
     private const ushort DamconObjl = 38;          // DAMCON (S-57 object class)
+
+    // A point PIPSOL converts to Obstruction when it extends from the seabed
+    // and to Landmark when it is on land (S-65 Annex B Ed 2.0.0 §11.6.1). The
+    // DefaultRules redirect sends every point to Obstruction; the translator
+    // moves one that no DepthArea or DredgedArea covers to Landmark, the same
+    // skin-of-the-earth test Annex B uses for a Landmark's inTheWater. Annex B
+    // names no category for either class: the optional categoryOfObstruction
+    // stays unset, and the mandatory categoryOfLandmark is populated as empty
+    // (null), its convention for a mandatory attribute without a source value,
+    // for the producer to review.
+    private const ushort PipsolObjl = 94;          // PIPSOL (S-57 object class)
+
+    // ── NEWOBJ virtual AIS aid to navigation → VirtualAISAidToNavigation ──
+    // S-57 has no class for a virtual AIS aid to navigation, so producers
+    // encode one as a point NEWOBJ (OBJL 163) whose CLSNAM is "Virtual AtoN,
+    // <type>", with the matching CLSDEF and SYMINS. S-65 Annex C §21.3 /
+    // §27.199 write exactly that from a VirtualAISAidToNavigation and its
+    // virtualAISAidToNavigationType, so the translator reads it back by the
+    // same table (S101ToS57Rules.VirtualAisTypes). Port and starboard
+    // lateral each have two types, told apart by the SYMINS symbol. A type
+    // name the table doesn't know (NOAA writes "Virtual AtoN, Wreck Marking"
+    // for "Emergency Wreck Marking", #1289) is matched by its CLSDEF, which
+    // follows the table. Any other NEWOBJ still becomes an S57UnknownObject.
+    private const ushort NewobjObjl = 163;         // NEWOBJ (S-57 object class)
+    private const ushort S57AttrClsdef = 190;      // CLSDEF — object class definition
+    private const ushort S57AttrClsnam = 191;      // CLSNAM — object class name
+    private const ushort S57AttrSymins = 192;      // SYMINS — symbol instruction
+    private const string VirtualAisClassPrefix = "Virtual AtoN, ";
+    private const string S101ClassVirtualAis = "VirtualAISAidToNavigation";
+    private const string S101AttrVirtualAisType = "virtualAISAidToNavigationType";
+    private static readonly IReadOnlyDictionary<string, S57AttributeOverride> NoAttributeOverrides =
+        new Dictionary<string, S57AttributeOverride>();
+    private const string S101ClassObstruction = "Obstruction";
     private const string BridgeAcronym = "BRIDGE";
 
     // ── IENC c_brga → S-401 BridgeArchAssociation ───────────────────────
@@ -636,9 +675,12 @@ public sealed class S57ToS101Translator
     // S-57 VALLMA (Value of local magnetic anomaly, ATTL 175) maps to the S-101
     // `valueOfLocalMagneticAnomaly` complex attribute, which the bundled FC
     // binds on LocalMagneticAnomaly [1..2]. The complex carries a mandatory
-    // `magneticAnomalyValue` [1..1] real sub-attribute (the VALLMA value, in
-    // nanoteslas, carried verbatim) plus an optional `referenceDirection`
-    // [0..1] enum that has no S-57 source and is left unpopulated. Flat
+    // `magneticAnomalyValue` [1..1] real sub-attribute plus an optional
+    // `referenceDirection`
+    // [0..1] enum that has no S-57 source and is left unpopulated. VALLMA is
+    // in minutes of arc (S-57 Appendix A) but magneticAnomalyValue is in
+    // degrees (the FC's unit of measure), so the value is divided by 60; the
+    // reverse multiplies by 60 (S-65 Annex C §27.122). Flat
     // one-level complex, so no consumer change is required (like CATZOC /
     // horizontalClearance).
     private const ushort S57AttrVallma = 175;  // VALLMA — value of local magnetic anomaly
@@ -673,7 +715,9 @@ public sealed class S57ToS101Translator
     // (CURENT) and TidalStreamFloodEbb (TS_FEB). The complex carries a
     // mandatory `speedMaximum` [1..1] real sub-attribute (the CURVEL value,
     // carried verbatim) plus an optional `speedMinimum` [0..1] that has no S-57
-    // source and is left unpopulated. Flat one-level complex, so no consumer
+    // source and is left unpopulated. `speed` is itself mandatory on both
+    // classes, so an object without CURVEL still gets the complex, with
+    // `speedMaximum` empty (null). Flat one-level complex, so no consumer
     // change is required (like CATZOC / valueOfLocalMagneticAnomaly).
     private const ushort S57AttrCurvel = 84;   // CURVEL — current velocity
     private const string S101AttrSpeed = "speed";
@@ -701,11 +745,23 @@ public sealed class S57ToS101Translator
     private const string S101AttrOpeningBridge = "openingBridge";
     private const string S101AttrCategoryOfOpeningBridge = "categoryOfOpeningBridge";
 
-    // ISO 639-3 language code used for the English-language INFORM/TXTDSC
-    // bucket. NINFOM/NTXTDS are emitted with an empty language string,
-    // since S-57 carries no language tag and Data Producers are expected
-    // to fill it in manually (Conversion Guidance §2.3).
+    // ISO 639-2 language code used for the English-language INFORM/TXTDSC
+    // and OBJNAM bucket.
     private const string LanguageEng = "eng";
+
+    // ISO 639-2 "undetermined", the language of the national-language
+    // NINFOM/NTXTDS and NOBJNM. S-57 doesn't say which language they're in,
+    // and an empty language reads as English (S-65 Annex C §27.177,
+    // §2.4.12.1), which would merge them into INFORM/TXTDSC/OBJNAM on the
+    // way back (#1221). Data producers can set the real one after conversion.
+    private const string LanguageNational = "und";
+
+    // S-101 DCEG 2.5.8 nameUsage: OBJNAM is the default name for chart
+    // display, NOBJNM the alternate one (S-65 Annex C §2.5.8 / §27.132 read
+    // them back the same way). The S-101 portrayal shows only names with a
+    // nameUsage.
+    private const string NameUsageDefault = "1";
+    private const string NameUsageAlternate = "2";
 
     private readonly S57S101Mapping _mapping;
     private readonly S101AllowedEnumValues? _allowedEnumValues;
@@ -831,9 +887,21 @@ public sealed class S57ToS101Translator
     /// enumerate values dropped during translation. Pass <c>null</c> (the
     /// default) to disable collection with zero overhead.
     /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="s57"/> is a NATO Additional Military Layers cell
+    /// (<c>DSID</c> <c>PRSP</c> 51–57). AML is military overlay data, not a
+    /// chart: translating it to S-101 would drop its AML classes and draw the
+    /// rest as chart content, so it's opened as AML instead.
+    /// </exception>
     public S101Document Translate(EncDotNet.S57.S57Document s57, S57TranslationDiagnostics? diagnostics)
     {
         ArgumentNullException.ThrowIfNull(s57);
+        if (AmlDatasetInfo.IsAml(s57))
+        {
+            throw new ArgumentException(
+                $"'{s57.DataSetIdentification?.DataSetName}' is an Additional Military Layers (AML) cell, not a chart; it isn't translated to S-101.",
+                nameof(s57));
+        }
 
         var ctx = new TranslationContext(
             s57, _mapping, _allowedEnumValues, _featureBindings, diagnostics, _target.InlineTextualInformation);
@@ -886,9 +954,19 @@ public sealed class S57ToS101Translator
 
     // ── Translation context ─────────────────────────────────────────────
 
-    private sealed class TranslationContext
+    private sealed partial class TranslationContext
     {
         private readonly EncDotNet.S57.S57Document _s57;
+
+        // The feature records, each with its national attributes (the NATF
+        // field: NINFOM, NOBJNM, NPLDST, NTXTDS) read along with its ATTF
+        // ones, so the rest of the translation sees them like any other.
+        private readonly List<EncDotNet.S57.S57FeatureRecord> _featureRecords;
+
+        private static EncDotNet.S57.S57FeatureRecord WithNationalAttributes(EncDotNet.S57.S57FeatureRecord feature)
+            => feature.NationalAttributes is { Count: > 0 } national
+                ? feature with { Attributes = [.. feature.Attributes, .. national] }
+                : feature;
         private readonly S57S101Mapping _mapping;
         private readonly S101AllowedEnumValues? _allowedEnumValues;
         private readonly S101FeatureAttributeBindings _featureBindings;
@@ -965,6 +1043,7 @@ public sealed class S57ToS101Translator
             bool inlineTextualInformation)
         {
             _s57 = s57;
+            _featureRecords = s57.FeatureRecords.Select(WithNationalAttributes).ToList();
             _mapping = mapping;
             _allowedEnumValues = allowedEnumValues;
             _featureBindings = featureBindings;
@@ -1060,9 +1139,7 @@ public sealed class S57ToS101Translator
             // absorbed members' sectors into the surviving LightSectored feature
             // as additional `sectorCharacteristics` instances (S-101 FC makes
             // `sectorCharacteristics` [1..*]). See BuildSectorMergeGroups.
-            var featureRecords =
-                _s57.FeatureRecords as IReadOnlyList<EncDotNet.S57.S57FeatureRecord>
-                ?? _s57.FeatureRecords.ToList();
+            var featureRecords = _featureRecords;
             var (absorbed, extraSectorsByIndex) = BuildSectorMergeGroups(featureRecords);
 
             // S-57 TOPMAR objects are folded into the `topmark` complex attribute
@@ -1103,6 +1180,7 @@ public sealed class S57ToS101Translator
             // See EmitDatasetSoundingDatum.
             var coverageFeatures = new List<(EncDotNet.S57.S57FeatureRecord Record, IReadOnlyList<S101SpatialAssociation> Spatials)>();
             var emittedSoundingDatum = false;
+            var coveragePlan = PlanCoverage(featureRecords);
 
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
@@ -1150,14 +1228,19 @@ public sealed class S57ToS101Translator
 
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
                 var resolved = _mapping.ResolveFeature(objl, acronymView, MapPrimitive(feat.Primitive));
+                string? virtualAisType = null;
+                if (resolved is null && objl == NewobjObjl && (virtualAisType = VirtualAisType(feat)) is not null)
+                    resolved = new ResolvedFeature(S101ClassVirtualAis, NoAttributeOverrides);
                 if (resolved is null)
                 {
-                    if (_diagnostics is not null)
+                    if (_mapping.FeatureRules.ContainsKey(objl))
                     {
-                        if (_mapping.FeatureRules.ContainsKey(objl))
-                            _diagnostics.RecordRuleDroppedObjectClass(objl);
-                        else
-                            _diagnostics.RecordUnmappedObjectClass(objl);
+                        _diagnostics?.RecordRuleDroppedObjectClass(objl);
+                    }
+                    else
+                    {
+                        _diagnostics?.RecordUnmappedObjectClass(objl);
+                        EmitUnknownObject(feat, objl);
                     }
                     continue;
                 }
@@ -1179,6 +1262,18 @@ public sealed class S57ToS101Translator
                     _diagnostics?.RecordRuleDroppedObjectClass(objl);
                     continue;
                 }
+
+                // Coverage available: Data Coverage with display scales, cut
+                // by M_CSCL (S-65 Annex B §2.2.6).
+                if (objl == MCovrObjl && coveragePlan.TryGetValue(fi, out var coveragePieces))
+                {
+                    EmitDataCoverage(feat, resolved, objl, coveragePieces, coverageFeatures);
+                    continue;
+                }
+
+                // A point PIPSOL on land is a Landmark, not an Obstruction.
+                if (objl == PipsolObjl && resolved.S101Code == S101ClassObstruction && !IsUnderWater(feat))
+                    resolved = resolved with { S101Code = S101ClassLandmark };
 
                 bool isBridge = IsBridgeObjl(objl) && resolved.S101Code == S101ClassBridge;
 
@@ -1217,6 +1312,8 @@ public sealed class S57ToS101Translator
                 var attributes = TranslateAttributes(
                     feat.Attributes, resolved, objl, out var infoAssociations, extraSectors, topmarkSource);
                 attributes = AppendHazardDepths(feat, resolved.S101Code, acronymView, attributes);
+                if (virtualAisType is not null)
+                    attributes = [new S101Attribute(GetOrAssignAttributeCode(S101AttrVirtualAisType), 1, virtualAisType), .. attributes];
                 if (schedulePlan.SchedulesByFeature.TryGetValue(fi, out var schedules))
                     infoAssociations = [.. infoAssociations, .. TimeScheduleAssociations(resolved.S101Code, schedules, schedulePlan)];
 
@@ -1269,6 +1366,7 @@ public sealed class S57ToS101Translator
             RecordUnlinkedTimeSchedules(schedulePlan);
             EmitBridgeArchAssociations(archGroups, archSpanPositions);
             EmitRangeSystems(pendingAggregations);
+            EmitStructureEquipment(featureRecords);
         }
 
         // ── Underwater hazard depths ────────────────────────────────────
@@ -1302,20 +1400,29 @@ public sealed class S57ToS101Translator
             if (bindsDefault && !hasSounding)
             {
                 var clearance = S57HazardDepths.DefaultClearanceDepth(
+                    s101Code,
                     surrounding,
                     acronymView.GetValueOrDefault("WATLEV")?.Trim(),
                     acronymView.GetValueOrDefault("EXPSOU")?.Trim(),
-                    acronymView.GetValueOrDefault("CATOBS")?.Trim());
+                    acronymView.GetValueOrDefault("CATOBS")?.Trim(),
+                    acronymView.GetValueOrDefault("CATWRK")?.Trim());
                 result.Insert(0, new S101Attribute(
                     GetOrAssignAttributeCode(S101AttrDefaultClearanceDepth), 1, S57HazardDepths.Format(clearance)));
             }
             return result;
         }
 
+        // True when a depth or dredged area covers the point feature.
+        private bool IsUnderWater(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            _hazardDepths ??= BuildHazardDepths();
+            return _hazardDepths.SurroundingDepth(S57Positions(feat), isPoint: true) is not null;
+        }
+
         private S57HazardDepths BuildHazardDepths()
         {
             var areas = new List<(double, List<List<(double Lat, double Lon)>>)>();
-            foreach (var feat in _s57.FeatureRecords)
+            foreach (var feat in _featureRecords)
             {
                 var primitive = MapPrimitive(feat.Primitive);
                 if (primitive != S57GeometryPrimitive.Surface) continue;
@@ -1704,6 +1811,62 @@ public sealed class S57ToS101Translator
                 }
             }
 
+            AppendFeatureAssociations(added);
+        }
+
+        // S-57 ties the parts of an aid to navigation with master/slave feature
+        // pointers (UOC 12.1.1): the master's FFPT names each slave with the
+        // slave relationship indicator. S-101 carries the same relationship as
+        // a StructureEquipment association, which S-65 Annex C §18.2 converts
+        // back to master/slave. Each slave with a feature of its own becomes
+        // `theEquipment` of its master's feature where the target FC binds the
+        // pair. Equipment links at most one structure, so a light a bridge
+        // collection already linked keeps that link (EmitBridgeAggregations).
+        private void EmitStructureEquipment(IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var classById = Features.ToDictionary(f => f.RecordId, f => FeatureTypeCatalogue[f.FeatureTypeCode]);
+            var added = new Dictionary<uint, List<S101FeatureAssociation>>();
+            foreach (var master in featureRecords)
+            {
+                if ((ushort)(int)master.ObjectCode is CAggrObjl or CAssoObjl) continue;
+                if (!_recordIdByLnam.TryGetValue(Lnam(master.RecordName), out var structureId)
+                    || !classById.TryGetValue(structureId, out var structureClass))
+                    continue;
+
+                foreach (var fp in master.FeaturePointers)
+                {
+                    if (fp.Relationship != EncDotNet.S57.S57RelationshipIndicator.Slave) continue;
+                    // A slave with no feature of its own (a TOPMAR folded into
+                    // the master's topmark, a merged sector light) has nothing
+                    // to link.
+                    if (!_recordIdByLnam.TryGetValue(fp.Name, out var equipmentId)
+                        || equipmentId == structureId
+                        || !classById.TryGetValue(equipmentId, out var equipmentClass))
+                        continue;
+                    if (!_featureBindings.BindsFeatureAssociation(
+                            structureClass, S101AssocStructureEquipment, S101RoleTheEquipment, equipmentClass))
+                    {
+                        _diagnostics?.RecordUnboundStructureEquipment(structureClass, equipmentClass);
+                        continue;
+                    }
+                    if (!_linkedEquipment.Add(equipmentId)) continue;
+
+                    if (_diagnostics is not null) _diagnostics.StructureEquipmentLinked++;
+                    if (!added.TryGetValue(structureId, out var links))
+                        added[structureId] = links = [];
+                    links.Add(new S101FeatureAssociation(
+                        GetOrAssignFeatureAssociationCode(S101AssocStructureEquipment),
+                        equipmentId,
+                        GetOrAssignRoleCode(S101RoleTheEquipment)));
+                }
+            }
+
+            AppendFeatureAssociations(added);
+        }
+
+        // Adds feature associations to features already emitted.
+        private void AppendFeatureAssociations(Dictionary<uint, List<S101FeatureAssociation>> added)
+        {
             if (added.Count == 0) return;
             for (int i = 0; i < Features.Count; i++)
             {
@@ -1724,6 +1887,36 @@ public sealed class S57ToS101Translator
                     UpdateInstruction = f.UpdateInstruction,
                 };
             }
+        }
+
+        // The virtualAISAidToNavigationType of a point NEWOBJ that encodes a
+        // virtual AIS aid to navigation (see NewobjObjl), or null.
+        private string? VirtualAisType(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            if (MapPrimitive(feat.Primitive) != S57GeometryPrimitive.Point
+                || !_featureBindings.Binds(S101ClassVirtualAis, S101AttrVirtualAisType))
+                return null;
+            var clsnam = feat.Attributes.Where(a => a.AttributeCode == S57AttrClsnam).Select(a => a.Value?.Trim()).FirstOrDefault();
+            if (clsnam is null || !clsnam.StartsWith(VirtualAisClassPrefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+            var name = clsnam[VirtualAisClassPrefix.Length..].Trim();
+            var types = S101ToS57Rules.VirtualAisTypes
+                .Where(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (types.Count == 0)
+            {
+                // An unknown type name: fall back to the class definition.
+                var clsdef = feat.Attributes.Where(a => a.AttributeCode == S57AttrClsdef).Select(a => a.Value?.Trim()).FirstOrDefault();
+                if (!string.IsNullOrEmpty(clsdef))
+                    types = S101ToS57Rules.VirtualAisTypes
+                        .Where(t => string.Equals(t.Definition, clsdef, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+            }
+            if (types.Count == 0) return null;
+            var symins = feat.Attributes.Where(a => a.AttributeCode == S57AttrSymins).Select(a => a.Value).FirstOrDefault() ?? string.Empty;
+            return (types.FirstOrDefault(t => symins.Contains(t.Symbol, StringComparison.OrdinalIgnoreCase)) is { Value: not null } bySymbol
+                ? bySymbol
+                : types[0]).Value;
         }
 
         // WGS-84 positions of an S-57 feature's geometry: one part per node, or
@@ -2278,16 +2471,22 @@ public sealed class S57ToS101Translator
 
         // The categoryOfLandmark of a point object redirected to Landmark
         // because its own S-101 class permits no point: 26 (bridge) for a
-        // BRIDGE, 27 (dam) for a DAMCON; null for any other feature.
+        // BRIDGE, 27 (dam) for a DAMCON, empty (null) for a PIPSOL; null for
+        // any other feature.
         private string? PointLandmarkCategory(ushort ownerObjl, string s101Code)
         {
             if (s101Code != S101ClassLandmark) return null;
             if (IsBridgeObjl(ownerObjl)) return CategoryOfLandmarkBridge;
-            return ownerObjl == DamconObjl ? CategoryOfLandmarkDam : null;
+            return ownerObjl switch
+            {
+                DamconObjl => CategoryOfLandmarkDam,
+                PipsolObjl => string.Empty,
+                _ => null,
+            };
         }
 
-        // Supplies the mandatory Landmark attributes for a point BRIDGE or
-        // DAMCON redirected to Landmark: its categoryOfLandmark and, when
+        // Supplies the mandatory Landmark attributes for a point BRIDGE, DAMCON
+        // or PIPSOL redirected to Landmark: its categoryOfLandmark and, when
         // CONVIS did not provide one, visualProminence = 2 (not visually
         // conspicuous).
         private void AppendPointLandmarkAttributes(List<S101Attribute> builder, string category)
@@ -2495,6 +2694,46 @@ public sealed class S57ToS101Translator
         private static S57LongName Lnam(EncDotNet.S57.S57RecordName n)
             => n.LongName ?? default;
 
+        // An S-57 object whose class has no rule is kept as an
+        // S57UnknownObject feature (see S57UnknownObject) with its own
+        // geometry. The S-101 Feature Catalogue doesn't define that type, so
+        // the portrayal falls back to its Default rule and draws QUESMRK1, as
+        // S-52 (and S-64 3.2.1) asks for an object of unknown class, and the
+        // pick report lists its OBJL and S-57 attributes. A rule that drops a
+        // class on purpose still drops it; an object without geometry (a
+        // C_ASSO, say) has nothing to draw and is left out.
+        private void EmitUnknownObject(EncDotNet.S57.S57FeatureRecord feat, ushort objl)
+        {
+            var spatials = TranslateSpatialPointers(feat);
+            if (spatials.Count == 0)
+                return;
+
+            var attributes = new List<S101Attribute>(feat.Attributes.Count + 1)
+            {
+                new(GetOrAssignAttributeCode(S57UnknownObject.ObjectClassAttribute), 1,
+                    objl.ToString(CultureInfo.InvariantCulture)),
+            };
+            foreach (var a in feat.Attributes)
+            {
+                var code = S57UnknownObject.AttributeCode((ushort)a.AttributeCode, _mapping);
+                attributes.Add(new S101Attribute(GetOrAssignAttributeCode(code), 1, a.Value));
+            }
+
+            if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
+            Features.Add(new S101FeatureRecord
+            {
+                RecordId = _nextFeatureId++,
+                FeatureTypeCode = GetOrAssignFeatureTypeCode(S57UnknownObject.FeatureTypeCode),
+                ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
+                Attributes = attributes,
+                SpatialAssociations = spatials,
+                FeatureAssociations = [],
+                InformationAssociations = [],
+            });
+        }
+
         // Second pass over deferred S-57 C_AGGR collection objects. S-101 has no
         // generic aggregation; a C_AGGR whose members are navigational tracks
         // (NavigationLine / RecommendedTrack / RecommendedRouteCentreline) plus
@@ -2526,7 +2765,7 @@ public sealed class S57ToS101Translator
             // Index every S-57 feature by LNAM so C_AGGR members (referenced by
             // long name, not RCNM/RCID) can be resolved to their object class.
             var featureByLnam = new Dictionary<S57LongName, EncDotNet.S57.S57FeatureRecord>();
-            foreach (var r in _s57.FeatureRecords)
+            foreach (var r in _featureRecords)
                 featureByLnam[Lnam(r.RecordName)] = r;
 
             var pendingByLnam = new Dictionary<S57LongName, EncDotNet.S57.S57FeatureRecord>();
@@ -2597,6 +2836,7 @@ public sealed class S57ToS101Translator
             var assocCode = GetOrAssignFeatureAssociationCode(S101AssocRangeSystemAggregation);
             var componentRole = GetOrAssignRoleCode(S101RoleTheComponent);
             var typeCode = GetOrAssignFeatureTypeCode(S101ClassRangeSystem);
+            var owner = new ResolvedFeature(S101ClassRangeSystem, NoAttributeOverrides);
 
             // Phase 2: emit each RangeSystem with a `theComponent` association to
             // every member that resolved to an emitted S-101 feature. Every
@@ -2612,6 +2852,12 @@ public sealed class S57ToS101Translator
                         assocs.Add(new S101FeatureAssociation(assocCode, memberId, componentRole));
                 }
 
+                // The collection's own attributes (OBJNAM, INFORM, DATSTA/DATEND,
+                // SCAMIN, …) translate against RangeSystem, which binds
+                // featureName, information, fixedDateRange and scaleMinimum;
+                // Annex C §15.6 carries them back onto the C_AGGR.
+                var attributes = TranslateAttributes(aggr.Attributes, owner, CAggrObjl, out var infoAssociations);
+
                 if (_diagnostics is not null) _diagnostics.RangeSystemsEmitted++;
                 Features.Add(new S101FeatureRecord
                 {
@@ -2620,10 +2866,10 @@ public sealed class S57ToS101Translator
                     ProducingAgency = (ushort)aggr.RecordName.AgencyCode,
                     FeatureIdentificationNumber = (uint)aggr.RecordName.FeatureId,
                     FeatureIdentificationSubdivision = (ushort)aggr.RecordName.FeatureSubdivision,
-                    Attributes = [],
+                    Attributes = attributes,
                     SpatialAssociations = [],
                     FeatureAssociations = assocs,
-                    InformationAssociations = [],
+                    InformationAssociations = infoAssociations,
                 });
             }
         }
@@ -2894,6 +3140,17 @@ public sealed class S57ToS101Translator
             }
 
             var typeCode = GetOrAssignFeatureTypeCode(SoundingS101Code);
+            // The depth values live on the points of the MultiPoint geometry,
+            // which the SOUNDG03 portrayal rule reads as point.ScaledZ. The
+            // object's own attributes (SCAMIN, SORDAT, QUASOU, TECSOU, STATUS,
+            // INFORM, …) go through the normal attribute path, gated on what
+            // the FC binds on Sounding (S-65 Annex B § 11.3; #1219).
+            var resolved = _mapping.ResolveFeature(
+                SoundingObjl, _mapping.BuildAcronymView(feat.Attributes), MapPrimitive(feat.Primitive));
+            IReadOnlyList<S101Attribute> attributes = [];
+            IReadOnlyList<S101InformationAssociation> infoAssociations = [];
+            if (resolved is not null)
+                attributes = TranslateAttributes(feat.Attributes, resolved, SoundingObjl, out infoAssociations);
             Features.Add(new S101FeatureRecord
             {
                 RecordId = _nextFeatureId++,
@@ -2901,13 +3158,10 @@ public sealed class S57ToS101Translator
                 ProducingAgency = (ushort)feat.RecordName.AgencyCode,
                 FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
                 FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
-                // The S-101 Sounding feature carries no attributes — depth values
-                // live on the individual points within the MultiPoint geometry,
-                // which the SOUNDG03 portrayal rule reads as point.ScaledZ.
-                Attributes = [],
+                Attributes = attributes,
                 SpatialAssociations = [new S101SpatialAssociation(S101RcnmMultiPoint, mpid, OrientationForward)],
                 FeatureAssociations = [],
-                InformationAssociations = [],
+                InformationAssociations = infoAssociations,
             });
         }
 
@@ -2921,7 +3175,8 @@ public sealed class S57ToS101Translator
         {
             informationAssociations = [];
             if (attrs.Count == 0 && topmarkSource is null
-                && PointLandmarkCategory(ownerObjl, feature.S101Code) is null)
+                && PointLandmarkCategory(ownerObjl, feature.S101Code) is null
+                && !_featureBindings.Binds(feature.S101Code, S101AttrSpeed))
                 return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
@@ -2964,6 +3219,8 @@ public sealed class S57ToS101Translator
             // class that binds the complex (QualityOfBathymetricData).
             bool bindsZoc = _featureBindings.Binds(feature.S101Code, S101AttrZoneOfConfidence);
             string? catzocValue = null;
+            string? posaccValue = null;
+            string? souaccValue = null;
             // topmark source — the TOPSHP/COLOUR/COLPAT of a master's slave TOPMAR
             // record (BuildTopmarkGroups), assembled into the `topmark` complex on
             // the buoy/beacon/light-float classes that bind it.
@@ -3084,10 +3341,18 @@ public sealed class S57ToS101Translator
                     case S57AttrSursta: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surstaValue = a.Value; break;
                     case S57AttrSurend: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surendValue = a.Value; break;
                     case S57AttrCatzoc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) catzocValue = a.Value; break;
+                    case S57AttrPosacc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) posaccValue = a.Value; break;
+                    case S57AttrSouacc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) souaccValue = a.Value; break;
                     case S57AttrNatsur: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natsurList = a.Value; break;
                     case S57AttrNatqua: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natquaList = a.Value; break;
                     case S57AttrHorclr: if (bindsHorClearance && !string.IsNullOrEmpty(a.Value)) horclrValue = a.Value; break;
-                    case S57AttrVallma: if (bindsValueOfLocalMagneticAnomaly && !string.IsNullOrEmpty(a.Value)) vallmaValue = a.Value; break;
+                    case S57AttrVallma:
+                        if (bindsValueOfLocalMagneticAnomaly && !string.IsNullOrEmpty(a.Value))
+                        {
+                            vallmaValue = MinutesToDegrees(a.Value);
+                            if (vallmaValue is null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrVallma);
+                        }
+                        break;
                     case S57AttrRadwal: if (bindsRadarWaveLength && !string.IsNullOrEmpty(a.Value)) radwalValue = a.Value; break;
                     case S57AttrCurvel: if (bindsSpeed && !string.IsNullOrEmpty(a.Value)) curvelValue = a.Value; break;
                     case S57AttrMltylt: if (bindsMultiplicityOfFeatures && !string.IsNullOrEmpty(a.Value)) mltyltValue = a.Value; break;
@@ -3157,6 +3422,8 @@ public sealed class S57ToS101Translator
                 // On QualityOfBathymetricData, CATZOC is assembled into the
                 // `zoneOfConfidence` complex below rather than passed through.
                 if (bindsZoc && a.AttributeCode is S57AttrCatzoc)
+                    continue;
+                if (bindsZoc && !string.IsNullOrEmpty(a.Value) && a.AttributeCode is S57AttrPosacc or S57AttrSouacc)
                     continue;
 
                 // On SeabedArea, NATSUR/NATQUA are assembled into the
@@ -3398,9 +3665,9 @@ public sealed class S57ToS101Translator
                 if (txtdscFile is not null)
                     AppendInformationInstance(builder, text: null, fileReference: txtdscFile, language: LanguageEng);
                 if (ninfomText is not null)
-                    AppendInformationInstance(builder, text: ninfomText, fileReference: null, language: string.Empty);
+                    AppendInformationInstance(builder, text: ninfomText, fileReference: null, language: LanguageNational);
                 if (ntxtdsFile is not null)
-                    AppendInformationInstance(builder, text: null, fileReference: ntxtdsFile, language: string.Empty);
+                    AppendInformationInstance(builder, text: null, fileReference: ntxtdsFile, language: LanguageNational);
             }
             else
             {
@@ -3411,16 +3678,15 @@ public sealed class S57ToS101Translator
             }
 
             // Append `featureName` complex-attribute instances only on feature
-            // classes that bind the complex. OBJNAM carries the English name;
-            // NOBJNM the national-language name (emitted with an empty language
-            // string, as S-57 carries no language tag — mirrors the
-            // INFORM/NINFOM handling above).
+            // classes that bind the complex. OBJNAM carries the English, default
+            // name; NOBJNM the national-language, alternate one (its language
+            // is undetermined, as for NINFOM above).
             if (bindsFeatureName)
             {
                 if (objnamText is not null)
-                    AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng);
+                    AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng, NameUsageIfAllowed(NameUsageDefault));
                 if (nobjnmText is not null)
-                    AppendFeatureNameInstance(builder, name: nobjnmText, language: string.Empty);
+                    AppendFeatureNameInstance(builder, name: nobjnmText, language: LanguageNational, NameUsageIfAllowed(NameUsageAlternate));
             }
 
             // Append the `rhythmOfLight` complex-attribute instance. The FC
@@ -3491,17 +3757,19 @@ public sealed class S57ToS101Translator
             // CATZOC-sourced sub-attribute, `categoryOfZoneOfConfidenceInData`,
             // is mandatory in practice (nothing else is populated), so an
             // out-of-range CATZOC code drops the instance and is reported.
-            if (bindsZoc && catzocValue is not null)
+            if (bindsZoc && catzocValue is not null
+                && (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrCategoryOfZocInData, catzocValue)))
             {
-                if (_allowedEnumValues is null
-                    || _allowedEnumValues.IsAllowed(S101AttrCategoryOfZocInData, catzocValue))
-                {
-                    AppendZoneOfConfidenceInstance(builder, catzocValue);
-                }
-                else
-                {
+                AppendZoneOfConfidenceInstance(builder, catzocValue, posaccValue, souaccValue);
+            }
+            else if (bindsZoc)
+            {
+                if (catzocValue is not null)
                     _diagnostics?.RecordDroppedEnumValue(S101AttrCategoryOfZocInData, catzocValue);
-                }
+                // Without a zone of confidence the accuracies have no home.
+                if (posaccValue is not null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrPosacc);
+                if (souaccValue is not null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrSouacc);
             }
 
             // Append the `topmark` complex-attribute instance from the master's
@@ -3561,7 +3829,7 @@ public sealed class S57ToS101Translator
 
             // Append the `valueOfLocalMagneticAnomaly` complex-attribute
             // instance. Its mandatory sub-attribute `magneticAnomalyValue` is a
-            // real that carries the VALLMA value verbatim; `referenceDirection`
+            // real that carries the VALLMA value in degrees; `referenceDirection`
             // has no S-57 source and is left unpopulated.
             if (bindsValueOfLocalMagneticAnomaly && vallmaValue is not null)
             {
@@ -3580,10 +3848,15 @@ public sealed class S57ToS101Translator
             // Append the `speed` complex-attribute instance. Its mandatory
             // sub-attribute `speedMaximum` is a real carrying the CURVEL value
             // verbatim; the optional `speedMinimum` has no S-57 source and is
-            // left unpopulated.
-            if (bindsSpeed && curvelValue is not null)
+            // left unpopulated. `speed` is mandatory on every class that binds
+            // it, so without CURVEL (S-57 lets it be empty or absent) the
+            // instance carries `speedMaximum` as empty (null), the S-65 Annex B
+            // convention for a mandatory attribute without a source value. The
+            // portrayal API reads an unknown value as nil, so the PC draws the
+            // stream arrow without the speed text, as S-52 does.
+            if (bindsSpeed)
             {
-                AppendSpeedInstance(builder, curvelValue);
+                AppendSpeedInstance(builder, curvelValue ?? string.Empty);
             }
 
             // Append the `multiplicityOfFeatures` complex-attribute instance.
@@ -3667,9 +3940,9 @@ public sealed class S57ToS101Translator
                 }
             }
 
-            // A point BRIDGE or DAMCON redirected to Landmark needs the
+            // A point BRIDGE, DAMCON or PIPSOL redirected to Landmark needs the
             // Landmark's mandatory category and visual prominence (S-65 Annex B
-            // §4.8.10, §4.8.5).
+            // §4.8.10, §4.8.5, §11.6.1).
             if (PointLandmarkCategory(ownerObjl, feature.S101Code) is { } landmarkCategory)
                 AppendPointLandmarkAttributes(builder, landmarkCategory);
 
@@ -3720,7 +3993,7 @@ public sealed class S57ToS101Translator
             if (hasEnglish)
                 AppendInformationInstance(infoAttributes, text: informText, fileReference: txtdscFile, language: LanguageEng);
             if (hasNational)
-                AppendInformationInstance(infoAttributes, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+                AppendInformationInstance(infoAttributes, text: ninfomText, fileReference: ntxtdsFile, language: LanguageNational);
 
             var infoId = _nextInformationId++;
             InformationTypes[infoId] = new S101InformationRecord
@@ -3737,6 +4010,9 @@ public sealed class S57ToS101Translator
                 infoId,
                 GetOrAssignRoleCode(S101RoleTheInformation));
         }
+        private string? NameUsageIfAllowed(string nameUsage)
+            => _allowedEnumValues?.IsAllowed(S101AttrNameUsage, nameUsage) != false ? nameUsage : null;
+
         private void AppendFeatureNameInstance(
             List<S101Attribute> builder,
             string name,
@@ -3833,9 +4109,13 @@ public sealed class S57ToS101Translator
         // uncertainty is itself a complex of uncertaintyFixed [1..1] +
         // uncertaintyVariableFactor [0..1]. ZOC D/U have no quantified accuracy
         // (absent from CatzocUncertainties) so only the category is emitted.
+        // The M_QUAL's own POSACC / SOUACC, where present, replace the
+        // CATZOC-implied horizontal / vertical uncertainty (fixed term only).
         private void AppendZoneOfConfidenceInstance(
             List<S101Attribute> builder,
-            string categoryOfZoneOfConfidenceInData)
+            string categoryOfZoneOfConfidenceInData,
+            string? posacc = null,
+            string? souacc = null)
         {
             var zocCode = GetOrAssignAttributeCode(S101AttrZoneOfConfidence);
             // Marker entry — Index=1, value=empty — followed by the sub-attribute.
@@ -3843,19 +4123,27 @@ public sealed class S57ToS101Translator
             var catCode = GetOrAssignAttributeCode(S101AttrCategoryOfZocInData);
             builder.Add(new S101Attribute(catCode, 1, categoryOfZoneOfConfidenceInData));
 
-            if (!CatzocUncertainties.TryGetValue(categoryOfZoneOfConfidenceInData, out var u))
-                return;
+            ZocUncertainty? implied = CatzocUncertainties.TryGetValue(categoryOfZoneOfConfidenceInData, out var u) ? u : null;
 
             // horizontalPositionUncertainty → uncertaintyFixed [+ uncertaintyVariableFactor].
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrHorizontalPositionUncertainty), 1, string.Empty));
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.HorizontalFixed));
-            if (u.HorizontalVariable is not null)
-                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.HorizontalVariable));
+            if (posacc is not null)
+                AppendUncertainty(S101AttrHorizontalPositionUncertainty, posacc, null);
+            else if (implied is { } h)
+                AppendUncertainty(S101AttrHorizontalPositionUncertainty, h.HorizontalFixed, h.HorizontalVariable);
 
             // verticalUncertainty → uncertaintyFixed + uncertaintyVariableFactor.
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalUncertainty), 1, string.Empty));
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.VerticalFixed));
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.VerticalVariable));
+            if (souacc is not null)
+                AppendUncertainty(S101AttrVerticalUncertainty, souacc, null);
+            else if (implied is { } v)
+                AppendUncertainty(S101AttrVerticalUncertainty, v.VerticalFixed, v.VerticalVariable);
+
+            void AppendUncertainty(string complex, string fixedTerm, string? variableFactor)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(complex), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, fixedTerm));
+                if (variableFactor is not null)
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, variableFactor));
+            }
         }
 
         // Emits a `topmark` complex-attribute instance from the master's slave
@@ -3876,6 +4164,7 @@ public sealed class S57ToS101Translator
             string? topshp = null;
             string? colourList = null;
             string? colpat = null;
+            string? inform = null;
             foreach (var a in topmarkSource.Attributes)
             {
                 switch (a.AttributeCode)
@@ -3883,6 +4172,7 @@ public sealed class S57ToS101Translator
                     case S57AttrTopshp: if (!string.IsNullOrEmpty(a.Value)) topshp = a.Value; break;
                     case S57AttrColour: if (!string.IsNullOrEmpty(a.Value)) colourList = a.Value; break;
                     case S57AttrColpat: if (!string.IsNullOrEmpty(a.Value)) colpat = a.Value; break;
+                    case S57AttrInform: if (!string.IsNullOrWhiteSpace(a.Value)) inform = a.Value; break;
                 }
             }
 
@@ -3927,6 +4217,16 @@ public sealed class S57ToS101Translator
             }
 
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrTopmarkDaymarkShape), 1, topshp));
+
+            // The TOPMAR's INFORM describes the topmark: it becomes the
+            // complex's shapeInformation, which S-65 Annex C §29.24 / §2.4.6
+            // convert back to the TOPMAR's INFORM.
+            if (inform is not null)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrShapeInformation), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLanguage), 1, LanguageEng));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrText), 1, inform));
+            }
         }
 
         // Emits a `horizontalClearanceOpen` / `horizontalClearanceFixed`
@@ -3946,6 +4246,16 @@ public sealed class S57ToS101Translator
             var valueCode = GetOrAssignAttributeCode(S101AttrHorizontalClearanceValue);
             builder.Add(new S101Attribute(valueCode, 1, horizontalClearanceValue));
         }
+
+        // Converts an S-57 VALLMA (minutes of arc) to the degrees S-101's
+        // magneticAnomalyValue carries. Full decimal precision is kept so that
+        // the reverse ×60 gives the original value back (100' is
+        // 1.6666666666666666666666666667°, which ×60 rounds to exactly 100).
+        // Returns null when the value is not a number.
+        private static string? MinutesToDegrees(string minutes)
+            => decimal.TryParse(minutes, NumberStyles.Float, CultureInfo.InvariantCulture, out var m)
+                ? (m / 60).ToString("0.############################", CultureInfo.InvariantCulture)
+                : null;
 
         // Emits a `valueOfLocalMagneticAnomaly` complex-attribute instance
         // (marker + its mandatory `magneticAnomalyValue` real sub-attribute),
@@ -4214,8 +4524,11 @@ public sealed class S57ToS101Translator
             string? natsurList,
             string? natquaList)
         {
-            var surfaces = SplitEnumList(natsurList);
-            var quals = SplitEnumList(natquaList);
+            // The lists pair by position (S-57 UOC 7.1.2), so an empty
+            // position is kept: NATSUR "4,1,4" with NATQUA ",1," qualifies
+            // only the second surface.
+            var surfaces = SplitPositionalList(natsurList);
+            var quals = SplitPositionalList(natquaList);
             int count = Math.Max(surfaces.Count, quals.Count);
             for (int i = 0; i < count; i++)
             {
@@ -4249,6 +4562,13 @@ public sealed class S57ToS101Translator
                     builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrNatureOfSurfaceQualifyingTerms), 1, qual));
             }
         }
+
+        // Splits an S-57 list-valued enumerate attribute into its positions,
+        // an empty position as null.
+        private static List<string?> SplitPositionalList(string? list)
+            => string.IsNullOrEmpty(list)
+                ? []
+                : list.Split(',').Select(t => t.Trim() is { Length: > 0 } code ? code : null).ToList();
 
         // Splits an S-57 list-valued enumerate attribute (comma-separated
         // integer codes) into its individual non-empty tokens.

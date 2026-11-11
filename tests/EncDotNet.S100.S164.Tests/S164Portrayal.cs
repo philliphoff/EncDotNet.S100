@@ -5,8 +5,8 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.S164.Tests;
 
@@ -89,7 +89,7 @@ internal static class S164Portrayal
             source,
             $"S-101/DATASET_FILES/{cell}",
             catalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
     }
 }

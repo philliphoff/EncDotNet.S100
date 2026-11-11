@@ -142,7 +142,8 @@ public sealed class GribField
 
     /// <summary>
     /// The field's level as a <see cref="WeatherLevel"/>: the surface (fixed
-    /// surface type 1), mean sea level (101), a height above ground (103), or
+    /// surface type 1), the entire atmosphere (10), mean sea level (101), a
+    /// height above ground (103), or
     /// <see cref="WeatherLevel.Other"/> describing anything else, such as a
     /// layer or NCEP's "1 in sequence" swell partitions (type 241).
     /// </summary>
@@ -158,6 +159,7 @@ public sealed class GribField
         return surface.Type switch
         {
             GribFixedSurface.GroundOrWater => WeatherLevel.Surface,
+            GribFixedSurface.EntireAtmosphere => WeatherLevel.EntireAtmosphere,
             GribFixedSurface.MeanSeaLevel => WeatherLevel.MeanSeaLevel,
             GribFixedSurface.HeightAboveGround when surface.Value is { } metres => WeatherLevel.AboveGround(Length.FromMetres(metres)),
             GribFixedSurface.Isobaric when surface.Value is { } pascals =>
@@ -169,14 +171,14 @@ public sealed class GribField
     /// <summary>
     /// Finds the canonical weather parameter (design note weather-sources.md
     /// §3.5) this field holds: its parameter code through
-    /// <see cref="WeatherParameters.FindByGribCode"/>, and its level matching
+    /// <see cref="WeatherParameters.FindByGribCode(GribParameterCode, WeatherLevel)"/>, and its level matching
     /// the row's level where the row has one (10 m for the wind rows, mean sea
     /// level for pressure).
     /// </summary>
     /// <returns>The row, or <see langword="null"/> for a parameter or level the table doesn't have.</returns>
     public WeatherParameterDefinition? FindWeatherParameter()
     {
-        var definition = WeatherParameters.FindByGribCode(Parameter);
+        var definition = WeatherParameters.FindByGribCode(Parameter, ToWeatherLevel());
         if (definition is null)
             return null;
         if (definition.Level is { } level && !level.Equals(ToWeatherLevel()))

@@ -40,8 +40,8 @@
     <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <!-- EncDotNet -->
-    <PackageVersion Include="EncDotNet.Iso8211" Version="0.8.1" />
-    <PackageVersion Include="EncDotNet.S57" Version="0.8.1" />
+    <PackageVersion Include="EncDotNet.Iso8211" Version="0.11.0" />
+    <PackageVersion Include="EncDotNet.S57" Version="0.11.0" />
     <!-- Mapping / rendering -->
     <!-- WGS-84 geodesics and rhumb lines (Karney; MIT) -->
     <PackageVersion Include="GeographicLib.NET" Version="2.3.2" />
@@ -51,6 +51,10 @@
     <PackageVersion Include="Mapsui.Nts" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Rendering.Skia" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Tiling" Version="5.1.0" />
+    <!-- Lua engines behind ILuaEngine. Lua-CSharp (MIT, pure managed, Lua 5.2)
+         is the default; MoonSharp stays selectable until the A/B criteria in
+         docs/design/map-render-architecture.md step 0 are met (#1278). -->
+    <PackageVersion Include="LuaCSharp" Version="0.5.8" />
     <PackageVersion Include="MoonSharp" Version="2.0.0" />
     <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
     <PackageVersion Include="ProjNet" Version="2.1.0" />
@@ -62,6 +66,8 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.57.2" />
     <PackageVersion Include="Svg.Skia" Version="3.2.1" />
+    <!-- Zstandard for the warm tile cache codec (map rendering slice 11). MIT. -->
+    <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- Test -->
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />

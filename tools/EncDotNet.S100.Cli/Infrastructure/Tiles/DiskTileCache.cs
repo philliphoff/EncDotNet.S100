@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using EncDotNet.S100.Core.Caching;
 
 namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 
@@ -10,37 +11,35 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Tiles are stored as <c>&lt;root&gt;/&lt;fingerprint&gt;/&lt;palette&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.&lt;ext&gt;</c>
-/// (<c>&lt;palette&gt;-&lt;yyyyMMddTHHmmssZ&gt;</c> for a time step asked for by URL),
-/// where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>) names
-/// the data and settings they were rendered from, so a tile is only reused for
-/// the same ones. A tile with nothing on it is an empty file.
+/// The tiles are the <see cref="KindName"/> kind of a <see cref="ContentStore"/>
+/// rooted at the cache folder (map rendering slice 11), stored as
+/// <c>&lt;root&gt;/served/&lt;fingerprint&gt;/&lt;palette&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.&lt;ext&gt;</c>
+/// (<c>&lt;palette&gt;-&lt;yyyyMMddTHHmmssZ&gt;</c> for a time step asked for by
+/// URL), where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>)
+/// names the data and settings they were rendered from, so a tile is only
+/// reused for the same ones. A tile with nothing on it is an empty file.
 /// </para>
 /// <para>
-/// Only fingerprint folders (32 hexadecimal characters) are read, counted,
-/// evicted or cleared, so pointing the cache at a folder that holds other files
-/// leaves them alone. The budget covers every fingerprint folder, so tiles of
-/// data no longer served age out. Reading a tile refreshes its write time, so
-/// the eviction order survives a restart. Tiles are written to a temporary
-/// file and renamed into place, so a reader never sees half a tile.
+/// The store only reads, counts, evicts or clears its own kind folder, so the
+/// cache folder may hold other files. The budget covers every fingerprint, so
+/// tiles of data no longer served age out. Tiles are written by background
+/// jobs, through a temporary file renamed into place, so a reader never sees
+/// half a tile; until a write lands, <see cref="TryGet"/> sees the queued tile.
 /// </para>
 /// </remarks>
-internal sealed partial class DiskTileCache
+internal sealed partial class DiskTileCache : IDisposable
 {
+    /// <summary>The store kind name, which is also its folder name under the cache folder.</summary>
+    public const string KindName = "served";
+
     // Files take whole blocks on disk; count each tile at least this much, so a
     // flood of empty tiles is bounded too.
     private const long EntryOverhead = 512;
 
-    private readonly string _root;
-    private readonly string _folder;
+    private readonly ContentStore _store;
+    private readonly ContentKind _kind;
+    private readonly string _fingerprint;
     private readonly string _extension;
-    private readonly long _capacity;
-    private readonly Lock _gate = new();
-    private readonly Dictionary<string, LinkedListNode<(string Path, long Cost)>> _entries = new(StringComparer.Ordinal);
-
-    // Least recently used first.
-    private readonly LinkedList<(string Path, long Cost)> _recency = new();
-    private long _size;
 
     /// <param name="root">The cache folder; created when missing.</param>
     /// <param name="fingerprint">The fingerprint of the data and settings tiles are rendered from.</param>
@@ -51,164 +50,77 @@ internal sealed partial class DiskTileCache
         if (!IsFingerprint(fingerprint))
             throw new ArgumentException("A fingerprint is 32 lowercase hexadecimal characters.", nameof(fingerprint));
 
-        _root = Path.GetFullPath(root);
-        _folder = Path.Combine(_root, fingerprint);
+        _store = new ContentStore(root);
+        _kind = _store.Open(
+            KindName,
+            Math.Max(1, capacityBytes),
+            new ContentKindOptions { Extension = "", NestedKeys = true, EntryOverheadBytes = EntryOverhead });
+        _fingerprint = fingerprint;
         _extension = "." + TileSetMetadata.FormatToken(format);
-        _capacity = Math.Max(0, capacityBytes);
-        Directory.CreateDirectory(_folder);
-
-        // Index what earlier runs (of any fingerprint) left, oldest first.
-        foreach (var file in CachedFiles(_root).OrderBy(f => f.LastWriteTimeUtc))
-            Track(file.FullName, Cost(file.Length));
-        Evict();
+        Directory.CreateDirectory(Folder);
+        _kind.EnsureIndexed();
     }
 
     /// <summary>The folder this cache's tiles go in.</summary>
-    public string Folder => _folder;
+    public string Folder => Path.Combine(_kind.Directory, _fingerprint);
 
     /// <summary>The bytes counted against the budget, across every fingerprint folder.</summary>
-    public long Size
-    {
-        get
-        {
-            lock (_gate)
-                return _size;
-        }
-    }
+    public long Size => _kind.TotalBytes;
 
-    /// <summary>Deletes every fingerprint folder under <paramref name="root"/>, and nothing else.</summary>
+    /// <summary>Deletes the cached tiles under <paramref name="root"/>, and nothing else.</summary>
     public static void Clear(string root)
     {
-        if (!Directory.Exists(root))
-            return;
-
-        foreach (var folder in Directory.EnumerateDirectories(root).Where(d => IsFingerprint(Path.GetFileName(d))))
+        var folder = Path.Combine(root, KindName);
+        if (Directory.Exists(folder))
             Directory.Delete(folder, recursive: true);
     }
 
     /// <summary>Whether <paramref name="name"/> is a fingerprint folder name.</summary>
     public static bool IsFingerprint(string name) => FingerprintPattern().IsMatch(name);
 
+    /// <summary>The fingerprint folders under the cache folder <paramref name="root"/>.</summary>
+    public static IEnumerable<string> FingerprintFolders(string root)
+    {
+        var folder = Path.Combine(root, KindName);
+        return Directory.Exists(folder)
+            ? Directory.EnumerateDirectories(folder).Where(d => IsFingerprint(Path.GetFileName(d)))
+            : [];
+    }
+
     public bool TryGet(TileKey key, out byte[] data)
     {
-        var path = PathFor(key);
-        try
-        {
-            data = File.ReadAllBytes(path);
-        }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
-        {
-            data = [];
-            return false;
-        }
-
-        lock (_gate)
-        {
-            if (_entries.TryGetValue(path, out var node))
-            {
-                _recency.Remove(node);
-                _recency.AddLast(node);
-            }
-            else
-            {
-                // Written by another server sharing the folder.
-                Track(path, Cost(data.Length));
-            }
-        }
-
-        try
-        {
-            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // Only the order of the next run's index suffers.
-        }
-
-        return true;
+        var entry = _kind.Read(KeyFor(key));
+        data = entry.Bytes ?? [];
+        return entry.IsHit;
     }
 
     public void Add(TileKey key, byte[] data)
     {
-        long cost = Cost(data.Length);
-        if (cost > _capacity)
+        if (data.Length + EntryOverhead > _kind.ShareBytes)
             return;
 
-        var path = PathFor(key);
-        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(temporary, data);
-            File.Move(temporary, path, overwrite: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A full or read-only disk only loses the cached copy.
-            TryDelete(temporary);
-            return;
-        }
-
-        lock (_gate)
-        {
-            Track(path, cost);
-            Evict();
-        }
+        // Writing on a request's thread only if the background queue is full.
+        var entryKey = KeyFor(key);
+        if (_kind.QueueWrite(entryKey, data) is ContentWriteResult.Full or ContentWriteResult.Stopped)
+            _kind.Write(entryKey, data);
     }
 
-    private string PathFor(TileKey key) => Path.Combine(
-        _folder,
+    /// <summary>Waits until every queued write has reached the disk.</summary>
+    /// <param name="timeout">The longest time to wait.</param>
+    /// <returns><see langword="true"/> when the queue drained within <paramref name="timeout"/>.</returns>
+    public bool WaitForWrites(TimeSpan timeout) => _kind.WaitForWritesIdle(timeout);
+
+    /// <summary>Waits briefly for queued writes, so they reach the disk.</summary>
+    public void Dispose() => _store.Dispose();
+
+    private string KeyFor(TileKey key) => string.Join('/',
+        _fingerprint,
         key.Time is { } time
             ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
             : key.Palette,
         key.Zoom.ToString(CultureInfo.InvariantCulture),
         key.X.ToString(CultureInfo.InvariantCulture),
         key.Y.ToString(CultureInfo.InvariantCulture) + _extension);
-
-    /// <summary>Records <paramref name="path"/> as the most recently used. Call under the lock (or from the constructor).</summary>
-    private void Track(string path, long cost)
-    {
-        if (_entries.Remove(path, out var existing))
-        {
-            _recency.Remove(existing);
-            _size -= existing.Value.Cost;
-        }
-
-        _entries[path] = _recency.AddLast((path, cost));
-        _size += cost;
-    }
-
-    /// <summary>Deletes the least recently used tiles until the cache fits its budget. Call under the lock (or from the constructor).</summary>
-    private void Evict()
-    {
-        while (_size > _capacity && _recency.First is { } oldest)
-        {
-            _recency.RemoveFirst();
-            _entries.Remove(oldest.Value.Path);
-            _size -= oldest.Value.Cost;
-            TryDelete(oldest.Value.Path);
-        }
-    }
-
-    private static long Cost(long length) => length + EntryOverhead;
-
-    /// <summary>The tile files under the fingerprint folders of <paramref name="root"/>.</summary>
-    private static IEnumerable<FileInfo> CachedFiles(string root) =>
-        new DirectoryInfo(root).EnumerateDirectories()
-            .Where(d => IsFingerprint(d.Name))
-            .SelectMany(d => d.EnumerateFiles("*", SearchOption.AllDirectories))
-            .Where(f => !f.Name.EndsWith(".tmp", StringComparison.Ordinal));
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
 
     [GeneratedRegex("^[0-9a-f]{32}$")]
     private static partial Regex FingerprintPattern();

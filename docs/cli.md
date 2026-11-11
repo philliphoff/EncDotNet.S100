@@ -123,6 +123,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
+| [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
@@ -199,7 +200,9 @@ other extension writes PNG, unless you set `--format`.
 | `--hide <categories>` | none | Hides drawing-instruction categories, comma-separated: `text`, `points`, `lines`, `areas`. Adds to `--no-text`. |
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth 1:10m land layer under the chart, in a parchment tone (`238,232,220`). Online tile basemaps aren't available. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. `ice-concentration`, `ice-sod` (stage of development), or `ice-navigational`. See [Sea-ice display modes](#sea-ice-display-modes). |
+| `--show-layer <keys>` | none | Single-dataset form only. Draws sub-layers that are off by default, comma-separated by key, as the SoundCharts Display controls switches do: for example `weather.precipitation,weather.cape,weather.cloud`. `s100 info` lists a dataset's layer keys. |
 | `--no-updates` | off | Single-dataset form only. Renders an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
+| `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
 `--hide`, `--no-text` and `--basemap` apply to every layer of a composite.
@@ -260,9 +263,13 @@ With an explicit viewport:
   so it usually has no visible effect. For example, an S-102 surface already
   draws above an S-101 chart.
 - **Overlapping cells.** Where a finer chart cell's data coverage overlaps a
-  coarser cell, the coarser cell is hidden there, as in SoundCharts. Cells are
-  ranked by compilation scale, or by minimum display scale when a cell has
-  none. Cells of the same scale don't hide each other.
+  coarser cell, the coarser cell is hidden there, as in SoundCharts. A cell's
+  data coverage is the union of its coverage areas, and a finer cell takes part
+  only where its coverage meets the coarser cell's, not just its bounding box.
+  Cells are ranked by compilation scale, or by minimum display scale when a
+  cell has none. Between cells of the same minimum display scale, the one with
+  the finer maximum display scale ranks finer. Cells of the same rank don't hide
+  each other.
 - **No S-101 updates.** The composite and exchange-set forms don't apply S-101
   update files. To render a cell with its updates, render it on its own.
 - **Skipped datasets.** In an exchange set, datasets with an unsupported
@@ -404,6 +411,7 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--parallel <workers>` | processor count | Number of blocks rendered at once. |
 | `-y`, `--yes` | off | Writes a tile set of more than 100,000 tiles without asking. |
 | `--no-updates` | off | Tiles an S-101 base cell, given on its own or with `--layer`, without its update files. |
+| `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
 ### Tiles export examples
@@ -509,7 +517,8 @@ can't be opened, the old data keeps serving until the files change again.
 `--refresh 0` turns the checks off. A built tile set needs none: it's read at
 each request.
 
-With `--cache-dir`, rendered tiles are also kept in that folder, so they come
+With `--cache-dir`, rendered tiles are also kept in that folder (in its
+`served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
 the data and settings: each input file's path, size and write time (S-101
 update files and the whole of an exchange set included), the display and
@@ -517,8 +526,8 @@ format options, and the `s100` version. Change any of them and new tiles are
 rendered, so a kept tile is never stale. The folder holds up to
 `--cache-dir-mb`, least recently used tiles going first, including those of
 data or settings you no longer serve. `--clear-cache` empties it before
-serving. Only the cache's own fingerprint folders are read or deleted, so other
-files in the folder are left alone, and several servers can share one folder. The zoom levels and the area served are
+serving. Only the `served` subfolder is read or deleted, so other files in the
+folder are left alone, and several servers can share one folder. The zoom levels and the area served are
 worked out as for `tiles export`, and `--min-zoom`, `--max-zoom` and `--bbox`
 narrow them. `--palette` sets the palette of the plain tile URLs; the other
 palettes are served too, under their own URLs.
@@ -630,13 +639,29 @@ and a **Warnings** table lists each alert area with its event, severity, when
 it's in force (UTC) and how it's drawn (a polygon, a circle, or the NWS marine
 zones it names), then any zone codes the marine zone layer doesn't have. Its
 time steps are when warnings start and end, so `render --time-step` draws
-what's in force then. [Show wind and waves on the chart](weather.md) covers
+what's in force then. For a WPC coded surface bulletin (`CODSUS`),
+**Bulletin** says whether it's an analysis or a forecast, its resolution and
+its WMO heading, **Issued by** and **Issued (UTC)** come from its header,
+**Coverage** says it covers WPC's domain only, and a **Surface analyses**
+table lists each valid time (one for an analysis, one per forecast time) with
+its lead time and its counts of cold, warm, occluded and stationary fronts,
+troughs, highs and lows. **Skipped codes** lists any feature codes it
+doesn't know. For a tropical cyclone advisory (an NHC forecast zip,
+such as `al092022_5day_020.zip`), **Storm**, **Advisory**, **Forecast** and
+**Intensity** give the storm and its basin, the advisory number and issue time
+(UTC), the forecast's span and the current wind, gusts, pressure and peak
+forecast wind. **Cone**, **Wind radii** and **Past track** say what the
+advisory holds; the wind radii and past track come from the `_fcst_` and
+`_best_track` zips beside the forecast zip. A **Forecast points** table then
+lists each point with its time, position, intensity, class and 34, 50 and
+64 kt radii by quadrant. [Show wind and waves on the chart](weather.md) covers
 the weather formats.
 
 ```bash
 s100 info currents.h5
 s100 info filter_gfswave.pl
 s100 info alerts.atom
+s100 info al092022_5day_020.zip
 ```
 
 | Option | Default | Description |
@@ -805,7 +830,12 @@ Other options:
 |---|---|---|
 | `--safety-contour <metres>` | `30` | Safety contour, as the mariner setting. |
 | `--safety-depth <metres>` | `30` | Safety depth, for charted dangers and soundings. |
-| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window. Needs a draft. |
+| `--max-wind <knots>` | the file's | Wind limit for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are Check findings. Replaces an RTZ route's `vesselMaxWind`. |
+| `--max-wave <metres>` | the file's | Significant wave height limit for the weather check. Replaces an RTZ route's `vesselMaxWave`. |
+| `--cyclone-radius <knots>` | `34` | Tropical cyclones (loaded NHC advisories): the outermost wind radius tested, 34, 50 or 64 kt. The cone is always tested. |
+| `--cyclone-must-review <knots>` | `50` | The weakest radius whose findings are Must review: 64, 50, 34 or `never`. Weaker radii and the cone are Check. |
+| `--no-cyclone-cpa` | off | Doesn't report the route's closest approach to each storm. |
+| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit). |
 | `--only <specs>` | all | Exchange set or folder only. Loads only these product specifications, comma-separated. |
 | `--fail-on <level>` | `must-review` | When to exit with code `7`: `must-review`, `check` or `never`. See [Exit codes for CI](#exit-codes-for-ci). |
 | `--format <format>` | `text` | `text` or `json`. |
@@ -819,10 +849,14 @@ s100 route check route.rtz exchange-set/ --safety-contour 10 --safety-depth 10
 s100 route check route.gml enc.000 bathy.h5 tides.h5 warnings.gml --draft 7 --required-ukc 1
 s100 route check route.rtz exchange-set.zip --corridor 100 --fail-on check
 s100 route check route.gml exchange-set/ --departure 2026-03-01T06:00Z --speed 8 --window --format json
+s100 route check route.rtz enc.000 gfs.t06z.pgrb2.0p25 gfswave.t06z.grib2 --max-wind 25 --max-wave 3
+s100 route check route.rtz enc.000 al142026_5day_017.zip --cyclone-radius 50 --cyclone-must-review 64
 ```
 
 The text output gives the verdict, the checks that didn't run in full, the
-findings by group, then the clearance verdict and its minimum. The JSON output
+findings by group, then the clearance verdict and its minimum, and the weather
+verdict with the highest wind and waves and, for each tropical cyclone near
+the route, the strongest radius it meets and its closest approach. The JSON output
 is an object with:
 
 - `route`: the `file`, `format` (`rtz` or `s421`), `version`, `routeId`
@@ -859,7 +893,7 @@ s100 list-specs
 `list-specs` prints a table of the product specifications `s100` reads, with
 whether each has a bundled portrayal catalogue and whether it can be rendered
 headlessly. S-57 is listed with its portrayal shown as "via S-101". The
-weather formats GRIB2, NetCDF and CAP are listed last, with their portrayal
+weather formats GRIB2, NetCDF, CAP, CODSUS and TC (tropical cyclone advisories) are listed last, with their portrayal
 shown as "SoundCharts, in code", and a line under the table says they aren't
 S-100 products. See [Supported specifications](#supported-specifications).
 
@@ -893,6 +927,49 @@ The output is an ordinary dataset: use `info`, `validate` and `render` on it.
 [Bringing S-57 into the pipeline](s57-to-s101.md) covers the summary, the
 report, inland cells and the translation's known gaps.
 
+## s101 convert
+
+```text
+s100 s101 convert --to s57 -o <output> <source> [options]
+```
+
+`s101 convert` translates an S-101 base dataset (`.000`) and writes it as an
+S-57 Edition 3.1 base cell, following S-65 Annex C. Update datasets next to
+the base dataset are applied first. The command then prints a summary of what
+converted, what Annex C dropped or folded into `INFORM`, and what had no rule.
+It warns when the dataset isn't S-101 Edition 2.0.0, the edition Annex C
+converts.
+
+The output is for testing and for tools that read only S-57, such as GDAL/OGR
+and OpenCPN. It isn't a production ENC: it isn't checked against S-58, and
+Annex C expects the producer to finish it by hand.
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--output <path>` | required | The S-57 cell to write, or with `--exchange-set` the directory to write the exchange set into. |
+| `--to <format>` | `s57` | The format to write. Only `s57` is supported. |
+| `--exchange-set` | off | Writes `ENC_ROOT/CATALOG.031` and `ENC_ROOT/<cell>/<cell>.000` under the output directory. |
+| `--cell-name <name>` | source file name | With `--exchange-set`, the cell's name without extension, such as `XX5CELL1`. |
+| `--report <path>` | off | Also writes the full translation diagnostics, with the Annex C clause of each drop, as JSON. |
+| `--no-updates` | off | Converts the base dataset without its update datasets. |
+| `--no-optional-inform` | off | Skips the conversions to `INFORM` that Annex C marks optional. |
+| `--inform-separator <text>` | `;` | The separator between strings folded into one `INFORM` or `NINFOM`. |
+| `--max-inform-length <n>` | `300` | The recommended maximum length of `INFORM` and `NINFOM`. |
+| `--inform-length <policy>` | `keep` | `keep` keeps a longer text and reports it; `truncate` cuts it at `--max-inform-length`. |
+| `--national-language <code>` | first | The ISO 639-2 language, such as `fra`, to prefer for `NOBJNM`, `NINFOM` and `NTXTDS`. |
+| `--name-without-usage <policy>` | `by-language` | A name with no `nameUsage`: `by-language` writes an English or unlabelled name to `OBJNAM` and any other to `NOBJNM`; `drop` doesn't convert it. |
+| `--debug` | off | Prints a full stack trace on error. |
+
+```bash
+s100 s101 convert --to s57 -o XX5CELL1.000 101XX00CELL1.000
+s100 s101 convert --to s57 -o XX5CELL1.000 101XX00CELL1.000 --report report.json
+s100 s101 convert --to s57 --exchange-set --cell-name XX5CELL1 -o s57set 101XX00CELL1.000
+```
+
+Read the cell back with `info`, and check an exchange set's catalogue with
+`validate`. [Converting S-101 to S-57](s101-to-s57.md) covers the summary,
+what Annex C drops, the options and what a producer still has to do.
+
 ## mcp serve
 
 ```text
@@ -922,6 +999,7 @@ lists them all.
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
+| `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
 ```bash
@@ -1020,14 +1098,29 @@ s100 feed export exchange-set.zip -o export --title "Harbour survey"
 When some datasets can't be written, they're left out of the feed and the
 command exits with code `1`.
 
+## Lua engine
+
+S-101, S-57, S-401, S-131, S-125 and S-102 are portrayed by the Lua rules in
+their portrayal catalogues. `render`, `tiles export`, `tiles serve` and
+`mcp serve` run those rules on Lua-CSharp unless `--lua-engine moonsharp`
+selects MoonSharp, the previous engine:
+
+```bash
+s100 render chart.000 chart.png --lua-engine moonsharp
+```
+
+The engines produce the same chart, with one known exception: a sectored light
+whose sectors share a nominal range can list its colours in a different order
+in its light description. Lua-CSharp lists them as reference Lua does.
+
 ## Supported specifications
 
 | Family | Specifications | Notes |
 |---|---|---|
 | Vector, ISO 8211 | S-101, S-401, S-57 | S-57 is translated to S-101, or to S-401 for an inland ENC, and drawn with that product's portrayal, not S-52. |
-| Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | |
+| Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-412, S-421 | |
 | Coverage, HDF5 | S-102; S-104 data coding formats 1, 2 and 8; S-111 data coding formats 1, 2, 3 and 8 | Gridded data is drawn as a coverage; station and node data as glyphs. S-104 has no IHO portrayal, so its stations and grids use SoundCharts' own gauges and isolines; see [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal). S-111 draws current arrows over the coverage. Other data coding formats exit with code `4`. |
-| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles. Not for navigation. See [Show wind and waves on the chart](weather.md). |
+| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS), NHC tropical cyclone GIS zips (`TC`) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; and surface analyses drawn as fronts and pressure centres. Tropical cyclone advisories are drawn in storm ink: the cone, wind radii, tracks, forecast points and storm. Not for navigation. See [Show wind and waves on the chart](weather.md). |
 
 ## Exit codes
 

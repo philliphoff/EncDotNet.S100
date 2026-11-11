@@ -1,8 +1,8 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services.Depth;
@@ -26,7 +26,7 @@ public sealed class LocationDepthProbeCellRankingTests : IDisposable
         var dataset = Synth.Cell([Synth.DataCoverage(minimumDisplayScale, coverage), Synth.DepthArea(5, coverage)]);
         var path = Path.Combine(_directory, name + ".000");
         S101DocumentWriter.WriteToFile(path, dataset.Document);
-        return new S101DatasetProcessor(path, Catalogues(), new MoonSharpLuaEngine(), new FeatureCatalogueManager());
+        return new S101DatasetProcessor(path, Catalogues(), TestLuaEngine.Create(), new FeatureCatalogueManager());
     }
 
     // The committed NOAA fixture (US5MA1BO) with its CSCL rewritten.
@@ -34,7 +34,7 @@ public sealed class LocationDepthProbeCellRankingTests : IDisposable
         new(
             SyntheticS57Cell.WriteWithCompilationScale(_directory, name + ".000", compilationScale),
             Catalogues(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
 
     private static PortrayalCatalogueManager Catalogues()
@@ -77,7 +77,7 @@ public sealed class LocationDepthProbeCellRankingTests : IDisposable
         var (lat, lon) = SoundingIn(harbour);
 
         Assert.True(coastal.CoversPoint(lat, lon));
-        Assert.Equal(12_000, harbour.CellRankingScale);
+        Assert.Equal(new CellRank(12_000), harbour.CellRank);
         Assert.Equal([harbour], LocationDepthProbe.FinestCoveringCells([coastal, harbour], lat, lon)!);
         Assert.True(LocationDepthProbe.FinestCoveringCells([coastal, harbour, peer], lat, lon)!.SetEquals([harbour, peer]));
     }

@@ -15,9 +15,19 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// components but no stored speed or direction, <see cref="Sample"/> adds
 /// <c>"wind.speed"</c> and <c>"wind.from_direction"</c> as
 /// <see cref="SampledCoverage.ComputedFields"/>, derived cell by cell (see
-/// <see cref="WindComponents"/>). Those aren't in
+/// <see cref="WindComponents"/>); the surface current group gets
+/// <c>"current.speed"</c> and <c>"current.to_direction"</c> the same way
+/// (<see cref="CurrentComponents"/>). Those aren't in
 /// <see cref="CoverageMetadata.ValueFields"/>, which lists stored fields;
 /// <see cref="FieldNames"/> lists both.
+/// </para>
+/// <para>
+/// A <em>combined</em> source (<see cref="IsCombined"/>) reads parameters of
+/// several groups to derive one field from them: the freezing spray
+/// predictor (<see cref="CreateFreezingSpray"/>). Its
+/// <see cref="FieldNames"/> lists only that derived field, so only the styles
+/// drawing it apply to it, and the wind and temperatures it reads are drawn
+/// by their own groups' sources.
 /// </para>
 /// <para>
 /// Time steps are decoded only when <see cref="Sample"/> first needs them,
@@ -88,6 +98,19 @@ public sealed class WeatherCoverageSource : ICoverageSource
         IReadOnlyList<WeatherParameter> parameters,
         SpecRef spec = default,
         int cacheCapacity = DefaultCacheCapacity)
+        : this(gridSet, name, parameters, spec, cacheCapacity, combined: null)
+    {
+    }
+
+    // combined: the derived fields of a combined source, or null to derive
+    // speed and direction from wind and current components.
+    private WeatherCoverageSource(
+        WeatherGridSet gridSet,
+        string name,
+        IReadOnlyList<WeatherParameter> parameters,
+        SpecRef spec,
+        int cacheCapacity,
+        ComputedCoverageField[]? combined)
     {
         ArgumentNullException.ThrowIfNull(gridSet);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -138,16 +161,20 @@ public sealed class WeatherCoverageSource : ICoverageSource
             _stepIndexByTime[p] = map;
         }
 
-        _derivedFields = BuildDerivedFields(ids);
+        _derivedFields = combined ?? BuildDerivedFields(ids);
+        IsCombined = combined is not null;
         _levels = BuildOverviewLevels(gridSet.Grid);
-        FieldNames = [.. _parameters.Select(p => p.Id), .. _derivedFields.Select(f => f.Name)];
+        FieldNames = IsCombined
+            ? [.. _derivedFields.Select(f => f.Name)]
+            : [.. _parameters.Select(p => p.Id), .. _derivedFields.Select(f => f.Name)];
     }
 
     /// <summary>
     /// Creates one source per parameter group of the grid set's known
     /// parameters (<see cref="WeatherParameterDefinition.Group"/>), split by
-    /// level, in the order the groups first appear. Unknown parameters aren't
-    /// drawn, so they get no source.
+    /// level, in the order the groups first appear, then the combined freezing
+    /// spray source when the set has its inputs (<see cref="CreateFreezingSpray"/>).
+    /// Unknown parameters aren't drawn, so they get no source.
     /// </summary>
     /// <param name="gridSet">The grid set.</param>
     /// <param name="spec">The product identity; see the constructor.</param>
@@ -173,10 +200,83 @@ public sealed class WeatherCoverageSource : ICoverageSource
                 groups[index].Members.Add(parameter);
         }
 
-        return groups
+        var sources = groups
             .Select(g => new WeatherCoverageSource(gridSet, g.Group, g.Members, spec, cacheCapacity))
-            .ToArray();
+            .ToList();
+        if (CreateFreezingSpray(gridSet, spec, cacheCapacity) is { } spray)
+            sources.Add(spray);
+        return sources;
     }
+
+    /// <summary>
+    /// Creates the combined source that derives the freezing spray predictor
+    /// (<see cref="WeatherParameters.FreezingSprayPredictor"/>,
+    /// <see cref="FreezingSpray"/>) cell by cell, when the grid set has what it
+    /// needs: the wind (speed, or its U and V components), the 2 m air
+    /// temperature, and the sea temperature, or else the surface (skin)
+    /// temperature, which over water is the model's sea temperature. With the
+    /// skin temperature, a land cover mask, when the set has one, leaves land
+    /// out; without one, only skin temperatures under −2 °C are.
+    /// </summary>
+    /// <param name="gridSet">The grid set.</param>
+    /// <param name="spec">The product identity; see the constructor.</param>
+    /// <param name="cacheCapacity">How many decoded time steps the source keeps.</param>
+    /// <returns>The source, named <see cref="WeatherParameters.FreezingSprayGroup"/>, or <see langword="null"/> when an input is missing.</returns>
+    public static WeatherCoverageSource? CreateFreezingSpray(
+        WeatherGridSet gridSet,
+        SpecRef spec = default,
+        int cacheCapacity = DefaultCacheCapacity)
+    {
+        ArgumentNullException.ThrowIfNull(gridSet);
+
+        WeatherParameter? Find(string id) =>
+            gridSet.Parameters.FirstOrDefault(p => p.Definition?.Id == id && p.Steps.Count > 0);
+
+        var air = Find(WeatherParameters.AirTemperature);
+        var water = Find(WeatherParameters.SeaSurfaceTemperature);
+        var land = water is null ? Find(WeatherParameters.LandCover) : null;
+        water ??= Find(WeatherParameters.SurfaceTemperature);
+        var speed = Find(WeatherParameters.WindSpeed);
+        var (u, v) = speed is null ? (Find(WeatherParameters.WindU), Find(WeatherParameters.WindV)) : (null, null);
+        if (air is null || water is null || (speed is null && (u is null || v is null)))
+            return null;
+
+        var inputs = new List<WeatherParameter>();
+        if (speed is not null)
+            inputs.Add(speed);
+        else
+            inputs.AddRange([u!, v!]);
+        inputs.Add(air);
+        inputs.Add(water);
+        if (land is not null)
+            inputs.Add(land);
+
+        bool components = speed is null;
+        bool masked = land is not null;
+        CoverageFieldComputation compute = (components, masked) switch
+        {
+            (false, false) => static i => FreezingSpray.PredictorCell(i[0], i[1], i[2], 0),
+            (false, true) => static i => FreezingSpray.PredictorCell(i[0], i[1], i[2], i[3]),
+            (true, false) => static i => FreezingSpray.PredictorCell(WindComponents.SpeedCell(i), i[2], i[3], 0),
+            (true, true) => static i => FreezingSpray.PredictorCell(WindComponents.SpeedCell(i), i[2], i[3], i[4]),
+        };
+        var predictor = new ComputedCoverageField
+        {
+            Name = WeatherParameters.FreezingSprayPredictor,
+            Inputs = [.. inputs.Select(p => p.Id)],
+            Compute = compute,
+            NoDataValue = float.NaN,
+        };
+
+        return new WeatherCoverageSource(gridSet, WeatherParameters.FreezingSprayGroup, inputs, spec, cacheCapacity, [predictor]);
+    }
+
+    /// <summary>
+    /// Whether the source combines several groups' parameters to derive one
+    /// field (<see cref="CreateFreezingSpray"/>), so lists only that field in
+    /// <see cref="FieldNames"/>.
+    /// </summary>
+    public bool IsCombined { get; }
 
     /// <summary>The group name, for example <c>"wind"</c>.</summary>
     public string Name { get; }
@@ -203,7 +303,11 @@ public sealed class WeatherCoverageSource : ICoverageSource
     /// </summary>
     public IReadOnlyList<ComputedCoverageField> DerivedFields => _derivedFields;
 
-    /// <summary>Every field a sample carries: the stored parameters, then the derived fields.</summary>
+    /// <summary>
+    /// The fields styles can draw: the stored parameters, then the derived
+    /// fields; for a combined source (<see cref="IsCombined"/>) only its
+    /// derived field.
+    /// </summary>
     public IReadOnlyList<string> FieldNames { get; }
 
     /// <summary>The time step currently selected.</summary>
@@ -430,34 +534,35 @@ public sealed class WeatherCoverageSource : ICoverageSource
 
     private static ComputedCoverageField[] BuildDerivedFields(HashSet<string> ids)
     {
-        if (!ids.Contains(WeatherParameters.WindU) || !ids.Contains(WeatherParameters.WindV))
-            return [];
-
-        string[] inputs = [WeatherParameters.WindU, WeatherParameters.WindV];
-        var derived = new List<ComputedCoverageField>(2);
-        if (!ids.Contains(WeatherParameters.WindSpeed))
-        {
-            derived.Add(new ComputedCoverageField
-            {
-                Name = WeatherParameters.WindSpeed,
-                Inputs = inputs,
-                Compute = WindComponents.SpeedCell,
-                NoDataValue = float.NaN,
-            });
-        }
-
-        if (!ids.Contains(WeatherParameters.WindFromDirection))
-        {
-            derived.Add(new ComputedCoverageField
-            {
-                Name = WeatherParameters.WindFromDirection,
-                Inputs = inputs,
-                Compute = WindComponents.FromDirectionCell,
-                NoDataValue = float.NaN,
-            });
-        }
-
+        var derived = new List<ComputedCoverageField>(4);
+        AddDerived(derived, ids, WeatherParameters.WindU, WeatherParameters.WindV,
+            WeatherParameters.WindSpeed, WindComponents.SpeedCell,
+            WeatherParameters.WindFromDirection, WindComponents.FromDirectionCell);
+        AddDerived(derived, ids, WeatherParameters.CurrentU, WeatherParameters.CurrentV,
+            WeatherParameters.CurrentSpeed, WindComponents.SpeedCell,
+            WeatherParameters.CurrentToDirection, CurrentComponents.ToDirectionCell);
         return derived.ToArray();
+    }
+
+    // Speed and direction from a (u, v) pair, unless the group stores them.
+    private static void AddDerived(
+        List<ComputedCoverageField> derived,
+        HashSet<string> ids,
+        string u,
+        string v,
+        string speed,
+        CoverageFieldComputation speedCell,
+        string direction,
+        CoverageFieldComputation directionCell)
+    {
+        if (!ids.Contains(u) || !ids.Contains(v))
+            return;
+
+        string[] inputs = [u, v];
+        if (!ids.Contains(speed))
+            derived.Add(new ComputedCoverageField { Name = speed, Inputs = inputs, Compute = speedCell, NoDataValue = float.NaN });
+        if (!ids.Contains(direction))
+            derived.Add(new ComputedCoverageField { Name = direction, Inputs = inputs, Compute = directionCell, NoDataValue = float.NaN });
     }
 
     // Level 0 is the grid; levels 1 and 2 keep every second and fourth point,

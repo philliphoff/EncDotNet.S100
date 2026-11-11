@@ -162,6 +162,31 @@
         <Style Selector="Ellipse.libraryStatusDot.error">
             <Setter Property="Fill" Value="{DynamicResource ErrorColor}" />
         </Style>
+        <!-- The AML filter chip (#1370): beside the state segments, solid ink while it filters. -->
+        <Style Selector="Button.libraryAmlChip">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="CornerRadius" Value="14" />
+        </Style>
+        <Style Selector="Button.libraryAmlChip.active">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <!-- The window's colour on the ink (BackgroundColor is transparent in the app's themes). -->
+        <Style Selector="Button.libraryAmlChip.active TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.libraryAmlChip.active ic|FluentIcon">
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+        </Style>
+        <!-- The header of a source's AML cells: small capitals, like a details group header. -->
+        <Style Selector="Border.libraryRow.amlSection">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0,6,0,2" />
+        </Style>
+
         <Style Selector="Ellipse.libraryStatusDot.ok">
             <Setter Property="Fill" Value="{DynamicResource SuccessColor}" />
         </Style>
@@ -276,14 +301,20 @@
              has a button over it, so the keyboard and automation clients reach its
              command as well as the pointer (#784). -->
         <DataTemplate x:Key="LibraryTagTemplate" x:DataType="vm:LibraryItemTag">
-            <Panel>
+            <Panel ToolTip.Tip="{Binding ToolTip}">
                 <Border Classes="libraryTag"
+                        IsVisible="{Binding IsPill}"
                         Classes.update="{Binding IsUpdate}"
                         Classes.loaded="{Binding IsLoaded}"
                         Classes.queued="{Binding IsQueued}"
                         Classes.failed="{Binding IsFailed}">
                     <TextBlock Text="{Binding Text}" />
                 </Border>
+                <!-- AML (#1236, decision 2): outlined ink with a layers glyph. -->
+                <views:AmlTagChip IsVisible="{Binding IsMilitary}"
+                                  Text="{Binding Text}"
+                                  AutomationProperties.AutomationId="Library.Row.AmlTag"
+                                  AutomationProperties.Name="{Binding Text}" />
                 <Button Classes="libraryTagAction"
                         IsVisible="{Binding IsClickable}"
                         Command="{Binding Command}"
@@ -556,7 +587,7 @@
                           ResizeDirection="Rows"
                           ResizeBehavior="PreviousAndNext"
                           bh:HoverDelay.DelayMilliseconds="500"
-                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).CatalogInnerSplit, Mode=TwoWay}" />
+                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.CatalogInnerSplit, Mode=TwoWay}" />
 
             <!-- Datasets of the selected node -->
             <DockPanel Grid.Row="3">
@@ -678,6 +709,37 @@
                             </RadioButton>
                         </UniformGrid>
                     </Border>
+                    <!-- The AML chip and its product menu, while the list holds AML cells (#1370).
+                         On a line of its own, so the segments keep their width in a narrow panel. -->
+                    <Button Classes="Outline libraryAmlChip" HorizontalAlignment="Left"
+                            Classes.active="{Binding IsAmlFilterActive}"
+                            IsVisible="{Binding HasAml}"
+                            AutomationProperties.AutomationId="Library.AmlFilter"
+                            AutomationProperties.Name="{Binding AmlFilterText}"
+                            ToolTip.Tip="{x:Static loc:Strings.Aml_Filter_ToolTip}">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="{x:Static loc:Strings.Aml_Filter_AllProducts}" Command="{Binding SetAmlFilterCommand}" CommandParameter="all"
+                                          AutomationProperties.AutomationId="Library.AmlFilter.All" />
+                                <MenuItem Header="CLB" Command="{Binding SetAmlFilterCommand}" CommandParameter="CLB" AutomationProperties.AutomationId="Library.AmlFilter.CLB" />
+                                <MenuItem Header="ESB" Command="{Binding SetAmlFilterCommand}" CommandParameter="ESB" AutomationProperties.AutomationId="Library.AmlFilter.ESB" />
+                                <MenuItem Header="LBO" Command="{Binding SetAmlFilterCommand}" CommandParameter="LBO" AutomationProperties.AutomationId="Library.AmlFilter.LBO" />
+                                <MenuItem Header="SBO" Command="{Binding SetAmlFilterCommand}" CommandParameter="SBO" AutomationProperties.AutomationId="Library.AmlFilter.SBO" />
+                                <MenuItem Header="MFF" Command="{Binding SetAmlFilterCommand}" CommandParameter="MFF" AutomationProperties.AutomationId="Library.AmlFilter.MFF" />
+                                <MenuItem Header="RAL" Command="{Binding SetAmlFilterCommand}" CommandParameter="RAL" AutomationProperties.AutomationId="Library.AmlFilter.RAL" />
+                                <MenuItem Header="3.0" Command="{Binding SetAmlFilterCommand}" CommandParameter="3.0" AutomationProperties.AutomationId="Library.AmlFilter.Aml30" />
+                                <Separator IsVisible="{Binding IsAmlFilterActive}" />
+                                <MenuItem Header="{x:Static loc:Strings.Aml_Filter_Clear}" Command="{Binding SetAmlFilterCommand}" CommandParameter="off"
+                                          IsVisible="{Binding IsAmlFilterActive}"
+                                          AutomationProperties.AutomationId="Library.AmlFilter.Clear" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding AmlFilterText}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       AutomationProperties.AutomationId="Library.AmlFilter.Text" />
+                            <ic:FluentIcon Icon="ChevronDown" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                     <!-- One bulk bar: what the buttons act on, then Download (or Cancel) and On pan. -->
                     <Border IsVisible="{Binding HasBulkBar}" Background="{DynamicResource MutedBackgroundColor}"
                             CornerRadius="8" Padding="10,6">
@@ -718,6 +780,12 @@
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}" />
                         </Grid>
                     </Border>
+                    <!-- Background chart preparation for load-as-you-pan sets (#1266). -->
+                    <TextBlock IsVisible="{Binding PortrayalWarm.IsVisible, FallbackValue=False}"
+                               Text="{Binding PortrayalWarm.Text, FallbackValue=''}"
+                               AutomationProperties.AutomationId="Library.PrewarmStatus"
+                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
+                               Margin="10,0" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
                 <ListBox x:Name="ItemList"
@@ -736,14 +804,40 @@
                         <DataTemplate x:DataType="vm:LibraryItemViewModel">
                             <Border Classes="libraryRow"
                                     Classes.groupHeader="{Binding IsGroupHeader}"
+                                    Classes.amlSection="{Binding IsAmlSection}"
                                     Classes.groupChild="{Binding IsGroupChild}"
                                     Background="Transparent">
-                                <Grid ColumnDefinitions="18,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                                <Panel>
+                                <!-- A source's AML cells (#1370): their own header, below its charts. -->
+                                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsAmlSection}">
+                                    <TextBlock Text="{Binding SectionHeader}" Classes="libraryGroupHeader"
+                                               AutomationProperties.AutomationId="Library.Row.AmlSection"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1" Classes="Icon" Padding="0" Width="20" Height="20" MinHeight="0"
+                                            AutomationProperties.AutomationId="Library.Row.ToggleAmlSection"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleGroup}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Library_ToggleGroup}"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding ToggleCommand}">
+                                        <Panel>
+                                            <ic:FluentIcon Icon="ChevronRight" FontSize="12" IsVisible="{Binding !IsExpanded}" />
+                                            <ic:FluentIcon Icon="ChevronDown" FontSize="12" IsVisible="{Binding IsExpanded}" />
+                                        </Panel>
+                                    </Button>
+                                </Grid>
+                                <Grid ColumnDefinitions="18,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10"
+                                      IsVisible="{Binding !IsAmlSection}">
                                     <!-- The swatch (or an unpacked package's chevron) sits in one 18 px column,
                                          centred on the name line. -->
                                     <views:LibrarySwatch Grid.Row="0" Grid.Column="0" State="{Binding PrimaryAvailability}"
-                                                         Width="18" IsVisible="{Binding !IsGroupHeader}"
+                                                         Width="18" IsVisible="{Binding ShowsOutlineSwatch}"
                                                          VerticalAlignment="Center" />
+                                    <!-- An NHC storm (V27): its class symbol, as on the chart. -->
+                                    <Border Grid.Row="0" Grid.Column="0" Width="18" Height="18" IsVisible="{Binding IsStorm}"
+                                            VerticalAlignment="Center">
+                                        <Image Source="{Binding StormGlyph}" Stretch="Uniform"
+                                               AutomationProperties.AutomationId="Library.Row.StormSymbol" />
+                                    </Border>
                                     <Button Grid.Row="0" Grid.Column="0" Classes="Icon" Padding="0" Width="18" Height="20" MinHeight="0"
                                             AutomationProperties.AutomationId="Library.Row.ToggleGroup"
                                             AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleGroup}"
@@ -766,6 +860,12 @@
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                         </ItemsControl>
+                                        <!-- The protective marking, only above UNCLASSIFIED, before the AML tag (#1370, decision 4). -->
+                                        <views:AmlMarkingChip DockPanel.Dock="Right" Margin="12,0,-8,0"
+                                                              IsVisible="{Binding HasAmlRowMarking}"
+                                                              Marking="{Binding AmlRowMarking}"
+                                                              AutomationProperties.AutomationId="Library.Row.AmlMarking"
+                                                              AutomationProperties.Name="{Binding AmlRowMarking}" />
                                         <TextBlock Text="{Binding Name}" Classes="accentListTitle libraryRowName"
                                                    Classes.mono="{Binding IsNameMono}"
                                                    FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -809,6 +909,7 @@
                                                 Command="{Binding CancelDownloadCommand}" />
                                     </Grid>
                                 </Grid>
+                                </Panel>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -843,6 +944,11 @@
                                                      FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                                      VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                    <!-- An AML cell's marking above UNCLASSIFIED, as on its row (#1370). -->
+                                    <views:AmlMarkingChip Margin="0,0,4,0"
+                                                          IsVisible="{Binding SelectedItem.HasAmlRowMarking, FallbackValue=False}"
+                                                          Marking="{Binding SelectedItem.AmlRowMarking, FallbackValue={x:Null}}"
+                                                          AutomationProperties.AutomationId="Library.Details.AmlMarking" />
                                     <Button Classes="Primary libraryHeaderAction"
                                             Command="{Binding DownloadOnlyCommand}"
                                             AutomationProperties.AutomationId="Library.Details.Download"
@@ -1009,6 +1115,16 @@
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="10" Margin="8,4,8,8">
+                        <!-- An AML cell (#1370, decision 6): military overlay data, not a chart. -->
+                        <Border IsVisible="{Binding SelectedItem.HasAmlNote, FallbackValue=False}"
+                                Background="{DynamicResource MutedBackgroundColor}" CornerRadius="6" Padding="10,8">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <ic:FluentIcon Icon="Info" FontSize="16" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding SelectedItem.AmlNote, FallbackValue=''}"
+                                           AutomationProperties.AutomationId="Library.Details.AmlNote"
+                                           FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
                         <Border IsVisible="{Binding SelectedItem.NotForNavigation, FallbackValue=False}"
                                 Background="#FFE4B5" BorderBrush="#B8860B" BorderThickness="1"
                                 CornerRadius="4" Padding="10,8">

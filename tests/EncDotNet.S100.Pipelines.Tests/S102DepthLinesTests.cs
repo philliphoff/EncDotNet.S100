@@ -1,4 +1,3 @@
-using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -8,9 +7,8 @@ using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
-using PureHDF;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -100,9 +98,9 @@ public sealed class S102DepthLinesTests
     public async Task Processor_draws_the_safety_contour_and_limit_with_the_s101_line_work()
     {
         // Depth rises 1 m per row from 10 m; the north-east corner is no-data.
-        var path = WriteGrid(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
+        var path = S102Grids.Write(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
         try
         {
             var context = new RenderContext
@@ -146,9 +144,9 @@ public sealed class S102DepthLinesTests
     [Fact]
     public async Task Processor_reuses_the_traced_lines_until_the_safety_contour_or_region_changes()
     {
-        var path = WriteGrid(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
+        var path = S102Grids.Write(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
         try
         {
             RenderContext At(double safety, PaletteType palette = PaletteType.Day) => new()
@@ -214,49 +212,6 @@ public sealed class S102DepthLinesTests
             NoDataValue = Fill,
             Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
         };
-    }
-
-    private struct BathyRow
-    {
-        [H5Name("depth")] public float Depth;
-        [H5Name("uncertainty")] public float Uncertainty;
-    }
-
-    private static string WriteGrid(int rows, int cols, Func<int, int, float> depth)
-    {
-        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".h5");
-        var values = new BathyRow[rows * cols];
-        for (int r = 0; r < rows; r++)
-        {
-            for (int c = 0; c < cols; c++)
-                values[(r * cols) + c] = new BathyRow { Depth = depth(r, c), Uncertainty = 0.1f };
-        }
-
-        var instance = new H5Group
-        {
-            Attributes = new()
-            {
-                ["gridOriginLatitude"] = 50.0,
-                ["gridOriginLongitude"] = -1.0,
-                ["gridSpacingLatitudinal"] = 0.01,
-                ["gridSpacingLongitudinal"] = 0.01,
-                ["numPointsLatitudinal"] = rows,
-                ["numPointsLongitudinal"] = cols,
-            },
-            ["Group_001"] = new H5Group { ["values"] = values },
-        };
-        var file = new H5File
-        {
-            Attributes = new Dictionary<string, object>
-            {
-                ["productSpecification"] = "INT.IHO.S-102.3.0.0",
-                ["horizontalCRS"] = 4326,
-                ["verticalDatum"] = 12,
-            },
-            ["BathymetryCoverage"] = new H5Group { ["BathymetryCoverage.01"] = instance },
-        };
-        file.Write(path, new H5WriteOptions(FieldNameMapper: f => f.GetCustomAttribute<H5NameAttribute>()?.Name));
-        return path;
     }
 
     private static PortrayalCatalogueManager CreateCatalogueManager()

@@ -18,7 +18,7 @@ public sealed class HeadlessMutableCatalogSchemaFailureTests
         try
         {
             WriteS102MissingGridOriginLatitude(path);
-            using var catalog = new HeadlessMutableCatalog();
+            using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
 
             var outcome = await catalog.LoadAsync(path, "S-102", TestContext.Current.CancellationToken);
 

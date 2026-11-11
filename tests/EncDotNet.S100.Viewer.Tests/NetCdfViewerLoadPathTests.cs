@@ -1,5 +1,3 @@
-using Avalonia.Automation;
-using Avalonia.Controls;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Core.Metadata;
 using EncDotNet.S100.Crs.ProjNet;
@@ -9,13 +7,9 @@ using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.TestSupport;
-using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
-using EncDotNet.S100.Viewer.Views;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -53,7 +47,7 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
         // catalogue manager.
         var factory = new DatasetPipelineFactory(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider());
@@ -81,7 +75,8 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
     {
         var path = NetCdfFixtures.WriteWaveNetCdf3(Path.Combine(_dir, "ww3.nc"));
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(Path.Combine(_dir, "cache"), 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)),
+            registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var metadata = reader.TryRead(path);
 
@@ -89,20 +84,6 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
         Assert.Equal("NetCDF", metadata.Spec.Name);
         Assert.Equal(new TimeCoverage(NetCdfFixtures.Run, NetCdfFixtures.Run.AddHours(6)), metadata.TimeCoverage);
         Assert.NotNull(metadata.Extent);
-    }
-
-    [AvaloniaFact]
-    public void The_layer_stack_badges_a_NetCDF_dataset()
-    {
-        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-        var waves = datasets.Add(NetCdfFixtures.WriteWaveNetCdf4(Path.Combine(_dir, "waves.nc")), "NetCDF");
-
-        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
-        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
-
-        var badge = host.Find<Border>("Datasets.Row.NotS100Badge");
-        Assert.Equal(Strings.Label_NotS100Product, AutomationProperties.GetName(badge));
-        Assert.True(waves.IsNotS100);
     }
 
     [Fact]

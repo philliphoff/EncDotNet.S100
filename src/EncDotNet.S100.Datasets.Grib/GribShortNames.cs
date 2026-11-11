@@ -34,6 +34,17 @@ internal static class GribShortNames
         (10, 0, 11) => "PERPW",
         (10, 0, 14) => "MWSDIR",
         (10, 0, 15) => "MWSPER",
+        (10, 1, 0) => "DIRC",
+        (10, 1, 1) => "SPC",
+        (10, 1, 2) => "UOGRD",
+        (10, 1, 3) => "VOGRD",
+        (10, 3, 0) => "WTMP",
+        (0, 19, 0) => "VIS",
+        (2, 0, 0) => "LAND",
+        (0, 1, 7) => "PRATE",
+        (0, 1, 8) => "APCP",
+        (0, 6, 1) => "TCDC",
+        (0, 7, 6) => "CAPE",
         _ => null,
     };
 

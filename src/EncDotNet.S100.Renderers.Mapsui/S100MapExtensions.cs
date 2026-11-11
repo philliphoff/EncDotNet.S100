@@ -1,5 +1,7 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 using Mapsui;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -99,9 +101,11 @@ public static class S100MapExtensions
         var redraw = options.RedrawMarshal is { } marshal
             ? () => marshal(refreshMap)
             : refreshMap;
+        var planner = options.DemandPlanner ?? new DemandPlanner();
         var session = new MapsuiDatasetLayerSession(
-            layerBands, processorOwner, renderer, authorityProvider, redraw);
-        var navigator = new MapsuiMapNavigator(map);
+            layerBands, processorOwner, renderer, authorityProvider, redraw, options.StackMarshal,
+            new ChartSession(options.ChartOptions ?? ChartEngine.Options, planner));
+        var navigator = new MapsuiMapNavigator(map, planner);
         var dynamicSourceHost = new DynamicSources.S100DynamicSourceHost(
             layerBands,
             options.DynamicFeatureRendererResolver,

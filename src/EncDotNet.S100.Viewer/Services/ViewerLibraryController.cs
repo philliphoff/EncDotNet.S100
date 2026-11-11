@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Mcp.Tools.Library;
@@ -18,13 +17,15 @@ internal sealed class ViewerLibraryController : ILibraryReader
 
     public ViewerLibraryController(
         LibraryPanelViewModel panel,
-        Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues = null,
-        Func<Action, Task>? dispatch = null)
+        Func<IReadOnlyList<KnownCatalogueSource>> userCatalogues,
+        Func<Action, Task> dispatch)
     {
         ArgumentNullException.ThrowIfNull(panel);
+        ArgumentNullException.ThrowIfNull(userCatalogues);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _panel = panel;
-        _userCatalogues = userCatalogues ?? (() => []);
-        _dispatch = dispatch ?? (action => Dispatcher.UIThread.InvokeAsync(action).GetTask());
+        _userCatalogues = userCatalogues;
+        _dispatch = dispatch;
     }
 
     /// <inheritdoc />

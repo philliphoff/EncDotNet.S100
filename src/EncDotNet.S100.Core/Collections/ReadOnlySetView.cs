@@ -23,8 +23,8 @@ namespace EncDotNet.S100.Collections;
 /// </para>
 /// <para>
 /// A dedicated type is used rather than <c>ReadOnlySet&lt;T&gt;</c> /
-/// <c>HashSet&lt;T&gt;.AsReadOnly()</c> because those are only available on
-/// .NET 9+, whereas <c>EncDotNet.S100.Core</c> also targets .NET 8.
+/// <c>HashSet&lt;T&gt;.AsReadOnly()</c> because those wrap only an
+/// <see cref="ISet{T}"/>, and some owners hold an <see cref="IReadOnlySet{T}"/>.
 /// </para>
 /// </remarks>
 /// <typeparam name="T">The element type.</typeparam>

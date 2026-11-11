@@ -12,10 +12,10 @@ public interface IChartDepthCell
 {
     /// <summary>
     /// The cell's scale rank against overlapping cells (see
-    /// <see cref="CellScaleRanking"/>). Smaller is finer;
-    /// <see langword="null"/> when the cell declares no usable scale.
+    /// <see cref="CellScaleRanking"/>), or <see langword="null"/> when the
+    /// cell declares no usable scale.
     /// </summary>
-    int? CellRankingScale { get; }
+    CellRank? CellRank { get; }
 
     /// <summary>
     /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell

@@ -4,7 +4,8 @@ using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -26,7 +27,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
     private const string DEPMD = "#A7D9FB";
     private const string DEPDW = "#C9EDFF";
 
-    private readonly MoonSharpLuaEngine _engine = new();
+    private readonly ILuaEngine _engine = TestLuaEngine.Create();
     private readonly PortrayalCatalogueProvider _provider;
 
     public S102CoveragePipelineIntegrationTests()

@@ -1,5 +1,3 @@
-using Avalonia.Automation;
-using Avalonia.Controls;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Core.Metadata;
 using EncDotNet.S100.Crs.ProjNet;
@@ -9,13 +7,9 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.TestSupport;
-using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
-using EncDotNet.S100.Viewer.Views;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -52,7 +46,7 @@ public sealed class CapViewerLoadPathTests : IDisposable
 
         var factory = new DatasetPipelineFactory(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider());
@@ -82,7 +76,8 @@ public sealed class CapViewerLoadPathTests : IDisposable
     {
         var path = CapFixtures.CopyFixture(CapFixtures.GaleWarning, Path.Combine(_dir, "gale.xml"));
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(Path.Combine(_dir, "cache"), 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)),
+            registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var metadata = reader.TryRead(path);
 
@@ -90,20 +85,6 @@ public sealed class CapViewerLoadPathTests : IDisposable
         Assert.Equal("CAP", metadata.Spec.Name);
         Assert.Equal(new TimeCoverage(CapFixtures.GaleOnset.UtcDateTime, CapFixtures.GaleEnds.UtcDateTime), metadata.TimeCoverage);
         Assert.InRange(metadata.Extent!.SouthLatitude, 36.5, 36.7);
-    }
-
-    [AvaloniaFact]
-    public void The_layer_stack_badges_a_CAP_dataset()
-    {
-        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-        var alerts = datasets.Add(CapFixtures.CopyFixture(CapFixtures.Atom, Path.Combine(_dir, "alerts.atom")), "CAP");
-
-        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
-        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
-
-        var badge = host.Find<Border>("Datasets.Row.NotS100Badge");
-        Assert.Equal(Strings.Label_NotS100Product, AutomationProperties.GetName(badge));
-        Assert.True(alerts.IsNotS100);
     }
 
     [Fact]

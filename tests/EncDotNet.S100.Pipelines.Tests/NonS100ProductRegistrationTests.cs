@@ -7,7 +7,7 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.TestSupport;
 using PureHDF;
 using SkiaSharp;
@@ -140,9 +140,9 @@ public class NonS100ProductRegistrationTests : IDisposable
 
         var result = await processor.BuildVectorPortrayalAsync(
             cancellationToken: TestContext.Current.CancellationToken);
-        using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
-            [HeadlessCompositeInput.ForVector(result)],
-            new HeadlessCompositeOptions { Width = 64, Height = 64 });
+        using var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
+            [ChartCompositeInput.ForVector(result)],
+            new ChartCompositeOptions { Width = 64, Height = 64 });
 
         Assert.Equal(SKColor.Parse(FakeWeatherProduct.FillHex), bitmap.GetPixel(32, 32));
     }
@@ -262,7 +262,7 @@ public class NonS100ProductRegistrationTests : IDisposable
     private static DatasetPipelineFactory CreateFactory(ProductRegistry registry) =>
         new(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider(registry),

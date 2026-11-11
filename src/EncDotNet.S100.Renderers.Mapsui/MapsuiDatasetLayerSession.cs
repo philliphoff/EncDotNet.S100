@@ -1,9 +1,11 @@
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -36,8 +38,19 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// layers must resume on the map-owning thread; UI hosts should call and await
 /// <see cref="RenderAsync"/> from that thread.
 /// </para>
+/// <para>
+/// With a stack marshal (map rendering slice 6), a rendered cell's arrival
+/// composes the layer stack — the S-98 projection, overlap suppression and
+/// the layer diff — as a <see cref="WorkStage.Stack"/> job on the work
+/// scheduler, and applies the result to the map in one marshalled post.
+/// Arrivals while a compose is in flight join the next one, and a result older
+/// than the stack on the map is dropped. <see cref="RenderAsync"/> completes
+/// once a stack that includes its cell is on the map. Every other change
+/// (order, display state, removal) still composes synchronously on the calling
+/// thread.
+/// </para>
 /// </remarks>
-public sealed class MapsuiDatasetLayerSession : IDisposable
+public sealed partial class MapsuiDatasetLayerSession : IDisposable
 {
     private readonly object _sync = new();
     private readonly MapsuiLayerBands _layerBands;
@@ -60,6 +73,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private MarinerSettings _mariner = MarinerSettings.Default;
     private CancellationTokenSource? _timeRefreshCts;
     private CancellationTokenSource? _presentationRefreshCts;
+    private CancellationTokenSource? _depthRefreshCts;
     private bool _ignoreScaleMinimum;
     private bool _disposed;
 
@@ -123,12 +137,27 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     /// attached map (e.g. <c>Map.RefreshGraphics()</c>), optionally marshalled
     /// onto a UI thread.
     /// </param>
+    /// <param name="stackMarshal">
+    /// Optional post to the map-owning (UI) thread. When set, a rendered cell's
+    /// arrival composes the layer stack on the work scheduler and applies it
+    /// through this post (see the remarks on the type). When
+    /// <see langword="null"/>, every compose runs inline on the calling thread,
+    /// which suits headless and single-threaded hosts.
+    /// </param>
+    /// <param name="chartSession">
+    /// The map's chart session (map rendering slice&#160;8), which draws the
+    /// session's tiled layers as chart tiles through one chart layer per run.
+    /// When <see langword="null"/>, a session over the process-wide
+    /// <see cref="ChartEngine.Options"/>.
+    /// </param>
     public MapsuiDatasetLayerSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer,
         IInteroperabilityAuthorityProvider authorityProvider,
-        Action? redrawRequested = null)
+        Action? redrawRequested = null,
+        Action<Action>? stackMarshal = null,
+        ChartSession? chartSession = null)
     {
         ArgumentNullException.ThrowIfNull(layerBands);
         ArgumentNullException.ThrowIfNull(processorOwner);
@@ -139,6 +168,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         _renderer = renderer;
         _authorityProvider = authorityProvider;
         _redrawRequested = redrawRequested;
+        _stackMarshal = stackMarshal;
+        _chartSession = chartSession ?? new ChartSession(ChartEngine.Options);
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
         Query = new S100MapQuery(this);
     }
@@ -233,18 +264,26 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         ArgumentNullException.ThrowIfNull(dataset);
 
         TimePolicy? timePolicy = null;
+        var adjustsDepths = false;
         DateTime? issueTime = null;
+        DateTime? nextIssueTime = null;
+        string? timelineLabel = null;
+        string? timelineDetail = null;
         DatasetForecastRun? forecastRun = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
             using (processorLease)
             {
+                adjustsDepths = processorLease.Processor is IDepthAdjustableProcessor;
                 if (processorLease.Processor is ITimeAwareDatasetProcessor timeAware)
                 {
                     timePolicy = TimePolicy.TryCreate(
                         timeAware.TimeSemantics,
                         timeAware.AvailableTimes);
                     issueTime = timeAware.IssueTime;
+                    nextIssueTime = timeAware.NextIssueTime;
+                    timelineLabel = timeAware.TimelineLabel;
+                    timelineDetail = timeAware.TimelineDetail;
                     forecastRun = timeAware.ForecastRun;
                 }
             }
@@ -274,7 +313,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 entry.LayerKeys,
                 entry.Dataset.SubLayers);
             entry.TimePolicy = timePolicy;
+            entry.AdjustsDepths = adjustsDepths;
             entry.IssueTime = issueTime;
+            entry.NextIssueTime = nextIssueTime;
+            entry.TimelineLabel = timelineLabel;
+            entry.TimelineDetail = timelineDetail;
             entry.ForecastRun = forecastRun;
             if (timePolicy is not null)
             {
@@ -306,7 +349,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                         entry.Dataset.SubLayers,
                         entry.TimePolicy.AvailableTimes,
                         _time.Current is { } clock
-                            ? entry.TimePolicy.SnapTo(clock)
+                            ? SelectTime(entry, clock)
                             : entry.TimePolicy.AvailableTimes.FirstOrDefault());
                 }
 
@@ -510,6 +553,64 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     }
 
     /// <summary>
+    /// Applies <paramref name="presentation"/> and re-renders only the datasets
+    /// whose processor honours <see cref="RenderContext.DepthAdjustment"/>
+    /// (<see cref="IDepthAdjustableProcessor"/>), for a change of the water
+    /// level applied to charted depths. Cancels the preceding depth refresh.
+    /// Off-view cells are deferred as <see cref="RefreshAsync"/> defers them.
+    /// </summary>
+    /// <param name="presentation">The presentation carrying the new adjustment.</param>
+    /// <param name="viewport">The current EPSG:3857 viewport, or <see langword="null"/> to re-render every such dataset.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when this refresh was applied, or
+    /// <see langword="false"/> when a newer depth refresh superseded it.
+    /// </returns>
+    public async Task<bool> RefreshDepthAdjustedAsync(
+        MapPresentationState presentation,
+        MRect? viewport = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _currentPresentation = presentation;
+            _depthRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _depthRefreshCts = localCts;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: false,
+                localCts.Token,
+                depthAdjustedOnly: true).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_depthRefreshCts, localCts))
+                    _depthRefreshCts = null;
+            }
+
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Cancels the preceding full refresh and re-renders registered datasets
     /// while holding the render gate exclusively, preserving time gating.
     /// </summary>
@@ -624,7 +725,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         bool timeAwareOnly,
         MRect? viewport,
         bool staleOnly,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool depthAdjustedOnly = false)
     {
         var kind = timeAwareOnly
             ? MapSessionRenderKind.TimeRefresh
@@ -672,7 +774,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 async (datasetId, ct) =>
                 {
                     if (await RefreshDatasetAsync(
-                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct)
+                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct, depthAdjustedOnly)
                         .ConfigureAwait(false))
                     {
                         Interlocked.Exchange(ref needsCompose, 1);
@@ -736,7 +838,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         MRect? gate,
         bool staleOnly,
         MapSessionRenderKind kind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool depthAdjustedOnly = false)
     {
         TimePolicy? policy;
         DateTime? selectedTime;
@@ -747,6 +850,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 return false;
             policy = entry.TimePolicy;
             if (timeAwareOnly && policy is null)
+                return false;
+            if (depthAdjustedOnly && !entry.AdjustsDepths)
                 return false;
 
             // Viewport gating and stale tracking apply to presentation refreshes
@@ -778,10 +883,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             }
 
             selectedTime = policy is not null && _time.Current is { } clock
-                ? policy.SnapTo(clock)
+                ? SelectTime(entry, clock)
                 : null;
             alreadyCurrent = policy is not null
                 && entry.RenderedTime == selectedTime
+                && entry.RenderedAge == StaleAgeOf(entry, selectedTime)
                 && (selectedTime is null || entry.Layers.Count > 0);
         }
 
@@ -854,6 +960,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         ViewingGroupFilter? viewingGroups;
         IReadOnlySet<string>? hiddenFeatures;
         PortrayalTime? portrayalTime;
+        TimeSpan? staleAge;
         lock (_sync)
         {
             ThrowIfDisposed();
@@ -864,12 +971,15 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             viewingGroups = entry.Dataset.ViewingGroups;
             hiddenFeatures = entry.Dataset.HiddenFeatures;
             portrayalTime = entry.Dataset.PortrayalTime;
+            staleAge = StaleAgeOf(entry, selectedTime);
         }
 
         if (!_processorOwner.TryAcquire(datasetId, out var lease))
             return null;
 
         MapsuiDatasetResult result;
+        long? stackVersion = null;
+        RenderingState? restore = null;
         using (lease)
         {
             // Raise Started only once a lease is held, so it reliably means a
@@ -888,13 +998,22 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 ViewingGroups = viewingGroups,
                 HiddenFeatures = hiddenFeatures,
                 PortrayalTime = portrayalTime,
+                TimeStepAge = staleAge,
             };
-            result = await Task.Run(
-                () => _renderer.RenderAsync(
-                    lease.Processor,
-                    context,
-                    renderEntry.CoverageLayout,
-                    cancellationToken),
+            // Portrayal runs on the work scheduler at the priority of the
+            // load that asked for it (a lazy load's tier), else as visible
+            // work (map rendering slice 5).
+            var processor = lease.Processor;
+            var layout = renderEntry.CoverageLayout;
+            // Layers a stored scene put on the map before the cell was parsed
+            // are reused when the fresh portrayal keys them the same, so the
+            // swap to the parsed cell re-renders nothing (slice 11).
+            IReadOnlyList<ILayer> reusable;
+            lock (_sync)
+                reusable = renderEntry.Layers;
+            result = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Portray,
+                token => _renderer.RenderAsync(processor, context, layout, reusable, token),
                 cancellationToken).ConfigureAwait(true);
         }
 
@@ -913,6 +1032,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             var previous = entry.CaptureRendering();
             entry.Apply(result);
             entry.RenderedTime = entry.TimePolicy is null ? null : selectedTime;
+            entry.RenderedAge = entry.TimePolicy is null ? null : staleAge;
             CaptureBaseStates(entry.Layers);
             entry.Dataset = ReconcileDatasetState(
                 entry.Dataset,
@@ -926,7 +1046,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                     entry.TimePolicy.AvailableTimes,
                     selectedTime);
             }
-            if (compose)
+            if (compose && _stackMarshal is not null)
+            {
+                stackVersion = RequestStackCompose();
+                restore = previous;
+            }
+            else if (compose)
             {
                 try
                 {
@@ -940,7 +1065,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             }
         }
 
-        if (compose)
+        if (stackVersion is { } version)
+        {
+            // The stack job raises LayersChanged when it applies.
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            await AwaitStackAsync(datasetId, renderEntry, generation, version, restore!).ConfigureAwait(true);
+        }
+        else if (compose)
         {
             LayersChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -949,6 +1080,92 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             this,
             new MapSessionDatasetRenderEventArgs(datasetId, kind));
         return result;
+    }
+
+    /// <summary>
+    /// Puts a registered dataset's stored rendering on the map without a
+    /// processor: the layers <see cref="MapsuiDatasetRenderer.FromStoredScene"/>
+    /// built from a cell scene stored by an earlier session. The dataset draws
+    /// and joins the chart stack, but isn't picked until a processor is
+    /// registered and rendered, which then reuses these layers when its keys
+    /// match (map rendering slice 11).
+    /// </summary>
+    /// <param name="datasetId">The registered dataset.</param>
+    /// <param name="result">The stored rendering.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// <see langword="true"/> once the stack holding the rendering is on the
+    /// map; <see langword="false"/> when the dataset isn't registered, already
+    /// has a processor, or rendered again meanwhile.
+    /// </returns>
+    public async Task<bool> PublishStoredAsync(
+        MapDatasetId datasetId,
+        MapsuiDatasetResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Entry publishEntry;
+        long generation;
+        long? stackVersion = null;
+        RenderingState? restore = null;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry)
+                || _processorOwner.TryAcquire(datasetId, out var lease) && DisposeLease(lease))
+            {
+                return false;
+            }
+
+            publishEntry = entry;
+            generation = ++entry.Generation;
+            var previous = entry.CaptureRendering();
+            entry.Apply(result);
+            entry.RenderedTime = null;
+            entry.RenderedAge = null;
+            CaptureBaseStates(entry.Layers);
+            entry.Dataset = ReconcileDatasetState(
+                entry.Dataset,
+                entry.LayerKeys,
+                entry.Dataset.SubLayers);
+            if (_stackMarshal is not null)
+            {
+                stackVersion = RequestStackCompose();
+                restore = previous;
+            }
+            else
+            {
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    throw;
+                }
+            }
+        }
+
+        if (stackVersion is { } version)
+        {
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            await AwaitStackAsync(datasetId, publishEntry, generation, version, restore!).ConfigureAwait(true);
+        }
+        else
+        {
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        return true;
+
+        static bool DisposeLease(DatasetProcessorLease lease)
+        {
+            lease.Dispose();
+            return true;
+        }
     }
 
     /// <summary>Removes a registered dataset's rendered layers from the map.</summary>
@@ -1329,15 +1546,31 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         double? scaleResolution =
             query.Resolution is { } r && double.IsFinite(r) && r > 0 ? r : null;
 
-        List<(MapDatasetId Id, int StackRank)> pickable = [];
+        List<(MapDatasetId Id, int StackRank, HashSet<string>? Suppressed)> pickable = [];
         DateTime? currentTime;
         lock (_sync)
         {
             ThrowIfDisposed();
             currentTime = _time.Current;
             var topStackIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            // Features an S-98 rule suppressed (R-101-102-B: S-101 depth
+            // areas under a visible S-102) aren't drawn, so they aren't picked.
+            var suppressed = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
             for (var i = 0; i < _stackEntries.Count; i++)
-                topStackIndex[_stackEntries[i].SourceDatasetId] = i; // last wins = topmost
+            {
+                var stackEntry = _stackEntries[i];
+                topStackIndex[stackEntry.SourceDatasetId] = i; // last wins = topmost
+                if (stackEntry.SuppressedFeatures is { Count: > 0 } dropped)
+                {
+                    if (!suppressed.TryGetValue(stackEntry.SourceDatasetId, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.Ordinal);
+                        suppressed[stackEntry.SourceDatasetId] = set;
+                    }
+
+                    set.UnionWith(dropped);
+                }
+            }
 
             foreach (var id in _order)
             {
@@ -1360,7 +1593,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                     && entry.ContentMaxVisibleResolution is { } cutoff
                     && res > cutoff)
                     continue;
-                pickable.Add((id, index));
+                pickable.Add((id, index, suppressed.GetValueOrDefault(id.Value)));
             }
         }
 
@@ -1380,11 +1613,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         GeographicPickQuery query,
         double radius,
         DateTime? currentTime,
-        List<(MapDatasetId Id, int StackRank)> pickable,
+        List<(MapDatasetId Id, int StackRank, HashSet<string>? Suppressed)> pickable,
         CancellationToken cancellationToken)
     {
         var ranked = new List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)>();
-        foreach (var (id, stackRank) in pickable)
+        foreach (var (id, stackRank, suppressed) in pickable)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!_processorOwner.TryAcquire(id, out var lease))
@@ -1400,7 +1633,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 foreach (var longitude in WorldCopies.CandidateLongitudes(
                     query.Longitude, extent?.WestLongitude, extent?.EastLongitude))
                 {
-                    if (PickDataset(processor, id, stackRank, query.Latitude, longitude, radius, currentTime, ranked))
+                    if (PickDataset(processor, id, stackRank, query.Latitude, longitude, radius, currentTime, suppressed, ranked))
                         break;
                 }
             }
@@ -1436,9 +1669,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         double longitude,
         double radius,
         DateTime? currentTime,
+        HashSet<string>? suppressed,
         List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)> ranked)
     {
         var hits = processor.HitTestFeatures(latitude, longitude, radius);
+        if (suppressed is not null)
+            hits = [.. hits.Where(hit => !suppressed.Contains(hit.FeatureRef))];
         if (hits.Count > 0)
         {
             foreach (var hit in hits)
@@ -1499,6 +1735,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             _disposed = true;
             _timeRefreshCts?.Cancel();
             _presentationRefreshCts?.Cancel();
+            _depthRefreshCts?.Cancel();
             CancelEntryRenders();
             _authorityProvider.CurrentChanged -= OnAuthorityChanged;
             _entries.Clear();
@@ -1513,23 +1750,42 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
             _stampedRedrawLayers.Clear();
             _layerBands.ReplaceDatasetLayers([]);
+            RemoveChartLayers();
+            CancelStackWaiters();
         }
     }
 
+    /// <summary>
+    /// Composes the layer stack now, on the calling thread, under
+    /// <c>_sync</c>: captures, computes and applies it in one go. It counts as
+    /// a stack version, so a background compose captured before it never
+    /// overwrites it.
+    /// </summary>
     private void ComposeLayers()
     {
-        var snapshots = CreateOrderedSnapshots();
-        var (projected, stackEntries, stackedLayers) = ProjectLayerStack(snapshots);
-        ValidateProjection(projected, snapshots);
+        var input = CaptureStackInput(++_stackRequested);
+        ApplyStack(ComputeStack(input));
+    }
+
+    /// <summary>
+    /// Applies a computed stack to the layers and the map. Runs under
+    /// <c>_sync</c> on the map-owning thread: everything here is cheap
+    /// (display state, scale windows, clip attachment and the layer diff).
+    /// </summary>
+    private void ApplyStack(StackPlan plan)
+    {
+        var snapshots = plan.Input.Snapshots;
         ApplyDisplayAndScaleToSourceLayers(snapshots);
-        ApplyDisplayAndScaleToProjectedLayers(projected);
-        ApplyOverlapSuppression(projected);
-        UpdateContentCutoffs(projected);
-        var datasetLayers = projected.Select(item => item.Layer).ToArray();
-        StampRedrawSink(datasetLayers);
+        ApplyDisplayAndScaleToProjectedLayers(plan.Input, plan.Projected);
+        ApplyOverlapSuppression(plan);
+        UpdateContentCutoffs(plan.Projected);
+        var datasetLayers = BuildMapLayers(plan.Input.Version, plan.Projected);
+        StampRedrawSink([.. plan.Projected.Select(item => item.Layer), .. datasetLayers.OfType<ChartLayer>()]);
         _layerBands.ReplaceDatasetLayers(datasetLayers);
-        _stackEntries = stackEntries;
-        _stackedLayers = stackedLayers;
+        _stackEntries = plan.StackEntries;
+        _stackedLayers = plan.StackedLayers;
+        _stackApplied = Math.Max(_stackApplied, plan.Input.Version);
+        CompleteStackWaiters();
     }
 
     /// <summary>
@@ -1568,6 +1824,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 instrumented.RequestRedraw = redraw;
                 _stampedRedrawLayers.Add(instrumented);
             }
+            else if (layer is ChartLayer chart)
+            {
+                chart.RequestRedraw = redraw;
+            }
         }
     }
 
@@ -1595,14 +1855,18 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     }
 
     private void ApplyDisplayAndScaleToProjectedLayers(
+        StackInput input,
         IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
     {
         foreach (var item in projected)
         {
-            if (!_entries.TryGetValue(item.DatasetId, out var entry))
+            if (!_entries.TryGetValue(item.DatasetId, out var entry)
+                || !input.Entries.TryGetValue(item.DatasetId, out var info))
+            {
                 continue;
+            }
 
-            RestoreProjectedBaseState(item, entry);
+            RestoreProjectedBaseState(item, info.Snapshot);
             ApplyDisplayState(entry.Dataset, item.LayerKey, item.Layer);
             if (!_ignoreScaleMinimum
                 && EffectiveMinimumDisplayScale(entry) is int minimumDisplayScale)
@@ -1614,44 +1878,146 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
     }
 
-    private void ApplyOverlapSuppression(
+    /// <summary>
+    /// The overlap-suppression cells of a projected stack, one per dataset in
+    /// the order the projection first lists it, with the finer coverages that
+    /// clip each (computed off the map thread through
+    /// <see cref="CoverageOverlapIndex"/>; the same answer as
+    /// <see cref="OverlapSuppression.Apply"/>).
+    /// </summary>
+    private IReadOnlyList<(IReadOnlyList<ILayer> Layers, FinerCoverage[]? Finer)> ComputeOverlapSuppression(
+        StackInput input,
         IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
     {
-        var allLayers = _entries.Values
-            .SelectMany(entry => entry.Layers)
-            .Concat(projected.Select(item => item.Layer))
-            .Distinct()
-            .ToArray();
-        OverlapSuppression.ClearAll(
-        [
-            new OverlapSuppressionCell { Layers = allLayers },
-        ]);
-
         var cells = new List<OverlapSuppressionCell>();
+        // The engine's cells hold opaque owners; keep the typed layers alongside.
+        var cellLayers = new List<ILayer[]>();
         foreach (var group in projected.GroupBy(item => item.DatasetId))
         {
-            if (!_entries.TryGetValue(group.Key, out var entry))
+            if (!input.Entries.TryGetValue(group.Key, out var info))
                 continue;
 
             var layers = group.Select(item => item.Layer).ToArray();
-            var drawing = layers.Any(layer => layer.Enabled && layer.Opacity > 0);
+            // Whether any of the cell's layers draws once its display state is
+            // applied (Enabled and Opacity > 0), worked out without touching
+            // the layers, which the map may be drawing from.
+            var drawing = group.Any(item => DrawsWithDisplayState(info, item));
+            cellLayers.Add(layers);
             cells.Add(new OverlapSuppressionCell
             {
                 Layers = layers,
-                Coverage = drawing ? entry.CoverageGeometry : null,
-                ScaleDenominator = drawing
-                    ? RankingScale(entry)
-                    : null,
-                CutoffScaleDenominator = drawing
-                    ? EffectiveMinimumDisplayScale(entry)
-                    : null,
+                Coverage = drawing ? info.Snapshot.CoverageGeometry : null,
+                Rank = drawing ? info.Rank : null,
+                CutoffScaleDenominator = drawing ? info.Snapshot.MinimumDisplayScale : null,
             });
         }
 
-        if (_ignoreScaleMinimum)
-            OverlapSuppression.ClearAll(cells);
+        var result = new (IReadOnlyList<ILayer>, FinerCoverage[]?)[cells.Count];
+        if (input.IgnoreScaleMinimum)
+        {
+            for (var i = 0; i < cells.Count; i++)
+                result[i] = (cellLayers[i], null);
+            return result;
+        }
+
+        FinerCoverage[]?[] finer;
+        lock (_overlapIndex)
+        {
+            _overlapIndex.Retain(input.Snapshots.Select(snapshot => snapshot.CoverageGeometry));
+            finer = _overlapIndex.Collect(cells);
+        }
+
+        for (var i = 0; i < cells.Count; i++)
+            result[i] = (cellLayers[i], finer[i]);
+        return result;
+    }
+
+    /// <summary>
+    /// Attaches a plan's overlap-suppression clips: clears every managed
+    /// layer that isn't in a cell, then sets each cell's finer coverages,
+    /// keeping a layer's attached set when it hasn't changed so its prepared
+    /// hidden region (<see cref="CoverageClip.GetHiddenCoverage"/>) survives.
+    /// </summary>
+    private void ApplyOverlapSuppression(StackPlan plan)
+    {
+        var inCell = new HashSet<ILayer>(ReferenceEqualityComparer.Instance);
+        foreach (var (layers, _) in plan.Suppression)
+        {
+            foreach (var layer in layers)
+                inCell.Add(layer);
+        }
+
+        foreach (var layer in _entries.Values
+            .SelectMany(entry => entry.Layers)
+            .Concat(plan.Projected.Select(item => item.Layer)))
+        {
+            if (!inCell.Contains(layer))
+                CoverageClip.Set(layer, null);
+        }
+
+        foreach (var (layers, finer) in plan.Suppression)
+        {
+            var attach = finer;
+            if (finer is not null
+                && layers.Count > 0
+                && CoverageClip.Get(layers[0]) is { } existing
+                && SameCoverages(existing, finer))
+            {
+                attach = existing;
+            }
+
+            foreach (var layer in layers)
+            {
+                if (attach is null || !ReferenceEquals(CoverageClip.Get(layer), attach))
+                    CoverageClip.Set(layer, attach);
+            }
+        }
+    }
+
+    private static bool SameCoverages(FinerCoverage[] a, FinerCoverage[] b)
+    {
+        if (a.Length != b.Length)
+            return false;
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (!ReferenceEquals(a[i].Coverage, b[i].Coverage)
+                || !a[i].CutoffResolution.Equals(b[i].CutoffResolution))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="item"/>'s layer is enabled with a positive
+    /// opacity once <see cref="ApplyDisplayState"/> runs, from the same inputs:
+    /// the dataset and sub-layer state and the layer's portrayal opacity, which
+    /// a projected (S-98 rebuilt) layer takes from its source layer
+    /// (<see cref="RestoreProjectedBaseState"/>).
+    /// </summary>
+    private bool DrawsWithDisplayState(StackEntryInfo info, MapsuiProjectedDatasetLayer item)
+    {
+        var dataset = info.Snapshot.Dataset;
+        var subLayer = dataset.SubLayers.FirstOrDefault(
+            candidate => string.Equals(candidate.Key, item.LayerKey, StringComparison.Ordinal));
+        if (!dataset.IsActive || !dataset.IsVisible || !(subLayer?.IsVisible ?? true))
+            return false;
+
+        double portrayalOpacity;
+        if (item.Layer is not BaseLayer)
+        {
+            portrayalOpacity = _baseStates.TryGetValue(item.Layer, out var own) ? own.Opacity : 1.0;
+        }
         else
-            OverlapSuppression.Apply(cells);
+        {
+            var source = FindSourceLayer(item.LayerKey, info.Snapshot.LayerKeys, info.Snapshot.Layers, info.Snapshot.StackEntries);
+            var baseLayer = source is BaseLayer && !ReferenceEquals(source, item.Layer) ? source : item.Layer;
+            portrayalOpacity = _baseStates.TryGetValue(baseLayer, out var state) ? state.Opacity : baseLayer.Opacity;
+        }
+
+        return portrayalOpacity * dataset.Opacity * (subLayer?.Opacity ?? 1.0) > 0;
     }
 
     private void UpdateContentCutoffs(
@@ -1685,10 +2051,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private (
         IReadOnlyList<MapsuiProjectedDatasetLayer> Projected,
         IReadOnlyList<LayerStackEntry> StackEntries,
-        IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(
-        IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
+        IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(StackInput input)
     {
-        var authority = _authorityProvider.Current;
+        var snapshots = input.Snapshots;
+        var authority = input.Authority;
         var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(snapshots.Count);
         var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
 
@@ -1704,7 +2070,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (snapshot.StackEntries is { Count: > 0 } stack)
             {
                 var items = new List<SubLayerStackItem>(stack.Count);
-                var layoutCache = _entries.GetValueOrDefault(snapshot.Dataset.Id)?.CoverageLayout;
+                var layoutCache = input.Entries.GetValueOrDefault(snapshot.Dataset.Id)?.CoverageLayout;
                 foreach (var stackEntry in stack)
                 {
                     items.Add(stackEntry.Item);
@@ -1737,7 +2103,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var topFirst = perDataset.AsEnumerable().Reverse().ToArray();
         var sorted = LayerStackBuilder.Build(authority, topFirst);
         var loaded = BuildLoadedDatasetInfos(snapshots);
-        var ruled = authority.ApplyRules(sorted, loaded, _mariner);
+        var ruled = authority.ApplyRules(sorted, loaded, input.Mariner);
         var stackEntries = LayerStackProjector.Project(
             ruled,
             prebuilt,
@@ -1759,7 +2125,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 return new MapsuiProjectedDatasetLayer(
                     new MapDatasetId(entry.SourceDatasetId),
                     key.LayerKey,
-                    entry.Layer);
+                    entry.Layer)
+                {
+                    SuppressedFeatures = entry.SuppressedFeatures,
+                };
             })
             .ToArray();
         return (
@@ -1910,6 +2279,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             .OrderBy(time => time)
             .ToArray();
         var minimum = samples.Length > 0 ? samples[0] : (DateTime?)null;
+        // A continuous dataset draws before its first step (a storm's past
+        // track), so the range starts where it does.
+        foreach (var policy in _entries.Values.Select(entry => entry.TimePolicy))
+        {
+            if (policy is { Selection: MapsuiTimeSelectionKind.Continuous } && minimum is { } lowest && policy.First < lowest)
+                minimum = policy.First;
+        }
         var maximum = samples.Length > 0 ? samples[^1] : (DateTime?)null;
         // The clock starts at the first sample and is kept as datasets come
         // and go, even outside the new range (#713).
@@ -1920,15 +2296,22 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             .Where(entry => entry.TimePolicy is { AvailableTimes.Count: > 0 })
             .Select(entry => new MapsuiMapTimedDataset(
                 entry.Dataset.Name,
-                entry.TimePolicy!.AvailableTimes.Min(),
+                entry.TimePolicy!.First,
                 entry.TimePolicy.AvailableTimes.Max())
             {
                 ProductSpec = entry.Dataset.Metadata.Spec.Name,
                 DatasetId = entry.Dataset.Id.Value,
                 IssueTime = entry.IssueTime,
+                NextIssueTime = entry.NextIssueTime,
+                TimelineLabel = entry.TimelineLabel,
+                TimelineDetail = entry.TimelineDetail,
                 ForecastRun = entry.ForecastRun,
                 Selection = entry.TimePolicy.Selection,
                 Tolerance = entry.TimePolicy.Tolerance,
+                StepKind = entry.TimePolicy.StepKind,
+                StaleAfter = entry.TimePolicy.StaleAfter,
+                StaleAfterIssue = entry.TimePolicy.StaleAfterIssue,
+                Supersession = entry.TimePolicy.Supersession,
                 Coverage = entry.TimePolicy.CoverageSegments,
                 Samples = entry.TimePolicy.AvailableTimes,
             })
@@ -2056,12 +2439,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     private void RestoreProjectedBaseState(
         MapsuiProjectedDatasetLayer item,
-        Entry entry)
+        MapsuiMapDatasetSnapshot rendering)
     {
         if (item.Layer is not BaseLayer projectedBase)
             return;
 
-        var source = FindSourceLayer(item.LayerKey, entry);
+        var source = FindSourceLayer(item.LayerKey, rendering.LayerKeys, rendering.Layers, rendering.StackEntries);
         if (source is not BaseLayer sourceBase || ReferenceEquals(source, item.Layer))
         {
             RestoreBaseState(item.Layer);
@@ -2080,26 +2463,30 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         _baseStates.Add(item.Layer, range);
     }
 
-    private static ILayer? FindSourceLayer(string layerKey, Entry entry)
+    private static ILayer? FindSourceLayer(
+        string layerKey,
+        IReadOnlyList<string>? layerKeys,
+        IReadOnlyList<ILayer> layers,
+        IReadOnlyList<LayerStackEntry>? stackEntries)
     {
-        if (entry.LayerKeys is not null)
+        if (layerKeys is not null)
         {
-            for (var index = 0; index < entry.LayerKeys.Count; index++)
+            for (var index = 0; index < layerKeys.Count; index++)
             {
                 if (string.Equals(
-                        entry.LayerKeys[index],
+                        layerKeys[index],
                         layerKey,
                         StringComparison.Ordinal)
-                    && index < entry.Layers.Count)
+                    && index < layers.Count)
                 {
-                    return entry.Layers[index];
+                    return layers[index];
                 }
             }
         }
 
-        if (entry.StackEntries is not null)
+        if (stackEntries is not null)
         {
-            foreach (var stackEntry in entry.StackEntries)
+            foreach (var stackEntry in stackEntries)
             {
                 if (string.Equals(
                     LayerStackProjector.KeyOf(stackEntry.Item).LayerKey,
@@ -2118,9 +2505,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var syntheticIndex)
-            && syntheticIndex < entry.Layers.Count)
+            && syntheticIndex < layers.Count)
         {
-            return entry.Layers[syntheticIndex];
+            return layers[syntheticIndex];
         }
 
         return null;
@@ -2221,9 +2608,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         entry.CatalogueMinimumDisplayScale ?? entry.CellMinimumDisplayScale;
 
     // Overlap ranking prefers the cell's compilation scale (S-57 CSCL) over its
-    // zoom-out window, which for S-57 extends to the largest SCAMIN.
-    private static int? RankingScale(Entry entry) =>
-        CellScaleRanking.RankingScale(entry.CellCompilationScale, EffectiveMinimumDisplayScale(entry));
+    // zoom-out window, which for S-57 extends to the largest SCAMIN. Cells of
+    // the same window are told apart by their finest display scale.
+    private static CellRank? Rank(Entry entry) =>
+        CellScaleRanking.Rank(
+            entry.CellCompilationScale,
+            EffectiveMinimumDisplayScale(entry),
+            entry.MaximumDisplayScale ?? entry.CellMaximumDisplayScale);
 
     private void OnAuthorityChanged()
     {
@@ -2270,13 +2661,30 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         private TimePolicy(
             TimePolicyKind kind,
             DateTime[] times,
-            TimeSpan tolerance)
+            TimeSpan tolerance,
+            TimeSemantics semantics)
         {
             _kind = kind;
             _times = times;
             _tolerance = tolerance;
+            StepKind = semantics.Kind;
+            StaleAfter = semantics.StaleAfter;
+            StaleAfterIssue = semantics.StaleAfterIssue;
+            Supersession = semantics.Supersession;
             CoverageSegments = ComputeSegments();
         }
+
+        /// <summary>What the steps are.</summary>
+        public TimeStepKind StepKind { get; }
+
+        /// <summary>How long after its step the data is stale (<see cref="TimeSemantics.StaleAfter"/>).</summary>
+        public TimeSpan? StaleAfter { get; }
+
+        /// <summary>How long after its issue the data is stale (<see cref="TimeSemantics.StaleAfterIssue"/>).</summary>
+        public TimeSpan? StaleAfterIssue { get; }
+
+        /// <summary>The key of the datasets of which only one draws at a time (<see cref="TimeSemantics.Supersession"/>).</summary>
+        public string? Supersession { get; }
 
         public IReadOnlyList<DateTime> AvailableTimes => _times;
 
@@ -2299,10 +2707,16 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (times.Length == 0)
                 return null;
 
-            var kind = semantics.Selection == TimeStepSelection.AtOrBefore
-                ? TimePolicyKind.AtOrBefore
-                : TimePolicyKind.Nearest;
-            return new TimePolicy(kind, times, semantics.Validity ?? TypicalStep(times));
+            var kind = semantics.Selection switch
+            {
+                TimeStepSelection.AtOrBefore => TimePolicyKind.AtOrBefore,
+                TimeStepSelection.Continuous => TimePolicyKind.Continuous,
+                _ => TimePolicyKind.Nearest,
+            };
+            var tolerance = kind == TimePolicyKind.Continuous
+                ? semantics.Validity is { } lead && lead > TimeSpan.Zero ? lead : TimeSpan.Zero
+                : semantics.Validity ?? TypicalStep(times);
+            return new TimePolicy(kind, times, tolerance, semantics);
         }
 
         /// <summary>
@@ -2312,14 +2726,25 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public DateTime? SnapTo(DateTime time) => MapsuiTimeSelection.Select(_times, Selection, _tolerance, time);
 
         /// <summary>How this policy picks a sample.</summary>
-        public MapsuiTimeSelectionKind Selection =>
-            _kind == TimePolicyKind.AtOrBefore ? MapsuiTimeSelectionKind.AtOrBefore : MapsuiTimeSelectionKind.Nearest;
+        public MapsuiTimeSelectionKind Selection => _kind switch
+        {
+            TimePolicyKind.AtOrBefore => MapsuiTimeSelectionKind.AtOrBefore,
+            TimePolicyKind.Continuous => MapsuiTimeSelectionKind.Continuous,
+            _ => MapsuiTimeSelectionKind.Nearest,
+        };
+
+        /// <summary>The first time the dataset draws: its first sample, or before it for a continuous dataset.</summary>
+        public DateTime First => CoverageSegments[0].Start < _times[0] ? CoverageSegments[0].Start : _times[0];
 
         /// <summary>How far from the clock a sample may be.</summary>
         public TimeSpan Tolerance => _tolerance;
 
         private IReadOnlyList<MapsuiMapTimeSegment> ComputeSegments()
         {
+            // A continuous dataset draws every time in its range: one window.
+            if (_kind == TimePolicyKind.Continuous)
+                return [new MapsuiMapTimeSegment(AddClamped(_times[0], -_tolerance), _times[^1])];
+
             var before = _kind == TimePolicyKind.Nearest ? _tolerance : TimeSpan.Zero;
             var segments = new List<MapsuiMapTimeSegment>();
             var start = AddClamped(_times[0], -before);
@@ -2370,6 +2795,50 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// The step <paramref name="entry"/> draws at <paramref name="clock"/>: its
+    /// policy's, unless another dataset with the same
+    /// <see cref="TimeSemantics.Supersession"/> takes over (V30). Call under <c>_sync</c>.
+    /// </summary>
+    private DateTime? SelectTime(Entry entry, DateTime clock)
+    {
+        if (entry.TimePolicy is not { } policy)
+            return null;
+        var sample = policy.SnapTo(clock);
+        if (policy.Supersession is null || sample is null)
+            return sample;
+        var candidate = new MapsuiTimeCandidate(entry.Dataset.Id.Value, policy.Supersession, policy.StepKind, sample);
+        var rivals = _entries.Values
+            .Where(e => e.TimePolicy?.Supersession is not null)
+            .Select(e => new MapsuiTimeCandidate(e.Dataset.Id.Value, e.TimePolicy!.Supersession, e.TimePolicy.StepKind, e.TimePolicy.SnapTo(clock)));
+        return MapsuiTimeSupersession.IsSuperseded(candidate, rivals) ? null : sample;
+    }
+
+    /// <summary>
+    /// The age of <paramref name="selectedTime"/> at the clock once stale, or of
+    /// the dataset since its issue (<see cref="TimeSemantics.StaleAfterIssue"/>,
+    /// taken at <see cref="Clock"/> when the map time is later), for
+    /// <see cref="RenderContext.TimeStepAge"/>. Call under <c>_sync</c>.
+    /// </summary>
+    private TimeSpan? StaleAgeOf(Entry entry, DateTime? selectedTime)
+    {
+        if (_time.Current is not { } clock || selectedTime is null)
+            return null;
+        if (entry.TimePolicy is { StaleAfterIssue: { } fromIssue })
+            return MapsuiTimeSupersession.StaleAgeFromIssue(entry.IssueTime, clock, Clock.GetUtcNow().UtcDateTime, fromIssue);
+        return entry.TimePolicy is { StaleAfter: { } limit }
+            ? MapsuiTimeSupersession.StaleAge(selectedTime, clock, limit)
+            : null;
+    }
+
+    /// <summary>
+    /// The host's clock, which an issue-based stale age
+    /// (<see cref="TimeSemantics.StaleAfterIssue"/>) is taken at while the map
+    /// time is ahead of it: the system clock unless the host has its own (a
+    /// test clock, as SoundCharts' <c>set_test_clock</c> sets).
+    /// </summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
     private enum TimePolicyKind
     {
         /// <summary>The nearest sample, within the tolerance either side (<see cref="TimeStepSelection.Nearest"/>).</summary>
@@ -2377,6 +2846,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         /// <summary>The latest sample at or before the clock, held for the tolerance (<see cref="TimeStepSelection.AtOrBefore"/>).</summary>
         AtOrBefore,
+
+        /// <summary>The clock itself, within the range (<see cref="TimeStepSelection.Continuous"/>).</summary>
+        Continuous,
     }
 
     private sealed class Entry(MapDataset dataset)
@@ -2385,13 +2857,28 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         public TimePolicy? TimePolicy { get; set; }
 
+        /// <summary>Whether the processor honours <see cref="RenderContext.DepthAdjustment"/>.</summary>
+        public bool AdjustsDepths { get; set; }
+
         /// <summary>When the dataset was issued, from its data (#720).</summary>
         public DateTime? IssueTime { get; set; }
+
+        /// <summary>When a newer dataset is next expected (<see cref="ITimeAwareDatasetProcessor.NextIssueTime"/>).</summary>
+        public DateTime? NextIssueTime { get; set; }
+
+        /// <summary>The dataset's short name on a timeline (<see cref="ITimeAwareDatasetProcessor.TimelineLabel"/>).</summary>
+        public string? TimelineLabel { get; set; }
+
+        /// <summary>The words after it (<see cref="ITimeAwareDatasetProcessor.TimelineDetail"/>).</summary>
+        public string? TimelineDetail { get; set; }
 
         /// <summary>The model run the dataset belongs to, from its processor, or null.</summary>
         public DatasetForecastRun? ForecastRun { get; set; }
 
         public DateTime? RenderedTime { get; set; }
+
+        /// <summary>The <see cref="RenderContext.TimeStepAge"/> the current layers were rendered with.</summary>
+        public TimeSpan? RenderedAge { get; set; }
 
         public CancellationTokenSource? RenderCts { get; set; }
 
@@ -2419,6 +2906,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public int? CellMinimumDisplayScale { get; set; }
 
         public int? CellCompilationScale { get; set; }
+
+        public int? CellMaximumDisplayScale { get; set; }
 
         public int? MaximumDisplayScale { get; set; }
 
@@ -2449,6 +2938,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = result.CoverageGeometry;
             CellMinimumDisplayScale = result.CellMinimumDisplayScale;
             CellCompilationScale = result.CellCompilationScale;
+            CellMaximumDisplayScale = result.CellMaximumDisplayScale;
         }
 
         /// <summary>
@@ -2475,6 +2965,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = null;
             CellMinimumDisplayScale = null;
             CellCompilationScale = null;
+            CellMaximumDisplayScale = null;
             ContentMaxVisibleResolution = null;
         }
 
@@ -2488,6 +2979,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry,
             CellMinimumDisplayScale,
             CellCompilationScale,
+            CellMaximumDisplayScale,
             ContentMaxVisibleResolution,
             RenderedTime);
 
@@ -2502,6 +2994,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = state.CoverageGeometry;
             CellMinimumDisplayScale = state.CellMinimumDisplayScale;
             CellCompilationScale = state.CellCompilationScale;
+            CellMaximumDisplayScale = state.CellMaximumDisplayScale;
             ContentMaxVisibleResolution = state.ContentMaxVisibleResolution;
             RenderedTime = state.RenderedTime;
         }
@@ -2517,6 +3010,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         NetTopologySuite.Geometries.Geometry? CoverageGeometry,
         int? CellMinimumDisplayScale,
         int? CellCompilationScale,
+        int? CellMaximumDisplayScale,
         double? ContentMaxVisibleResolution,
         DateTime? RenderedTime);
 

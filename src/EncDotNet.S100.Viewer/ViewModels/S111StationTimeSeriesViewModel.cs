@@ -30,8 +30,8 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
     public S111StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
         GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
         : base(snapshot, globalTime, timeFormat, themeService)
     {
         var speedChannel = FindChannel(snapshot, "surfaceCurrentSpeed");

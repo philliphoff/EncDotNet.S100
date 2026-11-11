@@ -3,7 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Specifications;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
@@ -22,7 +22,9 @@ internal static class ProcessorFactoryBuilder
     /// <see cref="PortrayalCatalogueManager"/> it owns. The caller is
     /// responsible for disposing the returned manager.
     /// </summary>
-    public static (DatasetPipelineFactory Factory, PortrayalCatalogueManager CatalogueManager) Build()
+    /// <param name="luaEngine">The Lua engine that runs the portrayal rules.</param>
+    public static (DatasetPipelineFactory Factory, PortrayalCatalogueManager CatalogueManager) Build(
+        LuaEngineKind luaEngine = LuaEngineKinds.Default)
     {
         var catalogueManager = new PortrayalCatalogueManager();
         foreach (var spec in Specification.AvailableSpecs)
@@ -38,7 +40,7 @@ internal static class ProcessorFactoryBuilder
 
         var factory = new DatasetPipelineFactory(
             catalogueManager,
-            new MoonSharpLuaEngine(),
+            LuaEngineFactory.Create(luaEngine),
             new ProjNetCrsTransformFactory(),
             featureCatalogueManager,
             new DisplayPlaneAuthorityProvider());

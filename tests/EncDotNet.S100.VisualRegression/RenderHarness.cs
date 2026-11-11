@@ -5,8 +5,9 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Rendering;
@@ -83,7 +84,7 @@ public sealed class RenderHarness : IDisposable
 
         _factory = new DatasetPipelineFactory(
             _catalogueManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             featureCatalogueManager,
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());

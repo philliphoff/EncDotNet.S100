@@ -35,11 +35,11 @@ public sealed class SecomIdentityViewTests
         keys.Identities.Import(keys.Identities.Load(keys.IdentityFile("org", "urn:mrn:mcp:org:mcc:soundcharts"), "secret"), "SoundCharts organisation", makeDefault: false);
         var directory = new SecomIdentityDirectory(keys.Identities, keys.Time);
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel([Khra]),
+            new CatalogueDirectoryDialogViewModel([Khra], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 Secom = (_, _, _, _) => throw new HttpRequestException("403"),
-            }),
+            }, timeProvider: TimeProvider.System),
             _ => { },
             (source, openKeys) => new SecomConnectionStepViewModel(source, directory, (_, _, _) => Task.FromResult(
                 new SecomProbeResult(SecomReachability.CertificateRefused, "403") { Identity = bridge.Mrn, IdentityId = bridge.Id }), openKeys));
@@ -81,7 +81,7 @@ public sealed class SecomIdentityViewTests
         library.Initialize();
         library.AddCollection("SECOM", [new SecomSource(Guid.NewGuid(), "KHRA S-124", new Uri("https://secom.khra.example/api/secom/"), SecomFilter.All) { Identity = bridge.Id }]);
         await library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action());
+        using var panel = new LibraryPanelViewModel(library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         panel.Identities = new SecomIdentityDirectory(keys.Identities, keys.Time);
         panel.Sync();
         panel.SelectedNode = panel.Nodes.Single().Children.Single();

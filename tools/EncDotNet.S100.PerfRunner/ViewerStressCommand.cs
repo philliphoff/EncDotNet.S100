@@ -66,9 +66,122 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
 
         /// <summary>Viewport route scenario.</summary>
         [CommandOption("--scenario <SCENARIO>")]
-        [Description("Route shape: burst for a snake with continuous zoom, or navigation for distinct pan and zoom legs.")]
+        [Description("Route shape: burst for a snake with continuous zoom, navigation for distinct pan and zoom legs, jumps for the settle-timed Seattle → Tacoma → Port Townsend jumps, glide for the same jumps animated (a 'go to'), fling for settle-timed flings from Seattle, or pan for a settle-timed pan across cell boundaries.")]
         [DefaultValue("burst")]
         public string Scenario { get; set; } = "burst";
+
+        // ── Settle scenarios (jumps, pan): map rendering slice 1 ──────────
+
+        /// <summary>Cold, after pre-warm, or both.</summary>
+        [CommandOption("--mode <MODE>")]
+        [Description("jumps/pan: cold (empty render caches, pre-warm off), prewarm (after the portrayal pre-warm finishes) or both (needs --launch).")]
+        [DefaultValue("cold")]
+        public string Mode { get; set; } = "cold";
+
+        /// <summary>Lua engines to run, one viewer each.</summary>
+        [CommandOption("--engines <LIST>")]
+        [Description("jumps/pan: comma-separated Lua engines (luacsharp, moonsharp). With --launch, one viewer per engine; without, the attached viewer's engine must match.")]
+        public string? Engines { get; set; }
+
+        /// <summary>Viewer executable or DLL to start per run.</summary>
+        [CommandOption("--launch <PATH>")]
+        [Description("jumps/pan: start this viewer (the SoundCharts executable or SoundCharts.dll) for each engine and mode, with MCP, a fresh --cache-dir for cold runs and S100_LUA_ENGINE set. Replaces --endpoint/--port-file.")]
+        public string? Launch { get; set; }
+
+        /// <summary>Extra viewer arguments.</summary>
+        [CommandOption("--viewer-arg <ARG>")]
+        [Description("jumps/pan with --launch: an extra viewer argument, repeatable, e.g. --viewer-arg=--data-dir --viewer-arg=/path.")]
+        public string[] ViewerArguments { get; set; } = [];
+
+        /// <summary>Library source to load as you pan.</summary>
+        [CommandOption("--library-source <NAME>")]
+        [Description("jumps/pan: the Library source (or collection) to load as you pan, matched by name. Empty to use whatever is on the map.")]
+        [DefaultValue("Washington")]
+        public string? LibrarySource { get; set; } = "Washington";
+
+        /// <summary>Jump stops.</summary>
+        [CommandOption("--jumps <STOPS>")]
+        [Description("jumps: stops as Name=lat,lon;Name=lat,lon. Defaults to Seattle, Tacoma and Port Townsend.")]
+        public string? JumpStops { get; set; }
+
+        /// <summary>Pan ends.</summary>
+        [CommandOption("--pan <STOPS>")]
+        [Description("pan: the start and end as Name=lat,lon;Name=lat,lon. Defaults to Seattle → Bainbridge Island across Elliott Bay.")]
+        public string? PanStops { get; set; }
+
+        /// <summary>Pan moves.</summary>
+        [CommandOption("--pan-steps <N>")]
+        [Description("pan: viewport moves between the ends.")]
+        [DefaultValue(40)]
+        public int PanSteps { get; set; } = 40;
+
+        /// <summary>Delay between pan moves.</summary>
+        [CommandOption("--pan-step-delay-ms <MS>")]
+        [Description("pan: delay between moves, about one frame by default.")]
+        [DefaultValue(16)]
+        public int PanStepDelayMs { get; set; } = 16;
+
+        /// <summary>Glide animation length.</summary>
+        [CommandOption("--glide-ms <MS>")]
+        [Description("glide: how long each animated jump takes.")]
+        [DefaultValue(800)]
+        public int GlideMs { get; set; } = 800;
+
+        /// <summary>Fling velocities.</summary>
+        [CommandOption("--flings <VELOCITIES>")]
+        [Description("fling: release velocities in screen pixels per second as vx,vy;vx,vy (positive x drags right, so the view travels west). Defaults to west, west, south, east at 4000 px/s, Mapsui's fastest fling.")]
+        public string? Flings { get; set; }
+
+        /// <summary>Map scale.</summary>
+        [CommandOption("--scale <DENOMINATOR>")]
+        [Description("jumps/pan: map scale denominator.")]
+        [DefaultValue(44300.0)]
+        public double ScaleDenominator { get; set; } = SettleRoute.DefaultScaleDenominator;
+
+        /// <summary>Settle timeout.</summary>
+        [CommandOption("--settle-timeout-ms <MS>")]
+        [Description("jumps/pan: longest await_settled wait per move.")]
+        [DefaultValue(120000)]
+        public int SettleTimeoutMs { get; set; } = 120_000;
+
+        /// <summary>Longest wait for the start view to settle.</summary>
+        [CommandOption("--start-settle-timeout-ms <MS>")]
+        [Description("jumps/pan/glide/fling: longest await_settled wait for the view the viewer starts at, before the first move; defaults to --settle-timeout-ms. That view often never settles (a basemap layer that never paints), so a shorter wait saves time on every run.")]
+        public int? StartSettleTimeoutMs { get; set; }
+
+        /// <summary>Settle confirmation.</summary>
+        [CommandOption("--confirm-ms <MS>")]
+        [Description("jumps/pan: how long the view must stay settled; not counted in the settle time.")]
+        [DefaultValue(250)]
+        public int ConfirmMs { get; set; } = 250;
+
+        /// <summary>Pre-warm timeout.</summary>
+        [CommandOption("--prewarm-timeout-ms <MS>")]
+        [Description("jumps/pan in prewarm mode: longest wait for the portrayal pre-warm to finish.")]
+        [DefaultValue(900000)]
+        public int PrewarmTimeoutMs { get; set; } = 900_000;
+
+        /// <summary>Repetitions.</summary>
+        [CommandOption("--repeat <N>")]
+        [Description("jumps/pan: runs per engine and mode. Cold runs with --launch start a fresh viewer and caches each time.")]
+        [DefaultValue(1)]
+        public int Repeat { get; set; } = 1;
+
+        /// <summary>Viewer telemetry.</summary>
+        [CommandOption("--trace")]
+        [Description("jumps/pan with --launch: have each viewer write its spans and metrics (the warm-load breakdown) to <stem>.jsonl in --out.")]
+        public bool Trace { get; set; }
+
+        /// <summary>Keep the cold caches.</summary>
+        [CommandOption("--keep-caches")]
+        [Description("jumps/pan with --launch: keep cold runs' cache folders under --out/caches instead of deleting them.")]
+        public bool KeepCaches { get; set; }
+
+        internal bool IsSettleScenario =>
+            string.Equals(Scenario, "jumps", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Scenario, "glide", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Scenario, "fling", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Scenario, "pan", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Maximum time to wait for rendering to settle after each cycle.</summary>
         [CommandOption("--idle-timeout-ms <MS>")]
@@ -85,10 +198,16 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
         /// <inheritdoc />
         public override ValidationResult Validate()
         {
-            if (string.IsNullOrWhiteSpace(Endpoint) == string.IsNullOrWhiteSpace(PortFile))
+            var sources = new[] { Endpoint, PortFile, Launch }.Count(v => !string.IsNullOrWhiteSpace(v));
+            if (sources != 1 || (!IsSettleScenario && !string.IsNullOrWhiteSpace(Launch)))
             {
-                return ValidationResult.Error(
-                    "Supply exactly one of --endpoint or --port-file.");
+                return ValidationResult.Error(IsSettleScenario
+                    ? "Supply exactly one of --endpoint, --port-file or --launch."
+                    : "Supply exactly one of --endpoint or --port-file.");
+            }
+            if (IsSettleScenario)
+            {
+                return ValidateSettle();
             }
             if (BoundingBox is not null && !TryParseBounds(BoundingBox, out _))
             {
@@ -110,10 +229,66 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
                 && !string.Equals(Scenario, "navigation", StringComparison.OrdinalIgnoreCase))
             {
                 return ValidationResult.Error(
-                    "--scenario must be either burst or navigation.");
+                    "--scenario must be burst, navigation, jumps, glide, fling or pan.");
             }
 
             return ValidationResult.Success();
+        }
+
+        private ValidationResult ValidateSettle()
+        {
+            if (ParseModes() is null)
+                return ValidationResult.Error("--mode must be cold, prewarm or both.");
+            if (ParseModes()!.Count > 1 && string.IsNullOrWhiteSpace(Launch))
+                return ValidationResult.Error("--mode both needs --launch: a cold run must start from empty caches in its own viewer.");
+            if (ParseEngines() is null)
+                return ValidationResult.Error("--engines must list luacsharp and/or moonsharp.");
+            if (ParseEngines() is { Count: > 1 } && string.IsNullOrWhiteSpace(Launch))
+                return ValidationResult.Error("Several --engines need --launch: an attached viewer runs one engine.");
+            if (JumpStops is not null && !SettleRoute.TryParseWaypoints(JumpStops, out _))
+                return ValidationResult.Error("--jumps must be Name=lat,lon;Name=lat,lon.");
+            if (PanStops is not null && (!SettleRoute.TryParseWaypoints(PanStops, out var pan) || pan.Count != 2))
+                return ValidationResult.Error("--pan must be two stops: Name=lat,lon;Name=lat,lon.");
+            if (Flings is not null && !SettleRoute.TryParseFlings(Flings, out _))
+                return ValidationResult.Error("--flings must be vx,vy;vx,vy with each component within ±20000.");
+            if (GlideMs is < 1 or > 10_000)
+                return ValidationResult.Error("--glide-ms must be 1 to 10000.");
+            if (PanSteps < 1 || PanStepDelayMs < 0 || Repeat < 1 || ConfirmMs < 0
+                || SettleTimeoutMs < 50 || StartSettleTimeoutMs is < 50 || PrewarmTimeoutMs < 1000
+                || !double.IsFinite(ScaleDenominator) || ScaleDenominator <= 0)
+            {
+                return ValidationResult.Error(
+                    "Pan steps, repeat and the scale must be positive, delays and --confirm-ms non-negative, --settle-timeout-ms at least 50.");
+            }
+
+            return ValidationResult.Success();
+        }
+
+        /// <summary>The modes to run, or null when --mode is invalid.</summary>
+        internal IReadOnlyList<SettleMode>? ParseModes() => Mode.Trim().ToLowerInvariant() switch
+        {
+            "cold" => [SettleMode.Cold],
+            "prewarm" => [SettleMode.Prewarm],
+            "both" => [SettleMode.Cold, SettleMode.Prewarm],
+            _ => null,
+        };
+
+        /// <summary>The engines to run (empty for the attached viewer's), or null when --engines is invalid.</summary>
+        internal IReadOnlyList<string>? ParseEngines()
+        {
+            if (string.IsNullOrWhiteSpace(Engines))
+                return [];
+            var engines = new List<string>();
+            foreach (var name in Engines.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (!Scripting.LuaEngineKinds.TryParse(name, out var kind))
+                    return null;
+                var canonical = Scripting.LuaEngineKinds.GetName(kind);
+                if (!engines.Contains(canonical))
+                    engines.Add(canonical);
+            }
+
+            return engines.Count == 0 ? null : engines;
         }
     }
 
@@ -123,6 +298,11 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
         Settings settings,
         CancellationToken cancellationToken)
     {
+        if (settings.IsSettleScenario)
+        {
+            return await ViewerSettleCommand.ExecuteAsync(settings, cancellationToken);
+        }
+
         var endpoint = ResolveEndpoint(settings);
         if (endpoint is null)
         {
@@ -323,7 +503,7 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
         return south < north && west < east;
     }
 
-    private static Uri? ResolveEndpoint(Settings settings)
+    internal static Uri? ResolveEndpoint(Settings settings)
     {
         var raw = settings.Endpoint;
         if (!string.IsNullOrWhiteSpace(settings.PortFile))

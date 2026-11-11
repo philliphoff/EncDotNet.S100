@@ -47,6 +47,12 @@ internal static class BuiltInDisplayCombinations
         PressureIsobarStyle.Key,
         WindSpeedStyle.Key,
         WaveDirectionStyle.Key,
+        SeaTemperatureIsothermStyle.Key,
+        CurrentArrowStyle.Key,
+        AirTemperatureIsothermStyle.Key,
+        PrecipitationStyle.Key,
+        ThunderstormRiskStyle.Key,
+        CloudCoverStyle.Key,
     ];
 
     /// <summary>The S-111 station (non-grid) arrows sub-layer.</summary>

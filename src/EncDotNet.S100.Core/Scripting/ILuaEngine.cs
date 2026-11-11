@@ -2,7 +2,7 @@ namespace EncDotNet.S100.Scripting;
 
 /// <summary>
 /// Creates isolated Lua execution contexts for running portrayal catalogue scripts.
-/// Implementations wrap a specific Lua runtime (e.g. MoonSharp, NLua) but are
+/// Implementations wrap a specific Lua runtime (Lua-CSharp, MoonSharp) but are
 /// consumed only through this abstraction so the core library stays dependency-free.
 /// </summary>
 public interface ILuaEngine

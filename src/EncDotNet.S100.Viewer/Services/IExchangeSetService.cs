@@ -219,6 +219,8 @@ internal sealed record ExchangeSetSubsetRequest(
 /// <param name="MinimumDisplayScale">The coarsest display scale, if known.</param>
 /// <param name="MaximumDisplayScale">The finest display scale, if known.</param>
 /// <param name="NotForNavigation">Whether the source's catalogue marks the dataset not for navigation.</param>
+/// <param name="CompilationScale">The catalogue's compilation scale denominator, if known.</param>
+/// <param name="Coverage">The catalogue's coverage polygons, if known; used to defer covered coarse cells (#1265).</param>
 internal sealed record ExchangeSetSubsetItem(
     string RelativePath,
     IReadOnlyList<string> UpdateRelativePaths,
@@ -227,4 +229,6 @@ internal sealed record ExchangeSetSubsetItem(
     BoundingBox? GeographicBounds = null,
     int? MinimumDisplayScale = null,
     int? MaximumDisplayScale = null,
-    bool NotForNavigation = false);
+    bool NotForNavigation = false,
+    int? CompilationScale = null,
+    EncDotNet.S100.Collections.GeoCoverage? Coverage = null);

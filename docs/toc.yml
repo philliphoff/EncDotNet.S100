@@ -16,6 +16,8 @@
       href: catalogues-and-validation.md
     - name: Bringing S-57 into the pipeline
       href: s57-to-s101.md
+    - name: Converting S-101 to S-57
+      href: s101-to-s57.md
     - name: Route checks and under-keel clearance
       href: route-checks.md
     - name: How a route check works
@@ -94,6 +96,8 @@
           href: design/s98-interoperability.md
         - name: Rendering-backend contract
           href: design/rendering-backend-contract.md
+        - name: Map rendering architecture
+          href: design/map-render-architecture.md
         - name: Dataset collections
           href: design/dataset-collections.md
         - name: Wind and wave data
@@ -104,3 +108,5 @@
           href: design/chart-wide-water-level-adjustment.md
         - name: Predefined display combinations
           href: design/predefined-display-combinations.md
+        - name: Viewer view model dependencies
+          href: design/viewer-view-model-dependencies.md

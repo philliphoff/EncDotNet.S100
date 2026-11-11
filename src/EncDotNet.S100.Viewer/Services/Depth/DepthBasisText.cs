@@ -13,6 +13,12 @@ internal enum DepthBasisTone
 
     /// <summary>Informational accent: S-104 in view but not applied.</summary>
     Info,
+
+    /// <summary>The chart is adjusted for water level (#1132): a distinct accent, always on.</summary>
+    Adjusted,
+
+    /// <summary>Adjustment is on but doesn't apply in view (#1132): a caution accent with its icon.</summary>
+    Caution,
 }
 
 /// <summary>
@@ -49,8 +55,9 @@ internal static class DepthBasisText
 
     /// <summary>The pill's forms for a basis.</summary>
     /// <param name="basis">The basis; not <see cref="DepthBasisKind.None"/>.</param>
+    /// <param name="format">The user's Local/UTC setting, for the time.</param>
     /// <returns>The forms.</returns>
-    public static DepthBasisForms Pill(DepthBasis basis)
+    public static DepthBasisForms Pill(DepthBasis basis, TimeFormat format)
     {
         ArgumentNullException.ThrowIfNull(basis);
         return (basis.Kind, basis.Reason) switch
@@ -68,15 +75,60 @@ internal static class DepthBasisText
                 Strings.Status_DepthBasis_ChartedNotApplied_Compact,
                 DepthBasisTone.Info,
                 true),
-            _ => throw new NotSupportedException(
-                $"The depth basis {basis.Kind}/{basis.Reason} has no text until chart water level adjustment (#1132) adds it."),
+            (DepthBasisKind.Charted, DepthBasisReason.WaterLevel) => Unavailable(basis, format),
+            (DepthBasisKind.Adjusted, _) => Adjusted(basis, format),
+            _ => throw new NotSupportedException($"The depth basis {basis.Kind}/{basis.Reason} has no text."),
         };
     }
 
+    private static DepthBasisForms Adjusted(DepthBasis basis, TimeFormat format)
+    {
+        var time = Clock(basis, format);
+        var c = CultureInfo.CurrentCulture;
+        var unconfirmed = basis.Datum == DatumAgreement.Unknown ? Strings.Status_DepthBasis_DatumUnconfirmedSuffix : string.Empty;
+        return basis.CoversWholeView
+            ? new(
+                string.Format(c, Strings.Status_DepthBasis_AdjustedFormat, time) + unconfirmed,
+                string.Format(c, Strings.Status_DepthBasis_AdjustedFormat, time),
+                string.Format(c, Strings.Status_DepthBasis_AdjustedFormat_Compact, time),
+                DepthBasisTone.Adjusted,
+                false)
+            : new(
+                string.Format(c, Strings.Status_DepthBasis_AdjustedPartialFormat, time) + unconfirmed,
+                string.Format(c, Strings.Status_DepthBasis_AdjustedPartialFormat_Short, time),
+                string.Format(c, Strings.Status_DepthBasis_AdjustedPartialFormat_Short, time),
+                DepthBasisTone.Adjusted,
+                false);
+    }
+
+    private static DepthBasisForms Unavailable(DepthBasis basis, TimeFormat format) =>
+        basis.WaterLevelStatus == WaterLevelStatus.DatumMismatch
+            ? new(
+                Strings.Status_DepthBasis_DatumMismatch,
+                Strings.Status_DepthBasis_DatumMismatch,
+                Strings.Status_DepthBasis_Charted,
+                DepthBasisTone.Caution,
+                true)
+            : new(
+                string.Format(CultureInfo.CurrentCulture, Strings.Status_DepthBasis_NoWaterLevelAtFormat, Clock(basis, format)),
+                Strings.Status_DepthBasis_NoWaterLevelAt_Short,
+                Strings.Status_DepthBasis_Charted,
+                DepthBasisTone.Caution,
+                true);
+
+    // The time the drawn layers are for; the view time before any have landed.
+    private static string Clock(DepthBasis basis, TimeFormat format) =>
+        basis.WaterLevelStepTime is { } step
+            ? TimeFormatting.FormatClock(step, format)
+            : basis.ViewTime is { } view
+                ? TimeFormatting.FormatClock(view.UtcDateTime, format)
+                : string.Empty;
+
     /// <summary>The pill text exactly as drawn at its widest (<c>get_depth_basis</c>'s <c>display</c>).</summary>
     /// <param name="basis">The basis.</param>
+    /// <param name="format">The user's Local/UTC setting, for the time.</param>
     /// <returns>The full form; empty when hidden.</returns>
-    public static string Display(DepthBasis basis) => Pill(basis).Full;
+    public static string Display(DepthBasis basis, TimeFormat format) => Pill(basis, format).Full;
 
     /// <summary>
     /// The pill's accessible name, with the state, e.g. "Depth basis: Charted,
@@ -84,10 +136,11 @@ internal static class DepthBasisText
     /// opening the flyout.
     /// </summary>
     /// <param name="basis">The basis.</param>
+    /// <param name="format">The user's Local/UTC setting, for the time.</param>
     /// <returns>The name.</returns>
-    public static string AccessibleName(DepthBasis basis)
+    public static string AccessibleName(DepthBasis basis, TimeFormat format)
     {
-        var full = Display(basis);
+        var full = Display(basis, format);
         return full.Length == 0
             ? Strings.Label_DepthBasis
             : string.Format(CultureInfo.CurrentCulture, Strings.Label_DepthBasisStateFormat, full.Replace(" · ", ", ", StringComparison.Ordinal));
@@ -95,26 +148,28 @@ internal static class DepthBasisText
 
     /// <summary>The flyout's line on what the chart's depths are.</summary>
     /// <param name="basis">The basis.</param>
+    /// <param name="format">The user's Local/UTC setting, for the time.</param>
     /// <returns>The line.</returns>
-    public static string BasisLine(DepthBasis basis)
+    public static string BasisLine(DepthBasis basis, TimeFormat format)
     {
         ArgumentNullException.ThrowIfNull(basis);
         return basis.Kind == DepthBasisKind.Adjusted
-            ? throw new NotSupportedException("Adjusted depths get their text with #1132.")
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Status_DepthBasisPopup_AdjustedBasisFormat, Clock(basis, format))
             : Strings.Status_DepthBasisPopup_ChartedBasis;
     }
 
     /// <summary>The depth card's line on how the chart relates to the picked depth.</summary>
     /// <param name="basis">The basis.</param>
+    /// <param name="format">The user's Local/UTC setting, for the time.</param>
     /// <returns>The line; empty when hidden.</returns>
-    public static string CardLine(DepthBasis basis)
+    public static string CardLine(DepthBasis basis, TimeFormat format)
     {
         ArgumentNullException.ThrowIfNull(basis);
         return basis.Kind switch
         {
             DepthBasisKind.None => string.Empty,
             DepthBasisKind.Charted => Strings.Pick_Depth_ChartBasisCharted,
-            _ => throw new NotSupportedException("Adjusted depths get their text with #1132."),
+            _ => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_ChartBasisAdjustedFormat, Clock(basis, format)),
         };
     }
 
@@ -230,14 +285,56 @@ internal static class DepthBasisText
         if (basis.Kind == DepthBasisKind.Charted && basis.Reason == DepthBasisReason.NotApplied)
             lines.Add(Strings.Status_DepthBasisPopup_NotApplied);
 
+        lines.AddRange(AdjustmentLines(basis, format));
         return lines;
     }
 
-    /// <summary>Where the viewer applies water level today.</summary>
+    // What chart adjustment did with the water level (#1132): the datum
+    // agreement where it applied, and why it didn't elsewhere.
+    private static IEnumerable<string> AdjustmentLines(DepthBasis basis, TimeFormat format)
+    {
+        var c = CultureInfo.CurrentCulture;
+        if (basis.Kind == DepthBasisKind.Adjusted)
+        {
+            yield return basis.Datum == DatumAgreement.Unknown
+                ? Strings.Status_DepthBasisPopup_AdjustedDatumUnconfirmed
+                : Strings.Status_DepthBasisPopup_AdjustedDatumSame;
+        }
+        else if (basis.Reason == DepthBasisReason.WaterLevel)
+        {
+            switch (basis.WaterLevelStatus)
+            {
+                case WaterLevelStatus.NoCoverage:
+                    yield return Strings.Status_DepthBasisPopup_NoWaterLevelInViewNow;
+                    break;
+                case WaterLevelStatus.BeforeStart or WaterLevelStatus.AfterEnd or WaterLevelStatus.NoData:
+                    yield return string.Format(c, Strings.Status_DepthBasisPopup_OutsideTimeRangeFormat, Clock(basis, format));
+                    break;
+            }
+        }
+
+        var waterDatums = string.Join(", ", basis.WaterLevelSources.Select(w => w.VerticalDatumCode).Distinct().Select(DatumLabel));
+        foreach (var refused in basis.NotAdjustedSources)
+        {
+            yield return DepthBasisEvaluator.AdjustableSpecs.Contains(refused.Spec)
+                ? string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedFormat, refused.DatasetId, DatumLabel(refused.VerticalDatumCode), waterDatums)
+                : string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedProductFormat, refused.DatasetId, refused.Spec);
+        }
+    }
+
+    /// <summary>Where the viewer applies water level.</summary>
+    /// <param name="chartAdjustmentOn">Whether chart-wide adjustment (#1132) is on.</param>
     /// <returns>The lines.</returns>
-    public static IReadOnlyList<string> WhereAppliedLines() =>
-    [
-        Strings.Status_DepthBasisPopup_WherePick,
-        Strings.Status_DepthBasisPopup_WhereRoute,
-    ];
+    public static IReadOnlyList<string> WhereAppliedLines(bool chartAdjustmentOn) => chartAdjustmentOn
+        ?
+        [
+            Strings.Status_DepthBasisPopup_WhereChart,
+            Strings.Status_DepthBasisPopup_WherePick,
+            Strings.Status_DepthBasisPopup_WhereRoute,
+        ]
+        :
+        [
+            Strings.Status_DepthBasisPopup_WherePick,
+            Strings.Status_DepthBasisPopup_WhereRoute,
+        ];
 }

@@ -52,8 +52,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         RoutesService routes,
         Func<DepthUnit> depthUnit,
         Func<TimeFormat> timeFormat,
-        RouteFindingsService? findings = null,
-        Action? addDraft = null)
+        RouteFindingsService? findings,
+        Action? addDraft)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(routes);
@@ -495,11 +495,11 @@ internal sealed class CheckSummaryRowViewModel : ViewModelBase
     /// <summary>The filter the row sets.</summary>
     public FindingsFilter Filter { get; }
 
-    /// <summary>A stable AutomationId suffix: Clearance, Route or Warnings.</summary>
+    /// <summary>A stable AutomationId suffix: Clearance, Route, Warnings or Weather.</summary>
     public string Key => Filter.ToString();
 
     private string _label = string.Empty;
-    /// <summary>"Clearance", "Route" or "Warnings".</summary>
+    /// <summary>"Clearance", "Route", "Warnings" or "Weather".</summary>
     public string Label
     {
         get => _label;
@@ -560,8 +560,17 @@ internal sealed class CheckSummaryRowViewModel : ViewModelBase
         private set => SetProperty(ref _addDraft, value);
     }
 
+    private string _tooltip = Strings.Tooltip_CheckSummaryRow;
+    /// <summary>The row's tooltip: "Show these findings", or the Weather row's limits in use.</summary>
+    public string Tooltip
+    {
+        get => _tooltip;
+        private set => SetProperty(ref _tooltip, value);
+    }
+
     internal void Update(RouteCheckSummaryRow row)
     {
+        Tooltip = row.Tooltip ?? Strings.Tooltip_CheckSummaryRow;
         Label = row.Label;
         Text = row.Text;
         Chip = row.Chip;

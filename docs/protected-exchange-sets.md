@@ -72,9 +72,6 @@ foreach (var entry in decrypted.Datasets)
 }
 ```
 
-`X509CertificateLoader` is available in .NET 9 and later. On .NET 8, load the
-certificate with `new X509Certificate2("scheme-administrator.crt")` instead.
-
 The sections below explain each step and what can go wrong.
 
 ## Get the hardware ID

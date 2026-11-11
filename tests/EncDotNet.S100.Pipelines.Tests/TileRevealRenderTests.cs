@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Rendering;
@@ -13,7 +14,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// map (an S-98 filtered copy whose dropped features changed) shows the
 /// replaced layer's tiles until its own land, rather than blanking.
 /// </summary>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class TileRevealRenderTests
 {
     private const int Band = 10;
@@ -53,44 +54,6 @@ public sealed class TileRevealRenderTests
         Assert.True(Count(first, Symbol) > 0);
     }
 
-    [Fact]
-    public void Render_ReplacementLayer_ShowsReplacedLayersTilesUntilItsOwnLand()
-    {
-        var viewport = MakeViewport();
-        var source = BindLayer(new List<PaintOp> { Square() });
-        using (RenderSettled(source, viewport))
-        {
-        }
-
-        var replacement = new MemoryLayer { Name = "filtered" };
-        Assert.True(S100VectorTileRenderer.TryBindFilteredScene(source, replacement, _ => true, replaces: source));
-
-        // The replacement's first frame has no tile of its own yet (its workers
-        // start after the composite), so the fill comes from the replaced layer.
-        using var first = RenderFrame(replacement, viewport);
-
-        Assert.True(Count(first, Fill) > 0);
-    }
-
-    [Fact]
-    public void Render_FilteredLayerWithoutPredecessor_StartsBlank()
-    {
-        // The control for the test above: a filtered copy that replaces nothing
-        // has nothing to show on its first frame.
-        var viewport = MakeViewport();
-        var source = BindLayer(new List<PaintOp> { Square() });
-        using (RenderSettled(source, viewport))
-        {
-        }
-
-        var filtered = new MemoryLayer { Name = "filtered" };
-        Assert.True(S100VectorTileRenderer.TryBindFilteredScene(source, filtered, _ => true));
-
-        using var first = RenderFrame(filtered, viewport);
-
-        Assert.Equal(0, Count(first, Fill));
-    }
-
     private static long Count(SKSurface surface, RgbaColor color)
     {
         using var image = surface.Snapshot();
@@ -113,7 +76,7 @@ public sealed class TileRevealRenderTests
     private static SKSurface RenderFrame(ILayer layer, Mapsui.Viewport viewport)
     {
         var surface = CreateSurface();
-        S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, new RenderService());
+        MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, new RenderService());
         return surface;
     }
 

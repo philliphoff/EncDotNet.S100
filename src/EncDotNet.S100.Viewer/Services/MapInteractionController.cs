@@ -4,13 +4,13 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 using Mapsui;
 using Mapsui.Extensions;
-using Mapsui.Layers;
 using Mapsui.Manipulations;
 using Mapsui.Projections;
 using Mapsui.UI.Avalonia;
@@ -63,6 +63,13 @@ internal sealed class MapInteractionController
     /// change next to the overscale indication; null in hosts without one.
     /// </summary>
     public Depth.DepthBasisService? DepthBasis { get; init; }
+
+    /// <summary>
+    /// The map's viewport, for the zoom buttons: animating through it reports
+    /// the zoom's target to the demand planner (map rendering slice&#160;9), so
+    /// the target's cells and tiles start before the zoom ends.
+    /// </summary>
+    public IMapViewportController? Viewport { get; init; }
 
     private MapControl? _mapControl;
     private MapsuiMapNavigator? _mapNavigator;
@@ -201,16 +208,23 @@ internal sealed class MapInteractionController
 
     private void OnZoomInClick(object? sender, RoutedEventArgs e)
     {
-        if (_mapControl?.Map?.Navigator is not { } navigator)
-            return;
-        navigator.ZoomTo(navigator.Viewport.Resolution / 2, 250);
+        ZoomBy(0.5);
     }
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e)
     {
+        ZoomBy(2.0);
+    }
+
+    private void ZoomBy(double factor)
+    {
         if (_mapControl?.Map?.Navigator is not { } navigator)
             return;
-        navigator.ZoomTo(navigator.Viewport.Resolution * 2, 250);
+        var viewport = navigator.Viewport;
+        if (Viewport is { } host)
+            host.AnimateToCenterAndResolution(new MPoint(viewport.CenterX, viewport.CenterY), viewport.Resolution * factor, 250);
+        else
+            navigator.ZoomTo(viewport.Resolution * factor, 250);
     }
 
     /// <summary>
@@ -251,7 +265,7 @@ internal sealed class MapInteractionController
     {
         scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
         compassRose.UpdateForViewport(viewport.Rotation);
-        _viewModel.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
+        _viewModel.StatusBar.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
         UpdateOverscale(viewport);
         DepthBasis?.Invalidate();
     }
@@ -268,7 +282,7 @@ internal sealed class MapInteractionController
         var cells = _loader.GetOverscaleCells();
         if (cells.Count == 0)
         {
-            _viewModel.UpdateOverscale(OverscaleReport.None);
+            _viewModel.StatusBar.UpdateOverscale(OverscaleReport.None);
             return;
         }
 
@@ -276,7 +290,7 @@ internal sealed class MapInteractionController
         var envelope = new NetTopologySuite.Geometries.Envelope(
             extent.MinX, extent.MaxX, extent.MinY, extent.MaxY);
         var report = OverscaleEvaluator.Evaluate(cells, envelope, viewport.Resolution);
-        _viewModel.UpdateOverscale(report);
+        _viewModel.StatusBar.UpdateOverscale(report);
     }
 
     private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)
@@ -368,7 +382,7 @@ internal sealed class MapInteractionController
 
         // In Pick Mode the double-tap zoom is suppressed so that successive
         // taps on adjacent features each register as picks rather than zooms.
-        if (_viewModel.IsPickModeActive)
+        if (_viewModel.MapTools.IsPickModeActive)
         {
             e.Handled = true;
             return;
@@ -413,7 +427,7 @@ internal sealed class MapInteractionController
         // doesn't fight with double-tap-to-zoom (the first tap of a double-tap
         // also fires here; clearing on it is harmless). A tap while a map tool
         // (e.g. Measure) is active is left for the tool and never clears.
-        if (!_viewModel.IsPickModeActive)
+        if (!_viewModel.MapTools.IsPickModeActive)
         {
             if (ShouldClearPickOnTap(
                     pickModeActive: false,
@@ -605,8 +619,8 @@ internal sealed class MapInteractionController
     private void OnMapPointerExited(object? sender, PointerEventArgs e)
     {
         _lastMouseScreenPos = null;
-        _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-        _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+        _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+        _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
     }
 
     private void HandleViewportChangedForMouseLatLon()
@@ -631,8 +645,8 @@ internal sealed class MapInteractionController
             position.X > bounds.Width || position.Y > bounds.Height)
         {
             _lastMouseScreenPos = null;
-            _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-            _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             return;
         }
 
@@ -644,8 +658,8 @@ internal sealed class MapInteractionController
     {
         if (_mapControl?.Map?.Navigator is not { } navigator)
         {
-            _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-            _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             return;
         }
 
@@ -655,16 +669,16 @@ internal sealed class MapInteractionController
             double.IsInfinity(lat) || double.IsInfinity(lon) ||
             lat < -90.0 || lat > 90.0)
         {
-            _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-            _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             return;
         }
 
         // Normalize longitude into the canonical [-180, 180] range so that
         // panning past the antimeridian still produces sensible readings.
         lon = ((lon + 540.0) % 360.0) - 180.0;
-        _viewModel.MouseLatText = LatLonFormatter.FormatLatitude(lat);
-        _viewModel.MouseLonText = LatLonFormatter.FormatLongitude(lon);
+        _viewModel.StatusBar.MouseLatText = LatLonFormatter.FormatLatitude(lat);
+        _viewModel.StatusBar.MouseLonText = LatLonFormatter.FormatLongitude(lon);
     }
 
     private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -711,47 +725,38 @@ internal sealed class MapInteractionController
         _longPressTimer?.Stop();
         _longPressTimer = null;
 
-        // Translate the press position to a Mapsui MapInfo and dispatch the
-        // pick. Setting _longPressFired suppresses the SingleTap that will be
-        // synthesized when the user lifts their finger.
-        var datasetLayers = GetDatasetLayers();
-        var mapInfo = _mapControl.GetMapInfo(new ScreenPosition(origin.X, origin.Y), datasetLayers);
+        // Pick at the press position. Setting _longPressFired suppresses the
+        // SingleTap that will be synthesized when the user lifts their finger.
+        var world = _mapControl.Map?.Navigator?.Viewport.ScreenToWorld(origin.X, origin.Y);
         _longPressOrigin = null;
         _longPressFired = true;
-        _pickService.HandlePick(mapInfo, CollectDynamicHits(mapInfo));
+        PickAt(world);
     }
 
-    private void PerformPickAt(BaseEventArgs e)
+    private void PerformPickAt(BaseEventArgs e) => PickAt(e.WorldPosition);
+
+    /// <summary>
+    /// Picks at <paramref name="world"/> through the map session's engine
+    /// pick (map rendering slice 8), with the dynamic sources' hits.
+    /// </summary>
+    private void PickAt(MPoint? world)
     {
-        var datasetLayers = GetDatasetLayers();
-        var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
-        _pickService.HandlePick(mapInfo, CollectDynamicHits(mapInfo));
+        var resolution = _mapControl?.Map?.Navigator?.Viewport.Resolution ?? double.NaN;
+        _ = _pickService.HandlePickAsync(world, resolution, CollectDynamicHits(world, resolution));
     }
 
     /// <summary>
-    /// Asks the dynamic-source pick service to hit-test the supplied
-    /// <see cref="MapInfo"/>'s world position. Returns an empty list
-    /// when the service is unavailable (legacy ctor / test stubs) or
-    /// when the <see cref="MapInfo"/> lacks a world position.
+    /// Asks the dynamic-source pick service to hit-test
+    /// <paramref name="world"/>. Returns an empty list when the service is
+    /// unavailable (legacy ctor / test stubs) or there is no position.
     /// </summary>
-    private IReadOnlyList<ViewModels.DynamicPickHit> CollectDynamicHits(MapInfo? mapInfo)
+    private IReadOnlyList<ViewModels.DynamicPickHit> CollectDynamicHits(MPoint? world, double resolution)
     {
-        if (_dynamicPickService is null || mapInfo?.WorldPosition is not { } world)
+        if (_dynamicPickService is null || world is null)
         {
             return Array.Empty<ViewModels.DynamicPickHit>();
         }
 
-        var resolution = _mapControl?.Map?.Navigator?.Viewport.Resolution ?? double.NaN;
         return _dynamicPickService.Pick(world, resolution);
-    }
-
-    private List<ILayer> GetDatasetLayers()
-    {
-        var result = new List<ILayer>();
-        foreach (var layers in _loader.EntryLayers.Values)
-        {
-            result.AddRange(layers);
-        }
-        return result;
     }
 }

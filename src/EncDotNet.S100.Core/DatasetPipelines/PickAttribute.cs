@@ -65,6 +65,17 @@ public sealed class PickAttribute
     public double? DepthMetresValue { get; init; }
 
     /// <summary>
+    /// A short outlined mark shown before the attribute's name, or
+    /// <see langword="null"/> for none: <c>"AML"</c> on an attribute that a
+    /// NATO Additional Military Layers catalogue adds to a standard S-57
+    /// object class (<see cref="AmlMark"/>).
+    /// </summary>
+    public string? Mark { get; init; }
+
+    /// <summary>The <see cref="Mark"/> of an AML-only attribute on a standard S-57 class: <c>"AML"</c>.</summary>
+    public const string AmlMark = "AML";
+
+    /// <summary>
     /// Sub-attributes of a complex attribute. Empty for simple attributes
     /// and for leaf rows of a complex attribute.
     /// </summary>
@@ -103,6 +114,39 @@ public sealed class PickAttribute
             RawValue = text,
             DisplayValue = text,
             IsNavigationNotice = true,
+        };
+    }
+
+    /// <summary>
+    /// The <see cref="Code"/> of a stale-data line (<see cref="StaleNotice"/>):
+    /// <c>"stale"</c>.
+    /// </summary>
+    public const string StaleNoticeCode = "stale";
+
+    /// <summary>
+    /// <c>true</c> when this row says the data picked is old, e.g. "This
+    /// analysis is 9 h old. A newer one is likely." on a stale
+    /// surface analysis. Non-viewer callers show it as an ordinary row; the
+    /// viewer shows it as a warning line under the notice.
+    /// </summary>
+    public bool IsStaleNotice { get; init; }
+
+    /// <summary>
+    /// A stale-data row: <see cref="StaleNoticeCode"/>, named "Stale", with
+    /// <paramref name="text"/> as its value and <see cref="IsStaleNotice"/> set.
+    /// </summary>
+    /// <param name="text">What is old and how old.</param>
+    /// <returns>The row.</returns>
+    public static PickAttribute StaleNotice(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return new PickAttribute
+        {
+            Code = StaleNoticeCode,
+            Name = "Stale",
+            RawValue = text,
+            DisplayValue = text,
+            IsStaleNotice = true,
         };
     }
 

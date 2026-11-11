@@ -10,7 +10,7 @@ public class ListSpecsToolTests
     public async Task Empty_catalog_lists_every_known_spec_with_zero_counts()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new ListSpecsTool(catalog);
+        var tool = new ListSpecsTool(catalog, registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -32,7 +32,7 @@ public class ListSpecsToolTests
         catalog.Add(LoadedDatasetFactory.S124("a"));
         catalog.Add(LoadedDatasetFactory.S124("b"));
         catalog.Add(LoadedDatasetFactory.S122("c"));
-        var tool = new ListSpecsTool(catalog);
+        var tool = new ListSpecsTool(catalog, registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -49,7 +49,7 @@ public class ListSpecsToolTests
     public async Task Capabilities_flag_coverage_versus_vector_specs_correctly()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new ListSpecsTool(catalog);
+        var tool = new ListSpecsTool(catalog, registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -97,7 +97,7 @@ public class ListSpecsToolTests
     [Fact]
     public async Task PortrayalNote_marks_S104_as_SoundCharts_portrayal_only()
     {
-        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -114,13 +114,23 @@ public class ListSpecsToolTests
         Assert.Equal(
             "SoundCharts portrayal: CAP 1.2 defines no symbology",
             value.Specs.Single(s => s.Name == "CAP").PortrayalNote);
-        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2" or "CAP")), s => Assert.Null(s.PortrayalNote));
+        Assert.Equal(
+            "SoundCharts portrayal: WPC's coded surface bulletin defines no symbology",
+            value.Specs.Single(s => s.Name == "CODSUS").PortrayalNote);
+        Assert.Equal(
+            "SoundCharts portrayal: NHC tropical cyclone GIS data defines no symbology",
+            value.Specs.Single(s => s.Name == "TC").PortrayalNote);
+        // AML's official portrayal is restricted, so SoundCharts draws its own (#1369).
+        Assert.Equal(
+            "SoundCharts portrayal: the public AML release defines no symbology",
+            value.Specs.Single(s => s.Name == "AML").PortrayalNote);
+        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2" or "CAP" or "CODSUS" or "TC" or "AML")), s => Assert.Null(s.PortrayalNote));
     }
 
     [Fact]
     public async Task Built_in_products_are_listed_from_the_registry_as_S100()
     {
-        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -133,7 +143,7 @@ public class ListSpecsToolTests
     [Fact]
     public async Task The_built_in_weather_formats_are_listed_as_not_S100()
     {
-        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 

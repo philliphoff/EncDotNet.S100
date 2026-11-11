@@ -118,7 +118,7 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
 
         var list = Value(await get.InvokeAsync(null, cancellationToken: ct));
         Assert.Equal(("all", false, (string?)null), (list.Filter, list.InfoOpen, list.ExpandedId));
-        Assert.Equal(new FindingsCountsDto(6, 0, 0, 6), list.Counts);
+        Assert.Equal(new FindingsCountsDto(6, 0, 0, 6, 0), list.Counts);
         var near = Assert.Single(list.Merged, m => m.Code == RouteFindingCodes.WarningNearRoute.Value);
         Assert.Equal(("check", 2, false), (near.Group, near.Count, near.Expanded));
         Assert.Equal(near.Ids, list.Findings.Where(f => f.Code == RouteFindingCodes.WarningNearRoute.Value).Select(f => f.Id));
@@ -158,7 +158,7 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 1400);
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));

@@ -70,10 +70,25 @@ public sealed class RouteCheckSettings
     public IReadOnlyCollection<int> AreaKindsOff { get; init; } = [];
 
     /// <summary>
-    /// Departures to sweep for the clearance check, or <c>null</c> for none.
-    /// The sweep is in <see cref="RouteCheckReport.Departures"/>.
+    /// Departures to sweep for the clearance and weather checks, or
+    /// <c>null</c> for none. The sweeps are in
+    /// <see cref="RouteCheckReport.Departures"/> and
+    /// <see cref="WeatherCheckResult.Departures"/>.
     /// </summary>
     public DepartureRange? DepartureWindow { get; init; }
+
+    /// <summary>
+    /// The wind and wave limits for the weather check, or <c>null</c>. Each
+    /// value set here replaces the plan's (<see cref="PassagePlan.VesselLimits"/>);
+    /// a value set in neither isn't checked.
+    /// </summary>
+    public WeatherLimits? WeatherLimits { get; init; }
+
+    /// <summary>
+    /// The tropical cyclone rule's settings for the weather check (#1299), or
+    /// <c>null</c> for <see cref="TropicalCycloneCheckSettings.Default"/>.
+    /// </summary>
+    public TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
 
     /// <summary>Whether the depth and danger checks run: both the safety contour and the safety depth are set.</summary>
     public bool ChecksDepths => SafetyContour is not null && SafetyDepth is not null;
@@ -109,8 +124,10 @@ public sealed class RouteCheckSettings
 }
 
 /// <summary>
-/// The departures a clearance check sweeps (<see cref="RouteCheckSettings.DepartureWindow"/>):
-/// a fixed range, or the span of the water-level data that covers the route.
+/// The departures the clearance and weather checks sweep
+/// (<see cref="RouteCheckSettings.DepartureWindow"/>): a fixed range, or the
+/// span of each check's own data that covers the route (water level for the
+/// clearance check, the forecast for the weather check).
 /// </summary>
 public sealed record DepartureRange
 {

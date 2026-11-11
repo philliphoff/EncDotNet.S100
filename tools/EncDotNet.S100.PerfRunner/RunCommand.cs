@@ -45,6 +45,10 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
         [Description("Extra metadata tags (repeatable).")]
         public string[]? Tags { get; set; }
 
+        [CommandOption("--lua-engine <ENGINE>")]
+        [Description("The Lua engine scenarios portray with: luacsharp (default) or moonsharp. Defaults to S100_LUA_ENGINE when that is set.")]
+        public string? LuaEngine { get; set; }
+
         [CommandOption("--profile <MODE>")]
         [Description("Capture an in-process EventPipe trace alongside the .jsonl: 'none' (default), 'cpu', or 'alloc'. Output is <basename>.nettrace; convert with 'dotnet-trace convert <file>.nettrace --format speedscope'.")]
         [DefaultValue("none")]
@@ -85,6 +89,12 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             return 1;
         }
 
+        if (!PerfLuaEngine.TrySelect(settings.LuaEngine))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid --lua-engine value:[/] {settings.LuaEngine ?? Environment.GetEnvironmentVariable(PerfLuaEngine.EnvironmentVariable)} (expected: luacsharp, moonsharp)");
+            return 1;
+        }
+
         // Resolve profile mode early so we fail fast on bad input.
         if (!TryParseProfileMode(settings.Profile, out var profileMode))
         {
@@ -117,6 +127,7 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
         AnsiConsole.MarkupLine($"[bold]Corpus:[/]   {corpus}");
         AnsiConsole.MarkupLine($"[bold]Output:[/]   {jsonlPath}");
         AnsiConsole.MarkupLine($"[bold]Warmup:[/]   {settings.Warmup}  [bold]Iterations:[/] {settings.Iterations}");
+        AnsiConsole.MarkupLine($"[bold]Lua:[/]      {PerfLuaEngine.Name}");
         if (profileMode != ProfileMode.None)
         {
             AnsiConsole.MarkupLine($"[bold]Profile:[/]  {profileMode} → {nettracePath}");
@@ -148,6 +159,7 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             // Measured iterations — wrapped in a perf.iteration activity so the
             // JSONL contains a tagged span per sample (consistent with `baseline`).
             var durations = new List<double>();
+            var allocatedMb = new List<double>();
             for (int i = 0; i < settings.Iterations; i++)
             {
                 AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
@@ -156,12 +168,19 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
                 iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
                 iterActivity?.SetTag(PerfActivitySource.RoundTag, 1);
                 iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
+                iterActivity?.SetTag(PerfActivitySource.LuaEngineTag, PerfLuaEngine.Name);
 
+                // Bytes allocated on every thread during the iteration, so
+                // background work the scenario starts is counted too.
+                var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
                 var sw = Stopwatch.StartNew();
                 await scenario.RunAsync(ctx, CancellationToken.None);
                 sw.Stop();
+                var allocated = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
+                iterActivity?.SetTag(PerfActivitySource.AllocatedBytesTag, allocated);
                 durations.Add(sw.Elapsed.TotalMilliseconds);
-                AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/]");
+                allocatedMb.Add(allocated / (1024.0 * 1024.0));
+                AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/] [grey]{allocated / (1024.0 * 1024.0):F1} MB[/]");
             }
 
             totalSw.Stop();
@@ -169,7 +188,7 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             AnsiConsole.MarkupLine($"[bold]Total:[/] {totalSw.Elapsed.TotalSeconds:F1}s");
 
             // Write a simple markdown summary alongside.
-            WriteSummary(mdPath, scenario, settings, durations);
+            WriteSummary(mdPath, scenario, settings, durations, allocatedMb);
 
             AnsiConsole.MarkupLine($"[bold]Summary:[/] {mdPath}");
         }
@@ -197,7 +216,7 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
     }
 
     private static void WriteSummary(
-        string path, IPerfScenario scenario, Settings settings, List<double> durations)
+        string path, IPerfScenario scenario, Settings settings, List<double> durations, List<double> allocatedMb)
     {
         durations.Sort();
         using var writer = new StreamWriter(path);
@@ -211,6 +230,7 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
         writer.WriteLine($"- **Warmup:** {settings.Warmup}");
         writer.WriteLine($"- **Iterations:** {settings.Iterations}");
         writer.WriteLine($"- **Corpus:** {settings.Corpus}");
+        writer.WriteLine($"- **Lua engine:** {PerfLuaEngine.Name}");
         writer.WriteLine();
 
         if (durations.Count > 0)
@@ -226,6 +246,20 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             writer.WriteLine($"| P99 | {Percentile(durations, 0.99):F2} |");
             writer.WriteLine($"| Max | {durations[^1]:F2} |");
             writer.WriteLine($"| Mean | {durations.Average():F2} |");
+        }
+
+        if (allocatedMb.Count > 0)
+        {
+            allocatedMb.Sort();
+            writer.WriteLine();
+            writer.WriteLine("## Bytes allocated per iteration (MB)");
+            writer.WriteLine();
+            writer.WriteLine("| Stat | Value |");
+            writer.WriteLine("|------|-------|");
+            writer.WriteLine($"| Min | {allocatedMb[0]:F1} |");
+            writer.WriteLine($"| P50 | {Percentile(allocatedMb, 0.50):F1} |");
+            writer.WriteLine($"| Max | {allocatedMb[^1]:F1} |");
+            writer.WriteLine($"| Mean | {allocatedMb.Average():F1} |");
         }
 
         if (settings.Tags is { Length: > 0 })

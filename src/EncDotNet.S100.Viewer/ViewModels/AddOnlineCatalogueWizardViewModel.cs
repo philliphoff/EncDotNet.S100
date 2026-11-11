@@ -20,25 +20,45 @@ internal enum WizardStepState
     Done,
 }
 
+/// <summary>What a step of the "Add online source" wizard is for.</summary>
+internal enum WizardStepKind
+{
+    /// <summary>Choose the source from the directory (or add one by URL).</summary>
+    Source,
+
+    /// <summary>SECOM services only: the identity presented and how the service reads (#883).</summary>
+    Connection,
+
+    /// <summary>Choose what to include.</summary>
+    Include,
+
+    /// <summary>Choose the collection and review.</summary>
+    AddTo,
+}
+
 /// <summary>One step in a wizard's step header: its number, label, the choice made in it, and its state.</summary>
 internal sealed class WizardStepViewModel : ViewModelBase
 {
     private string _value = string.Empty;
     private WizardStepState _state;
-    private bool _isSkipped;
 
-    public WizardStepViewModel(int number, string label, Action<int> goTo)
+    public WizardStepViewModel(WizardStepKind kind, int number, string label, Action<int> goTo)
     {
+        Kind = kind;
         Number = number;
         Label = label;
-        GoToCommand = new RelayCommand(() => goTo(number), () => _state == WizardStepState.Done && !_isSkipped);
+        GoToCommand = new RelayCommand(() => goTo(number), () => _state == WizardStepState.Done);
     }
 
+    /// <summary>What the step is for.</summary>
+    public WizardStepKind Kind { get; }
+
+    /// <summary>The step's position in the current path (1-based).</summary>
     public int Number { get; }
 
     public string Label { get; }
 
-    /// <summary>The choice made in the step ("NOAA ENC", "Everything", "New collection").</summary>
+    /// <summary>The choice made in a completed step ("NOAA ENC", "Everything", "New collection"); empty otherwise.</summary>
     public string Value
     {
         get => _value;
@@ -60,17 +80,6 @@ internal sealed class WizardStepViewModel : ViewModelBase
         }
     }
 
-    /// <summary>True for a step the chosen catalogue doesn't need (Connection, for all but SECOM); it can't be clicked.</summary>
-    public bool IsSkipped
-    {
-        get => _isSkipped;
-        set
-        {
-            if (SetProperty(ref _isSkipped, value))
-                ((RelayCommand)GoToCommand).NotifyCanExecuteChanged();
-        }
-    }
-
     public bool IsCurrent => _state == WizardStepState.Current;
 
     public bool IsDone => _state == WizardStepState.Done;
@@ -82,25 +91,22 @@ internal sealed class WizardStepViewModel : ViewModelBase
 }
 
 /// <summary>
-/// The "Add online catalogue" wizard: one dialog in four steps with a real
-/// Back button. Step 1 picks a catalogue from the directory (or adds one by
-/// URL); step 2, for a SECOM service, chooses the identity it presents and
-/// says how it reads (#883); step 3 chooses what to include; step 4 picks the
-/// collection and reviews. Other catalogues skip step 2. Nothing chosen is
-/// lost going back: each catalogue keeps its own
+/// The "Add online source" wizard: one dialog with a real Back button, in
+/// three steps (Source, What to include, Add to), or four for a SECOM service,
+/// whose Connection step chooses the identity it presents and says how it
+/// reads (#883). The step list follows the path: it is rebuilt when the
+/// source chosen in step 1 changes between SECOM and anything else, and steps
+/// are numbered by their position in it. Nothing chosen is lost going back: each catalogue keeps its own
 /// <see cref="AddToLibraryDialogViewModel"/> (its ticks, scope and name), and
 /// is read once (again when the identity changes).
 /// </summary>
 /// <remarks>
 /// A SECOM service that can't be read yet is added anyway ("Add and wait"):
-/// steps 3 and 4 then use the products from its directory entry, and the
+/// What to include and Add to then use the products from its directory entry, and the
 /// source lists once it can be read.
 /// </remarks>
 internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
 {
-    /// <summary>The number of steps.</summary>
-    public const int StepCount = 4;
-
     private readonly Func<AddToLibraryDialogViewModel> _scopeFactory;
     private readonly Func<KnownCatalogueSource, Action<Keys.KeysTab>, Secom.SecomConnectionStepViewModel?>? _connectionFactory;
     private readonly Action<Keys.KeysTab>? _openKeys;
@@ -109,14 +115,15 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     private Secom.SecomConnectionStepViewModel? _connection;
     private KnownCatalogueSource? _chosen;
     private Guid? _targetCollectionId;
-    private int _currentStep = 1;
+    private WizardStepKind _current = WizardStepKind.Source;
+    private IReadOnlyList<WizardStepViewModel> _steps = [];
     private AddToLibraryDialogViewModel? _scope;
 
     public AddOnlineCatalogueWizardViewModel(
         CatalogueDirectoryDialogViewModel directory,
         Func<AddToLibraryDialogViewModel> scopeFactory,
-        Action<Keys.KeysTab>? openKeys = null,
-        Func<KnownCatalogueSource, Action<Keys.KeysTab>, Secom.SecomConnectionStepViewModel?>? connectionFactory = null)
+        Action<Keys.KeysTab>? openKeys,
+        Func<KnownCatalogueSource, Action<Keys.KeysTab>, Secom.SecomConnectionStepViewModel?>? connectionFactory)
     {
         _connectionFactory = connectionFactory;
         _openKeys = openKeys;
@@ -127,15 +134,7 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
         Directory.KeysRequested += (_, tab) => OpenKeys(tab);
         _scopeFactory = scopeFactory;
 
-        Steps =
-        [
-            new(1, Strings.Wizard_StepCatalogue, GoTo),
-            new(2, Strings.Wizard_StepConnection, GoTo),
-            new(3, Strings.Wizard_StepInclude, GoTo),
-            new(4, Strings.Wizard_StepAddTo, GoTo),
-        ];
-
-        BackCommand = new RelayCommand(() => GoTo(_currentStep == 3 && _connection is null ? 1 : _currentStep - 1), () => _currentStep > 1);
+        BackCommand = new RelayCommand(() => GoTo(CurrentStep - 1), () => CurrentStep > 1);
         NextCommand = new AsyncRelayCommand(NextAsync, () => CanNext, AsyncRelayCommandOptions.AllowConcurrentExecutions);
         AddCommand = new RelayCommand(() => _scope?.ConfirmCommand.Execute(null), () => CanAdd);
         CancelCommand = new RelayCommand(() => Closed?.Invoke(this, false));
@@ -146,8 +145,11 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
 
         Directory.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(CatalogueDirectoryDialogViewModel.SelectedEntry))
+            if (e.PropertyName is nameof(CatalogueDirectoryDialogViewModel.SelectedEntry)
+                or nameof(CatalogueDirectoryDialogViewModel.CanContinueWithSelection))
+            {
                 Refresh();
+            }
         };
         Refresh();
     }
@@ -155,10 +157,10 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     /// <summary>Raised with <see langword="true"/> when the source was added, <see langword="false"/> when cancelled.</summary>
     public event EventHandler<bool>? Closed;
 
-    /// <summary>Step 1: the catalogue directory.</summary>
+    /// <summary>The Source step: the catalogue directory.</summary>
     public CatalogueDirectoryDialogViewModel Directory { get; }
 
-    /// <summary>Step 2 for a SECOM service: its identity and how it reads (#883); null for other catalogues.</summary>
+    /// <summary>The Connection step of a SECOM service: its identity and how it reads (#883); null for other sources.</summary>
     public Secom.SecomConnectionStepViewModel? Connection
     {
         get => _connection;
@@ -175,23 +177,33 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Steps 3 and 4: the scope and target for the chosen catalogue.</summary>
+    /// <summary>What to include and Add to: the scope and target for the chosen source.</summary>
     public AddToLibraryDialogViewModel? Scope
     {
         get => _scope;
         private set => SetProperty(ref _scope, value);
     }
 
-    /// <summary>The step header.</summary>
-    public IReadOnlyList<WizardStepViewModel> Steps { get; }
-
-    /// <summary>The step being shown (1–4).</summary>
-    public int CurrentStep
+    /// <summary>The step header for the current path: three steps, or four for a SECOM service.</summary>
+    public IReadOnlyList<WizardStepViewModel> Steps
     {
-        get => _currentStep;
+        get => _steps;
+        private set => SetProperty(ref _steps, value);
+    }
+
+    /// <summary>The number of steps in the current path.</summary>
+    public int StepCount => _steps.Count;
+
+    /// <summary>The step being shown, as its position in <see cref="Steps"/> (1-based).</summary>
+    public int CurrentStep => IndexOf(_current) + 1;
+
+    /// <summary>What the step being shown is for.</summary>
+    public WizardStepKind CurrentKind
+    {
+        get => _current;
         private set
         {
-            if (!SetProperty(ref _currentStep, value))
+            if (!SetProperty(ref _current, value))
                 return;
 
             OnPropertyChanged(nameof(IsCatalogueStep));
@@ -199,31 +211,43 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsIncludeStep));
             OnPropertyChanged(nameof(IsAddToStep));
             OnPropertyChanged(nameof(IsLastStep));
-            OnPropertyChanged(nameof(StepOfText));
             Refresh();
         }
     }
 
-    public bool IsCatalogueStep => _currentStep == 1;
+    public bool IsCatalogueStep => _current == WizardStepKind.Source;
 
-    public bool IsConnectionStep => _currentStep == 2;
+    public bool IsConnectionStep => _current == WizardStepKind.Connection;
 
-    public bool IsIncludeStep => _currentStep == 3;
+    public bool IsIncludeStep => _current == WizardStepKind.Include;
 
-    public bool IsAddToStep => _currentStep == 4;
+    public bool IsAddToStep => _current == WizardStepKind.AddTo;
 
     /// <summary>The primary button before the last step: "Next", or on the Connection step "Continue" or "Add and wait" (#883 C5).</summary>
     public string NextLabel => IsConnectionStep && _connection is { } connection ? connection.PrimaryLabel : Strings.Button_Next;
 
     /// <summary>True on the last step, where the primary button reads "Add to Library".</summary>
-    public bool IsLastStep => _currentStep == StepCount;
+    public bool IsLastStep => _current == WizardStepKind.AddTo;
 
-    /// <summary>"Step 2 of 4".</summary>
-    public string StepOfText => string.Format(CultureInfo.CurrentCulture, Strings.Wizard_StepOfFormat, _currentStep, StepCount);
+    /// <summary>"Step 2 of 3", counted in the current path.</summary>
+    public string StepOfText => string.Format(CultureInfo.CurrentCulture, Strings.Wizard_StepOfFormat, CurrentStep, StepCount);
+
+    /// <summary>
+    /// On the Source step, the selection in one line ("NOAA ENC — all U.S. waters · NOAA ENC"),
+    /// so the footer confirms the choice when its row has scrolled away; otherwise null.
+    /// </summary>
+    public string? SelectionText =>
+        _isReadingCatalogue ? Strings.Wizard_Loading
+        : IsCatalogueStep && Directory.SelectedEntry is { } entry
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_SelectionFormat, entry.Name, entry.FormatText)
+            : null;
+
+    /// <summary>True when <see cref="SelectionText"/> is set.</summary>
+    public bool HasSelectionText => SelectionText is not null;
 
     /// <summary>"Select at least one" when the scope step cannot continue for want of a tick; otherwise null.</summary>
     public string? FooterHint =>
-        _currentStep == 3 && _scope is { IsLoaded: true, IsLoading: false, IncludeAll: false, HasSelection: false, IsSingleEntry: false }
+        IsIncludeStep && _scope is { IsLoaded: true, IsLoading: false, IncludeAll: false, HasSelection: false, IsSingleEntry: false }
             ? Strings.Wizard_SelectAtLeastOne
             : null;
 
@@ -232,10 +256,10 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
 
     public ICommand BackCommand { get; }
 
-    /// <summary>Steps 1–3: continues to the next step (reading the catalogue when it is first needed).</summary>
+    /// <summary>Before the last step: continues to the next one (reading the catalogue when it is first needed).</summary>
     public ICommand NextCommand { get; }
 
-    /// <summary>Step 4: adds the source to the chosen collection.</summary>
+    /// <summary>The last step: adds the source to the chosen collection.</summary>
     public ICommand AddCommand { get; }
 
     public ICommand CancelCommand { get; }
@@ -243,19 +267,20 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     /// <summary>Reads the catalogue again after a failure.</summary>
     public ICommand TryAgainCommand { get; }
 
-    /// <summary>Goes back to the catalogue step.</summary>
+    /// <summary>Goes back to the Source step.</summary>
     public ICommand ChangeCatalogueCommand { get; }
 
-    /// <summary>Opens the wizard at step 1, adding into <paramref name="targetCollectionId"/> by default.</summary>
+    /// <summary>Opens the wizard at the Source step, adding into <paramref name="targetCollectionId"/> by default.</summary>
     public void Start(Guid? targetCollectionId)
     {
         _targetCollectionId = targetCollectionId;
-        GoTo(1);
+        CurrentKind = WizardStepKind.Source;
+        Refresh();
     }
 
     /// <summary>
     /// Opens the wizard at the include step with <paramref name="source"/> chosen
-    /// (a shared feed, for example); step 1 shows it as done and stays reachable
+    /// (a shared feed, for example); the Source step shows it as done and stays reachable
     /// with Back. Completes when the catalogue has been read.
     /// </summary>
     public Task StartAtIncludeAsync(KnownCatalogueSource source, Guid? targetCollectionId)
@@ -269,31 +294,57 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
         return EnterIncludeAsync(source);
     }
 
-    private bool CanNext => _currentStep switch
+    /// <summary>
+    /// True when the path has a Connection step: on the Source step, when the
+    /// selection is a SECOM service the wizard can connect to; after it, when
+    /// the chosen source has one.
+    /// </summary>
+    private bool HasConnectionStep => IsCatalogueStep
+        ? Directory.SelectedEntry?.Source is { Format: KnownCatalogueFormat.Secom } && _connectionFactory is not null
+        : _connection is not null;
+
+    /// <summary>
+    /// True while Next on the Source step reads the chosen catalogue (D12); the
+    /// footer says so and Next waits.
+    /// </summary>
+    public bool IsReadingCatalogue
     {
-        1 => Directory.CanContinueWithSelection,
+        get => _isReadingCatalogue;
+        private set
+        {
+            if (!SetProperty(ref _isReadingCatalogue, value))
+                return;
+            Refresh();
+        }
+    }
+
+    private bool _isReadingCatalogue;
+
+    private bool CanNext => _current switch
+    {
+        WizardStepKind.Source => Directory.CanContinueWithSelection && !_isReadingCatalogue,
         // Add and wait is always possible once the service has been asked (C5).
-        2 => _connection is { HasState: true },
-        3 => _scope is { CanContinueFromScope: true },
+        WizardStepKind.Connection => _connection is { HasState: true },
+        WizardStepKind.Include => _scope is { CanContinueFromScope: true },
         _ => false,
     };
 
-    private bool CanAdd => _currentStep == 4 && _scope is { ConfirmCommand: var confirm } && confirm.CanExecute(null);
+    private bool CanAdd => IsAddToStep && _scope is { ConfirmCommand: var confirm } && confirm.CanExecute(null);
 
     private Task NextAsync()
     {
-        switch (_currentStep)
+        switch (_current)
         {
-            case 1 when Directory.SelectedEntry is { } entry:
+            case WizardStepKind.Source when Directory.SelectedEntry is { } entry:
                 _chosen = entry.Source;
                 if (entry.Source.Format == KnownCatalogueFormat.Secom && ConnectionFor(entry.Source) is { } connection)
                     return EnterConnectionAsync(connection);
                 Connection = null;
-                return EnterIncludeAsync(entry.Source);
-            case 2 when CanNext && _chosen is { } secom:
+                return ReadThenContinueAsync(entry.Source);
+            case WizardStepKind.Connection when CanNext && _chosen is { } secom:
                 return EnterIncludeAsync(secom);
-            case 3 when CanNext:
-                GoTo(4);
+            case WizardStepKind.Include when CanNext:
+                CurrentKind = WizardStepKind.AddTo;
                 break;
         }
 
@@ -310,11 +361,11 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
         return created;
     }
 
-    /// <summary>Shows step 2 for a SECOM service, probing it with the chosen identity the first time.</summary>
+    /// <summary>Shows the Connection step for a SECOM service, probing it with the chosen identity the first time.</summary>
     private Task EnterConnectionAsync(Secom.SecomConnectionStepViewModel connection)
     {
         Connection = connection;
-        CurrentStep = 2;
+        CurrentKind = WizardStepKind.Connection;
         Refresh();
         return connection.HasState || connection.IsProbing ? Task.CompletedTask : connection.ProbeAsync();
     }
@@ -333,12 +384,87 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Shows step 3 for <paramref name="source"/>. A catalogue is read unless it
+    /// Shows What to include for <paramref name="source"/>. A catalogue is read unless it
     /// has been read (or is being read); a SECOM service is read with the
     /// Connection step's identity, or, when it can't be read, added to wait
     /// with its directory entry's products.
     /// </summary>
     private Task EnterIncludeAsync(KnownCatalogueSource source)
+    {
+        var scope = ScopeFor(source);
+        Scope = scope;
+        CurrentKind = WizardStepKind.Include;
+        Refresh();
+        if (_connection is { } connection && scope.IsSecom)
+        {
+            if (connection.IsReadable)
+                return scope.ReadSecomWithAsync(connection.IdentitySetting);
+            scope.WaitForSecom(connection.IdentitySetting, connection.Products);
+            Refresh();
+            return Task.CompletedTask;
+        }
+
+        return scope.IsLoaded || scope.IsLoading ? Task.CompletedTask : scope.LoadCatalogAsync();
+    }
+
+    /// <summary>
+    /// From the Source step (not SECOM): reads the catalogue while Next shows
+    /// that it is reading, then goes to What to include, or, when the catalogue
+    /// lists one download, straight to Add to with What to include done (D12).
+    /// A failed read shows What to include with the error and Try again.
+    /// </summary>
+    private async Task ReadThenContinueAsync(KnownCatalogueSource source)
+    {
+        var scope = ScopeFor(source);
+        Scope = scope;
+        if (!scope.IsLoaded && !scope.HasLoadError)
+        {
+            IsReadingCatalogue = true;
+            try
+            {
+                await (scope.IsLoading ? WaitForLoadAsync(scope) : scope.LoadCatalogAsync());
+            }
+            finally
+            {
+                IsReadingCatalogue = false;
+            }
+        }
+
+        // The user may have gone elsewhere (closed, or chosen another source) meanwhile.
+        if (_current != WizardStepKind.Source || Directory.SelectedEntry?.Source.Id != source.Id)
+            return;
+
+        CurrentKind = scope is { IsLoaded: true, IsSingleEntry: true, HasLoadError: false }
+            ? WizardStepKind.AddTo
+            : WizardStepKind.Include;
+        Refresh();
+    }
+
+    /// <summary>Completes when a read already under way ends.</summary>
+    private static Task WaitForLoadAsync(AddToLibraryDialogViewModel scope)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (!scope.IsLoading)
+            {
+                scope.PropertyChanged -= OnChanged;
+                done.TrySetResult();
+            }
+        }
+
+        scope.PropertyChanged += OnChanged;
+        if (!scope.IsLoading)
+        {
+            scope.PropertyChanged -= OnChanged;
+            done.TrySetResult();
+        }
+
+        return done.Task;
+    }
+
+    /// <summary>The scope kept for <paramref name="source"/>, created the first time it is chosen.</summary>
+    private AddToLibraryDialogViewModel ScopeFor(KnownCatalogueSource source)
     {
         if (!_scopes.TryGetValue(source.Id, out var scope))
         {
@@ -353,29 +479,67 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
             _scopes[source.Id] = scope;
         }
 
-        Scope = scope;
-        CurrentStep = 3;
-        Refresh();
-        if (_connection is { } connection && scope.IsSecom)
-        {
-            if (connection.IsReadable)
-                return scope.ReadSecomWithAsync(connection.IdentitySetting);
-            scope.WaitForSecom(connection.IdentitySetting, connection.Products);
-            Refresh();
-            return Task.CompletedTask;
-        }
-
-        return scope.IsLoaded || scope.IsLoading ? Task.CompletedTask : scope.LoadCatalogAsync();
+        return scope;
     }
 
+    /// <summary>Goes to the step at position <paramref name="step"/> (1-based) in the current path.</summary>
     private void GoTo(int step)
     {
-        if (step < 1 || step > StepCount || (step == 2 && _connection is null) || (step > 2 && _scope is null))
+        if (step < 1 || step > _steps.Count)
             return;
 
-        CurrentStep = step;
+        var kind = _steps[step - 1].Kind;
+        if ((kind == WizardStepKind.Connection && _connection is null)
+            || (kind is WizardStepKind.Include or WizardStepKind.AddTo && _scope is null))
+        {
+            return;
+        }
+
+        CurrentKind = kind;
         Refresh();
     }
+
+    private int IndexOf(WizardStepKind kind)
+    {
+        for (var i = 0; i < _steps.Count; i++)
+        {
+            if (_steps[i].Kind == kind)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>Rebuilds <see cref="Steps"/> when the path gains or loses its Connection step.</summary>
+    private void RebuildSteps()
+    {
+        var withConnection = HasConnectionStep;
+        if (_steps.Count == (withConnection ? 4 : 3))
+            return;
+
+        var kinds = withConnection
+            ? new[] { WizardStepKind.Source, WizardStepKind.Connection, WizardStepKind.Include, WizardStepKind.AddTo }
+            : new[] { WizardStepKind.Source, WizardStepKind.Include, WizardStepKind.AddTo };
+        Steps = kinds.Select((kind, i) => new WizardStepViewModel(kind, i + 1, LabelOf(kind), GoTo)).ToArray();
+        OnPropertyChanged(nameof(StepCount));
+    }
+
+    private static string LabelOf(WizardStepKind kind) => kind switch
+    {
+        WizardStepKind.Source => Strings.Wizard_StepCatalogue,
+        WizardStepKind.Connection => Strings.Wizard_StepConnection,
+        WizardStepKind.Include => Strings.Wizard_StepInclude,
+        _ => Strings.Wizard_StepAddTo,
+    };
+
+    /// <summary>The choice made in a completed step of <paramref name="kind"/>.</summary>
+    private string DoneValueOf(WizardStepKind kind) => kind switch
+    {
+        WizardStepKind.Source => _chosen?.Name ?? _scope?.CatalogueName ?? string.Empty,
+        WizardStepKind.Connection => _connection?.Picker.Name ?? string.Empty,
+        WizardStepKind.Include => _scope?.ScopeDescription ?? string.Empty,
+        _ => _scope?.TargetDescription ?? string.Empty,
+    };
 
     private void OnScopeChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -386,21 +550,21 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     /// <summary>Updates the step header, the footer and the commands.</summary>
     private void Refresh()
     {
-        foreach (var step in Steps)
+        RebuildSteps();
+        var current = CurrentStep;
+        foreach (var step in _steps)
         {
-            step.State = step.Number < _currentStep ? WizardStepState.Done
-                : step.Number == _currentStep ? WizardStepState.Current
+            step.State = step.Number < current ? WizardStepState.Done
+                : step.Number == current ? WizardStepState.Current
                 : WizardStepState.Upcoming;
+            // Only a completed step says what was chosen in it (D4).
+            step.Value = step.IsDone ? DoneValueOf(step.Kind) : string.Empty;
         }
 
-        Steps[0].Value = (_currentStep == 1 ? Directory.SelectedEntry?.Name : _chosen?.Name ?? _scope?.CatalogueName) ?? string.Empty;
-        Steps[1].IsSkipped = _connection is null;
-        Steps[1].Value = _connection is { } connection ? connection.Picker.Name
-            : _currentStep > 2 ? Strings.Wizard_ConnectionNotNeeded
-            : Strings.Wizard_ConnectionForSecom;
-        Steps[2].Value = Steps[2].IsUpcoming ? Strings.Wizard_ChooseCatalogueFirst : _scope?.ScopeDescription ?? string.Empty;
-        Steps[3].Value = Steps[3].IsUpcoming ? Strings.Wizard_Collection : _scope?.TargetDescription ?? string.Empty;
-
+        OnPropertyChanged(nameof(CurrentStep));
+        OnPropertyChanged(nameof(StepOfText));
+        OnPropertyChanged(nameof(SelectionText));
+        OnPropertyChanged(nameof(HasSelectionText));
         OnPropertyChanged(nameof(NextLabel));
         OnPropertyChanged(nameof(FooterHint));
         OnPropertyChanged(nameof(HasFooterHint));

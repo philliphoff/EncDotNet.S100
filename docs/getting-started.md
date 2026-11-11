@@ -70,7 +70,7 @@ and portrayal catalogues, which ship inside the package.
 
 ### Prerequisites
 
-- [.NET SDK](https://dotnet.microsoft.com/download) 8.0 or later.
+- [.NET SDK](https://dotnet.microsoft.com/download) 10.0 or later.
 - A dataset file. See [Get sample data](#get-sample-data).
 
 ### Create a project

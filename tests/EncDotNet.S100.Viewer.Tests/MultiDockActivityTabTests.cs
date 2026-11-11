@@ -85,13 +85,13 @@ public sealed class MultiDockActivityTabTests : IDisposable
         var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false };
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, helm });
-        vm.SelectTabCommand.Execute(helm);
-        Assert.Same(helm, vm.SelectedLeftTab);
+        vm.Layout.SelectTabCommand.Execute(helm);
+        Assert.Same(helm, vm.Layout.SelectedLeftTab);
 
         helm.IsVisible = false;
 
-        Assert.Same(datasets, vm.SelectedLeftTab);
-        Assert.True(vm.IsLeftDockOpen);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
+        Assert.True(vm.Layout.IsLeftDockOpen);
     }
 
     [Fact]
@@ -100,13 +100,13 @@ public sealed class MultiDockActivityTabTests : IDisposable
         var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false };
 
         var vm = CreateViewModel(new IActivityTab[] { helm });
-        vm.SelectTabCommand.Execute(helm);
-        Assert.Same(helm, vm.SelectedLeftTab);
+        vm.Layout.SelectTabCommand.Execute(helm);
+        Assert.Same(helm, vm.Layout.SelectedLeftTab);
 
         helm.IsVisible = false;
 
-        Assert.Null(vm.SelectedLeftTab);
-        Assert.False(vm.IsLeftDockOpen);
+        Assert.Null(vm.Layout.SelectedLeftTab);
+        Assert.False(vm.Layout.IsLeftDockOpen);
     }
 
     [Fact]
@@ -117,9 +117,9 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, helm });
 
-        vm.SelectTabCommand.Execute(helm);
+        vm.Layout.SelectTabCommand.Execute(helm);
 
-        Assert.NotSame(helm, vm.SelectedLeftTab);
+        Assert.NotSame(helm, vm.Layout.SelectedLeftTab);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, helm }, settings);
 
-        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
     }
 
     [Fact]
@@ -142,25 +142,17 @@ public sealed class MultiDockActivityTabTests : IDisposable
         var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false };
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, helm }, settings);
-        vm.SelectTabCommand.Execute(helm);
+        vm.Layout.SelectTabCommand.Execute(helm);
 
         helm.IsVisible = false;
 
         // Falling back to Datasets is system-driven and must not overwrite
         // the persisted last-selected activity.
-        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
         Assert.Null(settings.LastSelectedActivity);
     }
 
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme => false;
-        public event System.EventHandler? ThemeChanged { add { } remove { } }
-        public bool ToggleTheme() => false;
-        public ChromeTheme Current => ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { }
-    }
 
     private sealed class NoopLoader : IDatasetLoaderService
     {
@@ -189,25 +181,24 @@ public sealed class MultiDockActivityTabTests : IDisposable
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
+        var timelineVm = timeline ?? new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
+        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var shellLayout = new ShellLayoutViewModel(settings, tabs ?? [], timelineVm, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
-            settings,
+            layout: shellLayout,
+            mapTools: TestMapTools.Create(settingsVm, routeStore),
+            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
+            mapChrome: TestMapChrome.Create(catalogues, datasets),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new NoopLoader()),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
+            settingsViewModel: settingsVm,
             pickReport: new PickReportViewModel(),
-            timeline: timeline ?? new TimelineViewModel(new GlobalTimeService()),
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs);
+            timeline: timelineVm,
+            routes: routeStore);
     }
 
     [Fact]
@@ -219,9 +210,9 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, pick, timeline });
 
-        Assert.Equal(new[] { "Datasets" }, vm.LeftTabs.Select(t => t.Id));
-        Assert.Equal(new[] { "Pick" }, vm.RightTabs.Select(t => t.Id));
-        Assert.Equal(new[] { "Timeline" }, vm.BottomTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "Datasets" }, vm.Layout.LeftTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "Pick" }, vm.Layout.RightTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "Timeline" }, vm.Layout.BottomTabs.Select(t => t.Id));
     }
 
     [Fact]
@@ -234,14 +225,14 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, search, pick, timeline });
 
-        var rightBefore = vm.SelectedRightTab;
-        var bottomBefore = vm.SelectedBottomTab;
+        var rightBefore = vm.Layout.SelectedRightTab;
+        var bottomBefore = vm.Layout.SelectedBottomTab;
 
-        vm.SelectTabCommand.Execute(search);
+        vm.Layout.SelectTabCommand.Execute(search);
 
-        Assert.Same(search, vm.SelectedLeftTab);
-        Assert.Same(rightBefore, vm.SelectedRightTab);
-        Assert.Same(bottomBefore, vm.SelectedBottomTab);
+        Assert.Same(search, vm.Layout.SelectedLeftTab);
+        Assert.Same(rightBefore, vm.Layout.SelectedRightTab);
+        Assert.Same(bottomBefore, vm.Layout.SelectedBottomTab);
     }
 
     [Fact]
@@ -249,10 +240,10 @@ public sealed class MultiDockActivityTabTests : IDisposable
     {
         // #712 F5: the dock no longer opens by itself; the HUD stands in for it.
         var time = new GlobalTimeService();
-        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
+        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action(), refresher: null, progress: null, scope: null, library: null);
         var vm = CreateViewModel(new IActivityTab[] { new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom } }, timeline: timeline);
-        vm.WindowWidth = 1200;
-        Assert.False(vm.IsTimeHudVisible);
+        vm.Layout.WindowWidth = 1200;
+        Assert.False(vm.Layout.IsTimeHudVisible);
 
         var t0 = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         time.ApplySnapshot(new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
@@ -264,21 +255,21 @@ public sealed class MultiDockActivityTabTests : IDisposable
             CoverageSegments = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSegment(t0, t0.AddHours(2))],
             Datasets = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset("x", t0, t0.AddHours(2))],
         });
-        Assert.True(vm.IsTimeHudVisible);
+        Assert.True(vm.Layout.IsTimeHudVisible);
 
-        vm.ToggleTimelineDockCommand.Execute(null);
-        Assert.True(vm.IsBottomDockShown);
-        Assert.False(vm.IsTimeHudVisible);
+        vm.Layout.ToggleTimelineDockCommand.Execute(null);
+        Assert.True(vm.Layout.IsBottomDockShown);
+        Assert.False(vm.Layout.IsTimeHudVisible);
 
         // Under 900 px the dock is hidden (but remembered) and the HUD is the only control.
-        vm.WindowWidth = 850;
-        Assert.True(vm.IsBottomDockOpen);
-        Assert.False(vm.IsBottomDockShown);
-        Assert.True(vm.IsTimeHudVisible);
-        Assert.False(vm.ToggleTimelineDockCommand.CanExecute(null));
+        vm.Layout.WindowWidth = 850;
+        Assert.True(vm.Layout.IsBottomDockOpen);
+        Assert.False(vm.Layout.IsBottomDockShown);
+        Assert.True(vm.Layout.IsTimeHudVisible);
+        Assert.False(vm.Layout.ToggleTimelineDockCommand.CanExecute(null));
 
-        vm.WindowWidth = 1000;
-        Assert.True(vm.IsBottomDockShown);
+        vm.Layout.WindowWidth = 1000;
+        Assert.True(vm.Layout.IsBottomDockShown);
     }
 
     [Fact]
@@ -287,11 +278,11 @@ public sealed class MultiDockActivityTabTests : IDisposable
         // Design note time-overlays D1: the stamp while the Timeline tab is
         // shown, the HUD otherwise, never both (the Logs tab used to show both).
         var time = new GlobalTimeService();
-        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
+        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action(), refresher: null, progress: null, scope: null, library: null);
         var timelineTab = new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom };
         var logsTab = new FakeTab { Id = "Logs", Order = 20, Dock = TabDock.Bottom };
         var vm = CreateViewModel(new IActivityTab[] { timelineTab, logsTab }, timeline: timeline);
-        vm.WindowWidth = 1200;
+        vm.Layout.WindowWidth = 1200;
         var t0 = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         time.ApplySnapshot(new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
         {
@@ -304,19 +295,19 @@ public sealed class MultiDockActivityTabTests : IDisposable
         });
         void AssertOne(bool stamp)
         {
-            Assert.Equal(stamp, vm.IsMapStampVisible);
-            Assert.Equal(!stamp, vm.IsTimeHudVisible);
+            Assert.Equal(stamp, vm.Layout.IsMapStampVisible);
+            Assert.Equal(!stamp, vm.Layout.IsTimeHudVisible);
         }
 
         AssertOne(stamp: false);
-        vm.ToggleTimelineDockCommand.Execute(null);
-        Assert.True(vm.IsTimelineTabSelected);
+        vm.Layout.ToggleTimelineDockCommand.Execute(null);
+        Assert.True(vm.Layout.IsTimelineTabSelected);
         AssertOne(stamp: true);
 
         var raised = new List<string?>();
-        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
-        vm.SelectTabCommand.Execute(logsTab);
-        Assert.Contains(nameof(MainViewModel.IsMapStampVisible), raised);
+        vm.Layout.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        vm.Layout.SelectTabCommand.Execute(logsTab);
+        Assert.Contains(nameof(ShellLayoutViewModel.IsMapStampVisible), raised);
         AssertOne(stamp: false);
 
         // Pinned with date-dependent data: the HUD says Display Not Real Time, so the stamp stays away.
@@ -325,9 +316,9 @@ public sealed class MultiDockActivityTabTests : IDisposable
         Assert.True(timeline.IsNotRealTime);
         AssertOne(stamp: false);
 
-        vm.SelectTabCommand.Execute(timelineTab);
+        vm.Layout.SelectTabCommand.Execute(timelineTab);
         AssertOne(stamp: true);
-        vm.WindowWidth = 850;
+        vm.Layout.WindowWidth = 850;
         AssertOne(stamp: false);
     }
 
@@ -337,18 +328,18 @@ public sealed class MultiDockActivityTabTests : IDisposable
         // list_panels said the Logs tab was showing while a narrow window hid the dock.
         var logs = new FakeTab { Id = "Logs", Order = 30, Dock = TabDock.Bottom };
         var vm = CreateViewModel(new IActivityTab[] { new FakeTab { Id = "Datasets", Dock = TabDock.Left }, logs });
-        vm.WindowWidth = 1200;
-        var controller = new ViewerUiController(vm);
+        vm.Layout.WindowWidth = 1200;
+        var controller = new ViewerUiController(vm.Layout);
 
         var shown = await controller.SetPanelVisibilityAsync("Logs", visible: true);
         Assert.True(shown.State!.Value.Showing);
 
-        vm.WindowWidth = 850;
+        vm.Layout.WindowWidth = 850;
         var narrow = (await controller.GetPanelsAsync()).Single(p => p.Id == "Logs");
         Assert.True(narrow.DockOpen);
         Assert.False(narrow.Showing);
 
-        vm.WindowWidth = 1000;
+        vm.Layout.WindowWidth = 1000;
         Assert.True((await controller.GetPanelsAsync()).Single(p => p.Id == "Logs").Showing);
     }
 
@@ -361,14 +352,14 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, pick, timeline });
 
-        vm.IsRightDockOpen = true;
-        vm.IsBottomDockOpen = true;
+        vm.Layout.IsRightDockOpen = true;
+        vm.Layout.IsBottomDockOpen = true;
 
-        vm.CloseDockCommand.Execute(TabDock.Right);
+        vm.Layout.CloseDockCommand.Execute(TabDock.Right);
 
-        Assert.False(vm.IsRightDockOpen);
-        Assert.True(vm.IsBottomDockOpen);
-        Assert.True(vm.IsLeftDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
+        Assert.True(vm.Layout.IsBottomDockOpen);
+        Assert.True(vm.Layout.IsLeftDockOpen);
     }
 
     [Fact]
@@ -387,12 +378,12 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         var vm = CreateViewModel(new IActivityTab[] { datasets, pick });
 
-        Assert.False(vm.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
 
         signal.Raise();
 
-        Assert.True(vm.IsRightDockOpen);
-        Assert.Same(pick, vm.SelectedRightTab);
+        Assert.True(vm.Layout.IsRightDockOpen);
+        Assert.Same(pick, vm.Layout.SelectedRightTab);
     }
 
     [Fact]
@@ -413,7 +404,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
 
         signal.Raise();
 
-        Assert.False(vm.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
     }
 
     [Fact]
@@ -433,13 +424,13 @@ public sealed class MultiDockActivityTabTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { datasets, pick });
 
         signal.Raise();
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
 
-        vm.CloseDockCommand.Execute(TabDock.Right);
-        Assert.False(vm.IsRightDockOpen);
+        vm.Layout.CloseDockCommand.Execute(TabDock.Right);
+        Assert.False(vm.Layout.IsRightDockOpen);
 
         signal.Raise();
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
     }
 
     // ── Logs tab (#1080) ────────────────────────────────────────────────
@@ -447,44 +438,44 @@ public sealed class MultiDockActivityTabTests : IDisposable
     [Fact]
     public void Show_logs_opens_the_bottom_dock_on_the_logs_tab_and_tells_it_it_is_shown()
     {
-        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer();
-        using var logs = new LogsViewModel(buffer, post: action => action());
-        var timeline = new FakeTab { Id = MainViewModel.TimelineTabId, Order = 10, Dock = TabDock.Bottom };
+        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer(timeProvider: TimeProvider.System);
+        using var logs = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
+        var timeline = new FakeTab { Id = ShellLayoutViewModel.TimelineTabId, Order = 10, Dock = TabDock.Bottom };
         var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
-            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
+            ShellLayoutViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, visibility: null, TabDock.Bottom);
         var vm = CreateViewModel(new IActivityTab[] { timeline, logsTab });
-        vm.WindowWidth = 1200;
-        Assert.False(vm.IsBottomDockOpen);
-        Assert.Same(timeline, vm.SelectedBottomTab);
+        vm.Layout.WindowWidth = 1200;
+        Assert.False(vm.Layout.IsBottomDockOpen);
+        Assert.Same(timeline, vm.Layout.SelectedBottomTab);
         Assert.False(logs.IsTabShown);
 
-        vm.ShowLogsCommand.Execute(null);
+        vm.Layout.ShowLogsCommand.Execute(null);
 
-        Assert.True(vm.IsBottomDockOpen);
-        Assert.Same(logsTab, vm.SelectedBottomTab);
+        Assert.True(vm.Layout.IsBottomDockOpen);
+        Assert.Same(logsTab, vm.Layout.SelectedBottomTab);
         Assert.True(logs.IsTabShown);
-        Assert.True(vm.HasBottomDockTabs);
+        Assert.True(vm.Layout.HasBottomDockTabs);
 
-        vm.SelectTabCommand.Execute(timeline);
+        vm.Layout.SelectTabCommand.Execute(timeline);
         Assert.False(logs.IsTabShown);
-        vm.SelectTabCommand.Execute(logsTab);
+        vm.Layout.SelectTabCommand.Execute(logsTab);
         Assert.True(logs.IsTabShown);
-        vm.CloseDockCommand.Execute("Bottom");
+        vm.Layout.CloseDockCommand.Execute("Bottom");
         Assert.False(logs.IsTabShown);
 
         // View › Timeline opens the Timeline, not the Logs tab the dock last showed.
-        vm.ToggleTimelineCommand.Execute(null);
-        Assert.True(vm.IsBottomDockOpen);
-        Assert.True(vm.IsTimelineTabSelected);
+        vm.Layout.ToggleTimelineCommand.Execute(null);
+        Assert.True(vm.Layout.IsBottomDockOpen);
+        Assert.True(vm.Layout.IsTimelineTabSelected);
     }
 
     [Fact]
     public void The_logs_badge_reaches_its_bottom_dock_tab()
     {
-        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer();
-        using var logs = new LogsViewModel(buffer, post: action => action());
+        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer(timeProvider: TimeProvider.System);
+        using var logs = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
         using var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
-            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
+            ShellLayoutViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, visibility: null, TabDock.Bottom);
 
         buffer.Add(Microsoft.Extensions.Logging.LogLevel.Error, "EncDotNet.S100.Viewer.App", "boom");
         buffer.Flush();

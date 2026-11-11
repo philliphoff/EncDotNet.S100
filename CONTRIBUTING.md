@@ -7,7 +7,10 @@ submit changes.
 
 ## Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/) or later.
+- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). The
+  repository's `global.json` selects the newest 10.0 SDK you have installed,
+  even when a later SDK such as a .NET 11 preview is also installed, so a
+  later SDK on its own isn't enough.
 - A git client.
 - No native dependencies are required — HDF5 (PureHDF) and Lua (MoonSharp)
   are fully managed, so everything runs on macOS, Windows, and Linux.
@@ -141,7 +144,7 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
 > unused-directive removal), and *naming*. `dotnet format` cannot Fix-All
 > IDE1006 naming violations, so fix those manually. Other style diagnostics
 > are not machine-enforced solution-wide because style fix-all is unreliable
-> on the multi-targeted (`net8.0;net10.0`) projects; follow those rules by hand
+> there; follow those rules by hand
 > (the `.editorconfig` still flags them in your IDE).
 
 ## Documentation

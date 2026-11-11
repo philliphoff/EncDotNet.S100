@@ -46,6 +46,10 @@ public class SpecNameTests
     [InlineData("netcdf", "NetCDF")]
     [InlineData("CAP", "CAP")]
     [InlineData("cap", "CAP")]
+    [InlineData("TC", "TC")]
+    [InlineData("tc", "TC")]
+    [InlineData("CODSUS", "CODSUS")]
+    [InlineData("codsus", "CODSUS")]
     public void Normalize_accepts_the_non_S100_format_names_in_their_canonical_casing(string raw, string expected)
     {
         Assert.Equal(expected, SpecName.Normalize(raw));

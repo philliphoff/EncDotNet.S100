@@ -159,7 +159,7 @@ public static class WeatherPortrayal
                 Viewport = viewport,
                 Opacity = style.Opacity,
                 ClipToWater = style.ClipToWater,
-                Legend = layer.ColorScheme is { } scheme ? CoverageLegendEntry.FromScheme(scheme) : null,
+                Legend = layer.ColorScheme is { } scheme ? LegendEntry.FromScheme(scheme) : null,
             };
         }
 
@@ -202,6 +202,7 @@ public static class WeatherPortrayal
             BaseSymbolScale = context?.SymbolScale ?? 1.0,
             SymbolProvider = WeatherCoverageStyle.Symbols.Provider,
             FallbackExtent = bounds,
+            YieldsToS111 = style is CurrentArrowStyle,
         };
     }
 

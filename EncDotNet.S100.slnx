@@ -23,11 +23,14 @@
     <Project Path="src/EncDotNet.S100.Datasets.S131/EncDotNet.S100.Datasets.S131.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S201/EncDotNet.S100.Datasets.S201.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S411/EncDotNet.S100.Datasets.S411.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.S412/EncDotNet.S100.Datasets.S412.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S421/EncDotNet.S100.Datasets.S421.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S57/EncDotNet.S100.Datasets.S57.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Grib/EncDotNet.S100.Datasets.Grib.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Weather/EncDotNet.S100.Datasets.Weather.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.Aml/EncDotNet.S100.Datasets.Aml.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Cap/EncDotNet.S100.Datasets.Cap.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.TropicalCyclones/EncDotNet.S100.Datasets.TropicalCyclones.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Pipelines/EncDotNet.S100.Datasets.Pipelines.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.NetCdf/EncDotNet.S100.Datasets.NetCdf.csproj" />
     <Project Path="src/EncDotNet.S100.Crs.ProjNet/EncDotNet.S100.Crs.ProjNet.csproj" />
@@ -42,7 +45,9 @@
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui.Avalonia/EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj" />
+    <Project Path="src/EncDotNet.S100.Rendering.Engine/EncDotNet.S100.Rendering.Engine.csproj" />
     <Project Path="src/EncDotNet.S100.Rendering.Scene/EncDotNet.S100.Rendering.Scene.csproj" />
+    <Project Path="src/EncDotNet.S100.Scripting.LuaCSharp/EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <Project Path="src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <Project Path="src/EncDotNet.S100.Specifications/EncDotNet.S100.Specifications.csproj" />
     <Project Path="src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj" />
@@ -70,6 +75,7 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S131.Tests/EncDotNet.S100.Datasets.S131.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S201.Tests/EncDotNet.S100.Datasets.S201.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S411.Tests/EncDotNet.S100.Datasets.S411.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.S412.Tests/EncDotNet.S100.Datasets.S412.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S421.Tests/EncDotNet.S100.Datasets.S421.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Tests/EncDotNet.S100.DynamicSources.Ais.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
@@ -80,7 +86,9 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Grib.Tests/EncDotNet.S100.Datasets.Grib.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Weather.Tests/EncDotNet.S100.Datasets.Weather.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.Aml.Tests/EncDotNet.S100.Datasets.Aml.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Cap.Tests/EncDotNet.S100.Datasets.Cap.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.TropicalCyclones.Tests/EncDotNet.S100.Datasets.TropicalCyclones.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Testing.Scenarios.Tests/EncDotNet.S100.Testing.Scenarios.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Testing.Scenarios/EncDotNet.S100.Testing.Scenarios.csproj" />
@@ -92,6 +100,7 @@
     <Project Path="tests/EncDotNet.S100.Navigation.Tests/EncDotNet.S100.Navigation.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Routes.Rtz.Tests/EncDotNet.S100.Routes.Rtz.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.S164.Tests/EncDotNet.S100.S164.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Scripting.Tests/EncDotNet.S100.Scripting.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfReport.Tests/EncDotNet.S100.PerfReport.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfRunner.Tests/EncDotNet.S100.PerfRunner.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Viewer.Tests/EncDotNet.S100.Viewer.Tests.csproj" />

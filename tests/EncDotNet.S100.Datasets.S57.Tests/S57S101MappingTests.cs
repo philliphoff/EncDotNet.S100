@@ -638,12 +638,17 @@ public class S57S101MappingTests
     [InlineData(21, "CableOverhead")]        // CBLOHD
     [InlineData(22, "CableSubmarine")]       // CBLSUB
     [InlineData(27, "CautionArea")]          // CTNARE (ambiguous alias → CautionArea)
+    [InlineData(37, "CustomZone")]           // CUSZNE
     [InlineData(39, "Daymark")]              // DAYMAR
     [InlineData(58, "FogSignal")]            // FOGSIG
+    [InlineData(77, "LightVessel")]          // LITVES
     [InlineData(81, "MagneticVariation")]    // MAGVAR
     [InlineData(87, "OffshorePlatform")]     // OFSPLF
     [InlineData(94, "PipelineSubmarineOnLand")] // PIPSOL
     [InlineData(109, "RecommendedTrack")]    // RECTRC
+    [InlineData(133, "SubmarineTransitLane")] // SUBTLN
+    [InlineData(145, "SeparationZoneOrLine")] // TSELNE
+    [InlineData(150, "SeparationZoneOrLine")] // TSEZNE
     [InlineData(119, "SeaAreaNamedWaterArea")] // SEAARE
     [InlineData(121, "SeabedArea")]          // SBDARE
     [InlineData(125, "SiloTank")]            // SILTNK
@@ -658,7 +663,7 @@ public class S57S101MappingTests
     }
 
     [Theory]
-    [InlineData(301, "QualityOfNonBathymetricData")] // M_ACCY
+    [InlineData(300, "QualityOfNonBathymetricData")] // M_ACCY
     [InlineData(302, "DataCoverage")]                // M_COVR
     [InlineData(305, "InformationArea")]             // M_NPUB
     [InlineData(306, "NavigationalSystemOfMarks")]   // M_NSYS
@@ -901,6 +906,42 @@ public class S57S101MappingTests
         Assert.Equal("Kept", rule.DefaultS101Code);
         Assert.Equal("Kept", Assert.Single(rule.Redirects).TargetS101Code);
         Assert.Throws<ArgumentNullException>(() => mapping.RestrictToFeatureTypes(null!));
+    }
+
+    // #1217: a rule's OBJL must be the S-57 code of its acronym (M_ACCY once
+    // used 301, which is M_CSCL's). Codes past the enum (161 and up) are skipped.
+    [Fact]
+    public void Default_FeatureRuleCodesMatchS57ObjectCatalogue()
+    {
+        foreach (var rule in S57S101Mapping.Default.FeatureRules.Values)
+        {
+            if (Enum.TryParse<EncDotNet.S57.S57ObjectCode>(rule.S57Acronym, out var code))
+                Assert.True((int)code == rule.Objl, $"{rule.S57Acronym}: rule OBJL {rule.Objl}, catalogue {(int)code}");
+        }
+    }
+
+    // #1218: S-57 enumerations S-101 models as Booleans are remapped to
+    // "true"/"false" (S-65 Annex C §27.146, §27.90, §27.1, §27.112 invert them).
+    [Theory]
+    [InlineData((ushort)82, "1", "radarConspicuous", "true")]
+    [InlineData((ushort)82, "2", "radarConspicuous", "false")]
+    [InlineData((ushort)82, "3", "radarConspicuous", "true")]
+    [InlineData((ushort)21, "1", "distanceMarkVisible", "false")]
+    [InlineData((ushort)21, "2", "distanceMarkVisible", "true")]
+    [InlineData((ushort)21, "3", "distanceMarkVisible", "true")]
+    [InlineData((ushort)21, "4", "distanceMarkVisible", "true")]
+    [InlineData((ushort)54, "1", "basedOnFixedMarks", "true")]
+    [InlineData((ushort)54, "2", "basedOnFixedMarks", "false")]
+    [InlineData((ushort)67, "1", "iMOAdopted", "true")]
+    [InlineData((ushort)67, "2", "iMOAdopted", "false")]
+    public void Default_BooleanAttributes_RemapS57Codes(ushort attl, string value, string s101, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        var feature = m.ResolveFeature(17, ReadOnlyDictionary<string, string>.Empty)!; // BOYLAT
+
+        var resolved = m.ResolveAttribute(attl, value, feature);
+
+        Assert.Equal(new ResolvedAttribute(s101, expected), resolved);
     }
 
     [Fact]

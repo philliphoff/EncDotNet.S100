@@ -4,14 +4,18 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services.Caching;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
@@ -53,6 +57,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly Dictionary<MapDatasetId, DatasetEntry> _sessionEntries = [];
     private readonly ConditionalWeakTable<DatasetEntry, LoadGeneration> _loadGenerations = new();
     private readonly ConditionalWeakTable<DatasetEntry, SemaphoreSlim> _loadGates = new();
+    // The parse a load drawn from a stored scene finishes in the background,
+    // per entry; a newer load or an unload cancels it.
+    private readonly ConditionalWeakTable<DatasetEntry, CancellationTokenSource> _storedCompletions = new();
+    private readonly CellSceneStore? _cellScenes;
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
 
     private IMapLayerCollection? _layerCollection;
@@ -79,8 +87,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         INotificationService notifications,
         DatasetProcessorOwner processorOwner,
         IMapViewportNotifier viewportNotifier,
-        IRenderActivityMonitor? renderActivityMonitor = null,
-        TimeRefreshProgress? timeProgress = null,
+        IRenderActivityMonitor? renderActivityMonitor,
+        TimeRefreshProgress? timeProgress,
+        CellSceneStore? cellScenes,
         ILogger<DatasetLoaderService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -111,7 +120,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _viewportNotifier = viewportNotifier;
         _renderActivityMonitor = renderActivityMonitor;
         _logger = logger ?? (ILogger)NullLogger.Instance;
+        _cellScenes = CellScenesEnabled ? cellScenes : null;
     }
+
+    /// <summary>
+    /// Whether loads draw from and store cell scenes (map rendering slice 11).
+    /// <c>S100_CELL_SCENES=0</c> turns it off, for A/B measurement.
+    /// </summary>
+    private static bool CellScenesEnabled { get; } =
+        Environment.GetEnvironmentVariable("S100_CELL_SCENES") != "0";
 
     /// <summary>
     /// Re-applies the time gate when the aggregate timeline shifts (a
@@ -164,6 +181,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     public IReadOnlyList<ILayer> CurrentStackedLayers =>
         _mapSession?.GetStackedLayers() ?? [];
+
+    public Task<IReadOnlyList<S100Pick>> PickAsync(GeographicPickQuery query, CancellationToken cancellationToken = default) =>
+        _mapSession is null
+            ? Task.FromResult<IReadOnlyList<S100Pick>>([])
+            : _mapSession.Query.PickAsync(query, cancellationToken);
 
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries =>
         _mapSession?.GetLayerStackEntries() ?? [];
@@ -222,6 +244,35 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
     }
 
+    /// <summary>
+    /// Surfaces problems with an S-57 cell's updates as a warning toast, as
+    /// <see cref="SurfaceUpdateReport(DatasetEntry, S101UpdateReport)"/> does
+    /// for S-101: an update refused for its edition, a gap in the sequence, or
+    /// an update that cancels the cell. S-57 Part 3, sequential updating.
+    /// </summary>
+    private void SurfaceUpdateReport(DatasetEntry entry, S57UpdateReport report)
+    {
+        string msg;
+        if (report.CancelledByUpdateNumber is { } cancelledBy)
+        {
+            msg = string.Format(Strings.Status_CellCancelled, entry.DisplayName, cancelledBy);
+        }
+        else if (report.Messages.FirstOrDefault(m => m.Severity >= S57UpdateSeverity.Warning) is { Text: { } text })
+        {
+            var appliedCount = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
+            msg = string.Format(Strings.Status_ExchangeSetUpdatesPartial, appliedCount, entry.DisplayName, text);
+        }
+        else
+        {
+            return;
+        }
+
+        _notifications.Create(Strings.Toast_Warning)
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent(msg)
+            .Show();
+    }
+
     public void Initialize(
         IMapLayerCollection layerCollection,
         IMapViewportController viewport,
@@ -275,6 +326,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         var loadGeneration = BeginLoad(entry);
         entry.IsLoading = true;
+        StoredPublish? published = null;
         try
         {
             var gate = _loadGates.GetValue(entry, static _ => new SemaphoreSlim(1, 1));
@@ -283,16 +335,28 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             {
                 if (IsCurrentLoad(entry, loadGeneration))
                 {
-                    await LoadCoreAsync(
-                        entry,
-                        loadGeneration,
-                        cancellationToken).ConfigureAwait(true);
+                    // A cell with a stored scene draws from it now; the parse
+                    // that gives it picks, validation and its info runs after
+                    // this load returns (map rendering slice 11).
+                    published = await TryPublishStoredSceneAsync(
+                        entry, loadGeneration, cancellationToken).ConfigureAwait(true);
+                    if (published is not { Published: true })
+                    {
+                        await LoadCoreAsync(
+                            entry,
+                            loadGeneration,
+                            cancellationToken,
+                            published?.SceneKey).ConfigureAwait(true);
+                    }
                 }
             }
             finally
             {
                 gate.Release();
             }
+
+            if (published is { Published: true } stored)
+                _ = CompleteStoredLoadAsync(entry, loadGeneration, stored);
         }
         finally
         {
@@ -305,7 +369,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private async Task LoadCoreAsync(
         DatasetEntry entry,
         long loadGeneration,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sceneKey,
+        StoredPublish? afterStored = null)
     {
         using var __cmd = ViewerObservability.BeginCommand("dataset.open");
 
@@ -348,8 +414,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         try
         {
             var parseStart = Stopwatch.GetTimestamp();
-            var processor = await CreateProcessorAsync(
-                entry, spec, fromExchangeSet, token).ConfigureAwait(true);
+            IDatasetProcessor processor;
+            // The parse stage of the warm-load breakdown (s100.cell.parse,
+            // then s100.cell.portray, s100.cell.scene_build, s100.cell.stack_wait).
+            using (EncDotNet.S100.Viewer.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.parse"))
+            {
+                processor = await CreateProcessorAsync(
+                    entry, spec, fromExchangeSet, token).ConfigureAwait(true);
+            }
             parseTime = Stopwatch.GetElapsedTime(parseStart);
             callerOwnedProcessor = processor;
             // Parsing cannot be interrupted, but a load cancelled meanwhile
@@ -369,20 +441,26 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             registeredProcessor = processor;
             _processorEntries[entry.Id] = entry;
             _sessionEntries[entry.Id] = entry;
-            var wasKnownBySession = _mapSession!.GetDataset(entry.Id) is not null;
+            var wasKnownBySession = afterStored?.WasKnownBySession
+                ?? _mapSession!.GetDataset(entry.Id) is not null;
 
             ApplyPostRegistrationPolicies(entry, processor, spec, wasKnownBySession);
 
             entry.SetVersionAssessment(processor.VersionAssessment);
             entry.SetAxisOrder(processor.AxisOrder);
             entry.SetPortrayalSpec(processor.PortrayalSpec.Name);
+            // AML rows, outlines and the MARKING pill follow the portrayal's
+            // real drawn state (#1371), not a fixed "not drawn".
+            entry.SetAml(processor is AmlDatasetProcessor aml
+                ? new ViewModels.AmlCellState(aml.Info, aml.Drawn, aml.Features.Count, aml.Coverage)
+                : null);
             entry.AvailableTimes = [];
             entry.CurrentTime = null;
             entry.SetLoadedState(processor.Metadata);
             var mapDataset = entry.MapDataset
                 ?? throw new InvalidOperationException(
                     "A loaded entry must expose renderer-neutral dataset state.");
-            _mapSession.SetDataset(
+            _mapSession!.SetDataset(
                 mapDataset,
                 entry.MinimumDisplayScale,
                 entry.MaximumDisplayScale);
@@ -419,6 +497,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                     DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                     return;
                 }
+
+                StoreScene(entry, spec, sceneKey, processor, result);
                 // Record the dataset's mercator extent so the panel can zoom to
                 // it (double-click reveal) and the out-of-scale extent indicator
                 // can outline it, even for exchange-set entries that opt out of
@@ -456,9 +536,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             EncDotNet.S100.Validation.ValidationReport? validation;
             using (validationLease)
             {
-                validation = await Task.Run(
-                    () => SafeValidate(processor),
-                    token).ConfigureAwait(true);
+                // Validation runs in the scheduler's lowest class, whatever
+                // the load's demand, so it never delays drawing (map
+                // rendering slice 5).
+                Task<EncDotNet.S100.Validation.ValidationReport?> validating;
+                using (WorkDemand.Enter(null))
+                {
+                    validating = WorkScheduler.Shared.RunAsync(
+                        WorkStage.Validate,
+                        _ => SafeValidate(processor),
+                        token,
+                        WorkPriority.Validation());
+                }
+
+                validation = await validating.ConfigureAwait(true);
             }
             if (!IsCurrentLoad(entry, loadGeneration)
                 || !OwnsProcessor(entry, processor))
@@ -520,11 +611,16 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             }
 
             _logger.Log(progressLevel,
-                "Loaded {Spec} dataset {Dataset} in {ElapsedMs:F0} ms (parse {ParseMs:F0} ms, portrayal {PortrayalMs:F0} ms)",
+                "Loaded {Spec} dataset {Dataset} in {ElapsedMs:F0} ms (parse {ParseMs:F0} ms, portrayal {PortrayalMs:F0} ms{StoredScene})",
                 spec, entry.DisplayName,
                 Stopwatch.GetElapsedTime(loadStart).TotalMilliseconds,
                 parseTime.TotalMilliseconds,
-                portrayalTime.TotalMilliseconds);
+                portrayalTime.TotalMilliseconds,
+                afterStored is null
+                    ? string.Empty
+                    : result?.ReusedStoredLayers == result?.Layers.Count
+                        ? ", after its stored scene; kept"
+                        : ", after its stored scene; replaced");
             DatasetLoaded?.Invoke(entry);
             loadCompleted = true;
         }
@@ -588,8 +684,213 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         {
             if (!loadCompleted && registeredProcessor is not null)
                 RollBackLoad(entry, registeredProcessor);
+            else if (!loadCompleted && afterStored is not null && IsCurrentLoad(entry, loadGeneration))
+                RollBackStoredScene(entry);
             if (callerOwnedProcessor is IDisposable disposableProcessor)
                 disposableProcessor.Dispose();
+        }
+    }
+
+    /// <summary>The outcome of looking for a cell's stored scene.</summary>
+    /// <param name="SceneKey">The cell's scene key, or null when it can't use one.</param>
+    /// <param name="Published">Whether the stored scene is on the map.</param>
+    /// <param name="WasKnownBySession">Whether the session knew the dataset before the stored scene registered it.</param>
+    private sealed record StoredPublish(string? SceneKey, bool Published, bool WasKnownBySession);
+
+    /// <summary>
+    /// Draws an exchange-set cell from the scene an earlier session stored
+    /// for it, before parsing it (map rendering slice 11): registers the
+    /// dataset with its stored metadata and publishes its chart-stack entries
+    /// from the stored scene. Returns null when cell scenes are off or the
+    /// cell can't use one; otherwise the key, and whether it drew.
+    /// </summary>
+    private async Task<StoredPublish?> TryPublishStoredSceneAsync(
+        DatasetEntry entry,
+        long loadGeneration,
+        CancellationToken token)
+    {
+        if (_cellScenes is null
+            || !entry.IsFromExchangeSet
+            || entry.ProductSpec is not { } spec
+            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) is not { } key)
+        {
+            return null;
+        }
+
+        var start = Stopwatch.GetTimestamp();
+        MapsuiDatasetResult? result = null;
+        using (var activity = EncDotNet.S100.Viewer.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.scene_read"))
+        {
+            // The read and decode run off the UI thread; binding the layers
+            // (partitioning each scene and building its spatial index) runs on
+            // the work scheduler at the load's priority.
+            var stored = await _cellScenes.TryReadAsync(key, token).ConfigureAwait(true);
+            activity?.SetTag("s100.cell.scene.hit", stored is not null);
+            if (stored is not null)
+            {
+                result = await WorkScheduler.Shared.RunAsync(
+                    WorkStage.Scene,
+                    _ => MapsuiDatasetRenderer.FromStoredScene(stored),
+                    token).ConfigureAwait(true);
+                entry.SetLoadedState(stored.Metadata);
+            }
+        }
+
+        if (result is null || !IsCurrentLoad(entry, loadGeneration) || entry.MapDataset is not { } mapDataset)
+            return new StoredPublish(key, Published: false, WasKnownBySession: false);
+
+        var wasKnownBySession = _mapSession!.GetDataset(entry.Id) is not null;
+        _sessionEntries[entry.Id] = entry;
+        try
+        {
+            _mapSession.SetDataset(mapDataset, entry.MinimumDisplayScale, entry.MaximumDisplayScale);
+            ProjectSessionState(entry);
+            SubscribeEntry(entry);
+            if (!await _mapSession.PublishStoredAsync(entry.Id, result, token).ConfigureAwait(true)
+                || !IsCurrentLoad(entry, loadGeneration))
+            {
+                if (IsCurrentLoad(entry, loadGeneration))
+                    RollBackStoredScene(entry);
+                return new StoredPublish(key, Published: false, wasKnownBySession);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentLoad(entry, loadGeneration))
+                RollBackStoredScene(entry);
+            if (ex is OperationCanceledException)
+                throw;
+            _logger.LogWarning(ex, "Could not draw {Dataset} from its stored scene; parsing it instead", entry.DisplayName);
+            return new StoredPublish(key, Published: false, wasKnownBySession);
+        }
+
+        entry.MercatorExtent = result.Extent;
+        entry.IsLoaded = true;
+        entry.Info = result.Info;
+        ApplyEntryState(entry);
+        _logger.LogDebug(
+            "Drew {Spec} dataset {Dataset} from its stored scene in {ElapsedMs:F0} ms",
+            spec, entry.DisplayName, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+        return new StoredPublish(key, Published: true, wasKnownBySession);
+    }
+
+    /// <summary>
+    /// Finishes a load drawn from a stored scene: parses the cell in the
+    /// background class, then renders it, which keeps the stored layers when
+    /// the portrayal keys them the same, and validates it.
+    /// </summary>
+    private async Task CompleteStoredLoadAsync(DatasetEntry entry, long loadGeneration, StoredPublish published)
+    {
+        var cts = new CancellationTokenSource();
+        lock (_storedCompletions)
+        {
+            if (_storedCompletions.TryGetValue(entry, out var previous))
+                previous.Cancel();
+            _storedCompletions.AddOrUpdate(entry, cts);
+        }
+
+        try
+        {
+            var gate = _loadGates.GetValue(entry, static _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cts.Token).ConfigureAwait(true);
+            try
+            {
+                if (!IsCurrentLoad(entry, loadGeneration))
+                    return;
+
+                // Nothing waits on this parse to draw, so all of it (parse,
+                // portrayal, the reuse check, validation) runs in the
+                // background class of the work scheduler.
+                using (WorkDemand.Enter(new WorkDemand(WorkPriority.Background())))
+                {
+                    await LoadCoreAsync(entry, loadGeneration, cts.Token, published.SceneKey, published)
+                        .ConfigureAwait(true);
+                }
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Finishing the load of {Dataset} after its stored scene failed", entry.DisplayName);
+        }
+        finally
+        {
+            lock (_storedCompletions)
+            {
+                if (_storedCompletions.TryGetValue(entry, out var current) && ReferenceEquals(current, cts))
+                    _storedCompletions.Remove(entry);
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private void CancelStoredCompletion(DatasetEntry entry)
+    {
+        lock (_storedCompletions)
+        {
+            if (_storedCompletions.TryGetValue(entry, out var cts))
+                cts.Cancel();
+        }
+    }
+
+    /// <summary>Takes a stored scene's drawing off the map when its load fails before a processor registers.</summary>
+    private void RollBackStoredScene(DatasetEntry entry)
+    {
+        if (_processorOwner.TryAcquire(entry.Id, out var lease))
+        {
+            lease.Dispose();
+            return;
+        }
+
+        _sessionEntries.Remove(entry.Id);
+        _mapSession?.RemoveDataset(entry.Id, removeProcessor: false);
+        entry.IsLoaded = false;
+        entry.Info = null;
+    }
+
+    /// <summary>
+    /// Stores the cell's scene after a render that built it, when the cell
+    /// has a scene key that still matches the presentation the render used.
+    /// The encode and write run in the background.
+    /// </summary>
+    private void StoreScene(
+        DatasetEntry entry,
+        string spec,
+        string? sceneKey,
+        IDatasetProcessor processor,
+        MapsuiDatasetResult result)
+    {
+        if (_cellScenes is not { } store
+            || sceneKey is null
+            || result.SceneLayers is null
+            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) != sceneKey
+            || StoredCellScene.TryCreate(result, processor.Metadata) is not { } scene)
+        {
+            return;
+        }
+
+        using (WorkDemand.Enter(null))
+        {
+            _ = WorkScheduler.Shared.RunAsync(
+                WorkStage.Encode,
+                _ =>
+                {
+                    store.Write(sceneKey, scene);
+                    return true;
+                },
+                CancellationToken.None,
+                WorkPriority.Background()).ContinueWith(
+                    t => _logger.LogDebug(t.Exception, "Could not store the scene of {Dataset}", entry.DisplayName),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted,
+                    TaskScheduler.Default);
         }
     }
 
@@ -676,23 +977,55 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         DatasetEntry entry,
         string spec,
         bool fromExchangeSet,
-        CancellationToken token) =>
-        Task.Run(() =>
+        CancellationToken token)
+    {
+        // DatasetEntry is UI-thread state: read it here, not on the worker.
+        var filePath = entry.FilePath;
+        var source = entry.Source;
+        var relativePath = entry.RelativePath;
+        var updates = entry.UpdateRelativePaths;
+
+        // On the work scheduler, at the priority of the load that asked for
+        // it (a lazy load's tier), else as visible work (map rendering slice 5).
+        return WorkScheduler.Shared.RunAsync(WorkStage.Parse, _ =>
         {
             if (!fromExchangeSet)
-                return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
+                return _pipelineFactory.CreateProcessorWithFilesystemUpdates(filePath);
 
-            if (!entry.HasUpdates)
-                return _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
-
-            return spec switch
-            {
-                "S-57" => _pipelineFactory.CreateS57ProcessorWithUpdates(
-                    entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
-                _ => _pipelineFactory.CreateS101ProcessorWithUpdates(
-                    entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
-            };
+            return CreateExchangeSetCellProcessor(
+                _pipelineFactory, source!, relativePath!, updates, spec);
         }, token);
+    }
+
+    /// <summary>
+    /// Builds the processor for an exchange-set cell: the base cell alone, or
+    /// collapsed with its in-set sequential updates into a single up-to-date
+    /// dataset (S-101 / S-57 / S-100 Part 10a; S-57 Part 3). Shared with the
+    /// background portrayal-cache warmer so both open a cell the same way and
+    /// so portray it under the same cache key.
+    /// </summary>
+    /// <param name="factory">The pipeline factory to build the processor with.</param>
+    /// <param name="source">The exchange set's asset source.</param>
+    /// <param name="relativePath">The base cell's path within <paramref name="source"/>.</param>
+    /// <param name="updateRelativePaths">The cell's sequential updates, in order; empty for none.</param>
+    /// <param name="spec">The cell's declared product specification.</param>
+    /// <returns>The processor; the caller owns it.</returns>
+    internal static IDatasetProcessor CreateExchangeSetCellProcessor(
+        DatasetPipelineFactory factory,
+        EncDotNet.S100.Core.IAssetSource source,
+        string relativePath,
+        IReadOnlyList<string> updateRelativePaths,
+        string spec)
+    {
+        if (updateRelativePaths.Count == 0)
+            return factory.CreateProcessor(source, relativePath, spec);
+
+        return spec switch
+        {
+            "S-57" => factory.CreateS57ProcessorWithUpdates(source, relativePath, updateRelativePaths),
+            _ => factory.CreateS101ProcessorWithUpdates(source, relativePath, updateRelativePaths),
+        };
+    }
 
     /// <summary>
     /// Applies Viewer load defaults once a processor is registered: collapse
@@ -800,6 +1133,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (processor is S101DatasetProcessor { UpdateReport: { } updateReport })
         {
             SurfaceUpdateReport(entry, updateReport);
+        }
+        else if (processor is S57DatasetProcessor { UpdateReport: { } s57UpdateReport })
+        {
+            SurfaceUpdateReport(entry, s57UpdateReport);
         }
 
         // Surface S-128 catalogues in the Library panel's session collection.
@@ -977,6 +1314,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 .WithContent(Strings.Toast_SettingsApplied)
                 .Show();
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> SetDepthAdjustmentAsync(
+        MapPresentationState presentation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var __cmd = ViewerObservability.BeginCommand("presentation.depthAdjustment");
+        Volatile.Write(ref _presentation, presentation);
+        if (_mapSession is null)
+            return true;
+
+        return await _mapSession.RefreshDepthAdjustedAsync(
+            presentation,
+            ToMercatorViewport(_viewportNotifier.Current),
+            cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1276,6 +1632,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         "weather.wind.barbs" => Strings.SubLayer_Weather_WindBarbs,
         "weather.wave.direction" => Strings.SubLayer_Weather_WaveDirection,
         "weather.pressure.isobars" => Strings.SubLayer_Weather_Isobars,
+        "weather.sea.temperature" => Strings.SubLayer_Weather_SeaTemperature,
+        "weather.sea.temperature.isotherms" => Strings.SubLayer_Weather_Isotherms,
+        "weather.current.arrows" => Strings.SubLayer_Weather_Currents,
+        "weather.visibility" => Strings.SubLayer_Weather_Visibility,
+        "weather.spray" => Strings.SubLayer_Weather_FreezingSpray,
+        "weather.air.temperature.isotherms" => Strings.SubLayer_Weather_AirTemperature,
+        "weather.precipitation" => Strings.SubLayer_Weather_Precipitation,
+        "weather.cape" => Strings.SubLayer_Weather_ThunderstormRisk,
+        "weather.cloud" => Strings.SubLayer_Weather_CloudCover,
         _ => key,
     };
 
@@ -1310,6 +1675,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
         if (e.PropertyName is not (
             nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsHiddenByDisplay)
             or nameof(DatasetEntry.IsActive)
             or nameof(DatasetEntry.Opacity)))
             return;
@@ -1391,11 +1757,16 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     }
 
     private long BeginLoad(DatasetEntry entry)
-        => Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+    {
+        var generation = Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+        CancelStoredCompletion(entry);
+        return generation;
+    }
 
     private void InvalidateLoad(DatasetEntry entry)
     {
         Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+        CancelStoredCompletion(entry);
         // The superseded load no longer counts as in progress.
         entry.IsLoading = false;
     }

@@ -136,6 +136,31 @@ public sealed class NetCdfWeatherDatasetTests : IDisposable
         Assert.Equal(WaveHeight(1, 1, 0) * 0.3048, step[5], 4);
     }
 
+    [Theory]
+    [InlineData("degree_C")]
+    [InlineData("Celsius")]
+    [InlineData("K")]
+    [InlineData("degree_F")]
+    public void A_GHRSST_analysis_reads_as_sea_temperature_in_kelvin(string units)
+    {
+        using var dataset = NetCdfWeatherDataset.Open(WriteSstNetCdf4(PathFor("sst.nc"), units));
+        var set = dataset.GridSet;
+        var sst = Assert.Single(set.Parameters);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, sst.Id);
+        Assert.Equal("analysed_sst", sst.SourceName);
+        Assert.Equal(WeatherLevel.Surface, sst.Level);
+        Assert.Equal("kelvin", sst.Units);
+        Assert.Empty(dataset.IgnoredVariables);
+
+        var step = set.ReadStep(sst, 0, Ct);
+        int columns = ChartGrid.Columns;
+        // Packed to 0.01 in the file's unit: within 0.01 K (0.0056 K for °F).
+        Assert.Equal(SeaTemperatureCelsius(3, 7) + 273.15, step[3 * columns + 7], 2);
+        Assert.Equal(SeaTemperatureCelsius(0, 0) + 273.15, step[0], 2);
+        Assert.True(float.IsNaN(step[^1]), "Land is missing.");
+    }
+
     [Fact]
     public void Unconvertible_units_make_an_unknown_parameter()
     {
@@ -255,6 +280,44 @@ public sealed class NetCdfWeatherDatasetTests : IDisposable
         using var dataset = NetCdfWeatherDataset.Open(path);
 
         Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.WaveHeight));
+    }
+
+    [Fact]
+    public void Model_currents_read_at_their_top_layer_with_speed_and_direction()
+    {
+        var path = WriteCurrentNetCdf4(PathFor("hycom.nc"));
+
+        using var dataset = NetCdfWeatherDataset.Open(path);
+        var set = dataset.GridSet;
+
+        var u = set.FindParameter(WeatherParameters.CurrentU);
+        Assert.NotNull(u);
+        Assert.NotNull(set.FindParameter(WeatherParameters.CurrentV));
+        // A depth of 0 m is the surface.
+        Assert.Equal(WeatherLevel.Surface, u.Level);
+        Assert.Equal("HYCOM archive file, GLBz0.04", set.Origin.Model);
+
+        // Normalised steps run south to north, as the fixture's latitudes do.
+        var values = set.ReadStep(u, 0, Ct);
+        var (knots, to) = Current(0, 0);
+        double expected = knots * 1852.0 / 3600.0 * Math.Sin(to * Math.PI / 180);
+        Assert.Equal(expected, values[0], 4);
+        var (row, col) = MissingNode(ChartGrid);
+        Assert.True(float.IsNaN(values[row * ChartGrid.Columns + col]));
+    }
+
+    [Fact]
+    public void HF_radar_currents_read_although_their_grid_mapping_variable_is_left_out()
+    {
+        var path = WriteCurrentNetCdf4(PathFor("hfradar.nc"), hfRadar: true);
+
+        using var dataset = NetCdfWeatherDataset.Open(path);
+
+        Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.CurrentU));
+        Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.CurrentV));
+        // The source lists every radial file and the institution is a long
+        // name, so the model is the program that made the data.
+        Assert.Equal("NOAA IOOS Surface Currents Program", dataset.GridSet.Origin.Model);
     }
 
     [Fact]

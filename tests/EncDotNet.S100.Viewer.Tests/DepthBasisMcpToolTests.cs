@@ -90,7 +90,7 @@ public sealed class DepthBasisMcpToolTests
     public async Task The_tool_recomputes_and_returns_the_current_basis()
     {
         var loader = new FakeDatasetLoaderService();
-        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { });
+        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run);
         var tool = new GetDepthBasisTool(service, new InlineInvoker());
 
         var dto = Value(await tool.InvokeAsync(TestContext.Current.CancellationToken));
@@ -120,11 +120,11 @@ public sealed class DepthBasisMcpToolTests
     {
         var f = new PassageCheckFixture();
         var loader = new FakeDatasetLoaderService();
-        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { });
+        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run);
 
-        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check) { DepthBasis = service }
+        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null) { DepthBasis = service }
             .InvokeAsync(false, TestContext.Current.CancellationToken));
-        var without = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check)
+        var without = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null)
             .InvokeAsync(false, TestContext.Current.CancellationToken));
 
         Assert.NotNull(state.DepthBasis);

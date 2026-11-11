@@ -112,14 +112,17 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
     private async Task<Setup> Start(Route route)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         route.SetDeparture(Departure);
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog,
-            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post);
-        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
+            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(),
+            warnings: null,
+            mariner: null,
+            options: null);
+        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), viewport: null, mariner: null, warnings: null);
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
         return new Setup(routes, route, check, findings, catalog);
@@ -171,7 +174,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
     public async Task Check_route_returns_the_same_area_findings()
     {
         using var s = await Start(fixture.Import());
-        var tool = new CheckRouteTool(s.Catalog, new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()));
+        var tool = new CheckRouteTool(s.Catalog, routes: new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()), sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
 
         var result = await tool.InvokeAsync(new CheckRouteRequest(), TestContext.Current.CancellationToken);
 
@@ -194,7 +197,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
     public async Task Check_route_judges_a_polyline_at_the_given_time()
     {
         using var s = await Start(fixture.Import());
-        var tool = new CheckRouteTool(s.Catalog);
+        var tool = new CheckRouteTool(s.Catalog, routes: null, sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
         var points = s.Route.Waypoints.Select(w => new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPoint(w.Position.Latitude, w.Position.Longitude)).ToList();
 
         var summer = await tool.InvokeAsync(

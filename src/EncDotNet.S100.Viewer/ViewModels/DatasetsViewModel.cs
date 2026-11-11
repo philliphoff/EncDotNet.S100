@@ -13,7 +13,7 @@ using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class DatasetEntry : ViewModelBase
+internal sealed partial class DatasetEntry : ViewModelBase
 {
     private readonly MapDatasetId _id;
     private MapDataset? _mapDataset;
@@ -44,13 +44,6 @@ internal sealed class DatasetEntry : ViewModelBase
 
     /// <summary>True when <see cref="PortrayalNote"/> has a value to show.</summary>
     public bool HasPortrayalNote => PortrayalNote is not null;
-
-    /// <summary>
-    /// True when the product isn't an S-100 product
-    /// (<see cref="ProductRegistration.IsS100"/> is <see langword="false"/>), so
-    /// the layer stack shows a "Not an S-100 product" badge on its row.
-    /// </summary>
-    public bool IsNotS100 => !ProductRegistry.Default.IsS100(ProductSpec);
 
     /// <summary>
     /// The specification whose catalogues portray this dataset. Until the
@@ -154,6 +147,23 @@ internal sealed class DatasetEntry : ViewModelBase
     /// touching their bytes. See issue #458.
     /// </summary>
     public ExchangeSets.BoundingBox? GeographicBounds { get; }
+
+    /// <summary>
+    /// The cell's compilation scale denominator from its catalogue (for example
+    /// the NOAA product catalogue's <c>cscale</c>), known before the cell is
+    /// parsed; <see langword="null"/> when the catalogue doesn't give one. Ranks
+    /// cells for lazy-load deferral (#1265) the way overlap suppression ranks
+    /// loaded cells (<see cref="DataModel.CellScaleRanking"/>).
+    /// </summary>
+    public int? CompilationScale { get; }
+
+    /// <summary>
+    /// The cell's coverage from its catalogue as an EPSG:4326 geometry
+    /// (x = longitude), known before the cell is parsed; <see langword="null"/>
+    /// when the catalogue only gives a bounding box. Lazy loading defers a
+    /// coarse cell while finer cells' coverage fills its part of the view (#1265).
+    /// </summary>
+    public NetTopologySuite.Geometries.Geometry? CatalogueCoverage { get; }
 
     /// <summary>
     /// The ENC navigational-purpose band (1&#160;Overview .. 6&#160;Berthing)
@@ -266,7 +276,11 @@ internal sealed class DatasetEntry : ViewModelBase
     public bool IsLoading
     {
         get => _isLoading;
-        set => SetProperty(ref _isLoading, value);
+        set
+        {
+            if (SetProperty(ref _isLoading, value) && IsAml)
+                OnPropertyChanged(nameof(AmlStateText));
+        }
     }
 
     /// <summary>
@@ -385,7 +399,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public bool IsVisible
     {
-        get => _mapDataset?.IsVisible ?? _isVisible;
+        get => _isVisible;
         set
         {
             if (IsVisible != value)
@@ -394,7 +408,29 @@ internal sealed class DatasetEntry : ViewModelBase
                 UpdateMapDataset();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RowOpacity));
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
             }
+        }
+    }
+
+    private bool _isHiddenByDisplay;
+    /// <summary>
+    /// Whether a display control hides this dataset on the map, whatever
+    /// <see cref="IsVisible"/> says: today the AML product switches and scale
+    /// bands (<c>AmlDisplayService</c>, AML handoff decisions 24 and 26). Unlike
+    /// <see cref="IsVisible"/> it isn't the row's own setting, so the row's eye
+    /// keeps its state. Changing it doesn't re-render the dataset.
+    /// </summary>
+    public bool IsHiddenByDisplay
+    {
+        get => _isHiddenByDisplay;
+        set
+        {
+            if (_isHiddenByDisplay == value) return;
+            _isHiddenByDisplay = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 
@@ -623,6 +659,15 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when the layer has no data near the view time and hides (the amber Hidden tag).</summary>
     public bool IsLayerHidden => _layerTime?.IsHidden == true;
 
+    /// <summary>True when the layer time is a warning with a tag: hidden, or out of range such as a storm beyond its forecast (V11).</summary>
+    public bool IsLayerWarning => _layerTime?.IsWarning == true;
+
+    /// <summary>The warning tag: "Hidden", or why, such as "Beyond forecast" for a tropical cyclone (V11).</summary>
+    public string LayerTagText => _layerTime?.TagText ?? Strings.LayerTime_Hidden;
+
+    /// <summary>True when the layer draws stale data at the view time: the Stale tag (a surface analysis over 6 hours old, §7).</summary>
+    public bool IsLayerStale => _layerTime?.IsStale == true;
+
     /// <summary>True while the layer is drawing the view time.</summary>
     public bool IsLayerDrawing => _layerTime?.State == EncDotNet.S100.Viewer.Services.LayerTimeState.Drawing;
 
@@ -640,7 +685,10 @@ internal sealed class DatasetEntry : ViewModelBase
         OnPropertyChanged(nameof(HasLayerTime));
         OnPropertyChanged(nameof(LayerTimeText));
         OnPropertyChanged(nameof(IsLayerHidden));
+        OnPropertyChanged(nameof(IsLayerWarning));
+        OnPropertyChanged(nameof(LayerTagText));
         OnPropertyChanged(nameof(IsLayerDrawing));
+        OnPropertyChanged(nameof(IsLayerStale));
     }
 
     /// <summary>
@@ -820,9 +868,13 @@ internal sealed class DatasetEntry : ViewModelBase
         int? minimumDisplayScale = null,
         int? maximumDisplayScale = null,
         ExchangeSets.BoundingBox? geographicBounds = null,
-        bool notForNavigation = false)
+        bool notForNavigation = false,
+        int? compilationScale = null,
+        NetTopologySuite.Geometries.Geometry? catalogueCoverage = null)
     {
         FilePath = filePath;
+        CompilationScale = compilationScale;
+        CatalogueCoverage = catalogueCoverage;
         NotForNavigation = notForNavigation;
         ProductSpec = productSpec;
         Source = source;
@@ -855,6 +907,7 @@ internal sealed class DatasetEntry : ViewModelBase
             ReconcileSubLayerProjectionSubscriptions();
             UpdateMapDataset();
             OnPropertyChanged(nameof(HasSubLayers));
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         };
     }
 
@@ -880,7 +933,7 @@ internal sealed class DatasetEntry : ViewModelBase
         _id,
         DisplayName,
         metadata,
-        _isVisible,
+        _isVisible && !_isHiddenByDisplay,
         _isActive,
         _opacity,
         _availableTimes,
@@ -912,6 +965,8 @@ internal sealed class DatasetEntry : ViewModelBase
         if (e.PropertyName == nameof(DatasetSubLayer.State))
         {
             UpdateMapDataset();
+            if (_aml is not null)
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 }
@@ -1497,7 +1552,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 minimumDisplayScale: reg.MinimumDisplayScale,
                 maximumDisplayScale: reg.MaximumDisplayScale,
                 geographicBounds: reg.GeographicBounds,
-                notForNavigation: reg.NotForNavigation);
+                notForNavigation: reg.NotForNavigation,
+                compilationScale: reg.CompilationScale,
+                catalogueCoverage: reg.CatalogueCoverage);
 
             // Mark the entry deferred *before* it is inserted (and therefore
             // before the extent-overlay / grouping subscribers attach to it).

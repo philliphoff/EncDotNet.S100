@@ -58,8 +58,8 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     protected StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
         GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Snapshot = snapshot;

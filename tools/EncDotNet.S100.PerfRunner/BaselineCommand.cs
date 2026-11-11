@@ -72,6 +72,10 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
         [System.ComponentModel.Description("Override the per-run subdirectory name (defaults to the short git SHA of HEAD).")]
         public string? OutputSubdir { get; set; }
 
+        [CommandOption("--lua-engine <ENGINE>")]
+        [System.ComponentModel.Description("The Lua engine scenarios portray with: luacsharp (default) or moonsharp. Defaults to S100_LUA_ENGINE when that is set.")]
+        public string? LuaEngine { get; set; }
+
         [CommandOption("--profile <MODE>")]
         [System.ComponentModel.Description("Capture an in-process EventPipe trace per scenario: 'none' (default), 'cpu', or 'alloc'. Mutually exclusive with --append. Output is <scenario>.nettrace next to the .jsonl.")]
         [System.ComponentModel.DefaultValue("none")]
@@ -89,6 +93,12 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
         if (!Directory.Exists(corpus))
         {
             AnsiConsole.MarkupLine($"[red]Corpus directory not found:[/] {corpus}");
+            return 1;
+        }
+
+        if (!PerfLuaEngine.TrySelect(settings.LuaEngine))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid --lua-engine value:[/] {settings.LuaEngine ?? Environment.GetEnvironmentVariable(PerfLuaEngine.EnvironmentVariable)} (expected: luacsharp, moonsharp)");
             return 1;
         }
 
@@ -209,6 +219,7 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
                     iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
                     if (!string.IsNullOrWhiteSpace(settings.Side))
                         iterActivity?.SetTag(PerfActivitySource.SideTag, settings.Side);
+                    iterActivity?.SetTag(PerfActivitySource.LuaEngineTag, PerfLuaEngine.Name);
 
                     var sw = Stopwatch.StartNew();
                     try

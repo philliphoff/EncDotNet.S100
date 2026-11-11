@@ -23,6 +23,17 @@
     <!-- Trim analyzers run on every build (issue #764): reflection they cannot
          follow is an error, as in the libraries. The app is not published trimmed. -->
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <!--
+      Server GC (issue #1264). Loading cells as you pan runs Lua portrayal on
+      several threads and allocates about 2 GB/s; workstation GC spent 40-60%
+      of wall time paused and roughly halved cell-load throughput. Server GC
+      keeps concurrent (background) gen2 collections, and on .NET 9+ DATAS
+      (dynamic heap count) is on by default, which keeps idle memory close to
+      workstation GC. Heap count and affinity are left to DATAS: pinning them
+      would fight other apps on a desktop machine.
+    -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <!--
@@ -109,6 +120,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S127\EncDotNet.S100.Datasets.S127.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S411\EncDotNet.S100.Datasets.S411.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S412\EncDotNet.S100.Datasets.S412.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S129\EncDotNet.S100.Datasets.S129.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S201\EncDotNet.S100.Datasets.S201.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
@@ -128,6 +140,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Routes.Rtz\EncDotNet.S100.Routes.Rtz.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
   </ItemGroup>

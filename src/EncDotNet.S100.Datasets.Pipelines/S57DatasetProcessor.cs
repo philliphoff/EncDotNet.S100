@@ -60,7 +60,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// </summary>
     private readonly S57TranslationTarget _target;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private IReadOnlyList<SoundingDatumArea>? _soundingDatums;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -269,6 +269,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // fields that do not survive translation — see
         // docs/design/non-gml-validation.md §9.3.
         _rawS57Document = s57.Document;
+        UpdateReport = s57.UpdateReport;
         var translator = S57ToS101Translator.ForTarget(_target);
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);
@@ -335,6 +336,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         }
     }
 
+    /// <summary>
+    /// What happened to the cell's updates when it was opened with them
+    /// (<see cref="S57UpdateApplicator"/>), or <see langword="null"/> when it
+    /// was opened without. S-57 Part 3, sequential updating.
+    /// </summary>
+    public S57UpdateReport? UpdateReport { get; }
+
     /// <inheritdoc/>
     public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
@@ -370,7 +378,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // product's category mapping and default-hidden VGs correctly.
         (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, context?.SafetyContourHalo == true, fc, cancellationToken).ConfigureAwait(false);
 
         // Pattern-clip cache identity, as for S-101: the clip reads only the
         // visible area fills, so a display toggle that leaves them unchanged
@@ -471,10 +479,12 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// Returns the cell's drawing instructions under the catalogue's current
     /// ECDIS display state (already applied by the caller). The Lua rules run
     /// only when the mariner settings change; otherwise the cached rule output
-    /// is re-filtered. Call with <see cref="_renderGate"/> held.
+    /// is re-filtered, and the safety contour gets its halo when
+    /// <paramref name="safetyContourHalo"/> (<see cref="RenderContext.SafetyContourHalo"/>).
+    /// Call with <see cref="_renderGate"/> held.
     /// </summary>
     private async Task<(IReadOnlyList<DrawingInstruction> Visible, IReadOnlyList<DrawingInstruction> Unfiltered, string RuleKey)> GetDisplayInstructionsAsync(
-        MarinerSettings mariner, FeatureCatalogue fc, CancellationToken cancellationToken)
+        MarinerSettings mariner, bool safetyContourHalo, FeatureCatalogue fc, CancellationToken cancellationToken)
     {
         var s101Cat = _catalogue;
         var ruleKey = S101DatasetProcessor.BuildRuleOutputCacheKey(
@@ -498,7 +508,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             _cachedRuleKey = ruleKey;
         }
 
-        return (VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat), _cachedRuleOutput, ruleKey);
+        var visible = VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat);
+        return (safetyContourHalo ? SafetyContourHalo.Apply(visible) : visible, _cachedRuleOutput, ruleKey);
     }
 
     /// <summary>
@@ -604,10 +615,11 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// The cell's scale rank against overlapping cells (see
     /// <see cref="CellScaleRanking"/>): its compilation
     /// scale (DSPM CSCL), else the translated <c>DataCoverage</c> minimum
-    /// display scale, the same rank the display and the route check use.
-    /// Smaller is finer; <see langword="null"/> when the cell declares none.
+    /// display scale with its maximum display scale as the tie-break, the same
+    /// rank the display and the route check use; <see langword="null"/> when
+    /// the cell declares none.
     /// </summary>
-    public int? CellRankingScale => CellExtent.RankingScale;
+    public CellRank? CellRank => CellExtent.Rank;
 
     /// <summary>
     /// Whether the cell's translated <c>DataCoverage</c> (from <c>M_COVR</c>
@@ -664,7 +676,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         }
     }
 
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage) CellExtent
     {
         get
         {
@@ -673,9 +685,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
             _featureIndex ??= BuildFeatureIndex();
             extent = (
-                CellScaleRanking.RankingScale(
-                    S57Dataset.ResolveCompilationScale(_rawS57Document),
-                    S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                S101DatasetProcessor.ResolveCellRank(
+                    _featureIndex.Values,
+                    S57Dataset.ResolveCompilationScale(_rawS57Document)),
                 CoverageAreaResolver.Resolve(_featureIndex.Values));
             _cellExtent = extent;
             return extent;
@@ -698,6 +710,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
     private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
     {
+        if (feature.FeatureType == S57UnknownObject.FeatureTypeCode)
+            return BuildUnknownObjectInfo(feature);
+
         var attributes = FeatureInfoBuilder.BuildFlat(
             feature.Attributes.Select(kv =>
                 new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
@@ -708,6 +723,37 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
+        };
+    }
+
+    /// <summary>
+    /// The pick report of an S-57 object whose class the translation has no
+    /// rule for (drawn as "?"): named by its object class, with its S-57
+    /// attributes as encoded (none of them are in the Feature Catalogue) and,
+    /// for a point, its position.
+    /// </summary>
+    private static FeatureInfo BuildUnknownObjectInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
+    {
+        var attributes = FeatureInfoBuilder.BuildFlat(
+            feature.Attributes.Select(kv =>
+                new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
+            decoder: null);
+        if (feature.GeometryType == EncDotNet.S100.Pipelines.Vector.GeometryType.Point
+            && feature.Coordinates is [var position])
+        {
+            var value = string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"{position.Latitude:0.0000000} {position.Longitude:0.0000000}");
+            attributes = [.. attributes, new PickAttribute { Code = "position", Name = "Position", RawValue = value }];
+        }
+
+        return new FeatureInfo
+        {
+            FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            FeatureType = feature.FeatureType,
+            FeatureTypeName = S57UnknownObject.Name(
+                feature.Attributes.GetValueOrDefault(S57UnknownObject.ObjectClassAttribute)?.ToString()),
             Attributes = attributes,
         };
     }
@@ -726,7 +772,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 Ordinal = i++,
                 FeatureType = feature.FeatureType,
-                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+                FeatureTypeName = feature.FeatureType == S57UnknownObject.FeatureTypeCode
+                    ? S57UnknownObject.Name(feature.Attributes.GetValueOrDefault(S57UnknownObject.ObjectClassAttribute)?.ToString())
+                    : _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             };
         }
     }
@@ -835,7 +883,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             // portrayal, keyed on this cell's portrayal spec — see the core path.
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, context?.SafetyContourHalo == true, fc, cancellationToken).ConfigureAwait(false);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
 

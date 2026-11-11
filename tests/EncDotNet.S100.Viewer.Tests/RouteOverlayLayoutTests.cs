@@ -189,7 +189,7 @@ public sealed class RouteOverlayLayoutTests
     [AvaloniaFact]
     public void Clicking_an_insert_handle_inserts_at_the_legs_midpoint()
     {
-        var service = new RoutesService();
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = service.Routes.CreateRoute("R");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(0, 0.100)); // 100 px: has a handle

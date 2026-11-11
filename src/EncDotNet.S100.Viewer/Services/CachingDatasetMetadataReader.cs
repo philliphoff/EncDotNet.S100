@@ -40,16 +40,14 @@ internal sealed class CachingDatasetMetadataReader : IDatasetMetadataReader
     /// Creates a reader backed by <paramref name="cache"/>.
     /// </summary>
     /// <param name="cache">The cross-session metadata cache to memoize into.</param>
-    /// <param name="registry">
-    /// The products to detect and read; <see langword="null"/> for
-    /// <see cref="ProductRegistry.Default"/>.
-    /// </param>
-    /// <exception cref="ArgumentNullException"><paramref name="cache"/> is null.</exception>
-    public CachingDatasetMetadataReader(IDatasetMetadataCache cache, ProductRegistry? registry = null)
+    /// <param name="registry">The products to detect and read.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="cache"/> or <paramref name="registry"/> is null.</exception>
+    public CachingDatasetMetadataReader(IDatasetMetadataCache cache, ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(cache);
         _cache = cache;
-        _registry = registry ?? ProductRegistry.Default;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
     }
 
     /// <inheritdoc />

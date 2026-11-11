@@ -1,4 +1,5 @@
 using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 
 namespace EncDotNet.S100.Viewer.Services.LazyLoading;
 
@@ -13,18 +14,139 @@ internal enum LoadTier
     Visible = 0,
 
     /// <summary>
-    /// The cell lies just outside the viewport, within the ahead margin. Loaded
-    /// speculatively so a short pan finds it ready, like the tile renderer's
-    /// predicted tiles.
+    /// The cell is in view at a known destination: a fling's resting viewport
+    /// or an animation's target (map rendering slice&#160;9). It loads as soon
+    /// as the gesture starts, as predicted work, and may use every load slot,
+    /// like a visible cell.
     /// </summary>
-    Ahead = 1,
+    Destination = 1,
+
+    /// <summary>
+    /// The cell lies just outside the viewport, within the ahead margin, or in
+    /// a view the demand planner predicts a few seconds ahead (along the pan
+    /// velocity and zoom rate, or along the route). Loaded speculatively so a
+    /// short pan finds it ready, like the tile renderer's predicted tiles.
+    /// </summary>
+    Ahead = 2,
+
+    /// <summary>
+    /// The cell is in view, but finer cells that draw at this scale cover its
+    /// part of the view (#1265). Overlap suppression would hide almost all of
+    /// it, so it loads speculatively after the visible and ahead cells instead
+    /// of competing with them; once loaded it fills any hairline gaps between
+    /// the finer cells.
+    /// </summary>
+    Covered = 3,
+
+    /// <summary>
+    /// The cell is in a place the view rested at recently, or the start view
+    /// (map rendering slice&#160;9). Loaded at low priority, so jumping back is
+    /// warm.
+    /// </summary>
+    History = 4,
 
     /// <summary>
     /// The cell has no known footprint, so it may or may not be in view. Loaded
     /// last, like the tile renderer's idle pre-warm, so it never holds back a
     /// cell that is known to be in view.
     /// </summary>
-    Unbounded = 2,
+    Unbounded = 5,
+}
+
+/// <summary>
+/// A view the demand planner predicts (map rendering slice&#160;9), in the
+/// terms cells are ranked by: its footprint in EPSG:4326 decimal degrees and
+/// the scale it would be shown at.
+/// </summary>
+/// <param name="South">South edge.</param>
+/// <param name="West">West edge; greater than <paramref name="East"/> when the view crosses ±180°.</param>
+/// <param name="North">North edge.</param>
+/// <param name="East">East edge.</param>
+/// <param name="CenterLatitude">The view centre's latitude.</param>
+/// <param name="CenterLongitude">The view centre's longitude.</param>
+/// <param name="ScaleDenominator">The scale denominator the view would be shown at.</param>
+/// <param name="Resolution">The view's EPSG:3857 resolution, metres per pixel.</param>
+/// <param name="Probability">How likely the view is.</param>
+/// <param name="Source">The signal the prediction came from.</param>
+internal sealed record PredictedWindow(
+    double South,
+    double West,
+    double North,
+    double East,
+    double CenterLatitude,
+    double CenterLongitude,
+    double ScaleDenominator,
+    double Resolution,
+    double Probability,
+    PredictionSource Source)
+{
+    /// <summary>The cell tier a cell in this window gets.</summary>
+    public LoadTier Tier => Source switch
+    {
+        PredictionSource.Destination => LoadTier.Destination,
+        PredictionSource.History => LoadTier.History,
+        _ => LoadTier.Ahead,
+    };
+
+    /// <summary>Projects a predicted view to geographic terms.</summary>
+    /// <param name="predicted">The predicted view.</param>
+    /// <returns>The window, or <see langword="null"/> for a view with no size.</returns>
+    public static PredictedWindow? From(PredictedView predicted)
+    {
+        var view = predicted.View;
+        if (!view.HasSize || !(view.Resolution > 0))
+            return null;
+
+        var extent = view.ToExtent();
+        var (west, south) = ToLonLat(extent.MinX, extent.MinY);
+        var (east, north) = ToLonLat(extent.MaxX, extent.MaxY);
+        var (centerLon, centerLat) = ToLonLat(view.CenterX, view.CenterY);
+        return new PredictedWindow(
+            south,
+            NormalizeLongitude(west),
+            north,
+            NormalizeLongitude(east),
+            centerLat,
+            NormalizeLongitude(centerLon),
+            LazyCellGate.ScaleDenominator(view.Resolution, centerLat),
+            view.Resolution,
+            predicted.Probability,
+            predicted.Source);
+    }
+
+    /// <summary>The window as a <see cref="LoadWindow"/> with no ahead margin, for the coverage test.</summary>
+    public LoadWindow ToLoadWindow() => new()
+    {
+        South = South,
+        West = West,
+        North = North,
+        East = East,
+        AheadSouth = South,
+        AheadWest = West,
+        AheadNorth = North,
+        AheadEast = East,
+        CenterLatitude = CenterLatitude,
+        CenterLongitude = CenterLongitude,
+        LeadLatitude = CenterLatitude,
+        LeadLongitude = CenterLongitude,
+    };
+
+    // EPSG:3857 to WGS-84, as Mapsui's SphericalMercator.ToLonLat.
+    private static (double Longitude, double Latitude) ToLonLat(double x, double y)
+    {
+        const double radius = 6378137.0;
+        var longitude = x / radius * (180.0 / Math.PI);
+        var latitude = (2.0 * Math.Atan(Math.Exp(y / radius)) - (Math.PI / 2.0)) * (180.0 / Math.PI);
+        return (longitude, Math.Clamp(latitude, -90.0, 90.0));
+    }
+
+    private static double NormalizeLongitude(double longitude)
+    {
+        var normalized = (longitude + 180.0) % 360.0;
+        if (normalized < 0)
+            normalized += 360.0;
+        return normalized - 180.0;
+    }
 }
 
 /// <summary>
@@ -191,6 +313,59 @@ internal static class LoadPrioritizer
     }
 
     /// <summary>
+    /// The strongest predicted window <paramref name="cell"/> falls in, as a
+    /// tier and the window, for a cell the current view doesn't rank (map
+    /// rendering slice&#160;9). Each window applies its own scale, so a cell
+    /// that only draws at an animated zoom's target scale ranks for it.
+    /// </summary>
+    /// <param name="cell">The cell's footprint.</param>
+    /// <param name="band">The cell's S-57 usage band, when it has one.</param>
+    /// <param name="minimumDisplayScale">The cell's coarsest display scale, when it declares one.</param>
+    /// <param name="windows">The predicted windows, strongest first.</param>
+    /// <returns>The tier and window, or <see langword="null"/>.</returns>
+    public static (LoadTier Tier, PredictedWindow Window)? ClassifyPredicted(
+        BoundingBox? cell,
+        int? band,
+        int? minimumDisplayScale,
+        IReadOnlyList<PredictedWindow> windows)
+    {
+        ArgumentNullException.ThrowIfNull(windows);
+        if (cell is null)
+            return null;
+
+        (LoadTier Tier, PredictedWindow Window)? best = null;
+        foreach (var window in windows)
+        {
+            if (best is { } b && (window.Tier > b.Tier || (window.Tier == b.Tier && window.Probability <= b.Window.Probability)))
+                continue;
+            if (!LazyCellGate.IsScaleEligible(band, minimumDisplayScale, window.ScaleDenominator))
+                continue;
+            if (!LazyCellGate.IntersectsViewport(cell, window.South, window.West, window.North, window.East))
+                continue;
+            best = (window.Tier, window);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// The rank of a cell within a predicted window: its distance from the
+    /// window's centre, divided by the window's probability, so the likeliest,
+    /// nearest views fill first.
+    /// </summary>
+    /// <param name="cell">The cell's footprint.</param>
+    /// <param name="window">The window.</param>
+    /// <returns>An approximate distance in degrees.</returns>
+    public static double RankPredicted(BoundingBox? cell, PredictedWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        if (cell is null)
+            return 0;
+
+        return Distance(cell, window.CenterLatitude, window.CenterLongitude) / Math.Max(window.Probability, 0.01);
+    }
+
+    /// <summary>
     /// The rank of a cell within its tier; lower loads first. Visible cells
     /// rank by distance from the viewport centre, so the middle of the screen
     /// fills first; ahead cells rank by distance from the lead point, so the
@@ -210,7 +385,11 @@ internal static class LoadPrioritizer
         var (lat, lon) = tier == LoadTier.Ahead
             ? (window.LeadLatitude, window.LeadLongitude)
             : (window.CenterLatitude, window.CenterLongitude);
+        return Distance(cell, lat, lon);
+    }
 
+    private static double Distance(BoundingBox cell, double lat, double lon)
+    {
         var cellLat = (cell.SouthBoundLatitude + cell.NorthBoundLatitude) / 2.0;
         var cellEast = cell.EastBoundLongitude < cell.WestBoundLongitude
             ? cell.EastBoundLongitude + 360.0

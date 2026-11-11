@@ -762,7 +762,8 @@ public sealed class VectorSceneBuilder
                     continue;
                 symbols.Add(new LineSymbolPlacement(
                     new ResolvedSymbol(asset.ProcessedSvg, LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
-                    placed.Position / S100PixelSizeMm));
+                    placed.Position / S100PixelSizeMm,
+                    placed.Rotation));
             }
         }
 
@@ -976,6 +977,7 @@ public sealed class VectorSceneBuilder
             OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
             FontWeight = instruction.FontWeight,
             FontProportion = instruction.FontProportion,
+            FontSlant = instruction.FontSlant,
             HaloColor = string.IsNullOrEmpty(instruction.HaloColor) ? null : ResolveColor(instruction.HaloColor),
             HaloWidthPx = instruction.HaloWidth / S100PixelSizeMm * TextScale,
         };

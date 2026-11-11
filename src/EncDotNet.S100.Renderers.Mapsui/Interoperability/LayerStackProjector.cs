@@ -1,8 +1,4 @@
-using System.Runtime.CompilerServices;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
-using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Rendering.Scene;
-using Mapsui;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -25,11 +21,11 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <para>
 /// Instead, this projector reuses each item's prebuilt <see cref="ILayer"/> and,
 /// when the engine replaced a vector payload's <see cref="VectorSubLayer"/>
-/// (R-101-102-B depth suppression), drops exactly the same features from the
-/// already-built Mapsui <see cref="MemoryLayer"/> by comparing the original and
-/// surviving instruction <c>FeatureReference</c> sets. The removed set is
-/// byte-identical to the legacy in-place Mapsui feature filter, so the viewer's
-/// golden-image output does not change (S-98 Annex A §8.4.1; MSC.232(82) §5.8).
+/// (R-101-102-B depth suppression), records the features it dropped, found by
+/// comparing the original and surviving instruction <c>FeatureReference</c>
+/// sets, as the entry's <see cref="LayerStackEntry.SuppressedFeatures"/>: a
+/// filter on the layer's scene ops that the chart tile applies while
+/// rasterising (S-98 Annex A §8.4.1; MSC.232(82) §5.8).
 /// </para>
 /// </remarks>
 public static class LayerStackProjector
@@ -107,29 +103,30 @@ public static class LayerStackProjector
             if (!prebuilt.TryGetValue(KeyOf(item), out var pre))
                 continue;
 
-            var layer = ProjectOne(item, pre, rebuildCoverage);
-            result.Add(new LayerStackEntry(layer, item));
+            var (layer, suppressed) = ProjectOne(item, pre, rebuildCoverage);
+            result.Add(new LayerStackEntry(layer, item) { SuppressedFeatures = suppressed });
         }
         return result;
     }
 
-    private static ILayer ProjectOne(
+    private static (ILayer Layer, IReadOnlySet<string>? Suppressed) ProjectOne(
         SubLayerStackItem ruled,
         LayerStackEntry prebuilt,
         Func<SubLayerStackItem, CoverageSubLayerBase, ILayer?>? rebuildCoverage)
     {
         // Coverage payloads are re-rasterised (not feature-filtered) when the
         // engine replaced the sub-layer — e.g. R-101-104-B attaches a land-area
-        // mask to the S-104 surface so it can be clipped to water (issue #483).
+        // mask to the S-104 surface so it can be clipped to water (issue #483),
+        // and R-111-WX-B blanks model current arrows inside S-111 (issue #1228).
         if (ruled.Payload is CoverageStackPayload ruledCoverage
             && prebuilt.Item.Payload is CoverageStackPayload originalCoverage
             && !ReferenceEquals(ruledCoverage.SubLayer, originalCoverage.SubLayer)
-            && ruledCoverage.SubLayer is GridCoverageSubLayer or IsolineCoverageSubLayer
+            && ruledCoverage.SubLayer is GridCoverageSubLayer or IsolineCoverageSubLayer or ArrowCoverageSubLayer
             && rebuildCoverage is not null)
         {
             var rebuilt = rebuildCoverage(ruled, ruledCoverage.SubLayer);
             if (rebuilt is null)
-                return prebuilt.Layer;
+                return (prebuilt.Layer, null);
 
             // The rebuilt layer is a fresh ILayer that defaults to
             // Enabled=true / Opacity=1 with no visible range. Carry over the
@@ -138,80 +135,23 @@ public static class LayerStackProjector
             // — including the default-hidden S-104 surface (issue #483) — or
             // resets the user's opacity / scale-window choices.
             CopyDisplayState(prebuilt.Layer, rebuilt);
-            return rebuilt;
+            return (rebuilt, null);
         }
 
         // Only vector payloads are suppressible (R-101-102-B). If the engine
-        // left the sub-layer reference untouched, the prebuilt layer is reused
-        // verbatim.
+        // left the sub-layer reference untouched, nothing is suppressed.
         if (ruled.Payload is not VectorStackPayload ruledVector
             || prebuilt.Item.Payload is not VectorStackPayload originalVector
             || ReferenceEquals(ruledVector.SubLayer, originalVector.SubLayer))
         {
-            return prebuilt.Layer;
+            return (prebuilt.Layer, null);
         }
 
-        if (prebuilt.Layer is not MemoryLayer memoryLayer)
-        {
-            // Vector layers are always MemoryLayer today; guard defensively so a
-            // future non-MemoryLayer vector renderer is passed through unfiltered
-            // rather than silently mis-suppressed.
-            return prebuilt.Layer;
-        }
-
+        // The prebuilt layer stays on the stack; the features the rule
+        // dropped become a filter on its scene's ops (map rendering slice 8),
+        // applied by the chart tile and the single-surface renderer alike.
         var dropped = ComputeDroppedRefs(originalVector.SubLayer, ruledVector.SubLayer);
-        if (dropped.Count == 0)
-            return prebuilt.Layer;
-
-        // The stack is re-projected whenever any dataset loads, unloads or
-        // changes, and the engine hands back a new suppressed sub-layer each
-        // time. Rebuilding the filtered layer then would give the map a new
-        // layer with an empty tile cache, so the cell's area fills would blank
-        // and repaint over its line work on every load. Reuse the filtered
-        // layer while the source and the dropped set are unchanged.
-        FilteredLayers.TryGetValue(memoryLayer, out var memo);
-        var previous = memo?.Filtered;
-        if (previous is not null && memo!.Matches(memoryLayer, dropped))
-        {
-            CopyDisplayState(memoryLayer, previous);
-            return previous;
-        }
-
-        // A changed dropped set (an S-102 loaded over the cell) needs a new
-        // filtered layer. It shows the tiles of the layer it replaces on the
-        // map until its own land: the previous filtered copy, or the source
-        // itself the first time anything is dropped.
-        var filtered = FilterFeatures(memoryLayer, dropped, replaces: previous ?? memoryLayer);
-        FilteredLayers.AddOrUpdate(memoryLayer, new FilteredLayerMemo(memoryLayer, dropped, filtered));
-        return filtered;
-    }
-
-    /// <summary>
-    /// The suppression-filtered layer last built for each prebuilt source
-    /// layer. Keyed weakly by source, so it goes with the source's dataset,
-    /// and holding the filtered layer weakly, so one no longer on the map (its
-    /// S-102 switched off) does not keep its tiles alive.
-    /// </summary>
-    private static readonly ConditionalWeakTable<MemoryLayer, FilteredLayerMemo> FilteredLayers = new();
-
-    private sealed class FilteredLayerMemo(MemoryLayer source, HashSet<string> dropped, MemoryLayer filtered)
-    {
-        private readonly IEnumerable<IFeature> _sourceFeatures = source.Features;
-        private readonly VectorScene? _sourceScene = BoundScene(source);
-
-        private readonly WeakReference<MemoryLayer> _filtered = new(filtered);
-
-        public MemoryLayer? Filtered => _filtered.TryGetTarget(out var layer) ? layer : null;
-
-        // A source whose features or bound scene were replaced since the
-        // filtered copy was taken needs a new copy.
-        public bool Matches(MemoryLayer source, HashSet<string> droppedNow) =>
-            ReferenceEquals(source.Features, _sourceFeatures)
-            && ReferenceEquals(BoundScene(source), _sourceScene)
-            && dropped.SetEquals(droppedNow);
-
-        private static VectorScene? BoundScene(MemoryLayer layer) =>
-            S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out _) ? baseScene : null;
+        return (prebuilt.Layer, dropped.Count == 0 ? null : dropped);
     }
 
     private static void CopyDisplayState(ILayer source, ILayer target)
@@ -245,44 +185,6 @@ public static class LayerStackProjector
                 dropped.Add(r);
         }
         return dropped;
-    }
-
-    private static MemoryLayer FilterFeatures(MemoryLayer source, HashSet<string> droppedRefs, ILayer? replaces)
-    {
-        var kept = source.Features
-            .Where(f => f[MapsuiDisplayListRenderer.FeatureRefKey] is not string r || !droppedRefs.Contains(r))
-            .ToList();
-
-        // Build a fresh MemoryLayer mirroring the source rather than mutating it
-        // — the session retains the prebuilt layer for the un-suppressed case (e.g.
-        // an S-102 deactivation restores the full S-101 depth shading). A tiled
-        // source repeats its pick features across world copies, as it is drawn.
-        var filtered = source is InstrumentedMemoryLayer { RepeatsAcrossWorldCopies: true }
-            ? new WorldCopyMemoryLayer()
-            : new MemoryLayer();
-        filtered.Name = source.Name;
-        filtered.Features = kept;
-        filtered.Style = source.Style;
-        filtered.CustomLayerRendererName = source.CustomLayerRendererName;
-        CopyDisplayState(source, filtered);
-
-        // The source is painted by a scene renderer from its bound VectorScene;
-        // its features only carry pick identity (pattern fills are near-invisible
-        // hit targets). Bind the same scene minus the dropped features, or the
-        // filtered layer would fall back to those pick styles: untiled, and
-        // without its pattern fills.
-        bool Keep(PaintOp op) => !droppedRefs.Contains(op.FeatureReference);
-        var bound = source.CustomLayerRendererName switch
-        {
-            S100VectorTileRenderer.RendererName => S100VectorTileRenderer.TryBindFilteredScene(source, filtered, Keep, replaces),
-            S100VectorSceneRenderer.RendererName => S100VectorSceneRenderer.TryBindFilteredScene(source, filtered, Keep),
-            _ => true,
-        };
-        if (!bound)
-        {
-            filtered.CustomLayerRendererName = null;
-        }
-        return filtered;
     }
 
     /// <summary>

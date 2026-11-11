@@ -67,4 +67,12 @@ public sealed class S100McpServerOptions
     /// its own.
     /// </summary>
     public EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? RouteCheckSources { get; init; }
+
+    /// <summary>
+    /// What the host's map draws, so the built-in <c>identify_features</c>
+    /// tool, given no time, identifies what the map shows (its view time and
+    /// the warnings it hides). May be <see langword="null"/> when the host has
+    /// no map, and the tool then identifies every drawable feature.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState? MapDrawState { get; init; }
 }

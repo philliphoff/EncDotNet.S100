@@ -25,12 +25,13 @@ internal sealed class FileDialogService : IFileDialogService
                 {
                     Patterns = new[] { "*.000", "*.h5", "*.hdf5", "*.gml" },
                 },
-                // Weather formats that aren't S-100 (GRIB2, NetCDF, CAP). NCEP's
-                // own GRIB2 files and NOMADS GRIB filter downloads have no
-                // extension; All files shows them.
+                // Weather formats that aren't S-100 (GRIB2, NetCDF, CAP, and WPC's
+                // coded surface bulletins as .txt). NCEP's own GRIB2 files, NOMADS
+                // GRIB filter downloads and some bulletins have no extension; All
+                // files shows them.
                 new FilePickerFileType(Strings.FilePicker_WeatherDataType)
                 {
-                    Patterns = new[] { "*.grib2", "*.grb2", "*.grib", "*.grb", "*.nc", "*.nc4", "*.xml", "*.atom", "*.json", "*.geojson" },
+                    Patterns = new[] { "*.grib2", "*.grb2", "*.grib", "*.grb", "*.nc", "*.nc4", "*.xml", "*.atom", "*.json", "*.geojson", "*.txt" },
                 },
                 FilePickerFileTypes.All,
             },

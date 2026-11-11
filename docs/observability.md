@@ -207,6 +207,21 @@ adds these spans:
 These spans are inert unless an `ActivityListener` subscribes, so ordinary
 runs don't allocate trace records.
 
+### Cell load stage spans
+
+Each SoundCharts cell load also splits into stage spans, so you can see where
+a warm load spends its time:
+
+| Span | Covers |
+|---|---|
+| `s100.cell.parse` | Opening and parsing the cell. |
+| `s100.cell.portray` | Portrayal, including the portrayal-cache read. |
+| `s100.portrayal.cache.read` | The disk portrayal-cache read, tagged `s100.cache.result` (`hit` or `miss`). |
+| `s100.cell.scene_build` | Building the Mapsui layers and scene, including the pattern clip. |
+| `s100.cell.pattern_clip` | The pattern clip, tagged `s100.cache.result` (`hit` or `miss`). |
+| `s100.cell.compose` | Composing the map's layer stack. In the viewer, a landing cell's compose runs as a background job outside the load's trace. |
+| `s100.cell.stack_wait` | In the viewer, waiting for a layer stack that includes the landed cell to reach the map: the background compose and the post that applies it. |
+
 To rank slow tile jobs and break down their latency from first visible enqueue
 to publish, run PerfReport's `tile-report` command on a trace file:
 
@@ -269,7 +284,9 @@ product and catalogue versions and the kind of match.
 | `s100.hdf5.read.bytes` | counter | `By` | — |
 | `s100.hdf5.read.duration` | histogram | `ms` | — |
 
-### Lua rules (`EncDotNet.S100.Scripting.MoonSharp`)
+### Lua rules (`EncDotNet.S100.Scripting.LuaCSharp`, `EncDotNet.S100.Scripting.MoonSharp`)
+
+Both engines record the same instruments, each under its own assembly's name.
 
 | Instrument | Type | Unit | Tags |
 |---|---|---|---|

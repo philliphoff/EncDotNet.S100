@@ -98,7 +98,7 @@ public sealed class CoverageBandTests
         s.Register(NewEntry(), new Stub(new[] { T0.AddHours(32), T0.AddHours(34) }));
 
         // Now inside the data, so the axis (which always includes now) is just the data.
-        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(T0.AddHours(1))));
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(T0.AddHours(1))), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         var bands = vm.CoverageBands;
 
         // Two equal 2h data clusters separated by a 30h gap: the gap is
@@ -117,7 +117,7 @@ public sealed class CoverageBandTests
         var s = new GlobalTimeService();
         s.Register(NewEntry(), new Stub(new[] { T0 })); // single sample => min==max
 
-        var vm = new TimelineViewModel(s);
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         Assert.Empty(vm.CoverageBands);
     }
 
@@ -125,7 +125,7 @@ public sealed class CoverageBandTests
     public void CoverageBands_property_changes_when_range_changes()
     {
         var s = new GlobalTimeService();
-        var vm = new TimelineViewModel(s);
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         var raised = new List<string?>();
         ((INotifyPropertyChanged)vm).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 

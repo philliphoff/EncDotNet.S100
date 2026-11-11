@@ -19,7 +19,7 @@ internal sealed class SecomCredentials
         ILogger? logger = null)
     {
         Trust = new SecomServerTrust(revocation: revocation);
-        Authorities = new TrustedAuthorityStore(settings, Trust);
+        Authorities = new TrustedAuthorityStore(settings, Trust, SecomTrustAnchors.BuiltIn);
         Identities = new SecomIdentityStore(settings, Trust, keys, logger);
         Authorities.Apply();
         Identities.Restore(commandLineIdentity);

@@ -12,7 +12,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.TestSupport;
 using Mapsui;
 using PureHDF;
 using SkiaSharp;
@@ -293,6 +293,66 @@ public sealed class NetCdfProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task An_SST_analysis_draws_the_temperature_fill_and_picks_and_samples_in_celsius()
+    {
+        using var sst = new NetCdfDatasetProcessor(WriteSstNetCdf4(PathFor("sst.nc")), new ProjNetCrsTransformFactory());
+        var grid = ChartGrid;
+
+        // The fill is on by default; the isotherms are off.
+        var portrayal = await sst.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        var fill = Assert.IsType<GridCoverageSubLayer>(Assert.Single(portrayal.SubLayers));
+        Assert.Equal(SeaTemperatureStyle.Key, fill.LayerKey);
+        Assert.True(fill.ClipToWater);
+        var withIsotherms = await sst.BuildCoveragePortrayalAsync(
+            new RenderContext { EcdisDisplay = new EcdisDisplaySettings { LayerVisibility = new Dictionary<string, bool> { [SeaTemperatureIsothermStyle.Key] = true } } }, Ct);
+        Assert.Equal([SeaTemperatureStyle.Key, SeaTemperatureIsothermStyle.Key], withIsotherms.SubLayers.Select(l => l.LayerKey));
+
+        var info = sst.GetCoverageInfo(grid.South + 3 * grid.Spacing, grid.West + 7 * grid.Spacing, null)!;
+        var temperature = info.Attributes.Single(a => a.Code == WeatherParameters.SeaSurfaceTemperature);
+        Assert.Equal("Sea surface temperature", temperature.Name);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{SeaTemperatureCelsius(3, 7):0.0} °C"), temperature.DisplayValue);
+        Assert.DoesNotContain(info.Attributes, a => a.Code == WeatherParameters.SeaSurfaceTemperature + ".degc");
+
+        var query = new CoverageSampleQuery(grid.South + 3 * grid.Spacing, grid.West + 7 * grid.Spacing, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(sst.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal(("sea_surface_temperature", "K"), (fields["sea.temperature"].Quantity, fields["sea.temperature"].Unit));
+        Assert.Equal(("sea_surface_temperature", "degC"), (fields["sea.temperature.degc"].Quantity, fields["sea.temperature.degc"].Unit));
+        Assert.Equal(SeaTemperatureCelsius(3, 7), fields["sea.temperature.degc"].Value!.Value, 2);
+        Assert.Equal(SeaTemperatureCelsius(3, 7) + 273.15, fields["sea.temperature"].Value!.Value, 2);
+    }
+
+    [Fact]
+    public async Task Currents_draw_arrows_that_yield_to_S111_and_pick_and_sample_in_knots()
+    {
+        using var currents = new NetCdfDatasetProcessor(WriteCurrentNetCdf4(PathFor("currents.nc")), new ProjNetCrsTransformFactory());
+        var grid = ChartGrid;
+
+        var portrayal = await currents.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        var arrows = Assert.IsType<ArrowCoverageSubLayer>(Assert.Single(portrayal.SubLayers));
+        Assert.Equal(CurrentArrowStyle.Key, arrows.LayerKey);
+        Assert.True(arrows.YieldsToS111);
+        Assert.Equal(S98DisplayPlane.DynamicArrows, arrows.Plane);
+
+        var (knots, to) = Current(3, 7);
+        var info = currents.GetCoverageInfo(grid.South + 3 * grid.Spacing, grid.West + 7 * grid.Spacing, null)!;
+        var speed = info.Attributes.Single(a => a.Code == WeatherParameters.CurrentSpeed);
+        Assert.Equal("Current speed", speed.Name);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{knots:0.0} kn"), speed.DisplayValue);
+        var direction = info.Attributes.Single(a => a.Code == WeatherParameters.CurrentToDirection);
+        Assert.Equal("Current direction (to)", direction.Name);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{to:0}°"), direction.DisplayValue);
+
+        var query = new CoverageSampleQuery(grid.South + 3 * grid.Spacing, grid.West + 7 * grid.Spacing, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(currents.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal(("sea_water_speed", "kn"), (fields["current.speed.kn"].Quantity, fields["current.speed.kn"].Unit));
+        Assert.Equal(knots, fields["current.speed.kn"].Value!.Value, 3);
+        Assert.Equal(("sea_water_velocity_to_direction", "deg"), (fields["current.to_direction"].Quantity, fields["current.to_direction"].Unit));
+        Assert.Equal(to, fields["current.to_direction"].Value!.Value, 2);
+    }
+
+    [Fact]
     public async Task The_headless_render_draws_the_wave_fill()
     {
         using var processor = new NetCdfDatasetProcessor(WriteWaveNetCdf4(PathFor("waves.nc")), new ProjNetCrsTransformFactory());
@@ -419,7 +479,7 @@ public sealed class NetCdfProcessorTests : IDisposable
     private static DatasetPipelineFactory CreateFactory() =>
         new(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider());

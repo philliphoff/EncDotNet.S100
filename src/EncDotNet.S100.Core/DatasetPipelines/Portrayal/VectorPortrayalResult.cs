@@ -154,6 +154,15 @@ public sealed class VectorPortrayalResult
     public int? CellCompilationScale { get; init; }
 
     /// <summary>
+    /// The cell's finest (smallest-denominator) intended display scale (S-101
+    /// FC §3.1.1 <c>DataCoverage.maximumDisplayScale</c>). Breaks ties between
+    /// overlapping cells ranked by the same <see cref="CellMinimumDisplayScale"/>
+    /// (see <c>CellScaleRanking</c>). Null when the cell declares none or is
+    /// ranked by <see cref="CellCompilationScale"/>.
+    /// </summary>
+    public int? CellMaximumDisplayScale { get; init; }
+
+    /// <summary>
     /// The cell's declared data-coverage polygons in EPSG:4326 (lat/lon),
     /// resolved from its <c>DataCoverage</c> surface features (S-101 FC §3.1.1;
     /// the S-57 <c>M_COVR</c> meta-object translated to <c>DataCoverage</c>).

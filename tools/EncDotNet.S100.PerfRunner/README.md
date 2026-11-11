@@ -12,7 +12,7 @@ PerfRunner has three commands:
 |---|---|
 | `run <scenario>` | Runs one scenario. `run list` lists the scenarios. |
 | `baseline` | Runs every scenario with fixed settings into a folder named after the current commit. |
-| `viewer-stress` | Drives viewport changes against a running viewer's MCP endpoint. |
+| `viewer-stress` | Drives viewport changes against a running viewer's MCP endpoint, and times how long jumps and pans take to settle. |
 
 ## Run a scenario
 
@@ -363,6 +363,235 @@ Speedscope.
 | `--scenario <name>` | `burst` | `burst` snakes with continuous zoom; `navigation` pans and zooms in separate steps. |
 | `--idle-timeout-ms <ms>` | `120000` | The longest wait for rendering to settle after each cycle. |
 | `--out <dir>` | `./perf-runs` | The folder for the JSON manifest. |
+
+## Measure how long a view takes to settle
+
+The `jumps` and `pan` scenarios of `viewer-stress` time how long SoundCharts
+takes to show a finished chart after the view moves, and record CPU, GC and
+memory for each move. They're the measurements the
+[map rendering architecture](../../docs/design/map-render-architecture.md#measuring-success)
+judges each change by.
+
+- `jumps` moves the view to Seattle, Tacoma and Port Townsend at 1:44 300, one
+  after another, and waits for the view to settle after each.
+- `pan` settles at Seattle, then pans west across Elliott Bay towards
+  Bainbridge Island in 40 small moves about a frame apart, crossing harbour and
+  approach cell boundaries, then waits for the view to settle. It records the
+  map paint times of the pan.
+
+Each scenario runs in one of two modes:
+
+| Mode | Starts from |
+|---|---|
+| `cold` | Empty portrayal, pattern-clip and tile caches. The background portrayal pre-warm is switched off for the session, so it can't warm cells between jumps. |
+| `prewarm` | Warm caches: the harness switches the pre-warm on and waits until it reports `complete` (every load-as-you-pan cell is in the portrayal cache), then runs the route. The manifest's `prewarm` block records how long that took, the pre-warm's concurrency limit, and the CPU, GC and memory window over it (`metrics`). |
+
+### Data you need
+
+The routes need the NOAA ENC cells for Washington in the SoundCharts Library,
+loading as you pan. CI doesn't have this data, so these runs are made by hand.
+
+1. In the SoundCharts Library, add the NOAA ENC cells for the state of
+   Washington, so the Library has a source or collection named "Washington".
+2. Download the cells. The harness measures loading and drawing, not
+   downloading.
+
+The harness turns on load as you pan for the source if it's off. To use a
+source with another name, pass `--library-source <name>`; to use whatever is
+already on the map, pass `--library-source ""`.
+
+### Run cold and after-pre-warm jumps
+
+Build the viewer in Release first:
+
+```bash
+dotnet build src/EncDotNet.S100.Viewer -c Release
+```
+
+The simplest run lets the harness start a viewer for each Lua engine and mode:
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfRunner -c Release -- viewer-stress \
+    --scenario jumps \
+    --launch src/EncDotNet.S100.Viewer/bin/Release/net10.0/SoundCharts.dll \
+    --mode both \
+    --engines luacsharp,moonsharp \
+    --out ./perf-runs/settle
+```
+
+For each engine and mode, the harness:
+
+1. Starts the viewer with `--mcp`, a port file and `--cache-dir`, and with
+   `S100_LUA_ENGINE` set to the engine. A cold run gets a new, empty cache
+   folder under `--out/caches`, deleted afterwards. After-pre-warm runs share
+   `--out/caches/prewarm-<engine>`, so the pre-warm fills it once per engine.
+2. Turns on load as you pan for the Library source, switches the pre-warm off
+   (cold) or waits for it to finish (`prewarm`), and waits for the starting
+   view to settle.
+3. Runs the route and writes the results.
+4. Closes the viewer.
+
+`--cache-dir` moves only the render caches, so the viewer keeps your settings
+and Library, and your own caches aren't touched. To run the viewer with a
+separate profile too, pass `--viewer-arg=--data-dir --viewer-arg=<folder>`;
+that folder needs its own Library with the Washington source.
+
+To drive a viewer you started yourself, give its port file instead of
+`--launch`. Start it with an empty cache folder for a cold run:
+
+```bash
+dotnet src/EncDotNet.S100.Viewer/bin/Release/net10.0/SoundCharts.dll \
+    --mcp --mcp-port-file /tmp/settle/mcp.url \
+    --cache-dir /tmp/settle/cold-caches
+```
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfRunner -c Release -- viewer-stress \
+    --scenario jumps --mode cold \
+    --port-file /tmp/settle/mcp.url \
+    --out ./perf-runs/settle
+```
+
+An attached viewer runs one engine and one mode. The harness reads the engine
+from the viewer; pass `--engines <name>` to have it check. Start the viewer
+with `S100_LUA_ENGINE=moonsharp` to measure MoonSharp. If the attached viewer
+uses its normal caches, a `cold` run warns that it may not be cold.
+
+### Compare two runs
+
+Each run writes `<timestamp>-settle-<route>-<mode>-<engine>.json` and a `.md`
+summary to `--out`. Compare two runs, for example MoonSharp and Lua-CSharp,
+with PerfReport:
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfReport -- diff \
+    perf-runs/settle/<timestamp>-settle-jumps-cold-moonsharp.json \
+    perf-runs/settle/<timestamp>-settle-jumps-cold-luacsharp.json
+```
+
+`diff` compares every metric step by step and in total. `summarise` prints one
+run's table. See [PerfReport](../EncDotNet.S100.PerfReport/README.md#settle-runs).
+
+A single run is noisy. Use `--repeat <n>` for several runs of each engine and
+mode, and compare medians.
+
+### Keep runs comparable on macOS
+
+- **App Nap.** macOS throttles an app whose windows are all hidden or covered:
+  it lowers the app's CPU priority and coalesces its timers. A viewer in that
+  state settles several times slower, with three to four times the CPU time and
+  frame p95 in the hundreds of milliseconds. The viewer turns App Nap off when
+  the first perf-harness tool is called, so the window's visibility doesn't
+  matter. The manifest's `viewer.appNapDisabled` records it, and `summarise`
+  marks a macOS run with **App Nap on**.
+- **Screen lock.** With the screen locked the viewer doesn't paint, so
+  `await_settled` times out. Keep the screen unlocked.
+- **Other work.** On macOS the load average overstates how busy the machine is.
+  Wait for `top` to show at least 85% idle before each run.
+
+### When a view is settled
+
+The viewer's MCP tool `await_settled` decides. The view is settled when both
+hold:
+
+- **Every cell in view is loaded.** No viewport change is waiting for the
+  lazy-load coordinator's 200 ms debounce, and no cell it ranks as visible for
+  the current view is queued or loading. A cell that started loading ahead of
+  the view and is now in it counts as visible. Cells ahead of the view, covered
+  by finer cells, or without a footprint don't count.
+- **Every visible tile slot shows its own target tile.** Every enabled tiled
+  layer in range at the current scale has painted the current view, and in that
+  frame drew each visible tile as itself: cached at the frame's pixel size, not
+  held back for a sibling layer, and not stood in for by another SCAMIN scale
+  class, a coarser or finer band, or a replaced layer's tiles. No visible tile
+  of those layers is queued or rasterising. A layer that draws nothing in view
+  (outside it, past its scale cap, or hidden by finer cells) counts as done.
+
+The frame must also come after the `set_viewport` and after the last cell load
+finished, so a just-loaded cell's layer has painted. The state must then hold
+for `--confirm-ms` (default 250 ms). The settle time runs from `set_viewport`
+to the frame that completed the view; the confirmation isn't included. A move
+that doesn't settle within `--settle-timeout-ms` is recorded as timed out.
+
+The tile renderer records what each layer showed only after the first
+`set_viewport` or `await_settled` call, so a viewer without the harness does no
+extra work per frame.
+
+### What each metric means
+
+The viewer's `get_process_metrics` tool measures over a window that runs from
+just before each move to just after it settles, including the confirmation
+period.
+
+| Metric | Meaning |
+|---|---|
+| Settle | Milliseconds from `set_viewport` to the frame that completed the settled view. |
+| CPU | Process CPU time in the window, user and kernel, all threads. |
+| Wall | Wall time of the window. |
+| Cores busy | CPU ÷ wall: the average number of cores the process kept busy. `cpuUtilisation` divides that by `Environment.ProcessorCount`. |
+| GC pause, pause share | GC pause time in the window (`GC.GetTotalPauseDuration`), and its share of wall time. |
+| Gen 0, 1, 2 | Collections of each generation in the window. |
+| Allocated | Bytes allocated in the window (`GC.GetTotalAllocatedBytes`), and per second. |
+| GC heap | Managed heap size at the last collection (`GCMemoryInfo.HeapSizeBytes`). |
+| GC committed | Memory the GC has committed from the OS (`GCMemoryInfo.TotalCommittedBytes`). With Server GC this can be several times the heap. |
+| Tile native | Native bytes the tile raster caches and GPU tile textures hold, summed over every layer. |
+| Working set | Resident memory. The peak is sampled every 100 ms through the window, because the process's own peak counter isn't reliable on macOS. |
+| Frame p50, p95, max | Map paint times over the window, from `get_render_stats`. The `pan` scenario's frame times are the pan's. |
+| Scheduler cores busy | Work scheduler worker time ÷ wall: how many of its workers were busy on average. |
+| Visible job wait p95 | 95th percentile of the time from a visible job (a tile on screen) being queued, or promoted to visible, to a worker starting it. The totals take the largest step's p95. |
+| Job run p95 | 95th percentile of how long a job held a worker per run, every class. |
+
+Peaks of the GC heap, GC committed and tile native bytes are sampled the same
+way. The manifest's `totals` add CPU, wall, GC pause and allocation over the
+moves, divide for cores busy and pause share, and take the largest peaks and
+job-wait percentiles.
+Each step also keeps the raw MCP replies under `raw`.
+
+### Split a warm cell load by stage
+
+With `--trace` (and `--launch`), each viewer writes its spans to
+`<stem>.jsonl` next to the manifest. A cell load splits into these spans:
+
+| Span | Covers |
+|---|---|
+| `s100.cell.parse` | Opening and parsing the cell. |
+| `s100.cell.portray` | Portrayal, including the portrayal-cache read. |
+| `s100.portrayal.cache.read` | The portrayal-cache read alone, tagged `s100.cache.result` = `hit` or `miss`. |
+| `s100.cell.scene_build` | Building the Mapsui layers and scene, including the pattern clip. |
+| `s100.cell.pattern_clip` | The pattern clip, tagged `s100.cache.result` = `hit` or `miss`. |
+| `s100.cell.compose` | Composing the layer stack. A landing cell's compose runs as a background job, outside the load's trace. |
+| `s100.cell.stack_wait` | Waiting for a layer stack with the landed cell to reach the map. |
+
+Summarize them with `dotnet run --project tools/EncDotNet.S100.PerfReport --
+summarise <stem>.jsonl`.
+
+### Settle options
+
+| Option | Default | Description |
+|---|---|---|
+| `--scenario <name>` | `burst` | `jumps` or `pan` for the settle runs. |
+| `--mode <mode>` | `cold` | `cold`, `prewarm`, or `both` (needs `--launch`). |
+| `--engines <list>` | the viewer's | `luacsharp`, `moonsharp`, or both, comma-separated. Several need `--launch`. |
+| `--launch <path>` | — | The viewer executable or `SoundCharts.dll` to start for each run. Use this, `--port-file` or `--endpoint`. |
+| `--viewer-arg <arg>` | — | An extra argument for a launched viewer (repeatable). |
+| `--library-source <name>` | `Washington` | The Library source or collection to load as you pan; empty to skip. |
+| `--jumps <stops>` | Seattle, Tacoma, Port Townsend | Jump stops as `Name=lat,lon;Name=lat,lon`. |
+| `--pan <stops>` | Seattle → Bainbridge Island | The pan's start and end, in the same form. |
+| `--pan-steps <n>` | `40` | Moves between the pan's ends. |
+| `--pan-step-delay-ms <ms>` | `16` | Delay between pan moves. |
+| `--scale <denominator>` | `44300` | Map scale. |
+| `--settle-timeout-ms <ms>` | `120000` | Longest wait for each move to settle. |
+| `--confirm-ms <ms>` | `250` | How long the view must stay settled. |
+| `--prewarm-timeout-ms <ms>` | `900000` | Longest wait for the pre-warm to finish. |
+| `--repeat <n>` | `1` | Runs of each engine and mode. |
+| `--trace` | off | With `--launch`, write each viewer's spans and metrics to `<stem>.jsonl`. |
+| `--keep-caches` | off | With `--launch`, keep cold runs' cache folders. |
+| `--out <dir>` | `./perf-runs` | The folder for manifests, summaries and traces. |
+
+The move from the starting view to Seattle is the first recorded jump, so it
+depends on where the viewer starts. To fix the starting view of a launched
+viewer, pass `--viewer-arg=--center --viewer-arg=<lat,lon> --viewer-arg=--zoom
+--viewer-arg=<level>`.
 
 ## What the scenarios don't measure
 

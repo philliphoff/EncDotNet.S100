@@ -32,7 +32,7 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// group's steps are ordered by valid time (reference time plus forecast
 /// time; for a time-interval statistic, template 4.8, such as ECMWF's
 /// <c>10fg</c> gust, the end of the interval). A group maps to the canonical
-/// table (<see cref="WeatherParameters.FindByGribCode"/>) when its level
+/// table (<see cref="WeatherParameters.FindByGribCode(GribParameterCode, WeatherLevel)"/>) when its level
 /// matches the row's. Each parameter group of the table
 /// (<see cref="WeatherParameterDefinition.Group"/>) is read at one level, so a
 /// drawn group never mixes levels:
@@ -348,7 +348,7 @@ public sealed class GribWeatherDataset : IDisposable
         var candidates = new List<(FieldGroup Group, WeatherParameterDefinition Definition, int Rank)>();
         foreach (var group in groups)
         {
-            var definition = WeatherParameters.FindByGribCode(group.Code);
+            var definition = WeatherParameters.FindByGribCode(group.Code, group.Level);
             if (definition is null)
             {
                 reasons[group] = "The weather parameter table doesn't have this parameter.";

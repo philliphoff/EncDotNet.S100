@@ -35,7 +35,7 @@ public sealed class LooseHdf5IndexingTests : IDisposable
 
         var loose = Path.Combine(_root, "loose");
         Directory.CreateDirectory(loose);
-        var probe = new CachingDatasetMetadataReader(new DiskDatasetMetadataCache(Path.Combine(_root, "cache"), 1_000_000));
+        var probe = new CachingDatasetMetadataReader(new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_root, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
         var indexer = new LocalSourceIndexer((path, _) => probe.TryRead(path));
 
         var expected = new Dictionary<string, CollectionItem>(StringComparer.Ordinal);

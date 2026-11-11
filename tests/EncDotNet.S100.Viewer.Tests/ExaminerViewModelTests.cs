@@ -25,7 +25,7 @@ public class ExaminerViewModelTests
     public void Settings_default_examiner_links_enabled()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.True(vm.ExaminerLinksEnabled);
         Assert.Equal(ViewerSettings.DefaultS100ExaminerBaseUrl, vm.ExaminerBaseUrl);
     }
@@ -34,7 +34,7 @@ public class ExaminerViewModelTests
     public void Settings_toggle_persists()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s) { ExaminerLinksEnabled = false };
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null) { ExaminerLinksEnabled = false };
         Assert.False(s.S100ExaminerLinksEnabled);
     }
 
@@ -42,7 +42,7 @@ public class ExaminerViewModelTests
     public void Settings_base_url_persists_and_resets()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s) { ExaminerBaseUrl = "https://mirror.example.org/" };
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null) { ExaminerBaseUrl = "https://mirror.example.org/" };
         Assert.Equal("https://mirror.example.org/", s.S100ExaminerBaseUrl);
 
         vm.ResetExaminerBaseUrlCommand.Execute(null);
@@ -54,7 +54,7 @@ public class ExaminerViewModelTests
     public void Settings_blank_base_url_falls_back_to_default()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s) { ExaminerBaseUrl = "   " };
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null) { ExaminerBaseUrl = "   " };
         Assert.Equal(ViewerSettings.DefaultS100ExaminerBaseUrl, vm.ExaminerBaseUrl);
     }
 
@@ -100,7 +100,7 @@ public class ExaminerViewModelTests
     public void Settings_change_raises_examiner_settings_changed()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var count = 0;
         vm.ExaminerSettingsChanged += () => count++;
 

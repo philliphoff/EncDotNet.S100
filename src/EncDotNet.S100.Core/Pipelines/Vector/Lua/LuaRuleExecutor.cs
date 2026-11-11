@@ -92,8 +92,10 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     {
         ArgumentNullException.ThrowIfNull(mariner);
 
-        // The MoonSharp interpreter is not interruptible mid-script, so the
-        // token is honoured at the coarse boundary before invocation.
+        // The token is checked before the run, passed to the engine (which
+        // Lua-CSharp checks between instructions) and checked at every
+        // feature the rules emit, which is the only check MoonSharp gets (see
+        // ExecuteRawCore).
         cancellationToken.ThrowIfCancellationRequested();
 
         using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
@@ -103,12 +105,12 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         try
         {
             // Async pre-warm — load every Lua module declared by the catalogue
-            // so the synchronous MoonSharp require() loader can resolve modules
+            // so the synchronous require() loader can resolve modules
             // without blocking. The snapshot dictionary is captured by the
             // sync loader callback inside ExecuteRawCore.
             var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
 
-            var (emitted, provider) = ExecuteRawCore(mariner, luaSources);
+            var (emitted, provider) = ExecuteRawCore(mariner, luaSources, cancellationToken);
 
             Telemetry.LuaFeaturesCount.Add(
                 emitted.Count,
@@ -160,12 +162,12 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         ArgumentNullException.ThrowIfNull(mariner);
         cancellationToken.ThrowIfCancellationRequested();
         var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
-        return ExecuteRawCore(mariner, luaSources).Emitted;
+        return ExecuteRawCore(mariner, luaSources, cancellationToken).Emitted;
     }
 
     /// <summary>
     /// Awaits every Lua rule file declared in the portrayal catalogue
-    /// manifest into a local snapshot dictionary so the synchronous MoonSharp
+    /// manifest into a local snapshot dictionary so the synchronous
     /// <c>require()</c> module loader (registered inside
     /// <see cref="ExecuteRawCore"/>) can perform its lookups against an
     /// in-memory map. This is the sync↔async bridge for Lua portrayal:
@@ -185,6 +187,16 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
                 dict[name] = src;
             }
         }
+
+        // Remove the framework's empty type-check and profiling calls (#1275).
+        if (LuaNoOpCallStripper.CanStrip(dict.Values))
+        {
+            foreach (var name in dict.Keys.ToList())
+            {
+                dict[name] = LuaNoOpCallStripper.Strip(dict[name]);
+            }
+        }
+
         return dict;
     }
 
@@ -222,17 +234,23 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     }
 
     private (IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider) ExecuteRawCore(
-        MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
+        MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources, CancellationToken cancellationToken)
     {
         var provider = _providerFactory.Create(mariner);
 
         using var lua = _luaEngine.CreateContext();
         Prepare(lua, provider, mariner, luaSources);
+        if (cancellationToken.CanBeCanceled)
+            InstallCancellationCheck(lua, cancellationToken);
 
         // 7. Run portrayal.
         try
         {
-            lua.Call("PortrayalMain");
+            lua.CallCancellable("PortrayalMain", cancellationToken);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -242,6 +260,34 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
 
         return (Deduplicate(provider.EmittedInstructions, 0), provider);
     }
+
+    /// <summary>
+    /// Makes a running <c>PortrayalMain</c> stop soon after
+    /// <paramref name="cancellationToken"/> is cancelled. The S-100 Part 9a
+    /// rules hand each feature's drawing instructions to the global
+    /// <c>HostPortrayalEmit</c>, so wrapping that global with a token check
+    /// gives one check per feature without touching the interpreter. A cell's
+    /// rules can run for several seconds, so without this a cancelled load kept
+    /// a core busy until they finished.
+    /// </summary>
+    /// <remarks>
+    /// Lua-CSharp also checks the token passed to <c>PortrayalMain</c> between
+    /// instructions, so on that engine this is a second, coarser check.
+    /// MoonSharp has no interrupt, so there it's the only one. Keep it until
+    /// the work scheduler shows whether it needs a finer yield point (map
+    /// render design, slice 5).
+    /// </remarks>
+    private static void InstallCancellationCheck(ILuaContext lua, CancellationToken cancellationToken)
+    {
+        lua.SetGlobal(CancellationCheckGlobal, (Action)cancellationToken.ThrowIfCancellationRequested);
+        lua.Execute(
+            "local emit = HostPortrayalEmit\n" +
+            "if emit ~= nil then\n" +
+            "  HostPortrayalEmit = function(...) " + CancellationCheckGlobal + "() return emit(...) end\n" +
+            "end\n");
+    }
+
+    private const string CancellationCheckGlobal = "__EncDotNetCheckCancelled";
 
     // 8. Collect + dedup. PortrayalModel.lua AddFeature() stores items under
     //    both array append and feature-ID index, so ipairs() may visit some
@@ -266,8 +312,8 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     private void Prepare(ILuaContext lua, ILuaDataProvider provider, MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
     {
         // 1. Resolve require() modules from the pre-loaded snapshot.
-        //    Normalise the module name here (MoonSharp may pass it bare or with
-        //    a .lua extension) so each catalogue need not repeat the logic.
+        //    Normalise the module name here (an engine may pass it bare or
+        //    with a .lua extension) so each catalogue need not repeat the logic.
         lua.SetModuleLoader(moduleName =>
         {
             var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)

@@ -96,7 +96,7 @@ public partial class LogsView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         Subscribe(DataContext as LogsViewModel);
-        if (Main?.LogsDetailsWidth is { } width)
+        if (Main?.Layout.LogsDetailsWidth is { } width)
             _detailsWidth = width;
         UpdateDetailsColumn();
         AttachScrollViewer();
@@ -175,7 +175,7 @@ public partial class LogsView : UserControl
             return;
         _detailsWidth = _detailsColumn.ActualWidth;
         if (Main is { } main)
-            main.LogsDetailsWidth = _detailsWidth;
+            main.Layout.LogsDetailsWidth = _detailsWidth;
     }
 
     private void AttachScrollViewer()

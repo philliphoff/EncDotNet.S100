@@ -35,4 +35,25 @@ public interface IMapPresentationController
     Task SetPresentationAsync(
         MapPresentationState presentation,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies <paramref name="presentation"/> when only how depths are drawn
+    /// changed, its <see cref="MapPresentationState.DepthAdjustment"/> or its
+    /// <see cref="MapPresentationState.SafetyContourHalo"/>, re-rendering just
+    /// the datasets that adjust depths. The default re-applies the whole
+    /// presentation.
+    /// </summary>
+    /// <param name="presentation">The presentation carrying the new adjustment.</param>
+    /// <param name="cancellationToken">Cancels the refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when the map now shows this adjustment, or
+    /// <see langword="false"/> when a newer one superseded it.
+    /// </returns>
+    async Task<bool> SetDepthAdjustmentAsync(
+        MapPresentationState presentation,
+        CancellationToken cancellationToken = default)
+    {
+        await SetPresentationAsync(presentation, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
 }

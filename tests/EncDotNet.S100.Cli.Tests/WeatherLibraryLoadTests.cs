@@ -30,7 +30,7 @@ public sealed class WeatherLibraryLoadTests : IDisposable
     private static readonly GeoBounds UsEast = new(32.1, -75.9, 39.9, -68.2);
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "weather-library-" + Guid.NewGuid().ToString("N"));
-    private readonly HeadlessMutableCatalog _catalog = new();
+    private readonly HeadlessMutableCatalog _catalog = new(null, CliTestProcessors.Bundled);
     private readonly List<IDisposable> _owned = [];
 
     public WeatherLibraryLoadTests() => Directory.CreateDirectory(_root);
@@ -270,6 +270,9 @@ public sealed class WeatherLibraryLoadTests : IDisposable
     [InlineData("noaa-aws-gfs")]
     [InlineData("nws-marine-alerts")]
     [InlineData("noaa-erddap-ww3")]
+    [InlineData("noaa-erddap-sst")]
+    [InlineData("noaa-erddap-currents")]
+    [InlineData("ioos-erddap-hfradar")]
     public async Task Live_each_source_adds_downloads_and_opens(string id)
     {
         Assert.SkipUnless(Environment.GetEnvironmentVariable(LiveVariable) == "1", $"Set {LiveVariable}=1 to reach the live weather services.");

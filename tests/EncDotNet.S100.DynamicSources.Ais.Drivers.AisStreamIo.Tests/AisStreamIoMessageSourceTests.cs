@@ -148,7 +148,7 @@ public class AisStreamIoMessageSourceTests
         Assert.Throws<ArgumentException>(() => new AisStreamIoMessageSource(new AisStreamIoOptions
         {
             ApiKey = "",
-        }));
+        }, transportFactory: () => new ClientWebSocketTransport()));
     }
 
     [Fact]

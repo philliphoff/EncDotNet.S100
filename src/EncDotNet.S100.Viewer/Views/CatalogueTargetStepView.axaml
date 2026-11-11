@@ -83,6 +83,11 @@
             </Grid>
         </Border>
 
+        <!-- A single-download source skips What to include (D12), so its ended-forecast warning shows here. -->
+        <TextBlock Text="{Binding ForecastEndedNote}" IsVisible="{Binding HasForecastEndedNote}"
+                   AutomationProperties.AutomationId="CatalogueTarget.ForecastEnded"
+                   Classes="warning" FontSize="12.5" TextWrapping="Wrap" />
+
         <TextBlock IsVisible="{Binding !IsManifest}" Text="{x:Static loc:Strings.Wizard_OnlineNote}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
     </StackPanel>
 </UserControl>

@@ -21,9 +21,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: '10.0.x'
 
       - name: Restore
         run: dotnet restore
@@ -54,6 +52,15 @@ jobs:
         with:
           path: ~/.cache/EncDotNet.S100/s164
           key: s164-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/s164-*.json') }}
+
+      - name: Cache S-64 test data
+        # The IHO S-64:100 unencrypted S-57 test data (about 17 MB), used by the
+        # S-164 Part 8 tests in the same project and downloaded under the same
+        # switch. Keyed on its own manifest.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/EncDotNet.S100/s64
+          key: s64-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/S64/s64-*.json') }}
 
       - name: Test
         env:
@@ -131,7 +138,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nupkgs
-          path: nupkgs/*.nupkg
+          # Include symbol packages; `dotnet nuget push *.nupkg` pushes each
+          # matching .snupkg to the NuGet.org symbol server alongside it.
+          path: |
+            nupkgs/*.nupkg
+            nupkgs/*.snupkg
 
   format:
     name: Format check
@@ -145,9 +156,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: '10.0.x'
 
       - name: Restore
         run: dotnet restore
@@ -155,8 +164,8 @@ jobs:
       - name: Verify formatting and naming
         # The root command verifies whitespace while the diagnostic filter
         # limits code-style analysis to using directives (IDE0005) and naming
-        # (IDE1006). Keeping one invocation avoids loading the multi-targeted
-        # solution separately for each rule.
+        # (IDE1006). Keeping one invocation avoids loading the solution
+        # separately for each rule.
         run: >
           dotnet format EncDotNet.S100.slnx
           --diagnostics IDE0005 IDE1006
@@ -182,9 +191,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: '10.0.x'
 
       - name: Restore
         run: dotnet restore
@@ -207,6 +214,65 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: rendering-snapshots-${{ matrix.name }}
+          path: |
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
+  test-net11:
+    # Forward-compatibility check: the packages target net10.0 only, so on
+    # .NET 11 consumers run the net10.0 build. Build with the .NET 10 SDK as
+    # usual, then run the same tests on the newest runtime installed.
+    name: Test on .NET 11
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # global.json keeps the build and test commands on the .NET 10 SDK;
+      # this adds the .NET 11 runtime the tests roll forward to. Drop
+      # dotnet-quality once .NET 11 is generally available.
+      - name: Setup .NET 11
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Test
+        env:
+          # Run the net10.0 test hosts on the latest installed runtime, even
+          # when it's a prerelease, instead of the .NET 10 runtime.
+          DOTNET_ROLL_FORWARD: LatestMajor
+          DOTNET_ROLL_FORWARD_TO_PRERELEASE: '1'
+        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-net11
+          path: TestResults/*.trx
+
+      - name: Upload visual regression diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rendering-snapshots-net11
           path: |
             tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
             tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png

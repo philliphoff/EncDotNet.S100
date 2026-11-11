@@ -102,6 +102,7 @@ internal static partial class Strings
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
     public static string LayerStack_LegendNameFormat => Get(nameof(LayerStack_LegendNameFormat));
+    public static string LayerStack_LegendRowsNameFormat => Get(nameof(LayerStack_LegendRowsNameFormat));
     public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
     public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
@@ -165,6 +166,15 @@ internal static partial class Strings
     public static string SubLayer_Weather_WindBarbs => Get(nameof(SubLayer_Weather_WindBarbs));
     public static string SubLayer_Weather_WaveDirection => Get(nameof(SubLayer_Weather_WaveDirection));
     public static string SubLayer_Weather_Isobars => Get(nameof(SubLayer_Weather_Isobars));
+    public static string SubLayer_Weather_SeaTemperature => Get(nameof(SubLayer_Weather_SeaTemperature));
+    public static string SubLayer_Weather_Isotherms => Get(nameof(SubLayer_Weather_Isotherms));
+    public static string SubLayer_Weather_Currents => Get(nameof(SubLayer_Weather_Currents));
+    public static string SubLayer_Weather_Visibility => Get(nameof(SubLayer_Weather_Visibility));
+    public static string SubLayer_Weather_FreezingSpray => Get(nameof(SubLayer_Weather_FreezingSpray));
+    public static string SubLayer_Weather_AirTemperature => Get(nameof(SubLayer_Weather_AirTemperature));
+    public static string SubLayer_Weather_Precipitation => Get(nameof(SubLayer_Weather_Precipitation));
+    public static string SubLayer_Weather_ThunderstormRisk => Get(nameof(SubLayer_Weather_ThunderstormRisk));
+    public static string SubLayer_Weather_CloudCover => Get(nameof(SubLayer_Weather_CloudCover));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));
@@ -514,12 +524,21 @@ internal static partial class Strings
     public static string Tooltip_TileGpuResidencyEnabled => Get(nameof(Tooltip_TileGpuResidencyEnabled));
     public static string Settings_TileGpuBudgetMb => Get(nameof(Settings_TileGpuBudgetMb));
     public static string Tooltip_TileGpuBudgetMb => Get(nameof(Tooltip_TileGpuBudgetMb));
-    public static string Settings_TileWorkerCount => Get(nameof(Settings_TileWorkerCount));
-    public static string Tooltip_TileWorkerCount => Get(nameof(Tooltip_TileWorkerCount));
     public static string Settings_RenderKnob_RestartHint => Get(nameof(Settings_RenderKnob_RestartHint));
     public static string Settings_MaintenanceSubsection => Get(nameof(Settings_MaintenanceSubsection));
     public static string Settings_MaintenanceSubsection_Help => Get(nameof(Settings_MaintenanceSubsection_Help));
     public static string Settings_ClearCaches_Button => Get(nameof(Settings_ClearCaches_Button));
+    public static string Settings_PortrayalPrewarmEnabled => Get(nameof(Settings_PortrayalPrewarmEnabled));
+    public static string Tooltip_PortrayalPrewarmEnabled => Get(nameof(Tooltip_PortrayalPrewarmEnabled));
+    public static string Settings_LuaEngine => Get(nameof(Settings_LuaEngine));
+    public static string Tooltip_LuaEngine => Get(nameof(Tooltip_LuaEngine));
+    public static string Settings_LuaEngine_LuaCSharp => Get(nameof(Settings_LuaEngine_LuaCSharp));
+    public static string Settings_LuaEngine_MoonSharp => Get(nameof(Settings_LuaEngine_MoonSharp));
+    public static string Settings_LuaEngine_RestartHint => Get(nameof(Settings_LuaEngine_RestartHint));
+    public static string Library_PrewarmWorkingFormat => Get(nameof(Library_PrewarmWorkingFormat));
+    public static string Library_PrewarmPausedFormat => Get(nameof(Library_PrewarmPausedFormat));
+    public static string Library_PrewarmCompleteFormat => Get(nameof(Library_PrewarmCompleteFormat));
+    public static string Library_PrewarmCacheFullFormat => Get(nameof(Library_PrewarmCacheFullFormat));
     public static string Tooltip_ClearCaches => Get(nameof(Tooltip_ClearCaches));
     public static string Settings_ClearCaches_ConfirmTitle => Get(nameof(Settings_ClearCaches_ConfirmTitle));
     public static string Settings_ClearCaches_ConfirmMessage => Get(nameof(Settings_ClearCaches_ConfirmMessage));
@@ -576,6 +595,7 @@ internal static partial class Strings
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
     public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));
     public static string Status_ExchangeSetUpdatesPartial => Get(nameof(Status_ExchangeSetUpdatesPartial));
+    public static string Status_CellCancelled => Get(nameof(Status_CellCancelled));
 
 
     // Dataset entry
@@ -595,8 +615,9 @@ internal static partial class Strings
     public static string LayerTime_NoDataLastFormat => Get(nameof(LayerTime_NoDataLastFormat));
     public static string LayerTime_NoDataNextFormat => Get(nameof(LayerTime_NoDataNextFormat));
     public static string LayerTime_Hidden => Get(nameof(LayerTime_Hidden));
-    public static string Label_NotS100Product => Get(nameof(Label_NotS100Product));
-    public static string Tooltip_NotS100Product => Get(nameof(Tooltip_NotS100Product));
+    public static string LayerTime_NoAnalysis => Get(nameof(LayerTime_NoAnalysis));
+    public static string LayerTime_Superseded => Get(nameof(LayerTime_Superseded));
+    public static string LayerTime_Stale => Get(nameof(LayerTime_Stale));
     public static string Pick_NotS100Notice => Get(nameof(Pick_NotS100Notice));
     public static string Tooltip_LayerTimeJump => Get(nameof(Tooltip_LayerTimeJump));
     public static string TimelinePanel_DrawingFormat => Get(nameof(TimelinePanel_DrawingFormat));
@@ -669,6 +690,10 @@ internal static partial class Strings
     public static string TimelinePanel_ProductS411 => Get(nameof(TimelinePanel_ProductS411));
     public static string TimelinePanel_ProductS412 => Get(nameof(TimelinePanel_ProductS412));
     public static string TimelinePanel_ProductS413 => Get(nameof(TimelinePanel_ProductS413));
+    public static string TimelinePanel_GroupSurfaceAnalysis => Get(nameof(TimelinePanel_GroupSurfaceAnalysis));
+    public static string TimelinePanel_LaneWpc => Get(nameof(TimelinePanel_LaneWpc));
+    public static string TimelinePanel_LaneAnalysis => Get(nameof(TimelinePanel_LaneAnalysis));
+    public static string TimelinePanel_LaneForecast => Get(nameof(TimelinePanel_LaneForecast));
     public static string Tooltip_TimelineInMapView => Get(nameof(Tooltip_TimelineInMapView));
     public static string Tooltip_TimelineCollapseToStrip => Get(nameof(Tooltip_TimelineCollapseToStrip));
     public static string Tooltip_TimelineOutsideMapView => Get(nameof(Tooltip_TimelineOutsideMapView));
@@ -841,6 +866,24 @@ internal static partial class Strings
     public static string Tooltip_EcdisPanel_Weather_WindSpeedFill => Get(nameof(Tooltip_EcdisPanel_Weather_WindSpeedFill));
     public static string EcdisPanel_Weather_WaveArrows => Get(nameof(EcdisPanel_Weather_WaveArrows));
     public static string Tooltip_EcdisPanel_Weather_WaveArrows => Get(nameof(Tooltip_EcdisPanel_Weather_WaveArrows));
+    public static string EcdisPanel_Weather_Isotherms => Get(nameof(EcdisPanel_Weather_Isotherms));
+    public static string Tooltip_EcdisPanel_Weather_Isotherms => Get(nameof(Tooltip_EcdisPanel_Weather_Isotherms));
+    public static string EcdisPanel_Weather_Currents => Get(nameof(EcdisPanel_Weather_Currents));
+    public static string Tooltip_EcdisPanel_Weather_Currents => Get(nameof(Tooltip_EcdisPanel_Weather_Currents));
+    public static string EcdisPanel_Weather_AirTemperature => Get(nameof(EcdisPanel_Weather_AirTemperature));
+    public static string Tooltip_EcdisPanel_Weather_AirTemperature => Get(nameof(Tooltip_EcdisPanel_Weather_AirTemperature));
+    public static string EcdisPanel_Weather_Precipitation => Get(nameof(EcdisPanel_Weather_Precipitation));
+    public static string Tooltip_EcdisPanel_Weather_Precipitation => Get(nameof(Tooltip_EcdisPanel_Weather_Precipitation));
+    public static string EcdisPanel_Weather_ThunderstormRisk => Get(nameof(EcdisPanel_Weather_ThunderstormRisk));
+    public static string Tooltip_EcdisPanel_Weather_ThunderstormRisk => Get(nameof(Tooltip_EcdisPanel_Weather_ThunderstormRisk));
+    public static string EcdisPanel_Weather_CloudCover => Get(nameof(EcdisPanel_Weather_CloudCover));
+    public static string Tooltip_EcdisPanel_Weather_CloudCover => Get(nameof(Tooltip_EcdisPanel_Weather_CloudCover));
+    public static string EcdisPanel_Weather_WindRadii => Get(nameof(EcdisPanel_Weather_WindRadii));
+    public static string Tooltip_EcdisPanel_Weather_WindRadii => Get(nameof(Tooltip_EcdisPanel_Weather_WindRadii));
+    public static string EcdisPanel_Weather_PastTrack => Get(nameof(EcdisPanel_Weather_PastTrack));
+    public static string Tooltip_EcdisPanel_Weather_PastTrack => Get(nameof(Tooltip_EcdisPanel_Weather_PastTrack));
+    public static string EcdisPanel_Weather_ForecastTimes => Get(nameof(EcdisPanel_Weather_ForecastTimes));
+    public static string Tooltip_EcdisPanel_Weather_ForecastTimes => Get(nameof(Tooltip_EcdisPanel_Weather_ForecastTimes));
 
     // Text group toolbar pill
     public static string Toolbar_Text => Get(nameof(Toolbar_Text));
@@ -1209,13 +1252,6 @@ internal static partial class Strings
     public static string Library_AddUsaceTitle => Get(nameof(Library_AddUsaceTitle));
     public static string Library_UsaceFeed => Get(nameof(Library_UsaceFeed));
     public static string Menu_AddLibraryOnlineCatalogue => Get(nameof(Menu_AddLibraryOnlineCatalogue));
-    public static string Library_Chip_CoveragePolygons => Get(nameof(Library_Chip_CoveragePolygons));
-    public static string Library_Chip_CoverageBoxes => Get(nameof(Library_Chip_CoverageBoxes));
-    public static string Library_Chip_CoverageNone => Get(nameof(Library_Chip_CoverageNone));
-    public static string Library_Chip_Editions => Get(nameof(Library_Chip_Editions));
-    public static string Library_Chip_NoEditions => Get(nameof(Library_Chip_NoEditions));
-    public static string Library_Chip_Sizes => Get(nameof(Library_Chip_Sizes));
-    public static string Library_Chip_NoSizes => Get(nameof(Library_Chip_NoSizes));
     public static string Button_Next => Get(nameof(Button_Next));
     public static string Library_CatalogueDatedFormat => Get(nameof(Library_CatalogueDatedFormat));
     public static string Library_CommunityCharts => Get(nameof(Library_CommunityCharts));
@@ -1396,8 +1432,7 @@ internal static partial class Strings
     public static string Wizard_StepInclude => Get(nameof(Wizard_StepInclude));
     public static string Wizard_StepAddTo => Get(nameof(Wizard_StepAddTo));
     public static string Wizard_StepOfFormat => Get(nameof(Wizard_StepOfFormat));
-    public static string Wizard_ChooseCatalogueFirst => Get(nameof(Wizard_ChooseCatalogueFirst));
-    public static string Wizard_Collection => Get(nameof(Wizard_Collection));
+    public static string Wizard_SelectionFormat => Get(nameof(Wizard_SelectionFormat));
     public static string Wizard_Everything => Get(nameof(Wizard_Everything));
     public static string Wizard_OnlySelected => Get(nameof(Wizard_OnlySelected));
     public static string Wizard_NothingSelected => Get(nameof(Wizard_NothingSelected));
@@ -1464,10 +1499,7 @@ internal static partial class Strings
     public static string Wizard_Review_UpdatesForecast => Get(nameof(Wizard_Review_UpdatesForecast));
     public static string Wizard_ForecastEndedFormat => Get(nameof(Wizard_ForecastEndedFormat));
     public static string Library_DirectorySearchWatermark => Get(nameof(Library_DirectorySearchWatermark));
-    public static string Library_DirectoryCountFormat => Get(nameof(Library_DirectoryCountFormat));
-    public static string Library_DirectoryNoMatches => Get(nameof(Library_DirectoryNoMatches));
     public static string Library_DirectoryAddByUrl => Get(nameof(Library_DirectoryAddByUrl));
-    public static string Library_DirectoryAddByUrlHint => Get(nameof(Library_DirectoryAddByUrlHint));
     public static string Library_DirectoryUrlHeading => Get(nameof(Library_DirectoryUrlHeading));
     public static string Library_DirectoryUrlHelp => Get(nameof(Library_DirectoryUrlHelp));
     public static string Library_DirectoryUrlRecognisedFormat => Get(nameof(Library_DirectoryUrlRecognisedFormat));
@@ -1587,7 +1619,6 @@ internal static partial class Strings
     public static string Library_Host_Aws => Get(nameof(Library_Host_Aws));
     public static string Library_Host_Web => Get(nameof(Library_Host_Web));
     public static string Library_Format_S100Catalogue => Get(nameof(Library_Format_S100Catalogue));
-    public static string Library_Chip_NotForNavigation => Get(nameof(Library_Chip_NotForNavigation));
     public static string Library_EditionNewerOnlineFormat => Get(nameof(Library_EditionNewerOnlineFormat));
     public static string Library_EditionOnlineFormat => Get(nameof(Library_EditionOnlineFormat));
     public static string Library_BulkUpdatesFormat => Get(nameof(Library_BulkUpdatesFormat));
@@ -1633,9 +1664,6 @@ internal static partial class Strings
     public static string Library_BulkLastCheckedFormat => Get(nameof(Library_BulkLastCheckedFormat));
     public static string Library_BulkCheckForRuns => Get(nameof(Library_BulkCheckForRuns));
     public static string Library_Format_S100Forecast => Get(nameof(Library_Format_S100Forecast));
-    public static string Library_Chip_Forecast => Get(nameof(Library_Chip_Forecast));
-    public static string Library_Chip_LatestRunOnly => Get(nameof(Library_Chip_LatestRunOnly));
-    public static string Library_Chip_Pilot => Get(nameof(Library_Chip_Pilot));
     public static string Library_Pairing_Bathymetry => Get(nameof(Library_Pairing_Bathymetry));
     public static string Library_Pairing_SameCell => Get(nameof(Library_Pairing_SameCell));
     public static string Library_Pairing_Get => Get(nameof(Library_Pairing_Get));
@@ -1787,8 +1815,6 @@ internal static partial class Strings
     public static string Keys_Revoked_Notification => Get(nameof(Keys_Revoked_Notification));
     public static string Keys_Revoked_NotificationAction => Get(nameof(Keys_Revoked_NotificationAction));
     public static string Wizard_StepConnection => Get(nameof(Wizard_StepConnection));
-    public static string Wizard_ConnectionNotNeeded => Get(nameof(Wizard_ConnectionNotNeeded));
-    public static string Wizard_ConnectionForSecom => Get(nameof(Wizard_ConnectionForSecom));
     public static string Secom_Identity_None => Get(nameof(Secom_Identity_None));
     public static string Secom_Identity_RowDefaultFormat => Get(nameof(Secom_Identity_RowDefaultFormat));
     public static string Secom_Identity_RowDefaultNotSet => Get(nameof(Secom_Identity_RowDefaultNotSet));

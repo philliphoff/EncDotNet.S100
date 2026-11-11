@@ -137,30 +137,75 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         }
 
         var stations = new List<StationSeries>();
+        var here = new GeoPosition(latitude, longitude);
         foreach (var (datasetId, dataset) in _stations)
         {
-            WaterLevelStation? nearest = null;
-            var best = double.PositiveInfinity;
-            foreach (var station in dataset.Stations)
+            if (NearestStation(dataset.Stations, here) is ({ } nearest, var distance))
             {
-                var d = PassageGeodesy.GreatCircleDistanceMeters(
-                    new GeoPosition(latitude, longitude), new GeoPosition(station.Latitude, station.Longitude));
-                if (d < best && station.NumberOfTimes > 0)
-                {
-                    best = d;
-                    nearest = station;
-                }
-            }
-
-            if (nearest is not null && best <= _maxStationDistance)
-            {
-                stations.Add(new StationSeries(datasetId, dataset.VerticalDatum, nearest, best));
+                stations.Add(new StationSeries(datasetId, dataset.VerticalDatum, nearest, distance));
             }
         }
 
         stations.Sort((a, b) => a.Source.DistanceMeters!.Value.CompareTo(b.Source.DistanceMeters!.Value));
         result.AddRange(stations);
         return result;
+    }
+
+    // The flat-earth distance below is within 0.6 % of the WGS-84 geodesic at
+    // the station reach (10 km), so a station is a candidate when its flat
+    // distance is within this factor of the nearest one's or of the reach.
+    private const double CandidateBand = 1.02;
+    private const double EarthRadiusMeters = 6_371_008.8;
+
+    // The nearest station with values within the reach, by WGS-84 geodesic,
+    // or none. A cheap flat-earth distance ranks the stations first, so only
+    // the few near the nearest one (and none beyond the reach) need the
+    // geodesic: a chart adjustment asks this at every sampled node.
+    private (WaterLevelStation? Station, double Distance) NearestStation(IReadOnlyList<WaterLevelStation> stations, GeoPosition here)
+    {
+        var cosLat = Math.Cos(here.Latitude * Math.PI / 180);
+        var bestFlat = double.PositiveInfinity;
+        foreach (var station in stations)
+        {
+            if (station.NumberOfTimes > 0)
+            {
+                bestFlat = Math.Min(bestFlat, FlatDistance(here, station, cosLat));
+            }
+        }
+
+        if (bestFlat > _maxStationDistance * CandidateBand)
+        {
+            return (null, double.PositiveInfinity);
+        }
+
+        WaterLevelStation? nearest = null;
+        var best = double.PositiveInfinity;
+        var limit = bestFlat * CandidateBand;
+        foreach (var station in stations)
+        {
+            if (station.NumberOfTimes == 0 || FlatDistance(here, station, cosLat) > limit)
+            {
+                continue;
+            }
+
+            var d = PassageGeodesy.GreatCircleDistanceMeters(here, new GeoPosition(station.Latitude, station.Longitude));
+            if (d < best)
+            {
+                best = d;
+                nearest = station;
+            }
+        }
+
+        return best <= _maxStationDistance ? (nearest, best) : (null, double.PositiveInfinity);
+    }
+
+    private static double FlatDistance(GeoPosition here, WaterLevelStation station, double cosLat)
+    {
+        var dLat = (station.Latitude - here.Latitude) * Math.PI / 180;
+        var dLon = station.Longitude - here.Longitude;
+        dLon = (dLon + 540) % 360 - 180;
+        dLon *= Math.PI / 180 * cosLat;
+        return EarthRadiusMeters * Math.Sqrt((dLat * dLat) + (dLon * dLon));
     }
 
     private sealed record GridCandidate(string DatasetId, S104Dataset Model, PassageGrid Grid, double Spacing, DateTime? Issued)

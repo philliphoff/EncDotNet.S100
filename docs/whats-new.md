@@ -4,6 +4,359 @@ This page lists notable changes to the libraries, tools and documentation, by
 month. For package versions and release assets, see
 [GitHub releases](https://github.com/philliphoff/EncDotNet.S100/releases).
 
+## November 2026
+
+- **S-102 relief shading.** An optional hillshade over the S-102 depth bands
+  shows the shape of the seabed (dredged pits, sand waves, berth toes) in
+  high-resolution bathymetry. It lights the depth surface from the north-west
+  and darkens or lightens each band colour by slope, so the bands and the
+  safety contour keep their meaning. It isn't part of the S-102 portrayal, so
+  it's off by default. In SoundCharts, switch it on in the new **Bathymetry**
+  section of Display controls, shown while an S-102 dataset is loaded, or with
+  the `get_bathymetry_display` and `set_bathymetry_display` MCP tools.
+  `s100 render --show-layer s102.relief` draws it. `ReliefShading` and
+  `S102Relief` are the library types, and `StyledCoverageLayer.ReliefShade`
+  carries the shading to the coverage renderers.
+- **Additional Military Layers portrayal.** The new
+  `EncDotNet.S100.Datasets.Aml` package draws NATO AML cells with
+  SoundCharts' own portrayal (not the restricted official one): dash-dot lines
+  on a halo, unfilled areas with inward ticks, framed point symbols and italic
+  labels, in air, operational, seabed and environmental colour families for
+  Day, Dusk and Night. It covers the RAL air and operational classes, which
+  the AML 3.0 air trials share; airspace shows its limits as a stacked
+  fraction. Styles are data in modules, and the legend is built from them. A
+  new S-98 plane, `S98DisplayPlane.AdditionalMilitaryLayers` (45), sits
+  between the chart overlays and the cautions. Text instructions gain
+  `FontSlant` for italic labels. See the
+  [Datasets.Aml README](../src/EncDotNet.S100.Datasets.Aml/README.md).
+- **Additional Military Layers display controls.** SoundCharts' display
+  panel gains an **Additional Military Layers** section while an AML cell is
+  loaded: a switch per AML product with its cell count, **Follow AML scale
+  bands** (on by default) and a **Legend** flyout built from the AML styles.
+  With the bands followed, each AML cell shows out to its scale band's
+  coarsest display scale, and a finer band of the same product wins where its
+  cells cover a coarser cell (`AmlScaleBandVisibility`). A corner chip says
+  CLB isn't used for depth checks while CLB is drawn. The switches are kept
+  after a restart, and the `get_aml_display` and `set_aml_display` MCP tools
+  read and set them.
+- **S-412 Marine Weather Warnings (draft).** The new
+  `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
+  significant wave height, restricted visibility, thunderstorm and ice
+  accretion warnings) and portrays them with the draft WMO portrayal
+  catalogue, now bundled with the feature catalogue in
+  `EncDotNet.S100.Specifications`. `s100 render` and the other
+  hosts detect S-412 and draw it on the S-98 cautions and warnings plane, with
+  S-124. `S412MarineWeatherWarnings` is the typed model. S-412 isn't
+  approved yet, so expect its catalogues to change. Its validation pack
+  (`S412MarineWeatherWarningRules`, 14 rules, all warnings while the
+  specification is a draft) checks the feature catalogue's mandatory
+  attributes and listed values, times, references and geometry.
+  Warnings follow the Timeline: each is drawn only from the start to the end
+  of its date range and until its cancellation date, by the rule S-124 and
+  CAP warnings use, and `s100 render --time-step` draws a step.
+  `describe_feature` decodes a warning's threshold, Beaufort force and
+  message in each language. See the
+  [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
+- **Picks match the map's time.** MCP `identify_features` takes an optional
+  `time` and returns only the S-412 and CAP warnings in force then, the
+  surface analysis valid then and a tropical cyclone's position then. In
+  SoundCharts, `identify_features` without a time and `pick_features` follow
+  the map: its view time and the S-124 parts it hides. Hosts supply what
+  their map draws through `IMapDrawState` (`S100McpServerOptions.MapDrawState`),
+  and `FeatureAccessor.GetFeatures` has an overload that takes the time.
+  `PickFeaturesTool` now takes the `IdentifyFeaturesTool` it uses.
+- **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
+  The CLI and `s100 mcp serve` now render through the chart engine
+  (`EncDotNet.S100.Rendering.Engine`): cells parse, portray and build their
+  scenes in parallel, so a 17-cell composite renders in about 10 s instead of
+  14 s, and tile blocks render as scheduled jobs in the order they're written.
+  `render_to_image`'s `pixelDensity` now applies in `mcp serve`, as in
+  SoundCharts. Finer cells hide coarser ones by their coverage footprint, not
+  its bounding box, so composites where a coarse cell's coverage isn't
+  rectangular can change slightly. Breaking changes: `HeadlessCompositor`,
+  `HeadlessCompositeScene`, `HeadlessCompositeInput`, `HeadlessCompositeOptions`,
+  `HeadlessTileRenderer`, `HeadlessTileOptions`, `HeadlessTile` and `TileBlock`
+  leave `EncDotNet.S100.Datasets.Pipelines`; use `ChartCompositor`,
+  `ChartComposition`, `ChartCompositeInput`, `ChartCompositeOptions`,
+  `ChartTileRenderer`, `ChartTileOptions`, `ChartTile` and `TileBlock` in
+  `EncDotNet.S100.Rendering.Engine`, where `ChartCompositor` now takes its S-98
+  authority explicitly. `S100CompositeOptions.PixelDensity` is new. See the
+  [Rendering.Engine README](../src/EncDotNet.S100.Rendering.Engine/README.md#render-images-and-tile-sets).
+- **Tropical cyclones on a route.** With an NHC advisory loaded, Check
+  route, `check_route` and `s100 route check` test the route against the
+  storm at each ETA: stretches inside its 34, 50 or 64 kt wind radius (in the
+  quadrant the vessel is in) and inside the forecast cone, the closest
+  approach to its centre, and stretches reached after the forecast ends (not
+  checked). By default the 34 kt radius is tested, the 50 and 64 kt radii are
+  Must review, and the 34 kt radius and the cone are Check; SoundCharts sets
+  these in **Settings** > **Chart display** > **Mariner Settings** >
+  **Tropical cyclones on a route**, MCP with `set_route_weather_settings` and
+  `check_route`'s `cyclone*` arguments, and the CLI with `--cyclone-radius`,
+  `--cyclone-must-review` and `--no-cyclone-cpa`. The verdict card's
+  **Weather** row counts the storm's findings and gives the closest approach,
+  and the map draws the storm at that ETA. In the libraries,
+  `RouteCheckSources.Cyclones` (`IRouteCyclone`),
+  `RouteCheckSettings.TropicalCyclones` (`TropicalCycloneCheckSettings`),
+  `WeatherCheckResult.Cyclones`, `TropicalCycloneDetails` and the
+  `weather.tc_*` codes are new. Breaking changes: `WeatherVerdict` gains
+  `InsideCycloneRadius` as its first value, `CycloneCheckStorm` and
+  `WeatherSample.Cyclones` are new, and the weather check runs, rather than
+  being skipped, when only an advisory is loaded. See
+  [Tropical cyclones](route-checks.md#tropical-cyclones).
+
+- **Weather along a route.** Check route, `check_route` and
+  `s100 route check` gain a weather check: with a GRIB2 or NetCDF forecast
+  loaded, they sample the route every nautical mile at the ETA and compare
+  the wind at 10 m and the significant wave height with the vessel's limits.
+  Stretches above a limit are Check findings with their time window ("Wind
+  above 25 kn for 3 h", `weather.wind_above_limit`,
+  `weather.waves_above_limit`); where the forecast ends before the vessel
+  gets there, or a grid doesn't cover it, the stretch is reported as not
+  checked (`weather.forecast_ends` and others), never passed. Each sample
+  reads the nearest grid node and time step, and the finest grid with the
+  newest run wins where grids overlap. In SoundCharts the limits are in
+  **Settings** > **Chart display** > **Mariner Settings** > **Weather on a
+  route** (`get_route_weather_settings`, `set_route_weather_settings`), the
+  verdict card gains a **Weather** row whose tooltip names the limits in use,
+  and **Findings** gains a **Weather** chip. An RTZ route's `vesselMaxWind`
+  (knots) and `vesselMaxWave` are used where no limit is set. `check_route`
+  takes `maxWindKnots` and `maxWaveHeightMeters` and returns a `weather`
+  section with an optional departure sweep; the CLI takes `--max-wind` and
+  `--max-wave`. In the libraries, `WeatherCheck` joins the built-in checks,
+  with `IRouteWeatherSource` (on `RouteCheckSources.Weather`), `WeatherLimits`
+  on `RouteCheckSettings` and `PassagePlan.VesselLimits`, `WeatherDetails`,
+  `WeatherFindings`, `RouteFindingCategory.Weather` and
+  `RtzPassagePlan.VesselLimits`. Breaking changes: `RouteChecker` runs five
+  built-in checks, so `RouteCheckReport.Checks` has a `weather` entry; the
+  `PassageRouteSnapshot` record has a new last positional parameter. See
+  [Weather along the route](route-checks.md#weather-along-the-route).
+
+- **Precipitation, thunderstorm risk and cloud cover on the chart.** GRIB2
+  and NetCDF files with a precipitation rate, CAPE or total cloud cover,
+  such as GFS, can now draw them: precipitation in rain radar colours from
+  0.1 mm/h, thunderstorm risk in ochre where CAPE is 1000 J/kg or more
+  (moderate, high and extreme), and cloud cover as a light grey veil from
+  25 %. All three are off by default, behind new **Precipitation**,
+  **Thunderstorm risk** and **Cloud cover** switches in Display controls
+  (and in `set_weather_display`), and each has a legend. Picks give the rate
+  in mm/h, CAPE in J/kg with its risk, and cloud cover in percent, and the
+  Library's GFS sources can fetch PRATE, CAPE and TCDC. `s100 render` gains
+  `--show-layer` to draw layers that are off by default. In the libraries,
+  `WeatherParameters` gains `PrecipitationRate`, `Cape` and `CloudCover`,
+  `WeatherUnit` gains `KilogramsPerSquareMetrePerSecond`, `JoulesPerKilogram`
+  and `Percent`, `WeatherLevel` gains `EntireAtmosphere` (GRIB2 fixed
+  surface 10), and the new styles are `PrecipitationStyle`,
+  `ThunderstormRiskStyle` and `CloudCoverStyle`. `WeatherCoverageStyle.Opacity`
+  is now set per style, and `StyleVersion` is 7. See
+  [Show wind and waves on the chart](weather.md).
+
+- **Tropical cyclones from the Library.** A new Library source,
+  **Tropical cyclones — NHC** (`FEED`), lists every storm NHC is issuing
+  advisories for in the Atlantic, East and Central Pacific, one item each,
+  named by the storm with its class symbol. An item downloads the advisory's
+  forecast, wind radii and best track zips, and NHC's next advisory replaces
+  it in place. While a storm is loaded, the Library reads NHC's list every
+  hour and announces a new advisory for it, with **Load latest run**; nothing
+  is loaded on its own, and a storm newly active doesn't notify. An advisory
+  is stale 7 hours after it's issued ("Advisory 17 is over 7 hours old"); a
+  stale storm isn't faded but says its age on its label and in Object
+  information. A loaded storm NHC stops listing is drawn as its final
+  advisory: past track and a post-tropical storm, "Final advisory issued".
+  **Display controls** shows its **Weather** section for cyclones and surface
+  analyses too, and ends it with **Wind radii**, **Past track** and
+  **Forecast times** switches while a cyclone is loaded; the new
+  `get_weather_display` and `set_weather_display` MCP tools read and set every
+  Weather switch. In the libraries, `WeatherServiceKind` gains `NhcStorms`
+  (`NhcActiveStorms` reads `CurrentStorms.json`), `RemotePart` gains
+  `FileName` (a download's parts saved side by side), `TimeSemantics` gains
+  `StaleAfterIssue`, `TropicalCycloneAdvisory` gains `IsFinal`,
+  `NhcAdvisoryFiles` gains `IsFinal` and `FinalMarkerName`, and
+  `TropicalCycloneStyle` gains the switch keys. Breaking changes:
+  `MapsuiMapTimedDataset.StaleAgeAt` takes an optional clock, and
+  `TimeSemantics` has a new last positional parameter. See
+  [Get active storms from the Library](weather.md#get-active-storms-from-the-library).
+
+- **Tropical cyclones follow the Timeline.** The cone and forecast always
+  draw; the storm and its wind radii are drawn at the view time, so
+  scrubbing moves them smoothly along the track. Between forecast points the
+  storm is an estimate, in a dashed ring labelled "est.", with its position
+  on the great circle and its wind and radii in between; before the advisory
+  it follows the best track; beyond the forecast the cone stays and the
+  Datasets row has a **Beyond forecast** tag. Object information gives the storm at the view
+  time and says when it's an estimate. The Timeline groups storms under
+  **Tropical cyclones**, in a lane named for the storm with a tick at each
+  forecast point and diamonds at the issue time and the next advisory due;
+  the step menu lists the storm, so ‹ › step its forecast points. In Live
+  mode the storm follows the clock. In the libraries:
+  `TropicalCycloneAdvisory.StormAt` and `TropicalCycloneStormAt`,
+  `TimeStepSelection.Continuous` (and `MapsuiTimeSelectionKind.Continuous`),
+  `ITimeAwareDatasetProcessor.NextIssueTime`, `TimelineLabel` and
+  `TimelineDetail` (on `MapsuiMapTimedDataset` too), and
+  `TropicalCycloneStyle.StormDetailLabel`; `TropicalCycloneDatasetProcessor`
+  is time-aware. `get_timeline_state` reports a lane's `sub`, `issued`,
+  `nextIssue` and `stepTicks` and a layer's warning `tag`. Breaking
+  change: a storm's own parts (the storm and its radii) now come after the
+  advisory's other parts in `EnumerateFeatures`. See
+  [Show tropical cyclones](weather.md#storm-at-the-view-time).
+
+- **Surface analyses follow the Timeline, from the Library.** A WPC
+  bulletin's analysis or forecast is now drawn from its valid time for 12
+  hours: after 6 it's stale, at half opacity with its age on each **H** and
+  **L**, a **Stale** tag in the Datasets panel and a warning line in Object
+  information; beyond 12 hours the Datasets row says "No analysis at view
+  time". Of several loaded bulletins, the one valid latest at or before the
+  view time draws, so a newer analysis or a nearer forecast takes over. The
+  Timeline groups them under **Surface analysis** in a **WPC** lane. A new
+  Library source, **Surface analysis — WPC** (`FEED`), lists the latest
+  analysis and, when chosen, the forecast fronts; a loaded analysis is
+  replaced by the next every 3 hours, and is stale after 6. In the
+  libraries, `TimeSemantics` gains `StaleAfter` and `Supersession`,
+  `RenderContext` gains `TimeStepAge`, `VectorSubLayer` gains `Opacity`,
+  `PickAttribute` gains `StaleNotice`, and `WeatherServiceKind` gains
+  `WpcBulletins`, with `WeatherService.StaleAfterHours` and `RefreshHours`
+  and `WeatherServiceDataset.File`. `get_timeline_state` reports a stale
+  layer's `staleHours`. Breaking changes:
+  `SurfaceAnalysisDatasetProcessor.DrawnAnalysisOf` takes a time step, and
+  `SurfaceAnalysisStyle.BuildCentre` takes the analysis's stale age. See
+  [Show a surface analysis](weather.md#show-a-surface-analysis).
+
+- **Tropical cyclones on the chart.** SoundCharts and `s100 render` now draw
+  an NHC advisory in one plum-grey storm ink: the cone, tinted and stippled
+  beyond 72 hours, the 34, 50 and 64 kt wind radii, the forecast and past
+  tracks, a WMO weather-map symbol at each forecast point (mirrored south of
+  the equator), and the storm with its name, wind, pressure, advisory and
+  motion. Times on the chart follow the Local or UTC setting. In the Layer
+  stack a storm has two entries, one for its lines and symbols and one for
+  its cone and radii, each with a legend. Picking any part shows one storm in
+  Object information, with the advisory, the next advisory due, the
+  intensity, the part picked and the radii by quadrant. Not for navigation.
+  New in the libraries: `TropicalCycloneStyle` and the `WXTC*` tokens in
+  `EncDotNet.S100.Datasets.Weather`, `RenderContext.DisplayTimeZone`,
+  `MapPresentationState.DisplayTimeZone`, `InstructionBuilder.Point`'s
+  `symbolScale` and `TropicalCycloneWindRadii.QuadrantSurface`. Breaking
+  changes: `EncDotNet.S100.Datasets.Weather` now depends on
+  `EncDotNet.S100.Datasets.TropicalCyclones`, and
+  `TropicalCycloneDatasetProcessor.NotForNavigationNotice` reads "Tropical
+  cyclone forecast, not for navigation. Follow official NHC advisories." See
+  [Show tropical cyclones](weather.md#show-tropical-cyclones).
+
+- **Fronts and pressure centres on the chart.** A WPC coded surface
+  bulletin now draws its cold, warm, occluded and stationary fronts and its
+  troughs with the triangles and semicircles of a printed weather map, on
+  the side each front moves towards, and its highs and lows as a bold **H**
+  or **L** with the pressure. Everything is in one dark ink (`WXFRONT`) over
+  the isobars, with a Layer stack legend and a pick in Object information.
+  `s100 render` draws bulletins too. Feature ids are now the bulletin's code
+  and number, such as `COLD 3`, and the pick notice is "Weather analysis,
+  not for navigation." See
+  [Show a surface analysis](weather.md#show-a-surface-analysis).
+- **Tropical cyclone advisories.** A new
+  `EncDotNet.S100.Datasets.TropicalCyclones` package reads the National
+  Hurricane Center's GIS shapefile zips for an advisory: the forecast track
+  and cone (`al092022_5day_020.zip`), the wind radii (`_fcst_`) and the best
+  track (`_best_track`). `NhcAdvisoryReader` gives a `TropicalCycloneAdvisory`
+  with the storm, the advisory number and issue time, every forecast point
+  with its wind, gusts, pressure and class, the 34, 50 and 64 kt radii by
+  quadrant, the cone split at 72 hours, and the past track with observed
+  radii. The default registry recognises a forecast zip, or a folder of one
+  storm's zips, as `TC/1.0.0`, and `s100 info` describes the storm, the
+  advisory, the forecast and every forecast point. Tropical cyclones aren't
+  drawn on the chart yet. Not for navigation. Breaking changes:
+  `SpecName.NonS100Formats`, `S100Products.CreateDefaultRegistry()` (and so
+  `ProductRegistry.Default`) and `WeatherProducts.All` now also hold `TC`.
+  See the
+  [Datasets.TropicalCyclones README](../src/EncDotNet.S100.Datasets.TropicalCyclones/README.md).
+
+- **Lines with symbols along them, and legends with pictures.** Code-defined
+  portrayals can now draw a line with a symbol repeated along it, such as a
+  weather front's triangles: `ComplexLineStyle` sets the pen, the symbols,
+  their spacing and the side of the line they go on, optionally alternating,
+  and `InstructionBuilder.ComplexLine` draws it. The spacing is in
+  millimetres on the display, so it holds at every zoom. Layer stack legends
+  can now show a symbol, a line sample or an outlined area beside each label,
+  built with `LegendBuilder`. `CoverageLegendEntry` is replaced by
+  `LegendEntry` and its `SwatchLegendEntry`, `SymbolLegendEntry` and
+  `LineLegendEntry` rows. See
+  [EncDotNet.S100.Portrayals](../src/EncDotNet.S100.Portrayals/README.md#code-defined-portrayal).
+
+- **Surface analyses: fronts and pressure centres.** `s100` and the
+  libraries now read the Weather Prediction Center's coded surface
+  bulletins, the 3-hourly analysis at standard and high resolution and the
+  coded forecast bulletins, into a surface analysis model of fronts, troughs,
+  highs and lows. `s100 info` gives each bulletin's valid times and what it
+  holds. Drawing them on the chart comes next. See
+  [Show wind and waves on the chart](weather.md).
+
+- **Air temperature and freezing spray on the chart.** GRIB2 and NetCDF
+  files with 2 m air temperature now draw it as dashed isotherms every 5 °C,
+  off by default, behind a new **Air temperature** switch in Display
+  controls. Where a file also has the 10 m wind and a sea temperature, or
+  GFS's surface temperature and land mask, SoundCharts works out the
+  freezing spray (vessel icing) risk with Overland's predictor and draws it
+  in four classes, from light to extreme. Picks give the air temperature and
+  the icing class, and the Library's GFS sources can fetch the inputs. See
+  [Show wind and waves on the chart](weather.md).
+
+- **Restricted visibility on the chart.** GRIB2 and NetCDF files with
+  visibility, such as GFS, now draw fog and poor visibility as a grey fill
+  in the marine forecast bands: very poor (under 1000 m), poor (to 2 nautical
+  miles) and moderate (to 5 nautical miles). Good visibility isn't drawn.
+  The Library's GFS sources can now fetch visibility, and picks give it in
+  nautical miles. See [Show wind and waves on the chart](weather.md).
+
+- **Charts get ready for panning in the background.** When a Library source
+  or a large exchange set loads as you pan, SoundCharts now portrays its
+  not-yet-loaded cells one at a time while the map is idle, so panning to
+  them later takes about a second instead of many seconds. It stops whenever
+  the map is loading or drawing, picks up where it left off after a restart,
+  and shows its progress under the Library's bulk bar. Turn it off with
+  **Prepare charts in the background** in Settings → Advanced. The portrayal
+  cache is now capped at 1 GB, and background work fills at most three
+  quarters of it.
+
+- **S-57 updates are checked before they apply.** An S-57 update now applies
+  only when it's for the cell's edition and follows on from the updates
+  before it, record by record. Updates a re-issue already holds are skipped,
+  and an update of edition 0 is reported as cancelling the cell. SoundCharts
+  warns when an update is refused or cancels a cell, `s100 s57 convert` prints
+  what applied, and `S57Dataset.UpdateReport` gives the details. Exchange sets
+  that hold only updates are now CRC-checked too. See
+  [Apply update cells](s57-to-s101.md#apply-update-cells).
+
+- **.NET 10 only.** The packages no longer target .NET 8, which reached end
+  of support in November 2026; they target .NET 10 and run on later
+  versions. CI also runs the tests on .NET 11. The packages now build on
+  EncDotNet 0.11.0, which made the same change.
+
+- **Surface currents on the chart.** GRIB2 and NetCDF files with currents
+  now draw them as arrows in S-111's speed bands and colours, from ocean
+  models such as HYCOM and Copernicus Marine, satellite altimetry or HF
+  radar. Where an S-111 grid is loaded, only its arrows are drawn inside its
+  area. A **Currents** switch in Display controls turns them off. The Library
+  has two new sources: **Surface currents, altimetry — NOAA AOML ERDDAP**
+  (worldwide, daily) and **Surface currents, HF radar — NOAA ERDDAP** (US
+  coasts, hourly). Picks and `sample_coverage` give speed in knots and the
+  direction the current sets to. See
+  [Show wind and waves on the chart](weather.md).
+
+- **Sea surface temperature on the chart.** GRIB2 and NetCDF files with sea
+  surface temperature now draw it as a colour fill with a band for each
+  degree from 0 °C to 30 °C, so fronts such as the edge of the Gulf Stream
+  stand out; the fill is clipped to water. An **Isotherms** switch in
+  Display controls adds labelled lines every 2 °C. The Library has a new
+  **Sea surface temperature — NOAA ERDDAP** source with the NASA MUR, NOAA
+  OISST and NOAA Geo-polar Blended daily analyses, and picks and
+  `sample_coverage` give the temperature in degrees Celsius. See
+  [Show wind and waves on the chart](weather.md).
+
+- **Convert S-101 to S-57.** `s100 s101 convert --to s57` writes an S-101
+  dataset as an S-57 Edition 3.1 base cell, following S-65 Annex C, and
+  prints what Annex C dropped or folded into `INFORM`. `--exchange-set`
+  writes an `ENC_ROOT` with a `CATALOG.031`, and options cover the choices
+  Annex C leaves to the converter. It's for testing the S-57 → S-101
+  translation and for tools that read only S-57, not for producing ENCs. See
+  [Converting S-101 to S-57](s101-to-s57.md).
+
 ## October 2026
 
 - **One time readout on the map, and step buttons that stay put.**

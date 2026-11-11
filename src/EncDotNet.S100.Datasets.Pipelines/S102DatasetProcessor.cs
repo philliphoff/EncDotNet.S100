@@ -37,7 +37,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// directly.
 /// </para>
 /// </remarks>
-public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
+public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -286,9 +286,25 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
                 var styledLayer = (StyledCoverageLayer)layer;
+                var nativeToWgs84 = NativeToWgs84(crs);
+                string? adjustmentKey = null;
+                if (context?.DepthAdjustment is { } adjustment)
+                {
+                    // S-98 Appendix D: band and trace the adjusted depths.
+                    // The depth lines are traced from the adjusted values, so
+                    // the safety contour follows the water level too.
+                    var (adjusted, count) = S102DepthAdjuster.Apply(styledLayer, adjustment, _dataset.VerticalDatum, () => NativeToWgs84(crs), cancellationToken);
+                    styledLayer = adjusted;
+                    adjustmentKey = count > 0 ? adjustment.Key : null;
+                }
+
+                // Optional relief shading (off by default; not part of the
+                // S-102 portrayal): a hillshade over the band colours.
+                if (S102Relief.IsOn(context?.EcdisDisplay))
+                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
 
                 var depthLines = BuildDepthLineSubLayers(
-                    styledLayer, context?.Mariner ?? MarinerSettings.Default, crs, context?.Palette ?? PaletteType.Day);
+                    styledLayer, context?.Mariner ?? MarinerSettings.Default, crs, nativeToWgs84, adjustmentKey);
 
                 var geoId = _dataset.GeographicIdentifier ?? _fileName;
                 var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
@@ -339,19 +355,24 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <see cref="S98DisplayPlane.BaseChartOver"/> with the S-101 line work.
     /// Neither is adjusted for water level. Called under the render gate.
     /// </summary>
-    private (IsolineCoverageSubLayer SafetyContour, IsolineCoverageSubLayer CoverageLimit) BuildDepthLineSubLayers(
-        StyledCoverageLayer layer, MarinerSettings mariner, int crs, PaletteType palette)
+    private Func<double, double, (double Longitude, double Latitude)>? NativeToWgs84(int crs)
     {
-        Func<double, double, (double Longitude, double Latitude)>? nativeToWgs84 = null;
-        if (crs != 4326)
+        if (crs == 4326)
         {
-            var transform = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
-            if (!transform.IsIdentity)
-            {
-                nativeToWgs84 = (x, y) => transform.Transform(x, y);
-            }
+            return null;
         }
 
+        var transform = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
+        return transform.IsIdentity ? null : (x, y) => transform.Transform(x, y);
+    }
+
+    private (IsolineCoverageSubLayer SafetyContour, IsolineCoverageSubLayer CoverageLimit) BuildDepthLineSubLayers(
+        StyledCoverageLayer layer,
+        MarinerSettings mariner,
+        int crs,
+        Func<double, double, (double Longitude, double Latitude)>? nativeToWgs84,
+        string? adjustmentKey)
+    {
         var mercatorExtent = S102DepthLines.SurfaceExtent(layer, nativeToWgs84);
         var halo = RgbaColor.FromHex(_catalogue.ActivePalette.Resolve("CHWHT"));
 
@@ -360,7 +381,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         var grid = layer.Coverage.Metadata;
         var key = new DepthLineKey(
             _source.SelectedOverviewLevel, crs, grid.OriginLongitude, grid.OriginLatitude,
-            grid.SpacingLongitudinal, grid.SpacingLatitudinal, grid.NumRows, grid.NumColumns);
+            grid.SpacingLongitudinal, grid.SpacingLatitudinal, grid.NumRows, grid.NumColumns, adjustmentKey);
         return (
             new IsolineCoverageSubLayer
             {
@@ -427,7 +448,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         double SpacingLongitudinal,
         double SpacingLatitudinal,
         int Rows,
-        int Columns);
+        int Columns,
+        string? AdjustmentKey);
 
     /// <summary>Layer key of the S-102 safety contour sub-layer.</summary>
     public const string SafetyContourLayerKey = "s102.safetycontour";
@@ -549,6 +571,14 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // identity for geographic (EPSG:4326) grids. (See issue #239.)
         int crs = _dataset.HorizontalCRS ?? 4326;
         var nativeToWgs84 = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
+        if (S102Relief.IsOn(context?.EcdisDisplay))
+        {
+            styledLayer = S102Relief.Apply(
+                styledLayer,
+                nativeToWgs84.IsIdentity ? null : (x, y) => nativeToWgs84.Transform(x, y),
+                ReliefShading.Default);
+        }
+
         var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);
         var (west, south, east, north) =
             (extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude);

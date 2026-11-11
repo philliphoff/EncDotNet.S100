@@ -13,7 +13,6 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.TestSupport;
 using Mapsui;
 using PureHDF;
@@ -157,6 +156,9 @@ public sealed class GribProcessorTests : IDisposable
         Assert.Equal("GRIB2", registry.PortrayalOf("GRIB2").AsApplication?.Basis);
         Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", WaveHeightStyle.Key));
         Assert.Equal(S98DisplayPlane.DynamicArrows, registry.DisplayPlanes.GetDefaultPlane("GRIB2", WindBarbStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", PrecipitationStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", ThunderstormRiskStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", CloudCoverStyle.Key));
     }
 
     // -----------------------------------------------------------------
@@ -229,6 +231,134 @@ public sealed class GribProcessorTests : IDisposable
         var result = await processor.BuildCoveragePortrayalAsync(new RenderContext { TimeStep = Run.AddHours(6) }, Ct);
         Assert.All(Drawn(processor), s => Assert.Equal(Run.AddHours(6), s.SelectedTime));
         Assert.Contains("2026-10-25 06:00:00Z", result.Info);
+    }
+
+    [Fact]
+    public async Task A_GFS_file_with_air_and_skin_temperature_draws_freezing_spray_over_water_and_picks_it()
+    {
+        // GFS fields at 60°N: column 0 is water, column 1 land. A 15 m/s
+        // wind, −10 °C air and +2 °C water: Overland's predictor is 59, heavy.
+        var grid = new Grid(60, -170, 1, 1, 2);
+        Message Field(byte discipline, byte category, byte number, byte surface, int value, double[] values) =>
+            new() { Discipline = discipline, Category = category, Number = number, SurfaceType = surface, SurfaceValue = value, Grid = grid, Values = values, DecimalScale = 2 };
+        var path = Write(PathFor("gfs-icing.grib2"), Concat(
+            Encode(Field(0, 2, 2, 103, 10, [0, 0])),
+            Encode(Field(0, 2, 3, 103, 10, [15, 15])),
+            Encode(Field(0, 0, 0, 103, 2, [263.15, 263.15])),
+            Encode(Field(0, 0, 0, 1, 0, [275.15, 255.15])),
+            Encode(Field(2, 0, 0, 1, 0, [0, 1]))));
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+
+        Assert.Equal(
+            [WeatherParameters.WindU, WeatherParameters.WindV, WeatherParameters.AirTemperature, WeatherParameters.SurfaceTemperature, WeatherParameters.LandCover],
+            processor.GridSet.Parameters.Select(p => p.Id));
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        var spray = Assert.IsType<GridCoverageSubLayer>(portrayal.SubLayers.Single(l => l.LayerKey == FreezingSprayStyle.Key));
+        Assert.True(spray.ClipToWater);
+        Assert.DoesNotContain(portrayal.SubLayers, l => l.LayerKey == AirTemperatureIsothermStyle.Key);
+        var withAir = await processor.BuildCoveragePortrayalAsync(
+            new RenderContext { EcdisDisplay = new EcdisDisplaySettings { LayerVisibility = new Dictionary<string, bool> { [AirTemperatureIsothermStyle.Key] = true } } }, Ct);
+        Assert.Contains(withAir.SubLayers, l => l.LayerKey == AirTemperatureIsothermStyle.Key);
+
+        var water = processor.GetCoverageInfo(60, -170, null)!.Attributes;
+        Assert.Equal("Heavy (predictor 59)", water.Single(a => a.Code == WeatherParameters.FreezingSprayPredictor).DisplayValue);
+        Assert.Equal("-10.0 °C", water.Single(a => a.Code == WeatherParameters.AirTemperature).DisplayValue);
+        Assert.Equal("2.0 °C", water.Single(a => a.Code == WeatherParameters.SurfaceTemperature).DisplayValue);
+        Assert.DoesNotContain(water, a => a.Code == WeatherParameters.LandCover);
+        var land = processor.GetCoverageInfo(60, -169, null)!.Attributes;
+        Assert.Equal("—", land.Single(a => a.Code == WeatherParameters.FreezingSprayPredictor).DisplayValue);
+
+        var query = new CoverageSampleQuery(60, -170, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(processor.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal((double)(int)FreezingSprayClass.Heavy, fields["spray.predictor.class"].Value);
+        Assert.Equal(-10, fields["air.temperature.degc"].Value!.Value, 2);
+    }
+
+    [Fact]
+    public async Task A_GFS_file_with_precipitation_CAPE_and_cloud_draws_them_only_when_switched_on_and_picks_them()
+    {
+        // GFS fields at 25°N, 6 h into the run. GFS writes the precipitation
+        // rate and cloud cover at the valid time, then as an average over
+        // the hours before it: the first is read. CAPE for the 180–0 hPa
+        // layer and low cloud aren't the rows' levels, so they're left out.
+        var grid = new Grid(25, -80, 1, 1, 2);
+        Message Field(byte category, byte number, byte surface, int value, double[] values, int decimals) =>
+            new() { Category = category, Number = number, SurfaceType = surface, SurfaceValue = value, ForecastHours = 6, Grid = grid, Values = values, DecimalScale = decimals };
+        var path = Write(PathFor("gfs-convection.grib2"), Concat(
+            Encode(Field(1, 7, 1, 0, [0.001, 0], 6)),
+            Encode(Field(1, 7, 1, 0, [0.01, 0.01], 6) with { ForecastHours = 0, IntervalHours = 6 }),
+            Encode(Field(7, 6, 1, 0, [1850, 400], 0)),
+            Encode(Field(7, 6, 108, 18000, [5000, 5000], 0) with { SecondSurfaceType = 108, SecondSurfaceValue = 0 }),
+            Encode(Field(6, 1, 10, 0, [80, 10], 0)),
+            Encode(Field(6, 1, 214, 0, [100, 100], 0))));
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+
+        Assert.Equal(
+            [WeatherParameters.PrecipitationRate, WeatherParameters.Cape, WeatherParameters.CloudCover],
+            processor.GridSet.Parameters.Where(p => p.IsKnown).Select(p => p.Id));
+        Assert.Equal(WeatherLevel.EntireAtmosphere, processor.GridSet.FindParameter(WeatherParameters.CloudCover)!.Level);
+        string[] keys = [PrecipitationStyle.Key, ThunderstormRiskStyle.Key, CloudCoverStyle.Key];
+
+        // Off by default: the chart isn't covered until the mariner asks.
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        Assert.DoesNotContain(portrayal.SubLayers, l => keys.Contains(l.LayerKey));
+
+        var on = new EcdisDisplaySettings { LayerVisibility = keys.ToDictionary(k => k, _ => true) };
+        var withAll = await processor.BuildCoveragePortrayalAsync(new RenderContext { EcdisDisplay = on }, Ct);
+        var fills = keys.Select(k => Assert.IsType<GridCoverageSubLayer>(withAll.SubLayers.Single(l => l.LayerKey == k))).ToArray();
+        Assert.All(fills, f => Assert.True(f.ClipToWater, f.LayerKey));
+        Assert.All(fills, f => Assert.Equal(S98DisplayPlane.OnDemandSurface, f.Plane));
+        Assert.Equal([0.5, 0.5, 0.3], fills.Select(f => f.Opacity));
+
+        IReadOnlyList<PickAttribute> At(double longitude) => processor.GetCoverageInfo(25, longitude, null)!.Attributes;
+        string? Pick(double longitude, string code) => At(longitude).Single(a => a.Code == code).DisplayValue;
+        Assert.Equal("3.6 mm/h (moderate)", Pick(-80, WeatherParameters.PrecipitationRate));
+        Assert.Equal("0.0 mm/h", Pick(-79, WeatherParameters.PrecipitationRate));
+        Assert.Equal("1850 J/kg (moderate thunderstorm risk)", Pick(-80, WeatherParameters.Cape));
+        Assert.Equal("400 J/kg", Pick(-79, WeatherParameters.Cape));
+        Assert.Equal("80 %", Pick(-80, WeatherParameters.CloudCover));
+        Assert.Equal("10 %", Pick(-79, WeatherParameters.CloudCover));
+        Assert.DoesNotContain(At(-80), a => a.Code == WeatherParameters.PrecipitationRate + ".mmh");
+
+        var query = new CoverageSampleQuery(25, -80, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(processor.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal(("precipitation_flux", "kg m-2 s-1"), (fields["precipitation.rate"].Quantity, fields["precipitation.rate"].Unit));
+        Assert.Equal(("precipitation_flux", "mm/h"), (fields["precipitation.rate.mmh"].Quantity, fields["precipitation.rate.mmh"].Unit));
+        Assert.Equal(3.6, fields["precipitation.rate.mmh"].Value!.Value, 3);
+        Assert.Equal(("atmosphere_convective_available_potential_energy", "J/kg"), (fields["cape"].Quantity, fields["cape"].Unit));
+        Assert.Equal(("cloud_area_fraction", "%"), (fields["cloud.cover"].Quantity, fields["cloud.cover"].Unit));
+    }
+
+    [Fact]
+    public async Task Visibility_draws_a_sparse_fill_and_picks_in_nautical_miles()
+    {
+        // Rows run north to south: 10°N has 400 m and 2500 m, 9°N 8000 m and 24100 m (good).
+        var grid = new Grid(10, 10, 1, 2, 2);
+        var path = Write(PathFor("vis.grib2"), Encode(new Message { Category = 19, Number = 0, Grid = grid, DecimalScale = 0, Values = [400, 2500, 8000, 24100] }));
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        var fill = Assert.IsType<GridCoverageSubLayer>(Assert.Single(portrayal.SubLayers));
+        Assert.Equal(VisibilityStyle.Key, fill.LayerKey);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
+        Assert.True(fill.ClipToWater);
+
+        string? Pick(double latitude, double longitude) =>
+            processor.GetCoverageInfo(latitude, longitude, null)!.Attributes.Single(a => a.Code == WeatherParameters.Visibility).DisplayValue;
+        Assert.Equal("0.2 nm (400 m)", Pick(10, 10));
+        Assert.Equal("1.3 nm", Pick(10, 11));
+        Assert.Equal("4.3 nm", Pick(9, 10));
+        Assert.Equal("13.0 nm", Pick(9, 11));
+        Assert.DoesNotContain(processor.GetCoverageInfo(9, 11, null)!.Attributes, a => a.Code == WeatherParameters.Visibility + ".nmi");
+
+        var query = new CoverageSampleQuery(9, 10, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(processor.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal(("visibility_in_air", "m"), (fields["visibility"].Quantity, fields["visibility"].Unit));
+        Assert.Equal(("visibility_in_air", "nmi"), (fields["visibility.nmi"].Quantity, fields["visibility.nmi"].Unit));
+        Assert.Equal(8000 / 1852.0, fields["visibility.nmi"].Value!.Value, 3);
     }
 
     [Fact]
@@ -454,7 +584,7 @@ public sealed class GribProcessorTests : IDisposable
     private static DatasetPipelineFactory CreateFactory() =>
         new(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider());

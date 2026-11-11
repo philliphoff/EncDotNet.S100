@@ -76,29 +76,31 @@ internal sealed class ReceivedRoutesService
     /// <summary>Creates the service and starts watching the loader and the routes.</summary>
     /// <param name="loader">The dataset loader whose loads and closes to follow.</param>
     /// <param name="routes">The route collection received routes join.</param>
-    /// <param name="checkSettings">Where check settings for received routes are kept; in memory when <c>null</c>.</param>
+    /// <param name="checkSettings">Where check settings for received routes are kept.</param>
     /// <param name="closeDataset">Closes a dataset (removes it from the Datasets panel) when its route is closed.</param>
     /// <param name="notifications">Shows the "Check route ended" toast; none when <c>null</c>.</param>
     /// <param name="follow">Follow passage, stopped when a checked route's dataset closes.</param>
-    /// <param name="read">Reads an entry's S-421 dataset; from its exchange set or folder (else its file) when omitted.</param>
+    /// <param name="read">Reads an entry's S-421 dataset (the app passes <see cref="ReadDataset"/>).</param>
     public ReceivedRoutesService(
         IDatasetLoaderService loader,
         RoutesService routes,
-        CheckSettingsStore? checkSettings = null,
-        Action<DatasetEntry>? closeDataset = null,
-        INotificationService? notifications = null,
-        FollowPassageService? follow = null,
-        Func<DatasetEntry, S421Dataset?>? read = null)
+        CheckSettingsStore checkSettings,
+        Action<DatasetEntry>? closeDataset,
+        INotificationService? notifications,
+        FollowPassageService? follow,
+        Func<DatasetEntry, S421Dataset?> read)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(routes);
+        ArgumentNullException.ThrowIfNull(checkSettings);
+        ArgumentNullException.ThrowIfNull(read);
         _loader = loader;
         _routes = routes;
-        _checkSettings = checkSettings ?? new CheckSettingsStore();
+        _checkSettings = checkSettings;
         _closeDataset = closeDataset;
         _notifications = notifications;
         _follow = follow;
-        _read = read ?? ReadDataset;
+        _read = read;
         _filesToReopen = _checkSettings.OpenFiles.Count > 0 ? _checkSettings.OpenFiles.ToList() : null;
 
         _loader.DatasetLoaded += OnDatasetLoaded;
@@ -379,7 +381,7 @@ internal sealed class ReceivedRoutesService
     // Reads the entry's own bytes: a Library entry's FilePath is relative to
     // its exchange set or folder, and its loaded processor is keyed by an id
     // other datasets can share, so neither identifies its file.
-    private static S421Dataset? ReadDataset(DatasetEntry entry)
+    internal static S421Dataset? ReadDataset(DatasetEntry entry)
     {
         if (entry is { Source: { } source, RelativePath: { } relativePath })
         {

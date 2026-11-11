@@ -61,4 +61,20 @@ public sealed class VectorSubLayer
     /// (S-101 detail declutter). Applied only to the line-work sub-layer.
     /// </summary>
     public bool ApplyOutOfBandCap { get; init; }
+
+    /// <summary>
+    /// The sub-layer's legend, for a viewer to show under its layer stack
+    /// entry: symbol, line-sample and swatch rows (see <see cref="LegendEntry"/>),
+    /// resolved against the palette the sub-layer was drawn in;
+    /// <see langword="null"/> (the default) for no legend. Renderers ignore it.
+    /// </summary>
+    public IReadOnlyList<LegendEntry>? Legend { get; init; }
+
+    /// <summary>
+    /// The opacity the sub-layer is drawn at, 0 (invisible) to 1 (opaque, the
+    /// default), on top of the dataset's own: for data a processor draws as
+    /// old, such as a stale surface analysis at half opacity
+    /// (<c>vector-weather.md</c> §7).
+    /// </summary>
+    public double Opacity { get; init; } = 1.0;
 }

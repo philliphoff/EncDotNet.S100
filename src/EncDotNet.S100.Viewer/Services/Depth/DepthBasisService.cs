@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -39,27 +38,29 @@ internal sealed class DepthBasisService : IDisposable
     /// <param name="viewTime">The Timeline's view time.</param>
     /// <param name="adjustment">Chart water level adjustment; <see cref="NoWaterLevelAdjustment"/> until #1132.</param>
     /// <param name="scope">Raises when a dataset's footprint changes; optional.</param>
-    /// <param name="post">Schedules the coalesced recompute; defaults to the UI thread at background priority.</param>
-    /// <param name="readDatum">Runs a chart cell's datum read; defaults to the thread pool.</param>
+    /// <param name="post">Schedules the coalesced recompute (the app passes <see cref="UiThread.PostBackground"/>).</param>
+    /// <param name="readDatum">Runs a chart cell's datum read (the app passes <see cref="Task.Run{TResult}(Func{TResult})"/>).</param>
     public DepthBasisService(
         IDatasetLoaderService loader,
         IMapViewportNotifier? viewport,
         IViewTime viewTime,
         IWaterLevelAdjustmentState adjustment,
-        ITimelineMapScope? scope = null,
-        Action<Action>? post = null,
-        Func<Func<int?>, Task<int?>>? readDatum = null)
+        ITimelineMapScope? scope,
+        Action<Action> post,
+        Func<Func<int?>, Task<int?>> readDatum)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(viewTime);
         ArgumentNullException.ThrowIfNull(adjustment);
+        ArgumentNullException.ThrowIfNull(post);
+        ArgumentNullException.ThrowIfNull(readDatum);
         _loader = loader;
         _viewport = viewport;
         _viewTime = viewTime;
         _adjustment = adjustment;
         _scope = scope;
-        _post = post ?? (a => Dispatcher.UIThread.Post(a, DispatcherPriority.Background));
-        _readDatum = readDatum ?? Task.Run;
+        _post = post;
+        _readDatum = readDatum;
 
         _loader.DatasetLoaded += OnDatasetChanged;
         _loader.DatasetRemoved += OnDatasetChanged;

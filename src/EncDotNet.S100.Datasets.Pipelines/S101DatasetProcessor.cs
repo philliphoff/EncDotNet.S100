@@ -44,7 +44,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// in-memory cache is used.
 /// </para>
 /// </remarks>
-public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IDateDependentDatasetProcessor
+public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IDateDependentDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly S101UpdateReport? _updateReport;
@@ -77,7 +77,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private readonly string _datasetContentHash;
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private IReadOnlyList<SoundingDatumArea>? _soundingDatums;
     private Dictionary<long, S101FeatureRecord>? _featureRecords;
     private FeatureCatalogueDecoder? _decoder;
@@ -99,6 +99,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // BuildRuleOutputCacheKey); display filters are re-applied per render.
     // Guarded by _renderGate.
     private string? _cachedPortrayalKey;
+
+    // Chart-wide water level adjustment (#1132): the last adjusted display
+    // list and what it was built from. Memory only; guarded by _renderGate.
+    private (string Key, S101DepthAdjustmentPortrayal.Result? Result)? _adjustedPortrayal;
+    private volatile S101DepthAdjustmentPortrayal.Result? _drawnAdjustment;
     private IReadOnlyList<DrawingInstruction>? _cachedPortrayalInstructions;
 
     // Cross-load cache of the unfiltered rule output. The
@@ -647,7 +652,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         AppendModuleVersion(sb, typeof(FeatureCatalogue).Assembly);           // Features (FC decode)
         AppendModuleVersion(sb, typeof(S101LuaRuleExecutor).Assembly);        // Datasets.S101 (executor)
         AppendModuleVersion(sb, typeof(S101DatasetProcessor).Assembly);       // Datasets.Pipelines (this)
-        AppendModuleVersion(sb, _luaEngine.GetType().Assembly);               // Lua engine (MoonSharp)
+        AppendModuleVersion(sb, _luaEngine.GetType().Assembly);               // Lua engine: each engine keeps its own entries
 
         _portrayalContentHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))
@@ -754,6 +759,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
                 .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            if (context?.SafetyContourHalo == true)
+                prepared = SafetyContourHalo.Apply(prepared);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
 
@@ -849,12 +856,47 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             PortrayalCacheMisses++;
         }
 
+        // S-98 Appendix D: with a water level adjustment, the depth features
+        // in its footprint are re-portrayed with the water level added. The
+        // charted list above stays cached; the adjusted one is memory-only
+        // and keyed on the adjustment, so scrubbing back reuses it.
+        S101DepthAdjustmentPortrayal.Result? adjusted = null;
+        if (context?.DepthAdjustment is { } depthAdjustment)
+        {
+            _featureIndex ??= BuildFeatureIndex();
+            var adjustedKey = $"{ruleKey}|{depthAdjustment.Key}";
+            if (_adjustedPortrayal is { } cachedAdjustment && cachedAdjustment.Key == adjustedKey)
+            {
+                adjusted = cachedAdjustment.Result;
+            }
+            else
+            {
+                adjusted = await S101DepthAdjustmentPortrayal.ApplyAsync(
+                    unfiltered,
+                    _featureIndex,
+                    depthAdjustment,
+                    (lat, lon) => SoundingDatumAt(lat, lon) ?? SoundingDatum,
+                    (shift, ct) => new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc, shift).OpenSessionAsync(mariner, ct),
+                    cancellationToken).ConfigureAwait(false);
+                _adjustedPortrayal = (adjustedKey, adjusted);
+            }
+
+            if (adjusted is not null)
+                unfiltered = adjusted.Instructions;
+        }
+
+        _drawnAdjustment = adjusted;
+
         // S-100 Part 9 timeValid: leave out what isn't drawn at the view
         // time. The cached list keeps every instruction, so moving the view
         // time never re-runs the Lua rules.
         _portrayalTimeIntervals = PortrayalTimeFilter.Intervals(unfiltered);
         var prepared = PortrayalTimeFilter.Apply(
             VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
+        // AML CLB drawn over the chart: the safety contour keeps its weight
+        // and gains a halo (AML design handoff decision 22).
+        if (context?.SafetyContourHalo == true)
+            prepared = SafetyContourHalo.Apply(prepared);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
         _drawingPriorities = DrawingPriorities(prepared);
 
@@ -868,7 +910,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
 
         var sourceFeatures = new S101VectorSource(_dataset).GetFeatures().ToList();
-        var geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
+        IFeatureGeometryProvider geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
+        if (adjusted is { Geometry.Count: > 0 })
+            geometryProvider = new OverlayGeometryProvider(geometryProvider, adjusted.Geometry);
         var coverageAreas = CoverageAreaResolver.Resolve(sourceFeatures);
 
 
@@ -878,7 +922,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // clip's only inputs). The Mapsui renderer appends
         // its own clip-algorithm / serialization-format qualifiers before
         // consulting the actual pattern-clip cache it owns.
-        var patternClipKey = $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}|areas:{BuildVisibleAreaSignature(unfiltered, prepared)}";
+        var patternClipKey = adjusted is not null ? null : $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}|areas:{BuildVisibleAreaSignature(unfiltered, prepared)}";
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
@@ -888,6 +932,17 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // features without re-running portrayal. See S98DefaultRules.
         _featureIndex ??= BuildFeatureIndex();
         var featureTags = BuildFeatureTags(_featureIndex.Values);
+        if (adjusted is { SourceIds.Count: > 0 })
+        {
+            var withSplit = new Dictionary<long, VectorFeatureTag>(featureTags);
+            foreach (var (synthetic, source) in adjusted.SourceIds)
+            {
+                if (featureTags.TryGetValue(source, out var tag))
+                    withSplit[synthetic] = tag;
+            }
+
+            featureTags = withSplit;
+        }
 
         // Out-of-scale-band declutter cutoff (S-101 DataCoverage /
         // minimumDisplayScale, FC §3.1.1): the most-permissive denominator the
@@ -945,7 +1000,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             // Dataset bytes (with updates), FC/PC content and the portrayal
             // assemblies: everything the scene depends on beyond the
             // instructions and the renderer's style state.
-            ContentScope = await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false),
+            // An adjusted scene changes with every water level, so it stays
+            // out of the tile disk cache (null scope bypasses it).
+            ContentScope = adjusted is not null ? null : await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false),
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
@@ -956,6 +1013,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             FeatureTags = featureTags,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
+            CellMaximumDisplayScale = ResolveCellMaximumDisplayScale(_featureIndex.Values),
             CoverageAreas = coverageAreas,
         };
     }
@@ -1120,6 +1178,54 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return minDisplayScale;
     }
 
+    /// <summary>
+    /// Resolves the cell's finest intended display scale as the smallest
+    /// <c>maximumDisplayScale</c> denominator across the <c>DataCoverage</c>
+    /// features (S-101 FC §3.1.1), each coverage's pair normalised first via
+    /// <see cref="DisplayScaleRange.FromDeclared"/>. It breaks ties between
+    /// overlapping cells of the same minimum display scale (see
+    /// <see cref="CellScaleRanking"/>).
+    /// </summary>
+    /// <param name="features">The dataset's vector features.</param>
+    /// <returns>
+    /// The smallest usable <c>maximumDisplayScale</c> denominator, or
+    /// <see langword="null"/> when no <c>DataCoverage</c> feature carries one.
+    /// </returns>
+    internal static int? ResolveCellMaximumDisplayScale(
+        IEnumerable<EncDotNet.S100.Pipelines.Vector.Feature> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+
+        int? maxDisplayScale = null;
+        foreach (var feature in features)
+        {
+            if (!string.Equals(feature.FeatureType, "DataCoverage", StringComparison.Ordinal))
+                continue;
+
+            var window = DisplayScaleRange.FromDeclared(
+                ParseDenominator(feature, "minimumDisplayScale"),
+                ParseDenominator(feature, "maximumDisplayScale"));
+            if (window.Maximum is not int denom)
+                continue;
+
+            maxDisplayScale = maxDisplayScale is null ? denom : Math.Min(maxDisplayScale.Value, denom);
+        }
+
+        return maxDisplayScale;
+    }
+
+    /// <summary>
+    /// The cell's rank among overlapping cells (see <see cref="CellScaleRanking"/>):
+    /// <paramref name="compilationScale"/> when known, otherwise the cell's
+    /// minimum display scale with its maximum display scale as the tie-break.
+    /// </summary>
+    internal static CellRank? ResolveCellRank(
+        IReadOnlyCollection<EncDotNet.S100.Pipelines.Vector.Feature> features, int? compilationScale = null) =>
+        CellScaleRanking.Rank(
+            compilationScale,
+            ResolveOutOfBandMinDisplayScale(features),
+            ResolveCellMaximumDisplayScale(features));
+
     private static int? ParseDenominator(EncDotNet.S100.Pipelines.Vector.Feature feature, string attribute)
     {
         if (!feature.Attributes.TryGetValue(attribute, out var raw) || raw is null)
@@ -1187,7 +1293,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// cell under a finer one. Smaller is finer; <see langword="null"/> when the
     /// cell declares none.
     /// </summary>
-    public int? CellRankingScale => CellExtent.RankingScale;
+    public CellRank? CellRank => CellExtent.Rank;
 
     /// <summary>
     /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell
@@ -1211,7 +1317,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return false;
     }
 
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage) CellExtent
     {
         get
         {
@@ -1220,7 +1326,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
             _featureIndex ??= BuildFeatureIndex();
             extent = (
-                CellScaleRanking.RankingScale(null, ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                ResolveCellRank(_featureIndex.Values),
                 CoverageAreaResolver.Resolve(_featureIndex.Values));
             _cellExtent = extent;
             return extent;
@@ -1363,6 +1469,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         if (_externalTextResolver is not null)
             attributes = FeatureInfoBuilder.ResolveFileReferences(attributes, _externalTextResolver);
 
+        // S-98 Appendix D-3 / S-164 WLAFeatureInformation: a depth feature the
+        // drawn chart adjusted says by how much and what it now shows.
+        if (_drawnAdjustment is { } drawn)
+            attributes = [.. attributes, .. AdjustmentRows(drawn, feature)];
+
         var featureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return new FeatureInfo
         {
@@ -1374,6 +1485,48 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             DrawingPriority = DrawingPriority(featureRef),
             Geometry = ((IS100Feature)feature).GeometryType,
         };
+    }
+
+    private static IEnumerable<PickAttribute> AdjustmentRows(S101DepthAdjustmentPortrayal.Result drawn, EncDotNet.S100.Pipelines.Vector.Feature feature)
+    {
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        if (drawn.AdjustedSoundings.Contains(feature.Id))
+        {
+            yield return new PickAttribute
+            {
+                Code = "waterLevelAdjustment",
+                Name = "Water level adjustment",
+                RawValue = "sounding",
+                DisplayValue = "Each sounding in the adjusted area shows charted depth + water level at its position (marked ◆).",
+            };
+            yield break;
+        }
+
+        if (!drawn.Heights.TryGetValue(feature.Id, out var h))
+            yield break;
+
+        yield return new PickAttribute
+        {
+            Code = "waterLevelAdjustment",
+            Name = "Water level",
+            RawValue = h.ToString("0.0", c),
+            DisplayValue = $"{h.ToString("+0.0;-0.0;0.0", c)} m (lowest over the feature in the adjusted area, rounded down to 0.1 m)",
+        };
+        foreach (var attribute in S101DepthShift.DepthAttributes)
+        {
+            if (feature.Attributes.TryGetValue(attribute, out var raw)
+                && raw is not null
+                && double.TryParse(raw.ToString(), System.Globalization.NumberStyles.Float, c, out var charted))
+            {
+                yield return new PickAttribute
+                {
+                    Code = "adjusted." + attribute,
+                    Name = $"Adjusted {attribute}",
+                    RawValue = (charted + h).ToString("0.0#", c),
+                    DisplayValue = $"{(charted + h).ToString("0.0#", c)} m (charted {charted.ToString("0.0#", c)} m)",
+                };
+            }
+        }
     }
 
     /// <inheritdoc/>
@@ -1404,4 +1557,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             index[f.Id] = f;
         return index;
     }
+}
+
+/// <summary>Feature geometry with some ids answered from a fixed map (split depth features, #1132).</summary>
+internal sealed class OverlayGeometryProvider(IFeatureGeometryProvider inner, IReadOnlyDictionary<long, FeatureGeometry> overlay) : IFeatureGeometryProvider
+{
+    /// <inheritdoc />
+    public FeatureGeometry? GetGeometry(string featureReference) =>
+        long.TryParse(featureReference, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id)
+        && overlay.TryGetValue(id, out var geometry)
+            ? geometry
+            : inner.GetGeometry(featureReference);
 }

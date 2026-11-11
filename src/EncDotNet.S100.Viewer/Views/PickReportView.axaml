@@ -35,8 +35,26 @@
                         <ColumnDefinition Width="14" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding DisplayName}"
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                    <!-- An attribute AML adds to a standard S-57 class (#1372). -->
+                    <Border IsVisible="{Binding Mark, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            AutomationProperties.AutomationId="PickReport.Attribute.Mark"
+                            AutomationProperties.Name="{Binding Mark}"
+                            ToolTip.Tip="{x:Static loc:Strings.Pick_AmlAttributeMarkToolTip}"
+                            CornerRadius="3"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ForegroundColor}"
+                            Padding="3,0"
+                            Margin="0,0,6,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Mark}"
+                                   FontSize="9.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ForegroundColor}" />
+                    </Border>
+                    <TextBlock Text="{Binding DisplayName}"
                                FontSize="12"
                                Opacity="0.7"
                                TextWrapping="NoWrap"
@@ -50,6 +68,7 @@
                             </MultiBinding>
                         </ToolTip.Tip>
                     </TextBlock>
+                    </StackPanel>
                     <Grid Grid.Column="2"
                           ColumnDefinitions="Auto,*,Auto"
                           VerticalAlignment="Center">
@@ -1126,6 +1145,15 @@
                        Foreground="{DynamicResource WarningColor}"
                        Margin="0,0,0,6"
                        TextWrapping="Wrap" />
+            <!-- Stale data (vector-weather.md §7): how old the picked analysis is. -->
+            <TextBlock Text="{Binding StaleNotice}"
+                       IsVisible="{Binding HasStaleNotice}"
+                       AutomationProperties.AutomationId="PickReport.StaleNotice"
+                       AutomationProperties.Name="{Binding StaleNotice}"
+                       FontSize="12"
+                       Foreground="{DynamicResource WarningColor}"
+                       Margin="0,0,0,6"
+                       TextWrapping="Wrap" />
             <!-- The data's credit from its Library source (#1075): attribution and licence. -->
             <SelectableTextBlock Text="{Binding DataCredit}"
                                  IsVisible="{Binding HasDataCredit}"
@@ -1135,6 +1163,37 @@
                                  Opacity="0.7"
                                  Margin="0,0,0,6"
                                  TextWrapping="Wrap" />
+            <!-- An AML feature's provenance strip (#1372, decision 13): the AML
+                 tag, the cell and the protective marking, in place of the spec. -->
+            <Border IsVisible="{Binding HasAml}"
+                    AutomationProperties.AutomationId="PickReport.AmlProvenance"
+                    AutomationProperties.Name="{x:Static loc:Strings.Pick_AmlProvenanceName}"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    CornerRadius="6"
+                    Padding="8,6"
+                    Margin="0,0,0,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <views:AmlTagChip Grid.Column="0"
+                                      Text="{Binding Aml.TagText}"
+                                      ToolTip.Tip="{Binding Aml.TagToolTip}"
+                                      AutomationProperties.AutomationId="PickReport.AmlTag"
+                                      AutomationProperties.Name="{Binding Aml.TagText}" />
+                    <SelectableTextBlock Grid.Column="1"
+                                         Text="{Binding Aml.CellName}"
+                                         AutomationProperties.AutomationId="PickReport.AmlCell"
+                                         FontSize="11"
+                                         FontFamily="{StaticResource MonoFontFamily}"
+                                         Opacity="0.75"
+                                         Margin="8,0"
+                                         VerticalAlignment="Center"
+                                         TextTrimming="CharacterEllipsis" />
+                    <views:AmlMarkingChip Grid.Column="2"
+                                          Marking="{Binding Aml.Marking}"
+                                          IsVisible="{Binding Aml.HasMarking}"
+                                          AutomationProperties.AutomationId="PickReport.AmlMarking"
+                                          AutomationProperties.Name="{Binding Aml.Marking}" />
+                </Grid>
+            </Border>
             <Grid ColumnDefinitions="Auto,*,Auto"
                   IsVisible="{Binding HasDatasetPick}">
                 <Border Grid.Column="0"
@@ -1402,6 +1461,21 @@
                                    FontStyle="Italic"
                                    Opacity="0.6"
                                    IsVisible="{Binding !HasAttributes}" />
+                        <!-- An AML feature the map doesn't draw is still pickable (#1372). -->
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,4,0,0"
+                                    IsVisible="{Binding HasAmlNotDrawnNote}">
+                            <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="14" Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding AmlNotDrawnNote}"
+                                       AutomationProperties.AutomationId="PickReport.AmlNotDrawn"
+                                       AutomationProperties.Name="{Binding AmlNotDrawnNote}"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

@@ -6,8 +6,8 @@ using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using PureHDF;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -265,7 +265,7 @@ public class S102CoveragePyramidTests
         using var processor = new S102DatasetProcessor(
             path,
             manager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory());
 
         try

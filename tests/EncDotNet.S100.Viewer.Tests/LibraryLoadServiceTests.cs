@@ -27,8 +27,8 @@ public sealed class LibraryLoadServiceTests : IDisposable
     private static (DatasetsViewModel Datasets, ExchangeSetService Service, LibraryLoadService Loader) CreateSystem()
     {
         var datasets = new DatasetsViewModel(new NoopDatasetLoader());
-        var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create());
-        return (datasets, service, new LibraryLoadService(service, datasets));
+        var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), lazyCoordinator: null, metadataReader: null, s57CatalogCache: null);
+        return (datasets, service, new LibraryLoadService(service, datasets, notifications: null));
     }
 
     [Fact]

@@ -63,10 +63,10 @@ internal sealed class RouteFindingsService : IDisposable
         PassageCheckService check,
         RoutesService routes,
         IDatasetCatalog catalog,
-        ICapabilityAccessor<IMapViewportController>? viewport = null,
-        IMarinerSettingsProvider? mariner = null,
-        ITimeFormatProvider? timeFormat = null,
-        NavigationalWarningsService? warnings = null)
+        ICapabilityAccessor<IMapViewportController>? viewport,
+        IMarinerSettingsProvider? mariner,
+        ITimeFormatProvider? timeFormat,
+        NavigationalWarningsService? warnings)
     {
         ArgumentNullException.ThrowIfNull(check);
         ArgumentNullException.ThrowIfNull(routes);
@@ -260,7 +260,7 @@ internal sealed class RouteFindingsService : IDisposable
             return Findings;
         }
 
-        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current, _mariner?.Current) is not { } input)
+        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current, _check.WeatherLimits, _check.CycloneSettings, _mariner?.Current) is not { } input)
             return null;
 
         var report = await _check.CheckOnceAsync(input, cancellationToken).ConfigureAwait(true);

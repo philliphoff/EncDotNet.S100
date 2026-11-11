@@ -231,10 +231,25 @@ datasets). Each index lists one item per model or dataset:
 - **ERDDAP `griddap`** (`erddapGriddap`): datasets by id. Each dataset's
   `info/<id>/index.json` gives its axes (a negative `averageSpacing` is a
   descending axis), `actual_range` and time coverage. The item downloads a
-  NetCDF subset of the area from now to the last chosen hour. An issue date
+  NetCDF subset of the area from now to the last chosen hour, or, for an
+  analysis or observation whose time coverage has ended (the sea surface
+  temperature, geostrophic current and HF radar datasets), the chosen hours
+  up to its last time. Latitude and longitude
+  are strided so that neither takes more than
+  `WeatherRequests.ErddapMaxAxisPoints` (1500) points: a 0.01° analysis over
+  30° is read every third point. An issue date
   (`date_issued`, `date_modified`, `date_created`) is taken as the run only
   when it falls within the forecast; `NWW3_Global_Best` gives the dataset's
   own dates, so its item has no run and is never stale.
+- **NHC's active storms** (`nhcStorms`): `CurrentStorms.json`, read whole at
+  each index (`NhcActiveStorms`), lists one item per storm NHC is issuing
+  advisories for in the Atlantic, East and Central Pacific, keyed and named
+  by its ATCF id (`al142026`). The item's run is its latest advisory's issue
+  time, valid to the end of the five-day forecast. It downloads the
+  advisory's forecast, wind radii and best track zips side by side in one
+  folder (`RemotePart.FileName`), so the next advisory replaces it in place.
+  Items have no area until downloaded, and a storm NHC stops listing drops
+  out of the index.
 
 The weather readers can't yet open a regional grid that crosses the
 antimeridian, so a filter or ERDDAP area across 180° is downloaded as its wider
@@ -246,7 +261,8 @@ Runs and freshness (`WeatherRuns`):
   feeds, so a downloaded run is outdated once a newer one is listed, and a
   newer run's download replaces it.
 - A run more than 12 hours old is stale (`LibraryItemState.IsStaleRun`, a
-  **Stale** tag). `LibraryOperations.LoadLatestRunAsync` re-reads the source,
+  **Stale** tag), or older than its service's `StaleAfterHours`: 6 for WPC's
+  analysis, 7 after an NHC advisory. `LibraryOperations.LoadLatestRunAsync` re-reads the source,
   downloads its newest run and opens it.
 - Old runs aren't kept unless pinned. `LibraryDownloads.Pin` copies a
   downloaded run beside the latest; the next index lists it as a local item
@@ -470,7 +486,7 @@ SoundCharts Library panel is built on it, and a headless host such as the
 
 `KnownSources/known-sources.json` is embedded in the library and exposed as
 `KnownCatalogueSources.All`. It lists the online chart catalogues SoundCharts
-offers under **Browse online catalogues…** in the Library. The list is
+offers under **Browse online sources…** in the Library. The list is
 maintained in this repository, under its MIT licence.
 
 To add a catalogue:
@@ -485,6 +501,11 @@ To add a catalogue:
   `weather`. A build
   skips entries in a format it doesn't know, instead of rejecting the list, so
   newer lists still load.
+- Set `category`, the group the source is listed under when browsing:
+  `charts`, `depth` (depth, tides and currents), `weather` (weather and ocean)
+  or `secom`. It's set per entry because format and kind of data don't always
+  agree: ERDDAP current feeds are `weather` services listed with weather and
+  ocean. Without it, the category follows the format.
 - Describe accurately what the catalogue provides. These fields drive the
   quality chips users see:
   - `coverage`: `polygons`, `boundingBoxes` or `none`.

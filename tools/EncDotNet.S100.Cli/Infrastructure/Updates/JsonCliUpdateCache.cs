@@ -14,12 +14,17 @@ internal sealed partial class JsonCliUpdateCache : ICliUpdateCache
 
     private readonly string _path;
 
-    public JsonCliUpdateCache(string? path = null)
+    /// <summary>The cache file in the user's local application data.</summary>
+    public static string DefaultPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "EncDotNet.S100.Cli",
+        "update-cache.json");
+
+    /// <param name="path">The cache file (the CLI passes <see cref="DefaultPath"/>).</param>
+    public JsonCliUpdateCache(string path)
     {
-        _path = path ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "EncDotNet.S100.Cli",
-            "update-cache.json");
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        _path = path;
     }
 
     public async Task<CliUpdateCacheEntry?> LoadAsync(

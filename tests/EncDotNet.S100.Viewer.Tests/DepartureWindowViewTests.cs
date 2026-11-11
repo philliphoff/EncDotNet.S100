@@ -61,7 +61,7 @@ public sealed class DepartureWindowViewTests
     public void The_verdict_card_shows_the_window_line_and_Depart_moves_into_the_window() => InCulture(() =>
     {
         var fixture = Fixture();
-        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check);
+        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check, viewport: null, marinerSettings: null, findings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
@@ -92,7 +92,7 @@ public sealed class DepartureWindowViewTests
             depthDatum: null,
             tide: PassageCheckFixture.HighWaterUntil0750,
             post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
-        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check);
+        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check, viewport: null, marinerSettings: null, findings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
         Assert.False(host.IsShown("Routes.Check.Confidence"));
 
@@ -113,7 +113,7 @@ public sealed class DepartureWindowViewTests
     public void Dragging_the_departure_band_sets_the_departure_and_the_labels_end_at_s104() => InCulture(() =>
     {
         var fixture = Fixture();
-        var vm = new ClearanceViewModel(fixture.Check, timeFormat: new UtcTime());
+        var vm = new ClearanceViewModel(fixture.Check, timeFormat: new UtcTime(), mariner: null, theme: null);
         using var host = ViewHost.Show(new ClearanceView { DataContext = vm }, width: 900, height: 260);
         Assert.False(host.IsShown("Clearance.DepartureBand"));
 
@@ -166,7 +166,7 @@ public sealed class DepartureWindowViewTests
     {
         // #1038: the end label ran into the centred middle one at usual widths.
         var fixture = Fixture();
-        var vm = new ClearanceViewModel(fixture.Check, timeFormat: new UtcTime());
+        var vm = new ClearanceViewModel(fixture.Check, timeFormat: new UtcTime(), mariner: null, theme: null);
         using var host = ViewHost.Show(new ClearanceView { DataContext = vm }, width: width, height: 260);
         fixture.Routes.IsCheckModeActive = true;
         WaitForWindow(host, fixture);

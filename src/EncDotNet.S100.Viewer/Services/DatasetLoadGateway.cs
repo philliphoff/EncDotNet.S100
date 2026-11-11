@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -16,32 +15,24 @@ internal sealed class DatasetLoadGateway : IDatasetLoadGateway
     private readonly Func<Func<Task>, Task> _dispatcher;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
 
+    /// <param name="datasets">The Datasets panel the loads go through.</param>
+    /// <param name="loader">The dataset loader.</param>
+    /// <param name="exchangeSet">Opens exchange sets.</param>
+    /// <param name="dispatcher">Runs work on the UI thread (the app passes <see cref="UiThread.InvokeAsync(Func{Task})"/>).</param>
     public DatasetLoadGateway(
         DatasetsViewModel datasets,
         IDatasetLoaderService loader,
-        IExchangeSetService exchangeSet)
-        : this(datasets, loader, exchangeSet, dispatcher: null)
-    {
-    }
-
-    /// <summary>
-    /// Test seam: allows tests to provide a synchronous dispatcher so the
-    /// production path through <see cref="Dispatcher.UIThread"/> can be
-    /// exercised without a running Avalonia application.
-    /// </summary>
-    internal DatasetLoadGateway(
-        DatasetsViewModel datasets,
-        IDatasetLoaderService loader,
         IExchangeSetService exchangeSet,
-        Func<Func<Task>, Task>? dispatcher)
+        Func<Func<Task>, Task> dispatcher)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(exchangeSet);
+        ArgumentNullException.ThrowIfNull(dispatcher);
         _datasets = datasets;
         _loader = loader;
         _exchangeSet = exchangeSet;
-        _dispatcher = dispatcher ?? DefaultDispatchAsync;
+        _dispatcher = dispatcher;
     }
 
     /// <inheritdoc />
@@ -161,11 +152,6 @@ internal sealed class DatasetLoadGateway : IDatasetLoadGateway
     {
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         return new Releaser(_operationGate);
-    }
-
-    private static async Task DefaultDispatchAsync(Func<Task> work)
-    {
-        await Dispatcher.UIThread.InvokeAsync(work).ConfigureAwait(false);
     }
 
     private sealed class Releaser : IDisposable

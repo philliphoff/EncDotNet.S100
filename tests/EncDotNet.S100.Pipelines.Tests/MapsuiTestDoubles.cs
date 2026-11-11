@@ -45,7 +45,7 @@ internal readonly struct ParkUntilCancelled(
 /// sub-layers, can be made time-aware, can throw on render, and counts
 /// disposals. Shared by the reusable-session and AddS100 facade tests.
 /// </summary>
-internal sealed class StubProcessor :
+internal class StubProcessor :
     IDatasetProcessor,
     ITimeAwareDatasetProcessor,
     IVectorPortrayalSource,
@@ -65,6 +65,8 @@ internal sealed class StubProcessor :
     public IReadOnlyList<DateTime> AvailableTimes { get; set; } = [];
 
     public DateTime? IssueTime { get; set; }
+
+    public DateTime? NextIssueTime { get; set; }
 
     private TimeSemantics? _timeSemantics;
 
@@ -135,6 +137,9 @@ internal sealed class StubProcessor :
     public string ProductSpec { get; set; } = "S-101";
 
     public string? FeatureType { get; set; }
+
+    /// <summary>The portrayal result's content scope, which keys its tile disk namespace; null for none.</summary>
+    public string? ContentScope { get; set; }
 
     public S98DisplayPlane Plane { get; set; } = S98DisplayPlane.BaseChartUnder;
 
@@ -255,6 +260,7 @@ internal sealed class StubProcessor :
             CellCompilationScale = CellCompilationScale,
             CoverageAreas = CoverageAreas,
             GeographicExtent = GeographicExtent,
+            ContentScope = ContentScope,
         };
     }
 
@@ -277,4 +283,9 @@ internal sealed class StubGeometryProvider : IFeatureGeometryProvider
                 new GeoPosition(0, 0),
             ],
         };
+}
+
+/// <summary>A <see cref="StubProcessor"/> whose portrayal follows <see cref="RenderContext.DepthAdjustment"/>.</summary>
+internal sealed class DepthAdjustableStubProcessor(string datasetId) : StubProcessor(datasetId), IDepthAdjustableProcessor
+{
 }

@@ -2,6 +2,8 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
@@ -139,6 +141,82 @@ public class S101OutOfScaleBandTests
         Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
+    [Fact]
+    public void ResolveMaximum_UsesFinestDenominatorAcrossCoverages()
+    {
+        var features = new[]
+        {
+            Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "12000")),
+            Feature("DataCoverage", 2, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "3500")),
+            Feature("DepthArea", 3, ("maximumDisplayScale", "1000")),
+        };
+
+        Assert.Equal(3500, S101DatasetProcessor.ResolveCellMaximumDisplayScale(features));
+    }
+
+    [Fact]
+    public void ResolveMaximum_InvertedPair_UsesFinerDenominator()
+    {
+        // IC-ENC 101GB0040242C declares minimumDisplayScale 22000 with
+        // maximumDisplayScale 45000.
+        var features = new[]
+        {
+            Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "45000")),
+        };
+
+        Assert.Equal(22000, S101DatasetProcessor.ResolveCellMaximumDisplayScale(features));
+    }
+
+    [Fact]
+    public void ResolveCellRank_BreaksEqualMinimumsByMaximum()
+    {
+        // IC-ENC Cowes: berthing 101GB00602793 over harbour 101GB00502038.
+        var berthing = S101DatasetProcessor.ResolveCellRank(
+            [Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "3500"))]);
+        var harbour = S101DatasetProcessor.ResolveCellRank(
+            [Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "12000"))]);
+
+        Assert.Equal(new CellRank(22000, 3500), berthing);
+        Assert.True(CellScaleRanking.IsFiner(berthing, harbour));
+    }
+
+    private sealed class PointGeometry : IFeatureGeometryProvider
+    {
+        public FeatureGeometry? GetGeometry(string featureReference) => new()
+        {
+            Type = GeometryType.Point,
+            Coordinates = [new GeoPosition(50.72, -1.29)],
+        };
+    }
+
+    /// <summary>
+    /// A tiled layer is drawn and picked from its bound scene, so the cap must
+    /// land on the scene's ops: a missing SCAMIN inherits it, a looser one is
+    /// tightened to it, and a tighter one is kept.
+    /// </summary>
+    [Theory]
+    [InlineData(null, 90000.0)]
+    [InlineData(200000.0, 90000.0)]
+    [InlineData(45000.0, 45000.0)]
+    public void Cap_TiledLayer_LandsOnTheBoundScene(double? scaleMinimum, double expected)
+    {
+        var layer = new MapsuiDisplayListRenderer
+        {
+            Palette = ColorPalette.Default,
+            OutOfBandMinDisplayScale = 90000,
+            Options = new S100MapsuiOptions { SceneMode = VectorSceneMode.Tiled },
+        }.Render(
+            [new PointInstruction { FeatureReference = "f1", SymbolReference = "SYM01", ScaleMinimum = scaleMinimum }],
+            new PointGeometry());
+
+        Assert.Empty(Assert.IsAssignableFrom<MemoryLayer>(layer).Features);
+        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out _, out var overlay));
+        var op = Assert.IsType<PointPaintOp>(Assert.Single(overlay.Ops));
+        Assert.Equal(expected, op.ScaleMinimum);
+    }
+
+    // The single-surface arm still picks through Mapsui features, so the cap
+    // is stamped onto their styles as well (ApplyOutOfScaleBandCap).
     private static IFeature PointWithMaxVisible(double maxVisible)
     {
         var feature = new PointFeature(0, 0);

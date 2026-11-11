@@ -1,6 +1,5 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
-using Avalonia.Threading;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -65,29 +64,29 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     /// <param name="datasets">The datasets view-model to observe.</param>
     /// <param name="appearance">Accent/theme provider for the border colour.</param>
     /// <param name="settings">Settings view-model supplying the on/off toggle.</param>
-    /// <param name="marshal">
-    /// Optional UI-thread marshalling override. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
-    /// implementation.
-    /// </param>
+    /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
+    /// <param name="coalesce">Queues a rebuild for later on the UI thread, even from it (the app passes <see cref="UiThread.Post"/>).</param>
     public DatasetExtentIndicatorController(
         IMapLayerCollection layers,
         DatasetsViewModel datasets,
         IMeasureOverlayAppearanceProvider appearance,
         SettingsViewModel settings,
-        Action<Action>? marshal = null)
+        Action<Action> marshal,
+        Action<Action> coalesce)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(marshal);
+        ArgumentNullException.ThrowIfNull(coalesce);
 
         _layers = layers;
         _datasets = datasets;
         _appearance = appearance;
         _settings = settings;
-        _marshal = marshal ?? DispatcherMarshal;
-        _coalesce = marshal ?? PostLater;
+        _marshal = marshal;
+        _coalesce = coalesce;
 
         _extent = new S100DatasetExtentIndicatorLayer(name: OverlayLayerName);
 
@@ -146,7 +145,8 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
             or nameof(DatasetEntry.ContentMaxVisibleResolution)
             or nameof(DatasetEntry.IsLoaded)
             or nameof(DatasetEntry.IsDeferred)
-            or nameof(DatasetEntry.IsVisible))
+            or nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsHiddenByDisplay))
         {
             ScheduleRebuild();
         }
@@ -186,7 +186,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 // outline, consistent with a hidden loaded dataset.
                 if (entry.IsDeferred)
                 {
-                    if (entry.IsVisible && entry.GeographicBounds is { } bounds)
+                    if (entry.IsVisible && !entry.IsHiddenByDisplay && entry.GeographicBounds is { } bounds)
                     {
                         foreach (var deferredExtent in ToMercatorExtents(bounds))
                             indicators.Add(new S100DatasetExtentIndicator(deferredExtent, 0.0));
@@ -194,7 +194,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                     continue;
                 }
 
-                if (!entry.IsLoaded || !entry.IsVisible)
+                if (!entry.IsLoaded || !entry.IsVisible || entry.IsHiddenByDisplay)
                     continue;
                 if (entry.MercatorExtent is not { } extent)
                     continue;
@@ -261,14 +261,6 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
 
         return new Mapsui.MRect(minX, minY, maxX, maxY);
     }
-
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
-    }
-
-    private static void PostLater(Action action) => Dispatcher.UIThread.Post(action);
 
     /// <summary>Detaches the overlay layer and unsubscribes. Idempotent.</summary>
     public void Dispose()

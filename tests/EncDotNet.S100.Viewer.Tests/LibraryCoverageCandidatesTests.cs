@@ -25,7 +25,7 @@ public sealed class LibraryCoverageCandidatesTests
             MaximumDisplayScale = finest,
             Bounds = new GeoBounds(50.5, -1.5, 50.9, -1.0),
             Location = new LocalItemLocation("/charts", name + ".000", []),
-        }, Source, _ => LibraryLoadState.None, null, null);
+        }, Source, _ => LibraryLoadState.None, null, null, null, TimeProvider.System, null);
 
     private static string[] Outlined(IEnumerable<LibraryItemViewModel> rows, double scale) =>
         LibraryCoverageOverlayController.Candidates(rows, scale).Select(r => r.Name).ToArray();
@@ -59,7 +59,7 @@ public sealed class LibraryCoverageCandidatesTests
             Name = name,
             Bounds = bounds,
             Location = new LocalItemLocation("/warnings/" + name, name + ".gml", []),
-        }, Source, _ => LibraryLoadState.None, null, null);
+        }, Source, _ => LibraryLoadState.None, null, null, null, TimeProvider.System, null);
 
     [Fact]
     public void Point_sized_coverage_is_drawn_and_hit_as_a_marker()

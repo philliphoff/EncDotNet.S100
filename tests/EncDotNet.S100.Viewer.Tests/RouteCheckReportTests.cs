@@ -149,7 +149,7 @@ public sealed class RouteCheckReportTests : IDisposable
         RouteFindingLocation.Point(new GeoPosition(0, distance / 111_320.0), distance));
 
     private static RouteFindingsService Findings(PassageCheckFixture f) =>
-        new(f.Check, f.Routes, f.Catalog, timeFormat: new Utc());
+        new(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), viewport: null, mariner: null, warnings: null);
 
     private PassageCheckFixture WithDraft(params IRouteCheck[] checks) => new(post: _ui.Post, checks: checks);
 
@@ -197,7 +197,7 @@ public sealed class RouteCheckReportTests : IDisposable
         var report = Assert.IsType<RouteCheckReport>(f.Check.Report);
         Assert.Same(report, findings.Report);
         Assert.Equal(
-            [ChartCheck.CheckName, AreaCheck.CheckName, WarningCheck.CheckName, ClearanceCheck.CheckName],
+            [ChartCheck.CheckName, AreaCheck.CheckName, WarningCheck.CheckName, ClearanceCheck.CheckName, WeatherCheck.CheckName],
             report.Checks.Select(c => c.Name));
         // No mariner settings: the chart check runs without its depth checks.
         Assert.Equal((RouteCheckState.Partial, RouteCheckReasons.SafetySettingsMissing),
@@ -224,8 +224,8 @@ public sealed class RouteCheckReportTests : IDisposable
             Finding("route_check.warning.0", RouteFindingGroup.Check, 1500));
         var f = NoDraft(stub);
         using var findings = Findings(f);
-        var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
-        var clearance = new ClearanceViewModel(f.Check);
+        var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+        var clearance = new ClearanceViewModel(f.Check, mariner: null, timeFormat: null, theme: null);
 
         Assert.False(panel.HasDraft);
         Assert.True(panel.CanCheckPassage);
@@ -480,7 +480,7 @@ public sealed class RouteCheckReportTests : IDisposable
         using var findings = Findings(f);
         var ct = TestContext.Current.CancellationToken;
         var invoker = new UiInvoker(_ui);
-        var state = Value(await new SetCheckModeTool(f.Routes, invoker, f.Check).InvokeAsync(new SetCheckModeRequest(true), ct));
+        var state = Value(await new SetCheckModeTool(f.Routes, invoker, f.Check, findings: null).InvokeAsync(new SetCheckModeRequest(true), ct));
         Assert.True(state.On);
         Assert.False(state.HasDraft);
 
@@ -510,7 +510,7 @@ public sealed class RouteCheckReportTests : IDisposable
             void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
             var f = NoDraft(Post, new StubCheck("stub", Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000)));
             using var findings = Findings(f);
-            var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
+            var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
             var toggle = host.Find<Avalonia.Controls.Primitives.ToggleButton>("Routes.CheckRouteToggle");

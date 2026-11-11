@@ -14,7 +14,7 @@ public class ViewerDataPathsTests
         var paths = new ViewerDataPaths();
 
         Assert.Null(paths.BaseDirectory);
-        Assert.Null(paths.TileDiskCacheDirectory);
+        Assert.EndsWith(Path.Combine("EncDotNet.S100", "tiles"), paths.TileDiskCacheDirectory);
         Assert.EndsWith(Path.Combine("EncDotNet.S100.Viewer", "settings.json"), paths.SettingsFilePath);
         Assert.EndsWith(Path.Combine("EncDotNet.S100.Viewer", "crash-markers"), paths.CrashMarkersDirectory);
         Assert.EndsWith(Path.Combine("EncDotNet.S100", "PatternClipCache"), paths.PatternClipCacheDirectory);
@@ -51,11 +51,11 @@ public class ViewerDataPathsTests
     }
 
     [Fact]
-    public void CacheDirectories_IncludeTileCacheOnlyWhenBaseDirectoryInUse()
+    public void CacheDirectories_IncludeTheTileCache()
     {
         var withoutBase = new ViewerDataPaths();
-        Assert.Equal(6, withoutBase.CacheDirectories.Count);
-        Assert.DoesNotContain(withoutBase.CacheDirectories, d => d.Contains("tiles"));
+        Assert.Equal(7, withoutBase.CacheDirectories.Count);
+        Assert.Contains(withoutBase.CacheDirectories, d => d.EndsWith("tiles"));
 
         var withBase = new ViewerDataPaths(Path.Combine(Path.GetTempPath(), "encdotnet-" + Guid.NewGuid().ToString("N")));
         Assert.Equal(7, withBase.CacheDirectories.Count);

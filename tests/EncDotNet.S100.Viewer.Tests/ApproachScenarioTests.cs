@@ -181,7 +181,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
         var definition = fixture.Scenario.Definition;
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = RouteS421Mapping.FromS421(fixture.S421Route());
         route.SetPassageValue(RoutePassageField.Squat, fixture.RouteSpec.Passage.SquatMeters);
         route.SetDeparture(departure);
@@ -189,7 +189,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         routes.Routes.SetActiveRoute(route);
 
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, checks: () => [new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost);
+        var check = new PassageCheckService(routes, catalog, checks: () => [new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), warnings: null, mariner: null, options: null);
 
         var time = new GlobalTimeService();
         var samples = CoverageWriters.Times(definition.WaterLevelStart, definition.WaterLevelEnd, TimeSpan.FromMinutes(10)).ToArray();
@@ -206,7 +206,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
             ],
         });
         var follow = new FollowPassageService(check, time);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc());
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), mariner: null, warnings: null);
 
         routes.IsCheckModeActive = true;
         await check.WhenIdle();

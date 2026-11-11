@@ -4,8 +4,8 @@ using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -111,7 +111,7 @@ public sealed class S401PortrayalPatchTests
         var fc = ReadFeatureCatalogue();
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-401");
         var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
-        var lua = new MoonSharpLuaEngine();
+        var lua = TestLuaEngine.Create();
         var catalogue = new S101PortrayalCatalogue(provider, lua);
         var executor = new S101LuaRuleExecutor(lua, S101Dataset.FromDocument(BuildDocument()), catalogue, fc);
         return await executor.ExecuteRawAsync(MarinerSettings.Default, TestContext.Current.CancellationToken);

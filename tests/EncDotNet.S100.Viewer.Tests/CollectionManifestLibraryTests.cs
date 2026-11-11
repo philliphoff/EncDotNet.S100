@@ -56,7 +56,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
 
     private async Task<AddToLibraryDialogViewModel> OpenDialogAsync(string path)
     {
-        var vm = new AddToLibraryDialogViewModel(_library, null);
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         vm.Initialize(LibrarySourceKind.LocalManifest, path, targetCollectionId: null);
         await vm.LoadCatalogAsync();
         return vm;
@@ -160,7 +160,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var source = new LocalManifestSource(Guid.NewGuid(), "Test — Belgium", path, new LocalManifestFilter { Groups = ["BE"] });
         var collection = _library.AddCollection("Test — Belgium", [source]);
 
-        var vm = new AddToLibraryDialogViewModel(_library, null);
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         vm.InitializeEdit(collection.Id, source);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
@@ -189,7 +189,12 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         _library.AddCollection("Test", [new LocalManifestSource(Guid.NewGuid(), "Test", path, LocalManifestFilter.All)]);
         await _library.WhenIdle();
         using var panel = new LibraryPanelViewModel(
-            _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action());
+            _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
+            feedHealth: null,
+            notifications: null,
+            viewTime: null,
+            timeFormat: null,
+            sync: null);
 
         var source = Assert.Single(Assert.Single(panel.Nodes).Children);
         Assert.Equal("JSON", source.KindTag);
@@ -228,7 +233,12 @@ public sealed class CollectionManifestLibraryTests : IDisposable
             Guid.NewGuid(), null, path, new LocalManifestFilter { Groups = ["AU"] })]);
         await _library.WhenIdle();
         using var panel = new LibraryPanelViewModel(
-            _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action());
+            _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
+            feedHealth: null,
+            notifications: null,
+            viewTime: null,
+            timeFormat: null,
+            sync: null);
 
         var source = Assert.Single(Assert.Single(panel.Nodes).Children);
         Assert.Empty(source.Children);

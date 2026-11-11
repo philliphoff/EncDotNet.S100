@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.Iso8211;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
@@ -801,6 +802,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         ArgumentException.ThrowIfNullOrEmpty(baseRelativePath);
         ArgumentNullException.ThrowIfNull(updateRelativePaths);
 
+        // An exchange set lists AML cells as S-57 cells; they're never translated.
+        if (IsAmlCell(source, baseRelativePath))
+            return new AmlDatasetProcessor(source, baseRelativePath, updateRelativePaths, S100Products.AmlPortrayal);
+
         return new S57DatasetProcessor(
             source,
             baseRelativePath,
@@ -809,6 +814,19 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.LuaEngine,
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache);
+    }
+
+    private static bool IsAmlCell(IAssetSource source, string relativePath)
+    {
+        try
+        {
+            using var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
+            return S57DatasetHeader.Read(stream, AssetSourceHelpers.GetFileName(relativePath))?.Aml is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -839,6 +857,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             case "S-401":
                 return CreateS101ProcessorWithUpdates(baseFilePath, updates, spec);
             case "S-57":
+            case SpecName.Aml:
                 var directory = Path.GetDirectoryName(Path.GetFullPath(baseFilePath))
                     ?? throw new ArgumentException(
                         "Base cell path must include a directory.", nameof(baseFilePath));

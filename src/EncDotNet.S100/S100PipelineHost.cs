@@ -3,7 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Specifications;
 
 namespace EncDotNet.S100;
@@ -31,13 +31,14 @@ internal sealed class S100PipelineHost : IDisposable
 
     private S100PipelineHost(
         PortrayalCatalogueManager portrayalManager,
-        FeatureCatalogueManager featureManager)
+        FeatureCatalogueManager featureManager,
+        LuaEngineKind luaEngine)
     {
         _portrayalManager = portrayalManager;
         _featureManager = featureManager;
         _factory = new DatasetPipelineFactory(
             portrayalManager,
-            new MoonSharpLuaEngine(),
+            LuaEngineFactory.Create(luaEngine),
             new ProjNetCrsTransformFactory(),
             featureManager,
             new DisplayPlaneAuthorityProvider());
@@ -60,10 +61,12 @@ internal sealed class S100PipelineHost : IDisposable
     /// A caller-supplied portrayal catalogue for <paramref name="overrideSpec"/>,
     /// or <c>null</c> to use the bundled one.
     /// </param>
+    /// <param name="luaEngine">The Lua engine that runs the portrayal rules.</param>
     public static S100PipelineHost Create(
         string? overrideSpec = null,
         S100FeatureCatalogue? featureOverride = null,
-        S100PortrayalCatalogue? portrayalOverride = null)
+        S100PortrayalCatalogue? portrayalOverride = null,
+        LuaEngineKind luaEngine = LuaEngineKinds.Default)
     {
         var portrayalManager = new PortrayalCatalogueManager();
         foreach (var spec in Specification.AvailableSpecs)
@@ -88,7 +91,7 @@ internal sealed class S100PipelineHost : IDisposable
             return Specification.TryOpenFeatureCatalogue(spec);
         });
 
-        return new S100PipelineHost(portrayalManager, featureManager);
+        return new S100PipelineHost(portrayalManager, featureManager, luaEngine);
     }
 
     /// <summary>Creates the dataset processor for the file at <paramref name="path"/>.</summary>

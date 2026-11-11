@@ -4,10 +4,10 @@ namespace EncDotNet.S100.Portrayals.Application;
 
 /// <summary>
 /// Builds the S-100 Part 9 drawing instructions of a portrayal defined in
-/// code: point symbols, text, lines and areas. The builder carries what a
-/// catalogue rule would set before its drawing commands (viewing group,
-/// drawing priority, display plane and scale limits) and stamps them on every
-/// instruction it builds.
+/// code: point symbols, text, simple and complex lines, and areas. The
+/// builder carries what a catalogue rule would set before its drawing commands
+/// (viewing group, drawing priority, display plane and scale limits) and
+/// stamps them on every instruction it builds.
 /// </summary>
 /// <remarks>
 /// The builder is immutable. Derive a variant with a <c>with</c> expression,
@@ -55,14 +55,20 @@ public sealed record InstructionBuilder
     /// <param name="symbolReference">The symbol name, resolved by the sub-layer's symbol provider (see <see cref="SymbolSet"/>).</param>
     /// <param name="rotation">Clockwise rotation in degrees, or <see langword="null"/> for upright.</param>
     /// <param name="rotationCrs">The frame <paramref name="rotation"/> is measured in.</param>
+    /// <param name="symbolScale">
+    /// The symbol's size as a multiple of its own: 1 draws it as defined, 1.7
+    /// draws one symbol set larger for emphasis.
+    /// </param>
     public PointInstruction Point(
         string featureReference,
         string symbolReference,
         double? rotation = null,
-        SymbolRotationCrs rotationCrs = SymbolRotationCrs.Portrayal)
+        SymbolRotationCrs rotationCrs = SymbolRotationCrs.Portrayal,
+        double symbolScale = 1.0)
     {
         ArgumentException.ThrowIfNullOrEmpty(featureReference);
         ArgumentException.ThrowIfNullOrEmpty(symbolReference);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(symbolScale);
 
         return new PointInstruction
         {
@@ -70,6 +76,7 @@ public sealed record InstructionBuilder
             SymbolReference = symbolReference,
             Rotation = rotation,
             RotationCrs = rotationCrs,
+            SymbolScale = symbolScale,
             Plane = Plane,
             ViewingGroup = ViewingGroup,
             DrawingPriority = DrawingPriority,
@@ -96,6 +103,7 @@ public sealed record InstructionBuilder
             FontColor = style.FontColor,
             FontWeight = style.FontWeight,
             FontProportion = style.FontProportion,
+            FontSlant = style.FontSlant,
             HaloColor = style.HaloColor,
             HaloWidth = style.HaloWidth,
             HorizontalAlignment = style.HorizontalAlignment,
@@ -144,6 +152,36 @@ public sealed record InstructionBuilder
             // Lua portrayal emits them (Dash:0,dash;LineStyle:_simple_,interval).
             Dashes = dashed ? [(0.0, dashLength)] : null,
             DashIntervalLength = dashed ? dashLength + gapLength : 0,
+            Plane = Plane,
+            ViewingGroup = ViewingGroup,
+            DrawingPriority = DrawingPriority,
+            ScaleMinimum = ScaleMinimum,
+            ScaleMaximum = ScaleMaximum,
+        };
+    }
+
+    /// <summary>
+    /// Builds a complex-line instruction: the curve drawn with a named line
+    /// style, such as a <see cref="ComplexLineStyle"/> in the portrayal's
+    /// <see cref="LineStyleSet"/>, whose pen, dashes and symbols repeated
+    /// along the line come from the style.
+    /// </summary>
+    /// <param name="featureReference">The feature whose curve is drawn.</param>
+    /// <param name="lineStyleReference">
+    /// The line style's name, resolved by the sub-layer's line style provider
+    /// (see <see cref="LineStyleSet.Provider"/>).
+    /// </param>
+    public LineInstruction ComplexLine(string featureReference, string lineStyleReference)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(featureReference);
+        ArgumentException.ThrowIfNullOrEmpty(lineStyleReference);
+        if (string.Equals(lineStyleReference, LineInstruction.SimpleLineStyleReference, StringComparison.Ordinal))
+            throw new ArgumentException("Use Line for a simple line style.", nameof(lineStyleReference));
+
+        return new LineInstruction
+        {
+            FeatureReference = featureReference,
+            LineStyleReference = lineStyleReference,
             Plane = Plane,
             ViewingGroup = ViewingGroup,
             DrawingPriority = DrawingPriority,
@@ -223,6 +261,9 @@ public sealed record TextInstructionStyle
 
     /// <summary>The font proportion.</summary>
     public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>The font slant; <see cref="TextFontSlant.Upright"/> by default.</summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
 
     /// <summary>The halo's colour token, or <see langword="null"/> (the default) for no halo.</summary>
     public string? HaloColor { get; init; }

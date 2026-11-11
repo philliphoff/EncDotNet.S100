@@ -65,14 +65,16 @@ internal sealed partial class FeedCache
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, FeedHealth> _health = new(StringComparer.Ordinal);
 
-    public FeedCache(HttpClient httpClient, string directory, FeedCacheOptions? options, TimeProvider? timeProvider)
+    public FeedCache(HttpClient httpClient, string directory, FeedCacheOptions options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentException.ThrowIfNullOrEmpty(directory);
         _httpClient = httpClient;
         _directory = directory;
-        _options = options ?? FeedCacheOptions.Default;
-        _time = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _options = options;
+        _time = timeProvider;
     }
 
     /// <summary>

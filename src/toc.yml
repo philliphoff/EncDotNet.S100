@@ -54,6 +54,8 @@
       href: EncDotNet.S100.Datasets.S201/README.md
     - name: EncDotNet.S100.Datasets.S411
       href: EncDotNet.S100.Datasets.S411/README.md
+    - name: EncDotNet.S100.Datasets.S412
+      href: EncDotNet.S100.Datasets.S412/README.md
     - name: EncDotNet.S100.Datasets.S421
       href: EncDotNet.S100.Datasets.S421/README.md
     - name: EncDotNet.S100.Datasets.S57
@@ -64,6 +66,10 @@
       href: EncDotNet.S100.Datasets.Weather/README.md
     - name: EncDotNet.S100.Datasets.Cap
       href: EncDotNet.S100.Datasets.Cap/README.md
+    - name: EncDotNet.S100.Datasets.TropicalCyclones
+      href: EncDotNet.S100.Datasets.TropicalCyclones/README.md
+    - name: EncDotNet.S100.Datasets.Aml
+      href: EncDotNet.S100.Datasets.Aml/README.md
     - name: EncDotNet.S100.Datasets.Pipelines
       href: EncDotNet.S100.Datasets.Pipelines/README.md
     - name: EncDotNet.S100.Datasets.NetCdf
@@ -80,6 +86,8 @@
       href: EncDotNet.S100.Rendering.Scene/README.md
     - name: EncDotNet.S100.Renderers.Skia
       href: EncDotNet.S100.Renderers.Skia/README.md
+    - name: EncDotNet.S100.Rendering.Engine
+      href: EncDotNet.S100.Rendering.Engine/README.md
     - name: EncDotNet.S100.Renderers.Mapsui
       href: EncDotNet.S100.Renderers.Mapsui/README.md
     - name: EncDotNet.S100.Renderers.Mapsui.Avalonia

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -36,7 +35,6 @@ internal static class S164TestData
 
     private static readonly Lazy<S164Manifest> LazyManifest = new(LoadManifest);
     private static readonly ConcurrentDictionary<string, Lazy<Task<string?>>> Fetches = new(StringComparer.Ordinal);
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
 
     /// <summary>The pinned release.</summary>
     public static S164Manifest Manifest => LazyManifest.Value;
@@ -61,9 +59,6 @@ internal static class S164TestData
             return Path.Combine(cacheHome, "EncDotNet.S100", "s164", Manifest.Release);
         }
     }
-
-    private static bool DownloadEnabled =>
-        Environment.GetEnvironmentVariable(DownloadVariable) is "1" or "true" or "TRUE" or "True";
 
     /// <summary>The names of every exchange set in the release, for theories.</summary>
     public static TheoryData<string> ExchangeSetNames()
@@ -98,70 +93,13 @@ internal static class S164TestData
         return path!;
     }
 
-    private static async Task<string?> FetchAsync(S164ExchangeSetEntry entry)
-    {
-        var path = Path.Combine(CacheDirectory, entry.File);
-        if (File.Exists(path))
-        {
-            if (await HashMatchesAsync(path, entry.Sha256))
-            {
-                return path;
-            }
-
-            if (!DownloadEnabled)
-            {
-                throw new InvalidOperationException(
-                    $"Cached S-164 file '{path}' doesn't match the SHA-256 in {ManifestFileName}. Delete it, or set {DownloadVariable}=1 to download it again.");
-            }
-        }
-        else if (!DownloadEnabled)
-        {
-            return null;
-        }
-
-        Directory.CreateDirectory(CacheDirectory);
-        var url = new Uri(new Uri(Manifest.DownloadBase), entry.File);
-        var partial = path + ".partial";
-        Exception? last = null;
-
-        // GitHub release downloads occasionally fail mid-transfer; a few
-        // attempts keep CI from failing on one dropped connection.
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            try
-            {
-                using (var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-                {
-                    response.EnsureSuccessStatusCode();
-                    await using var file = File.Create(partial);
-                    await response.Content.CopyToAsync(file);
-                }
-
-                if (!await HashMatchesAsync(partial, entry.Sha256))
-                {
-                    throw new InvalidDataException(
-                        $"Downloaded '{url}' doesn't match the SHA-256 in {ManifestFileName}. The release may have been replaced.");
-                }
-
-                File.Move(partial, path, overwrite: true);
-                return path;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
-            {
-                last = ex;
-                await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
-            }
-        }
-
-        throw new InvalidOperationException($"Couldn't download '{url}' after 3 attempts.", last);
-    }
-
-    private static async Task<bool> HashMatchesAsync(string path, string expectedSha256)
-    {
-        await using var stream = File.OpenRead(path);
-        var hash = await SHA256.HashDataAsync(stream);
-        return string.Equals(Convert.ToHexStringLower(hash), expectedSha256, StringComparison.OrdinalIgnoreCase);
-    }
+    private static Task<string?> FetchAsync(S164ExchangeSetEntry entry) =>
+        PinnedDownload.FetchAsync(
+            Path.Combine(CacheDirectory, entry.File),
+            new Uri(new Uri(Manifest.DownloadBase), entry.File),
+            entry.Sha256,
+            ManifestFileName,
+            DownloadVariable);
 
     private static S164Manifest LoadManifest()
     {

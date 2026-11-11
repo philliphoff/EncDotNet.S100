@@ -120,10 +120,350 @@ public class WeatherCoverageStyleTests
         Assert.Equal(scale.Value, band.ScaleFor(metres), 3);
     }
 
+    [Theory]
+    // S-111 Ed 2.0.0 select_arrow.xsl: three bands at 0.4, five at 0.2 per
+    // knot, the fastest at 2.6.
+    [InlineData(0.2, 1, 0.4)]
+    [InlineData(0.5, 2, 0.4)]
+    [InlineData(1.5, 3, 0.4)]
+    [InlineData(2.0, 4, 0.4)]
+    [InlineData(4.0, 5, 0.8)]
+    [InlineData(6.0, 6, 1.2)]
+    [InlineData(9.0, 7, 1.8)]
+    [InlineData(12.0, 8, 2.4)]
+    [InlineData(13.0, 9, 2.6)]
+    [InlineData(20.0, 9, 2.6)]
+    public void Current_arrows_follow_the_S111_speed_bands(double knots, int band, double scale)
+    {
+        float metresPerSecond = (float)Speed.FromKnots(knots).TotalMetresPerSecond;
+
+        var resolved = new CurrentArrowStyle().ResolveSymbolScheme(MarinerSettings.Default).Resolve(metresPerSecond, 0);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(CurrentArrowStyle.SymbolName(band), resolved.SymbolRef);
+        Assert.Equal(scale, resolved.ScaleFor(metresPerSecond), 3);
+    }
+
+    [Fact]
+    public void Current_arrows_point_the_way_the_water_flows_and_are_on_by_default()
+    {
+        var style = new CurrentArrowStyle();
+        var scheme = style.ResolveSymbolScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.CurrentSpeed, scheme.ValueFieldName);
+        Assert.Equal(WeatherParameters.CurrentToDirection, scheme.RotationFieldName);
+        Assert.Equal(0, scheme.RotationOffsetDegrees);
+        Assert.True(style.IsVisibleByDefault);
+        Assert.False(style.ClipToWater);
+        Assert.Equal(["Under 0.5 kn", "0.5–1 kn", "1–2 kn", "2–3 kn", "3–5 kn", "5–7 kn", "7–10 kn", "10–13 kn", "13 kn and faster"],
+            CurrentArrowStyle.Bands.Select(b => b.Label));
+    }
+
+    [Fact]
+    public void Current_band_colours_are_the_S111_colour_profile_s()
+    {
+        // SCBN1 and SCBN9 of the S-111 Ed 2.0.0 colour profile, by day.
+        Assert.Equal("#7652E2", WeatherPalette.Palette.Tokens[WeatherPalette.CurrentToken(1)].Day.ToHex());
+        Assert.Equal("#FF1E1E", WeatherPalette.Palette.Tokens[WeatherPalette.CurrentToken(9)].Day.ToHex());
+        Assert.Contains("fWXCUR5", WeatherCoverageStyle.Symbols.Provider(CurrentArrowStyle.SymbolName(5)));
+    }
+
+    [Theory]
+    [InlineData(-1.9, 1)]
+    [InlineData(-0.01, 1)]
+    [InlineData(0.0, 2)]
+    [InlineData(15.5, 17)]
+    [InlineData(26.4, 28)]
+    [InlineData(29.99, 31)]
+    [InlineData(30.0, 32)]
+    [InlineData(34.0, 32)]
+    public void Sea_temperature_resolves_to_its_1_degree_band(double celsius, int band)
+    {
+        var style = new SeaTemperatureStyle();
+        var scheme = style.ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, scheme.FieldName);
+        Assert.Equal(32, scheme.Bands.Count);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.SeaTemperatureToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve((float)(celsius + SeaTemperatureStyle.CelsiusZero)));
+    }
+
+    [Theory]
+    // Marine forecast terms: very poor under 1000 m, poor to 2 nm, moderate to 5 nm.
+    [InlineData(0, 1)]
+    [InlineData(999, 1)]
+    [InlineData(1000, 2)]
+    [InlineData(3703, 2)]
+    [InlineData(3704, 3)]
+    [InlineData(9259, 3)]
+    public void Restricted_visibility_resolves_to_its_forecast_band(double metres, int band)
+    {
+        var scheme = new VisibilityStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.Visibility, scheme.FieldName);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.VisibilityToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve((float)metres));
+    }
+
+    [Theory]
+    [InlineData(9260)] // 5 nm: good.
+    [InlineData(24100)] // GFS's ceiling.
+    [InlineData(float.NaN)]
+    public void Good_visibility_is_not_drawn(float metres)
+    {
+        Assert.Null(new VisibilityStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(metres));
+    }
+
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(-5, null)]
+    [InlineData(0.01, 1)]
+    [InlineData(22.39, 1)]
+    [InlineData(22.4, 2)]
+    [InlineData(53.3, 3)]
+    [InlineData(83.0, 4)]
+    [InlineData(200, 4)]
+    public void Freezing_spray_resolves_the_predictor_to_its_icing_class(double predictor, int? band)
+    {
+        var scheme = new FreezingSprayStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.FreezingSprayPredictor, scheme.FieldName);
+        Assert.Equal(
+            band is { } b ? WeatherPalette.Palette.Resolve(WeatherPalette.FreezingSprayToken(b), PaletteType.Day).ToHex() : null,
+            scheme.Resolve((float)predictor));
+    }
+
+    [Fact]
+    public void Freezing_spray_is_on_by_default_and_air_isotherms_off_dashed_every_5_degrees()
+    {
+        Assert.Equal(["Light", "Moderate", "Heavy", "Extreme"], FreezingSprayStyle.Bands.Select(b => b.Label));
+        Assert.True(new FreezingSprayStyle().IsVisibleByDefault);
+
+        var air = new AirTemperatureIsothermStyle();
+        Assert.False(air.IsVisibleByDefault);
+        Assert.Equal(WeatherLayerKind.Isolines, air.Kind);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, air.Plane);
+        Assert.Contains(air.Contours, c => Math.Abs(c.Value - SeaTemperatureStyle.CelsiusZero) < 1e-9);
+        Assert.All(air.Contours, c => Assert.Equal([6f, 3f], c.DashPattern!));
+        Assert.Equal(5, air.Contours[1].Value - air.Contours[0].Value, 9);
+        Assert.Equal("-5°", air.FormatContourLabel(air.Contours.Single(c => Math.Abs(c.Value - 268.15) < 1e-9)));
+    }
+
+    [Fact]
+    public void Visibility_bands_are_labelled_with_the_forecast_terms_and_drawn_by_default()
+    {
+        var style = new VisibilityStyle();
+
+        Assert.Equal(["Very poor (fog), under 1000 m", "Poor, 1000 m to 2 nm", "Moderate, 2 to 5 nm"], VisibilityStyle.Bands.Select(b => b.Label));
+        Assert.True(style.IsVisibleByDefault);
+        Assert.Equal(VisibilityStyle.Key, style.LayerKey);
+        Assert.Contains(WeatherCoverageStyle.CreateAll(), s => s is VisibilityStyle);
+    }
+
+    [Fact]
+    public void Visibility_greys_darken_by_day_and_lighten_at_dusk_and_night_as_it_worsens()
+    {
+        double Luminance(int band, Func<PaletteColors, RgbaColor> pick) =>
+            RelativeLuminance(pick(WeatherPalette.Palette.Tokens[WeatherPalette.VisibilityToken(band)]));
+
+        Assert.True(Luminance(1, c => c.Day) < Luminance(2, c => c.Day));
+        Assert.True(Luminance(2, c => c.Day) < Luminance(3, c => c.Day));
+        Assert.True(Luminance(1, c => c.Dusk) > Luminance(2, c => c.Dusk));
+        Assert.True(Luminance(2, c => c.Night) > Luminance(3, c => c.Night));
+    }
+
+    [Theory]
+    // Rain radar bands in mm/h: light from 0.1, moderate from 2.5, heavy from 7.5, very heavy from 15, violent from 50.
+    [InlineData(0.1, 1)]
+    [InlineData(0.49, 1)]
+    [InlineData(0.5, 2)]
+    [InlineData(2.4, 2)]
+    [InlineData(2.5, 3)]
+    [InlineData(7.5, 4)]
+    [InlineData(15, 5)]
+    [InlineData(49, 5)]
+    [InlineData(50, 6)]
+    [InlineData(200, 6)]
+    public void Precipitation_resolves_to_its_rain_radar_band(double millimetresPerHour, int band)
+    {
+        var scheme = new PrecipitationStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.PrecipitationRate, scheme.FieldName);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.PrecipitationToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve((float)(millimetresPerHour / 3600)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(0.09)]
+    [InlineData(float.NaN)]
+    public void Drier_than_0_1_mm_an_hour_is_not_drawn(float millimetresPerHour)
+    {
+        Assert.Null(new PrecipitationStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(millimetresPerHour / 3600));
+    }
+
+    [Theory]
+    [InlineData(1000, 1)]
+    [InlineData(2499, 1)]
+    [InlineData(2500, 2)]
+    [InlineData(3999, 2)]
+    [InlineData(4000, 3)]
+    [InlineData(7000, 3)]
+    public void CAPE_from_1000_J_kg_resolves_to_its_risk_class(float joulesPerKilogram, int band)
+    {
+        var scheme = new ThunderstormRiskStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.Cape, scheme.FieldName);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.CapeToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve(joulesPerKilogram));
+        Assert.Equal(new[] { "moderate", "high", "extreme" }[band - 1], ThunderstormRiskStyle.Classify(joulesPerKilogram));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(999)]
+    [InlineData(float.NaN)]
+    public void A_stable_atmosphere_under_1000_J_kg_is_not_drawn(float joulesPerKilogram)
+    {
+        Assert.Null(new ThunderstormRiskStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(joulesPerKilogram));
+        Assert.Null(ThunderstormRiskStyle.Classify(joulesPerKilogram));
+    }
+
+    [Theory]
+    [InlineData(25, 1)]
+    [InlineData(49.9, 1)]
+    [InlineData(50, 2)]
+    [InlineData(75, 3)]
+    [InlineData(100, 3)]
+    public void Cloud_cover_from_25_percent_resolves_to_its_band(float percent, int band)
+    {
+        var scheme = new CloudCoverStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.CloudCover, scheme.FieldName);
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.CloudToken(band), PaletteType.Day).ToHex(), scheme.Resolve(percent));
+        Assert.Null(scheme.Resolve(24.9f));
+    }
+
+    [Fact]
+    public void Precipitation_thunderstorm_risk_and_cloud_are_off_by_default_and_labelled()
+    {
+        WeatherCoverageStyle[] styles = [new PrecipitationStyle(), new ThunderstormRiskStyle(), new CloudCoverStyle()];
+
+        Assert.All(styles, style => Assert.False(style.IsVisibleByDefault, style.LayerKey));
+        Assert.All(styles, style => Assert.False(style.IsDrawnWith(null), style.LayerKey));
+        Assert.Equal(["weather.precipitation", "weather.cape", "weather.cloud"], styles.Select(s => s.LayerKey));
+        Assert.Equal(["Precipitation", "Thunderstorm risk", "Cloud cover"], styles.Select(s => s.Name));
+        Assert.All(styles, style => Assert.Contains(WeatherCoverageStyle.CreateAll(), s => s.LayerKey == style.LayerKey));
+        Assert.Equal("Light, 0.1 to 0.5 mm/h", PrecipitationStyle.Bands[0].Label);
+        Assert.Equal("Violent, 50 mm/h and more", PrecipitationStyle.Bands[^1].Label);
+        Assert.Equal(["Moderate, 1000 to 2500 J/kg", "High, 2500 to 4000 J/kg", "Extreme, 4000 J/kg and more"], ThunderstormRiskStyle.Bands.Select(b => b.Label));
+        Assert.Equal(["Partly cloudy, 25 to 50 %", "Mostly cloudy, 50 to 75 %", "Cloudy, 75 % and more"], CloudCoverStyle.Bands.Select(b => b.Label));
+    }
+
+    [Fact]
+    public void Cloud_cover_is_a_lighter_veil_under_the_other_fills()
+    {
+        var cloud = new CloudCoverStyle();
+        var all = WeatherCoverageStyle.CreateAll().Select(s => s.LayerKey).ToList();
+
+        Assert.Equal(WeatherLayerKind.Fill, cloud.Kind);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, cloud.Plane);
+        Assert.Equal(WeatherCoverageStyle.VeilOpacity, cloud.Opacity);
+        Assert.True(cloud.Opacity < WeatherCoverageStyle.FillOpacity);
+        // The veil is drawn before the visibility, thunderstorm and precipitation fills, so they sit on it.
+        Assert.True(all.IndexOf(CloudCoverStyle.Key) < all.IndexOf(VisibilityStyle.Key));
+        Assert.True(all.IndexOf(ThunderstormRiskStyle.Key) < all.IndexOf(PrecipitationStyle.Key));
+    }
+
+    [Fact]
+    public void Thunderstorm_risk_and_cloud_darken_by_day_and_lighten_at_dusk_and_night_as_they_grow()
+    {
+        foreach (Func<int, string> token in new Func<int, string>[] { WeatherPalette.CapeToken, WeatherPalette.CloudToken })
+        {
+            double Luminance(int band, Func<PaletteColors, RgbaColor> pick) => RelativeLuminance(pick(WeatherPalette.Palette.Tokens[token(band)]));
+            for (int band = 1; band < 3; band++)
+            {
+                Assert.True(Luminance(band, c => c.Day) > Luminance(band + 1, c => c.Day), token(band));
+                Assert.True(Luminance(band, c => c.Dusk) < Luminance(band + 1, c => c.Dusk), token(band));
+                Assert.True(Luminance(band, c => c.Night) < Luminance(band + 1, c => c.Night), token(band));
+            }
+        }
+    }
+
+    [Fact]
+    public void Sea_temperature_bands_are_labelled_in_celsius()
+    {
+        Assert.Equal("below 0 °C", SeaTemperatureStyle.Bands[0].Label);
+        Assert.Equal("15–16 °C", SeaTemperatureStyle.Bands[16].Label);
+        Assert.Equal("30 °C and higher", SeaTemperatureStyle.Bands[^1].Label);
+        Assert.Null(new SeaTemperatureStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(float.NaN));
+    }
+
+    [Fact]
+    public void Sea_temperature_ramp_is_lightest_in_the_middle_by_day_and_darkest_at_night()
+    {
+        var tokens = Enumerable.Range(1, WeatherPalette.SeaTemperatureBandCount).Select(WeatherPalette.SeaTemperatureToken).ToArray();
+        double Luminance(string token, Func<PaletteColors, RgbaColor> pick) => RelativeLuminance(pick(WeatherPalette.Palette.Tokens[token]));
+
+        var day = tokens.Select(t => Luminance(t, c => c.Day)).ToArray();
+        var dusk = tokens.Select(t => Luminance(t, c => c.Dusk)).ToArray();
+        Assert.True(day[15] > day[0] && day[15] > day[^1], "Day is lightest near 15 °C.");
+        Assert.True(dusk[15] < dusk[0] && dusk[15] < dusk[^1], "Dusk is darkest near 15 °C.");
+        Assert.Equal(day.Length, day.Distinct().Count());
+    }
+
+    [Fact]
+    public void Isotherms_are_every_2_degrees_in_kelvin_labelled_in_celsius_and_off_by_default()
+    {
+        var style = new SeaTemperatureIsothermStyle();
+        var contours = style.Contours;
+
+        Assert.False(style.IsVisibleByDefault);
+        Assert.Equal(WeatherLayerKind.Isolines, style.Kind);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, style.Plane);
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, style.ValueFieldName);
+        Assert.Equal(20, contours.Count);
+        Assert.Equal(271.15, contours[0].Value, 6);
+        Assert.Equal(309.15, contours[^1].Value, 6);
+        Assert.All(contours, c => Assert.Equal("K", c.Unit));
+        Assert.Equal("18°", style.FormatContourLabel(contours.Single(c => Math.Abs(c.Value - 291.15) < 1e-6)));
+        Assert.Equal("-2°", style.FormatContourLabel(contours[0]));
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.IsothermInkToken, PaletteType.Day).ToHex(), contours[0].Color);
+    }
+
+    [Fact]
+    public async Task Portrayal_draws_sea_temperature_as_a_clipped_fill_with_a_celsius_legend()
+    {
+        const int rows = 4, columns = 6;
+        var values = new float[rows * columns];
+        for (int i = 0; i < values.Length; i++)
+            values[i] = 288.15f + i * 0.5f; // 15 °C rising half a degree a node
+        var sst = TestGrids.Parameter(WeatherParameters.SeaSurfaceTemperature, (0, values));
+        var set = new WeatherGridSet(TestGrids.Origin, TestGrids.Regular(rows, columns), [sst]);
+        var source = new WeatherCoverageSource(set, WeatherParameters.SeaTemperatureGroup, [sst]);
+
+        Assert.Equal(
+            [SeaTemperatureStyle.Key, SeaTemperatureIsothermStyle.Key],
+            WeatherCoverageStyle.CreateFor(source).Select(s => s.LayerKey));
+
+        var result = await WeatherPortrayal.BuildAsync(source, WeatherCoverageStyle.CreateFor(source), "sst.nc", cancellationToken: Ct);
+
+        var fill = Assert.IsType<GridCoverageSubLayer>(result.SubLayers[0]);
+        Assert.True(fill.ClipToWater);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
+        Assert.Equal(SeaTemperatureStyle.Bands.Select(b => b.Label), fill.Legend!.Select(e => e.Label));
+        var isotherms = Assert.IsType<IsolineCoverageSubLayer>(result.SubLayers[1]);
+        Assert.Equal(["16°", "18°", "20°", "22°", "24°", "26°"], isotherms.Isolines.Select(l => l.Label).Distinct().Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public void Fills_sit_under_S104_on_the_on_demand_surface_at_half_opacity()
     {
-        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle() })
+        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle(), new SeaTemperatureStyle(), new VisibilityStyle(), new PrecipitationStyle(), new ThunderstormRiskStyle() })
         {
             Assert.Equal(WeatherLayerKind.Fill, style.Kind);
             Assert.Equal(S98DisplayPlane.OnDemandSurface, style.Plane);
@@ -136,7 +476,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Symbols_sit_above_S111_on_the_dynamic_arrows_plane()
     {
-        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WindBarbStyle(), new WaveDirectionStyle() })
+        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WindBarbStyle(), new WaveDirectionStyle(), new CurrentArrowStyle() })
         {
             Assert.Equal(WeatherLayerKind.Symbols, style.Kind);
             Assert.Equal(S98DisplayPlane.DynamicArrows, style.Plane);
@@ -181,11 +521,18 @@ public class WeatherCoverageStyleTests
     }
 
     [Fact]
-    public void Only_the_wave_height_fill_is_clipped_to_water()
+    public void Only_the_sea_fills_are_clipped_to_water()
     {
         Assert.True(new WaveHeightStyle().ClipToWater);
+        Assert.True(new SeaTemperatureStyle().ClipToWater);
+        Assert.True(new VisibilityStyle().ClipToWater);
+        Assert.True(new FreezingSprayStyle().ClipToWater);
+        Assert.True(new PrecipitationStyle().ClipToWater);
+        Assert.True(new ThunderstormRiskStyle().ClipToWater);
+        Assert.True(new CloudCoverStyle().ClipToWater);
         Assert.All(
-            WeatherCoverageStyle.CreateAll().Where(s => s is not WaveHeightStyle),
+            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle or FreezingSprayStyle
+                or PrecipitationStyle or ThunderstormRiskStyle or CloudCoverStyle)),
             style => Assert.False(style.ClipToWater, style.LayerKey));
     }
 
@@ -302,7 +649,7 @@ public class WeatherCoverageStyleTests
 
         Assert.NotNull(legend);
         Assert.Equal(WaveHeightStyle.Bands.Select(b => b.Label), legend.Select(e => e.Label));
-        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.WaveHeightToken(1), PaletteType.Night).ToHex(), legend[0].Color);
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.WaveHeightToken(1), PaletteType.Night).ToHex(), Assert.IsType<SwatchLegendEntry>(legend[0]).Color);
     }
 
     [Theory]
@@ -332,7 +679,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Night_is_dimmer_than_dusk_for_every_symbol_ink()
     {
-        foreach (var token in new[] { WeatherPalette.BarbInkToken, WeatherPalette.WaveArrowToken, WeatherPalette.IsobarInkToken })
+        foreach (var token in new[] { WeatherPalette.BarbInkToken, WeatherPalette.WaveArrowToken, WeatherPalette.IsobarInkToken, WeatherPalette.IsothermInkToken })
         {
             var colors = WeatherPalette.Palette.Tokens[token];
             Assert.True(RelativeLuminance(colors.Night) < RelativeLuminance(colors.Dusk), token);
@@ -343,14 +690,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(4 + 15 + 13, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(8 + 6 + 15 + 13 + 32 + 9 + 3 + 4 + 6 + 3 + 3, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@2|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@7|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

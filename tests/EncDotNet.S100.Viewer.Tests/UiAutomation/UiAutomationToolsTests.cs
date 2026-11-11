@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Viewer.McpTools;
+using EncDotNet.S100.Viewer.McpTools.Groups;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Protocol;
 
@@ -21,8 +21,8 @@ public sealed class UiAutomationToolsTests
     {
         var automation = new RecordingAutomation();
 
-        var withoutHooks = Names(new McpServerHost(new EmptyCatalog(), new ViewerSettings(), uiAutomation: automation));
-        var withHooks = Names(new McpServerHost(new EmptyCatalog(), new ViewerSettings { McpTestHooks = true }, uiAutomation: automation));
+        var withoutHooks = Names(new TestHooksMcpToolGroup(new ViewerSettings(), testClock: null, uiAutomation: automation));
+        var withHooks = Names(new TestHooksMcpToolGroup(new ViewerSettings { McpTestHooks = true }, testClock: null, uiAutomation: automation));
 
         Assert.DoesNotContain(withoutHooks, name => name.StartsWith("ui_", StringComparison.Ordinal));
         Assert.Equal(AllToolNames.Order(), withHooks.Where(n => n.StartsWith("ui_", StringComparison.Ordinal)).Order());
@@ -81,6 +81,7 @@ public sealed class UiAutomationToolsTests
 
     [Theory]
     [InlineData(null, -1, null)]
+    [InlineData(null, UiTreeTool.MaxDepth + 1, null)]
     [InlineData(null, null, 0)]
     [InlineData("everything", null, null)]
     public async Task Tree_arguments_are_checked(string? filter, int? depth, int? maxNodes)
@@ -89,6 +90,25 @@ public sealed class UiAutomationToolsTests
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal("invalid_argument", error!.Code);
+    }
+
+    // #1225: the deepest tree a request can ask for serializes, and an MCP
+    // client that reads JSON nested no deeper than 64 (System.Text.Json's
+    // default) can read it inside the JSON-RPC envelope.
+    [Fact]
+    public void The_deepest_tree_stays_within_the_json_nesting_limit()
+    {
+        UiElementSnapshot? element = null;
+        for (var level = UiTreeTool.MaxDepth; level >= 0; level--)
+            element = new UiElementSnapshot($"e{level}", null, "pane", "Panel", null, null, null, null, true, false,
+                ["invoke"], null, null, null, null, new UiBounds(0, 0, 10, 10), element is null ? null : [element]);
+        var snapshot = new UiTreeSnapshot([new UiRootSnapshot("window", "Viewer", element!)], UiTreeTool.MaxDepth + 1, false);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(snapshot, McpAdapterShared.Options);
+
+        using var document = System.Text.Json.JsonDocument.Parse(
+            """{"jsonrpc":"2.0","id":1,"result":{"content":[],"structuredContent":""" + json + "}}");
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, document.RootElement.ValueKind);
     }
 
     [Fact]
@@ -156,18 +176,13 @@ public sealed class UiAutomationToolsTests
         Assert.Equal((new UiTarget("CatalogueScope.Option", null), UiAction.Toggle, "on"), automation.Calls.Single());
     }
 
-    private static IReadOnlyList<string> Names(McpServerHost host)
-        => (host.BuildAdditionalTools() ?? []).Select(t => t.ProtocolTool.Name).ToList();
+    private static IReadOnlyList<string> Names(TestHooksMcpToolGroup group)
+        => group.CreateTools().Select(t => t.ProtocolTool.Name).ToList();
 
     /// <summary>The JSON a client receives for <paramref name="result"/>.</summary>
     private static JsonObject Wire<T>(Datasets.Pipelines.Query.ToolResult<T> result)
         => JsonNode.Parse(((TextContentBlock)McpAdapterShared.Translate(result).Content[0]).Text)!.AsObject();
 
-    private sealed class EmptyCatalog : IDatasetCatalog
-    {
-        public IReadOnlyList<LoadedDataset> Datasets => [];
-        public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
-    }
 
     private sealed class RecordingAutomation : IViewerUiAutomation
     {

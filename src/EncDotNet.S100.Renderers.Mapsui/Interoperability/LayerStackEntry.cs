@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <param name="Item">
 /// The renderer-neutral stack item the S-98 engine ordered / suppressed. Its
 /// <see cref="SubLayerStackItem.Payload"/> is the original portrayal slice this
-/// <paramref name="Layer"/> was built from (or a suppression-filtered copy).
+/// <paramref name="Layer"/> was built from, or the S-98-ruled one.
 /// </param>
 public sealed record LayerStackEntry(ILayer Layer, SubLayerStackItem Item)
 {
@@ -46,4 +46,12 @@ public sealed record LayerStackEntry(ILayer Layer, SubLayerStackItem Item)
     /// paints on top of coarser overlapping cells (issue #464).
     /// </summary>
     public int? SourceScaleDenominator => Item.SourceScaleDenominator;
+
+    /// <summary>
+    /// The feature references an S-98 rule suppressed from this layer (for
+    /// example S-101 depth areas under a loaded S-102, R-101-102-B), or
+    /// <see langword="null"/> for none. The layer keeps its scene; these
+    /// features' ops are filtered out where it is drawn.
+    /// </summary>
+    public IReadOnlySet<string>? SuppressedFeatures { get; init; }
 }

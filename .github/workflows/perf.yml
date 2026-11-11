@@ -34,6 +34,12 @@ jobs:
       # the base SHA's library code. The library code under test stays
       # at the base SHA — only the measurement harness is overlaid.
       #
+      # The Lua-CSharp adapter is overlaid too, because the runner picks
+      # the Lua engine (--lua-engine, default luacsharp) and a base that
+      # predates the adapter would not build. Both sides then portray
+      # with the PR's adapter, so a change to the adapter itself is not
+      # measured by the gate; compare engines with --lua-engine instead.
+      #
       # Directory.Packages.props is overlaid as well because central
       # package management requires every PackageReference in the
       # overlaid PerfRunner csproj to have a matching PackageVersion;
@@ -54,6 +60,7 @@ jobs:
             tools/EncDotNet.S100.PerfReport \
             tools/perf \
             src/EncDotNet.S100.Crs.ProjNet \
+            src/EncDotNet.S100.Scripting.LuaCSharp \
             src/EncDotNet.S100.Diagnostics.Export \
             Directory.Packages.props
           python3 - /tmp/base-packages.props Directory.Packages.props <<'PY'

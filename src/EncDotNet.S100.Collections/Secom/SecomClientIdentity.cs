@@ -167,11 +167,7 @@ public sealed class SecomClientIdentity : IDisposable
 
     private static X509Certificate2 FromPkcs12(byte[] bytes, string? password, X509KeyStorageFlags keyStorageFlags)
     {
-#if NET10_0_OR_GREATER
         return X509CertificateLoader.LoadPkcs12(bytes, password, keyStorageFlags);
-#else
-        return new X509Certificate2(bytes, password, keyStorageFlags);
-#endif
     }
 
     /// <summary>

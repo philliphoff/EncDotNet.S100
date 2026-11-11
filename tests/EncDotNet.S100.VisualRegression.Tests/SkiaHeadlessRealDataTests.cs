@@ -2,8 +2,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
@@ -103,7 +103,7 @@ public sealed class SkiaHeadlessRealDataTests
         var featureCatalogues = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);
 
         var processor = new S101DatasetProcessor(
-            path, manager, new MoonSharpLuaEngine(), featureCatalogues);
+            path, manager, TestLuaEngine.Create(), featureCatalogues);
         using var bitmap = await processor.RenderHeadlessAsync(1000, 800, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1000, bitmap.Width);

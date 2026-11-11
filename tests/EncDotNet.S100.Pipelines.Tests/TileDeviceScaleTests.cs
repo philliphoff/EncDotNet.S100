@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Rendering;
@@ -13,7 +14,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// layer) must never leave tiles behind that a later frame at another scale
 /// (the 2x retina window) keeps blitting.
 /// </summary>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class TileDeviceScaleTests
 {
     private const int Band = 10;
@@ -51,7 +52,7 @@ public sealed class TileDeviceScaleTests
         using (var surface = SKSurface.Create(new SKImageInfo(256, 256)))
         using (S100VectorTileRenderer.BeginOffscreenRender())
         {
-            S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, new RenderService());
+            MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, new RenderService());
             Assert.NotEqual(SKColors.Transparent, Pixel(surface, 128, 128));
         }
 
@@ -134,7 +135,7 @@ public sealed class TileDeviceScaleTests
         {
             surface.Canvas.ResetMatrix();
             surface.Canvas.Scale(deviceScale);
-            S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
+            MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, renderService);
             if (S100VectorTileRenderer.IsVisibleSettledForTest(layer, px))
             {
                 return;

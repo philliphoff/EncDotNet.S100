@@ -57,9 +57,18 @@ public static class S57ExchangeSetVerification
     {
         ArgumentException.ThrowIfNullOrEmpty(rootPath);
 
-        var s57Result = await S57ExchangeSetReader.Read(rootPath)
+        // The catalogue is read directly rather than through
+        // S57ExchangeSetReader, which needs a base cell: an exchange set that
+        // delivers only updates must be checked too (S-64 §2.2.1).
+        var cataloguePath = FindCatalogue(rootPath)
+            ?? throw new FileNotFoundException($"No {CatalogueFileName} in the exchange set.", Path.Combine(rootPath, CatalogueFileName));
+        var catalogue = await S57CatalogReader.ReadFromFileAsync(cataloguePath, logger: null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var s57Result = await new S57ExchangeSetVerifier(signatureVerifier: null)
             .VerifyAsync(
                 rootPath,
+                catalogue,
                 new S63TrustAnchorOptions { AllowUntrustedCertificates = allowUntrustedCertificates },
                 logger: null,
                 cancellationToken)
@@ -67,6 +76,18 @@ public static class S57ExchangeSetVerification
 
         return Map(s57Result);
     }
+
+    private const string CatalogueFileName = "CATALOG.031";
+
+    /// <summary>
+    /// The exchange set's catalogue in <paramref name="rootPath"/>, matching
+    /// its name without regard to case, or <see langword="null"/> when there's none.
+    /// </summary>
+    private static string? FindCatalogue(string rootPath)
+        => Directory.Exists(rootPath)
+            ? Directory.EnumerateFiles(rootPath)
+                .FirstOrDefault(f => string.Equals(Path.GetFileName(f), CatalogueFileName, StringComparison.OrdinalIgnoreCase))
+            : null;
 
     /// <summary>
     /// Maps an <see cref="S57ExchangeSetVerificationResult"/> onto the S-100

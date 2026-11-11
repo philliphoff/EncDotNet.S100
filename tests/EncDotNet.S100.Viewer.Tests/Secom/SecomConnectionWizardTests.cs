@@ -12,7 +12,7 @@ using EncDotNet.S100.Viewer.ViewModels.Secom;
 namespace EncDotNet.S100.Viewer.Tests.Secom;
 
 /// <summary>
-/// The Add online catalogue wizard's Connection step for a SECOM service
+/// The Add online source wizard's Connection step for a SECOM service
 /// (#883 C): an identity per source, re-probed when it changes, and "Add and
 /// wait" for a service that can't be read yet.
 /// </summary>
@@ -146,9 +146,45 @@ public sealed class SecomConnectionWizardTests : IDisposable
 
         await NextAsync(wizard);
 
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(2, wizard.CurrentStep);
+        Assert.True(wizard.IsIncludeStep);
+        Assert.Equal(["Source", "What to include", "Add to"], wizard.Steps.Select(s => s.Label));
         Assert.Null(wizard.Connection);
         Assert.Empty(_probes);
+    }
+
+    [Fact]
+    public async Task The_step_list_follows_the_selection_four_steps_only_for_secom()
+    {
+        var known = new KnownCatalogueSource("noaa", "NOAA", "NOAA", ["North America"], KnownCatalogueFormat.NoaaEnc,
+            new Uri("https://noaa.test/catalog.xml"), null, KnownCatalogueCoverage.Polygons, true, true);
+        var wizard = Wizard(known, Khra);
+        wizard.Start(null);
+
+        wizard.Directory.SelectedEntry = wizard.Directory.Entries.Single(e => e.Source.Id == "noaa");
+        Assert.Equal(["Source", "What to include", "Add to"], wizard.Steps.Select(s => s.Label));
+
+        wizard.Directory.SelectedEntry = wizard.Directory.Entries.Single(e => e.Source.Id == Khra.Id);
+        Assert.Equal(["Source", "Connection", "What to include", "Add to"], wizard.Steps.Select(s => s.Label));
+        Assert.Equal(4, wizard.StepCount);
+        Assert.Empty(_probes);  // choosing a row doesn't connect
+
+        await NextAsync(wizard);
+        Assert.True(wizard.IsConnectionStep);
+        await NextAsync(wizard);
+        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal("Step 3 of 4", wizard.StepOfText);
+
+        // Back goes through Connection; on the first step, choosing a chart catalogue drops it again.
+        wizard.BackCommand.Execute(null);
+        Assert.True(wizard.IsConnectionStep);
+        wizard.BackCommand.Execute(null);
+        Assert.True(wizard.IsCatalogueStep);
+        wizard.Directory.SelectedEntry = wizard.Directory.Entries.Single(e => e.Source.Id == "noaa");
+        Assert.Equal(3, wizard.StepCount);
+        await NextAsync(wizard);
+        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Null(wizard.Connection);
     }
 
     private SecomIdentityReference Import(string file, string name, string mrn) =>
@@ -158,7 +194,7 @@ public sealed class SecomConnectionWizardTests : IDisposable
     {
         var directory = new SecomIdentityDirectory(_keys.Identities, _keys.Time);
         return new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(sources.Length > 0 ? sources : [Khra]),
+            new CatalogueDirectoryDialogViewModel(sources.Length > 0 ? sources : [Khra], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
             () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
             {
                 Secom = (_, _, identity, _) =>
@@ -168,7 +204,7 @@ public sealed class SecomConnectionWizardTests : IDisposable
                 },
                 NoaaEnc = (_, _) => Task.FromResult(Collections.Noaa.NoaaEncProductCatalogReader.Read(LibraryTestContext.RepoFile(
                     "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }),
+            }, timeProvider: TimeProvider.System),
             _ => { },
             (source, openKeys) => new SecomConnectionStepViewModel(source, directory, (uri, identity, _) =>
             {

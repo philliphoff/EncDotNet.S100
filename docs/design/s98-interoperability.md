@@ -407,6 +407,13 @@ R-101-WX-B (#1072) does the same for any coverage surface that sets
 fill (GRIB2 and NetCDF aren't S-100 products, so the rule keys on the flag
 rather than a product pair).
 
+R-111-WX-B (#1228) also keys on a flag. When an S-111 dataset is active, it
+hides the model current arrows that set `ArrowCoverageSubLayer.YieldsToS111`
+inside that dataset's `CoveragePortrayalResult.CoverageExtent`, so official
+S-111 currents and model currents never draw over each other. It does this by
+blanking the arrows' speed cell by cell. Only S-111 grids report an extent;
+station and mesh datasets leave the model arrows alone.
+
 ### 3.5 Deferred — explicit non-goals for v1
 
 The mariner-facing side of predefined combinations (Annex A §11, Part B

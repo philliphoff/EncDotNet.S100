@@ -14,6 +14,7 @@ using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
+using EncDotNet.S100.Datasets.S412;
 using EncDotNet.S100.Datasets.S421;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -100,6 +101,9 @@ public sealed record S201DatasetData(S201Dataset Model) : LoadedDatasetData;
 
 /// <summary>S-411 Sea Ice Information typed model.</summary>
 public sealed record S411DatasetData(S411Dataset Model) : LoadedDatasetData;
+
+/// <summary>S-412 Marine Weather Warnings typed model.</summary>
+public sealed record S412DatasetData(S412Dataset Model) : LoadedDatasetData;
 
 /// <summary>S-421 Route Plans typed model.</summary>
 public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;

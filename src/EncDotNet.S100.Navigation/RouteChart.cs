@@ -112,8 +112,8 @@ public abstract class RouteChartCell
     /// <summary>The cell's catalog id.</summary>
     public string DatasetId { get; }
 
-    /// <summary>The cell's <see cref="CellScaleRanking"/> scale; smaller is finer, <c>null</c> when unranked.</summary>
-    public abstract int? RankingScale { get; }
+    /// <summary>The cell's <see cref="CellScaleRanking"/> rank, or <c>null</c> when unranked.</summary>
+    public abstract CellRank? Rank { get; }
 
     /// <summary>
     /// Whether the cell's data coverage (its S-101 <c>DataCoverage</c>, or

@@ -129,6 +129,49 @@ public class S98DefaultRulesTests
     }
 
     [Fact]
+    public void R_101_102_B_draws_the_kept_s101_safety_contour_faint_under_s102()
+    {
+        // #1132 Q4: the S-102 safety contour is primary where S-102 covers;
+        // the S-101 one stays visible but faint.
+        var (areaItem, lineItem) = BuildS101ItemsWithDepthFeatures(depthContoursMetres: new double[] { 5.0, 10.0 });
+        var payload = Assert.IsType<VectorStackPayload>(lineItem.Payload);
+        var tags = payload.Result.FeatureTags!;
+        var recoloured = payload.SubLayer.Instructions
+            .Select(i => i is LineInstruction l
+                && tags[long.Parse(l.FeatureReference, CultureInfo.InvariantCulture)].DepthContourValue is 10.0
+                    ? new LineInstruction { FeatureReference = l.FeatureReference, LineColor = "DEPSC", LineWidth = 0.64 }
+                    : i)
+            .ToList();
+        var sub = payload.SubLayer;
+        lineItem = lineItem with
+        {
+            Payload = payload.WithSubLayer(new VectorSubLayer
+            {
+                LayerKey = sub.LayerKey,
+                LayerName = sub.LayerName,
+                Instructions = recoloured,
+                Plane = sub.Plane,
+                WithinPlanePriority = sub.WithinPlanePriority,
+                SourceFeatureType = sub.SourceFeatureType,
+            }),
+        };
+
+        var ruled = _auth.ApplyRules(
+            new[] { areaItem, SynthItem("s102-tile.h5", S98DisplayPlane.Bathymetry), lineItem },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s102-tile.h5", "S-102", Active: true),
+            },
+            MarinerSettings.Default with { SafetyContour = Depth.FromMetres(10.0) });
+
+        var safety = Assert.Single(Assert.IsType<VectorStackPayload>(ruled[2].Payload).SubLayer.Instructions.OfType<LineInstruction>(),
+            l => tags[long.Parse(l.FeatureReference, CultureInfo.InvariantCulture)].DepthContourValue is 10.0);
+        Assert.Equal(S98DefaultRules.FaintSafetyContourColor, safety.LineColor);
+        Assert.Equal(0.32, safety.LineWidth, 6);
+    }
+
+    [Fact]
     public void R_101_102_B_suppresses_only_depth_features_inside_the_s102_coverage_extent()
     {
         // S-102 covers lat/lon 0..2. DepthArea 1 and DepthContour 4 lie inside;
@@ -525,6 +568,89 @@ public class S98DefaultRulesTests
     }
 
     // ----------------------------------------------------------------
+    // R-111-WX-B: model currents give way to S-111
+    // ----------------------------------------------------------------
+
+    [Fact]
+    public void R_111_WX_B_hides_model_arrows_inside_the_S111_extent_and_keeps_the_rest()
+    {
+        // A 1 × 4 row of model cells at longitudes 0, 1, 2 and 3; S-111 covers 0.5 to 2.5.
+        var model = BuildCurrentArrowItem("currents.nc", originLongitude: 0);
+        var s111 = BuildS111Item("111US00HARBOUR.h5", new GeographicBounds(0.5, -1, 2.5, 1));
+
+        var ruled = _auth.ApplyRules(
+            new[] { model, s111 },
+            new[]
+            {
+                new LoadedDatasetInfo("currents.nc", "NetCDF", Active: true),
+                new LoadedDatasetInfo("111US00HARBOUR.h5", "S-111", Active: true),
+            });
+
+        var speed = ArrowSubLayerOf(ruled, "currents.nc").Coverage.Coverage.GetValues("current.speed");
+        Assert.Equal(1f, speed[0]);
+        Assert.True(float.IsNaN(speed[1]));
+        Assert.True(float.IsNaN(speed[2]));
+        Assert.Equal(1f, speed[3]);
+        // The direction field is untouched: no arrow is drawn without a speed.
+        Assert.Equal(90f, ArrowSubLayerOf(ruled, "currents.nc").Coverage.Coverage.GetValues("current.to_direction")[1]);
+        Assert.True(ArrowSubLayerOf(ruled, "currents.nc").YieldsToS111);
+    }
+
+    [Fact]
+    public void R_111_WX_B_matches_a_0_to_360_grid_against_a_minus_180_to_180_extent()
+    {
+        // Cells at 358, 359, 360 and 361 °E; S-111 covers −1.5 to −0.5 (358.5 to 359.5).
+        var model = BuildCurrentArrowItem("currents.nc", originLongitude: 358);
+        var s111 = BuildS111Item("111US00HARBOUR.h5", new GeographicBounds(-1.5, -1, -0.5, 1));
+
+        var ruled = _auth.ApplyRules(
+            new[] { model, s111 },
+            new[]
+            {
+                new LoadedDatasetInfo("currents.nc", "NetCDF", Active: true),
+                new LoadedDatasetInfo("111US00HARBOUR.h5", "S-111", Active: true),
+            });
+
+        var speed = ArrowSubLayerOf(ruled, "currents.nc").Coverage.Coverage.GetValues("current.speed");
+        Assert.Equal([false, true, false, false], speed.Select(float.IsNaN));
+    }
+
+    [Fact]
+    public void R_111_WX_B_leaves_arrows_that_do_not_yield_and_needs_an_active_S111_with_an_extent()
+    {
+        var waves = BuildCurrentArrowItem("waves.nc", originLongitude: 0, yieldsToS111: false);
+        var model = BuildCurrentArrowItem("currents.nc", originLongitude: 0);
+        var s111 = BuildS111Item("111US00HARBOUR.h5", new GeographicBounds(-10, -10, 10, 10));
+        var stations = BuildS111Item("111US00STATIONS.h5", extent: null);
+
+        var withS111 = _auth.ApplyRules(
+            new[] { waves, s111 },
+            new[]
+            {
+                new LoadedDatasetInfo("waves.nc", "NetCDF", Active: true),
+                new LoadedDatasetInfo("111US00HARBOUR.h5", "S-111", Active: true),
+            });
+        var inactive = _auth.ApplyRules(
+            new[] { model, s111 },
+            new[]
+            {
+                new LoadedDatasetInfo("currents.nc", "NetCDF", Active: true),
+                new LoadedDatasetInfo("111US00HARBOUR.h5", "S-111", Active: false),
+            });
+        var stationsOnly = _auth.ApplyRules(
+            new[] { model, stations },
+            new[]
+            {
+                new LoadedDatasetInfo("currents.nc", "NetCDF", Active: true),
+                new LoadedDatasetInfo("111US00STATIONS.h5", "S-111", Active: true),
+            });
+
+        Assert.Same(waves, withS111.Single(i => i.SourceDatasetId == "waves.nc"));
+        Assert.Same(model, inactive.Single(i => i.SourceDatasetId == "currents.nc"));
+        Assert.Same(model, stationsOnly.Single(i => i.SourceDatasetId == "currents.nc"));
+    }
+
+    // ----------------------------------------------------------------
     // Rule composition / declaration order
     // ----------------------------------------------------------------
 
@@ -578,7 +704,7 @@ public class S98DefaultRulesTests
         // S98DefaultRules.Default declaration order is part of the
         // public contract — pin it.
         Assert.Equal(
-            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-101-104-B", "R-101-WX-B", "R-111-A" },
+            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-101-104-B", "R-101-WX-B", "R-111-A", "R-111-WX-B" },
             S98DefaultRules.Default.Select(r => r.RuleId).ToArray());
     }
 
@@ -889,6 +1015,93 @@ public class S98DefaultRulesTests
             CoverageExtent = coverageExtent,
         };
         return new SubLayerStackItem(new CoverageStackPayload(result, grid), plane, 0, datasetId);
+    }
+
+    /// <summary>
+    /// A 1 × 4 EPSG:4326 row of model currents, 1 m/s setting east, with
+    /// cells at <paramref name="originLongitude"/> to three degrees east of it
+    /// along the equator. The speed and direction are computed from U and V,
+    /// as the weather source serves them.
+    /// </summary>
+    private static SubLayerStackItem BuildCurrentArrowItem(string datasetId, double originLongitude, bool yieldsToS111 = true)
+    {
+        var metadata = new GridMetadata
+        {
+            NumRows = 1,
+            NumColumns = 4,
+            OriginLatitude = 0.0,
+            OriginLongitude = originLongitude,
+            SpacingLatitudinal = 1.0,
+            SpacingLongitudinal = 1.0,
+        };
+        var sampled = new SampledCoverage
+        {
+            Region = GridRegion.Full,
+            Metadata = metadata,
+            Values = new Dictionary<string, float[]>
+            {
+                ["current.u"] = [1f, 1f, 1f, 1f],
+                ["current.v"] = [0f, 0f, 0f, 0f],
+            },
+            ComputedFields =
+            [
+                new ComputedCoverageField { Name = "current.speed", Inputs = ["current.u", "current.v"], Compute = c => MathF.Sqrt((c[0] * c[0]) + (c[1] * c[1])), NoDataValue = float.NaN },
+                new ComputedCoverageField { Name = "current.to_direction", Inputs = ["current.u", "current.v"], Compute = c => 90f, NoDataValue = float.NaN },
+            ],
+        };
+        var styled = new StyledCoverageLayer
+        {
+            Coverage = sampled,
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
+            SymbolScheme = new CoverageSymbolScheme
+            {
+                ValueFieldName = "current.speed",
+                RotationFieldName = "current.to_direction",
+                Bands = [new SymbolBand { MinValue = 0, MaxValue = float.PositiveInfinity, SymbolRef = "ARROW" }],
+            },
+        };
+        var viewport = new Viewport
+        {
+            MinLatitude = -1.0,
+            MaxLatitude = 1.0,
+            MinLongitude = originLongitude,
+            MaxLongitude = originLongitude + 3,
+            WidthPixels = 1,
+            HeightPixels = 1,
+            ScaleDenominator = 1.0,
+        };
+        var arrows = new ArrowCoverageSubLayer
+        {
+            LayerKey = "weather.current.arrows",
+            LayerName = "Currents",
+            Plane = S98DisplayPlane.DynamicArrows,
+            WithinPlanePriority = 20,
+            Coverage = styled,
+            Viewport = viewport,
+            SymbolProvider = _ => null,
+            FallbackExtent = new GeographicBounds(originLongitude, -1, originLongitude + 3, 1),
+            YieldsToS111 = yieldsToS111,
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = new[] { arrows },
+            Spec = new SpecRef("NetCDF", default),
+            SourceDatasetId = datasetId,
+            Info = "test",
+        };
+        return new SubLayerStackItem(new CoverageStackPayload(result, arrows), S98DisplayPlane.DynamicArrows, 20, datasetId);
+    }
+
+    // An S-111 coverage item: the coverage extent is all the rule reads.
+    private static SubLayerStackItem BuildS111Item(string datasetId, GeographicBounds? extent) =>
+        BuildCoverageGridItem(datasetId, "S-111", S98DisplayPlane.DynamicArrows, extent);
+
+    private static ArrowCoverageSubLayer ArrowSubLayerOf(IReadOnlyList<SubLayerStackItem> ruled, string datasetId)
+    {
+        var item = ruled.Single(i => i.SourceDatasetId == datasetId);
+        var payload = Assert.IsType<CoverageStackPayload>(item.Payload);
+        return Assert.IsType<ArrowCoverageSubLayer>(payload.SubLayer);
     }
 
     private static GridCoverageSubLayer GridSubLayerOf(IReadOnlyList<SubLayerStackItem> ruled, string datasetId)

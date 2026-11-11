@@ -30,6 +30,15 @@ namespace EncDotNet.S100.Datasets.Weather;
 ///   <item><term><see cref="WindSpeedStyle"/></term><description>A <c>wind.speed</c> fill in Beaufort bands. Off by default.</description></item>
 ///   <item><term><see cref="WaveDirectionStyle"/></term><description>Arrows along <c>wave.dir</c>, sized by <c>wave.hs</c>. Off by default.</description></item>
 ///   <item><term><see cref="PressureIsobarStyle"/></term><description>Isobars every 4 hPa on <c>pressure.msl</c>, labelled. On by default.</description></item>
+///   <item><term><see cref="SeaTemperatureStyle"/></term><description>A <c>sea.temperature</c> fill in 1 °C bands. On by default.</description></item>
+///   <item><term><see cref="VisibilityStyle"/></term><description>A <c>visibility</c> fill in the three restricted bands; good visibility isn't drawn. On by default.</description></item>
+///   <item><term><see cref="FreezingSprayStyle"/></term><description>A freezing spray fill in Overland's four icing classes; no icing isn't drawn. On by default.</description></item>
+///   <item><term><see cref="AirTemperatureIsothermStyle"/></term><description>Dashed isotherms every 5 °C on <c>air.temperature</c>, labelled. Off by default.</description></item>
+///   <item><term><see cref="PrecipitationStyle"/></term><description>A <c>precipitation.rate</c> fill in rain radar colours from 0.1 mm/h. Off by default.</description></item>
+///   <item><term><see cref="ThunderstormRiskStyle"/></term><description>A <c>cape</c> fill from 1000 J/kg. Off by default.</description></item>
+///   <item><term><see cref="CloudCoverStyle"/></term><description>A grey <c>cloud.cover</c> veil from 25 %, at <see cref="VeilOpacity"/>. Off by default.</description></item>
+///   <item><term><see cref="SeaTemperatureIsothermStyle"/></term><description>Isotherms every 2 °C on <c>sea.temperature</c>, labelled. Off by default.</description></item>
+///   <item><term><see cref="CurrentArrowStyle"/></term><description>Arrows along <c>current.to_direction</c> in S-111's speed bands. On by default; hidden inside S-111 coverage.</description></item>
 /// </list>
 /// <para>
 /// Layer order (design note §5): fills go on
@@ -42,7 +51,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// sub-layers <see cref="WeatherPortrayal"/> builds carry these.
 /// </para>
 /// <para>
-/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height) are
+/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height, sea surface temperature, visibility, freezing spray, precipitation, thunderstorm risk, cloud cover) are
 /// clipped to water when an S-101 chart is loaded, by the S-98 rule that
 /// clips the S-104 surface (<c>S98DefaultRules.R_101_WX_B_ClipWeatherFillsToWater</c>).
 /// Wind isn't clipped: it blows over land too.
@@ -58,10 +67,16 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// The version of the weather styles, folded into <see cref="ContentScope"/>.
     /// Bump it whenever the symbols, the palette or the bands change.
     /// </summary>
-    public const int StyleVersion = 2;
+    public const int StyleVersion = 7;
 
     /// <summary>The opacity of the colour fills: 0.5, so the chart under them stays readable.</summary>
     public const double FillOpacity = 0.5;
+
+    /// <summary>
+    /// The opacity of the cloud cover veil (<see cref="CloudCoverStyle"/>):
+    /// 0.3, lighter than the other fills, as cloud covers wide areas.
+    /// </summary>
+    public const double VeilOpacity = 0.3;
 
     /// <summary>The fills' priority within <see cref="S98DisplayPlane.OnDemandSurface"/>: 0, under the S-104 surface.</summary>
     public const int FillPriority = 0;
@@ -104,6 +119,7 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <param name="rotationFieldName">The field the symbols are rotated by; <see langword="null"/> for a fill.</param>
     /// <param name="isVisibleByDefault">Whether the layer is shown until the mariner hides it.</param>
     /// <param name="clipToWater">Whether a fill is clipped to water when an S-101 chart is loaded.</param>
+    /// <param name="opacity">The portrayal opacity, or <see langword="null"/> for the kind's own (<see cref="Opacity"/>).</param>
     private protected WeatherCoverageStyle(
         string layerKey,
         string name,
@@ -111,8 +127,10 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
         string valueFieldName,
         string? rotationFieldName,
         bool isVisibleByDefault,
-        bool clipToWater = false)
+        bool clipToWater = false,
+        double? opacity = null)
     {
+        Opacity = opacity ?? (kind == WeatherLayerKind.Fill ? FillOpacity : 1.0);
         ClipToWater = clipToWater;
         LayerKey = layerKey;
         Name = name;
@@ -188,10 +206,11 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     };
 
     /// <summary>
-    /// The portrayal opacity: <see cref="FillOpacity"/> for a fill, 1 for
-    /// symbols and isolines. Renderers multiply it with any user opacity.
+    /// The portrayal opacity: <see cref="FillOpacity"/> for a fill
+    /// (<see cref="VeilOpacity"/> for the cloud cover veil), 1 for symbols and
+    /// isolines. Renderers multiply it with any user opacity.
     /// </summary>
-    public double Opacity => Kind == WeatherLayerKind.Fill ? FillOpacity : 1.0;
+    public double Opacity { get; }
 
     /// <summary>
     /// Gets the active colour palette: <see cref="WeatherPalette.Palette"/>'s
@@ -252,12 +271,19 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     }
 
     /// <summary>
-    /// New instances of every weather style, in layer-stack order: the wave
-    /// height and wind speed fills, the pressure isobars, then the wind barbs
-    /// and wave arrows.
+    /// New instances of every weather style, in layer-stack order: the sea
+    /// surface temperature, wave height and wind speed fills, the cloud cover
+    /// veil, the visibility, thunderstorm risk, precipitation and freezing
+    /// spray fills, the sea and air isotherms and pressure isobars, then the current arrows, wind barbs and wave
+    /// arrows.
     /// </summary>
     public static IReadOnlyList<WeatherCoverageStyle> CreateAll() =>
-        [new WaveHeightStyle(), new WindSpeedStyle(), new PressureIsobarStyle(), new WindBarbStyle(), new WaveDirectionStyle()];
+    [
+        new SeaTemperatureStyle(), new WaveHeightStyle(), new WindSpeedStyle(),
+        new CloudCoverStyle(), new VisibilityStyle(), new ThunderstormRiskStyle(), new PrecipitationStyle(), new FreezingSprayStyle(),
+        new SeaTemperatureIsothermStyle(), new AirTemperatureIsothermStyle(), new PressureIsobarStyle(),
+        new CurrentArrowStyle(), new WindBarbStyle(), new WaveDirectionStyle(),
+    ];
 
     /// <summary>
     /// New instances of the styles that apply to <paramref name="source"/>

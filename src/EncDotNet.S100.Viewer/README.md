@@ -214,19 +214,21 @@ panel. The menu groups sources by where the data is.
   `.s100collection.json` file. See
   [Local collection manifests](../../docs/local-collection-manifest.md).
 
-**Online:** **Browse online catalogues…** opens the **Add online catalogue**
-wizard. See [Add an online catalogue](#add-an-online-catalogue).
+**Online:** **Browse online sources…** opens the **Add online source**
+wizard. See [Add an online source](#add-an-online-source).
 
 **Another computer:** **Connect to a shared feed…** adds datasets served by
 `s100` on another computer. See [Shared feeds](#shared-feeds).
 
-### Add an online catalogue
+### Add an online source
 
-The **Add online catalogue** wizard has three steps. **Back** and the step
-header go back without losing your choices, and each catalogue is read only
-once.
+The **Add online source** wizard has three steps, or four for a SECOM service
+(see [SECOM services](#secom-services)). The step header shows what you chose
+in each step you've completed. **Back** and the step header go back without
+losing your choices, and each catalogue is read only once. On the first step
+the footer repeats your selection.
 
-1. **Catalogue**: choose from a curated directory, grouped by region. Search
+1. **Source**: choose from a curated directory, grouped by region. Search
    by name, provider or country. The directory includes NOAA ENC; USACE Inland
    ENC rivers and buoy overlay; NOAA S-102 bathymetry and S-104 and S-111
    forecasts; S-124 navigational warnings from Canada over SECOM; community
@@ -607,10 +609,43 @@ and safety contour on the chart are relative to:
 - **Charted · water level not applied**: an active S-104 dataset covers the
   view, but its water level isn't added to the chart. The pill is highlighted
   and has an information icon.
+- **+ water level 14:20**: the chart adds the S-104 water level at that time
+  (see [Water level adjustment](#water-level-adjustment)). It says **· part of
+  view** when the adjusted area doesn't cover every depth in view, and
+  **· datum unconfirmed** when a vertical datum isn't declared and the water
+  level is applied anyway.
+- **Charted · no water level at 14:20** or **Charted · datum mismatch**:
+  adjustment is on, but no water level applies in view at that time, or every
+  depth source in view is on another datum. The pill has a caution icon.
 
-The chart always draws charted depths. S-104 water level is applied in two
-places: the **Depth** card in Object information, and the clearance in
-**Check route**. Moving the Timeline doesn't change the depths on the chart.
+### Water level adjustment
+
+In **Settings** > **Chart display** > **Mariner Settings**, **Water level
+adjustment** set to **At view time** adds the S-104 water level at the
+Timeline's view time to the charted depths (S-98 Appendix D). The S-102
+depth shading and its safety contour, and the S-101 depth areas, depth
+contours, soundings and dangers, follow the tide as you move the Timeline.
+Adjusted soundings show the adjusted figure with a small ◆ after it, and
+contour labels show the adjusted depth. An S-101 area or contour gets the
+lowest water level over its part inside the adjusted area, rounded down to
+0.1 m; one that crosses the edge is split there, so the part outside stays
+charted. Selecting an adjusted feature shows its water level and adjusted
+values. Where S-102 is drawn, its safety contour is the main one and the
+S-101 safety contour is drawn thin and grey under it. A dash-dot teal line marks the edge of the area that has a water
+level (S-104 grid nodes and 10 km around each station); outside it the chart
+is charted.
+
+Water level on a different vertical datum from the depths is never applied:
+those depths stay charted and the **DEPTHS** flyout says why ("Not adjusted:
+… on Mean Lower Low Water, water level on Lowest Astronomical Tide"). When a
+datum isn't declared, water level isn't applied either unless you turn on
+**Apply anyway when datum is not declared**. The **Depth** card follows the
+same setting.
+
+While the Timeline is dragged, the chart keeps the last water level it drew
+and the pill names that time until the new one lands. Translated S-57 cells
+are drawn as charted. Alert highlights still follow the charted safety
+contour (#1272).
 
 On a narrow window the value shortens to **Charted · not applied**, then
 **Charted** with the information icon. It never cuts off part of a word. The
@@ -623,7 +658,10 @@ Select the pill to see:
   themselves.
 - **Water level**: each S-104 dataset in view, with its kind (grid or
   station), run and time range, or "No S-104 water level loaded."
-- **Where water level is applied**: the Depth card and the route check.
+- **Where water level is applied**: the chart (when adjustment is on), the
+  Depth card and the route check. With adjustment on, the water level section
+  also says whether the datums agree and lists any depth source that isn't
+  adjusted.
 
 ## Control the layer stack
 
@@ -644,7 +682,9 @@ Rows include:
   arrows**) or **NDBC buoy observations** (under **Other chart overlays**).
 - A colour legend under each weather fill (wave height, wind speed): a swatch
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
-  the palette the map is drawn in. Legends appear only in this panel, not on
+  the palette the map is drawn in. An overlay drawn with symbols or styled
+  lines can carry a legend too, with a small picture of each symbol, line or
+  outlined area beside its label. Legends appear only in this panel, not on
   the map.
 
 Each dataset row has an **Active** toggle. When it's off, the dataset is taken
@@ -783,6 +823,21 @@ dataset.
 - **Ignore scale minimum**
 - **National Language**: the 3-letter ISO 639-2/B code for chart text, or
   **(Catalogue default)**.
+
+**Weather on a route** sets the limits [Check route](#check-a-route) compares
+a loaded GRIB2 or NetCDF forecast with: **Wind limit (kn)** and **Wave height
+limit**, in metres or, for any other depth unit, feet. Both are off (empty) by
+default; an RTZ route's own `vesselMaxWind` and `vesselMaxWave` are used where
+a limit is off. They're kept with the mariner settings, not with a route, and
+changing one re-runs an open route check without redrawing the chart.
+
+**Tropical cyclones on a route** sets how Check route tests a route against a
+loaded NHC advisory: **Check against** (the 34, 50 or 64 kt radius; 34 kt by
+default; the cone is always tested), **Report closest approach** (on by
+default) and **Must review inside** (64, 50 or 34 kt, or Never; 50 kt by
+default, and never outside **Check against**). A line under them spells out
+which findings are Must review and which are Check. They're kept with the
+mariner settings, and a change re-runs an open route check.
 
 ## Identify features
 
@@ -1210,7 +1265,10 @@ It checks the active route against the loaded data: land and drying ground,
 chart coverage, water shallower than the **Safety Contour** and charted
 dangers (from [Mariner settings](#mariner-settings)), restricted and S-122
 protected areas, and S-124 navigational warnings, judged at each point's ETA.
-With a draft, on the passage or on every leg, it also checks under-keel
+With a GRIB2 or NetCDF forecast loaded and a wind or wave limit set (**Weather
+on a route** in [Mariner settings](#mariner-settings), or the RTZ route's own),
+it also compares the forecast wind and significant wave height at each
+point's ETA with the limits. With a draft, on the passage or on every leg, it also checks under-keel
 clearance at each point's ETA: UKC = charted depth + water level − draft −
 squat, against the **Required UKC** (0 m when unset). Charted depth comes from
 loaded S-102, or from S-101 where there's no S-102 (lower confidence); water
@@ -1249,11 +1307,26 @@ and confidence. While it's on:
   **INFO**: each stretch below your UKC setting, depths charted from S-101
   only, water-level gaps (such as data ending before arrival), expired S-111
   runs, which aren't used in ETAs, and the route check's findings, such as
-  land, dangers and areas the route crosses and warnings on it. A tag names
-  the check behind each one. Clicking a finding zooms the map to it, outlines it dashed in its tone
+  land, dangers and areas the route crosses and warnings on it, and the
+  stretches where wind or waves are above your limits ("Wind above 25 kn for
+  3 h", with the time window) or the forecast doesn't reach ("Wind not
+  checked: forecast ends before arrival"). Weather findings are always
+  **CHECK**: forecast model data is advisory. A tag names the check behind
+  each one, and a **Weather** chip filters to the weather findings. Clicking a finding zooms the map to it, outlines it dashed in its tone
   with a "Zoomed to finding" chip, and moves the profile cursor there. On the
   map, a small dot marks each finding, red for MUST REVIEW, amber for CHECK
   and grey for INFO.
+
+  While a weather forecast is loaded, the card has a **Weather** row: "No
+  limits set", "Within your limits", "1 above limits" or "Forecast ends
+  before arrival". With a tropical cyclone advisory loaded, it also counts the
+  storm's findings and gives the closest approach, as in "2 must review · 2 to
+  check · CPA 12 NM". Its tooltip names the limits in use and where each comes
+  from (Settings or the route), and the cyclone settings ("34 kt radius and
+  cone · Must review inside 50 kt"). Clicking it filters **Findings** to
+  weather. On the map, the storm at the ETA of the closest approach is drawn
+  as its class letter in a dashed ring, joined to the route by a dashed line,
+  and the legend gains a **Weather** group.
 
   Without a draft there's no clearance: the verdict card is titled from the
   findings, such as "2 items to review", and says "Add a draft to check
@@ -1789,6 +1862,7 @@ a run, stop the process from the operating system; SoundCharts ignores
 | `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12, or PEM with its key) to SECOM services for this run, instead of the identity chosen in **Settings** > **Keys & certificates**. The password, if any, comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD`. |
 | `--settings <PATH>` | Use this settings file instead of the per-user one. |
 | `--data-dir <PATH>` | Put the settings file and all caches under this folder. You can also set `S100_DATA_DIR`. |
+| `--cache-dir <PATH>` | Put only the render caches (portrayal instructions, pattern clips and tiles) under this folder, leaving settings and the Library where they are. You can also set `S100_CACHE_DIR`. `S100_VECTOR_TILE_DISK_DIR` still gives the tile cache a folder of its own (tiles go in its `tiles` subfolder). Performance runs use it to start from empty caches. |
 | `--ephemeral` | Use throwaway settings that are never saved. Can't be combined with `--settings`. |
 | `--center <LAT,LON>` | Center the map on this position. Needs `--zoom`. |
 | `--zoom <LEVEL>` | Web Mercator zoom level, 0 to 24, for `--center`. |
@@ -1971,6 +2045,16 @@ batch with
 `DatasetsViewModel.AddRangeFromExchangeSet(IReadOnlyList<ExchangeSetCellRegistration>)`,
 backed by `BulkObservableCollection`, so thousands of cells raise one
 collection notification instead of one each.
+
+A coarse cell whose part of the view is covered by finer cells loads after
+them, not alongside them (`LoadTier.Covered`, #1265). The finer cells count
+only when the catalogue gives their coverage polygons
+(`DatasetEntry.CatalogueCoverage`, for example from the NOAA product
+catalogue), they're shown at full opacity, and they draw at the current scale
+or are loading as visible cells. `CoveredCellGate` does the coverage test,
+ignoring slivers under a pixel wide. The covered cell still loads once the
+visible loads and tiles are done, and the queue is ranked again after each
+load, so a finer cell that doesn't draw at this scale promotes it back.
 
 The S-57 catalogue descriptor cache is `Services/Caching/DiskS57CatalogCache`,
 stored under `caches/S57CatalogCache` and keyed by the `CATALOG.031` file's

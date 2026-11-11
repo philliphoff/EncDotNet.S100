@@ -42,9 +42,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     public ExchangeSetService(
         DatasetsViewModel datasets,
         INotificationService notifications,
-        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null,
-        IDatasetMetadataReader? metadataReader = null,
-        Caching.IS57CatalogCache? s57CatalogCache = null,
+        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator,
+        IDatasetMetadataReader? metadataReader,
+        Caching.IS57CatalogCache? s57CatalogCache,
         int? maxConcurrentLoads = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
@@ -565,6 +565,10 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 cells.Count,
                 closeAction: CloseExchangeSetFromHeader);
 
+            // CATALOG.031 doesn't say which product a cell is; AML cells are
+            // S-57 encoded too, so their DSID tells them apart (#1236).
+            var cellSpecs = S57CellSpecs(tracked.Source, cells);
+
             // Above the lazy-load threshold, register every cell without
             // loading its bytes and hand them to the viewport-driven
             // coordinator, which loads only the cells that are actually in view
@@ -593,7 +597,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     specs.Add(new ViewModels.ExchangeSetCellRegistration(
                         Source: tracked.Source,
                         RelativePath: cell.RelativePath,
-                        ProductSpec: "S-57",
+                        ProductSpec: cellSpecs(cell),
                         DisplayName: cell.CellName,
                         UpdateRelativePaths: updates,
                         GeographicBounds: cell.BoundingBox));
@@ -664,7 +668,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 var entry = _datasets.AddFromExchangeSet(
                     tracked.Source,
                     cell.RelativePath,
-                    "S-57",
+                    cellSpecs(cell),
                     displayName: cell.CellName,
                     updateRelativePaths: updateRelativePaths,
                     geographicBounds: cell.BoundingBox);
@@ -1090,7 +1094,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 item.MinimumDisplayScale,
                 item.MaximumDisplayScale,
                 item.GeographicBounds,
-                item.NotForNavigation)));
+                item.NotForNavigation,
+                item.CompilationScale,
+                LazyLoading.CoveredCellGate.FromCatalogueCoverage(item.Coverage))));
         }
 
         if (registrations.Count > 0)
@@ -1495,6 +1501,39 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             try { tracked.Owner.Dispose(); } catch { /* swallow on shutdown */ }
         }
         _tracked.Clear();
+    }
+
+    /// <summary>
+    /// The product spec of each S-57 exchange-set cell: <c>AML</c> for a NATO
+    /// Additional Military Layers cell, otherwise <c>S-57</c>. Only the first
+    /// cell's header is read unless it's AML: a large ENC set isn't slowed by
+    /// reading every header. A cell missed this way is still opened as AML by
+    /// the processor factory, never translated.
+    /// </summary>
+    private static Func<S57ExchangeSetCell, string> S57CellSpecs(IAssetSource source, IReadOnlyList<S57ExchangeSetCell> cells)
+    {
+        if (cells.Count == 0 || !IsAmlCell(source, cells[0].RelativePath))
+            return static _ => "S-57";
+
+        var specs = cells.ToDictionary(
+            c => c.RelativePath,
+            c => IsAmlCell(source, c.RelativePath) ? AmlDatasetInfo.SpecName : "S-57",
+            StringComparer.Ordinal);
+        return cell => specs.GetValueOrDefault(cell.RelativePath, "S-57");
+    }
+
+    private static bool IsAmlCell(IAssetSource source, string relativePath)
+    {
+        try
+        {
+            // The header reader only reads forward, so any stream will do.
+            using var stream = source.OpenAsync(relativePath).GetAwaiter().GetResult();
+            return S57DatasetHeader.Read(stream, Path.GetFileName(relativePath))?.Aml is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private sealed class TrackedExchangeSet

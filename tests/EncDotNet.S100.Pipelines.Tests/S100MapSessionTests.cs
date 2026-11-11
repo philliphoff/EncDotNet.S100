@@ -6,8 +6,8 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using Mapsui;
 using Mapsui.Projections;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,7 +55,7 @@ public class S100MapSessionTests
         var id = new MapDatasetId("dataset");
 
         Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken));
-        Assert.Single(map.Layers);
+        Assert.Single(map.DatasetLayers());
     }
 
     [Fact]
@@ -104,19 +104,19 @@ public class S100MapSessionTests
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
-        var datasetLayer = Assert.Single(map.Layers);
+        var datasetLayer = Assert.Single(map.DatasetLayers());
 
         var overlay = new Mapsui.Layers.MemoryLayer { Name = "overlay" };
         s100.Layers.AddOverlayLayer(overlay);
 
         // Installed on the map, above the dataset layer (higher index paints
         // later = on top), through the session rather than Map.Layers directly.
-        var layers = map.Layers.ToList();
+        var layers = map.DatasetLayers().ToList();
         Assert.Contains(overlay, layers);
         Assert.True(layers.IndexOf(overlay) > layers.IndexOf(datasetLayer));
 
         s100.Layers.RemoveOverlayLayer(overlay);
-        Assert.DoesNotContain(overlay, map.Layers);
+        Assert.DoesNotContain(overlay, map.DatasetLayers());
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class S100MapSessionTests
 
         // The session stamped its redraw action onto the installed vector layer,
         // so a background publish routes through it — here driving the marshal.
-        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.DatasetLayers()));
         Assert.NotNull(layer.RequestRedraw);
         layer.RequestRepaint();
         Assert.Equal(1, marshalled);
@@ -205,7 +205,7 @@ public class S100MapSessionTests
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
-        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.DatasetLayers()));
         var before = refreshes;
         layer.RequestRepaint();
         Assert.True(refreshes > before);
@@ -218,7 +218,7 @@ public class S100MapSessionTests
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
-        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.DatasetLayers()));
         Assert.NotNull(layer.RequestRedraw);
 
         s100.RemoveDataset(id);
@@ -236,7 +236,7 @@ public class S100MapSessionTests
         var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
-        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.DatasetLayers()));
 
         s100.Dispose();
 
@@ -267,7 +267,7 @@ public class S100MapSessionTests
 
         Assert.True(added);
         Assert.Equal(1, processor.RenderCount);
-        Assert.Single(map.Layers);
+        Assert.Single(map.DatasetLayers());
         Assert.NotNull(s100.GetDataset(id));
     }
 
@@ -314,7 +314,7 @@ public class S100MapSessionTests
         processor.ReleaseDelayedRender.TrySetResult();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => add);
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Empty(s100.GetDatasets());
         Assert.Equal(1, processor.DisposeCount);
     }
@@ -361,7 +361,7 @@ public class S100MapSessionTests
         // Cancellation callbacks run inside Cancel, so this is already set.
         Assert.False(ownedAtCancellation);
         await Assert.ThrowsAsync<InvalidOperationException>(() => add);
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Empty(s100.GetDatasets());
         Assert.Equal(1, processor.DisposeCount);
     }
@@ -377,7 +377,7 @@ public class S100MapSessionTests
 
         Assert.True(s100.RemoveDataset(id));
 
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Empty(s100.GetDatasets());
         Assert.Equal(1, processor.DisposeCount);
     }
@@ -392,7 +392,7 @@ public class S100MapSessionTests
 
         s100.SetVisible(id, false);
 
-        Assert.False(Assert.Single(map.Layers).Enabled);
+        Assert.False(Assert.Single(map.DatasetLayers()).Enabled);
         Assert.False(s100.GetDataset(id)!.Dataset.IsVisible);
     }
 
@@ -534,7 +534,7 @@ public class S100MapSessionTests
 
         Assert.Equal(Path.GetFileName(basePath!), id.Value);
         Assert.NotNull(s100.GetDataset(id));
-        Assert.NotEmpty(map.Layers);
+        Assert.NotEmpty(map.DatasetLayers());
 
         // Re-loading the same path resolves to the same identity, which is
         // already present, so the add is rejected.
@@ -556,7 +556,7 @@ public class S100MapSessionTests
         var id = new MapDatasetId("dataset");
 
         Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken));
-        Assert.Single(map.Layers);
+        Assert.Single(map.DatasetLayers());
     }
 
     [Fact]
@@ -1049,7 +1049,7 @@ public class S100MapSessionTests
 
         return new DatasetPipelineFactory(
             pcManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
             new DisplayPlaneAuthorityProvider());

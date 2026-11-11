@@ -188,7 +188,11 @@ public sealed class LinePaintOp : PaintOp
 /// <summary>A symbol a line style places along a <see cref="LinePaintOp"/>.</summary>
 /// <param name="Symbol">The resolved symbol.</param>
 /// <param name="PositionPx">Its distance from the start of each interval, in display pixels.</param>
-public readonly record struct LineSymbolPlacement(ResolvedSymbol Symbol, double PositionPx);
+/// <param name="RotationDegrees">
+/// Its rotation, clockwise, relative to the line's direction where it lands
+/// (S-100 Part 9 <c>LineSymbol rotation</c>); 180 puts it on the other side.
+/// </param>
+public readonly record struct LineSymbolPlacement(ResolvedSymbol Symbol, double PositionPx, double RotationDegrees = 0);
 
 /// <summary>A resolved solid-colour area fill (with optional outline).</summary>
 /// <remarks>
@@ -302,6 +306,9 @@ public sealed class TextPaintOp : PaintOp
 
     /// <summary>Font proportion (S-100 Part 9 <c>FontCharacteristics.proportion</c>).</summary>
     public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>Font slant (S-100 Part 9 <c>FontCharacteristics.slant</c>).</summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
 
     /// <summary>Resolved halo colour stroked around the glyphs, or null for no halo.</summary>
     public RgbaColor? HaloColor { get; init; }

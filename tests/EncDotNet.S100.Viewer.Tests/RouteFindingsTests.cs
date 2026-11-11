@@ -65,7 +65,9 @@ public sealed class RouteFindingsTests : IDisposable
     internal static RouteFindingsService Findings(PassageCheckFixture f, RecordingViewport? viewport = null, Action<Action>? post = null) =>
         new(f.Check, f.Routes, f.Catalog,
             viewport is null ? null : new StaticCapabilityAccessor<IMapViewportController>(viewport),
-            timeFormat: new Utc());
+            timeFormat: new Utc(),
+            mariner: null,
+            warnings: null);
 
     private static T Value<T>(ToolResult<T> result)
     {
@@ -138,7 +140,7 @@ public sealed class RouteFindingsTests : IDisposable
 
         // F1: grouped MUST REVIEW, CHECK, INFO, then by distance along the route.
         Assert.Equal(findings.Findings.OrderBy(x => x.Group).ThenBy(x => x.Distance?.TotalMetres ?? double.MaxValue), findings.Findings);
-        Assert.Equal(["Route check", "Route check", "Route check", "S-124", "Clearance", "Confidence", "Data"],
+        Assert.Equal(["Route check", "Route check", "Route check", "S-124", "Clearance", "Confidence", "Data", "Weather"],
             Enum.GetValues<RouteFindingCategory>().Select(RouteFindingRowViewModel.TagOf));
     }
 
@@ -149,7 +151,7 @@ public sealed class RouteFindingsTests : IDisposable
         var f = new PassageCheckFixture(waterEnd: PassageCheckFixture.WaterStart.AddHours(2.5),
             post: PassageCheckFixture.SerialPost);
         using var findings = Findings(f, post: PassageCheckFixture.SerialPost);
-        var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
+        var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         Assert.Equal("Findings 0", panel.Check!.FindingsLabel);
 
         await f.CheckAsync();
@@ -195,7 +197,7 @@ public sealed class RouteFindingsTests : IDisposable
         }
 
         // The profile readout follows the cursor to the finding.
-        var clearance = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var clearance = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         Assert.Equal(5, clearance.ReadoutSample!.LegIndex);
     }
 

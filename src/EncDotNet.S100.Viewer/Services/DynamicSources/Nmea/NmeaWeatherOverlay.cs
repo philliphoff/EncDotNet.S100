@@ -45,7 +45,7 @@ internal sealed class NmeaWeatherOverlay : IAsyncDisposable
     /// <param name="source">The source.</param>
     /// <param name="ownShip">The own-ship provider whose fixes place the feature; <see langword="null"/> to rely on the stream's RMC.</param>
     /// <param name="followOwnShip">Whether to forward the fixes now, i.e. whether own ship is shown; <see langword="null"/> for always.</param>
-    public NmeaWeatherOverlay(NmeaWeatherSource source, IOwnShipPositionProvider? ownShip, Func<bool>? followOwnShip = null)
+    public NmeaWeatherOverlay(NmeaWeatherSource source, IOwnShipPositionProvider? ownShip, Func<bool>? followOwnShip)
     {
         ArgumentNullException.ThrowIfNull(source);
         Source = source;
@@ -114,7 +114,7 @@ internal sealed class NmeaWeatherOverlay : IAsyncDisposable
                 case "tcp":
                     return string.IsNullOrEmpty(uri.Host)
                         ? null
-                        : new NmeaTcpLineSource(uri.Host, uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port);
+                        : new NmeaTcpLineSource(uri.Host, TimeProvider.System, uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port);
                 case "file":
                     return Replay(uri.LocalPath);
                 default:

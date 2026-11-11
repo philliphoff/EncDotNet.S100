@@ -7,9 +7,9 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
+using EncDotNet.S100.TestSupport;
 using PureHDF;
 using SkiaSharp;
 
@@ -124,7 +124,7 @@ public class ProjectedCoverageExtentTests
     {
         var path = WriteUtmS102();
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), Factory);
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), Factory);
         try
         {
             var metadata = processor.Metadata;
@@ -148,7 +148,7 @@ public class ProjectedCoverageExtentTests
     {
         var path = WriteUtmS102();
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), Factory);
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), Factory);
         try
         {
             var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -245,6 +245,8 @@ public class ProjectedCoverageExtentTests
                 arrows.FallbackExtent.MinLongitude,
                 arrows.FallbackExtent.MaxLatitude,
                 arrows.FallbackExtent.MaxLongitude));
+            // The extent model currents give way inside (R-111-WX-B, #1228).
+            Assert.Equal(arrows.FallbackExtent, result.CoverageExtent);
         }
         finally
         {

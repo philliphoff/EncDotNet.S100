@@ -324,8 +324,13 @@ internal static class DefaultRules
         yield return F(27, "CTNARE", "CautionArea");
         yield return F(29, "CGUSTA", "CoastGuardStation");
         yield return F(31, "CONZNE", "ContiguousZone");
+        // COSARE: S-65 Annex C §16.14 converts ContinentalShelfArea back;
+        // the S-101 class permits the S-57 area primitive.
+        yield return F(32, "COSARE", "ContinentalShelfArea");
         yield return F(34, "CONVYR", "Conveyor");
         yield return F(36, "CURENT", "CurrentNonGravitational");
+        // CUSZNE — S-65 Annex B (Ed 2.0.0) § 11.2.2.
+        yield return F(37, "CUSZNE", "CustomZone");
         // DAMCON — S-65 Annex B (Ed 2.0.0) § 4.8.5: point is not a permitted
         // Dam primitive, so a point DAMCON converts to Landmark (the
         // translator supplies categoryOfLandmark = 27 (dam) and, when CONVIS
@@ -358,6 +363,7 @@ internal static class DefaultRules
         yield return F(66, "ICEARE", "IceArea");
         yield return F(68, "ISTZNE", "InshoreTrafficZone");
         yield return F(76, "LITFLT", "LightFloat");
+        yield return F(77, "LITVES", "LightVessel");
         yield return F(78, "LOCMAG", "LocalMagneticAnomaly");
         yield return F(80, "LOGPON", "LogPond");
         yield return F(81, "MAGVAR", "MagneticVariation");
@@ -404,7 +410,23 @@ internal static class DefaultRules
         yield return F(91, "PILBOP", "PilotBoardingPlace");
         yield return F(92, "PIPARE", "SubmarinePipelineArea");
         yield return F(93, "PIPOHD", "PipelineOverhead");
-        yield return F(94, "PIPSOL", "PipelineSubmarineOnLand");
+        // PIPSOL — S-65 Annex B (Ed 2.0.0) § 11.6.1: point is not a permitted
+        // PipelineSubmarineOnLand primitive. A point PIPSOL converts to
+        // Obstruction when it extends from the seabed and to Landmark when it
+        // is on land. The rule table cannot see the skin of the earth, so the
+        // point redirects to Obstruction here and S57ToS101Translator moves it
+        // to Landmark when no depth or dredged area covers it.
+        yield return new S57FeatureRule
+        {
+            Objl = 94,
+            S57Acronym = "PIPSOL",
+            DefaultS101Code = "PipelineSubmarineOnLand",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Obstruction",
+            }],
+        };
         yield return F(96, "PRCARE", "PrecautionaryArea");
         yield return F(97, "PRDARE", "ProductionStorageArea");
         yield return F(98, "PYLONS", "PylonBridgeSupport");
@@ -427,7 +449,24 @@ internal static class DefaultRules
         yield return F(110, "RCTLPT", "RecommendedTrafficLanePart");
         yield return F(111, "RSCSTA", "RescueStation");
         yield return F(113, "RETRFL", "Retroreflector");
-        yield return F(117, "RUNWAY", "Runway");
+        // RUNWAY — S-65 Annex B (Ed 2.0.0) § 4.8.12: point is not a permitted
+        // Runway primitive. A point RUNWAY that is a helicopter landing pad
+        // (CATRUN = 2) converts to Helipad; any other point RUNWAY is not
+        // converted.
+        yield return new S57FeatureRule
+        {
+            Objl = 117,
+            S57Acronym = "RUNWAY",
+            DefaultS101Code = "Runway",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                ConditionAttribute = "CATRUN",
+                ConditionValues = ["2"],
+                TargetS101Code = "Helipad",
+            }],
+            DroppedPrimitives = [S57GeometryPrimitive.Point],
+        };
         yield return F(118, "SNDWAV", "Sandwave");
         yield return F(119, "SEAARE", "SeaAreaNamedWaterArea");
         yield return F(120, "SPLARE", "SeaplaneLandingArea");
@@ -436,11 +475,18 @@ internal static class DefaultRules
         yield return F(124, "SISTAW", "SignalStationWarning");
         yield return F(125, "SILTNK", "SiloTank");
         yield return F(130, "SPRING", "Spring");
+        yield return F(133, "SUBTLN", "SubmarineTransitLane");
         yield return F(134, "SWPARE", "SweptArea");
         yield return F(135, "TESARE", "TerritorialSeaArea");
         yield return F(143, "TIDEWY", "Tideway");
         yield return F(146, "TSSBND", "TrafficSeparationSchemeBoundary");
         yield return F(148, "TSSLPT", "TrafficSeparationSchemeLanePart");
+        // TSEZNE — S-65 Annex B (Ed 2.0.0) § 10.2.1.4: its CATTSS isn't converted,
+        // and SeparationZoneOrLine doesn't bind iMOAdopted.
+        yield return F(150, "TSEZNE", "SeparationZoneOrLine");
+        // TSELNE — § 10.2.1.3: the line form of the same feature; its CATTSS
+        // isn't converted either.
+        yield return F(145, "TSELNE", "SeparationZoneOrLine");
         yield return F(151, "TUNNEL", "Tunnel");
         yield return F(152, "TWRTPT", "TwoWayRoutePart");
         yield return F(154, "UNSARE", "UnsurveyedArea");
@@ -455,7 +501,19 @@ internal static class DefaultRules
         // converts to QualityOfBathymetricData; QualityOfNonBathymetricData is
         // sourced from M_ACCY (S-57 → S-101 Conversion Guidance; the bundled
         // S-101 FC aliases QualityOfNonBathymetricData to M_ACCY).
-        yield return F(301, "M_ACCY", "QualityOfNonBathymetricData");
+        yield return F(300, "M_ACCY", "QualityOfNonBathymetricData");
+        // Meta objects S-101 has no feature for. They're dropped on purpose,
+        // so they don't draw as unknown objects ("?", S57UnknownObject):
+        // M_HOPA isn't converted (S-65 Annex B § 2.1.1); M_CSCL cuts the
+        // DataCoverage made from M_COVR and sets its display scales
+        // (§ 2.2.6, S57ToS101Translator.Coverage.cs) rather than becoming a
+        // feature of its own; and S-65 Annex B converts no M_HDAT, M_PROD or
+        // M_UNIT (their content is dataset-level metadata in S-101, § 2.2.1).
+        yield return F(301, "M_CSCL", null);
+        yield return F(303, "M_HDAT", null);
+        yield return F(304, "M_HOPA", null);
+        yield return F(307, "M_PROD", null);
+        yield return F(311, "M_UNIT", null);
         yield return F(302, "M_COVR", "DataCoverage");
         yield return F(305, "M_NPUB", "InformationArea");
         // M_NSYS — S-65 Annex B § 12.2: an M_NSYS with a value in ORIENT is
@@ -518,6 +576,9 @@ internal static class DefaultRules
         // redirected to Landmark (see CTRPNT feature rule). The default
         // mapping is therefore null; the redirect supplies the override.
         yield return A(16, "CATCTR", null);
+        // CATRUN: S-101 Runway and Helipad have no category; registered only
+        // so the RUNWAY rule can tell a helicopter landing pad (CATRUN = 2).
+        yield return A(58, "CATRUN", null);
         yield return A(19, "CATCRN", "categoryOfCrane");
         yield return A(29, "CATGAT", "categoryOfGate");
         yield return A(30, "CATHAF", "categoryOfHarbourFacility");
@@ -536,7 +597,12 @@ internal static class DefaultRules
         yield return A(76, "COLPAT", "colourPattern");
         yield return A(77, "COMCHA", "communicationChannel");
         yield return A(81, "CONDTN", "condition");
-        yield return A(82, "CONRAD", "radarConspicuous");
+        // CONRAD, CATDIS, CATTRK and CATTSS are S-57 enumerations that S-101
+        // remodels as Booleans; the remaps write "true"/"false" (as the
+        // openingBridge remap does), since the S-100 Lua framework reads a
+        // Boolean as true only for "1" or "true". S-65 Annex C §27.146,
+        // §27.90, §27.1 and §27.112 give the inverses.
+        yield return Boolean(82, "CONRAD", "radarConspicuous", whenTrue: ["1", "3"], whenFalse: ["2"]);
         yield return A(83, "CONVIS", "visualProminence");
         yield return A(87, "DRVAL1", "depthRangeMinimumValue");
         yield return A(88, "DRVAL2", "depthRangeMaximumValue");
@@ -609,7 +675,7 @@ internal static class DefaultRules
         yield return A(7, "CATAIR", "categoryOfAirportAirfield");
         yield return A(8, "CATACH", "categoryOfAnchorage");
         yield return A(10, "CATBUA", "categoryOfBuiltUpArea");
-        yield return A(21, "CATDIS", "distanceMarkVisible");
+        yield return Boolean(21, "CATDIS", "distanceMarkVisible", whenTrue: ["2", "3", "4"], whenFalse: ["1"]);
         yield return A(35, "CATLMK", "categoryOfLandmark");
         yield return A(41, "CATNAV", "categoryOfNavigationLine");
         yield return A(45, "CATPLE", "categoryOfPile");
@@ -677,13 +743,13 @@ internal static class DefaultRules
         yield return A(51, "CATRAS", "categoryOfRadarStation");
         yield return A(52, "CATRTB", "categoryOfRadarTransponderBeacon");
         yield return A(53, "CATROS", "categoryOfRadioStation");
-        yield return A(54, "CATTRK", "basedOnFixedMarks");
+        yield return Boolean(54, "CATTRK", "basedOnFixedMarks", whenTrue: ["1"], whenFalse: ["2"]);
         yield return A(55, "CATRSC", "categoryOfRescueStation");
         yield return A(59, "CATSEA", "categoryOfSeaArea");
         yield return A(61, "CATSIT", "categoryOfSignalStationTraffic");
         yield return A(62, "CATSIW", "categoryOfSignalStationWarning");
         yield return A(63, "CATSIL", "categoryOfSiloTank");
-        yield return A(67, "CATTSS", "iMOAdopted");
+        yield return Boolean(67, "CATTSS", "iMOAdopted", whenTrue: ["1"], whenFalse: ["2"]);
         yield return A(68, "CATVEG", "categoryOfVegetation");
         yield return A(69, "CATWAT", "categoryOfWaterTurbulence");
         yield return A(70, "CATWED", "categoryOfWeedKelp");
@@ -691,6 +757,13 @@ internal static class DefaultRules
         yield return A(111, "NATION", "nationality");
         yield return A(130, "RYRMGV", "referenceYearForMagneticVariation");
         yield return A(139, "SIGFRQ", "signalFrequency");
+        // The class definition, name and symbol instruction of a NEWOBJ
+        // (OBJL 163). A virtual AIS aid to navigation's are replaced by its
+        // virtualAISAidToNavigationType (S57ToS101Translator.VirtualAisType),
+        // from which S-65 Annex C §27.199 re-creates them.
+        yield return A(190, "CLSDEF", null);
+        yield return A(191, "CLSNAM", null);
+        yield return A(192, "SYMINS", null);
         yield return A(140, "SIGGEN", "signalGeneration");
         yield return A(150, "SURATH", "surveyAuthority");
         yield return A(153, "SURTYP", "surveyType");
@@ -738,4 +811,13 @@ internal static class DefaultRules
 
     private static S57AttributeRule A(ushort attl, string acronym, string? s101)
         => new() { Attl = attl, S57Acronym = acronym, DefaultS101Code = s101 };
+
+    // An S-57 enumeration that S-101 models as a Boolean attribute.
+    private static S57AttributeRule Boolean(ushort attl, string acronym, string s101, string[] whenTrue, string[] whenFalse)
+    {
+        var remap = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var value in whenTrue) remap[value] = "true";
+        foreach (var value in whenFalse) remap[value] = "false";
+        return A(attl, acronym, s101) with { DefaultValueRemap = remap };
+    }
 }

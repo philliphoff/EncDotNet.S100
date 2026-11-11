@@ -14,13 +14,15 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// The bundle uses S-101 cells (and S-401, and translated S-57) for charted
 /// features and regulated areas, S-102 surfaces with an S-101 fallback for
 /// charted depth, S-104 grids and station series for water level, S-122
-/// datasets for protected areas, and S-124 datasets for navigational
-/// warnings. Other products are ignored.
+/// datasets for protected areas, S-124 datasets for navigational
+/// warnings, GRIB2 and NetCDF weather grids for wind and waves, and NHC
+/// tropical cyclone advisories (the last one loaded of each storm) for the
+/// weather check's tropical cyclone rule. Other products are ignored.
 /// </para>
 /// <para>
 /// Each cell's features and spatial index are built on first use and kept,
-/// and the depth, water-level and warning sources are built the first time
-/// a check reads them. So build the sources once per set of loaded datasets
+/// and the depth, water-level, warning and weather sources are built the
+/// first time a check reads them. So build the sources once per set of loaded datasets
 /// (<see cref="RouteCheckSourceCache"/> does that) and check as often as the
 /// route changes. Every source is safe to call from several threads at once.
 /// </para>
@@ -52,6 +54,10 @@ public static class CatalogRouteCheckSources
             Warnings = new LazyWarnings(() => new RouteWarningList(
                 RouteWarningSources.FromDatasets(snapshot),
                 RouteWarningSources.SetFromDatasets(snapshot))),
+            Weather = CatalogRouteWeatherSource.HasWeather(snapshot)
+                ? new LazyWeather(() => new CatalogRouteWeatherSource(snapshot))
+                : null,
+            Cyclones = CatalogRouteCyclone.FromDatasets(snapshot),
         };
     }
 
@@ -75,6 +81,15 @@ public static class CatalogRouteCheckSources
         public IReadOnlyList<WaterLevelSourceInfo> Datasets => _source.Value.Datasets;
 
         public IReadOnlyList<CoverageArea> Footprint => _source.Value.Footprint;
+    }
+
+    private sealed class LazyWeather(Func<IRouteWeatherSource> create) : IRouteWeatherSource
+    {
+        private readonly Lazy<IRouteWeatherSource> _source = new(create, LazyThreadSafetyMode.ExecutionAndPublication);
+
+        public bool Carries(WeatherQuantity quantity) => _source.Value.Carries(quantity);
+
+        public IReadOnlyList<IRouteWeatherSeries> Locate(GeoPosition position, WeatherQuantity quantity) => _source.Value.Locate(position, quantity);
     }
 
     private sealed class LazyWarnings(Func<IRouteWarningSource> create) : IRouteWarningSource

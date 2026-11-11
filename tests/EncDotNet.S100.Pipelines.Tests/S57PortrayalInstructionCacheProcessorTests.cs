@@ -2,8 +2,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -31,13 +31,18 @@ public class S57PortrayalInstructionCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var first = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(cacheDir, maxBytes: 256L * 1024 * 1024));
+            var firstKind = EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions);
+            var first = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(firstKind));
             var firstResult = await first.BuildVectorPortrayalAsync(cancellationToken: ct);
             Assert.Equal(1, first.RuleRunCount);
             Assert.Equal(0, first.SharedInstructionCacheHits);
 
+            // The cache writes behind the render: wait for the entry to land
+            // on disk before the "restart" reads the folder.
+            Assert.True(firstKind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
+
             // A new cache over the same folder stands in for a restart.
-            var second = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(cacheDir, maxBytes: 256L * 1024 * 1024));
+            var second = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)));
             var secondResult = await second.BuildVectorPortrayalAsync(cancellationToken: ct);
             Assert.Equal(0, second.RuleRunCount);
             Assert.Equal(1, second.SharedInstructionCacheHits);
@@ -90,7 +95,7 @@ public class S57PortrayalInstructionCacheProcessorTests
         return new S57DatasetProcessor(
             fixturePath,
             catalogueManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)),
             cache);
     }

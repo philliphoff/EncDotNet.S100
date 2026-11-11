@@ -41,7 +41,7 @@ public sealed class LibraryToolsTests : IDisposable
     {
         _library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, _context.CreateS57ExchangeSet("Charts"))]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, new StubImporter(), _loader, _downloader, action => action());
+        var panel = new LibraryPanelViewModel(_library, new StubImporter(), _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         return (panel, new ViewerLibraryController(panel, () => _userCatalogues, Immediate));
     }
 

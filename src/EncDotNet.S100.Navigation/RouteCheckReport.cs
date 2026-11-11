@@ -133,6 +133,7 @@ public sealed class RouteCheckReport
         Departures = clearance?.Departures;
         Areas = Detail<AreaCheckResult>(AreaCheck.CheckName)?.Matches ?? [];
         Warnings = Detail<WarningCheckResult>(WarningCheck.CheckName)?.Matches ?? [];
+        Weather = Detail<WeatherCheckResult>(WeatherCheck.CheckName);
         Verdict = RouteCheckVerdict.From(Findings, Clearance);
         DatasetsUsed = Datasets(context.Sources);
     }
@@ -177,9 +178,16 @@ public sealed class RouteCheckReport
     public IReadOnlyList<RouteWarningMatch> Warnings { get; }
 
     /// <summary>
+    /// The weather check's result, with the limits it used, its samples and
+    /// its departure sweep, or <c>null</c> when it didn't run.
+    /// </summary>
+    public WeatherCheckResult? Weather { get; }
+
+    /// <summary>
     /// The ids of the datasets behind the report, sorted: the chart cells
-    /// along the corridors, the datasets behind the findings, and the depth
-    /// and water-level datasets the clearance check read.
+    /// along the corridors, the datasets behind the findings, the depth and
+    /// water-level datasets the clearance check read, and the weather
+    /// datasets the weather check read.
     /// </summary>
     public IReadOnlyList<string> DatasetsUsed { get; }
 
@@ -227,6 +235,11 @@ public sealed class RouteCheckReport
             datasets.UnionWith(used.BathymetryDatasets);
             datasets.UnionWith(used.FallbackDatasets);
             datasets.UnionWith(used.WaterLevelSources.Select(s => s.DatasetId));
+        }
+
+        if (Weather is { } weather)
+        {
+            datasets.UnionWith(weather.DatasetsUsed);
         }
 
         return datasets.ToArray();

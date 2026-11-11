@@ -144,6 +144,60 @@ public sealed class GribWeatherDatasetTests
         Assert.Throws<GribFormatException>(() => dataset.GridSet.ReadStep(height, 1, Ct));
     }
 
+    [Fact]
+    public void Water_temperature_reads_as_the_sea_temperature_in_kelvin()
+    {
+        // WMO table 4.2-10-3 parameter 0 (NCEP WTMP, as RTOFS writes it) is
+        // already in kelvin, so it reads unconverted.
+        var grid = new Grid(10, 10, 1, 2, 2);
+        var bytes = Encode(new Message { Discipline = 10, Category = 3, Number = 0, Grid = grid, Values = [288.15, 290.5, double.NaN, 300.25] });
+
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
+        var sst = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, sst.Id);
+        Assert.Equal(WeatherLevel.Surface, sst.Level);
+        Assert.Equal("WTMP", GribShortNames.Get(new GribParameterCode(10, 3, 0)));
+        // Rows are normalised south to north, so compare the values as a set.
+        var values = dataset.GridSet.ReadStep(sst, 0, Ct);
+        Assert.Single(values, float.IsNaN);
+        Assert.Equal([288.15, 290.5, 300.25], values.Where(v => !float.IsNaN(v)).Select(v => Math.Round(v, 2)).Order());
+    }
+
+    [Fact]
+    public void Precipitation_CAPE_and_cloud_cover_have_NCEP_short_names_and_cloud_reads_for_the_entire_atmosphere()
+    {
+        var grid = new Grid(10, 10, 1, 1, 2);
+        var bytes = Encode(new Message { Category = 6, Number = 1, SurfaceType = 10, Grid = grid, DecimalScale = 0, Values = [40, 100] });
+
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
+        var cloud = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.CloudCover, cloud.Id);
+        Assert.Equal(WeatherLevel.EntireAtmosphere, cloud.Level);
+        Assert.Equal(WeatherLevel.EntireAtmosphere, dataset.File.Fields[0].ToWeatherLevel());
+        Assert.Equal("PRATE", GribShortNames.Get(new GribParameterCode(0, 1, 7)));
+        Assert.Equal("APCP", GribShortNames.Get(new GribParameterCode(0, 1, 8)));
+        Assert.Equal("TCDC", GribShortNames.Get(new GribParameterCode(0, 6, 1)));
+        Assert.Equal("CAPE", GribShortNames.Get(new GribParameterCode(0, 7, 6)));
+    }
+
+    [Fact]
+    public void Surface_visibility_reads_in_metres()
+    {
+        // GFS VIS: WMO table 4.2-0-19 parameter 0, at the surface, in metres.
+        var grid = new Grid(10, 10, 1, 2, 2);
+        var bytes = Encode(new Message { Category = 19, Number = 0, Grid = grid, DecimalScale = 0, Values = [400, 2500, 8000, 24100] });
+
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
+        var visibility = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.Visibility, visibility.Id);
+        Assert.Equal(WeatherLevel.Surface, visibility.Level);
+        Assert.Equal("VIS", GribShortNames.Get(new GribParameterCode(0, 19, 0)));
+        Assert.Equal([400, 2500, 8000, 24100], dataset.GridSet.ReadStep(visibility, 0, Ct).Select(v => Math.Round(v)).Order());
+    }
+
     // -----------------------------------------------------------------
     // Levels: GFS-Wave's surface wind and the 10 m wind
     // -----------------------------------------------------------------

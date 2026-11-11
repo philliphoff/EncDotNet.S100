@@ -3,9 +3,10 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -32,13 +33,8 @@ public sealed class TileMetatileTests
         var outside = new TileKey(Band, 102, 100);
         var otherBand = new TileKey(Band + 1, 100, 100);
         var pending = peers.Append(outside).Append(otherBand).ToHashSet();
-        var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(seed);
 
-        var claimed = S100VectorTileRenderer.TakeMetatile(
-            pending,
-            (minX + maxX) * 0.5,
-            (minY + maxY) * 0.5,
-            enabled: true);
+        var claimed = S100VectorTileRenderer.TakeMetatile(pending, seed, enabled: true);
 
         Assert.Equal(seed, claimed[0]);
         Assert.Equal(peers.ToHashSet(), claimed.ToHashSet());
@@ -46,21 +42,25 @@ public sealed class TileMetatileTests
     }
 
     [Fact]
-    public void TakeMetatile_DisabledClaimsOnlyNearest()
+    public void TakeMetatile_DisabledClaimsOnlyTheSeed()
     {
         var near = new TileKey(Band, 10, 10);
         var peer = new TileKey(Band, 11, 10);
         var pending = new HashSet<TileKey> { near, peer };
-        var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(near);
 
-        var claimed = S100VectorTileRenderer.TakeMetatile(
-            pending,
-            (minX + maxX) * 0.5,
-            (minY + maxY) * 0.5,
-            enabled: false);
+        var claimed = S100VectorTileRenderer.TakeMetatile(pending, near, enabled: false);
 
         Assert.Equal([near], claimed);
         Assert.Equal([peer], pending);
+    }
+
+    [Fact]
+    public void TakeMetatile_SeedAlreadyTakenClaimsNothing()
+    {
+        var pending = new HashSet<TileKey> { new(Band, 11, 10) };
+
+        Assert.Empty(S100VectorTileRenderer.TakeMetatile(pending, new TileKey(Band, 10, 10), enabled: true));
+        Assert.Single(pending);
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public sealed class TileMetatileTests
 
         return new DatasetPipelineFactory(
             portrayalCatalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());

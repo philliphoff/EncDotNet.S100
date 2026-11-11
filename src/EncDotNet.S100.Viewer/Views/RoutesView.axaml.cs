@@ -30,7 +30,7 @@ public partial class RoutesView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        if (Main?.RoutesListHeight is { } height)
+        if (Main?.Layout.RoutesListHeight is { } height)
             SetListHeight(height);
     }
 
@@ -42,7 +42,7 @@ public partial class RoutesView : UserControl
     private void OnSplitterDragCompleted(object? sender, VectorEventArgs e)
     {
         if (Main is { } main)
-            main.RoutesListHeight = RoutesBody.RowDefinitions[0].ActualHeight;
+            main.Layout.RoutesListHeight = RoutesBody.RowDefinitions[0].ActualHeight;
     }
 
     private void SetListHeight(double height)

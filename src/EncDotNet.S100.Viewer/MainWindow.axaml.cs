@@ -35,12 +35,19 @@ public partial class MainWindow : ShadUI.Window
     private readonly MapsuiMapHost _mapHost;
     private ValidationOverlayService? _validationOverlay;
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
+    private EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor? _settleMonitor;
     private Map? _renderActivityMap;
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
+    private EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController? _amlOutlineController;
+
+    /// <summary>The status-bar width below which the MARKING pill drops its label.</summary>
+    private const double AmlMarkingLabelMinWidth = 900;
+
     private LibraryCoverageOverlayController? _libraryCoverageController;
+    private EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController? _adjustedAreaBoundary;
     private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -147,25 +154,25 @@ public partial class MainWindow : ShadUI.Window
         // Measure keys (#1130, D20): G geometry, Delete clears, Ctrl+C (⌘C) copies.
         Tools.MeasureKeys.Attach(
             this,
-            _viewModel.MeasureSession,
-            _viewModel.MeasureCard,
+            _viewModel.MapTools.MeasureSession,
+            _viewModel.MapTools.MeasureCard,
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
         // Range & bearing keys (#1130 D20): G geometry, Delete clears, Ctrl+C
         // (⌘C) copies; only while the tool is on and never while typing.
         Tools.RangeBearingKeys.Attach(
             this,
-            _viewModel.RangeBearing.State,
+            _viewModel.MapTools.RangeBearing.State,
             () =>
             {
-                if (_viewModel.RangeBearing.CopyText is { } text && Clipboard is { } clipboard)
+                if (_viewModel.MapTools.RangeBearing.CopyText is { } text && Clipboard is { } clipboard)
                     _ = clipboard.SetTextAsync(text);
             },
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
         // The Time HUD and the dock follow the map's width (#712 F5).
-        MapArea.SizeChanged += (_, e) => _viewModel.MapWidth = e.NewSize.Width;
-        SizeChanged += (_, e) => _viewModel.WindowWidth = e.NewSize.Width;
+        MapArea.SizeChanged += (_, e) => _viewModel.Layout.MapWidth = e.NewSize.Width;
+        SizeChanged += (_, e) => _viewModel.Layout.WindowWidth = e.NewSize.Width;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
@@ -180,7 +187,8 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
             App.Services.GetRequiredService<
-                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>());
+                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
+            App.Services.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>());
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
         // The image renderer is the MCP readiness gate, so publish it only after
@@ -199,7 +207,7 @@ public partial class MainWindow : ShadUI.Window
         // activity-panel state (which docks are open and which tab each
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
-            new ViewerUiController(_viewModel);
+            new ViewerUiController(_viewModel.Layout);
         _loader.Initialize(_mapHost, _mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
@@ -223,6 +231,12 @@ public partial class MainWindow : ShadUI.Window
             if (_renderActivityMonitor is not null)
             {
                 _renderActivityMonitor.BusyProbe = null;
+                if (_settleMonitor is not null)
+                {
+                    _settleMonitor.TileProbe = null;
+                    _settleMonitor.RequestRedraw = null;
+                    _settleMonitor = null;
+                }
                 if (_renderActivityMap is not null && _renderActivityRefreshHandler is not null)
                 {
                     _renderActivityMap.RefreshGraphicsRequest -= _renderActivityRefreshHandler;
@@ -233,7 +247,7 @@ public partial class MainWindow : ShadUI.Window
             }
             // PR-M3: flush any pending debounced size writes so the last
             // splitter drag isn't lost on shutdown.
-            _viewModel.OnShutdown();
+            _viewModel.Layout.OnShutdown();
             // Record a clean shutdown so the next launch does not report
             // this (graceful) exit as a crash.
             EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.MarkCleanExit();
@@ -248,8 +262,12 @@ public partial class MainWindow : ShadUI.Window
             _pickHighlightController = null;
             _extentIndicatorController?.Dispose();
             _extentIndicatorController = null;
+            _amlOutlineController?.Dispose();
+            _amlOutlineController = null;
             _libraryCoverageController?.Dispose();
             _libraryCoverageController = null;
+            _adjustedAreaBoundary?.Dispose();
+            _adjustedAreaBoundary = null;
             _overscaleCurtainController?.Dispose();
             _overscaleCurtainController = null;
             // Clear the late-bound accessors this window owns so panel /
@@ -276,7 +294,7 @@ public partial class MainWindow : ShadUI.Window
             libraryImporter: _libraryImporter);
 
         // Open Recent replays exchange sets through the same progress UI.
-        _viewModel.ExchangeSetOpener = RunExchangeSetAsync;
+        _viewModel.DatasetOpening.ExchangeSetOpener = RunExchangeSetAsync;
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -368,6 +386,15 @@ public partial class MainWindow : ShadUI.Window
 
             _renderActivityRefreshHandler = (_, _) => monitor.NotifyActivity();
             activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
+
+            // The tile half of the settled signal behind the MCP await_settled
+            // tool (map rendering slice 1). Read on the MCP request's thread from
+            // a snapshot of the layers; inert until a harness turns tracking on.
+            var settle = App.Services.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>();
+            _settleMonitor = settle;
+            settle.TileProbe = () => EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.EvaluateSettle(
+                activityMap.Layers.ToArray());
+            settle.RequestRedraw = activityMap.RefreshGraphics;
         }
 
         // The background vector-snapshot / scene / tile renderers repaint through
@@ -460,6 +487,7 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
             warningDrawing: App.Services.GetService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>());
 
         // Out-of-scale extent indicators: outline the extents of loaded
@@ -470,7 +498,19 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            App.Services.GetRequiredService<SettingsViewModel>());
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
+            UiThread.Post);
+
+        // AML coverage outlines (#1371): where AML cells that aren't drawn
+        // (or are hidden) lie, as an ink frame with inward ticks.
+        _amlOutlineController = new EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController(
+            _mapHost,
+            _viewModel.Datasets,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            UiThread.RunOrPost,
+            UiThread.Post);
 
         // Timeline lanes (#710): the hovered lane's footprint.
         App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.TimelineMapScope>().Attach(_mapHost);
@@ -480,30 +520,34 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<LibraryPanelViewModel>(),
             _viewModel.Timeline,
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.GlobalTimeService>(),
-            _viewModel);
+            _viewModel.Layout);
 
         // Navigational warnings (#932): the no-sources state's Open Library.
-        if (_viewModel.NavigationalWarnings is { } warnings)
-        {
-            warnings.OpenLibraryRequested += (_, _) => _viewModel.SelectTab(LibraryImportCoordinator.LibraryPanelId);
-            // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
-            warnings.RevealRequested += (_, _) => _viewModel.SelectTab("NavigationalWarnings");
-        }
+        var warnings = _viewModel.MapChrome.NavigationalWarnings;
+        warnings.OpenLibraryRequested += (_, _) => _viewModel.Layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+        // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
+        warnings.RevealRequested += (_, _) => _viewModel.Layout.SelectTab("NavigationalWarnings");
 
         // #959: a Warning card's "Crosses route · leg 3 → 4" brings the Routes panel's Findings forward.
         if (App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>() is { } routeFindings)
-            routeFindings.OpenRequested += (_, _) => _viewModel.SelectTab("Routes");
+            routeFindings.OpenRequested += (_, _) => _viewModel.Layout.SelectTab("Routes");
 
         // Library coverage (issue #655): outline the datasets listed in the
         // Library panel — without loading them — while that panel is showing.
         _libraryCoverageController = new LibraryCoverageOverlayController(
             _mapHost,
             App.Services.GetRequiredService<LibraryPanelViewModel>(),
-            _viewModel,
+            _viewModel.Layout,
             App.Services.GetRequiredService<IMapViewportNotifier>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current);
+            () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current,
+            UiThread.RunOrPost);
+
+        // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
+        _adjustedAreaBoundary = new EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController(
+            _mapHost,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>());
 
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).
@@ -513,7 +557,8 @@ public partial class MainWindow : ShadUI.Window
             _loader,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
-            App.Services.GetRequiredService<SettingsViewModel>());
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost);
         // Depth basis indicator (#1191): what the chart's depths are relative to.
         InitializeDepthBasis();
 
@@ -543,6 +588,7 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>())
         {
             DepthBasis = App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
+            Viewport = _mapHost,
         };
         interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
         interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);
@@ -555,7 +601,7 @@ public partial class MainWindow : ShadUI.Window
         // Apply the cursor that matches the current mode and keep it in sync
         // with the active tool.
         ApplyToolCursor();
-        _viewModel.Tools.ActiveToolChanged += _ => Dispatcher.UIThread.Post(ApplyToolCursor);
+        _viewModel.MapTools.Tools.ActiveToolChanged += _ => Dispatcher.UIThread.Post(ApplyToolCursor);
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -732,7 +778,7 @@ public partial class MainWindow : ShadUI.Window
             .WithContent(body)
             .WithAction(
                 Strings.Toast_PreviousCrashAction,
-                () => _viewModel.ShowFeedbackCommand.Execute(null))
+                () => _viewModel.AppCommands.ShowFeedbackCommand.Execute(null))
             .Persistent()
             .Show();
     }
@@ -830,7 +876,7 @@ public partial class MainWindow : ShadUI.Window
         {
             if (datasetPaths.Length > 0)
             {
-                _viewModel.SelectDefaultTab();
+                _viewModel.Layout.SelectDefaultTab();
                 foreach (var datasetPath in datasetPaths)
                 {
                     // No registered product claims an unrecognised file, so skip
@@ -1020,7 +1066,7 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void ApplyToolCursor()
     {
-        MapControl.Cursor = _viewModel.Tools.ActiveTool?.Cursor ?? Cursor.Default;
+        MapControl.Cursor = _viewModel.MapTools.Tools.ActiveTool?.Cursor ?? Cursor.Default;
     }
 
     /// <summary>
@@ -1031,13 +1077,13 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void InitializeMapTools(MapInteractionController interactionController)
     {
-        var tools = _viewModel.Tools;
+        var tools = _viewModel.MapTools.Tools;
 
         var context = new MapToolContext(
             mapControl: MapControl,
             addLayer: _mapHost.AddToolLayer,
             removeLayer: _mapHost.RemoveToolLayer,
-            setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
+            setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MapTools.MeasureSummary = text),
             refreshGraphics: _mapHost.RequestRedraw,
             screenToLatLon: ScreenToLatLon,
             latLonToScreen: LatLonToScreen);
@@ -1106,13 +1152,15 @@ public partial class MainWindow : ShadUI.Window
             _routeAppearance,
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>());
         RouteCheckLegend.DataContext = _routeCheckLegend;
+        // #1374: the AML CLB chip ("not used for depth checks").
+        AmlClbChip.DataContext = App.Services.GetRequiredService<AmlDisplaySectionViewModel>();
         // Clear of the Time HUD when it's shown, else close to the map's edge.
         void PlaceLegend() => RouteCheckLegend.Margin = new Thickness(
-            12, 0, 0, _viewModel.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);
+            12, 0, 0, _viewModel.Layout.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);
         PlaceLegend();
-        _viewModel.PropertyChanged += (_, e) =>
+        _viewModel.Layout.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.IsTimeHudVisible))
+            if (e.PropertyName == nameof(ShellLayoutViewModel.IsTimeHudVisible))
                 PlaceLegend();
         };
         RouteCheckLegend.LayoutUpdated += (_, _) =>
@@ -1156,7 +1204,7 @@ public partial class MainWindow : ShadUI.Window
             // Two zoom steps on the cluster: its markers are within 24 px, so
             // at four times the scale they stand apart.
             var world = navigator.Viewport.ScreenToWorld(cluster.Center.X, cluster.Center.Y + EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.StemLength);
-            navigator.CenterOnAndZoomTo(world, navigator.Viewport.Resolution / 4, 250);
+            _mapHost.AnimateToCenterAndResolution(world, navigator.Viewport.Resolution / 4, 250);
         }
     }
 
@@ -1285,7 +1333,7 @@ public partial class MainWindow : ShadUI.Window
         if (paths.Count == 0)
             return;
 
-        _viewModel.SelectDefaultTab();
+        _viewModel.Layout.SelectDefaultTab();
 
         foreach (var path in paths)
         {
@@ -1316,9 +1364,9 @@ public partial class MainWindow : ShadUI.Window
 
     private async Task RunExchangeSetAsync(string sourcePath)
     {
-        _viewModel.SelectDefaultTab();
+        _viewModel.Layout.SelectDefaultTab();
 
-        var token = _viewModel.BeginExchangeSetLoad(sourcePath);
+        var token = _viewModel.DatasetOpening.BeginExchangeSetLoad(sourcePath);
 
         // One progress notification drives the whole open: indeterminate
         // until the catalogue is parsed, then determinate as datasets are
@@ -1334,7 +1382,7 @@ public partial class MainWindow : ShadUI.Window
             .Persistent()
             .WithAction(
                 Strings.Toast_Cancel,
-                () => _viewModel.CancelExchangeSetCommand.Execute(null),
+                () => _viewModel.DatasetOpening.CancelExchangeSetCommand.Execute(null),
                 dismissOnInvoke: false)
             .Show();
 
@@ -1412,7 +1460,7 @@ public partial class MainWindow : ShadUI.Window
 
             var result = await _exchangeSetService.OpenAsync(
                 sourcePath, progress, token, notification, onFramingReady);
-            _viewModel.EndExchangeSetLoad(result);
+            _viewModel.DatasetOpening.EndExchangeSetLoad(result);
 
             // Remember a successfully opened exchange set in Open Recent
             // (issue #655). A dropped CATALOG.031 is recorded as its folder.
@@ -1450,7 +1498,7 @@ public partial class MainWindow : ShadUI.Window
         }
         catch (Exception ex)
         {
-            _viewModel.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
+            _viewModel.DatasetOpening.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
             {
                 SourcePath = sourcePath,
                 FailureMessage = ex.Message,
@@ -1589,7 +1637,7 @@ public partial class MainWindow : ShadUI.Window
         if (e.DataTransfer.TryGetFiles() is not { } files)
             return;
 
-        _viewModel.SelectDefaultTab();
+        _viewModel.Layout.SelectDefaultTab();
 
         foreach (var item in files)
         {
@@ -1691,7 +1739,7 @@ public partial class MainWindow : ShadUI.Window
             return;
         if (e.Key == Key.T && e.KeyModifiers == KeyModifiers.None)
         {
-            _viewModel.ToggleTimelineCommand.Execute(null);
+            _viewModel.Layout.ToggleTimelineCommand.Execute(null);
             e.Handled = true;
             return;
         }
@@ -1727,7 +1775,7 @@ public partial class MainWindow : ShadUI.Window
             return;
 
         var timeFormat = App.Services.GetService<ITimeFormatProvider>();
-        void Push() => _viewModel.UpdateDepthBasis(
+        void Push() => _viewModel.StatusBar.UpdateDepthBasis(
             depthBasis.Current, depthBasis.WaterLevelLoaded, timeFormat?.Current ?? TimeFormat.Utc);
         depthBasis.Changed += (_, _) => Push();
         if (timeFormat is not null)
@@ -1743,8 +1791,12 @@ public partial class MainWindow : ShadUI.Window
             pill.Fit(room);
         }
         StatusBarDock.SizeChanged += (_, _) => FitDepthBasis();
+        // The MARKING pill keeps its marking whole and drops its label when
+        // the status bar is short of room (#1371, decision 10).
+        StatusBarDock.SizeChanged += (_, _) =>
+            _viewModel.StatusBar.AmlMarking.ShowsLabel = StatusBarDock.Bounds.Width >= AmlMarkingLabelMinWidth;
         StatusRightCluster.SizeChanged += (_, _) => FitDepthBasis();
-        _viewModel.DepthBasis.PropertyChanged += (_, e) =>
+        _viewModel.StatusBar.DepthBasis.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DepthBasisIndicatorViewModel.FormTexts))
                 Dispatcher.UIThread.Post(FitDepthBasis, DispatcherPriority.Render);

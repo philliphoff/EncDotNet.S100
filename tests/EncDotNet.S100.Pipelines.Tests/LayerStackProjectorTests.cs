@@ -5,10 +5,9 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
-using Mapsui.Nts;
-using NetTopologySuite.Geometries;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -107,108 +106,78 @@ public class LayerStackProjectorTests
     }
 
     [Fact]
-    public void Project_suppressed_vector_layer_keeps_its_tiled_scene_minus_the_dropped_features()
+    public void Project_rebuilds_arrows_a_rule_replaced()
     {
-        // R-101-102-B dropped DepthArea "1"; the pattern fill "2" survives. The
-        // filtered layer must still be painted by the tiled renderer from the
-        // bound scene: its Mapsui features are pick targets only, so falling
-        // back to them would lose pattern fills and tiling.
-        const string datasetId = "s101.000";
-        var original = BuildVectorItem(datasetId, "1", "2");
-        var ruled = new SubLayerStackItem(
-            ((VectorStackPayload)original.Payload).WithSubLayer(BuildAreaSubLayer("2")),
-            S98DisplayPlane.BaseChartUnder,
-            0,
-            datasetId);
-
-        var square = new[] { (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0) };
-        var prebuiltLayer = new InstrumentedMemoryLayer
+        // R-111-WX-B (issue #1228) hands back model current arrows with their
+        // speed blanked inside S-111; the projector must draw those, not the
+        // prebuilt arrows.
+        const string datasetId = "currents.nc";
+        var grid = (GridCoverageSubLayer)((CoverageStackPayload)BuildCoverageGridItem(datasetId).Payload).SubLayer;
+        var arrows = new ArrowCoverageSubLayer
         {
-            Name = "S-101 (areas)",
-            Features = new[] { PickFeature("1"), PickFeature("2") },
-            CustomLayerRendererName = S100VectorTileRenderer.RendererName,
-            RepeatsAcrossWorldCopies = true,
-            MaxVisible = 300.0,
+            LayerKey = "weather.current.arrows",
+            LayerName = "Currents",
+            Plane = S98DisplayPlane.DynamicArrows,
+            Coverage = grid.Coverage,
+            Viewport = grid.Viewport,
+            SymbolProvider = _ => null,
+            FallbackExtent = new GeographicBounds(0, 0, 2, 2),
+            YieldsToS111 = true,
         };
-        S100VectorTileRenderer.BindScene(prebuiltLayer, new VectorScene(new PaintOp[]
+        var result = new CoveragePortrayalResult
         {
-            new AreaPaintOp { FeatureReference = "1", WorldShell = square },
-            new PatternAreaPaintOp
-            {
-                FeatureReference = "2", PatternReference = "DIAMOND1", WorldShell = square, TilePng = [],
-            },
-            new PointPaintOp { FeatureReference = "2", World = (0.5, 0.5) },
-        }));
+            SubLayers = new[] { arrows },
+            Spec = new SpecRef("NetCDF", default),
+            SourceDatasetId = datasetId,
+            Info = "test",
+        };
+        var original = new SubLayerStackItem(new CoverageStackPayload(result, arrows), S98DisplayPlane.DynamicArrows, 20, datasetId);
+        var masked = arrows.WithCoverage(grid.Coverage);
+        var ruled = original with { Payload = ((CoverageStackPayload)original.Payload).WithSubLayer(masked) };
         var prebuilt = new Dictionary<(string, string), LayerStackEntry>
         {
-            [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(prebuiltLayer, original),
+            [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(new MemoryLayer(), original),
         };
+        var rebuiltLayer = new MemoryLayer();
+        CoverageSubLayerBase? seen = null;
 
-        // The filtered layer keeps the tiled source's world-copy pick features
-        // (issue #773).
-        var layer = Assert.IsType<WorldCopyMemoryLayer>(Assert.Single(LayerStackProjector.Project(new[] { ruled }, prebuilt)).Layer);
-
-        Assert.NotSame(prebuiltLayer, layer);
-        Assert.Equal(S100VectorTileRenderer.RendererName, layer.CustomLayerRendererName);
-        Assert.Equal(300.0, layer.MaxVisible);
-        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlayScene));
-        Assert.IsType<PatternAreaPaintOp>(Assert.Single(baseScene.Ops));
-        Assert.Equal("2", Assert.Single(overlayScene.Ops).FeatureReference);
-        Assert.Equal("2", Assert.Single(layer.Features)[MapsuiDisplayListRenderer.FeatureRefKey]);
-    }
-
-    [Fact]
-    public void Project_unchanged_suppression_reuses_the_filtered_layer()
-    {
-        // The stack is re-projected whenever any dataset loads, and the engine
-        // returns a new suppressed sub-layer each time. A new filtered layer
-        // would start with an empty tile cache, so the cell's fills would
-        // blank and repaint on every load.
-        const string datasetId = "s101.000";
-        var original = BuildVectorItem(datasetId, "1", "2");
-        var prebuilt = TiledPrebuilt(original);
-
-        var first = ProjectSuppressing(original, prebuilt, "2");
-        var second = ProjectSuppressing(original, prebuilt, "2");
-
-        Assert.Same(first, second);
-    }
-
-    [Fact]
-    public void Project_changed_suppression_builds_a_new_filtered_layer()
-    {
-        const string datasetId = "s101.000";
-        var original = BuildVectorItem(datasetId, "1", "2", "3");
-        var prebuilt = TiledPrebuilt(original);
-
-        var first = ProjectSuppressing(original, prebuilt, "2", "3");
-        var second = ProjectSuppressing(original, prebuilt, "3");
-
-        Assert.NotSame(first, second);
-        Assert.Equal("3", Assert.Single(((MemoryLayer)second).Features)[MapsuiDisplayListRenderer.FeatureRefKey]);
-    }
-
-    [Fact]
-    public void Project_filtered_layer_keeps_its_sources_reveal_group()
-    {
-        // The filtered area layer stands in for its source, so it must reveal
-        // its tiles together with the dataset's line work, as the source did.
-        const string datasetId = "s101.000";
-        var original = BuildVectorItem(datasetId, "1", "2");
-        var prebuilt = TiledPrebuilt(original);
-        var source = prebuilt[LayerStackProjector.KeyOf(original)].Layer;
-        var lines = new MemoryLayer { Name = "S-101 (lines)" };
-        S100VectorTileRenderer.BindScene(lines, new VectorScene(new PaintOp[]
+        var projected = LayerStackProjector.Project(new[] { ruled }, prebuilt, subLayer =>
         {
-            new LinePaintOp { FeatureReference = "3", World = [(0.0, 0.0), (1.0, 1.0)] },
-        }));
-        S100VectorTileRenderer.JoinRevealGroup([(source, "0:s101.areas"), (lines, "1:s101.linework")]);
+            seen = subLayer;
+            return rebuiltLayer;
+        });
 
-        var filtered = ProjectSuppressing(original, prebuilt, "2");
+        Assert.Same(rebuiltLayer, Assert.Single(projected).Layer);
+        Assert.Same(masked, seen);
+    }
 
-        var group = S100VectorTileRenderer.RevealGroupForTest(lines);
-        Assert.NotNull(group);
-        Assert.Same(group, S100VectorTileRenderer.RevealGroupForTest(filtered));
+    [Fact]
+    public void Project_suppressed_vector_layer_keeps_its_layer_and_records_the_dropped_features()
+    {
+        // R-101-102-B dropped DepthArea "1"; "2" survives. The prebuilt layer
+        // stays on the stack, and the dropped features become a filter on its
+        // scene's ops (map rendering slice 8), not a filtered copy of the layer.
+        const string datasetId = "s101.000";
+        var original = BuildVectorItem(datasetId, "1", "2");
+        var prebuilt = TiledPrebuilt(original);
+
+        var entry = Assert.Single(LayerStackProjector.Project(new[] { Ruled(original, "2") }, prebuilt));
+
+        Assert.Same(prebuilt[LayerStackProjector.KeyOf(original)].Layer, entry.Layer);
+        Assert.Equal(new HashSet<string> { "1" }, entry.SuppressedFeatures);
+    }
+
+    [Fact]
+    public void Project_unsuppressed_vector_layer_has_no_suppressed_features()
+    {
+        const string datasetId = "s101.000";
+        var original = BuildVectorItem(datasetId, "1", "2");
+        var prebuilt = TiledPrebuilt(original);
+
+        var entry = Assert.Single(LayerStackProjector.Project(new[] { Ruled(original, "1", "2") }, prebuilt));
+
+        Assert.Same(prebuilt[LayerStackProjector.KeyOf(original)].Layer, entry.Layer);
+        Assert.Null(entry.SuppressedFeatures);
     }
 
     private static Dictionary<(string, string), LayerStackEntry> TiledPrebuilt(SubLayerStackItem original)
@@ -220,9 +189,7 @@ public class LayerStackProjectorTests
         var layer = new InstrumentedMemoryLayer
         {
             Name = "S-101 (areas)",
-            Features = refs.Select(PickFeature).ToList(),
             CustomLayerRendererName = S100VectorTileRenderer.RendererName,
-            RepeatsAcrossWorldCopies = true,
         };
         S100VectorTileRenderer.BindScene(layer, new VectorScene(
             refs.Select(r => (PaintOp)new AreaPaintOp { FeatureReference = r, WorldShell = square }).ToArray()));
@@ -232,26 +199,13 @@ public class LayerStackProjectorTests
         };
     }
 
-    /// <summary>Projects <paramref name="original"/> with only <paramref name="surviving"/> kept, as a fresh ruled item.</summary>
-    private static ILayer ProjectSuppressing(
-        SubLayerStackItem original,
-        Dictionary<(string, string), LayerStackEntry> prebuilt,
-        params string[] surviving)
-    {
-        var ruled = new SubLayerStackItem(
+    /// <summary><paramref name="original"/> re-ruled with only <paramref name="surviving"/> kept.</summary>
+    private static SubLayerStackItem Ruled(SubLayerStackItem original, params string[] surviving) =>
+        new(
             ((VectorStackPayload)original.Payload).WithSubLayer(BuildAreaSubLayer(surviving)),
             S98DisplayPlane.BaseChartUnder,
             0,
             original.SourceDatasetId);
-        return Assert.Single(LayerStackProjector.Project(new[] { ruled }, prebuilt)).Layer;
-    }
-
-    private static GeometryFeature PickFeature(string featureReference)
-    {
-        var feature = new GeometryFeature(new Point(0, 0));
-        feature[MapsuiDisplayListRenderer.FeatureRefKey] = featureReference;
-        return feature;
-    }
 
     private static VectorSubLayer BuildAreaSubLayer(params string[] featureReferences) => new()
     {

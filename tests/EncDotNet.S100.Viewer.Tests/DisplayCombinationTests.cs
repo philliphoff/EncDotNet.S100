@@ -146,7 +146,7 @@ public class DisplayCombinationServiceTests
         {
             Datasets = new DatasetsViewModel(Loader);
             Settings = settings ?? new ViewerSettings { IsReadOnly = true };
-            Service = new DisplayCombinationService(State, Loader, Datasets, Settings);
+            Service = new DisplayCombinationService(State, Loader, Datasets, Settings, post: null);
         }
 
         public DatasetEntry Add(string path, string spec, params string[] subLayers)
@@ -488,7 +488,7 @@ public class DisplayCombinationServiceTests
         var state = new EcdisDisplayState();
         state.SetCategory(EcdisDisplayCategory.All);
         var loader = new FakeDatasetLoaderService();
-        using var service = new DisplayCombinationService(state, loader, new DatasetsViewModel(loader), settings);
+        using var service = new DisplayCombinationService(state, loader, new DatasetsViewModel(loader), settings, post: null);
 
         Assert.Equal(BuiltInDisplayCombinations.ChartedId, service.Active?.Id);
         Assert.Equal(EcdisDisplayCategory.All, state.Category);
@@ -520,7 +520,7 @@ public class DisplayCombinationServiceTests
     {
         using var h = new Harness();
         h.Add("/data/US5WA31M.000", "S-101");
-        using var vm = new DisplayCombinationsViewModel(h.Service);
+        using var vm = new DisplayCombinationsViewModel(h.Service, ui: null);
 
         h.Service.Apply(BuiltInDisplayCombinations.PilotageId);
         Assert.Equal("View: Pilotage ▾", vm.PillLabel);
@@ -561,7 +561,7 @@ public class DisplayCombinationMcpToolsTests
         var loader = new FakeDatasetLoaderService();
         var datasets = new DatasetsViewModel(loader);
         datasets.Entries.Add(new DatasetEntry("/data/US5WA31M.000", "S-57") { IsLoaded = true });
-        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true });
+        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true }, post: null);
 
         var result = await new ListDisplayCombinationsTool(service, Inline).InvokeAsync(TestContext.Current.CancellationToken);
 
@@ -584,7 +584,7 @@ public class DisplayCombinationMcpToolsTests
         var s102 = new DatasetEntry("/data/102.h5", "S-102") { IsLoaded = true };
         datasets.Entries.Add(new DatasetEntry("/data/US5WA31M.000", "S-101") { IsLoaded = true });
         datasets.Entries.Add(s102);
-        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true });
+        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true }, post: null);
         var tool = new SetDisplayCombinationTool(service, Inline);
 
         var result = await tool.InvokeAsync(new SetDisplayCombinationRequest("charted", null), TestContext.Current.CancellationToken);
@@ -603,7 +603,7 @@ public class DisplayCombinationMcpToolsTests
     public async Task Set_rejects_an_unknown_id_and_a_bad_request()
     {
         var loader = new FakeDatasetLoaderService();
-        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, new DatasetsViewModel(loader), new ViewerSettings { IsReadOnly = true });
+        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, new DatasetsViewModel(loader), new ViewerSettings { IsReadOnly = true }, post: null);
         var tool = new SetDisplayCombinationTool(service, Inline);
 
         Assert.True((await tool.InvokeAsync(new SetDisplayCombinationRequest("nope", null), TestContext.Current.CancellationToken)).TryGetError(out var notFound));
@@ -618,7 +618,8 @@ public class DisplayCombinationMcpToolsTests
     {
         var loader = new FakeDatasetLoaderService();
         using var service = new DisplayCombinationService(
-            new EcdisDisplayState(), loader, new DatasetsViewModel(loader), new ViewerSettings { IsReadOnly = true, ActiveDisplayCombinationId = null });
+            new EcdisDisplayState(), loader, new DatasetsViewModel(loader), new ViewerSettings { IsReadOnly = true, ActiveDisplayCombinationId = null },
+            post: null);
 
         var result = await new SetDisplayCombinationTool(service, Inline).InvokeAsync(new SetDisplayCombinationRequest(null, true), TestContext.Current.CancellationToken);
 

@@ -1,7 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
-using Avalonia.Threading;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -64,31 +64,28 @@ internal sealed class OverscaleCurtainController : IDisposable
     /// <param name="loader">Supplies the overscale cell inputs.</param>
     /// <param name="viewport">Publishes viewport (resolution) changes.</param>
     /// <param name="settings">Settings view-model supplying the on/off toggle.</param>
-    /// <param name="marshal">
-    /// Optional UI-thread marshalling override. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
-    /// implementation.
-    /// </param>
+    /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
     public OverscaleCurtainController(
         IMapLayerCollection layers,
         DatasetsViewModel datasets,
         IDatasetLoaderService loader,
         IMapViewportNotifier viewport,
         SettingsViewModel settings,
-        Action<Action>? marshal = null)
+        Action<Action> marshal)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(marshal);
 
         _layers = layers;
         _datasets = datasets;
         _loader = loader;
         _viewport = viewport;
         _settings = settings;
-        _marshal = marshal ?? DispatcherMarshal;
+        _marshal = marshal;
 
         _curtain = new S100OverscaleCurtainLayer(name: OverlayLayerName);
 
@@ -189,12 +186,6 @@ internal sealed class OverscaleCurtainController : IDisposable
         // Treat sub-per-mille resolution changes as "same zoom" so incidental
         // navigator jitter during a pan does not trigger a rebuild.
         return Math.Abs(a - b) <= Math.Abs(b) * 1e-3;
-    }
-
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
     }
 
     /// <summary>Detaches the overlay layer and unsubscribes. Idempotent.</summary>

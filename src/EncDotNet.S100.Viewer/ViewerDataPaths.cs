@@ -27,6 +27,12 @@ internal sealed class ViewerDataPaths
 {
     private const string DataDirEnvironmentVariable = "S100_DATA_DIR";
 
+    /// <summary>
+    /// Re-roots only the render caches (portrayal instructions with the
+    /// pre-warm ledger, pattern clips and tiles), like <c>--cache-dir</c>.
+    /// </summary>
+    internal const string CacheDirEnvironmentVariable = "S100_CACHE_DIR";
+
     private static readonly string DefaultSettingsDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "EncDotNet.S100.Viewer");
@@ -37,6 +43,7 @@ internal sealed class ViewerDataPaths
 
     private readonly string? _baseDirectory;
     private readonly string? _settingsFileOverride;
+    private readonly string? _renderCacheDirectory;
 
     /// <summary>
     /// Creates a path set. <paramref name="baseDirectory"/> re-roots every
@@ -45,8 +52,20 @@ internal sealed class ViewerDataPaths
     /// the settings file (the <c>--settings</c> flag) and leaves caches
     /// under the base directory.
     /// </summary>
-    public ViewerDataPaths(string? baseDirectory = null, string? settingsFileOverride = null)
+    /// <param name="baseDirectory">Re-roots every location.</param>
+    /// <param name="settingsFileOverride">Pins just the settings file.</param>
+    /// <param name="renderCacheDirectory">
+    /// Re-roots only the render caches: the portrayal-instruction cache (and the
+    /// pre-warm ledger in it), the pattern-clip cache and the warm tile cache.
+    /// Settings, the Library and the other caches stay where they are, so a
+    /// performance run can start from empty render caches without touching the
+    /// user's own (the <c>--cache-dir</c> option).
+    /// </param>
+    public ViewerDataPaths(string? baseDirectory = null, string? settingsFileOverride = null, string? renderCacheDirectory = null)
     {
+        _renderCacheDirectory = string.IsNullOrWhiteSpace(renderCacheDirectory)
+            ? null
+            : Path.GetFullPath(renderCacheDirectory);
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory)
             ? null
             : Path.GetFullPath(baseDirectory);
@@ -107,37 +126,39 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "logs")
             : Path.Combine(DefaultSettingsDirectory, "logs");
 
-    /// <summary>Directory for the shared disk pattern-clip cache.</summary>
-    public string PatternClipCacheDirectory =>
-        _baseDirectory is { } b
-            ? Path.Combine(b, "caches", "PatternClipCache")
-            : Path.Combine(DefaultLocalDataDirectory, "PatternClipCache");
+    /// <summary>
+    /// The folder of the viewer's content store for derived data that belongs
+    /// with the profile: <c>caches</c> under the base directory, or the
+    /// per-user local data folder. The dataset-metadata and S-57 catalogue
+    /// kinds live here, and the render kinds too unless <c>--cache-dir</c>
+    /// moved them (see <see cref="RenderStoreDirectory"/>).
+    /// </summary>
+    public string CacheStoreDirectory =>
+        _baseDirectory is { } b ? Path.Combine(b, "caches") : DefaultLocalDataDirectory;
 
-    /// <summary>Directory for the shared disk portrayal-instruction cache.</summary>
+    /// <summary>
+    /// The folder of the viewer's content store for render caches (warm
+    /// tiles, portrayal display lists, pattern clips): the <c>--cache-dir</c>
+    /// folder when given, else <see cref="CacheStoreDirectory"/>.
+    /// </summary>
+    public string RenderStoreDirectory => _renderCacheDirectory ?? CacheStoreDirectory;
+
+    /// <summary>Directory for the shared disk pattern-clip cache (a render store kind).</summary>
+    public string PatternClipCacheDirectory =>
+        Path.Combine(RenderStoreDirectory, "PatternClipCache");
+
+    /// <summary>Directory for the shared disk portrayal-instruction cache (a render store kind).</summary>
     public string PortrayalInstructionCacheDirectory =>
-        _baseDirectory is { } b
-            ? Path.Combine(b, "caches", "PortrayalInstructionCache")
-            : Path.Combine(DefaultLocalDataDirectory, "PortrayalInstructionCache");
+        Path.Combine(RenderStoreDirectory, "PortrayalInstructionCache");
 
     /// <summary>Directory for the shared cross-session dataset-metadata sidecar cache.</summary>
     public string DatasetMetadataCacheDirectory =>
-        _baseDirectory is { } b
-            ? Path.Combine(b, "caches", "DatasetMetadataCache")
-            : Path.Combine(DefaultLocalDataDirectory, "DatasetMetadataCache");
+        Path.Combine(CacheStoreDirectory, "DatasetMetadataCache");
 
     /// <summary>Directory for the cross-session S-57 exchange-set catalogue descriptor cache.</summary>
     public string S57CatalogCacheDirectory =>
-        _baseDirectory is { } b
-            ? Path.Combine(b, "caches", "S57CatalogCache")
-            : Path.Combine(DefaultLocalDataDirectory, "S57CatalogCache");
+        Path.Combine(CacheStoreDirectory, "S57CatalogCache");
 
-    /// <summary>
-    /// Directory for the warm tile disk cache when a base directory is in
-    /// use, or <see langword="null"/> to let the renderer pick its own
-    /// default (the <c>S100_VECTOR_TILE_DISK_DIR</c> env var or an OS-temp
-    /// subdirectory). Re-rooting it under the base directory keeps an
-    /// isolated instance fully self-contained.
-    /// </summary>
     /// <summary>
     /// Absolute path of the persisted <c>collections.json</c> file holding
     /// the user's dataset collections (references to local folders, exchange
@@ -158,6 +179,15 @@ internal sealed class ViewerDataPaths
         _baseDirectory is { } b
             ? Path.Combine(b, "navigational-warnings.json")
             : Path.Combine(DefaultSettingsDirectory, "navigational-warnings.json");
+
+    /// <summary>
+    /// Path of the file listing the AML sets whose first-open notification
+    /// has been shown (#1371). Placed like <see cref="CollectionsFilePath"/>.
+    /// </summary>
+    public string AmlNoticesFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "aml-notices.txt")
+            : Path.Combine(DefaultSettingsDirectory, "aml-notices.txt");
 
     /// <summary>
     /// Absolute path of <c>navigational-warning-classifications.json</c>:
@@ -208,38 +238,31 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "downloads")
             : Path.Combine(DefaultLocalDataDirectory, "Downloads");
 
-    public string? TileDiskCacheDirectory =>
-        _baseDirectory is { } b ? Path.Combine(b, "caches", "tiles") : null;
+    /// <summary>Directory for the warm tile cache (a render store kind).</summary>
+    public string TileDiskCacheDirectory =>
+        Path.Combine(RenderStoreDirectory, "tiles");
+
+    /// <summary>
+    /// The folder the render caches were re-rooted under with <c>--cache-dir</c>
+    /// or <c>S100_CACHE_DIR</c>, or <see langword="null"/>.
+    /// </summary>
+    public string? RenderCacheDirectory => _renderCacheDirectory;
 
     /// <summary>
     /// Every disk-cache directory the viewer may populate this run,
     /// suitable for a "clear caches" sweep. Excludes the settings file and
-    /// crash markers. The tile-cache directory is included only when it is
-    /// known (i.e. a base directory is in use); otherwise the renderer's
-    /// own temp-rooted tile cache is enumerated by
-    /// <see cref="Services.DataMaintenanceService"/> directly.
+    /// crash markers.
     /// </summary>
-    public IReadOnlyList<string> CacheDirectories
-    {
-        get
-        {
-            var dirs = new List<string>(7)
-            {
-                PatternClipCacheDirectory,
-                PortrayalInstructionCacheDirectory,
-                DatasetMetadataCacheDirectory,
-                S57CatalogCacheDirectory,
-                CollectionIndexCacheDirectory,
-                CollectionFeedCacheDirectory,
-            };
-            if (TileDiskCacheDirectory is { } tiles)
-            {
-                dirs.Add(tiles);
-            }
-
-            return dirs;
-        }
-    }
+    public IReadOnlyList<string> CacheDirectories =>
+    [
+        PatternClipCacheDirectory,
+        PortrayalInstructionCacheDirectory,
+        DatasetMetadataCacheDirectory,
+        S57CatalogCacheDirectory,
+        CollectionIndexCacheDirectory,
+        CollectionFeedCacheDirectory,
+        TileDiskCacheDirectory,
+    ];
 
     /// <summary>
     /// Resolves the data paths for a run from the supplied command-line
@@ -254,6 +277,12 @@ internal sealed class ViewerDataPaths
             baseDir = Environment.GetEnvironmentVariable(DataDirEnvironmentVariable);
         }
 
-        return new ViewerDataPaths(baseDir, options?.SettingsPath);
+        var cacheDir = options?.CacheDir;
+        if (string.IsNullOrWhiteSpace(cacheDir))
+        {
+            cacheDir = Environment.GetEnvironmentVariable(CacheDirEnvironmentVariable);
+        }
+
+        return new ViewerDataPaths(baseDir, options?.SettingsPath, cacheDir);
     }
 }

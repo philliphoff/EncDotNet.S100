@@ -4,8 +4,8 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Datasets.S125.Tests;
 
@@ -202,7 +202,7 @@ public class S125AtonPortrayalTests
 
     private static async Task<IReadOnlyList<DrawingInstruction>> RunAsync(S125Dataset dataset)
     {
-        var engine = new MoonSharpLuaEngine();
+        var engine = TestLuaEngine.Create();
         var manager = new PortrayalCatalogueManager();
         manager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         var catalogue = new S101PortrayalCatalogue(manager.GetProvider("S-101"), engine);

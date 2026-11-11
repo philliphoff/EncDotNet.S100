@@ -99,7 +99,7 @@ public sealed class ListSpecsTool
     {
         "S-101",
         "S-122", "S-124", "S-125", "S-127", "S-128",
-        "S-129", "S-131", "S-201", "S-401", "S-411", "S-421",
+        "S-129", "S-131", "S-201", "S-401", "S-411", "S-412", "S-421",
         SpecName.Cap,
     };
 
@@ -123,7 +123,7 @@ public sealed class ListSpecsTool
     {
         "S-101", "S-102", "S-104", "S-111", "S-124",
         "S-122", "S-125", "S-127", "S-128", "S-129",
-        "S-131", "S-201", "S-401", "S-411", "S-421",
+        "S-131", "S-201", "S-401", "S-411", "S-412", "S-421",
         SpecName.Cap,
     };
 
@@ -133,14 +133,15 @@ public sealed class ListSpecsTool
     /// <summary>Creates a new <see cref="ListSpecsTool"/>.</summary>
     /// <param name="catalog">The host's dataset catalog.</param>
     /// <param name="registry">
-    /// The products the host can load; <see langword="null"/> for
-    /// <see cref="ProductRegistry.Default"/>.
+    /// The products the host can load (hosts usually pass
+    /// <see cref="ProductRegistry.Default"/>).
     /// </param>
-    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry? registry = null)
+    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
-        _registry = registry ?? ProductRegistry.Default;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
     }
 
     /// <summary>Executes the tool.</summary>

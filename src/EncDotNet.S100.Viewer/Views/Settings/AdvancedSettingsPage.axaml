@@ -141,25 +141,42 @@
                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGpuBudgetMb}"
                                        MinWidth="140"
                                        HorizontalAlignment="Left" />
-                        <TextBlock Text="{x:Static loc:Strings.Settings_TileWorkerCount}"
-                                   FontSize="12" />
-                        <NumericUpDown Value="{Binding TileWorkerCount}"
-                                       AutomationProperties.AutomationId="Settings.TileWorkerCount"
-                                       AutomationProperties.Name="{x:Static loc:Strings.Settings_TileWorkerCount}"
-                                       Minimum="1"
-                                       Maximum="8"
-                                       Increment="1"
-                                       FormatString="0"
-                                       IsEnabled="{Binding TileWorkerCountEditable}"
-                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileWorkerCount}"
-                                       MinWidth="140"
-                                       HorizontalAlignment="Left" />
                         <TextBlock Text="{x:Static loc:Strings.Settings_RenderKnob_RestartHint}"
                                    FontSize="11"
                                    Opacity="0.6"
                                    TextWrapping="Wrap" />
                     </StackPanel>
                 </StackPanel>
+            </StackPanel>
+
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_PortrayalPrewarmEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_PortrayalPrewarmEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding PortrayalPrewarmEnabled}" AutomationProperties.AutomationId="Settings.PortrayalPrewarmEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_PortrayalPrewarmEnabled}"/>
+            </Grid>
+
+            <StackPanel Spacing="6"
+                        IsEnabled="{Binding LuaEngineEditable}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LuaEngine}">
+                <TextBlock Text="{x:Static loc:Strings.Settings_LuaEngine}"
+                           FontSize="12" />
+                <ComboBox ItemsSource="{Binding AvailableLuaEngines}"
+                          AutomationProperties.AutomationId="Settings.LuaEngine"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_LuaEngine}"
+                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LuaEngine}"
+                          SelectedItem="{Binding SelectedLuaEngine}"
+                          MinWidth="160"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:LuaEngineKindNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="{x:Static loc:Strings.Settings_LuaEngine_RestartHint}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
             </StackPanel>
 
             <Separator Margin="0,8,0,0" />

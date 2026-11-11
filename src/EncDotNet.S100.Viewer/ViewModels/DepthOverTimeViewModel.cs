@@ -71,8 +71,8 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         DepthUnit depthUnit,
         double? safetyDepthMetres,
         GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
         : base(BuildSnapshot(result, locationLabel, latitude, longitude, depthUnit), globalTime, timeFormat, themeService)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -269,13 +269,15 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     /// because its vertical datum differs from the charted depth's, or either
     /// isn't declared.
     /// </summary>
-    public bool HasDatumNote => Result.Refusal is not null;
+    public bool HasDatumNote => Result.Refusal is not null || Result.DatumUnconfirmed;
 
     /// <summary>
     /// Why the water level was refused, e.g. "Not adjusted: S-102 on Mean
     /// Lower Low Water, S-104 on Lowest Astronomical Tide."; empty when not refused.
     /// </summary>
-    public string DatumNoteText => Result.Refusal is { } refusal ? FormatRefusal(refusal) : string.Empty;
+    public string DatumNoteText => Result.Refusal is { } refusal
+        ? FormatRefusal(refusal)
+        : Result.DatumUnconfirmed ? Strings.Pick_Depth_DatumUnconfirmed : string.Empty;
 
     /// <summary>
     /// <c>true</c> when no S-104 water level covers the location, so the

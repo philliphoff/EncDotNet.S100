@@ -3,8 +3,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -47,7 +47,7 @@ public class S101PortrayalInstructionCacheProcessorTests
     private static DatasetPipelineFactory CreateFactory(IPortrayalInstructionCache instructionCache) =>
         new(
             CreateCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider(),
@@ -64,7 +64,7 @@ public class S101PortrayalInstructionCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var sharedCache = new DiskPortrayalInstructionCache(cacheDir, maxBytes: 256L * 1024 * 1024);
+            var sharedCache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
 
             // First cold open: the cache is empty, so the Lua pipeline runs (a
             // miss) and the prepared list is persisted. This fresh processor sees
@@ -111,7 +111,7 @@ public class S101PortrayalInstructionCacheProcessorTests
         var processor = new S101DatasetProcessor(
             cell!,
             CreateCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
         var result = await processor.BuildVectorPortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 

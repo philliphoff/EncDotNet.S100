@@ -37,7 +37,7 @@ public sealed class ClearanceTests : IDisposable
     private static async Task<(PassageCheckFixture F, ClearanceViewModel Vm)> CheckedAsync(PassageCheckFixture? fixture = null)
     {
         var f = fixture ?? new PassageCheckFixture();
-        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         await f.CheckAsync();
         return (f, vm);
     }
@@ -48,7 +48,7 @@ public sealed class ClearanceTests : IDisposable
     public async Task The_profile_follows_check_mode()
     {
         var f = new PassageCheckFixture();
-        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         Assert.False(vm.HasProfile);
         Assert.Equal("Turn on Check route on a route with a draft to see its clearance profile.", vm.EmptyText);
 
@@ -167,7 +167,7 @@ public sealed class ClearanceTests : IDisposable
         var (f, vm) = await CheckedAsync();
         f.Check.SetCursor(Meters(0.11));
 
-        var tool = new CheckRouteTool(f.Catalog, new ViewerPassageRouteProvider(f.Routes, new InlineInvoker()));
+        var tool = new CheckRouteTool(f.Catalog, routes: new ViewerPassageRouteProvider(f.Routes, new InlineInvoker()), sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
         var result = await tool.InvokeAsync(new CheckRouteRequest(IncludeSamples: true, MaxSamples: 10_000), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         var sample = value!.Clearance!.Samples!.Single(s => s.Index == vm.ReadoutSample!.Index);

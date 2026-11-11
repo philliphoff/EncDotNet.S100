@@ -5,7 +5,6 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using PureHDF;
@@ -91,7 +90,7 @@ public sealed class CatalogProjectionTests
         var processor = new S57DatasetProcessor(
             path,
             catalogueManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
         var fromProcessor = LoadedDatasetProjector.Project(new DatasetId("cell"), processor);
 
@@ -133,7 +132,7 @@ public sealed class CatalogProjectionTests
             var processor = new S57DatasetProcessor(
                 path,
                 catalogueManager,
-                new MoonSharpLuaEngine(),
+                TestLuaEngine.Create(),
                 new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
             var fromProcessor = LoadedDatasetProjector.Project(new DatasetId("cell"), processor);
 

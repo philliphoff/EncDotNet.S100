@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -37,20 +38,25 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         EcdisDisplayState state,
         PortrayalCatalogueManager catalogueManager,
         DatasetsViewModel datasets,
-        EcdisLabelOverrideProvider? labelOverrides = null,
-        DisplayModeToolbarViewModel? displayModeToolbar = null,
-        DisplayCombinationsViewModel? displayCombinations = null)
+        EcdisLabelOverrideProvider labelOverrides,
+        DisplayModeToolbarViewModel? displayModeToolbar,
+        DisplayCombinationsViewModel? displayCombinations,
+        AmlDisplaySectionViewModel? amlDisplay)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(labelOverrides);
 
         _state = state;
         _catalogueManager = catalogueManager;
         _datasets = datasets;
-        _labelOverrides = labelOverrides ?? new EcdisLabelOverrideProvider();
+        _labelOverrides = labelOverrides;
         _displayModeToolbar = displayModeToolbar;
         DisplayCombinations = displayCombinations;
+        Aml = amlDisplay;
+        if (Aml is not null)
+            Aml.PropertyChanged += OnAmlPropertyChanged;
 
         ResetAllOverridesCommand = new RelayCommand(() => _state.ClearAllOverrides());
         SetDisplayBaseCommand = new RelayCommand(() => ActiveCategory = EcdisDisplayCategory.DisplayBase);
@@ -71,6 +77,25 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     /// Display Category; <see langword="null"/> where they aren't wired.
     /// </summary>
     public DisplayCombinationsViewModel? DisplayCombinations { get; }
+
+    /// <summary>
+    /// The Additional Military Layers section (AML handoff decision 24), below
+    /// Display Planes; <see langword="null"/> where it isn't wired.
+    /// </summary>
+    public AmlDisplaySectionViewModel? Aml { get; }
+
+    /// <summary>Whether the Additional Military Layers section shows: an AML cell is loaded.</summary>
+    public bool HasAml => Aml?.IsShown == true;
+
+    private void OnAmlPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AmlDisplaySectionViewModel.IsShown) or null or "")
+        {
+            OnPropertyChanged(nameof(HasAml));
+            OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
+        }
+    }
 
     /// <summary>True when the panel shows its View section.</summary>
     public bool HasDisplayCombinations => DisplayCombinations is not null;
@@ -94,18 +119,76 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     public DisplayModeToolbarViewModel? DisplayModeToolbar => _displayModeToolbar;
 
     /// <summary>
-    /// True when there is nothing to control: no loaded vector spec and no
-    /// weather dataset.
+    /// True when there is nothing to control: no loaded vector spec, no
+    /// weather dataset, no AML cell and no S-102 bathymetry.
     /// </summary>
-    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData;
+    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData && !HasAml && !HasBathymetryData;
 
     /// <summary>
-    /// Whether a GRIB2 or NetCDF weather dataset is loaded, which shows the
-    /// Weather section (#1072), as the per-spec sections show only for loaded
-    /// specs. The switches apply to every weather dataset and are kept with
-    /// the display settings whether or not one is loaded.
+    /// Whether an S-102 bathymetry dataset is loaded, which shows the
+    /// Bathymetry section. Its switch applies to every S-102 dataset and is
+    /// kept with the display settings whether or not one is loaded.
+    /// </summary>
+    public bool HasBathymetryData { get; private set; }
+
+    /// <summary>
+    /// The Bathymetry section's Relief shading switch: a hillshade over the
+    /// S-102 depth bands (<see cref="S102Relief"/>). Not part of the S-102
+    /// portrayal, so off by default.
+    /// </summary>
+    public bool IsReliefShadingVisible
+    {
+        get => _state.GetLayerVisible(S102Relief.LayerKey) ?? false;
+        set => _state.SetLayerVisible(S102Relief.LayerKey, value);
+    }
+
+    /// <summary>
+    /// Whether a weather dataset is loaded (a GRIB2 or NetCDF grid, a tropical
+    /// cyclone or a surface analysis), which shows the Weather section (#1072,
+    /// V26), as the per-spec sections show only for loaded specs. The switches
+    /// apply to every weather dataset and are kept with the display settings
+    /// whether or not one is loaded.
     /// </summary>
     public bool HasWeatherData { get; private set; }
+
+    /// <summary>
+    /// Whether a tropical cyclone is loaded, which shows the Weather section's
+    /// Wind radii, Past track and Forecast times switches (V26).
+    /// </summary>
+    public bool HasTropicalCyclone { get; private set; }
+
+    /// <summary>
+    /// The Weather section's Wind radii switch: the 34, 50 and 64 kt wind
+    /// radii of every tropical cyclone. On by default (V26).
+    /// </summary>
+    public bool IsWindRadiiVisible
+    {
+        get => GetCycloneSwitch(TropicalCycloneStyle.WindRadiiKey);
+        set => _state.SetLayerVisible(TropicalCycloneStyle.WindRadiiKey, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Past track switch: every tropical cyclone's
+    /// best-track line and points. On by default (V26).
+    /// </summary>
+    public bool IsPastTrackVisible
+    {
+        get => GetCycloneSwitch(TropicalCycloneStyle.PastTrackKey);
+        set => _state.SetLayerVisible(TropicalCycloneStyle.PastTrackKey, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Forecast times switch: the time and intensity
+    /// beside each tropical cyclone's forecast points. On by default (V26).
+    /// </summary>
+    public bool IsForecastTimesVisible
+    {
+        get => GetCycloneSwitch(TropicalCycloneStyle.ForecastTimesKey);
+        set => _state.SetLayerVisible(TropicalCycloneStyle.ForecastTimesKey, value);
+    }
+
+    // A cyclone switch, on unless the mariner turned it off.
+    private bool GetCycloneSwitch(string key) => _state.GetLayerVisible(key) ?? true;
 
     /// <summary>
     /// The Weather section's Isobars switch: mean sea level pressure isobars
@@ -140,6 +223,69 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         set => _state.SetLayerVisible(WaveDirectionStyle.Key, value);
     }
 
+    /// <summary>
+    /// The Weather section's Isotherms switch: sea surface temperature
+    /// isotherms on every weather dataset with sea temperature. Off by
+    /// default (<see cref="SeaTemperatureIsothermStyle"/>).
+    /// </summary>
+    public bool IsIsothermsVisible
+    {
+        get => GetWeatherLayer(SeaTemperatureIsothermStyle.Key);
+        set => _state.SetLayerVisible(SeaTemperatureIsothermStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Currents switch: surface current arrows on every
+    /// weather dataset with currents. On by default (<see cref="CurrentArrowStyle"/>).
+    /// </summary>
+    public bool IsCurrentArrowsVisible
+    {
+        get => GetWeatherLayer(CurrentArrowStyle.Key);
+        set => _state.SetLayerVisible(CurrentArrowStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Air temperature switch: dashed 2 m air
+    /// temperature isotherms on every weather dataset with air temperature.
+    /// Off by default (<see cref="AirTemperatureIsothermStyle"/>).
+    /// </summary>
+    public bool IsAirTemperatureVisible
+    {
+        get => GetWeatherLayer(AirTemperatureIsothermStyle.Key);
+        set => _state.SetLayerVisible(AirTemperatureIsothermStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Precipitation switch: the precipitation rate in
+    /// rain radar colours on every weather dataset with it. Off by default
+    /// (<see cref="PrecipitationStyle"/>).
+    /// </summary>
+    public bool IsPrecipitationVisible
+    {
+        get => GetWeatherLayer(PrecipitationStyle.Key);
+        set => _state.SetLayerVisible(PrecipitationStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Thunderstorm risk switch: CAPE from 1000 J/kg on
+    /// every weather dataset with it. Off by default (<see cref="ThunderstormRiskStyle"/>).
+    /// </summary>
+    public bool IsThunderstormRiskVisible
+    {
+        get => GetWeatherLayer(ThunderstormRiskStyle.Key);
+        set => _state.SetLayerVisible(ThunderstormRiskStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Cloud cover switch: the total cloud cover veil
+    /// on every weather dataset with it. Off by default (<see cref="CloudCoverStyle"/>).
+    /// </summary>
+    public bool IsCloudCoverVisible
+    {
+        get => GetWeatherLayer(CloudCoverStyle.Key);
+        set => _state.SetLayerVisible(CloudCoverStyle.Key, value);
+    }
+
     // The switch, or the style's own default when the mariner hasn't set it.
     private bool GetWeatherLayer(string layerKey) =>
         _state.GetLayerVisible(layerKey) ?? WeatherDefaults[layerKey];
@@ -149,7 +295,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     private static readonly HashSet<string> WeatherSpecs = new(StringComparer.OrdinalIgnoreCase)
     {
-        WeatherProducts.Grib2.Spec, WeatherProducts.NetCdf.Spec,
+        WeatherProducts.Grib2.Spec, WeatherProducts.NetCdf.Spec, WeatherProducts.TropicalCyclone.Spec, WeatherProducts.Codsus.Spec,
     };
 
     /// <summary>Clears all overrides across every spec.</summary>
@@ -246,6 +392,16 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsIsobarsVisible));
         OnPropertyChanged(nameof(IsWindSpeedFillVisible));
         OnPropertyChanged(nameof(IsWaveArrowsVisible));
+        OnPropertyChanged(nameof(IsIsothermsVisible));
+        OnPropertyChanged(nameof(IsCurrentArrowsVisible));
+        OnPropertyChanged(nameof(IsAirTemperatureVisible));
+        OnPropertyChanged(nameof(IsPrecipitationVisible));
+        OnPropertyChanged(nameof(IsThunderstormRiskVisible));
+        OnPropertyChanged(nameof(IsCloudCoverVisible));
+        OnPropertyChanged(nameof(IsWindRadiiVisible));
+        OnPropertyChanged(nameof(IsPastTrackVisible));
+        OnPropertyChanged(nameof(IsForecastTimesVisible));
+        OnPropertyChanged(nameof(IsReliefShadingVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));
@@ -276,6 +432,22 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(HasWeatherData));
             OnPropertyChanged(nameof(IsEmpty));
             OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
+        }
+
+        var hasBathymetry = _datasets.Entries.Any(e => string.Equals(e.ProductSpec, "S-102", StringComparison.OrdinalIgnoreCase));
+        if (hasBathymetry != HasBathymetryData)
+        {
+            HasBathymetryData = hasBathymetry;
+            OnPropertyChanged(nameof(HasBathymetryData));
+            OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
+        }
+
+        var hasCyclone = _datasets.Entries.Any(e => string.Equals(e.ProductSpec, WeatherProducts.TropicalCyclone.Spec, StringComparison.OrdinalIgnoreCase));
+        if (hasCyclone != HasTropicalCyclone)
+        {
+            HasTropicalCyclone = hasCyclone;
+            OnPropertyChanged(nameof(HasTropicalCyclone));
         }
 
         // Determine which portrayal specs are currently loaded. An S-57 entry
@@ -323,5 +495,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         _state.NavigationalWarningsChanged -= OnNavigationalWarningsChanged;
         _datasets.Entries.CollectionChanged -= OnEntriesChanged;
         _datasets.EntryPortrayalSpecChanged -= OnEntryPortrayalSpecChanged;
+        if (Aml is not null)
+            Aml.PropertyChanged -= OnAmlPropertyChanged;
     }
 }

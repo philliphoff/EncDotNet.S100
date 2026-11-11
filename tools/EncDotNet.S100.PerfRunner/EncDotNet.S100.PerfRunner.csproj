@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The settle-run manifest is written here and read by PerfReport; one source file keeps them in step. -->
+    <Compile Include="..\EncDotNet.S100.PerfReport\SettleReport.cs" Link="SettleReport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry" />
@@ -27,6 +32,7 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
   </ItemGroup>

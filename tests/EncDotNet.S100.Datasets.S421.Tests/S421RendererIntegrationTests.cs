@@ -2,9 +2,9 @@ using System.Xml.Linq;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Specifications;
-using Mapsui.Layers;
-using Mapsui.Nts;
 
 namespace EncDotNet.S100.Datasets.S421.Tests;
 
@@ -67,7 +67,7 @@ public class S421RendererIntegrationTests
     }
 
     [Fact]
-    public void Renderer_Minimal_ProducesLayerWithFeatures()
+    public void Renderer_Minimal_BindsBothWaypoints()
     {
         var (displayList, dataset, catalogue) = RunPipeline("RTE-TEST-GMIN.s421.gml");
 
@@ -84,16 +84,16 @@ public class S421RendererIntegrationTests
         var instructions = Part9DisplayListReader.Read(displayList);
         var geometryProvider = new FeatureGeometryProvider<S421Feature>(dataset.Features);
         var layer = renderer.Render(instructions, geometryProvider);
-        var memLayer = Assert.IsAssignableFrom<MemoryLayer>(layer);
-        var features = memLayer.Features.ToList();
-        Assert.Equal(2, features.Count); // both waypoints
 
-        // Each rendered feature must carry its source dataset reference.
-        foreach (var f in features)
-        {
-            var refValue = f[MapsuiDisplayListRenderer.FeatureRefKey] as string;
-            Assert.False(string.IsNullOrEmpty(refValue));
-        }
+        // The layer is drawn and picked from its bound scene.
+        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out _, out var overlay));
+        var points = overlay.Ops.OfType<PointPaintOp>().ToList();
+        Assert.NotEmpty(points);
+
+        // Each painted op must carry its source dataset reference, and both
+        // waypoints are drawn.
+        Assert.All(points, p => Assert.False(string.IsNullOrEmpty(p.FeatureReference)));
+        Assert.Equal(2, points.Select(p => p.FeatureReference).Distinct().Count());
     }
 
     [Fact]
@@ -104,12 +104,10 @@ public class S421RendererIntegrationTests
         var renderer = new MapsuiDisplayListRenderer { Palette = catalogue.ActivePalette };
         var instructions = Part9DisplayListReader.Read(displayList);
         var geometryProvider = new FeatureGeometryProvider<S421Feature>(dataset.Features);
-        var layer = (MemoryLayer)renderer.Render(instructions, geometryProvider);
+        var layer = renderer.Render(instructions, geometryProvider);
 
-        var features = layer.Features.OfType<GeometryFeature>().ToList();
-        Assert.NotEmpty(features);
-
-        // At least one feature whose geometry is a LineString (a route leg).
-        Assert.Contains(features, f => f.Geometry is NetTopologySuite.Geometries.LineString);
+        // At least one line op (a route leg) in the bound scene.
+        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out _));
+        Assert.Contains(baseScene.Ops, op => op is LinePaintOp { World.Count: >= 2 });
     }
 }

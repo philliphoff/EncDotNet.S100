@@ -1,7 +1,9 @@
+using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Hdf5;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -14,7 +16,10 @@ namespace EncDotNet.S100.Cli.Commands;
 /// time-series datasets) the available time steps with their indices; for
 /// weather files (GRIB2, NetCDF), the parameters and why any isn't used; for
 /// CAP warnings, each alert area, when it's in force and the zone codes the
-/// marine zone layer doesn't have.
+/// marine zone layer doesn't have; for WPC coded surface bulletins, the
+/// bulletin, its coverage and each analysis's valid time and feature counts;
+/// for tropical cyclone advisories, the storm, the advisory, the forecast span
+/// and intensity, and every forecast point.
 /// </summary>
 internal sealed class InfoCommand : Command<DatasetCommandSettings>
 {
@@ -39,6 +44,12 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             table.AddColumn("Value");
 
             table.AddRow("Dataset", Markup.Escape(settings.DatasetPath));
+
+            // AML: what the data is first, its protective marking second (#1236, decision 14).
+            var aml = processor as AmlDatasetProcessor;
+            if (aml is not null)
+                AddAmlHeadRows(table, aml.Info);
+
             table.AddRow("Specification", Markup.Escape(processor.Spec.Name));
             table.AddRow("Edition", Markup.Escape(DescribeDeclaredEdition(processor.Spec)));
 
@@ -68,7 +79,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             }
 
             // S-104 defines no portrayal, so say whose symbology render draws (issue #937).
-            if (ProductRegistry.Default.PortrayalOf(processor.Spec.Name).AsApplication is { } portrayal)
+            if (aml is null && ProductRegistry.Default.PortrayalOf(processor.Spec.Name).AsApplication is { } portrayal)
             {
                 table.AddRow("Portrayal", Markup.Escape(portrayal.Note));
             }
@@ -92,9 +103,9 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             table.AddRow("Headless render", processor is IHeadlessImageRenderer ? "[green]yes[/]" : "[yellow]no[/]");
 
-            // Weather data (GRIB2, NetCDF, CAP) isn't S-100 and isn't for
+            // Weather data (GRIB2, NetCDF, CAP, TC) isn't S-100 and isn't for
             // navigation (design note weather-sources.md §3.1).
-            if (!ProductRegistry.Default.IsS100(processor.Spec.Name))
+            if (aml is null && !ProductRegistry.Default.IsS100(processor.Spec.Name))
             {
                 var notice = ProductRegistry.Default.TryResolve(processor.Spec.Name, out var registration)
                     && registration.PickReportNotice is { Length: > 0 } own
@@ -112,6 +123,14 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                     "Alerts",
                     $"{capAlerts.Warnings.Document.Alerts.Count} ({capAlerts.Warnings.Areas.Count} areas, {capAlerts.Warnings.Areas.Count(a => a.IsDrawable)} drawn)");
             }
+
+            if (aml is not null)
+                AddAmlRows(table, aml);
+
+            if (processor is SurfaceAnalysisDatasetProcessor surface)
+                AddSurfaceAnalysisRows(table, surface.Bulletin);
+            if (processor is TropicalCycloneDatasetProcessor cyclone)
+                AddTropicalCycloneRows(table, cyclone.Advisory);
 
             if (processor is IDisplayModeAwareDatasetProcessor displayModeAware &&
                 displayModeAware.DeclaredDisplayModeIds.Count > 0)
@@ -185,6 +204,15 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             if (processor is CapDatasetProcessor cap)
                 WriteCapWarnings(cap);
 
+            // Coded surface bulletins: each analysis's valid time and what it
+            // holds (issue #1295).
+            if (processor is SurfaceAnalysisDatasetProcessor surfaceAnalysis)
+                WriteSurfaceAnalyses(surfaceAnalysis.Bulletin);
+
+            // Tropical cyclones: every forecast point (issue #1294).
+            if (processor is TropicalCycloneDatasetProcessor tc)
+                WriteTropicalCycloneForecast(tc.Advisory);
+
             return 0;
         }
         catch (NotSupportedException ex)
@@ -250,6 +278,204 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
         }
 
         table.AddRow("Layers", Markup.Escape(string.Join(", ", weather.LayerKeys)));
+    }
+
+    private static void AddTropicalCycloneRows(Table table, Datasets.TropicalCyclones.TropicalCycloneAdvisory advisory)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        static string Utc(DateTime time) => time.ToString("yyyy-MM-dd HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
+
+        var storm = advisory.Storm;
+        var current = advisory.Current;
+        var title = current is { ClassDescription.Length: > 0 } ? $"{current.ClassDescription} {storm.Name}" : storm.Name;
+        table.AddRow("Storm", Markup.Escape($"{title} ({storm.AtcfId}), {storm.BasinName}"));
+        table.AddRow("Advisory", Markup.Escape($"{advisory.Advisory}, issued {Utc(advisory.IssueTime.UtcDateTime)}"));
+        table.AddRow(
+            "Forecast",
+            Markup.Escape(string.Create(
+                invariant,
+                $"{Utc(advisory.SynopticTime)} to {Utc(advisory.ForecastEnd)} ({advisory.Forecast[^1].Tau} h, {advisory.Forecast.Count} points)")));
+        if (current is not null)
+        {
+            var parts = new List<string>();
+            if (current.MaxWindKnots is { } wind)
+                parts.Add(string.Create(invariant, $"{wind} kt"));
+            if (current.GustKnots is { } gust)
+                parts.Add(string.Create(invariant, $"gusts {gust} kt"));
+            if (current.PressureHectopascals is { } pressure)
+                parts.Add(string.Create(invariant, $"{pressure} hPa"));
+            if (current.SaffirSimpsonCategory is { } category)
+                parts.Add(string.Create(invariant, $"category {category}"));
+            if (advisory.PeakForecastWindKnots is { } peak)
+                parts.Add(string.Create(invariant, $"peak forecast {peak} kt"));
+            table.AddRow("Intensity", Markup.Escape(string.Join(", ", parts)));
+        }
+
+        table.AddRow(
+            "Cone",
+            advisory.Cone is { } cone
+                ? cone.DaysFourToFive.Count > 0 ? "days 1–3 and 4–5" : "days 1–3"
+                : "none (final advisory)");
+        var withRadii = advisory.Forecast.Count(p => p.Radii.Count > 0);
+        table.AddRow(
+            "Wind radii",
+            withRadii == 0
+                ? "none"
+                : Markup.Escape(string.Create(invariant, $"at {withRadii} of {advisory.Forecast.Count} forecast points")));
+        table.AddRow(
+            "Past track",
+            advisory.PastTrack.Count == 0
+                ? "none (no best track read)"
+                : Markup.Escape(string.Create(
+                    invariant,
+                    $"{advisory.PastTrack.Count} points from {Utc(advisory.PastTrack[0].Time)}, {advisory.PastTrack.Count(p => p.Radii.Count > 0)} with radii")));
+    }
+
+    private static void WriteTropicalCycloneForecast(Datasets.TropicalCyclones.TropicalCycloneAdvisory advisory)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        static string Radius(Datasets.TropicalCyclones.TropicalCycloneForecastPoint point, int threshold) =>
+            point.Radii.FirstOrDefault(r => r.ThresholdKnots == threshold) is { } r
+                ? string.Create(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    $"{r.NortheastNauticalMiles:0}/{r.SoutheastNauticalMiles:0}/{r.SouthwestNauticalMiles:0}/{r.NorthwestNauticalMiles:0}")
+                : "—";
+
+        var table = new Table().Border(TableBorder.Rounded).Title("Forecast points");
+        table.AddColumn("Tau");
+        table.AddColumn("Valid (UTC)");
+        table.AddColumn("Position");
+        table.AddColumn("Wind");
+        table.AddColumn("Gust");
+        table.AddColumn("Pressure");
+        table.AddColumn("Class");
+        table.AddColumn("34 kt nm");
+        table.AddColumn("50 kt nm");
+        table.AddColumn("64 kt nm");
+        foreach (var point in advisory.Forecast)
+        {
+            var p = point.Position;
+            table.AddRow(
+                point.Tau.ToString(invariant),
+                point.ValidTime.ToString("yyyy-MM-dd HH:mm", invariant),
+                string.Create(invariant, $"{Math.Abs(p.Latitude):0.0}°{(p.Latitude < 0 ? 'S' : 'N')} {Math.Abs(p.Longitude):0.0}°{(p.Longitude < 0 ? 'W' : 'E')}"),
+                point.MaxWindKnots is { } wind ? string.Create(invariant, $"{wind} kt") : "—",
+                point.GustKnots is { } gust ? string.Create(invariant, $"{gust} kt") : "—",
+                point.PressureHectopascals is { } pressure ? string.Create(invariant, $"{pressure} hPa") : "—",
+                Markup.Escape(point.ClassCode),
+                Radius(point, 34),
+                Radius(point, 50),
+                Radius(point, 64));
+        }
+
+        AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine("[grey]Radii are NE/SE/SW/NW in nautical miles.[/]");
+    }
+
+    /// <summary>
+    /// The first rows of an AML cell's info: that it's Additional Military
+    /// Layers, not a chart, then its protective marking.
+    /// </summary>
+    private static void AddAmlHeadRows(Table table, AmlDatasetInfo info)
+    {
+        table.AddRow("Notice", $"[yellow]{Markup.Escape(AmlDatasetProcessor.NotAChartNotice.TrimEnd('.'))}[/]");
+        table.AddRow("Protective marking", Markup.Escape(AmlMarkingText(info)));
+    }
+
+    /// <summary>The AML facts: product, version, IDO status, owner, caveat, scale band, title, coverage and whether it's drawn.</summary>
+    private static void AddAmlRows(Table table, AmlDatasetProcessor aml)
+    {
+        var info = aml.Info;
+        table.AddRow("Product", Markup.Escape(info.Version is { } version ? $"{info.ProductDisplay} (AML {version})" : info.ProductDisplay));
+        if (info.IdoStatus is { } ido)
+            table.AddRow("IDO status", Markup.Escape(ido));
+        if (info.OwnerAuthority is { } owner)
+            table.AddRow("Owner authority", Markup.Escape(owner));
+        if (info.Caveat is { } caveat)
+            table.AddRow("Caveat", Markup.Escape(caveat));
+        if (info.ScaleBand is { } band)
+            table.AddRow("Scale band", band.ToString(CultureInfo.InvariantCulture));
+        if (info.Title is { } title)
+            table.AddRow("Title", Markup.Escape(title));
+        if (info.FromName is { } name)
+        {
+            table.AddRow(
+                "From the cell name",
+                Markup.Escape(string.Create(CultureInfo.InvariantCulture,
+                    $"producer {name.Producer}, product {name.Product ?? "none"}, band {name.ScaleBand}, marking {name.ClassificationLetter}")));
+        }
+
+        table.AddRow("Features", aml.Features.Count.ToString(CultureInfo.InvariantCulture));
+        table.AddRow("Coverage", aml.CoverageIsBoundingBox ? "bounding box (no M_COVR)" : $"M_COVR ({aml.Coverage.Count} areas)");
+        table.AddRow("Drawn", aml.Drawn ? "yes" : "no (recognised, not translated)");
+    }
+
+    private static string AmlMarkingText(AmlDatasetInfo info) => info.ProtectiveMarking switch
+    {
+        null => "none given",
+        { } marking when info.MarkingSource == AmlMarkingSource.CellName => $"{marking} (from cell name)",
+        { } marking => marking,
+    };
+
+    private static void AddSurfaceAnalysisRows(Table table, Datasets.Weather.CodedSurfaceBulletin bulletin)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        table.AddRow(
+            "Bulletin",
+            Markup.Escape(string.Join(
+                " · ",
+                new[]
+                {
+                    bulletin.Kind == Datasets.Weather.CodedSurfaceBulletinKind.Forecast ? "forecast" : "analysis",
+                    bulletin.Resolution == Datasets.Weather.CodedSurfaceBulletinResolution.HighResolution
+                        ? "high resolution (0.1°)"
+                        : "standard (1°)",
+                    bulletin.Header.ProductId,
+                    bulletin.Header.WmoHeading,
+                }.Where(p => !string.IsNullOrEmpty(p)))));
+        table.AddRow("Issued by", Markup.Escape(bulletin.IssuingCentre));
+        if (bulletin.Header.IssuedAt is { } issued)
+            table.AddRow("Issued (UTC)", issued.UtcDateTime.ToString("yyyy-MM-dd HH:mm", invariant));
+        var d = bulletin.Domain;
+        table.AddRow(
+            "Coverage",
+            Markup.Escape(string.Create(
+                invariant,
+                $"WPC's domain only: {d.WestLongitude:0.###},{d.SouthLatitude:0.###},{d.EastLongitude:0.###},{d.NorthLatitude:0.###} (minLon,minLat,maxLon,maxLat)")));
+        if (bulletin.Analyses.Count == 1)
+            table.AddRow("Valid (UTC)", bulletin.Analyses[0].ValidTime.UtcDateTime.ToString("yyyy-MM-dd HH:mm", invariant));
+        if (bulletin.SkippedCodes.Count > 0)
+            table.AddRow("Skipped codes", $"[yellow]{Markup.Escape(string.Join(", ", bulletin.SkippedCodes.Distinct()))}[/]");
+    }
+
+    private static void WriteSurfaceAnalyses(Datasets.Weather.CodedSurfaceBulletin bulletin)
+    {
+        var table = new Table().Border(TableBorder.Rounded).Title("Surface analyses");
+        table.AddColumn("Valid (UTC)");
+        table.AddColumn("Forecast");
+        table.AddColumn("Cold");
+        table.AddColumn("Warm");
+        table.AddColumn("Occluded");
+        table.AddColumn("Stationary");
+        table.AddColumn("Troughs");
+        table.AddColumn("Highs");
+        table.AddColumn("Lows");
+        foreach (var analysis in bulletin.Analyses)
+        {
+            string Count(Datasets.Weather.SurfaceFrontType type) => analysis.FrontsOf(type).Count().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            table.AddRow(
+                analysis.ValidTime.UtcDateTime.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                analysis.ForecastHours is { } hours ? $"{hours} h" : "analysis",
+                Count(Datasets.Weather.SurfaceFrontType.Cold),
+                Count(Datasets.Weather.SurfaceFrontType.Warm),
+                Count(Datasets.Weather.SurfaceFrontType.Occluded),
+                Count(Datasets.Weather.SurfaceFrontType.Stationary),
+                Count(Datasets.Weather.SurfaceFrontType.Trough),
+                analysis.CentresOf(Datasets.Weather.PressureCentreKind.High).Count().ToString(System.Globalization.CultureInfo.InvariantCulture),
+                analysis.CentresOf(Datasets.Weather.PressureCentreKind.Low).Count().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        AnsiConsole.Write(table);
     }
 
     private static void WriteCapWarnings(CapDatasetProcessor cap)

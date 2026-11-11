@@ -217,6 +217,126 @@ public class S57ToS101TranslatorTests
         Assert.Equal(120, sa.RecordName);
     }
 
+    // ── Unknown object classes → S57UnknownObject ("?", #1242) ──────────
+
+    private static Dictionary<string, string> AttributesOf(S101Document doc, S101FeatureRecord feat)
+        => feat.Attributes.ToDictionary(a => doc.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+
+    [Fact]
+    public void Translate_UnknownClassPoint_IsKeptAsUnknownObjectWithItsS57Attributes()
+    {
+        // OBJL 500 isn't in the S-57 Object Catalogue (S-64 3.2.1). OBJNAM
+        // (116) has a rule, so it keeps its acronym; ATTL 9999 has none.
+        var n1 = Node(1, 1000, 2000, RcnmIsolatedNode);
+        var feature = Feat(recordId: 1, primitive: 1, objectClass: 500,
+            producingAgency: 550, featureIdentificationNumber: 77,
+            attributes: new[] { Attr(116, "WP1"), Attr(9999, "x") },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 255, 255, 255) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, ClassOf(s101, feat));
+        Assert.Equal(110, Assert.Single(feat.SpatialAssociations).RecordName);
+        Assert.Equal((ushort)550, feat.ProducingAgency);
+        Assert.Equal(77u, feat.FeatureIdentificationNumber);
+        Assert.Equal(
+            new Dictionary<string, string> { ["OBJL"] = "500", ["OBJNAM"] = "WP1", ["ATTL9999"] = "x" },
+            AttributesOf(s101, feat));
+        // Still counted as unmapped, and as emitted.
+        Assert.Equal(1, diag.UnmappedObjectClasses[500]);
+        Assert.Equal(1, diag.FeaturesEmitted);
+    }
+
+    [Theory]
+    [InlineData(2, 120)] // line → curve
+    [InlineData(3, 130)] // area → surface
+    public void Translate_UnknownClassLineOrArea_KeepsItsGeometry(byte primitive, int expectedRcnm)
+    {
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var edges = primitive == 2
+            ? new[] { Edge(10, 1, 2) }
+            : new[] { Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1) };
+        var feature = Feat(recordId: 1, primitive: primitive, objectClass: (ushort)(499 + primitive),
+            spatialPointers: edges.Select(e => Sp(RcnmEdge, (uint)e.RecordName.RecordId, 1, 1, 0)).ToArray());
+        var doc = BuildDocument(
+            vectorRecords: new EncDotNet.S57.S57VectorRecord[] { n1, n2, n3 }.Concat(edges),
+            features: new[] { feature });
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, ClassOf(s101, feat));
+        Assert.Equal(expectedRcnm, feat.SpatialAssociations[0].RecordName);
+    }
+
+    [Fact]
+    public void Translate_UnknownClassWithoutGeometry_IsCountedButNotEmitted()
+    {
+        var feature = Feat(recordId: 1, primitive: 255, objectClass: 500);
+        var doc = BuildDocument(features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.UnmappedObjectClasses[500]);
+    }
+
+    [Theory]
+    [InlineData(301)] // M_CSCL
+    [InlineData(303)] // M_HDAT
+    [InlineData(304)] // M_HOPA
+    [InlineData(307)] // M_PROD
+    [InlineData(311)] // M_UNIT
+    public void Translate_MetaObjectWithoutS101Feature_IsDroppedByRule(ushort objl)
+    {
+        // These have rules that drop them, so they don't draw as "?".
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var feature = Feat(recordId: 1, primitive: 3, objectClass: objl,
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0), Sp(RcnmEdge, 12, 1, 1, 0) });
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1) },
+            features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[objl]);
+        Assert.Empty(diag.UnmappedObjectClasses);
+    }
+
+    [Fact]
+    public void Translate_RuleDroppedClass_IsNotKeptAsUnknownObject()
+    {
+        // CTRPNT (33) is dropped unless CATCTR is 1 or 5 (Conversion Guidance § 4.3).
+        var n1 = Node(1, 1000, 2000, RcnmIsolatedNode);
+        var feature = Feat(recordId: 1, primitive: 1, objectClass: 33,
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 255, 255, 255) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[33]);
+    }
+
+    [Theory]
+    [InlineData("138", "Unknown S-57 object TS_PAD (138)")]
+    [InlineData("500", "Unknown S-57 object $AREAS (500)")]
+    [InlineData("999", "Unknown S-57 object (999)")]
+    [InlineData(null, "Unknown S-57 object")]
+    public void UnknownObjectName_UsesTheAcronymWhenTheCatalogueDefinesTheClass(string? objl, string expected)
+        => Assert.Equal(expected, S57UnknownObject.Name(objl));
+
     [Fact]
     public void Translate_MCovr_CoverageAvailable_BecomesDataCoverage()
     {
@@ -324,6 +444,86 @@ public class S57ToS101TranslatorTests
         Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
     }
 
+    // ── Data Coverage display scales (S-65 Annex B §2.2.6) ──
+
+    [Theory]
+    [InlineData(22_000, 22_000)]
+    [InlineData(40_000, 22_000)]
+    [InlineData(50_000, 45_000)]
+    [InlineData(80_000, 45_000)]
+    [InlineData(1_000, 1_000)]
+    [InlineData(500, 1_000)]
+    [InlineData(20_000_000, 10_000_000)]
+    public void OptimumDisplayScale_SnapsToTheNextSmallestTable23Denominator(int compilationScale, int expected)
+        => Assert.Equal(expected, S57ToS101Translator.OptimumDisplayScale(compilationScale));
+
+    [Fact]
+    public void OptimumDisplayScale_IsNullWithoutACompilationScale()
+        => Assert.Null(S57ToS101Translator.OptimumDisplayScale(0));
+
+    [Fact]
+    public void Translate_MCovr_GetsDisplayScalesFromTheCompilationScale()
+    {
+        // CSCL 50 000 → optimum 45 000 (Table 2-3), maximum half of it, and
+        // minimum left empty for the producer.
+        var s101 = new S57ToS101Translator().Translate(CoveredCell(sdat: 0));
+
+        var values = AttributeValues(s101, Assert.Single(FeaturesOf(s101, "DataCoverage")));
+        Assert.Equal(["45000"], values["optimumDisplayScale"]);
+        Assert.Equal(["22500"], values["maximumDisplayScale"]);
+        Assert.False(values.ContainsKey("minimumDisplayScale"));
+    }
+
+    // A 100 × 100 square split down the middle: A(0,0) B(50,0) C(100,0)
+    // D(100,100) E(50,100) F(0,100), with the divider BE.
+    private static EncDotNet.S57.S57Document SplitCell(params EncDotNet.S57.S57FeatureRecord[] scales)
+    {
+        var coverage = Feat(
+            recordId: 1, primitive: 3, objectClass: 302,
+            featureIdentificationNumber: 1,
+            attributes: new[] { Attr(18, "1") },
+            spatialPointers: new[] { 10u, 11u, 12u, 13u, 14u, 15u }.Select(e => Sp(RcnmEdge, e, 1, 1, 255)).ToArray());
+        return BuildDocument(
+            vectorRecords: new[]
+            {
+                Node(1, 0, 0), Node(2, 0, 50), Node(3, 0, 100), Node(4, 100, 100), Node(5, 100, 50), Node(6, 100, 0),
+                Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 4), Edge(13, 4, 5), Edge(14, 5, 6), Edge(15, 6, 1), Edge(16, 2, 5),
+            },
+            features: new[] { coverage }.Concat(scales));
+    }
+
+    private static EncDotNet.S57.S57FeatureRecord Scale(uint recordId, string cscale, params uint[] edges)
+        => Feat(
+            recordId: recordId, primitive: 3, objectClass: 301, // M_CSCL
+            featureIdentificationNumber: recordId,
+            attributes: new[] { Attr(80, cscale) },
+            spatialPointers: edges.Select(e => Sp(RcnmEdge, e, 1, 1, 255)).ToArray());
+
+    [Fact]
+    public void Translate_MCscl_CutsDataCoverageIntoPiecesWithTheirOwnScale()
+    {
+        // The M_CSCL covers the left half (A B E F) at 1:20 000 → 12 000.
+        var s101 = new S57ToS101Translator().Translate(SplitCell(Scale(2, "20000", 10, 16, 14, 15)));
+
+        var coverages = FeaturesOf(s101, "DataCoverage");
+        Assert.Equal(2, coverages.Count);
+        Assert.Equal(["45000", "12000"], coverages.Select(c => AttributeValues(s101, c)["optimumDisplayScale"].Single()));
+        Assert.Equal(["22500", "6000"], coverages.Select(c => AttributeValues(s101, c)["maximumDisplayScale"].Single()));
+
+        // The first piece keeps the M_COVR's FOID; the other gets a FIDS of its own.
+        Assert.Equal(2, coverages.Select(c => (c.FeatureIdentificationNumber, c.FeatureIdentificationSubdivision)).Distinct().Count());
+        Assert.Equal((1u, (ushort)0), (coverages[0].FeatureIdentificationNumber, coverages[0].FeatureIdentificationSubdivision));
+    }
+
+    [Fact]
+    public void Translate_MCscl_OverTheWholeCoverage_SetsItsScaleWithoutCutting()
+    {
+        var s101 = new S57ToS101Translator().Translate(SplitCell(Scale(2, "90000", 10, 11, 12, 13, 14, 15)));
+
+        var coverage = Assert.Single(FeaturesOf(s101, "DataCoverage"));
+        Assert.Equal(["90000"], AttributeValues(s101, coverage)["optimumDisplayScale"]);
+    }
+
     // ── Underwater hazard depths (surroundingDepth / defaultClearanceDepth) ──
 
     private const ushort ObjlDepare = 42;
@@ -331,6 +531,7 @@ public class S57ToS101TranslatorTests
     private const ushort ObjlUwtroc = 153;
     private const ushort ObjlWrecks = 159;
     private const int AttlCatobs = 42;
+    private const int AttlCatwrk = 71;
     private const int AttlDrval1 = 87;
     private const int AttlExpsou = 93;
     private const int AttlValsou = 179;
@@ -372,15 +573,23 @@ public class S57ToS101TranslatorTests
         => Assert.Single(doc.Features, f => ClassOf(doc, f) != "DepthArea");
 
     [Theory]
-    [InlineData(ObjlUwtroc, "3", "1", null, "5")]     // always under water, within range: the surrounding depth
-    [InlineData(ObjlWrecks, "3", "3", null, "5")]     // always under water, deeper than range: the surrounding depth
-    [InlineData(ObjlUwtroc, "3", null, null, "0.01")] // always under water, exposition unknown
-    [InlineData(ObjlUwtroc, "5", null, null, "0")]    // awash
-    [InlineData(ObjlUwtroc, "4", null, null, "-15")]  // covers and uncovers
-    [InlineData(ObjlObstrn, null, null, null, "-15")] // water level unknown
-    [InlineData(ObjlObstrn, "4", null, "6", "0.01")]  // foul area
+    // S-101 DCEG clause 30.1, Tables 30-1 to 30-3.
+    [InlineData(ObjlUwtroc, "3", "1", null, null, "5")]     // always under water, within range: the surrounding depth
+    [InlineData(ObjlWrecks, "3", "3", null, null, "5")]     // always under water, deeper than range: the surrounding depth
+    [InlineData(ObjlUwtroc, "3", null, null, null, "0.1")]  // always under water, exposition unknown
+    [InlineData(ObjlUwtroc, "5", null, null, null, "0")]    // awash
+    [InlineData(ObjlUwtroc, "4", null, null, null, "-15")]  // covers and uncovers
+    [InlineData(ObjlObstrn, null, null, null, null, "-15")] // water level unknown
+    [InlineData(ObjlObstrn, "4", null, "6", null, "0.1")]   // foul area
+    [InlineData(ObjlWrecks, "3", null, null, null, "0")]    // uncategorised wreck, always under water
+    [InlineData(ObjlWrecks, "5", null, null, null, "0")]    // uncategorised wreck, awash
+    [InlineData(ObjlWrecks, "4", null, null, null, "-15")]  // uncategorised wreck, covers and uncovers
+    [InlineData(ObjlWrecks, "3", null, null, "1", "20.1")]  // non-dangerous wreck
+    [InlineData(ObjlWrecks, null, null, null, "1", "20.1")] // non-dangerous wreck, water level unknown
+    [InlineData(ObjlWrecks, "3", null, null, "2", "-15")]   // dangerous wreck
+    [InlineData(ObjlWrecks, "3", "1", null, "2", "5")]      // dangerous wreck within range: the surrounding depth
     public void Translate_HazardWithoutValsou_GetsDefaultClearanceDepth(
-        ushort objectClass, string? watlev, string? expsou, string? catobs, string expected)
+        ushort objectClass, string? watlev, string? expsou, string? catobs, string? catwrk, string expected)
     {
         // S-101 OBSTRN07 / WRECKS05 raise an error, and the hazard is drawn
         // with the "?" default symbol, when neither valueOfSounding nor
@@ -389,6 +598,7 @@ public class S57ToS101TranslatorTests
         if (watlev is not null) attributes.Add(Attr(AttlWatlev, watlev));
         if (expsou is not null) attributes.Add(Attr(AttlExpsou, expsou));
         if (catobs is not null) attributes.Add(Attr(AttlCatobs, catobs));
+        if (catwrk is not null) attributes.Add(Attr(AttlCatwrk, catwrk));
 
         var s101 = new S57ToS101Translator().Translate(
             HazardCell(HazardPoint(objectClass, node: 1, attributes.ToArray())));
@@ -418,7 +628,7 @@ public class S57ToS101TranslatorTests
 
         var hazard = SingleHazard(s101);
         Assert.DoesNotContain("surroundingDepth", AttributeNames(s101, hazard));
-        Assert.Equal("0.01", TopLevelValue(s101, hazard, "defaultClearanceDepth"));
+        Assert.Equal("0.1", TopLevelValue(s101, hazard, "defaultClearanceDepth"));
     }
 
     [Fact]
@@ -557,7 +767,7 @@ public class S57ToS101TranslatorTests
         var s101Feature = Assert.Single(s101.Features);
         var soundingTypeCode = s101.FeatureTypeCatalogue.First(kv => kv.Value == "Sounding").Key;
         Assert.Equal(soundingTypeCode, s101Feature.FeatureTypeCode);
-        Assert.Empty(s101Feature.Attributes);
+        Assert.Empty(s101Feature.Attributes); // the source has no attributes
 
         var spa = Assert.Single(s101Feature.SpatialAssociations);
         Assert.Equal((byte)115, spa.RecordName);
@@ -575,6 +785,39 @@ public class S57ToS101TranslatorTests
 
         // CMFZ defaults to SOMF (10) so consumers can recover real depth.
         Assert.Equal(10u, s101.StructureInfo.CoordinateMultiplicationFactorZ);
+    }
+
+    // #1219: a SOUNDG's own attributes go through the normal attribute path,
+    // gated on what the FC binds on Sounding (S-65 Annex B § 11.3).
+    [Fact]
+    public void Translate_SoundingFeature_CarriesBoundAttributes()
+    {
+        var sn = SoundingNode(1, (10, 20, 50));
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 129, // SOUNDG
+            attributes: new[]
+            {
+                Attr(133, "21999"),           // SCAMIN
+                Attr(147, "20180827"),        // SORDAT
+                Attr(125, "1"),               // QUASOU
+                Attr(156, "3"),               // TECSOU
+                Attr(93, "3"),                // EXPSOU (not bound on Sounding)
+                Attr(102, "Reported depth"),  // INFORM
+            },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 1, 0, 0) });
+
+        var doc = BuildDocument(vectorRecords: new[] { sn }, features: new[] { feature }, somf: 10);
+        var diagnostics = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(doc, diagnostics);
+
+        var sounding = Assert.Single(s101.Features);
+        Assert.Equal("21999", TopLevelValue(s101, sounding, "scaleMinimum"));
+        Assert.Equal("20180827", TopLevelValue(s101, sounding, "reportedDate"));
+        Assert.Equal("1", TopLevelValue(s101, sounding, "qualityOfVerticalMeasurement"));
+        Assert.Equal("3", TopLevelValue(s101, sounding, "techniqueOfVerticalMeasurement"));
+        Assert.DoesNotContain("expositionOfSounding", AttributeNames(s101, sounding));
+        Assert.NotNull(NauticalInformationOf(s101, sounding));
+        Assert.Equal(1, diagnostics.RuleDroppedAttributes[93]); // reported, not silently lost
     }
 
     [Fact]
@@ -823,7 +1066,8 @@ public class S57ToS101TranslatorTests
         var maritime = new S57ToS101Translator().Translate(doc, maritimeDiag);
         var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
 
-        Assert.Empty(maritime.Features);
+        // The maritime mapping has no rule for it: it's kept as an unknown object.
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, ClassOf(maritime, Assert.Single(maritime.Features)));
         Assert.Equal(1, maritimeDiag.UnmappedObjectClasses[17050]);
 
         var feature = Assert.Single(inland.Features);
@@ -1363,7 +1607,7 @@ public class S57ToS101TranslatorTests
 
         var ninfom = InformationInstance(inland, feature.Attributes, 3).ToList();
         Assert.Equal("Durchfahrtshöhe 5,20 m", GetSubAttribute(inland, ninfom, "text"));
-        Assert.Equal(string.Empty, GetSubAttribute(inland, ninfom, "language"));
+        Assert.Equal("und", GetSubAttribute(inland, ninfom, "language"));
     }
 
     [Fact]
@@ -1524,7 +1768,7 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_NinfomAttribute_BecomesNauticalInformation_WithBlankLanguage()
+    public void Translate_NinfomAttribute_BecomesNauticalInformation_WithUndeterminedLanguage()
     {
         var doc = LandRegionWithS57Attributes(Attr(300, "Información en español"));
 
@@ -1535,7 +1779,8 @@ public class S57ToS101TranslatorTests
         var instance = InformationInstance(s101, info!.Attributes, 1).ToList();
 
         Assert.Equal("Información en español", GetSubAttribute(s101, instance, "text"));
-        Assert.Equal("", GetSubAttribute(s101, instance, "language"));
+        // #1221: an empty language would read as English (S-65 Annex C §27.177).
+        Assert.Equal("und", GetSubAttribute(s101, instance, "language"));
     }
 
     [Fact]
@@ -1556,7 +1801,7 @@ public class S57ToS101TranslatorTests
         Assert.Equal("English text", GetSubAttribute(s101, first, "text"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
         Assert.Equal("National text", GetSubAttribute(s101, second, "text"));
-        Assert.Equal("", GetSubAttribute(s101, second, "language"));
+        Assert.Equal("und", GetSubAttribute(s101, second, "language"));
 
         // Both texts live on a single NauticalInformation record (one association).
         Assert.Single(feat.InformationAssociations);
@@ -1645,6 +1890,83 @@ public class S57ToS101TranslatorTests
         }
     }
 
+    // ── Master/slave (FFPT) → StructureEquipment (#1220) ───────────────
+
+    // A BOYLAT master whose FFPT names a LIGHTS, a FOGSIG and an OBSTRN as
+    // slaves (S-57 UOC 12.1.1), all at the buoy's node.
+    [Fact]
+    public void Translate_MasterSlaves_BecomeStructureEquipment()
+    {
+        var slave = EncDotNet.S57.S57RelationshipIndicator.Slave;
+        var n1 = Node(1, 1000, 2000);
+        var buoy = Feat(
+            recordId: 1, primitive: 1, objectClass: 17, // BOYLAT
+            featureIdentificationNumber: 10,
+            attributes: new[] { Attr(36, "1") }, // CATLAM
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[]
+            {
+                Ffpt(540, 20, relationship: slave),
+                Ffpt(540, 21, relationship: slave),
+                Ffpt(540, 22, relationship: slave),
+                Ffpt(540, 99, relationship: slave), // names no object
+            });
+        var light = Feat(
+            recordId: 2, primitive: 1, objectClass: 75, // LIGHTS
+            featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "2") }, // LITCHR
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var fog = Feat(
+            recordId: 3, primitive: 1, objectClass: 58, // FOGSIG
+            featureIdentificationNumber: 21,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var obstruction = Feat(
+            recordId: 4, primitive: 1, objectClass: 86, // OBSTRN
+            featureIdentificationNumber: 22,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { buoy, light, fog, obstruction });
+
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        var structure = SingleOfClass(s101, "LateralBuoy");
+        var equipment = structure.FeatureAssociations
+            .Where(a => s101.FeatureAssociationCatalogue[a.NumericCode] == "StructureEquipment")
+            .ToList();
+        Assert.All(equipment, a => Assert.Equal("theEquipment", s101.RoleCatalogue[a.RoleCode]));
+        Assert.Equal(
+            new[] { SingleOfClass(s101, "LightAllAround").RecordId, SingleOfClass(s101, "FogSignal").RecordId },
+            equipment.Select(a => a.RecordId));
+        Assert.Equal(2, diag.StructureEquipmentLinked);
+        Assert.Equal(1, diag.UnboundStructureEquipment[new S57StructureEquipmentPair("LateralBuoy", "Obstruction")]);
+    }
+
+    // Peer pointers (and a master pointer back from a slave) aren't
+    // master/slave links from the master's side.
+    [Fact]
+    public void Translate_PeerPointers_DoNotBecomeStructureEquipment()
+    {
+        var n1 = Node(1, 1000, 2000);
+        var buoy = Feat(
+            recordId: 1, primitive: 1, objectClass: 17, // BOYLAT
+            featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 20) });
+        var light = Feat(
+            recordId: 2, primitive: 1, objectClass: 75, // LIGHTS
+            featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "2") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 10, relationship: EncDotNet.S57.S57RelationshipIndicator.Master) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { buoy, light });
+
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.All(s101.Features, f => Assert.Empty(f.FeatureAssociations));
+        Assert.Equal(0, diag.StructureEquipmentLinked);
+    }
+
     // ── TOPMAR slave → parent `topmark` complex attribute ───────────────
 
     // Builds a buoy/beacon master feature (with geometry) that references a
@@ -1700,6 +2022,102 @@ public class S57ToS101TranslatorTests
         Assert.Equal("3", GetSubAttribute(s101, topmark, "colour"));
         Assert.Equal("1", GetSubAttribute(s101, topmark, "colourPattern"));
     }
+
+    // #1222: the TOPMAR's INFORM describes the topmark, so it becomes the
+    // complex's shapeInformation (S-65 Annex C §29.24 converts it back).
+    [Fact]
+    public void Translate_TopmarSlave_InformBecomesShapeInformation()
+    {
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "1"),   // TOPSHP
+                Attr(102, "Seasonal aid: Replaced by can when endangered by ice"), // INFORM
+            }));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("topmark", ""),
+                ("topmarkDaymarkShape", "1"),
+                ("shapeInformation", ""),
+                ("language", "eng"),
+                ("text", "Seasonal aid: Replaced by can when endangered by ice"),
+            },
+            AttributeSequence(s101, feat.Attributes).SkipWhile(a => a.Item1 != "topmark").ToArray());
+        Assert.Empty(feat.InformationAssociations); // not the buoy's own information
+    }
+
+    // #1222: the S-57 encoding of a virtual AIS aid to navigation (a point
+    // NEWOBJ, OBJL 163) is the inverse of S-65 Annex C §21.3 / §27.199.
+    [Theory]
+    [InlineData("Virtual AtoN, Isolated Danger", "SY(BRTHNO01);SY(BCNISD21);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)", "9")]
+    [InlineData("Virtual AtoN, Port Lateral", "SY(BRTHNO01);SY(BOYLAT23);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)", "7")]
+    [InlineData("virtual aton, port lateral", "", "5")]
+    public void Translate_VirtualAisNewobj_BecomesVirtualAISAidToNavigation(string clsnam, string symins, string type)
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163,
+                Attr(191, clsnam), Attr(192, symins), Attr(190, "A Virtual object"),
+                Attr(116, "Fishing Grounds Obstruction (V-AIS) East, MMSI 993672988")), diag);
+
+        var feat = SingleOfClass(s101, "VirtualAISAidToNavigation");
+        Assert.Equal(type, TopLevelValue(s101, feat, "virtualAISAidToNavigationType"));
+        Assert.Equal("Fishing Grounds Obstruction (V-AIS) East, MMSI 993672988",
+            GetSubAttribute(s101, ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList(), "name"));
+        Assert.Empty(diag.UnmappedObjectClasses);
+        Assert.Empty(diag.UnmappedAttributes);
+    }
+
+    // #1289: NOAA names the emergency wreck mark "Wreck Marking", which the
+    // Annex C table doesn't list; its CLSDEF does match, and the SYMINS still
+    // tells the two lateral types apart when only the definition matches.
+    [Theory]
+    [InlineData("Virtual AtoN, Wreck Marking", "A Virtual object marking a wreck", "SY(BOYSPP11)", "12")]
+    [InlineData("Virtual AtoN, Port Hand", "A Virtual object marking the port side of a channel", "SY(BOYLAT24)", "5")]
+    [InlineData("Virtual AtoN, Port Hand", "A Virtual object marking the port side of a channel", "SY(BOYLAT23)", "7")]
+    public void Translate_VirtualAisNewobj_UnknownName_MatchesByDefinition(string clsnam, string clsdef, string symins, string type)
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163, Attr(191, clsnam), Attr(190, clsdef), Attr(192, symins)), diag);
+
+        var feat = SingleOfClass(s101, "VirtualAISAidToNavigation");
+        Assert.Equal(type, TopLevelValue(s101, feat, "virtualAISAidToNavigationType"));
+        Assert.Empty(diag.UnmappedObjectClasses);
+    }
+
+    // A "Virtual AtoN" NEWOBJ whose name and definition both miss the table
+    // stays an unknown object.
+    [Fact]
+    public void Translate_VirtualAisNewobj_UnknownNameAndDefinition_StaysUnknownObject()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163, Attr(191, "Virtual AtoN, Something"), Attr(190, "A Virtual object")), diag);
+
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, s101.FeatureTypeCatalogue[Assert.Single(s101.Features).FeatureTypeCode]);
+    }
+
+    // Any other NEWOBJ has no S-101 class and stays an unknown object (#1242).
+    [Fact]
+    public void Translate_OtherNewobj_StaysUnknownObject()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163, Attr(191, "Wind turbine under construction")), diag);
+
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, s101.FeatureTypeCatalogue[Assert.Single(s101.Features).FeatureTypeCode]);
+        Assert.Equal(1, diag.UnmappedObjectClasses[163]);
+    }
+
+    // #1222: COSARE has an S-101 class (S-65 Annex C §16.14 is the inverse).
+    [Fact]
+    public void Translate_Cosare_BecomesContinentalShelfArea()
+        => Assert.Equal("ContinentalShelfArea", S57S101Mapping.Default.ResolveFeatureCode(32));
 
     [Fact]
     public void Translate_TopmarSlave_MultiValuedColour_SplitsIntoOccurrences()
@@ -1865,6 +2283,29 @@ public class S57ToS101TranslatorTests
         // Members carry no back-association (the collection is the navigable end).
         foreach (var m in new[] { navlne, rectrc, beacon })
             Assert.Empty(FeatureByLnam(s101, m).FeatureAssociations);
+    }
+
+    [Fact]
+    public void Translate_RangeSystemCAggr_CarriesItsOwnName()
+    {
+        // #1249: the C_AGGR's OBJNAM becomes the RangeSystem's featureName.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var navlne = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var beacon = Feat(2, 1, 9, featureIdentificationNumber: 12,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var aggr = Feat(3, 1, 400, featureIdentificationNumber: 99,
+            attributes: new[] { Attr(116, "Ambrose Channel") },
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 12) });
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 }, features: new[] { navlne, beacon, aggr }));
+
+        var rangeSystem = FeatureOfClass(s101, "RangeSystem");
+        Assert.NotNull(rangeSystem);
+        var instance = ComplexInstance(s101, rangeSystem!.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Ambrose Channel", GetSubAttribute(s101, instance, "name"));
     }
 
     [Fact]
@@ -2141,7 +2582,7 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_NobjnmAttribute_BecomesFeatureNameComplex_WithBlankLanguage()
+    public void Translate_NobjnmAttribute_BecomesFeatureNameComplex_WithUndeterminedLanguage()
     {
         var doc = LandRegionWithS57Attributes(Attr(301, "Bahía de Todos"));
 
@@ -2150,7 +2591,8 @@ public class S57ToS101TranslatorTests
         var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
 
         Assert.Equal("Bahía de Todos", GetSubAttribute(s101, instance, "name"));
-        Assert.Equal("", GetSubAttribute(s101, instance, "language"));
+        Assert.Equal("und", GetSubAttribute(s101, instance, "language"));
+        Assert.Equal("2", GetSubAttribute(s101, instance, "nameUsage"));
     }
 
     [Fact]
@@ -2168,8 +2610,33 @@ public class S57ToS101TranslatorTests
 
         Assert.Equal("English name", GetSubAttribute(s101, first, "name"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
+        Assert.Equal("1", GetSubAttribute(s101, first, "nameUsage")); // S-101 DCEG 2.5.8 default
         Assert.Equal("National name", GetSubAttribute(s101, second, "name"));
-        Assert.Equal("", GetSubAttribute(s101, second, "language"));
+        Assert.Equal("und", GetSubAttribute(s101, second, "language"));
+        Assert.Equal("2", GetSubAttribute(s101, second, "nameUsage")); // alternate
+    }
+
+    // #1221: S-57 puts national attributes in the NATF field, which
+    // EncDotNet.S57 reads into NationalAttributes, not Attributes.
+    [Fact]
+    public void Translate_NationalAttributesField_IsTranslated()
+    {
+        var doc = LandRegionWithS57Attributes(Attr(116, "English name"));
+        var feature = doc.FeatureRecords[0] with
+        {
+            NationalAttributes = new[] { Attr(301, "Nom national"), Attr(300, "Texte national") },
+        };
+        doc = doc with { FeatureRecords = [feature] };
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        var national = ComplexInstance(s101, feat.Attributes, "featureName", 2).ToList();
+        Assert.Equal("Nom national", GetSubAttribute(s101, national, "name"));
+        Assert.Equal("und", GetSubAttribute(s101, national, "language"));
+        var info = InformationInstance(s101, NauticalInformationOf(s101, feat)!.Attributes, 1).ToList();
+        Assert.Equal("Texte national", GetSubAttribute(s101, info, "text"));
+        Assert.Equal("und", GetSubAttribute(s101, info, "language"));
     }
 
     [Fact]
@@ -3386,6 +3853,51 @@ public class S57ToS101TranslatorTests
         Assert.DoesNotContain("categoryOfDam", AttributeNames(s101, feat));
     }
 
+    private const ushort ObjlPipsol = 94;
+    private const int AttlCatpip = 47;
+    private const int AttlProdct = 123;
+
+    [Fact]
+    public void Translate_PointPipelineOnSeabed_BecomesObstruction()
+    {
+        // S-65 Annex B §11.6.1: a point PIPSOL extending from the seabed (in a
+        // depth area) is an Obstruction (#1243).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(ObjlPipsol, node: 1, Attr(AttlCatpip, "2"))), diag);
+
+        var feat = SingleHazard(s101);
+        Assert.Equal("Obstruction", ClassOf(s101, feat));
+        Assert.Equal("5", TopLevelValue(s101, feat, "surroundingDepth"));
+        Assert.NotNull(TopLevelValue(s101, feat, "defaultClearanceDepth"));
+        Assert.DoesNotContain("categoryOfPipelinePipe", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlCatpip]);
+    }
+
+    [Fact]
+    public void Translate_PointPipelineOnLand_BecomesLandmark()
+    {
+        // Outside every depth area the point is on land: a Landmark, with
+        // the mandatory category populated as empty (null) for review.
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(ObjlPipsol, node: 2, Attr(AttlProdct, "1"))));
+
+        var feat = SingleHazard(s101);
+        Assert.Equal("Landmark", ClassOf(s101, feat));
+        Assert.Equal("", TopLevelValue(s101, feat, "categoryOfLandmark"));
+        Assert.Equal("2", TopLevelValue(s101, feat, "visualProminence"));
+        Assert.DoesNotContain("surroundingDepth", AttributeNames(s101, feat));
+    }
+
+    [Fact]
+    public void Translate_LinePipeline_StaysPipeline()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(ObjlPipsol, Attr(AttlCatpip, "2")));
+
+        Assert.Equal("PipelineSubmarineOnLand", ClassOf(s101, Assert.Single(s101.Features)));
+    }
+
     [Fact]
     public void Translate_LineDam_StaysDam()
     {
@@ -3417,6 +3929,45 @@ public class S57ToS101TranslatorTests
             LineFeatureWithS57Attributes(ObjlRectrc, Attr(AttlOrient, "45")));
 
         Assert.Equal("RecommendedTrack", ClassOf(s101, Assert.Single(s101.Features)));
+    }
+
+    private const ushort ObjlRunway = 117;
+    private const int AttlCatrun = 58;
+
+    [Fact]
+    public void Translate_PointHelicopterLandingPad_BecomesHelipad()
+    {
+        // S-65 Annex B §4.8.12: Runway permits no point; a point RUNWAY with
+        // CATRUN 2 (helicopter landing pad) is a Helipad.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(ObjlRunway, Attr(AttlCatrun, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Helipad", ClassOf(s101, feat));
+        Assert.Empty(AttributeNames(s101, feat));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData(null)]
+    public void Translate_PointRunway_IsNotConverted(string? category)
+    {
+        // Any other point RUNWAY (an aeroplane runway, or no category) isn't converted.
+        var attributes = category is null ? [] : new[] { Attr(AttlCatrun, category) };
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(PointFeatureWithS57Attributes(ObjlRunway, attributes), diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[ObjlRunway]);
+    }
+
+    [Fact]
+    public void Translate_AreaRunway_StaysRunway()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            AreaFeatureWithS57Attributes(ObjlRunway, Attr(AttlCatrun, "2")));
+
+        Assert.Equal("Runway", ClassOf(s101, Assert.Single(s101.Features)));
     }
 
     // Three nodes on a line, two edges joining them (1→2, 2→3), and a node for
@@ -3729,7 +4280,7 @@ public class S57ToS101TranslatorTests
         var bridge = SingleOfClass(doc, "Bridge");
         var first = ComplexInstance(doc, bridge.Attributes, "featureName", 1).ToList();
         Assert.Equal("Harbour Bridge", GetSubAttribute(doc, first, "name"));
-        Assert.Null(GetSubAttribute(doc, first, "nameUsage"));
+        Assert.Equal("1", GetSubAttribute(doc, first, "nameUsage"));
         var second = ComplexInstance(doc, bridge.Attributes, "featureName", 2).ToList();
         Assert.Equal("Old Swing Bridge", GetSubAttribute(doc, second, "name"));
         Assert.Equal("eng", GetSubAttribute(doc, second, "language"));
@@ -4439,7 +4990,9 @@ public class S57ToS101TranslatorTests
             LineFeatureWithS57Attributes(objl, Attr(AttlOrient, "123.5")));
 
         var feat = SingleOfClass(s101, s101Class);
-        var orientation = ComplexInstanceStrict(s101, feat.Attributes, "orientation", 1, "orientation").ToList();
+        // The streams also carry the mandatory speed complex, which ends the
+        // orientation instance.
+        var orientation = ComplexInstanceStrict(s101, feat.Attributes, "orientation", 1, "orientation", "speed").ToList();
         Assert.Equal(["orientation", "orientationValue"],
             orientation.Select(a => s101.AttributeTypeCatalogue[a.NumericCode]));
         Assert.Equal("123.5", orientation[1].Value);
@@ -4685,6 +5238,33 @@ public class S57ToS101TranslatorTests
         Assert.Equal("0.9", GetSubAttribute(s101, instance, "speedMaximum"));
     }
 
+    [Theory]
+    [InlineData(160, "TidalStreamFloodEbb")]
+    [InlineData(36, "CurrentNonGravitational")]
+    public void Translate_StreamWithoutCurvel_HasSpeedWithEmptyMaximum(ushort objl, string s101Class)
+    {
+        // speed is mandatory on both classes. S-57 lets CURVEL be empty, so
+        // the complex carries speedMaximum as empty (null) (#1244).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(objl, Attr(117, "45"), Attr(84, "")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(s101Class, ClassOf(s101, feat));
+        var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
+        Assert.Equal("", GetSubAttribute(s101, instance, "speedMaximum"));
+        Assert.Null(GetSubAttribute(s101, instance, "speedMinimum"));
+    }
+
+    [Fact]
+    public void Translate_StreamWithNoAttributes_StillHasSpeed()
+    {
+        var s101 = new S57ToS101Translator().Translate(PointFeatureWithS57Attributes(160));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
+        Assert.Equal("", GetSubAttribute(s101, instance, "speedMaximum"));
+    }
+
     [Fact]
     public void Translate_CurvelOnNonBindingFeature_LeavesCurvelUnmapped()
     {
@@ -4736,7 +5316,8 @@ public class S57ToS101TranslatorTests
     {
         // LOCMAG (OBJL 78) → LocalMagneticAnomaly, which binds
         // valueOfLocalMagneticAnomaly. VALLMA (ATTL 175) feeds the mandatory
-        // magneticAnomalyValue sub-attribute (the value carried verbatim).
+        // magneticAnomalyValue sub-attribute, converted from minutes of arc
+        // to degrees (#1250).
         var s101 = new S57ToS101Translator().Translate(
             PointFeatureWithS57Attributes(78, Attr(175, "300")));
 
@@ -4745,7 +5326,7 @@ public class S57ToS101TranslatorTests
 
         var instance = ComplexInstance(s101, feat.Attributes, "valueOfLocalMagneticAnomaly", 1).ToList();
         Assert.NotEmpty(instance);
-        Assert.Equal("300", GetSubAttribute(s101, instance, "magneticAnomalyValue"));
+        Assert.Equal("5", GetSubAttribute(s101, instance, "magneticAnomalyValue"));
         // referenceDirection has no S-57 source and is not populated.
         Assert.Null(GetSubAttribute(s101, instance, "referenceDirection"));
         // VALLMA is not passed through as a top-level simple attribute.
@@ -4819,6 +5400,23 @@ public class S57ToS101TranslatorTests
 
         var feat = Assert.Single(s101.Features);
         Assert.Empty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 1).ToList());
+    }
+
+    [Theory]
+    [InlineData("100")]
+    [InlineData("7")]
+    [InlineData("-45.5")]
+    public void Translate_Vallma_RoundTripsThroughDegrees(string minutes)
+    {
+        // VALLMA values that do not divide evenly by 60 must come back
+        // unchanged from the reverse ×60 (S-65 Annex C §27.122).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(78, Attr(175, minutes)));
+
+        var s57 = new S101ToS57Translator().Translate(s101);
+
+        var locmag = Assert.Single(s57.FeatureRecords, f => (int)f.ObjectCode == 78);
+        Assert.Equal(minutes, Assert.Single(locmag.Attributes, a => a.AttributeCode == 175).Value);
     }
 
     [Fact]
@@ -5204,6 +5802,49 @@ public class S57ToS101TranslatorTests
             AttributeSequence(s101, feat.Attributes));
     }
 
+    // #1222: an M_QUAL's own POSACC / SOUACC replace the CATZOC-implied
+    // uncertainties (fixed term only); S-65 Annex C §3.1 / §3.2 convert them back.
+    [Fact]
+    public void Translate_MQualPosaccSouacc_TakePrecedenceOverCatzocTable()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "3"), Attr(401, "1"), Attr(144, "0.3")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "3"),
+                ("horizontalPositionUncertainty", ""),
+                ("uncertaintyFixed", "1"),
+                ("verticalUncertainty", ""),
+                ("uncertaintyFixed", "0.3"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+        Assert.Empty(diag.UnmappedAttributes);
+    }
+
+    // ZOC D has no table accuracy, but its own POSACC still has a home.
+    [Fact]
+    public void Translate_MQualPosacc_OnZocD_IsCarried()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "5"), Attr(401, "500")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "5"),
+                ("horizontalPositionUncertainty", ""),
+                ("uncertaintyFixed", "500"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+    }
+
     // Projects a feature's attribute rows onto their (catalogue-name, value)
     // pairs in emission order, for asserting nested complex pre-order layouts.
     private static (string, string)[] AttributeSequence(
@@ -5440,6 +6081,22 @@ public class S57ToS101TranslatorTests
         var second = ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", 2).ToList();
         Assert.Equal("3", GetSubAttribute(s101, second, "natureOfSurface"));
         Assert.Null(GetSubAttribute(s101, second, "natureOfSurfaceQualifyingTerms"));
+    }
+
+    // #1222: the lists pair by position (S-57 UOC 7.1.2), so an empty
+    // position isn't skipped.
+    [Fact]
+    public void Translate_NatquaWithEmptyPositions_QualifiesTheMatchingSurface()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(121, Attr(113, "4,1,4"), Attr(114, ",1,")));
+
+        var feat = Assert.Single(s101.Features);
+        var instances = Enumerable.Range(1, 3)
+            .Select(i => ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", i).ToList())
+            .Select(c => (GetSubAttribute(s101, c, "natureOfSurface"), GetSubAttribute(s101, c, "natureOfSurfaceQualifyingTerms")))
+            .ToArray();
+        Assert.Equal(new (string?, string?)[] { ("4", null), ("1", "1"), ("4", null) }, instances);
     }
 
     [Fact]

@@ -10,7 +10,7 @@
 // --theme light (the themed window shots again with Light chrome, as <ID>.light.png),
 // --no-clone (run the build in place instead of a cached clone),
 // --manifest-only (run the recipes and update the manifest, keeping the existing images),
-// --gfs-run yyyyMMddHH (W1: that GFS run instead of the latest).
+// --gfs-run yyyyMMddHH (W1: that GFS run instead of the latest; the other weather shots pin their own).
 // Data is downloaded once into site/capture/.cache/ (gitignored).
 #:package ModelContextProtocol
 #:package SkiaSharp
@@ -120,6 +120,50 @@ var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
 // US2ATLOC, the band-2 cell that draws at this scale (the band-3 cells don't),
 // so the chart reaches the edges of the view.
 var hatterasBox = new Box(33.62, -76.75, 37.8, -71.0);
+// The Weather section (W2–W9). Weather is drawn over NOAA's charts (bands 1–3,
+// downloaded by the Library), so the scenes are in US waters, framed so the
+// weather sits inside the charts. Each shot pins its own moment, so it reproduces
+// without live weather; all data is NOAA's (public domain) or NASA JPL's MUR
+// analysis via NOAA ERDDAP (free and open).
+// W2: the Gulf Stream through the Florida Straits, past the Keys and Miami.
+var floridaStraitsBox = new Box(23.3, -83.6, 28.2, -76.4);
+var floridaStraitsDay = new DateTime(2025, 2, 10, 0, 0, 0, DateTimeKind.Utc);
+// W3: freezing spray round Kodiak Island and Shelikof Strait as an Arctic outbreak
+// blew off the Alaska Peninsula on 15 Dec 2025.
+var kodiakBox = new Box(54.6, -160.0, 60.6, -147.5);
+var kodiakRun = new DateTime(2025, 12, 15, 0, 0, 0, DateTimeKind.Utc);
+// W4: Hurricane Erin passing north of the Virgin Islands and Puerto Rico. NHC
+// advisory 22 was issued at 21Z on 16 Aug 2025.
+var erin = (Storm: "al052025", Advisory: 22, Issued: new DateTimeOffset(2025, 8, 16, 21, 0, 0, TimeSpan.Zero));
+var puertoRicoBox = new Box(17.4, -68.0, 21.4, -62.8);
+// NOAA's Puerto Rico cells are band 3 only, drawn from about 1:1 400 000 in, and end
+// near 19° N, so the shot is framed at that scale with the radii over the charts.
+var erinFrame = (Lat: 19.3, Lon: -65.0, Scale: 1_400_000);
+// W5: the WPC analysis for 00Z on 28 Oct 2025 with the GFS analysis isobars at
+// the same time: a low off South Carolina with its cold front running out to
+// sea, framed so the band 2/3 charts of the coast still draw.
+var atlanticAnalysis = new DateTime(2025, 10, 28, 0, 0, 0, DateTimeKind.Utc);
+var southeastBox = new Box(29.6, -82.2, 36.4, -71.8);
+string[] southeastStates = ["FL", "GA", "SC", "NC"];
+// W7: the Library over the East Coast.
+var eastCoastBox = new Box(29.5, -82.5, 46.5, -59.5);
+// W6: Charleston to the Chesapeake Bay entrance at 12 kn, departing at 12Z on
+// 20 Aug 2025 as Erin passed offshore, checked against the GFS and GFS-Wave run
+// at departure, every 3 h, and Erin's latest advisory then, 36 (09Z on 20 Aug):
+// legs 4 → 6 off Cape Hatteras fall inside its 34 kt wind radius.
+(double Lat, double Lon)[] charlestonToChesapeake =
+[
+    (32.70, -79.70), (33.30, -78.60), (33.75, -77.70), (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.95, -75.95),
+];
+var erinRoute = (Departure: new DateTimeOffset(2025, 8, 20, 12, 0, 0, TimeSpan.Zero), Advisory: 36);
+var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
+// W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
+// at 1280 × 720 logical pixels, so the band 3 charts still draw at their scale.
+var gulfOfMaineBox = new Box(43.4, -69.6, 45.0, -66.4);
+var gulfOfMaineRun = new DateTime(2025, 6, 20, 12, 0, 0, DateTimeKind.Utc);
+// W9: an afternoon of thunderstorms over south Florida.
+var floridaBox = new Box(24.9, -83.8, 28.5, -79.4);
+var floridaRun = new DateTime(2025, 8, 10, 18, 0, 0, DateTimeKind.Utc);
 
 var shots = new List<Shot>
 {
@@ -291,7 +335,7 @@ var shots = new List<Shot>
     new("W1", async v =>
     {
         await v.Reset(category: "DisplayBase");
-        await CoastalCharts(v, "NC", hatterasBox);
+        await CoastalCharts(v, ["NC"], hatterasBox);
         const int hour = 6;
         var run = gfsRun ?? await data.LatestGfsRun(hour);
         await v.OpenAll([await data.GfsWave(run, "atlocn.0p16", hour, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
@@ -301,6 +345,120 @@ var shots = new List<Shot>
         await v.Frame(hatterasBox);
         return await v.Window();
     }, Themed: true),
+
+    // W2: the ocean. NASA JPL's MUR sea surface temperature analysis and NOAA
+    // AOML's geostrophic currents from altimetry for the same day, both from
+    // NOAA ERDDAP, over the NOAA charts of the Florida Straits, isotherms on.
+    new("W2", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["FL"], floridaStraitsBox);
+        await v.OpenAll([await data.Erddap(Data.CoastWatch, "jplMURSST41", ["analysed_sst"], floridaStraitsDay.AddHours(9), floridaStraitsBox, stride: 2)]);
+        // Two daily steps, so the 09Z SST time falls within the first.
+        await v.OpenAll([await data.Erddap(Data.Aoml, "miamicurrents", ["u_current", "v_current"], floridaStraitsDay, floridaStraitsBox, stride: 1, until: floridaStraitsDay.AddDays(1))]);
+        await v.Call("set_weather_display", new() { ["isotherms"] = true, ["currents"] = true });
+        await v.Call("set_view_time", new() { ["time"] = floridaStraitsDay.AddHours(9).ToString("O") });
+        await v.Frame(floridaStraitsBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W3: hazards. Freezing spray worked out from the GFS 10 m wind, 2 m air
+    // temperature and surface temperature, with the air isotherms and isobars,
+    // round Kodiak Island, over the NOAA charts.
+    new("W3", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["AK"], kodiakBox);
+        await v.OpenAll([await data.Gfs(kodiakRun, 0,
+            ["UGRD:10 m above ground", "VGRD:10 m above ground", "TMP:2 m above ground", "TMP:surface", "LAND:surface", "PRMSL:mean sea level"])]);
+        await v.Call("set_weather_display", new() { ["airTemperature"] = true, ["isobars"] = true });
+        await v.Call("set_view_time", new() { ["time"] = kodiakRun.ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(kodiakBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W4: tropical cyclones. Hurricane Erin's NHC advisory 22 (from NHC's GIS
+    // archive) with the cone, track, wind radii and best track over the NOAA
+    // charts of Puerto Rico and the Virgin Islands, the clock pinned an hour
+    // after the advisory and the view time three hours on, so the storm is drawn
+    // where it's estimated to be between forecast points (the map's time stamp
+    // shows it). The Timeline panel stays closed: it would halve the map, and the
+    // band 3 cells, the largest NOAA has here, only draw at this frame's scale.
+    new("W4", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["PR"], puertoRicoBox);
+        await v.OpenAll([await data.NhcAdvisory(erin.Storm, erin.Advisory)]);
+        await v.Call("set_test_clock", new() { ["now"] = erin.Issued.AddHours(1).ToString("O"), ["freeze"] = true });
+        await v.Call("set_view_time", new() { ["time"] = erin.Issued.AddHours(3).ToString("O") });
+        await v.Call("set_viewport", new() { ["centerLat"] = erinFrame.Lat, ["centerLon"] = erinFrame.Lon, ["scaleDenominator"] = erinFrame.Scale });
+        await v.Settle();
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W5: a surface analysis. WPC's high-resolution coded analysis for 00Z on
+    // 28 Oct 2025 (NWS bulletin ASUS02, from the Iowa Environmental Mesonet's
+    // archive of NWS text products) with the GFS analysis isobars for the same
+    // time, over the NOAA charts of the Southeast coast, the clock pinned an hour later.
+    new("W5", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, southeastStates, southeastBox);
+        await v.OpenAll([await data.WpcBulletin("ASUS02", atlanticAnalysis)]);
+        await v.OpenAll([await data.Gfs(atlanticAnalysis, 0, ["PRMSL:mean sea level"])]);
+        await v.Call("set_test_clock", new() { ["now"] = atlanticAnalysis.AddHours(1).ToString("O"), ["freeze"] = true });
+        await v.Call("set_view_time", new() { ["time"] = atlanticAnalysis.ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(southeastBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W6: weather on a route. Charleston to the Chesapeake Bay entrance as Erin
+    // passed offshore, checked against GFS wind and GFS-Wave wave height every 3 h
+    // from the run at departure, with 25 kn and 3.5 m limits, over the NOAA charts.
+    // The check also tests the route against Erin's advisory (#1299). The findings
+    // list is on its Weather filter, with the strongest radius finding selected.
+    new("W6", v => WeatherRoute(v), Themed: true, TimeZone: "UTC"),
+
+    // W7: the Library's weather sources: GFS on AWS, SST from ERDDAP, NHC's
+    // active storms and WPC's surface analysis. Live sources, like F5: the runs
+    // listed are the ones on the day of capture.
+    new("W7", async v =>
+    {
+        await v.Reset();
+        foreach (var source in new[] { "noaa-aws-gfs", "noaa-erddap-sst", "noaa-nhc-storms", "noaa-wpc-surface" })
+            await v.Call("add_library_source", new() { ["knownSourceId"] = source });
+        await v.Call("await_library_idle", new() { ["timeoutMs"] = 180000 });
+        await v.Panel("Library");
+        await v.Frame(eastCoastBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W8: restricted visibility. GFS surface visibility over the Gulf of Maine on
+    // a June morning, with sea fog over the NOAA charts. Map only.
+    new("W8", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["MA", "NH", "ME"], gulfOfMaineBox);
+        await v.OpenAll([await data.Gfs(gulfOfMaineRun, 0, ["VIS:surface"])]);
+        await v.Call("set_view_time", new() { ["time"] = gulfOfMaineRun.ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(gulfOfMaineBox);
+        return await v.Map(2560, 1440);
+    }, TimeZone: "UTC"),
+
+    // W9: rain and thunderstorms. GFS precipitation rate and CAPE three hours
+    // into the 18Z run, over the NOAA charts of south Florida, with
+    // the Precipitation and Thunderstorm risk switches on. Map only.
+    new("W9", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["FL"], floridaBox);
+        const int hour = 3;
+        await v.OpenAll([await data.Gfs(floridaRun, hour, ["PRATE:surface", "CAPE:surface", "PRMSL:mean sea level"])]);
+        await v.Call("set_weather_display", new() { ["precipitation"] = true, ["thunderstormRisk"] = true });
+        await v.Call("set_view_time", new() { ["time"] = floridaRun.AddHours(hour).ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(floridaBox);
+        return await v.Map(2560, 1440);
+    }, TimeZone: "UTC"),
 
     // D2: an agent planning and checking a route over MCP. Every call and result
     // in the transcript is real; the frames are window captures after each step,
@@ -722,9 +880,9 @@ async Task OpenRouteWarning(Viewer v)
 // The NOAA ENC cells of usage bands 2 and 3 (general and coastal) over a box,
 // downloaded and opened by the Library from its NOAA ENC source for one state.
 // Bands 4 and 5 add nothing at the scale of a weather view, so they're left out.
-async Task CoastalCharts(Viewer v, string state, Box box)
+async Task CoastalCharts(Viewer v, string[] states, Box box, string bands = "23")
 {
-    await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-enc", ["choices"] = new[] { state } });
+    await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-enc", ["choices"] = states });
     await v.Call("await_library_idle", new() { ["timeoutMs"] = 120000 });
     var items = (await v.Call("query_library_items", new()
     {
@@ -732,13 +890,65 @@ async Task CoastalCharts(Viewer v, string state, Box box)
     }))?["items"]?.AsArray() ?? [];
     var coastal = items
         .Select(i => i!["id"]!.GetValue<string>())
-        .Where(id => Regex.IsMatch(id, @"US[23][A-Z0-9]{5,6}$"))
+        .Where(id => Regex.IsMatch(id, $@"US[{bands}][A-Z0-9]{{5,6}}$"))
         .ToArray();
     if (coastal.Length == 0)
-        throw new InvalidOperationException($"no band 2 or 3 NOAA ENC cells over the box among {items.Count} Library items");
+        throw new InvalidOperationException($"no band {bands} NOAA ENC cells over the box among {items.Count} Library items");
     await v.Call("library_action", new() { ["action"] = "download", ["itemIds"] = coastal, ["maxBytes"] = 50_000_000L });
     await v.Call("await_library_idle", new() { ["timeoutMs"] = 300000 });
-    await v.WaitForLoads();
+    // Cells an earlier shot downloaded are already on disk, so the download leaves
+    // them alone; load them too. Wait only for these cells: other cells of the
+    // same states (another shot's bands) stay on disk unloaded.
+    await v.Call("library_action", new() { ["action"] = "load", ["itemIds"] = coastal });
+    for (var i = 0; ; i++)
+    {
+        var waiting = ((await v.Call("query_library_items", new() { ["states"] = new[] { "local" }, ["pageSize"] = 500 }))?["items"]?.AsArray() ?? [])
+            .Count(item => coastal.Contains(item!["id"]!.GetValue<string>()));
+        if (waiting == 0) return;
+        if (i == 120) throw new TimeoutException($"{waiting} chart cells did not load within 5 minutes.");
+        await Task.Delay(2500);
+    }
+}
+
+// W6: Charleston to the Chesapeake Bay entrance at 12 kn over the NOAA charts,
+// checked against the GFS wind and GFS-Wave wave height (every 3 h for 36 h of
+// the run at departure), with wind and wave limits set, Erin's advisory loaded,
+// the clock pinned at departure, and the findings list on its Weather filter
+// with the strongest cyclone radius finding selected (#1299).
+async Task<byte[]> WeatherRoute(Viewer v)
+{
+    await v.Reset(category: "DisplayBase");
+    await CoastalCharts(v, ["SC", "NC", "VA"], carolinasBox);
+    var run = erinRoute.Departure.UtcDateTime;
+    int[] hours = [.. Enumerable.Range(0, 13).Select(i => i * 3)];
+    await v.OpenAll([await data.GfsWaveHours(run, "atlocn.0p16", hours, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
+    await v.OpenAll([await data.GfsHours(run, hours, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
+    await v.OpenAll([await data.NhcAdvisory(erin.Storm, erinRoute.Advisory)]);
+    await v.Call("set_test_clock", new() { ["now"] = erinRoute.Departure.ToString("O"), ["freeze"] = true });
+    await v.Call("set_route_weather_settings", new()
+    {
+        ["maxWindKnots"] = 25.0, ["maxWaveHeightMeters"] = 3.5,
+        ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 50,
+    });
+    await v.Call("create_route", new() { ["name"] = "Charleston to the Chesapeake" });
+    foreach (var (lat, lon) in charlestonToChesapeake)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+    await v.Call("set_passage", new() { ["draftMeters"] = 9.0, ["speedKnots"] = 12.0, ["departure"] = erinRoute.Departure.ToString("O") });
+    await v.Call("set_check_mode", new() { ["on"] = true });
+    await v.Panel("Routes");
+    await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
+    await v.Call("set_findings_view", new() { ["filter"] = "weather" });
+    var findings = (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [];
+    // The strongest cyclone radius the route enters, else the first wind or wave stretch.
+    string[] preferred = ["weather.tc_radius_64", "weather.tc_radius_50", "weather.tc_radius_34", "weather.tc_cone", "weather.wind_above_limit", "weather.waves_above_limit"];
+    var weather = preferred.Select(code => findings.FirstOrDefault(f => f?["code"]?.GetValue<string>() == code)).FirstOrDefault(f => f is not null)
+        ?? throw new InvalidOperationException($"no weather finding on the route; codes: {string.Join(", ", findings.Select(f => f?["code"]?.GetValue<string>()).Distinct())}");
+    await v.Call("select_finding", new() { ["id"] = weather["id"]!.GetValue<string>(), ["zoom"] = false });
+    // The weather is the story here, not the clearance profile or the UKC legend.
+    await v.Call("set_panel", new() { ["panel"] = "Clearance", ["visible"] = false });
+    await v.Call("set_map_legend", new() { ["open"] = false });
+    await v.Frame(carolinasBox);
+    return await v.Window();
 }
 
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
@@ -933,6 +1143,88 @@ sealed class Data(string cacheDir)
         return path;
     }
 
+    /// <summary>Fields of several GFS forecast hours, appended into one file (the GRIB2 reader takes them as one run).</summary>
+    public async Task<string> GfsHours(DateTime run, int[] hours, string[] fields) =>
+        await Append($"gfs_{run:yyyyMMdd'T'HH'Z'}_f{hours[0]:000}-f{hours[^1]:000}.grib2",
+            await Task.WhenAll(hours.Select(h => Gfs(run, h, fields))));
+
+    /// <summary>Fields of several GFS-Wave forecast hours on one grid, appended into one file.</summary>
+    public async Task<string> GfsWaveHours(DateTime run, string grid, int[] hours, string[] fields) =>
+        await Append($"gfswave_{run:yyyyMMdd'T'HH'Z'}_{grid}_f{hours[0]:000}-f{hours[^1]:000}.grib2",
+            await Task.WhenAll(hours.Select(h => GfsWave(run, grid, h, fields))));
+
+    private async Task<string> Append(string name, string[] parts)
+    {
+        var path = Path.Combine(cacheDir, "gfs", name);
+        if (File.Exists(path)) return path;
+        await using (var output = File.Create(path + ".part"))
+            foreach (var part in parts)
+                await using (var input = File.OpenRead(part))
+                    await input.CopyToAsync(output);
+        File.Move(path + ".part", path, overwrite: true);
+        return path;
+    }
+
+    public const string CoastWatch = "https://coastwatch.pfeg.noaa.gov/erddap/";
+    public const string Aoml = "https://cwcgom.aoml.noaa.gov/erddap/";
+
+    /// <summary>
+    /// A NetCDF-3 subset of an ERDDAP griddap dataset for one time (the nearest
+    /// the dataset has) over a box, taking every <paramref name="stride"/>th point.
+    /// </summary>
+    public Task<string> Erddap(string server, string dataset, string[] variables, DateTime time, Box box, int stride, DateTime? until = null)
+    {
+        string T(DateTime d) => d.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+        var t = until is { } end ? $"{T(time)}):1:({T(end)}" : T(time);
+        string I(double d) => d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var query = string.Join(",", variables.Select(name =>
+            $"{name}[({t})][({I(box.South)}):{stride}:({I(box.North)})][({I(box.West)}):{stride}:({I(box.East)})]"));
+        var url = $"{server}griddap/{dataset}.nc?{Uri.EscapeDataString(query).Replace("%2C", ",")}";
+        return DownloadAsync(url, Path.Combine("erddap", $"{dataset}_{time:yyyyMMdd'T'HH'Z'}{(until is { } e ? $"-{e:yyyyMMdd'T'HH'Z'}" : "")}_{I(box.South)}_{I(box.West)}_{I(box.North)}_{I(box.East)}.nc"));
+    }
+
+    /// <summary>
+    /// One NHC advisory from NHC's GIS archive: the 5-day cone, track and points,
+    /// the forecast wind radii and the storm's best track, side by side in a
+    /// folder of their own, which SoundCharts opens as one storm.
+    /// </summary>
+    public async Task<string> NhcAdvisory(string storm, int advisory)
+    {
+        var dir = Path.Combine(cacheDir, "nhc", $"{storm}_{advisory:000}");
+        foreach (var url in new[]
+        {
+            $"https://www.nhc.noaa.gov/gis/forecast/archive/{storm}_5day_{advisory:000}.zip",
+            $"https://www.nhc.noaa.gov/gis/forecast/archive/{storm}_fcst_{advisory:000}.zip",
+            $"https://www.nhc.noaa.gov/gis/best_track/{storm}_best_track.zip",
+        })
+            await DownloadAsync(url, Path.Combine("nhc", Path.GetFileName(dir), Path.GetFileName(url)));
+        // The 5-day zip opens the advisory; the reader finds its siblings beside it.
+        return Path.Combine(dir, $"{storm}_5day_{advisory:000}.zip");
+    }
+
+    /// <summary>
+    /// A WPC coded surface bulletin (ASUS02 is the high-resolution analysis) valid at
+    /// <paramref name="valid"/>, from the Iowa Environmental Mesonet's archive of NWS
+    /// text products. The product itself is the NWS's (public domain).
+    /// </summary>
+    public async Task<string> WpcBulletin(string header, DateTime valid)
+    {
+        var path = Path.Combine(cacheDir, "wpc", $"{header}_{valid:yyyyMMdd'T'HH'Z'}.txt");
+        if (File.Exists(path)) return path;
+        var url = $"https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=CODSUS&sdate={valid:yyyy-MM-dd}&edate={valid.AddDays(2):yyyy-MM-dd}&limit=60&fmt=text&order=asc";
+        Console.WriteLine($"  downloading WPC CODSUS bulletins for {valid:yyyy-MM-dd}");
+        var text = await Http.GetStringAsync(url);
+        // Products are separated by control characters; pick the one with this
+        // WMO header whose VALID line is the analysis time.
+        var product = text.Split(['\u0001', '\u0003'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.Contains($"{header} KWBC", StringComparison.Ordinal) && p.Contains($"VALID {valid:MMddHH}Z", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException($"no {header} CODSUS valid {valid:MMddHH}Z in the IEM archive");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // Drop the archive's sequence number line, so the file starts at the WMO header.
+        await File.WriteAllTextAsync(path, product[product.IndexOf($"{header} KWBC", StringComparison.Ordinal)..].Trim() + "\n");
+        return path;
+    }
+
     private static async Task<bool> Exists(string url)
     {
         using var response = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
@@ -1034,12 +1326,13 @@ sealed class Viewer : IAsyncDisposable
             await Task.Delay(250);
         }
         var endpoint = new Uri((await File.ReadAllTextAsync(portFile)).Trim());
+        // A route check or a long forecast can take more than HttpClient's default 100 s.
         var client = await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = endpoint,
             TransportMode = HttpTransportMode.StreamableHttp,
             Name = "soundcharts-capture",
-        }));
+        }, new HttpClient { Timeout = TimeSpan.FromMinutes(10) }, ownsHttpClient: true));
         Console.WriteLine($"Viewer pid {process.Id}, MCP {endpoint}");
         var viewer = new Viewer(process, client, dataDir, keepOpen);
 
@@ -1121,6 +1414,19 @@ sealed class Viewer : IAsyncDisposable
         foreach (var collection in (await Call("list_library_sources"))?["collections"]?.AsArray() ?? [])
             await Call("remove_library_source", new() { ["id"] = collection!["id"]!.GetValue<string>(), ["confirm"] = true });
         await Call("set_test_clock", new() { ["reset"] = true });
+        // The weather switches and route weather limits are kept settings, so put
+        // them back to their defaults for the next shot.
+        await Call("set_weather_display", new()
+        {
+            ["isobars"] = true, ["windSpeedFill"] = false, ["waveArrows"] = false, ["isotherms"] = false, ["currents"] = true,
+            ["airTemperature"] = false, ["precipitation"] = false, ["thunderstormRisk"] = false, ["cloudCover"] = false,
+            ["windRadii"] = true, ["pastTrack"] = true, ["forecastTimes"] = true,
+        });
+        await Call("set_route_weather_settings", new()
+        {
+            ["clear"] = new[] { "maxWindKnots", "maxWaveHeightMeters" },
+            ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 50,
+        });
     }
 
     /// <summary>Forgets the bounds collected by <see cref="OpenAll"/>.</summary>
@@ -1808,6 +2114,10 @@ static class ShotManifest
             _ when p.Contains("/.cache/s111/") => ("NOAA S-111 on AWS (noaa-s111-pds)", "public domain (NOAA)"),
             _ when p.Contains("/.cache/gfs/gfswave_") => ("NOAA NCEP GFS-Wave (WAVEWATCH III) on AWS (noaa-gfs-bdp-pds), fields cut by byte range", "public domain (NOAA)"),
             _ when p.Contains("/.cache/gfs/gfs_") => ("NOAA NCEP GFS on AWS (noaa-gfs-bdp-pds), fields cut by byte range", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/erddap/jplMURSST41_") => ("NASA JPL MUR SST v4.1 analysis, via NOAA CoastWatch ERDDAP", "free and open (NASA JPL PO.DAAC, GHRSST)"),
+            _ when p.Contains("/.cache/erddap/miamicurrents_") => ("NOAA AOML near-real-time geostrophic currents, via NOAA CoastWatch ERDDAP", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/nhc/") => ("NOAA NHC advisory GIS files (forecast archive and best track, nhc.noaa.gov)", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/wpc/") => ("NOAA NWS WPC coded surface bulletin, via the Iowa Environmental Mesonet's NWS text archive", "public domain (NOAA NWS)"),
             _ when p.Contains("/.cache/s411/S411_NWS_") => ("US National Weather Service ice analysis, via the BSIS Ice Portal (bsis-ice.de)", "public domain (NOAA NWS)"),
             _ when p.Contains("Inland S-57 ENCs") => ("USACE inland ENC (IENC)", "public domain (USACE)"),
             _ when path is null && id.StartsWith("102US", StringComparison.Ordinal) => ("NOAA S-102 on AWS, downloaded by the Library", "public domain (NOAA)"),

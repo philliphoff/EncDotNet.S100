@@ -70,10 +70,25 @@ catalogue does:
 - `SymbolSet` reads S-100 SVG symbols from a project's embedded resources.
   Its `Provider` is the `Func<string, string?>` symbol provider a sub-layer
   takes.
-- `InstructionBuilder` builds point-symbol, text, line, solid area and
-  pattern area (`AreaPattern`, such as hatching) `DrawingInstruction`s, stamping its viewing group, drawing priority, display
-  plane and scale limits on each. `TextInstructionStyle` describes a label's
-  font, colours, halo and offset.
+- `InstructionBuilder` builds point-symbol, text, simple line, complex line
+  (`ComplexLine`), solid area and pattern area (`AreaPattern`, such as
+  hatching) `DrawingInstruction`s, stamping its viewing group, drawing
+  priority, display plane and scale limits on each. `TextInstructionStyle`
+  describes a label's font, colours, halo and offset.
+- `ComplexLineStyle` describes a line style with symbols repeated along the
+  line: a pen (solid or dashed), the symbols placed in turn every
+  `SymbolSpacing` millimetres from `SymbolStart`, and the `Side` they go on,
+  optionally alternating (`AlternateSides`). Sizes are millimetres on the
+  display, so the spacing on screen is the same at every scale. A symbol is
+  drawn with its pivot on the line and its x axis along it, so draw it above
+  its x axis for the left side; the right side turns it through 180°.
+- `LineStyleSet` serves `ComplexLineStyle`s by name. Its `Provider` is the
+  `Func<string, LineStyle?>` line style provider a portrayal result takes.
+- `LegendBuilder` builds the rows of a sub-layer's legend (`LegendEntry`) for
+  one palette, from the same tokens, symbols and line styles the portrayal
+  draws with: colour swatches, outlined areas, point symbols and line
+  samples. A viewer shows them under the sub-layer's layer stack entry
+  (`VectorSubLayer.Legend`, `GridCoverageSubLayer.Legend`).
 - `IDynamicFeaturePortrayal` is a code-defined portrayal of a dynamic
   feature source's features: drawing instructions (feature reference = the
   feature id), with the palette and symbols they resolve against. The NDBC
@@ -98,7 +113,26 @@ var stations = new InstructionBuilder { ViewingGroup = 31050, DrawingPriority = 
 var instruction = stations.Point("station:42", "WXSTATION");
 ColorPalette night = palette.GetColorPalette(PaletteType.Night);
 string scope = ApplicationContentScope.For("Weather", version: 1);
+
+// A line with a triangle every 9 mm on its left, starting 4 mm in.
+var cold = new ComplexLineStyle
+{
+    Name = "WXCOLD",
+    ColorToken = "WXINK",
+    Width = 0.7,
+    Symbols = ["WXTRIANGLE"],
+};
+var lineStyles = new LineStyleSet([cold]);
+var front = stations.ComplexLine("front:7", cold.Name);
+
+// The matching legend row, in the Night palette.
+var legend = new LegendBuilder(palette, PaletteType.Night, symbols.Provider);
+LegendEntry row = legend.Line(cold, "Cold front");
 ```
+
+Pass `symbols.Provider` and `lineStyles.Provider` as the portrayal result's
+`SymbolProvider` and `LineStyleProvider`, and set the sub-layer's `Legend`
+again whenever the palette changes.
 
 `S104CoverageStyle` in
 [`EncDotNet.S100.Datasets.S104`](../EncDotNet.S100.Datasets.S104/README.md#portrayal)
