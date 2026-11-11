@@ -196,7 +196,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
             timeFormat: null,
             sync: null);
 
-        var source = Assert.Single(Assert.Single(panel.Nodes).Children);
+        var source = Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
         Assert.Equal("JSON", source.KindTag);
         Assert.Equal("test.s100collection.json", source.SecondaryName);
         Assert.True(source.CanChooseGroups);
@@ -208,7 +208,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         Assert.Equal("Path not found", peru.StatusLine);
         Assert.True(peru.IsStatusWarning);
 
-        panel.SelectedNode = source.Children[1];
+        panel.Tree.SelectedNode = source.Children[1];
         Assert.Equal(2, panel.Items.Count);
         Assert.All(panel.Items, i => Assert.Equal("BE", i.Item.Properties["group"]));
 
@@ -220,8 +220,8 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var belgium = source.Children[1];
         _library.Refresh();
         await _library.WhenIdle();
-        panel.Sync();
-        Assert.Same(belgium, panel.SelectedNode);
+        panel.Tree.Sync();
+        Assert.Same(belgium, panel.Tree.SelectedNode);
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
             timeFormat: null,
             sync: null);
 
-        var source = Assert.Single(Assert.Single(panel.Nodes).Children);
+        var source = Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
         Assert.Empty(source.Children);
         Assert.Null(source.SecondaryName);
         Assert.Equal("2", source.Status);
