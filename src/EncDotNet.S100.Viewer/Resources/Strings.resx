@@ -8041,15 +8041,11 @@
   </data>
   <data name="AmlDisplay_Legend" xml:space="preserve">
     <value>Legend</value>
-    <comment>Link in the display panel's Additional Military Layers section that opens the AML legend flyout</comment>
+    <comment>Link in the display panel's Additional Military Layers section that opens the Legend tab at the AML section</comment>
   </data>
-  <data name="AmlDisplay_LegendTitle" xml:space="preserve">
-    <value>AML legend · SoundCharts symbols</value>
-    <comment>Title of the AML legend flyout</comment>
-  </data>
-  <data name="AmlDisplay_LegendNote" xml:space="preserve">
-    <value>Our own representation. Not the official AML portrayal.</value>
-    <comment>Footnote of the AML legend flyout</comment>
+  <data name="AmlDisplay_LegendLinkName" xml:space="preserve">
+    <value>Show the AML legend</value>
+    <comment>Tooltip and accessible name of the AML display section's Legend link, which opens the Legend tab at the AML section</comment>
   </data>
   <data name="AmlDisplay_ScaleHeader" xml:space="preserve">
     <value>Scale</value>

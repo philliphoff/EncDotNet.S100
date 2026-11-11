@@ -1,6 +1,5 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.VisualTree;
 using EncDotNet.S100.Datasets.Aml;
 using EncDotNet.S100.Datasets.Aml.Families;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -20,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
 /// The display panel's Additional Military Layers section (#1374, AML handoff
-/// decisions 23, 24 and 26): product switches, scale bands, legend, CLB chip,
+/// decisions 23, 24 and 26): product switches, scale bands, Legend link, CLB chip,
 /// persistence and the MCP tools. The cells are synthetic.
 /// </summary>
 public sealed class AmlDisplayTests : IDisposable
@@ -214,7 +213,7 @@ public sealed class AmlDisplayTests : IDisposable
         Load("UKC6U001.000", Clb, 6);
         Load("UKC6U002.000", Clb, 6);
         using var service = CreateService();
-        using var section = new AmlDisplaySectionViewModel(service, AmlStyleCatalog.Default);
+        using var section = new AmlDisplaySectionViewModel(service, _ => { });
 
         Assert.True(section.IsShown);
         Assert.Equal(["CLB", "RAL", "ESB", "LBO", "SBO", "MFF", "3.0"], section.Products.Select(p => p.Code));
@@ -230,7 +229,7 @@ public sealed class AmlDisplayTests : IDisposable
     public void The_section_hides_without_aml_and_the_switch_row_drives_the_service()
     {
         using var service = CreateService();
-        using var section = new AmlDisplaySectionViewModel(service, AmlStyleCatalog.Default);
+        using var section = new AmlDisplaySectionViewModel(service, _ => { });
         Assert.False(section.IsShown);
 
         var clb = Load("UKC6U001.000", Clb, 6);
@@ -246,28 +245,10 @@ public sealed class AmlDisplayTests : IDisposable
     }
 
     [Fact]
-    public void The_legend_lists_every_class_the_styles_draw()
-    {
-        using var service = CreateService();
-        using var section = new AmlDisplaySectionViewModel(service, AmlStyleCatalog.Default);
-
-        var labels = section.Legend.SelectMany(g => g.Entries).Select(e => e.Label).ToList();
-
-        var expected = AmlStyleCatalog.Default.BuildLegend(EncDotNet.S100.Pipelines.PaletteType.Day).SelectMany(g => g.Entries).Select(e => e.Label);
-        Assert.Equal(expected, labels);
-        // Every module's classes are listed, including the later slices' (CLB's contours, for one).
-        Assert.Contains(ClbStyles.DepthContour.LegendLabel, labels);
-        Assert.Contains(ClbStyles.Bathymetry.Name, section.Legend.Select(g => g.Name));
-        Assert.Equal(
-            AmlStyleCatalog.Default.BuildLegend(EncDotNet.S100.Pipelines.PaletteType.Day).Select(g => g.Family.Name),
-            section.Legend.Select(g => g.Name));
-    }
-
-    [Fact]
     public void The_clb_chip_shows_while_a_drawn_clb_cell_is_shown()
     {
         using var service = CreateService();
-        using var section = new AmlDisplaySectionViewModel(service, AmlStyleCatalog.Default);
+        using var section = new AmlDisplaySectionViewModel(service, _ => { });
         _viewport.ZoomTo(50_000);
         Assert.False(section.IsClbChipShown);
 
@@ -353,7 +334,8 @@ public sealed class AmlDisplayTests : IDisposable
     public void The_section_shows_below_display_planes_only_with_aml()
     {
         using var service = CreateService();
-        using var section = new AmlDisplaySectionViewModel(service, AmlStyleCatalog.Default);
+        var shown = new List<string>();
+        using var section = new AmlDisplaySectionViewModel(service, shown.Add);
         using var panel = new EcdisDisplayPanelViewModel(_state, new PortrayalCatalogueManager(), _datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null, amlDisplay: section);
         Assert.True(panel.IsEmpty);
 
@@ -367,17 +349,12 @@ public sealed class AmlDisplayTests : IDisposable
         Assert.True(follow.IsChecked);
         Assert.Equal(Strings.Tooltip_AmlDisplay_FollowScaleBands, AutomationProperties.GetHelpText(follow));
         var legend = host.Find<Button>("EcdisDisplayPanel.Aml.Legend");
-        Assert.Equal(Strings.AmlDisplay_LegendTitle, AutomationProperties.GetName(legend));
+        Assert.Equal(Strings.AmlDisplay_LegendLinkName, AutomationProperties.GetName(legend));
 
-        // The Legend link opens the flyout: an entry per class the styles draw.
+        // The Legend link opens the Legend tab at the AML section (#1409, D18): no flyout.
+        Assert.Null(legend.Flyout);
         host.Click(legend);
-        var flyout = Assert.IsType<Flyout>(legend.Flyout);
-        Assert.True(flyout.IsOpen);
-        var content = Assert.IsAssignableFrom<Control>(flyout.Content);
-        var entries = content.GetVisualDescendants().OfType<Grid>()
-            .Where(p => AutomationProperties.GetAutomationId(p) == "EcdisDisplayPanel.Aml.LegendEntry")
-            .Select(AutomationProperties.GetName)
-            .ToList();
-        Assert.Equal(section.Legend.SelectMany(g => g.Entries).Select(e => e.Label), entries);
+        Assert.Equal([AmlDisplaySectionViewModel.LegendSectionId], shown);
+        Assert.Empty(host.FindAll<Control>("EcdisDisplayPanel.Aml.LegendFlyout"));
     }
 }

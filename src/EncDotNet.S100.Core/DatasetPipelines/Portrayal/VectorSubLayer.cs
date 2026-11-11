@@ -77,6 +77,13 @@ public sealed class VectorSubLayer
     public string? LegendCaption { get; init; }
 
     /// <summary>
+    /// The title of the sub-layer's group in a legend, such as an AML family's
+    /// name ("Air"), or <see langword="null"/> (the default) for
+    /// <see cref="LayerName"/> without its dataset.
+    /// </summary>
+    public string? LegendTitle { get; init; }
+
+    /// <summary>
     /// The opacity the sub-layer is drawn at, 0 (invisible) to 1 (opaque, the
     /// default), on top of the dataset's own: for data a processor draws as
     /// old, such as a stale surface analysis at half opacity

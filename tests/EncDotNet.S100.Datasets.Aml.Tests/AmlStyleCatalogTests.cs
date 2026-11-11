@@ -196,6 +196,23 @@ public sealed class AmlStyleCatalogTests
         Assert.Equal("AML depths aren't used for depth answers or route checks.", AmlStyleCatalog.NoChecksNote);
     }
 
+    [Fact]
+    public void Each_sub_layer_carries_its_familys_legend_title_and_caption()
+    {
+        var drawing = new AmlPortrayal().Draw(AmlFixtures.Ral());
+        var subLayers = drawing.BuildSubLayers(PaletteType.Day);
+
+        Assert.NotEmpty(subLayers);
+        foreach (var (family, sub) in drawing.Instructions.Keys.Zip(subLayers))
+        {
+            Assert.Equal(family.Name, sub.LegendTitle);
+            Assert.Equal(AmlStyleCatalog.LegendCaption, sub.LegendCaption);
+            Assert.Equal(AmlStyleCatalog.Default.BuildLegend(family, PaletteType.Day).Select(e => e.Label), sub.Legend!.Select(e => e.Label));
+        }
+
+        Assert.EndsWith(AmlStyleCatalog.NoChecksNote, AmlStyleCatalog.LegendCaption, StringComparison.Ordinal);
+    }
+
     // A point feature of an AML 3.0 airspace class with the given attributes.
     private static AmlFeature Feature(params (string Acronym, string Value)[] attributes) =>
         new AmlPortrayal().Draw(AmlCellBuilder.Aml30().Point("airres", (0, 0), attributes).Build()).Features.Single();

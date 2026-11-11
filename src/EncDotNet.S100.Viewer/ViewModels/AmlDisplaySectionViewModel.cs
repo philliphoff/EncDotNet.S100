@@ -2,8 +2,6 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
-using EncDotNet.S100.Datasets.Aml;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -12,24 +10,26 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <summary>
 /// The display panel's Additional Military Layers section (AML handoff frame
 /// B4a, decisions 23, 24 and 26): a switch per product, Follow AML scale
-/// bands, the no-checks note and the Legend flyout. Shown only while an AML
-/// cell is loaded.
+/// bands, the no-checks note and the <b>Legend</b> link, which opens the
+/// Legend tab at the AML section (legends design note D8, D18). Shown only
+/// while an AML cell is loaded.
 /// </summary>
 internal sealed class AmlDisplaySectionViewModel : ViewModelBase, IDisposable
 {
     private readonly AmlDisplayService _service;
-    private readonly AmlStyleCatalog _catalog;
-    private IReadOnlyList<AmlLegendGroupViewModel>? _legend;
 
     /// <summary>Creates the section over <paramref name="service"/>.</summary>
     /// <param name="service">Applies the switches to the map.</param>
-    /// <param name="catalog">The AML styles the legend is built from.</param>
-    public AmlDisplaySectionViewModel(AmlDisplayService service, AmlStyleCatalog catalog)
+    /// <param name="showLegend">
+    /// Opens the Legend tab at a section, given its id
+    /// (<see cref="Services.Legends.LegendService.Show"/>).
+    /// </param>
+    public AmlDisplaySectionViewModel(AmlDisplayService service, Action<string> showLegend)
     {
         ArgumentNullException.ThrowIfNull(service);
-        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(showLegend);
         _service = service;
-        _catalog = catalog;
+        ShowLegendCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => showLegend(LegendSectionId));
         _service.Changed += Refresh;
         Refresh();
     }
@@ -63,14 +63,13 @@ internal sealed class AmlDisplaySectionViewModel : ViewModelBase, IDisposable
     public string NoChecksNote => Strings.Aml_NoDepthChecks;
 
     /// <summary>
-    /// The Legend flyout: one group per colour family, an entry per class the
-    /// AML styles draw. Built from the styles (<see cref="AmlStyleCatalog.BuildLegend(PaletteType)"/>)
-    /// on first use, so every class a family module adds is listed.
+    /// The id of the Legend tab's AML section: every AML product loads under
+    /// one spec, so its families are one section, a group per family.
     /// </summary>
-    public IReadOnlyList<AmlLegendGroupViewModel> Legend => _legend ??=
-        [.. _catalog.BuildLegend(PaletteType.Day).Select(g => new AmlLegendGroupViewModel(
-            g.Family.Name,
-            [.. g.Entries.Select(e => new Legends.LegendRowViewModel(e, Avalonia.Media.Brushes.Transparent))]))];
+    public static string LegendSectionId => Core.SpecName.Aml;
+
+    /// <summary>The <b>Legend</b> link: opens the Legend tab at the AML section (D8, D18).</summary>
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ShowLegendCommand { get; }
 
     private void Refresh()
     {
@@ -163,8 +162,3 @@ internal sealed class AmlProductRowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsVisible));
     }
 }
-
-/// <summary>One colour family of the AML legend flyout.</summary>
-/// <param name="Name">The family's name, such as "Air".</param>
-/// <param name="Entries">Its entries, one per class.</param>
-internal sealed record AmlLegendGroupViewModel(string Name, IReadOnlyList<Legends.LegendRowViewModel> Entries);

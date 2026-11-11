@@ -362,9 +362,9 @@ internal sealed class LegendService : IDisposable
         // Every coverage kind can carry rows (#1406): S-102 grids, S-104
         // isolines and stations, S-111 arrows and stations, weather fills.
         CoverageStackPayload { SubLayer: { Legend.Count: > 0 } coverage } payload =>
-            new SubLayerLegend(payload.Result.Spec.Name, coverage.LayerKey, coverage.LayerName, coverage.Legend, coverage.LegendCaption),
+            new SubLayerLegend(payload.Result.Spec.Name, coverage.LayerKey, coverage.LayerName, coverage.Legend, coverage.LegendCaption, Title: null),
         VectorStackPayload { SubLayer.Legend.Count: > 0 } vector =>
-            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend, vector.SubLayer.LegendCaption),
+            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend, vector.SubLayer.LegendCaption, vector.SubLayer.LegendTitle),
         _ => null,
     };
 
@@ -443,7 +443,7 @@ internal sealed class LegendService : IDisposable
             _viewport.ViewportChanged -= OnViewportChanged;
     }
 
-    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption);
+    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption, string? Title);
 
     private sealed record SectionDataset(string Id, DatasetEntry? Entry);
 
@@ -475,7 +475,7 @@ internal sealed class LegendService : IDisposable
                 // The caption is the topmost group's (D4): its first sub-layer is the top one.
                 if (Groups.Count == 0)
                     Caption = sub.Caption;
-                Groups.Add(new LegendGroup(sub.Key, GroupTitle(sub.Name), sub.Rows));
+                Groups.Add(new LegendGroup(sub.Key, sub.Title ?? GroupTitle(sub.Name), sub.Rows));
             }
         }
     }

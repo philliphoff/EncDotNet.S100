@@ -669,6 +669,7 @@ public static class S98DefaultRules
             ApplyOutOfBandCap = subLayer.ApplyOutOfBandCap,
             Legend = subLayer.Legend,
             LegendCaption = subLayer.LegendCaption,
+            LegendTitle = subLayer.LegendTitle,
         };
     }
 

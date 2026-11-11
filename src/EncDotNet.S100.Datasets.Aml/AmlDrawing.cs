@@ -66,7 +66,8 @@ public sealed class AmlDrawing
     /// <see cref="AmlFamily.LayerKey"/>, on
     /// <see cref="S98DisplayPlane.AdditionalMilitaryLayers"/> at the family's
     /// <see cref="AmlFamily.Order"/>, each with its legend in
-    /// <paramref name="palette"/>.
+    /// <paramref name="palette"/>, titled by the family's name, with
+    /// <see cref="AmlStyleCatalog.LegendCaption"/>.
     /// </summary>
     /// <param name="palette">The palette the legends are drawn in.</param>
     /// <param name="patternClipScope">
@@ -88,6 +89,8 @@ public sealed class AmlDrawing
             WithinPlanePriority = p.Key.Order,
             SourceFeatureType = p.Key.LayerKey,
             Legend = Catalog.BuildLegend(p.Key, palette),
+            LegendTitle = p.Key.Name,
+            LegendCaption = AmlStyleCatalog.LegendCaption,
         })];
 
     /// <summary>

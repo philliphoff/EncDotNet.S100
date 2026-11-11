@@ -262,6 +262,8 @@ foreach (var group in AmlStyleCatalog.Default.BuildLegend(PaletteType.Day))
 
 Points are `SymbolLegendEntry` values, lines and routes `LineLegendEntry`
 values, and areas a clear `SwatchLegendEntry` with the ticked boundary as its
-outline. Each sub-layer also carries its family's legend.
-`AmlStyleCatalog.NoChecksNote` is the caption to show with it: "AML depths
-aren't used for depth answers or route checks."
+outline. Each sub-layer also carries its family's legend
+(`VectorSubLayer.Legend`), titled by the family's name (`LegendTitle`, such as
+"Air") and captioned with `AmlStyleCatalog.LegendCaption`: the symbols are our
+own, and `AmlStyleCatalog.NoChecksNote`, "AML depths aren't used for depth
+answers or route checks."
