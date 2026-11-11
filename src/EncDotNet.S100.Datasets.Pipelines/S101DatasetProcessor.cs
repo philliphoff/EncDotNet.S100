@@ -1007,6 +1007,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             LayerNames = new[] { $"{LayerKeyPrefix}.areas", $"{LayerKeyPrefix}.linework" },
@@ -1294,6 +1295,24 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     /// cell declares none.
     /// </summary>
     public CellRank? CellRank => CellExtent.Rank;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// DSID <c>DSED</c> (its leading whole number), the dataset reference date,
+    /// and the last update applied (<see cref="UpdateReport"/>) or else the
+    /// update number in the file name.
+    /// </remarks>
+    public ChartCellEdition? Edition =>
+        _dataset.Document.Identification is { EditionNumber: int edition } id
+            ? new ChartCellEdition(
+                edition,
+                _updateReport?.AppliedThroughUpdateNumber ?? id.UpdateNumber,
+                ChartCellEditions.Date(id.DatasetReferenceDate))
+            : null;
+
+    /// <inheritdoc/>
+    /// <remarks>The finest <c>DataCoverage.maximumDisplayScale</c>.</remarks>
+    public int? CompilationScale => Metadata.DisplayScale?.Maximum;
 
     /// <summary>
     /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell

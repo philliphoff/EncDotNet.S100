@@ -1073,6 +1073,26 @@
     <value>REFERENCES</value>
     <comment>Header above the references list in the Object Information panel.</comment>
   </data>
+  <data name="Pick_LegendKeyHeading" xml:space="preserve">
+    <value>KEY · WHAT YOU SEE HERE</value>
+    <comment>Header above the picked features' legend rows in Object information (legends design note D3, D16)</comment>
+  </data>
+  <data name="Pick_LegendKeyLineFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A key line in Object information; {0} is the product ("S-102", "Wave height"), {1} the legend row ("2–10 m")</comment>
+  </data>
+  <data name="Pick_InLegend" xml:space="preserve">
+    <value>In legend</value>
+    <comment>Link on a key line in Object information that opens the Legend tab at the row</comment>
+  </data>
+  <data name="Pick_InLegendNameFormat" xml:space="preserve">
+    <value>Show {0} in the legend</value>
+    <comment>Accessible name and tooltip of the In legend link; {0} is the key line ("S-102 · 2–10 m")</comment>
+  </data>
+  <data name="Menu_ShowDatasetLegend" xml:space="preserve">
+    <value>Show legend</value>
+    <comment>Datasets row menu item that opens the Legend tab at the dataset's section</comment>
+  </data>
   <data name="Pick_ReferenceItemFormat" xml:space="preserve">
     <value>{0} → {1}</value>
     <comment>Single reference-list row format: role followed by target identifier.</comment>
@@ -1782,6 +1802,70 @@
   </data>
   <data name="Status_OverscaleFactor" xml:space="preserve">
     <value>{0:0.0}×</value>
+  </data>
+  <data name="PositionLegend_Heading" xml:space="preserve">
+    <value>AT VIEW CENTRE</value>
+    <comment>Caps heading of the Legend tab's position row (S-98 position legend, legends D17)</comment>
+  </data>
+  <data name="PositionLegend_Name" xml:space="preserve">
+    <value>Position legend at the view centre</value>
+    <comment>Accessible name of the Legend tab's position row</comment>
+  </data>
+  <data name="PositionLegend_DepthsMetres" xml:space="preserve">
+    <value>Depths in metres</value>
+    <comment>Position legend: depth unit (S-98 §9.1.4)</comment>
+  </data>
+  <data name="PositionLegend_DepthsFeet" xml:space="preserve">
+    <value>Depths in feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathomsFeet" xml:space="preserve">
+    <value>Depths in fathoms and feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathoms" xml:space="preserve">
+    <value>Depths in fathoms</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_SafetyContourFormat" xml:space="preserve">
+    <value>Safety contour {0}</value>
+    <comment>Position legend: the Mariner setting; {0} is the depth with its unit, e.g. "10 m"</comment>
+  </data>
+  <data name="PositionLegend_DatumNotDeclared" xml:space="preserve">
+    <value>Datum not declared</value>
+    <comment>Position legend when the cell at the view centre declares no sounding datum</comment>
+  </data>
+  <data name="PositionLegend_NoChart" xml:space="preserve">
+    <value>No chart at the view centre</value>
+    <comment>Position legend when no chart cell covers the view centre (D17)</comment>
+  </data>
+  <data name="PositionLegend_EditionFormat" xml:space="preserve">
+    <value>ed. {0}</value>
+    <comment>Position legend: the cell's edition number</comment>
+  </data>
+  <data name="PositionLegend_EditionUpdateFormat" xml:space="preserve">
+    <value>ed. {0} upd. {1}</value>
+    <comment>Position legend: the cell's edition and the last update applied</comment>
+  </data>
+  <data name="PositionLegend_CompiledFormat" xml:space="preserve">
+    <value>compiled {0}</value>
+    <comment>Position legend: the cell's compilation scale, e.g. "compiled 1:12 000"</comment>
+  </data>
+  <data name="PositionLegend_ShownFormat" xml:space="preserve">
+    <value>shown {0}</value>
+    <comment>Position legend: the display scale, e.g. "shown 1:22 000"</comment>
+  </data>
+  <data name="PositionLegend_OverscaleFormat" xml:space="preserve">
+    <value>{0:0.0}× overscale</value>
+    <comment>Position legend: the display is finer than the cell's compilation scale</comment>
+  </data>
+  <data name="PositionLegend_Separator" xml:space="preserve">
+    <value> · </value>
+    <comment>Separator between position legend items</comment>
+  </data>
+  <data name="Tooltip_PositionLegend" xml:space="preserve">
+    <value>Units, depth datum and safety contour, then the chart cell at the view centre with its edition and compilation scale against the display scale. Updates when the map stops moving.</value>
+    <comment>Tooltip of the Legend tab's position row</comment>
   </data>
   <data name="Status_OverscalePopupHeader" xml:space="preserve">
     <value>Overscaled cells in view</value>
@@ -7997,15 +8081,11 @@
   </data>
   <data name="AmlDisplay_Legend" xml:space="preserve">
     <value>Legend</value>
-    <comment>Link in the display panel's Additional Military Layers section that opens the AML legend flyout</comment>
+    <comment>Link in the display panel's Additional Military Layers section that opens the Legend tab at the AML section</comment>
   </data>
-  <data name="AmlDisplay_LegendTitle" xml:space="preserve">
-    <value>AML legend · SoundCharts symbols</value>
-    <comment>Title of the AML legend flyout</comment>
-  </data>
-  <data name="AmlDisplay_LegendNote" xml:space="preserve">
-    <value>Our own representation. Not the official AML portrayal.</value>
-    <comment>Footnote of the AML legend flyout</comment>
+  <data name="AmlDisplay_LegendLinkName" xml:space="preserve">
+    <value>Show the AML legend</value>
+    <comment>Tooltip and accessible name of the AML display section's Legend link, which opens the Legend tab at the AML section</comment>
   </data>
   <data name="AmlDisplay_ScaleHeader" xml:space="preserve">
     <value>Scale</value>
@@ -8153,6 +8233,30 @@
   <data name="Pick_AmlProvenanceName" xml:space="preserve">
     <value>AML provenance</value>
     <comment>Accessible name of the AML provenance strip in Object Information (#1372)</comment>
+  </data>
+  <data name="Legend_LibrarySpec" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Legend_LibraryTitle" xml:space="preserve">
+    <value>Coverage outlines</value>
+  </data>
+  <data name="Legend_LibraryOutlinedFormat" xml:space="preserve">
+    <value>{0} outlined</value>
+  </data>
+  <data name="Legend_LibraryOutlinedOneFormat" xml:space="preserve">
+    <value>1 outlined</value>
+  </data>
+  <data name="Legend_LibrarySelected" xml:space="preserve">
+    <value>Selected</value>
+  </data>
+  <data name="Legend_ProductS101" xml:space="preserve">
+    <value>Electronic navigational chart</value>
+  </data>
+  <data name="Legend_CatalogueSomeFormat" xml:space="preserve">
+    <value>{0} of {1} symbols drawn in view</value>
+  </data>
+  <data name="Legend_CatalogueAll" xml:space="preserve">
+    <value>Symbols drawn in view</value>
   </data>
   <data name="Legend_SourceCountFormat" xml:space="preserve">
     <value>{0} datasets</value>

@@ -210,21 +210,27 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
 
         var mercatorExtent = new MRect(layout.MercMinX, layout.MercMinY, layout.MercMaxX, layout.MercMaxY);
 
-        // Encode to PNG. When land polygons are supplied (S-98 water-area clip,
-        // issue #483), up-sample the surface and clip it to water at output-pixel
+        // When land polygons are supplied (S-98 water-area clip, issue #483),
+        // up-sample the surface and clip it to water at output-pixel
         // resolution so the (often very coarse) grid does not paint over land.
-        byte[] pngBytes = LandAreas is { Count: > 0 } land
-            ? EncodeClippedToWater(bmp, land, outCols, outRows, layout)
-            : EncodePng(bmp);
+        using var clipped = LandAreas is { Count: > 0 } land
+            ? ClipToWater(bmp, land, outCols, outRows, layout)
+            : null;
+        var surface = clipped ?? bmp;
 
-        // Build the Mapsui layer
-        var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
-        {
-            // Relief shading has detail finer than a pixel when zoomed out:
-            // draw it mipmapped so it averages instead of mottling. The flat
-            // band colours keep Mapsui's raster drawing.
-            Styles = { shade is not null ? new SmoothRasterStyle() : new RasterStyle() },
-        };
+        // Relief shading has detail finer than a pixel when zoomed out, so it
+        // is drawn mipmapped (SmoothRasterStyle). Its pixels barely compress,
+        // so it skips the PNG round trip: the style holds the image itself.
+        // The flat band colours compress well and keep Mapsui's raster drawing.
+        var rasterFeature = shade is not null
+            ? new RasterFeature(new MRaster([], mercatorExtent))
+            {
+                Styles = { new SmoothRasterStyle { Image = SKImage.FromBitmap(surface) } },
+            }
+            : new RasterFeature(new MRaster(EncodePng(surface), mercatorExtent))
+            {
+                Styles = { new RasterStyle() },
+            };
 
         return new MemoryLayer
         {
@@ -256,7 +262,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     /// <see cref="SKClipOperation.Difference"/>. Antialiased so the coastline is
     /// smooth even though the underlying grid is blocky.
     /// </summary>
-    private static byte[] EncodeClippedToWater(
+    private static SKBitmap ClipToWater(
         SKBitmap source,
         IReadOnlyList<FeatureGeometry> landAreas,
         int outCols,
@@ -275,7 +281,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         double spanX = layout.MercMaxX - layout.MercMinX;
         double spanY = layout.MercMaxY - layout.MercMinY;
 
-        using var target = new SKBitmap(new SKImageInfo(tCols, tRows, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var target = new SKBitmap(new SKImageInfo(tCols, tRows, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(target))
         {
             canvas.Clear(SKColors.Transparent);
@@ -312,7 +318,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             }
         }
 
-        return EncodePng(target);
+        return target;
     }
 
     /// <summary>

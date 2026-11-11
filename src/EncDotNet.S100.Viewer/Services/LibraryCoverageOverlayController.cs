@@ -5,6 +5,7 @@ using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
+using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -48,7 +49,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// newer edition, dashed otherwise. Tapping an area selects its node in the tree.
 /// </para>
 /// </remarks>
-internal sealed class LibraryCoverageOverlayController : IDisposable
+internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSectionSource
 {
     private const string LayerName = "Library Coverage";
 
@@ -133,6 +134,16 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
     /// <summary>The number of datasets outlined by the last redraw (for tests and diagnostics).</summary>
     public int OutlinedCount { get; private set; }
+
+    /// <summary>
+    /// The Legend tab's Library coverage section (legends design note D8):
+    /// one row per outline style the last redraw drew, while the overlay is
+    /// active; empty otherwise.
+    /// </summary>
+    public IReadOnlyList<LegendSection> Sections { get; private set; } = [];
+
+    /// <summary>Raised when <see cref="Sections"/> changes.</summary>
+    public event EventHandler? Changed;
 
     /// <summary>
     /// Handles a plain map tap: when the overlay is active, selects the most
@@ -376,6 +387,8 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             return;
 
         var features = new List<IFeature>();
+        var drawn = new HashSet<LibraryPrimaryAvailability>();
+        (byte R, byte G, byte B)? selectedAccent = null;
         OutlinedCount = 0;
 
         if (IsActive)
@@ -395,7 +408,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             {
                 if (mercatorView is { } mv && !mv.Intersects(area.Extent))
                     continue;
-                AddRings(features, area.Rings, StyleFor(AreaState(items)), casing, opacity);
+                var areaState = AreaState(items);
+                AddRings(features, area.Rings, StyleFor(areaState), casing, opacity);
+                drawn.Add(areaState);
                 OutlinedCount++;
             }
 
@@ -411,6 +426,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             foreach (var item in candidates)
             {
                 AddCoverage(features, item, StyleFor(item.PrimaryAvailability), casing, opacity, resolution);
+                drawn.Add(item.PrimaryAvailability);
                 OutlinedCount++;
             }
 
@@ -421,13 +437,30 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
                     new OutlineStyle(new MapsuiColor(accent.R, accent.G, accent.B), LibraryOutlineStyles.SelectedWidth, null,
                         LibraryOutlineStyles.SelectedFillOpacity, RoundCap: false),
                     casing, 1f, resolution);
+                selectedAccent = accent;
                 OutlinedCount++;
             }
         }
 
         _layer.Features = features;
         _layer.DataHasChanged();
+        UpdateLegend(drawn, selectedAccent);
     }
+
+    private void UpdateLegend(HashSet<LibraryPrimaryAvailability> drawn, (byte R, byte G, byte B)? selectedAccent)
+    {
+        IReadOnlyList<LegendSection> sections =
+            LibraryCoverageLegend.Build(drawn, OutlinedCount, selectedAccent) is { } section ? [section] : [];
+        // Pans redraw often; only tell the legend when what it shows changes.
+        if (sections.Count == Sections.Count && (sections.Count == 0 || SameRows(sections[0], Sections[0])))
+            return;
+
+        Sections = sections;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static bool SameRows(LegendSection a, LegendSection b) =>
+        a.Source == b.Source && a.Rows.Select(r => r.Label).SequenceEqual(b.Rows.Select(r => r.Label));
 
     /// <summary>A dataset's outline, or a marker when it is point-sized on screen.</summary>
     private static void AddCoverage(

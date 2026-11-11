@@ -35,9 +35,9 @@ public class SmoothRasterRendererTests
         // filtering without mipmaps draws it white; averaging the block gives
         // 4/64 white, near black.
         const int size = 64;
-        var raster = new MRaster(Dots(size), new MRect(0, 0, size, size));
-        var feature = new RasterFeature(raster);
-        var style = new SmoothRasterStyle();
+        using var dots = Dots(size);
+        var feature = new RasterFeature(new MRaster([], new MRect(0, 0, size, size)));
+        var style = new SmoothRasterStyle { Image = dots };
         var layer = new MemoryLayer { Features = [feature] };
         var viewport = new Mapsui.Viewport(size / 2.0, size / 2.0, 8, 0, size / 8, size / 8);
 
@@ -88,14 +88,13 @@ public class SmoothRasterRendererTests
     private static IStyle Style(ILayer layer) =>
         Assert.Single(Assert.IsType<MemoryLayer>(layer).Features.OfType<RasterFeature>()).Styles.Single();
 
-    private static byte[] Dots(int size)
+    private static SKImage Dots(int size)
     {
         using var bitmap = new SKBitmap(size, size, SKColorType.Rgba8888, SKAlphaType.Premul);
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
                 bitmap.SetPixel(x, y, x % 8 is 3 or 4 && y % 8 is 3 or 4 ? SKColors.White : SKColors.Black);
-        using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
-        return data.ToArray();
+        return SKImage.FromBitmap(bitmap);
     }
 
     private static StyledCoverageLayer Layer(float[]? shade)

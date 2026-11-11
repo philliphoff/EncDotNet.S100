@@ -43,7 +43,8 @@ internal static class S101AreaSynth
 
     public static S101Dataset Cell(
         IReadOnlyList<AreaFeature> areas,
-        IReadOnlyList<(double Lat, double Lon, double Depth)>? soundings = null)
+        IReadOnlyList<(double Lat, double Lon, double Depth)>? soundings = null,
+        S101DatasetIdentification? identification = null)
     {
         var featureTypes = new Dictionary<ushort, string>();
         var attributeTypes = new Dictionary<ushort, string>();
@@ -123,7 +124,7 @@ internal static class S101AreaSynth
 
         var document = new S101Document
         {
-            Identification = new S101DatasetIdentification { DatasetName = "101AREAS" },
+            Identification = identification ?? new S101DatasetIdentification { DatasetName = "101AREAS" },
             StructureInfo = new S101DatasetStructureInfo
             {
                 CoordinateMultiplicationFactorX = Cmf,

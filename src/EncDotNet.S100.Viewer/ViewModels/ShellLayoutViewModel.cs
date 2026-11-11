@@ -246,6 +246,22 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         get => _isRightDockOpen;
         set
         {
+            // Legends D9: opening the dock where it would leave the map under
+            // 480 px opens it folded to its edge tab instead.
+            if (value && !_isRightDockOpen && !_isRightDockFolded && WouldLeaveMapNarrow())
+            {
+                _isRightDockFolded = true;
+                _isRightDockNarrowFolded = true;
+                OnPropertyChanged(nameof(IsRightDockFolded));
+            }
+            else if (!value && _isRightDockNarrowFolded)
+            {
+                // Closing forgets the narrow fold; the next open measures again.
+                _isRightDockNarrowFolded = false;
+                _isRightDockOverlaid = false;
+                _isRightDockFolded = false;
+                OnPropertyChanged(nameof(IsRightDockFolded));
+            }
             if (!SetProperty(ref _isRightDockOpen, value))
                 return;
             OnRightDockShownChanged();
@@ -270,13 +286,101 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         {
             if (!SetProperty(ref _isRightDockFolded, value))
                 return;
+            if (!value)
+            {
+                _isRightDockNarrowFolded = false;
+                _isRightDockOverlaid = false;
+            }
             OnRightDockShownChanged();
         }
+    }
+
+    /// <summary>
+    /// The narrowest the map may be left by opening the right dock (legends
+    /// design note D9): below it the dock opens folded to its edge tab.
+    /// </summary>
+    internal const double NarrowMapMinimumWidth = 480;
+
+    /// <summary>The right dock's width before the user has resized it, as the content grid declares it.</summary>
+    internal const double RightDockDefaultWidth = 360;
+
+    /// <summary>The right dock's narrowest width, as the content grid declares it.</summary>
+    internal const double RightDockMinimumWidth = 240;
+
+    /// <summary>How much of the map stays uncovered, at least, by a dock shown over it (D9).</summary>
+    internal const double RightDockOverlayMapMargin = 48;
+
+    /// <summary>The splitter between the map and the right dock.</summary>
+    private const double RightDockSplitterWidth = 4;
+
+    private bool _isRightDockNarrowFolded;
+    private bool _isRightDockOverlaid;
+
+    /// <summary>
+    /// True when the dock is folded because docking it would leave the map
+    /// narrower than <see cref="NarrowMapMinimumWidth"/> (D9), rather than by
+    /// Check passage.
+    /// </summary>
+    public bool IsRightDockNarrowFolded => _isRightDockNarrowFolded;
+
+    /// <summary>
+    /// True while a narrow-folded dock (D9) is shown over the map's right
+    /// edge, without resizing the map. Escape or a map click folds it again
+    /// (<see cref="FoldOverlaidRightDock"/>).
+    /// </summary>
+    public bool IsRightDockOverlaid
+    {
+        get => _isRightDockOverlaid;
+        private set
+        {
+            if (!SetProperty(ref _isRightDockOverlaid, value))
+                return;
+            OnRightDockShownChanged();
+        }
+    }
+
+    /// <summary>Whether the user can see the right dock's panel: docked beside the map, or over it (D9).</summary>
+    public bool IsRightDockPanelVisible => IsRightDockShown || (IsRightDockOpen && _isRightDockOverlaid);
+
+    /// <summary>
+    /// True when docking the right dock now would leave the map narrower than
+    /// <see cref="NarrowMapMinimumWidth"/>. Measured while the dock isn't in
+    /// its column, so <see cref="MapWidth"/> still has the room it would take.
+    /// </summary>
+    private bool WouldLeaveMapNarrow() =>
+        !double.IsInfinity(_mapWidth)
+        && _mapWidth - (_rightDockSavedWidth ?? RightDockDefaultWidth) - RightDockSplitterWidth < NarrowMapMinimumWidth;
+
+    /// <summary>
+    /// Shows a folded right dock: a narrow fold (D9) shows over the map, a
+    /// Check passage fold unfolds into its column.
+    /// </summary>
+    public void ShowFoldedRightDock()
+    {
+        if (_isRightDockNarrowFolded)
+            IsRightDockOverlaid = true;
+        else
+            IsRightDockFolded = false;
+    }
+
+    /// <summary>
+    /// Folds a dock shown over the map back to its edge tab (D9: Escape or a
+    /// map click). Returns true when it was over the map.
+    /// </summary>
+    public bool FoldOverlaidRightDock()
+    {
+        if (!_isRightDockOverlaid)
+            return false;
+        IsRightDockOverlaid = false;
+        return true;
     }
 
     private void OnRightDockShownChanged()
     {
         OnPropertyChanged(nameof(IsRightDockShown));
+        OnPropertyChanged(nameof(IsRightDockNarrowFolded));
+        OnPropertyChanged(nameof(IsRightDockOverlaid));
+        OnPropertyChanged(nameof(IsRightDockPanelVisible));
         OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
         OnPropertyChanged(nameof(IsLegendTabShown));
         UpdateRightTabsShown();
@@ -293,7 +397,14 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         System.Globalization.CultureInfo.CurrentCulture, Resources.Strings.Tooltip_ShowDockTabFormat, _selectedRightTab?.Name ?? string.Empty);
 
     /// <summary>Unfolds the right dock from its edge tab.</summary>
-    public ICommand UnfoldRightDockCommand => _unfoldRightDockCommand ??= new RelayCommand(() => IsRightDockFolded = false);
+    public ICommand UnfoldRightDockCommand => _unfoldRightDockCommand ??= new RelayCommand(() =>
+    {
+        // D9: the edge tab of a narrow fold shows the dock over the map, and hides it again.
+        if (_isRightDockOverlaid)
+            IsRightDockOverlaid = false;
+        else
+            ShowFoldedRightDock();
+    });
 
     private ICommand? _unfoldRightDockCommand;
 
@@ -691,7 +802,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         foreach (var tab in RightTabs)
         {
             if (tab.ViewModel is IActivityTabShown shown)
-                shown.IsTabShown = IsRightDockShown && ReferenceEquals(_selectedRightTab, tab);
+                shown.IsTabShown = IsRightDockPanelVisible && ReferenceEquals(_selectedRightTab, tab);
         }
     }
 
@@ -702,7 +813,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     public bool HasRightDockTabs => RightTabs.Count(t => t.IsVisible) > 1;
 
     /// <summary>Whether the right dock is showing the Legend tab (View › Legend's check mark).</summary>
-    public bool IsLegendTabShown => IsRightDockShown && SelectedRightTabId == LegendTabId;
+    public bool IsLegendTabShown => IsRightDockPanelVisible && SelectedRightTabId == LegendTabId;
 
     private IActivityTab? _rightTabBeforeLegend;
     private bool _rightDockOpenBeforeLegend;
@@ -720,6 +831,13 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     {
         if (!_tabsById.TryGetValue(LegendTabId, out var legend) || !legend.IsVisible)
             return;
+
+        // D9: pressed again on a narrow fold already labelled LEGEND, it shows the dock over the map.
+        if (_isRightDockNarrowFolded && !_isRightDockOverlaid && IsRightDockOpen && SelectedRightTabId == LegendTabId)
+        {
+            IsRightDockOverlaid = true;
+            return;
+        }
 
         if (IsLegendTabShown)
         {
@@ -743,10 +861,13 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     {
         if (!IsLegendTabShown)
         {
-            _rightDockOpenBeforeLegend = IsRightDockShown;
+            _rightDockOpenBeforeLegend = IsRightDockPanelVisible;
             _rightTabBeforeLegend = _selectedRightTab;
         }
-        IsRightDockFolded = false;
+        // A Check passage fold unfolds; a narrow fold (D9) stays folded, and
+        // opening the dock may fold it.
+        if (IsRightDockFolded && !_isRightDockNarrowFolded)
+            IsRightDockFolded = false;
         SelectedRightTab = legend;
         IsRightDockOpen = true;
     }
@@ -1011,8 +1132,8 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
 
         TogglePickPanelCommand = new RelayCommand(() =>
         {
-            if (IsRightDockFolded)
-                IsRightDockFolded = false;
+            if (IsRightDockFolded && !_isRightDockOverlaid)
+                ShowFoldedRightDock();
             else
                 IsRightDockOpen = !IsRightDockOpen;
         });

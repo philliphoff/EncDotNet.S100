@@ -70,6 +70,12 @@ public sealed class AmlStyleCatalog
     /// <summary>The caption the legend and the display section show (decision 23).</summary>
     public const string NoChecksNote = "AML depths aren't used for depth answers or route checks.";
 
+    /// <summary>
+    /// The caption of the AML legend (every family's sub-layer carries it): the
+    /// symbols are SoundCharts' own, and <see cref="NoChecksNote"/>.
+    /// </summary>
+    public const string LegendCaption = "Our own symbols, not the official AML portrayal. " + NoChecksNote;
+
     private readonly Dictionary<string, AmlClassStyle> _byAcronym = new(StringComparer.Ordinal);
     private readonly Dictionary<string, LineStyle> _lineStyles = new(StringComparer.Ordinal);
 

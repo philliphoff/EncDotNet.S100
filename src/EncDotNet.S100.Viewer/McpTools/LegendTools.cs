@@ -38,11 +38,37 @@ internal sealed record LegendSectionDto(
     [property: Description("Whether the section shows its rows.")] bool Expanded,
     [property: Description("The rows, one group per kind of sub-layer, top of the stack first.")] IReadOnlyList<LegendGroupDto> Groups);
 
+/// <summary>The chart cell at the view centre.</summary>
+[Description("The chart cell at the view centre: the finest drawn cell whose coverage contains it, the topmost of peers.")]
+internal sealed record PositionLegendCellDto(
+    [property: Description("The dataset's session id.")] string DatasetId,
+    [property: Description("The cell's name, as the Datasets panel shows it.")] string Name,
+    [property: Description("The product it loads under, e.g. \"S-101\" or \"S-57\".")] string Spec,
+    [property: Description("The edition number; null when the cell declares none.")] int? Edition,
+    [property: Description("The last update applied (0 for none); null with no edition.")] int? Update,
+    [property: Description("The issue date (S-57 ISDT, S-101 reference date) as yyyy-MM-dd; null when not declared.")] string? IssueDate,
+    [property: Description("The compilation scale denominator: S-57 DSPM CSCL, or for S-101 the DataCoverage maximumDisplayScale; null when not declared.")] int? CompilationScale);
+
+/// <summary>The S-98 position legend: the Legend tab's fixed first row (D17).</summary>
+[Description("The S-98 position legend at the view centre (Legend tab's first row): units, datum, safety contour, then the cell there.")]
+internal sealed record PositionLegendDto(
+    [property: Description("The view centre latitude; null before the map has a view.")] double? Latitude,
+    [property: Description("The view centre longitude (-180..180); null before the map has a view.")] double? Longitude,
+    [property: Description("The display scale denominator at the centre, as the status bar computes it, rounded; null before the map has a view.")] double? DisplayScale,
+    [property: Description("The Mariner depth unit: Metres, Feet, FathomsFeet or Fathoms.")] string DepthUnit,
+    [property: Description("The Mariner safety contour in metres.")] double SafetyContourMetres,
+    [property: Description("The S-100 vertical datum code at the centre: the cell's SoundingDatum, or with no cell the one datum every depth source in view shares; null when not declared or not known.")] int? DatumCode,
+    [property: Description("The datum's name as the row shows it, \"Datum not declared\", or null when the row shows no datum.")] string? Datum,
+    [property: Description("The cell at the view centre; omitted over no chart (the row says \"No chart at the view centre\").")] PositionLegendCellDto? Cell,
+    [property: Description("How many times finer the display is than the cell's compilation scale; null when not overscaled.")] double? OverscaleFactor,
+    [property: Description("The row's two lines as drawn.")] IReadOnlyList<string> Lines);
+
 /// <summary>What the legend shows.</summary>
 [Description("The viewer's legends: one section per product drawn, in draw order, top first.")]
 internal sealed record LegendDto(
     [property: Description("Whether the right dock's Legend tab is showing.")] bool TabShown,
     [property: Description("The palette the rows are in: Day, Dusk or Night.")] string Palette,
+    [property: Description("The S-98 position legend at the view centre, the tab's fixed first row (updated on pan end).")] PositionLegendDto Position,
     [property: Description("The sections, in draw order, top first: only those in the map view unless all was asked for.")] IReadOnlyList<LegendSectionDto> Sections,
     [property: Description("How many loaded products with a legend are not in the map view.")] int NotInViewCount);
 
@@ -53,40 +79,73 @@ internal sealed class GetLegendTool
     public const string Name = "get_legend";
 
     private readonly LegendService _service;
+    private readonly PositionLegendService _position;
     private readonly IRouteEditInvoker _invoker;
 
-    public GetLegendTool(LegendService service, IRouteEditInvoker invoker)
+    public GetLegendTool(LegendService service, PositionLegendService position, IRouteEditInvoker invoker)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(position);
         ArgumentNullException.ThrowIfNull(invoker);
         _service = service;
+        _position = position;
         _invoker = invoker;
     }
 
-    /// <summary>Takes the current view, rebuilds the sections on the UI thread and returns them.</summary>
+    /// <summary>Takes the current view, rebuilds the sections and the position row on the UI thread and returns them.</summary>
     /// <param name="all">True for every loaded product with a legend; false (default) for those in view.</param>
     /// <param name="ct">Cancels the call.</param>
     public async Task<ToolResult<LegendDto>> InvokeAsync(bool all = false, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var dto = await _invoker.InvokeAsync(() =>
+        var position = await _invoker.InvokeAsync(() =>
         {
             _service.Refresh();
-            return ToDto(_service, all);
+            return _position.RefreshAsync();
         }).ConfigureAwait(false);
+        await position.WaitAsync(ct).ConfigureAwait(false);
+        var dto = await _invoker.InvokeAsync(() => ToDto(_service, _position.Current, all)).ConfigureAwait(false);
         return ToolResult<LegendDto>.Ok(dto);
     }
 
     /// <summary>The wire shape of the service's state.</summary>
-    internal static LegendDto ToDto(LegendService service, bool all)
+    internal static LegendDto ToDto(LegendService service, PositionLegend position, bool all)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(position);
         var sections = service.Sections;
         return new LegendDto(
             service.IsTabShown,
             service.Palette.ToString(),
+            Position(position),
             [.. sections.Where(s => all || s.IsInView).Select(Section)],
             sections.Count(s => !s.IsInView));
+    }
+
+    /// <summary>The wire shape of the position row.</summary>
+    internal static PositionLegendDto Position(PositionLegend legend)
+    {
+        ArgumentNullException.ThrowIfNull(legend);
+        return new PositionLegendDto(
+            legend.Latitude is double lat ? Math.Round(lat, 6) : null,
+            legend.Longitude is double lon ? Math.Round(lon, 6) : null,
+            legend.DisplayScale is double scale ? Math.Round(scale) : null,
+            legend.DepthUnit.ToString(),
+            legend.SafetyContourMetres,
+            legend.DatumCode,
+            legend.HasDatum ? PositionLegendText.Datum(legend.DatumCode) : null,
+            legend.Cell is { } cell
+                ? new PositionLegendCellDto(
+                    cell.DatasetId,
+                    cell.Name,
+                    cell.Spec,
+                    cell.Edition?.Number,
+                    cell.Edition?.Update,
+                    cell.Edition?.IssueDate?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                    cell.CompilationScale)
+                : null,
+            legend.OverscaleFactor is double factor ? Math.Round(factor, 2) : null,
+            [PositionLegendText.SettingsLine(legend), PositionLegendText.CellLine(legend)]);
     }
 
     private static LegendSectionDto Section(LegendSection section) => new(
@@ -149,17 +208,20 @@ internal sealed class SetLegendTool
     public const string Name = "set_legend";
 
     private readonly LegendService _service;
+    private readonly PositionLegendService _position;
     private readonly ViewModels.Legends.LegendViewModel _tab;
     private readonly Services.IViewerUiControllerAccessor _ui;
     private readonly IRouteEditInvoker _invoker;
 
-    public SetLegendTool(LegendService service, ViewModels.Legends.LegendViewModel tab, Services.IViewerUiControllerAccessor ui, IRouteEditInvoker invoker)
+    public SetLegendTool(LegendService service, PositionLegendService position, ViewModels.Legends.LegendViewModel tab, Services.IViewerUiControllerAccessor ui, IRouteEditInvoker invoker)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(position);
         ArgumentNullException.ThrowIfNull(tab);
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(invoker);
         _service = service;
+        _position = position;
         _tab = tab;
         _ui = ui;
         _invoker = invoker;
@@ -210,15 +272,17 @@ internal sealed class SetLegendTool
                 return ToolResult<SetLegendResult>.Err(new PanelUnavailable(ViewModels.ShellLayoutViewModel.LegendTabId));
         }
 
-        var result = await _invoker.InvokeAsync(() =>
+        var position = await _invoker.InvokeAsync(() =>
         {
             if (request.Open == true && section is not null && request.Expanded != false)
                 _tab.ShowSection(section);
             _service.Refresh();
-            return new SetLegendResult(
-                _tab.IsAllLoaded ? "all_loaded" : "in_view",
-                GetLegendTool.ToDto(_service, _tab.IsAllLoaded));
+            return _position.RefreshAsync();
         }).ConfigureAwait(false);
+        await position.WaitAsync(ct).ConfigureAwait(false);
+        var result = await _invoker.InvokeAsync(() => new SetLegendResult(
+            _tab.IsAllLoaded ? "all_loaded" : "in_view",
+            GetLegendTool.ToDto(_service, _position.Current, _tab.IsAllLoaded))).ConfigureAwait(false);
         return ToolResult<SetLegendResult>.Ok(result);
     }
 }
@@ -244,7 +308,9 @@ internal static class LegendMcpAdapter
                 + "it is expanded, its time state at the view time ('none', 'data' or 'no_data') with the Datasets row's time "
                 + "text, and its rows (kind, label, colour) in groups per sub-layer, in the current palette. By default only "
                 + "sections in view; all: true lists every loaded one. Also returns whether the Legend tab is shown and how "
-                + "many loaded products are out of view. Read-only; viewer-injected tool.",
+                + "many loaded products are out of view, and the S-98 position legend at the view centre (the tab's fixed first "
+                + "row): depth unit, datum, safety contour, and the finest chart cell covering the centre with its edition, "
+                + "compilation scale, the display scale and any overscale; cell is omitted over no chart. Read-only; viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }
