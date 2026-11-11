@@ -1152,6 +1152,8 @@ public partial class MainWindow : ShadUI.Window
             _routeAppearance,
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>());
         RouteCheckLegend.DataContext = _routeCheckLegend;
+        // #1374: the AML CLB chip ("not used for depth checks").
+        AmlClbChip.DataContext = App.Services.GetRequiredService<AmlDisplaySectionViewModel>();
         // Clear of the Time HUD when it's shown, else close to the map's edge.
         void PlaceLegend() => RouteCheckLegend.Margin = new Thickness(
             12, 0, 0, _viewModel.Layout.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);

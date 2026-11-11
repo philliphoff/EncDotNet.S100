@@ -29,6 +29,16 @@ month. For package versions and release assets, see
   between the chart overlays and the cautions. Text instructions gain
   `FontSlant` for italic labels. See the
   [Datasets.Aml README](../src/EncDotNet.S100.Datasets.Aml/README.md).
+- **Additional Military Layers display controls.** SoundCharts' display
+  panel gains an **Additional Military Layers** section while an AML cell is
+  loaded: a switch per AML product with its cell count, **Follow AML scale
+  bands** (on by default) and a **Legend** flyout built from the AML styles.
+  With the bands followed, each AML cell shows out to its scale band's
+  coarsest display scale, and a finer band of the same product wins where its
+  cells cover a coarser cell (`AmlScaleBandVisibility`). A corner chip says
+  CLB isn't used for depth checks while CLB is drawn. The switches are kept
+  after a restart, and the `get_aml_display` and `set_aml_display` MCP tools
+  read and set them.
 - **S-412 Marine Weather Warnings (draft).** The new
   `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
   significant wave height, restricted visibility, thunderstorm and ice

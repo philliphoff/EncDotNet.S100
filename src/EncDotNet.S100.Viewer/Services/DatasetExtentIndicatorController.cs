@@ -145,7 +145,8 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
             or nameof(DatasetEntry.ContentMaxVisibleResolution)
             or nameof(DatasetEntry.IsLoaded)
             or nameof(DatasetEntry.IsDeferred)
-            or nameof(DatasetEntry.IsVisible))
+            or nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsHiddenByDisplay))
         {
             ScheduleRebuild();
         }
@@ -185,7 +186,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 // outline, consistent with a hidden loaded dataset.
                 if (entry.IsDeferred)
                 {
-                    if (entry.IsVisible && entry.GeographicBounds is { } bounds)
+                    if (entry.IsVisible && !entry.IsHiddenByDisplay && entry.GeographicBounds is { } bounds)
                     {
                         foreach (var deferredExtent in ToMercatorExtents(bounds))
                             indicators.Add(new S100DatasetExtentIndicator(deferredExtent, 0.0));
@@ -193,7 +194,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                     continue;
                 }
 
-                if (!entry.IsLoaded || !entry.IsVisible)
+                if (!entry.IsLoaded || !entry.IsVisible || entry.IsHiddenByDisplay)
                     continue;
                 if (entry.MercatorExtent is not { } extent)
                     continue;

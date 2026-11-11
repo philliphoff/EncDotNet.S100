@@ -7969,6 +7969,49 @@
   <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
     <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
   </data>
+  <data name="AmlDisplay_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Link in the display panel's Additional Military Layers section that opens the AML legend flyout</comment>
+  </data>
+  <data name="AmlDisplay_LegendTitle" xml:space="preserve">
+    <value>AML legend · SoundCharts symbols</value>
+    <comment>Title of the AML legend flyout</comment>
+  </data>
+  <data name="AmlDisplay_LegendNote" xml:space="preserve">
+    <value>Our own representation. Not the official AML portrayal.</value>
+    <comment>Footnote of the AML legend flyout</comment>
+  </data>
+  <data name="AmlDisplay_ScaleHeader" xml:space="preserve">
+    <value>Scale</value>
+    <comment>Sub-heading above Follow AML scale bands</comment>
+  </data>
+  <data name="AmlDisplay_FollowScaleBands" xml:space="preserve">
+    <value>Follow AML scale bands</value>
+    <comment>Switch in the Additional Military Layers section (AML decision 26)</comment>
+  </data>
+  <data name="Tooltip_AmlDisplay_FollowScaleBands" xml:space="preserve">
+    <value>Each AML cell shows from its scale band out to the band's smallest display scale, and the finer band wins where it covers a coarser one. Off shows every AML cell at every scale.</value>
+  </data>
+  <data name="AmlDisplay_NotLoaded" xml:space="preserve">
+    <value>Not loaded</value>
+    <comment>An AML product row with no cell loaded</comment>
+  </data>
+  <data name="AmlDisplay_CellCountOne" xml:space="preserve">
+    <value>{0} cell</value>
+    <comment>An AML product row's cell count, one cell. {0}: the count</comment>
+  </data>
+  <data name="AmlDisplay_CellCountFormat" xml:space="preserve">
+    <value>{0} cells</value>
+    <comment>An AML product row's cell count. {0}: the count</comment>
+  </data>
+  <data name="AmlDisplay_ProductToolTipFormat" xml:space="preserve">
+    <value>{0} · {1}: {2} of {3} cells shown at this scale</value>
+    <comment>Tooltip of an AML product row. {0}: code; {1}: product name; {2}: cells shown; {3}: cells loaded</comment>
+  </data>
+  <data name="AmlDisplay_ClbChip" xml:space="preserve">
+    <value>AML · CLB not used for depth checks</value>
+    <comment>Corner chip on the map while AML CLB contours are drawn (AML decision 23)</comment>
+  </data>
   <data name="Aml_TagFormat" xml:space="preserve">
     <value>AML · {0}</value>
     <comment>The AML tag before a cell loads, from the cell name's product code. {0}: the code, e.g. CLB</comment>

@@ -40,7 +40,8 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         DatasetsViewModel datasets,
         EcdisLabelOverrideProvider labelOverrides,
         DisplayModeToolbarViewModel? displayModeToolbar,
-        DisplayCombinationsViewModel? displayCombinations)
+        DisplayCombinationsViewModel? displayCombinations,
+        AmlDisplaySectionViewModel? amlDisplay)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -53,6 +54,9 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         _labelOverrides = labelOverrides;
         _displayModeToolbar = displayModeToolbar;
         DisplayCombinations = displayCombinations;
+        Aml = amlDisplay;
+        if (Aml is not null)
+            Aml.PropertyChanged += OnAmlPropertyChanged;
 
         ResetAllOverridesCommand = new RelayCommand(() => _state.ClearAllOverrides());
         SetDisplayBaseCommand = new RelayCommand(() => ActiveCategory = EcdisDisplayCategory.DisplayBase);
@@ -73,6 +77,25 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     /// Display Category; <see langword="null"/> where they aren't wired.
     /// </summary>
     public DisplayCombinationsViewModel? DisplayCombinations { get; }
+
+    /// <summary>
+    /// The Additional Military Layers section (AML handoff decision 24), below
+    /// Display Planes; <see langword="null"/> where it isn't wired.
+    /// </summary>
+    public AmlDisplaySectionViewModel? Aml { get; }
+
+    /// <summary>Whether the Additional Military Layers section shows: an AML cell is loaded.</summary>
+    public bool HasAml => Aml?.IsShown == true;
+
+    private void OnAmlPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AmlDisplaySectionViewModel.IsShown) or null or "")
+        {
+            OnPropertyChanged(nameof(HasAml));
+            OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
+        }
+    }
 
     /// <summary>True when the panel shows its View section.</summary>
     public bool HasDisplayCombinations => DisplayCombinations is not null;
@@ -97,9 +120,9 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// True when there is nothing to control: no loaded vector spec, no
-    /// weather dataset and no S-102 bathymetry.
+    /// weather dataset, no AML cell and no S-102 bathymetry.
     /// </summary>
-    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData && !HasBathymetryData;
+    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData && !HasAml && !HasBathymetryData;
 
     /// <summary>
     /// Whether an S-102 bathymetry dataset is loaded, which shows the
@@ -472,5 +495,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         _state.NavigationalWarningsChanged -= OnNavigationalWarningsChanged;
         _datasets.Entries.CollectionChanged -= OnEntriesChanged;
         _datasets.EntryPortrayalSpecChanged -= OnEntryPortrayalSpecChanged;
+        if (Aml is not null)
+            Aml.PropertyChanged -= OnAmlPropertyChanged;
     }
 }

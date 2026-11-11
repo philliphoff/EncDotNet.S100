@@ -657,6 +657,31 @@
                                             HorizontalAlignment="Left"
                                             VerticalAlignment="Bottom"
                                             Margin="12,0,0,60" />
+                <!-- AML CLB chip (#1374, AML handoff decision 23): while CLB contours
+                     are drawn, say they're not used for depth checks. Bottom right,
+                     clear of the Check route legend (bottom left) and the Time HUD
+                     (bottom centre). DataContext is the AML display section, set in
+                     code-behind. -->
+                <Border x:Name="AmlClbChip"
+                        x:DataType="vm:AmlDisplaySectionViewModel"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,12,14"
+                        IsHitTestVisible="False"
+                        IsVisible="{Binding IsClbChipShown, FallbackValue=False}"
+                        AutomationProperties.AutomationId="Map.AmlClbChip"
+                        AutomationProperties.Name="{Binding ClbChipText, FallbackValue={x:Null}}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="#52525B"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,4">
+                    <TextBlock Text="{Binding ClbChipText, FallbackValue={x:Null}}"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ForegroundColor}"
+                               ToolTip.Tip="{x:Static loc:Strings.Aml_NoDepthChecks}" />
+                </Border>
                 <!-- Map stamp (#713 B4): the view time over the map while the
                      Timeline tab is shown in the dock, so the map (and any
                      screenshot of it) says which time it shows; the Time HUD

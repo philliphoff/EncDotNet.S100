@@ -121,7 +121,7 @@ public sealed class BathymetryDisplaySettingsTests
     }
 
     private static EcdisDisplayPanelViewModel Panel(EcdisDisplayState state, DatasetsViewModel datasets) =>
-        new(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
+        new(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null, amlDisplay: null);
 
     private sealed class ImmediateInvoker : IRouteEditInvoker
     {
