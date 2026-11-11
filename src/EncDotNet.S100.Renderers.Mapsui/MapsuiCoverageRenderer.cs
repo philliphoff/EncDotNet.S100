@@ -220,7 +220,10 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         // Build the Mapsui layer
         var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
         {
-            Styles = { new RasterStyle() },
+            // Relief shading has detail finer than a pixel when zoomed out:
+            // draw it mipmapped so it averages instead of mottling. The flat
+            // band colours keep Mapsui's raster drawing.
+            Styles = { shade is not null ? new SmoothRasterStyle() : new RasterStyle() },
         };
 
         return new MemoryLayer
