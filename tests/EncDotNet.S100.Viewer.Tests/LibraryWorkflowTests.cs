@@ -102,7 +102,7 @@ public sealed class LibraryWorkflowTests : IDisposable
         using var panel = TestLibrary.Panel(_library, new RecordingLibraryImporter(), _loader, _downloader, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         var names = new LibrarySourceNames(_library);
 
-        var node = panel.Nodes.SelectMany(c => c.Children.Prepend(c)).First(n => !n.IsGroup && n.Source?.Id == source.Id);
+        var node = panel.Tree.Nodes.SelectMany(c => c.Children.Prepend(c)).First(n => !n.IsGroup && n.Source?.Id == source.Id);
         Assert.Equal(node.Name, names.Of(source.Id));
         var unknown = Guid.NewGuid();
         Assert.Equal(unknown.ToString("N")[..8], names.Of(unknown));

@@ -47,7 +47,7 @@ public sealed class WeatherAutoRefreshTests : IDisposable
         await _library.WhenIdle();
         var library = new TestLibrary(_library, _loader, _downloader, _time);
         var panel = library.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: _time, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Sync();
+        panel.Tree.Sync();
         // The monitor checks on its own minute clock, as in the app.
         return (panel, library.Monitor(_time, action => action()), source.Id);
     }
