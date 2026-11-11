@@ -1,9 +1,10 @@
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 
 /// <summary>
-/// Whether the Check route map legend is open (#959, handoff C8), kept per
-/// user in <see cref="ViewerSettings"/>. The legend control and the
-/// <c>set_map_legend</c> / <c>get_map_legend</c> tools share it.
+/// Whether the Check route map card is open or folded to its "Legend" chip
+/// (#959, handoff C8; legends design note D6), kept per user in
+/// <see cref="ViewerSettings"/>. The card's rows come from the route check's
+/// Legend section (<see cref="RouteCheckLegendSource"/>).
 /// </summary>
 internal sealed class RouteCheckLegendState
 {

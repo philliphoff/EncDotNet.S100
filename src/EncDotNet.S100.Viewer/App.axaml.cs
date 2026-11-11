@@ -603,11 +603,9 @@ public partial class App : Application
                 timeline),
             new McpTools.Groups.LegendMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()),
-            new McpTools.Groups.RouteCheckLegendMcpToolGroup(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
-                routes,
-                passageCheck),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel>(),
+                sp.GetRequiredService<IViewerUiControllerAccessor>()),
             new McpTools.Groups.MeasuringMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
@@ -1726,6 +1724,12 @@ public partial class App : Application
                 sp.GetRequiredService<TimeProvider>(),
                 UiThread.PostBackground);
             settings.PaletteChanged += legend.SetPalette;
+            // #1408 (D5, D6): the route check's section goes on top while Check
+            // route is on; the map card draws the same section.
+            legend.AddSource(new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendSource(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+                sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
+                () => legend.Palette));
             return legend;
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.DepthBasisService(

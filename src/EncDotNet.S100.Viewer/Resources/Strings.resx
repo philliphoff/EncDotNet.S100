@@ -6267,6 +6267,26 @@
   <data name="Map_LegendNoDraft" xml:space="preserve">
     <value>No draft: the line isn't coloured by clearance.</value>
   </data>
+  <data name="Legend_RouteCheckSpec" xml:space="preserve">
+    <value>Route</value>
+    <comment>The route check section's chip in the Legend tab (#1408).</comment>
+  </data>
+  <data name="Legend_RouteCheckTitle" xml:space="preserve">
+    <value>Route check</value>
+    <comment>The route check section's name in the Legend tab.</comment>
+  </data>
+  <data name="Legend_RouteCheckUkc" xml:space="preserve">
+    <value>UKC at ETA</value>
+    <comment>The route check section's group of clearance line styles.</comment>
+  </data>
+  <data name="Legend_RouteCheckFindings" xml:space="preserve">
+    <value>Findings</value>
+    <comment>The route check section's group of finding markers.</comment>
+  </data>
+  <data name="Legend_RouteCheckWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>The route check section's group for the storm at ETA.</comment>
+  </data>
   <data name="Tooltip_MapLegendFold" xml:space="preserve">
     <value>Fold the legend</value>
   </data>

@@ -153,15 +153,21 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.Equal("M", ghost.ClassLetter); // Ian was a major hurricane.
         Assert.StartsWith("at ETA ", ghost.Label, StringComparison.Ordinal);
         Assert.EndsWith(" NM", ghost.Label, StringComparison.Ordinal);
-        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState(settings: null)))
-            Assert.True(legend.HasStormAtEta);
+        using (var source = new RouteCheckLegendSource(s.Routes, s.Check, () => PaletteType.Day))
+        {
+            Assert.True(source.HasStormAtEta);
+            Assert.Contains(RouteCheckLegendSource.WeatherGroupKey, source.Sections.Single().Groups.Select(g => g.Key));
+        }
 
         // Without the closest approach there's no ghost.
         s.Limits.Cyclones = TropicalCycloneCheckSettings.Default with { ReportClosestApproach = false };
         report = await Settled(s.Check);
         Assert.Empty(RouteCheckMap.Build(route, report.Findings, null, RouteCheckColors.For(PaletteType.Day), SKColors.Blue, PaletteType.Day, Synoptic, TimeFormat.Utc, 50).Storms);
-        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState(settings: null)))
-            Assert.False(legend.HasStormAtEta);
+        using (var source = new RouteCheckLegendSource(s.Routes, s.Check, () => PaletteType.Day))
+        {
+            Assert.False(source.HasStormAtEta);
+            Assert.DoesNotContain(RouteCheckLegendSource.WeatherGroupKey, source.Sections.Single().Groups.Select(g => g.Key));
+        }
     }
 
     [Fact]

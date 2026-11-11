@@ -23,8 +23,8 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// Check route's map layer (#959 slice 3, handoff C1–C8): corridor edges,
 /// the corridor fill on the selected finding's leg, sleeves for spans,
 /// shaped markers for Must review and Check (Info only when selected),
-/// leaders, 24 px clusters, one pill, and the folding legend with
-/// <c>get_map_legend</c> / <c>set_map_legend</c>. The scenario is the
+/// leaders, 24 px clusters, one pill, and the folding map card (its
+/// section and <c>set_legend</c> are in <see cref="RouteCheckLegendTests"/>). The scenario is the
 /// generated "Warnings on route" (no draft): 001/26 crosses in force (Must
 /// review), 003/26 and 006/26 are near (Check), and 002/26, 005/26 and
 /// 007/26 are Info.
@@ -212,30 +212,14 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
     }
 
     [Fact]
-    public async Task Map_legend_tools_read_and_fold_the_legend_and_the_fold_persists()
+    public void The_card_fold_persists()
     {
-        using var s = await CheckedAsync();
         var settings = new ViewerSettings { IsReadOnly = true };
         var state = new RouteCheckLegendState(settings);
-        var get = new GetMapLegendTool(state, s.Routes, s.Check, new InlineInvoker());
-        var set = new SetMapLegendTool(state, s.Routes, s.Check, new InlineInvoker());
-
-        var legend = Value(await get.InvokeAsync(TestContext.Current.CancellationToken));
-        Assert.Equal((true, true), (legend.Shown, legend.Open));
-        // No draft: no "UKC AT ETA".
-        var findings = Assert.Single(legend.Sections);
-        Assert.Equal("FINDINGS", findings.Title);
-        Assert.Equal(["Must review", "Check", "Info (on select)", "Stretch of the route", "Cross-track corridor"], findings.Rows);
-
-        var folded = Value(await set.InvokeAsync(false, TestContext.Current.CancellationToken));
-        Assert.False(folded.Open);
+        Assert.True(state.IsOpen);
+        state.IsOpen = false;
         Assert.False(settings.IsRouteCheckLegendOpen);
         Assert.False(new RouteCheckLegendState(settings).IsOpen);
-
-        // With a draft the legend starts with "UKC AT ETA".
-        s.Route.SetPassageValue(RoutePassageField.Draft, 5);
-        await s.Check.WhenIdle();
-        Assert.Equal(["UKC AT ETA", "FINDINGS"], Value(await get.InvokeAsync(TestContext.Current.CancellationToken)).Sections.Select(x => x.Title));
     }
 
     [AvaloniaFact]
@@ -249,7 +233,10 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         routes.Routes.SetActiveRoute(route);
         using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks, warnings: null, mariner: null, options: null);
         var state = new RouteCheckLegendState(settings: null);
-        using var legend = new RouteCheckLegendViewModel(routes, check, null, state);
+        var (service, source) = RouteCheckLegendTests.Legend(routes, check);
+        using var _ = service;
+        using var __ = source;
+        using var legend = new RouteCheckLegendViewModel(service, state);
         using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
 
         // Shown only while Check route is on.
@@ -287,7 +274,10 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks, warnings: null, mariner: null, options: null);
-        using var legend = new RouteCheckLegendViewModel(routes, check, null, new RouteCheckLegendState(settings: null));
+        var (service, source) = RouteCheckLegendTests.Legend(routes, check);
+        using var _ = service;
+        using var __ = source;
+        using var legend = new RouteCheckLegendViewModel(service, new RouteCheckLegendState(settings: null));
         using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
         routes.IsCheckModeActive = true;
         host.Settle();
