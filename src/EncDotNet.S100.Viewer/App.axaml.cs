@@ -2020,12 +2020,29 @@ public partial class App : Application
         // feature is picked. No switcher UI; chrome bar in MainWindow
         // owns the close button. Title reuses the existing pane string.
         services.AddActivityTab<PickReportViewModel, PickReportView>(
-            id: "PickReport",
+            id: ShellLayoutViewModel.PickReportTabId,
             order: 10,
             title: Strings.Pick_PanelTitle,
             name: Strings.Label_Activity_PickReport,
             tooltip: Strings.Pick_PanelTitle,
             iconFactory: static () => new FluentIcon { Icon = Icon.Cursor, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Right,
+            autoOpenOnContentSignal: true);
+
+        // Legends (#1404, D2): the Legend tab after Object information. It never
+        // opens by itself (D14); LegendService.Show raises its content signal.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetRequiredService<ITimeFormatProvider>()));
+        services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel, LegendView>(
+            id: ShellLayoutViewModel.LegendTabId,
+            order: 20,
+            title: Strings.Legend_TabTitle,
+            name: Strings.Label_Activity_Legend,
+            tooltip: Strings.Tooltip_Legend,
+            iconFactory: static () => new FluentIcon { Icon = Icon.ColorLine, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
             dock: TabDock.Right,
             autoOpenOnContentSignal: true);

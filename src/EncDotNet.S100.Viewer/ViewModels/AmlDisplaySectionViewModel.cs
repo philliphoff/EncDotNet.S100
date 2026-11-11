@@ -70,7 +70,7 @@ internal sealed class AmlDisplaySectionViewModel : ViewModelBase, IDisposable
     public IReadOnlyList<AmlLegendGroupViewModel> Legend => _legend ??=
         [.. _catalog.BuildLegend(PaletteType.Day).Select(g => new AmlLegendGroupViewModel(
             g.Family.Name,
-            [.. g.Entries.Select(e => new LayerStackLegendItemViewModel(e))]))];
+            [.. g.Entries.Select(e => new Legends.LegendRowViewModel(e, Avalonia.Media.Brushes.Transparent))]))];
 
     private void Refresh()
     {
@@ -167,4 +167,4 @@ internal sealed class AmlProductRowViewModel : ViewModelBase
 /// <summary>One colour family of the AML legend flyout.</summary>
 /// <param name="Name">The family's name, such as "Air".</param>
 /// <param name="Entries">Its entries, one per class.</param>
-internal sealed record AmlLegendGroupViewModel(string Name, IReadOnlyList<LayerStackLegendItemViewModel> Entries);
+internal sealed record AmlLegendGroupViewModel(string Name, IReadOnlyList<Legends.LegendRowViewModel> Entries);

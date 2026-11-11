@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Viewer.Services.Legends;
 
 /// <summary>
 /// The one home of the viewer's legend rows (legends design note D1): gathers
-/// the legends the drawn sub-layers carry (<see cref="GridCoverageSubLayer.Legend"/>,
+/// the legends the drawn sub-layers carry (<see cref="CoverageSubLayerBase.Legend"/>,
 /// <see cref="VectorSubLayer.Legend"/>) into one <see cref="LegendSection"/> per
 /// product or overlay, in draw order, top first (D5).
 /// </summary>
@@ -43,6 +43,7 @@ internal sealed class LegendService : IDisposable
     private readonly ITimer _panSettle;
     private readonly HashSet<DatasetEntry> _subscribed = [];
     private readonly Dictionary<string, bool> _expanded = new(StringComparer.Ordinal);
+    private readonly List<ILegendSectionSource> _sources = [];
     private GeoBounds? _view;
     private bool _isTabShown;
     private bool _pending;
@@ -116,6 +117,52 @@ internal sealed class LegendService : IDisposable
     /// <summary>Raised on the UI thread after the sections, the palette or <see cref="IsTabShown"/> change.</summary>
     public event EventHandler? Changed;
 
+    /// <summary>
+    /// Raised by <see cref="Show"/>: the Legend tab opens, at the section and
+    /// row the request names (D3, D8, D16). Hosts without the tab ignore it.
+    /// </summary>
+    public event EventHandler<LegendShowRequest>? ShowRequested;
+
+    /// <summary>
+    /// Opens the Legend tab, optionally at a section and a row in it: the Layer
+    /// stack's <b>Legend</b> link (D8), View › Legend, and later the pick's
+    /// <b>In legend</b> and the Datasets row's <b>Show legend</b> (D3).
+    /// </summary>
+    /// <param name="sectionId">The <see cref="LegendSection.Id"/> to scroll to and expand, or null for the tab as it was.</param>
+    /// <param name="rowLabel">The label of the row to ring in that section, or null for none.</param>
+    public void Show(string? sectionId = null, string? rowLabel = null) =>
+        ShowRequested?.Invoke(this, new LegendShowRequest(sectionId, rowLabel));
+
+    /// <summary>
+    /// Adds sections that don't come from the layer stack, such as the route
+    /// check or the Library coverage outlines (D5): they go above the product
+    /// sections, in the order the sources were added, while the source lists
+    /// them. Their expanded state is remembered like any other section's.
+    /// </summary>
+    /// <param name="source">The source; its <see cref="ILegendSectionSource.Changed"/> rebuilds the sections.</param>
+    public void AddSource(ILegendSectionSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (_sources.Contains(source))
+            return;
+        _sources.Add(source);
+        source.Changed += OnSourceChanged;
+        Invalidate();
+    }
+
+    /// <summary>Removes a source added with <see cref="AddSource"/>.</summary>
+    /// <param name="source">The source.</param>
+    public void RemoveSource(ILegendSectionSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (!_sources.Remove(source))
+            return;
+        source.Changed -= OnSourceChanged;
+        Invalidate();
+    }
+
+    private void OnSourceChanged(object? sender, EventArgs e) => Invalidate();
+
     /// <summary>Rebuilds the rows for a new palette (D10).</summary>
     /// <param name="palette">The palette the map is now drawn in.</param>
     public void SetPalette(PaletteType palette)
@@ -159,8 +206,21 @@ internal sealed class LegendService : IDisposable
     {
         if (takeView)
             _view = TimelineMapScope.ViewOf(_viewport?.Current);
-        Sections = Build(_loader.CurrentStackEntries);
+        Sections = [.. FromSources(), .. Build(_loader.CurrentStackEntries)];
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private IEnumerable<LegendSection> FromSources()
+    {
+        foreach (var source in _sources)
+        {
+            foreach (var section in source.Sections)
+            {
+                yield return _expanded.TryGetValue(section.Id, out var expanded) && expanded != section.IsExpanded
+                    ? section with { IsExpanded = expanded }
+                    : section;
+            }
+        }
     }
 
     private IReadOnlyList<LegendSection> Build(IReadOnlyList<LayerStackEntry> stack)
@@ -224,6 +284,7 @@ internal sealed class LegendService : IDisposable
             IsInView = datasets.Any(d => IsInView(d.Entry)),
             IsExpanded = !_expanded.TryGetValue(section.Id, out var expanded) || expanded,
             Plane = section.Plane,
+            Caption = section.Caption,
             Groups = [.. section.Groups],
         };
     }
@@ -285,12 +346,25 @@ internal sealed class LegendService : IDisposable
         return colon > 0 ? layerName[..colon] : layerName;
     }
 
+    /// <summary>
+    /// The id of the section a layer stack entry's legend is in, for the Layer
+    /// stack's <b>Legend</b> link (D8); null when the entry carries no legend.
+    /// </summary>
+    /// <param name="item">The layer stack entry.</param>
+    internal static string? SectionIdOf(LayerStackEntry item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return LegendOf(item) is { } sub ? SectionId(sub.Spec ?? string.Empty, sub.Key) : null;
+    }
+
     private static SubLayerLegend? LegendOf(LayerStackEntry item) => item.Item.Payload switch
     {
-        CoverageStackPayload { SubLayer: GridCoverageSubLayer { Legend: { Count: > 0 } gridLegend } grid } coverage =>
-            new SubLayerLegend(coverage.Result.Spec.Name, grid.LayerKey, grid.LayerName, gridLegend),
-        VectorStackPayload { SubLayer.Legend: { Count: > 0 } legend } vector =>
-            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, legend),
+        // Every coverage kind can carry rows (#1406): S-102 grids, S-104
+        // isolines and stations, S-111 arrows and stations, weather fills.
+        CoverageStackPayload { SubLayer: { Legend.Count: > 0 } coverage } payload =>
+            new SubLayerLegend(payload.Result.Spec.Name, coverage.LayerKey, coverage.LayerName, coverage.Legend, coverage.LegendCaption),
+        VectorStackPayload { SubLayer.Legend.Count: > 0 } vector =>
+            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend, vector.SubLayer.LegendCaption),
         _ => null,
     };
 
@@ -357,6 +431,9 @@ internal sealed class LegendService : IDisposable
             return;
         _disposed = true;
         _panSettle.Dispose();
+        foreach (var source in _sources)
+            source.Changed -= OnSourceChanged;
+        _sources.Clear();
         _loader.LayerStackChanged -= Invalidate;
         _datasets.Entries.CollectionChanged -= OnEntriesChanged;
         foreach (var entry in _subscribed)
@@ -366,7 +443,7 @@ internal sealed class LegendService : IDisposable
             _viewport.ViewportChanged -= OnViewportChanged;
     }
 
-    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows);
+    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption);
 
     private sealed record SectionDataset(string Id, DatasetEntry? Entry);
 
@@ -385,6 +462,8 @@ internal sealed class LegendService : IDisposable
 
         public List<LegendGroup> Groups { get; } = [];
 
+        public string? Caption { get; private set; }
+
         public List<SectionDataset> Datasets { get; } = [];
 
         public void Add(string datasetId, DatasetEntry? entry, SubLayerLegend sub)
@@ -392,7 +471,12 @@ internal sealed class LegendService : IDisposable
             if (_datasetIds.Add(datasetId))
                 Datasets.Add(new SectionDataset(datasetId, entry));
             if (_groupKeys.Add(sub.Key))
+            {
+                // The caption is the topmost group's (D4): its first sub-layer is the top one.
+                if (Groups.Count == 0)
+                    Caption = sub.Caption;
                 Groups.Add(new LegendGroup(sub.Key, GroupTitle(sub.Name), sub.Rows));
+            }
         }
     }
 }

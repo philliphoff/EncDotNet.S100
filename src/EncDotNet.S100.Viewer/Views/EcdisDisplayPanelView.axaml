@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:lg="using:EncDotNet.S100.Viewer.ViewModels.Legends"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
@@ -149,7 +150,7 @@
                                                                        Opacity="0.6" />
                                                             <ItemsControl ItemsSource="{Binding Entries}">
                                                                 <ItemsControl.ItemTemplate>
-                                                                    <DataTemplate x:DataType="vm:LayerStackLegendItemViewModel">
+                                                                    <DataTemplate x:DataType="lg:LegendRowViewModel">
                                                                         <Grid ColumnDefinitions="40,*"
                                                                               Margin="0,1"
                                                                               AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.LegendEntry"

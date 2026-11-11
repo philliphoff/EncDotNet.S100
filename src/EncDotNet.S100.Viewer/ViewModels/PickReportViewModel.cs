@@ -566,8 +566,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (SetProperty(ref _hasPick, value) && !wasHasPick && value)
             {
                 // false→true transition: signal that the Pick Report dock
-                // should auto-open (PR-M4). Subsequent updates while still
-                // HasPick=true do NOT re-raise.
+                // should auto-open (PR-M4). SetPicks raises it again for each
+                // later pick, so a pick switches the dock back to this tab.
                 ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -1197,7 +1197,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         if (locationDepth is not null)
             locationDepth.ChartBasisLine = _chartBasisLine;
         LocationDepthSeries = locationDepth;
+        var hadPick = _hasPick;
         HasPick = true;
+        // Every pick shows Object information, even while the right dock is on
+        // another tab such as the Legend (#1404, legends design note D2).
+        if (hadPick)
+            ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
         OnPropertyChanged(nameof(HasMultipleHits));
         RaiseWarningListChanged();
         OnPropertyChanged(nameof(HasDynamicHits));

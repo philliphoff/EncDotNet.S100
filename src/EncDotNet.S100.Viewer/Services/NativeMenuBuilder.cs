@@ -94,6 +94,15 @@ internal sealed class NativeMenuBuilder
             propertyName: nameof(ShellLayoutViewModel.IsRightDockOpen),
             checkedSelector: () => _viewModel.Layout.IsRightDockOpen);
 
+        var legendItem = BuildToggleItem(
+            Strings.Menu_Legend,
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsLegendTabShown,
+            execute: () => _viewModel.Layout.ToggleLegendCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsLegendTabShown),
+            checkedSelector: () => _viewModel.Layout.IsLegendTabShown,
+            gesture: new KeyGesture(Key.L, KeyModifiers.Meta | KeyModifiers.Shift));
+
         var pickModeItem = BuildToggleItem(
             Strings.Menu_PickMode,
             _viewModel.MapTools,
@@ -138,7 +147,7 @@ internal sealed class NativeMenuBuilder
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem, rangeBearingModeItem, routeEditModeItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, legendItem, pickModeItem, measureModeItem, rangeBearingModeItem, routeEditModeItem },
         };
 
         var viewMenu = new NativeMenuItem(Strings.Menu_View)
