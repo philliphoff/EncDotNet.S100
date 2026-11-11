@@ -589,6 +589,8 @@ public partial class App : Application
                 depthBasis,
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
                 timeline),
+            new McpTools.Groups.LegendMcpToolGroup(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>()),
             new McpTools.Groups.RouteCheckLegendMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
                 routes,
@@ -1625,6 +1627,21 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService>());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IDepthAdjustmentRequests>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService>());
+        // Legends (#1402, D1): one service gathers every legend row; the
+        // Legend tab, the route-check card and MCP get_legend read it.
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<SettingsViewModel>();
+            var legend = new EncDotNet.S100.Viewer.Services.Legends.LegendService(
+                sp.GetRequiredService<IDatasetLoaderService>(),
+                sp.GetRequiredService<DatasetsViewModel>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+                settings.SelectedPalette,
+                sp.GetRequiredService<TimeProvider>(),
+                UiThread.PostBackground);
+            settings.PaletteChanged += legend.SetPalette;
+            return legend;
+        });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.DepthBasisService(
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),

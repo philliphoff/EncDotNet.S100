@@ -8128,4 +8128,28 @@
     <value>AML provenance</value>
     <comment>Accessible name of the AML provenance strip in Object Information (#1372)</comment>
   </data>
+  <data name="Legend_SourceCountFormat" xml:space="preserve">
+    <value>{0} datasets</value>
+    <comment>Legend section source summary when several datasets make the section; {0} is the count</comment>
+  </data>
+  <data name="Legend_ProductS102" xml:space="preserve">
+    <value>Bathymetric surface</value>
+    <comment>Legend section title of S-102</comment>
+  </data>
+  <data name="Legend_ProductS122" xml:space="preserve">
+    <value>Marine protected areas</value>
+    <comment>Legend section title of S-122</comment>
+  </data>
+  <data name="Legend_ProductS124" xml:space="preserve">
+    <value>Navigational warnings</value>
+    <comment>Legend section title of S-124</comment>
+  </data>
+  <data name="Legend_ProductS129" xml:space="preserve">
+    <value>Under keel clearance management</value>
+    <comment>Legend section title of S-129</comment>
+  </data>
+  <data name="Legend_ProductAml" xml:space="preserve">
+    <value>Additional Military Layers</value>
+    <comment>Legend section title of AML</comment>
+  </data>
 </root>

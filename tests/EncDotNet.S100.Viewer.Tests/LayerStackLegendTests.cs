@@ -10,6 +10,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals.Application;
 using EncDotNet.S100.TestSupport;
+using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
