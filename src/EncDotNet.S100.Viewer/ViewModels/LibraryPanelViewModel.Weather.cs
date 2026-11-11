@@ -72,14 +72,14 @@ internal sealed partial class LibraryPanelViewModel
         var load = new List<LibraryItemViewModel>();
         foreach (var item in index.Items.Where(i => keys.Contains(i.Key) && !WeatherRuns.IsPinned(i)))
         {
-            var latest = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, collection, RetryDownloadAsync, _time, _runFormat);
+            var latest = _rows.Create(item, source, collection);
             (latest.CanLoadAfterDownload || _downloader.IsOutdated(item) ? download : load).Add(latest);
         }
 
         if (download.Count > 0)
             await DownloadRowsAsync(download, load: true).ConfigureAwait(true);
         if (load.Count > 0)
-            await LoadLabelledAsync(load, defer: false).ConfigureAwait(true);
+            await LoadRowsAsync(load, defer: false).ConfigureAwait(true);
     }
 
     private bool _autoRefreshing;
@@ -240,8 +240,7 @@ internal sealed partial class LibraryPanelViewModel
         if (reopen.Count == 0)
             return;
         _loader.Close(reopen);
-        var label = new LibrarySourceLabel(source.Id, SourceDisplayName(source.Id));
-        await _loader.LoadAsync(reopen, defer: false, _ => label).ConfigureAwait(true);
+        await _open.RunAsync([.. reopen.Select(item => (item, (LibrarySource?)source))], defer: false).ConfigureAwait(true);
     }
 
     private void PinSelectedRun()

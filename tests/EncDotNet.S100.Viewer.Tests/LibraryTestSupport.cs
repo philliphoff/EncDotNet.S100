@@ -153,6 +153,11 @@ internal sealed class FakeLibraryLoader : ILibraryLoader
 
     public List<int> Closes { get; } = [];
 
+    /// <summary>The dataset every item opened as (Open as route reads it), or <see langword="null"/>.</summary>
+    public EncDotNet.S100.Viewer.ViewModels.DatasetEntry? Entry { get; set; }
+
+    public EncDotNet.S100.Viewer.ViewModels.DatasetEntry? EntryOf(CollectionItem item) => Entry;
+
     public int Close(IReadOnlyList<CollectionItem> items)
     {
         Closing?.Invoke();

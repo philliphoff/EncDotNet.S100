@@ -1,46 +1,52 @@
 using System.Diagnostics;
-using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Library;
-using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.Library;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// The viewer's <see cref="ILibraryEditor"/>: each change goes through the code
 /// path the UI uses (the core's source drafts the Add-to-Library dialog is built
-/// on, the panel's download and load entry points, and the Library service).
+/// on, the Library's open and download workflows, and the Library service).
 /// </summary>
 internal sealed class ViewerLibraryEditor : ILibraryEditor
 {
-    private readonly LibraryPanelViewModel _panel;
     private readonly CollectionLibrary _library;
     private readonly ViewerLibraryController _reader;
     private readonly LibrarySourceAdder _adder;
     private readonly Func<Func<Task>, Task> _dispatch;
-    private readonly LibraryActivityTracker _activity;
+    private readonly ViewerLibraryActions _actions;
+    private readonly LibrarySourceNames _names;
 
+    /// <summary>Creates the editor.</summary>
+    /// <param name="library">The Library it changes.</param>
+    /// <param name="reader">Reads the Library's rows as the user sees them.</param>
+    /// <param name="adder">Adds sources.</param>
+    /// <param name="dispatch">Runs a change on the UI thread.</param>
+    /// <param name="actions">Runs <c>library_action</c>.</param>
+    /// <param name="names">Names sources as the Library tree does.</param>
     public ViewerLibraryEditor(
-        LibraryPanelViewModel panel,
         CollectionLibrary library,
         ViewerLibraryController reader,
         LibrarySourceAdder adder,
         Func<Func<Task>, Task> dispatch,
-        LibraryActivityTracker activity)
+        ViewerLibraryActions actions,
+        LibrarySourceNames names)
     {
-        ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(adder);
         ArgumentNullException.ThrowIfNull(dispatch);
-        ArgumentNullException.ThrowIfNull(activity);
-        _panel = panel;
+        ArgumentNullException.ThrowIfNull(actions);
+        ArgumentNullException.ThrowIfNull(names);
         _library = library;
         _reader = reader;
         _adder = adder;
         _dispatch = dispatch;
-        _activity = activity;
+        _actions = actions;
+        _names = names;
     }
 
     // ── add ─────────────────────────────────────────────────────────────
@@ -125,117 +131,16 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         }
 
         LibraryEditOutcome<LibraryActionResult> outcome = default;
-        await _dispatch(async () => outcome = await ActOnUiThreadAsync(action, request, ct).ConfigureAwait(true)).ConfigureAwait(false);
+        await _dispatch(async () => outcome = await _actions.RunAsync(action, request, ct).ConfigureAwait(true)).ConfigureAwait(false);
         return outcome;
     }
 
     /// <inheritdoc />
     public Task CancelAllDownloadsAsync(CancellationToken ct = default) => _dispatch(() =>
     {
-        _panel.Downloader.CancelAll();
+        _actions.CancelAll();
         return Task.CompletedTask;
     });
-
-    private async Task<LibraryEditOutcome<LibraryActionResult>> ActOnUiThreadAsync(string action, LibraryActionRequest request, CancellationToken ct)
-    {
-        List<LibraryItemViewModel> rows;
-        if (request.ItemIds is { Count: > 0 } ids)
-        {
-            rows = [];
-            var unknown = new List<string>();
-            foreach (var id in ids)
-            {
-                if (Row(id) is { } row)
-                    rows.Add(row);
-                else
-                    unknown.Add(id);
-            }
-            if (unknown.Count > 0)
-                return LibraryEditOutcome<LibraryActionResult>.Fail(new InvalidArgument("itemIds", $"unknown item id(s): {string.Join(", ", unknown)}"));
-        }
-        else if (_reader.FindRows(request.Filter!) is { } found)
-        {
-            rows = found;
-        }
-        else
-        {
-            return LibraryEditOutcome<LibraryActionResult>.Fail(new InvalidArgument("sourceId", "no such collection or source; call list_library_sources"));
-        }
-
-        Func<LibraryItemViewModel, bool> eligible = action switch
-        {
-            "load" or "load_as_you_pan" => row => row.CanLoad,
-            "download" or "download_only" => row => row.CanDownload,
-            "update" => row => row.CanDownload && row.Availability == LibraryAvailability.Outdated,
-            _ => row => _panel.Downloader.StatusOf(row.Item) is { State: LibraryDownloadItemState.Queued or LibraryDownloadItemState.Running },
-        };
-        var chosen = rows.Where(eligible).ToList();
-        var skipped = rows.Where(row => !eligible(row))
-            .GroupBy(row => LibraryAvailabilityNames.Of(row.Availability), StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        var downloads = action is "download" or "download_only" or "update";
-        var sizes = chosen.Select(row => (row.Item.Location as RemoteItemLocation)?.SizeBytes).ToArray();
-        var bytes = downloads ? sizes.Sum(size => size ?? 0) : 0;
-        var unknownSizes = downloads ? sizes.Count(size => size is null) : 0;
-        var names = chosen.Take(LibraryActionTool.ListedNames).Select(row => row.Item.Name).ToArray();
-
-        LibraryActionResult Result(int? opened, bool started) =>
-            new(action, request.DryRun, chosen.Count, skipped, bytes, unknownSizes, names, opened, started);
-
-        if (request.DryRun)
-            return LibraryEditOutcome<LibraryActionResult>.Ok(Result(null, false));
-        if (chosen.Count == 0)
-            return LibraryEditOutcome<LibraryActionResult>.Ok(Result(action.StartsWith("load", StringComparison.Ordinal) ? 0 : null, false));
-        if (downloads && request.MaxBytes is { } max && bytes > max)
-        {
-            return LibraryEditOutcome<LibraryActionResult>.Fail(new LibraryChangeRejected(
-                $"the download is {LibraryItemViewModel.FormatBytes(bytes)}, more than maxBytes ({LibraryItemViewModel.FormatBytes(max)})"));
-        }
-
-        switch (action)
-        {
-            case "load" or "load_as_you_pan":
-                // Tracked so a concurrent await_library_idle waits for the opens (#790).
-                using (_activity.Begin(action == "load" ? chosen.Count : 0))
-                {
-                    var loaded = await _panel.LoadRowsAsync(chosen, defer: action == "load_as_you_pan").ConfigureAwait(true);
-                    return LibraryEditOutcome<LibraryActionResult>.Ok(Result(loaded.Opened, false));
-                }
-            case "cancel":
-                foreach (var row in chosen)
-                    row.CancelDownloadCommand.Execute(null);
-                return LibraryEditOutcome<LibraryActionResult>.Ok(Result(null, false));
-            default:
-                // Downloads run on in the background, as from the panel; await_library_idle waits for
-                // them and for what follows (re-indexing, opening) until RunDownloadAsync ends (#790).
-                var load = action == "download";
-                _ = RunDownloadAsync(chosen, load, _activity.Begin(load ? chosen.Count : 0));
-                return LibraryEditOutcome<LibraryActionResult>.Ok(Result(null, true));
-        }
-    }
-
-    private async Task RunDownloadAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load, IDisposable activity)
-    {
-        using var scope = activity;
-        try
-        {
-            await _panel.DownloadRowsAsync(rows, load).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // Failures show on the rows (Failed · Retry) and in await_library_idle's counts.
-            Debug.WriteLine($"library_action download failed: {ex}");
-        }
-    }
-
-    private LibraryItemViewModel? Row(string itemId)
-    {
-        if (!LibraryItemState.TryParseId(itemId.Trim(), out var sourceId, out var key))
-            return null;
-        var source = _library.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId);
-        var item = source?.Index?.Items.FirstOrDefault(i => string.Equals(i.Key, key, StringComparison.Ordinal));
-        return source is not null && item is not null ? _panel.CreateItem(item, source) : null;
-    }
 
     // ── remove ──────────────────────────────────────────────────────────
 
@@ -293,7 +198,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
             if (collection is not null)
             {
                 outcome = change.Apply(
-                    collection, id, updated => _library.UpdateSource(collection.Id, updated), source => _panel.SourceDisplayName(source.Id));
+                    collection, id, updated => _library.UpdateSource(collection.Id, updated), source => _names.Of(source.Id));
             }
 
             return Task.CompletedTask;
@@ -312,7 +217,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
             LibraryActivitySnapshot activity = null!;
             await _dispatch(() =>
             {
-                activity = LibraryActivitySnapshot.Capture(_library, _panel.Downloader.Progress, _activity);
+                activity = _actions.CaptureActivity(_library);
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
 

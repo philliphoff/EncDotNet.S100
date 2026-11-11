@@ -557,7 +557,6 @@ public partial class App : Application
             new McpTools.Groups.LibraryMcpToolGroup(
                 sp.GetRequiredService<ViewerLibraryController>(),
                 new ViewerLibraryEditor(
-                    sp.GetRequiredService<LibraryPanelViewModel>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                     sp.GetRequiredService<ViewerLibraryController>(),
                     new EncDotNet.S100.Mcp.Tools.Library.LibrarySourceAdder(
@@ -566,7 +565,14 @@ public partial class App : Application
                         sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
                         sp.GetRequiredService<TimeProvider>()),
                     UiThread.InvokeAsync,
-                    new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
+                    new ViewerLibraryActions(
+                        sp.GetRequiredService<Library.LibraryRows>(),
+                        sp.GetRequiredService<ViewerLibraryController>(),
+                        sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+                        sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+                        sp.GetRequiredService<Library.ILibraryDownloader>(),
+                        new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
+                    sp.GetRequiredService<Library.LibrarySourceNames>()),
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
                 new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())),
@@ -853,7 +859,7 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             (Library.LibraryLoadService)sp.GetRequiredService<Library.ILibraryLoader>(),
             sp.GetRequiredService<Library.ILibraryDownloader>(),
-            id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id),
+            sp.GetRequiredService<Library.LibrarySourceNames>().Of,
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>(),
             UiThread.Post));
         services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
@@ -1503,6 +1509,7 @@ public partial class App : Application
         services.AddSingleton<McpTools.PortrayalPrewarmOverride>();
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
+            sp.GetRequiredService<Library.LibraryRows>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
             UiThread.InvokeAsync));
 
@@ -1524,6 +1531,10 @@ public partial class App : Application
                 sp.GetRequiredService<ILibraryImporter>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
                 sp.GetRequiredService<Library.ILibraryDownloader>(),
+                sp.GetRequiredService<Library.LibraryRows>(),
+                sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+                sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+                sp.GetRequiredService<Library.OpenLibraryItemAsRouteWorkflow>(),
                 UiThread.RunOrPost,
                 UiThread.Post,
                 sp.GetRequiredService<TimeProvider>(),
@@ -1537,28 +1548,47 @@ public partial class App : Application
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
                 sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>(),
-                // Storm-advisory and unpack toasts.
+                // Storm-advisory toasts.
                 notifications: sp.GetRequiredService<INotificationService>());
             panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
             panel.PortrayalWarm = sp.GetRequiredService<PortrayalWarmStatusViewModel>();
-            // Open as route: with Import route…, the only way a dataset becomes a route.
-            panel.OpenRoute = item =>
-            {
-                new LibraryRouteOpener(
-                    sp.GetRequiredService<Library.ILibraryLoader>(),
-                    sp.GetRequiredService<ReceivedRoutesService>(),
-                    () => sp.GetRequiredService<ShellLayoutViewModel>().SelectTab("Routes"),
-                    sp.GetService<INotificationService>()).Open(item);
-                return Task.CompletedTask;
-            };
             // SECOM rows name their identity; a selected source's details choose it (#883).
             panel.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
             return panel;
         });
-        services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
-            sp.GetRequiredService<LibraryPanelViewModel>(),
+        // The Library's rows and workflows (#1394): the panel, the Timeline and
+        // the MCP Library tools open and download items through the same ones.
+        services.AddSingleton(sp => new Library.LibrarySourceNames(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>()));
+        services.AddSingleton(sp => new Library.OpenLibraryItemsWorkflow(
+            sp.GetRequiredService<Library.ILibraryLoader>(),
+            sp.GetRequiredService<Library.LibrarySourceNames>()));
+        services.AddSingleton(sp => new Library.DownloadLibraryItemsWorkflow(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            sp.GetRequiredService<Library.ILibraryLoader>(),
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            sp.GetRequiredService<INotificationService>()));
+        services.AddSingleton(sp => new Library.OpenLibraryItemAsRouteWorkflow(
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            // Open as route: with Import route…, the only way a dataset becomes a route.
+            new LibraryRouteOpener(
+                sp.GetRequiredService<Library.ILibraryLoader>(),
+                sp.GetRequiredService<ReceivedRoutesService>(),
+                () => sp.GetRequiredService<ShellLayoutViewModel>().SelectTab("Routes"),
+                sp.GetRequiredService<INotificationService>())));
+        services.AddSingleton(sp => new Library.LibraryRows(
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<Library.ILibraryLoader>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ITimeFormatProvider>()));
+        services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
+            sp.GetRequiredService<Library.LibraryRows>(),
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+            (sourceId, key) => sp.GetRequiredService<LibraryPanelViewModel>().Reveal(sourceId, key),
             sp.GetRequiredService<TimeProvider>(),
             // Always defers, even on the UI thread, so a burst of changes raises Changed once.
             UiThread.Post));
@@ -1713,7 +1743,7 @@ public partial class App : Application
                     EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
                     _ => null,
                 },
-                id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id),
+                sp.GetRequiredService<Library.LibrarySourceNames>().Of,
                 UiThread.Post);
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningsService(

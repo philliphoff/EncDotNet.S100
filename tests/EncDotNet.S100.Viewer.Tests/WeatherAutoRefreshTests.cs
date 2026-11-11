@@ -45,7 +45,7 @@ public sealed class WeatherAutoRefreshTests : IDisposable
         _library.Initialize();
         _library.AddCollection("Weather", [source]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        var panel = TestLibrary.Panel(_library, new NoImporter(), _loader, _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         panel.Sync();
         return (panel, source.Id);
     }

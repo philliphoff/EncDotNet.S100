@@ -92,32 +92,50 @@ internal interface ILibraryTimeSource
 }
 
 /// <summary>
-/// <see cref="ILibraryTimeSource"/> over the Library panel's rows, so each
-/// entry's state is exactly what the Library shows. Entries are rebuilt
-/// lazily after a change.
+/// <see cref="ILibraryTimeSource"/> over the Library's rows, so each entry's
+/// state is exactly what the Library shows. Entries are rebuilt lazily after
+/// a change.
 /// </summary>
 internal sealed class LibraryTimeSource : ILibraryTimeSource
 {
-    private readonly LibraryPanelViewModel _panel;
+    private readonly LibraryRows _libraryRows;
+    private readonly OpenLibraryItemsWorkflow _open;
+    private readonly DownloadLibraryItemsWorkflow _download;
+    private readonly Action<Guid, string> _reveal;
     private readonly Action<Action> _dispatch;
     private readonly Dictionary<string, LibraryItemViewModel> _rows = new(StringComparer.Ordinal);
     private readonly ITimer _clock;
     private IReadOnlyList<LibraryTimedEntry>? _entries;
     private bool _changePosted;
 
-    public LibraryTimeSource(LibraryPanelViewModel panel, CollectionLibrary library, ILibraryLoader loader, TimeProvider clock, Action<Action> dispatch)
+    /// <summary>Creates the source.</summary>
+    /// <param name="rows">The Library's rows.</param>
+    /// <param name="open">Loads entries ("Load").</param>
+    /// <param name="download">Downloads, then loads, entries ("Get").</param>
+    /// <param name="reveal">Shows a source's item in the Library panel ("Reveal in Library").</param>
+    /// <param name="clock">The clock runs expire by.</param>
+    /// <param name="dispatch">Raises a change later on the UI thread, so a burst raises it once.</param>
+    public LibraryTimeSource(
+        LibraryRows rows,
+        OpenLibraryItemsWorkflow open,
+        DownloadLibraryItemsWorkflow download,
+        Action<Guid, string> reveal,
+        TimeProvider clock,
+        Action<Action> dispatch)
     {
-        ArgumentNullException.ThrowIfNull(panel);
-        ArgumentNullException.ThrowIfNull(library);
-        ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(download);
+        ArgumentNullException.ThrowIfNull(reveal);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(dispatch);
-        _panel = panel;
+        _libraryRows = rows;
+        _open = open;
+        _download = download;
+        _reveal = reveal;
         _dispatch = dispatch;
-        library.Changed += (_, _) => Invalidate();
-        loader.Changed += (_, _) => Invalidate();
-        panel.Downloader.Changed += (_, _) => Invalidate();
-        panel.Downloader.ProgressChanged += (_, _) => _dispatch(() => ProgressChanged?.Invoke());
+        rows.Changed += (_, _) => Invalidate();
+        rows.ProgressChanged += (_, _) => _dispatch(() => ProgressChanged?.Invoke());
 
         // Runs expire by the clock.
         _clock = clock.CreateTimer(_ => Invalidate(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
@@ -135,7 +153,7 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
     /// <inheritdoc />
     public double? ProgressOf(LibraryTimedEntry entry) =>
         _rows.TryGetValue(entry.ItemId, out var row)
-        && _panel.Downloader.StatusOf(row.Item) is { State: LibraryDownloadItemState.Running or LibraryDownloadItemState.Queued } status
+        && _libraryRows.StatusOf(row.Item) is { State: LibraryDownloadItemState.Running or LibraryDownloadItemState.Queued } status
             ? status.Fraction ?? 0d
             : null;
 
@@ -143,14 +161,14 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
     public Task GetAsync(IReadOnlyList<LibraryTimedEntry> entries)
     {
         var rows = Rows(entries).Where(row => row.CanDownload).ToArray();
-        return rows.Length == 0 ? Task.CompletedTask : _panel.DownloadRowsAsync(rows, load: true);
+        return rows.Length == 0 ? Task.CompletedTask : _download.RunAsync([.. rows.Select(row => (row.Item, row.Source))], load: true);
     }
 
     /// <inheritdoc />
     public Task LoadAsync(IReadOnlyList<LibraryTimedEntry> entries)
     {
         var rows = Rows(entries).Where(row => row.CanLoad).ToArray();
-        return rows.Length == 0 ? Task.CompletedTask : _panel.LoadRowsAsync(rows, defer: false);
+        return rows.Length == 0 ? Task.CompletedTask : _open.RunAsync([.. rows.Select(row => row.State)], defer: false);
     }
 
     /// <inheritdoc />
@@ -158,7 +176,7 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
     {
         if (!_rows.TryGetValue(entry.ItemId, out var row))
             return;
-        _panel.Reveal(row.Source.Id, row.Item.Key);
+        _reveal(row.Source.Id, row.Item.Key);
     }
 
     private IEnumerable<LibraryItemViewModel> Rows(IEnumerable<LibraryTimedEntry> entries) =>
@@ -181,14 +199,14 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
     {
         _rows.Clear();
         var entries = new List<LibraryTimedEntry>();
-        foreach (var source in _panel.Collections.SelectMany(c => c.Sources))
+        foreach (var source in _libraryRows.Collections.SelectMany(c => c.Sources))
         {
             foreach (var item in source.Index?.Items ?? [])
             {
                 var forecast = ForecastRuns.IsForecast(item);
                 if (!forecast && LibraryItemState.TimeCoverage(item) is null)
                     continue;
-                var row = _panel.CreateItem(item, source);
+                var row = _libraryRows.Create(item, source);
                 var id = $"{source.Id}:{item.Key}";
                 _rows[id] = row;
                 entries.AddRange(EntriesOf(row, id));
