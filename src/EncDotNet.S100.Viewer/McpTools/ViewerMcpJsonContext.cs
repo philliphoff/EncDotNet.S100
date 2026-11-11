@@ -48,6 +48,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(DisplayCombinationListDto))]
 [JsonSerializable(typeof(SetDisplayCombinationDto))]
 [JsonSerializable(typeof(DepthBasisDto))]
+[JsonSerializable(typeof(LegendDto))]
 [JsonSerializable(typeof(RangeBearingDto))]
 [JsonSerializable(typeof(SettleStateDto))]
 [JsonSerializable(typeof(ProcessMetricsDto))]

@@ -7,6 +7,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Legends;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -436,13 +437,7 @@ internal sealed class LayerStackLegendItemViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(entry.Label);
         _entry = entry;
         Label = entry.Label;
-        Kind = entry switch
-        {
-            SwatchLegendEntry { Outline: null } => LegendRowKind.Swatch,
-            SwatchLegendEntry => LegendRowKind.Area,
-            SymbolLegendEntry => LegendRowKind.Symbol,
-            _ => LegendRowKind.Line,
-        };
+        Kind = LegendRows.KindOf(entry);
         Color = entry is SwatchLegendEntry swatch ? swatch.Color : null;
         Swatch = Color is not null && Avalonia.Media.Color.TryParse(Color, out var parsed)
             ? new Avalonia.Media.Immutable.ImmutableSolidColorBrush(parsed)
@@ -488,20 +483,4 @@ internal sealed class LayerStackLegendItemViewModel : ViewModelBase
         using var stream = new MemoryStream(png.ToArray());
         return new Avalonia.Media.Imaging.Bitmap(stream);
     }
-}
-
-/// <summary>What a Layer stack legend row's glyph shows.</summary>
-internal enum LegendRowKind
-{
-    /// <summary>A colour swatch: a band of a colour fill.</summary>
-    Swatch,
-
-    /// <summary>A swatch inside an outline: an area such as a cyclone's cone.</summary>
-    Area,
-
-    /// <summary>A point symbol.</summary>
-    Symbol,
-
-    /// <summary>A sample of a line style with its symbols.</summary>
-    Line,
 }
