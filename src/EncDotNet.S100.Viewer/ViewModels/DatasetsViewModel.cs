@@ -399,7 +399,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
     /// </summary>
     public bool IsVisible
     {
-        get => _mapDataset?.IsVisible ?? _isVisible;
+        get => _isVisible;
         set
         {
             if (IsVisible != value)
@@ -410,6 +410,27 @@ internal sealed partial class DatasetEntry : ViewModelBase
                 OnPropertyChanged(nameof(RowOpacity));
                 OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
             }
+        }
+    }
+
+    private bool _isHiddenByDisplay;
+    /// <summary>
+    /// Whether a display control hides this dataset on the map, whatever
+    /// <see cref="IsVisible"/> says: today the AML product switches and scale
+    /// bands (<c>AmlDisplayService</c>, AML handoff decisions 24 and 26). Unlike
+    /// <see cref="IsVisible"/> it isn't the row's own setting, so the row's eye
+    /// keeps its state. Changing it doesn't re-render the dataset.
+    /// </summary>
+    public bool IsHiddenByDisplay
+    {
+        get => _isHiddenByDisplay;
+        set
+        {
+            if (_isHiddenByDisplay == value) return;
+            _isHiddenByDisplay = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 
@@ -912,7 +933,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
         _id,
         DisplayName,
         metadata,
-        _isVisible,
+        _isVisible && !_isHiddenByDisplay,
         _isActive,
         _opacity,
         _availableTimes,

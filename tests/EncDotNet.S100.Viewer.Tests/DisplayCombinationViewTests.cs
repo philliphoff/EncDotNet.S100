@@ -36,7 +36,7 @@ public sealed class DisplayCombinationViewTests
             Datasets.Entries.Add(new DatasetEntry("/data/gfs.grib2", "GRIB2") { IsLoaded = true });
             Service = new DisplayCombinationService(State, Loader, Datasets, new ViewerSettings { IsReadOnly = true }, post: null);
             Combinations = new DisplayCombinationsViewModel(Service, ui: null);
-            ViewModel = new EcdisDisplayPanelViewModel(State, new PortrayalCatalogueManager(), Datasets, displayCombinations: Combinations, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null);
+            ViewModel = new EcdisDisplayPanelViewModel(State, new PortrayalCatalogueManager(), Datasets, displayCombinations: Combinations, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, amlDisplay: null);
         }
 
         public void Dispose()
@@ -83,7 +83,7 @@ public sealed class DisplayCombinationViewTests
         var datasets = new DatasetsViewModel(loader);
         using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true }, post: null);
         using var combinations = new DisplayCombinationsViewModel(service, ui: null);
-        using var vm = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, displayCombinations: combinations, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null);
+        using var vm = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, displayCombinations: combinations, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, amlDisplay: null);
         using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = vm }, width: 380, height: 1200);
 
         Assert.True(vm.IsEmpty);

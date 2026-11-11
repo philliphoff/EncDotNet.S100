@@ -1675,6 +1675,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
         if (e.PropertyName is not (
             nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsHiddenByDisplay)
             or nameof(DatasetEntry.IsActive)
             or nameof(DatasetEntry.Opacity)))
             return;

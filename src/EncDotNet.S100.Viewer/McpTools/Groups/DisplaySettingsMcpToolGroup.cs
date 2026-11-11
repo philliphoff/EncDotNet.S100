@@ -3,7 +3,7 @@ using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools.Groups;
 
-/// <summary>The display settings tools: weather display, route weather settings, display combinations and the depth basis.</summary>
+/// <summary>The display settings tools: weather display, AML display, route weather settings, display combinations and the depth basis.</summary>
 internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
 {
     private readonly EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel _ecdisDisplay;
@@ -33,6 +33,13 @@ internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
         var weatherDisplay = new WeatherDisplayTools(_ecdisDisplay, new DispatcherRouteEditInvoker());
         yield return WeatherDisplayMcpAdapters.CreateGet(weatherDisplay);
         yield return WeatherDisplayMcpAdapters.CreateSet(weatherDisplay);
+
+        if (_ecdisDisplay.Aml is { } aml)
+        {
+            var amlDisplay = new AmlDisplayTools(aml.Service, new DispatcherRouteEditInvoker());
+            yield return AmlDisplayMcpAdapters.CreateGet(amlDisplay);
+            yield return AmlDisplayMcpAdapters.CreateSet(amlDisplay);
+        }
 
         var routeWeather = new RouteWeatherSettingsTools(_settingsViewModel, new DispatcherRouteEditInvoker());
         yield return RouteWeatherSettingsMcpAdapters.CreateGet(routeWeather);

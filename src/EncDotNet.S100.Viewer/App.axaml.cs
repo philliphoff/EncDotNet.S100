@@ -166,7 +166,9 @@ public partial class App : Application
         };
 
         _services = ConfigureServices();
-        _services.GetRequiredService<AmlClbPresence>().Attach(_services.GetRequiredService<IDatasetLoaderService>());
+        _services.GetRequiredService<AmlDisplayService>().Attach(
+            _services.GetRequiredService<DatasetsViewModel>(),
+            _services.GetRequiredService<IDatasetLoaderService>());
         _services.GetRequiredService<ViewerPresentationCoordinator>();
         _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();
@@ -1577,8 +1579,14 @@ public partial class App : Application
         services.AddSingleton<MapPresentationStateProjection>();
         services.AddSingleton(sp =>
             sp.GetRequiredService<MapPresentationStateProjection>().CreateSnapshot());
-        services.AddSingleton<AmlClbPresence>();
-        services.AddSingleton<IAmlClbPresence>(sp => sp.GetRequiredService<AmlClbPresence>());
+        // AML display controls (#1374): product switches and scale bands, and
+        // the CLB presence they decide. Attached to the datasets once the
+        // container is built, since the presentation projection reads it.
+        services.AddSingleton(sp => new AmlDisplayService(
+            sp.GetRequiredService<EcdisDisplayState>(),
+            sp.GetRequiredService<IMapViewportNotifier>(),
+            UiThread.RunOrPost));
+        services.AddSingleton<IAmlClbPresence>(sp => sp.GetRequiredService<AmlDisplayService>());
         services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
@@ -1657,6 +1665,9 @@ public partial class App : Application
         services.AddSingleton(sp => new DisplayCombinationsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<IViewerUiControllerAccessor>()));
+        services.AddSingleton(sp => new AmlDisplaySectionViewModel(
+            sp.GetRequiredService<AmlDisplayService>(),
+            EncDotNet.S100.Datasets.Pipelines.AmlOverlayPortrayal.Default.Catalog));
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();
