@@ -337,6 +337,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                     SourceDatasetId = _fileName,
                     Info = info,
                     CoverageExtent = ResolveCoverageExtent(),
+                    DataArea = S102DepthLines.DataArea(styledLayer, Wgs84ToNative(crs)),
                     CellMinimumDisplayScale = _cellMinimumDisplayScale,
                 };
             }
@@ -368,6 +369,17 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
 
         var transform = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
         return transform.IsIdentity ? null : (x, y) => transform.Transform(x, y);
+    }
+
+    private Func<double, double, (double X, double Y)>? Wgs84ToNative(int crs)
+    {
+        if (crs == 4326)
+        {
+            return null;
+        }
+
+        var transform = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+        return transform.IsIdentity ? null : (longitude, latitude) => transform.Transform(longitude, latitude);
     }
 
     private (IsolineCoverageSubLayer SafetyContour, IsolineCoverageSubLayer CoverageLimit) BuildDepthLineSubLayers(
@@ -462,7 +474,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     public const string SafetyContourLayerKey = "s102.safetycontour";
 
     /// <summary>Layer key of the S-102 coverage-limit sub-layer.</summary>
-    public const string CoverageLimitLayerKey = "s102.coveragelimit";
+    public const string CoverageLimitLayerKey = Interoperability.S98DefaultRules.S102CoverageLimitLayerKey;
 
     /// <summary>
     /// The WGS-84 envelope of the full grid (all four reprojected corners for a

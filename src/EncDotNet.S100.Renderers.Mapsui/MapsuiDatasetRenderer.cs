@@ -581,6 +581,7 @@ public sealed class MapsuiDatasetRenderer
         {
             LayerName = grid.LayerName,
             LandAreas = grid.LandAreaMask,
+            NeighbourDataAreas = grid.NeighbourDataAreas,
             Opacity = grid.Opacity,
             LayoutCache = coverageLayoutCache ?? new CoverageLayoutCache(),
         };

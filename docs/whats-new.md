@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Neighbouring S-102 cells join up.** Where two loaded S-102 cells meet,
+  the dashed "limit of S-102 data" line no longer runs through the water
+  between them, and SoundCharts no longer shows a light seam along the
+  join. The limit line stays wherever S-102 data ends and S-101 takes over.
+  A new S-98 rule, R-102-102-A, does this. It reads where each cell has
+  data from the new `CoveragePortrayalResult.DataArea`.
 - **Legend tab.** SoundCharts' right dock gains a tab strip, **Object
   information** · **Legend**, and the legends of what the map draws move to
   the Legend tab: one collapsible section per product or overlay (weather
