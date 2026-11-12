@@ -27,12 +27,12 @@ month. For package versions and release assets, see
   or moving keyboard focus to it, rings the features that row describes on
   the map, in the pick highlight's accent: a catalogue symbol (S-101, S-57),
   a front, a warning area or an AML class, up to 100 features drawn in the
-  current view. The rings clear when you leave the row or move the map. A
-  band of a colour or arrow ramp (S-102 depths, a weather field, S-111
-  speeds) doesn't ring anything yet
+  current view. A band of a colour or arrow ramp (S-102 depths, a weather
+  field, S-111 speeds) tints its area in view instead
   ([#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433)). The
-  MCP tool `set_legend` takes `findRow` to ring a row and returns what is
-  ringed as `find`.
+  rings and tint clear when you leave the row or move the map. The MCP tool
+  `set_legend` takes `findRow` to ring a row and returns what is ringed, or
+  tinted, as `find`.
 - **S-102 relief shading.** An optional hillshade over the S-102 depth bands
   shows the shape of the seabed (dredged pits, sand waves, berth toes) in
   high-resolution bathymetry. It lights the depth surface from the north-west

@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Tools;
 using Mapsui.Projections;
@@ -19,7 +20,8 @@ internal enum LegendFindKind
 
     /// <summary>
     /// The row is a band of a colour or arrow ramp (S-102 depths, a weather
-    /// field, S-111 speeds): its area isn't ringed yet (follow-up under #1402).
+    /// field, S-111 speeds): the band's area in view is tinted
+    /// (<see cref="LegendFeatureFind.Tint"/>, #1433) instead of features ringed.
     /// </summary>
     Band,
 
@@ -35,7 +37,7 @@ internal enum LegendFindKind
 /// <param name="RowLabel">The row's label.</param>
 /// <param name="Kind">How the row maps to the map.</param>
 /// <param name="Rings">The geometry ringed, at most <see cref="LegendFeatureFinder.MaxRings"/> features.</param>
-/// <param name="MatchCount">How many drawn features in view match, ringed or not.</param>
+/// <param name="MatchCount">How many drawn features in view match, ringed or not; for a band, how many coverage layers tint part of the view.</param>
 internal sealed record LegendFeatureFind(
     string SectionId,
     string RowLabel,
@@ -48,6 +50,9 @@ internal sealed record LegendFeatureFind(
 
     /// <summary>How many features are ringed (a multi-part area rings each part).</summary>
     public int RingedCount { get; init; }
+
+    /// <summary>For a <see cref="LegendFindKind.Band"/> row, the band's area tinted in view; null otherwise or without a view.</summary>
+    public LegendBandTint? Tint { get; init; }
 }
 
 /// <summary>
@@ -66,7 +71,8 @@ internal sealed record LegendFeatureFind(
 /// <b>In legend</b> row and the row that rings it agree.</item>
 /// <item>A station or isoline layer with one row rings what it draws.</item>
 /// <item>A band of a colour or arrow ramp reports
-/// <see cref="LegendFindKind.Band"/> and rings nothing yet.</item>
+/// <see cref="LegendFindKind.Band"/> and tints the cells of the drawn grids
+/// whose value is in the band (<see cref="LegendBandTinter"/>, #1433).</item>
 /// </list>
 /// </remarks>
 internal static class LegendFeatureFinder
@@ -86,6 +92,8 @@ internal static class LegendFeatureFinder
     /// <param name="processorOf">The processor of a dataset (session id), for feature class names; null when not known.</param>
     /// <param name="view">The map view, or null to find everywhere.</param>
     /// <param name="scaleDenominator">The display scale (1:N), or NaN to ignore SCAMIN.</param>
+    /// <param name="tintView">The map view a band row's area is tinted over, or null to tint nothing.</param>
+    /// <param name="transforms">Transforms WGS-84 into a grid's CRS, for a band's tint.</param>
     /// <param name="maxRings">The most features to ring.</param>
     public static LegendFeatureFind Find(
         LegendSection section,
@@ -96,6 +104,8 @@ internal static class LegendFeatureFinder
         Func<string, IDatasetProcessor?> processorOf,
         GeoBounds? view,
         double scaleDenominator,
+        LegendTintView? tintView,
+        ICrsTransformFactory transforms,
         int maxRings = MaxRings)
     {
         ArgumentNullException.ThrowIfNull(section);
@@ -103,6 +113,7 @@ internal static class LegendFeatureFinder
         ArgumentNullException.ThrowIfNull(stack);
         ArgumentNullException.ThrowIfNull(isVisible);
         ArgumentNullException.ThrowIfNull(processorOf);
+        ArgumentNullException.ThrowIfNull(transforms);
 
         var group = section.Groups.FirstOrDefault(g =>
             (groupKey is null || string.Equals(g.Key, groupKey, StringComparison.Ordinal))
@@ -111,6 +122,7 @@ internal static class LegendFeatureFinder
             return new LegendFeatureFind(section.Id, rowLabel, LegendFindKind.None, [], 0);
 
         var collector = new Collector(maxRings);
+        LegendBandTinter? tinter = null;
         var kind = LegendFindKind.None;
         var datasets = section.DatasetIds.ToHashSet(StringComparer.Ordinal);
 
@@ -175,13 +187,23 @@ internal static class LegendFeatureFinder
                             collector.Add(new PickHighlightGeometry([], [], [line], []));
                     }
                     break;
-                case CoverageStackPayload { SubLayer: GridCoverageSubLayer or ArrowCoverageSubLayer }:
+                case CoverageStackPayload { SubLayer: GridCoverageSubLayer or ArrowCoverageSubLayer } ramp:
                     if (kind == LegendFindKind.None)
                         kind = LegendFindKind.Band;
+                    if (tintView is { } tv)
+                    {
+                        tinter ??= new LegendBandTinter(tv, transforms);
+                        tinter.Add(ramp.SubLayer, sub.Rows, rowLabel);
+                    }
                     break;
             }
         }
 
+        if (kind == LegendFindKind.Band && tinter is not null)
+        {
+            var tint = tinter.Build();
+            return new LegendFeatureFind(section.Id, rowLabel, kind, [], tinter.Layers) { Tint = tint };
+        }
         return new LegendFeatureFind(section.Id, rowLabel, kind, collector.Rings, collector.Count) { RingedCount = collector.Ringed };
     }
 

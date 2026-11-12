@@ -200,15 +200,41 @@ internal sealed record LegendFindRingDto(
     [property: Description("Latitude of the centre of the ring's bounds.")] double Latitude,
     [property: Description("Longitude of the centre of the ring's bounds.")] double Longitude);
 
+/// <summary>The area a band row tints (#1433).</summary>
+[Description("The area of a colour or arrow ramp band tinted in the map view: the cells of the drawn grids whose value is in the band.")]
+internal sealed record LegendFindTintDto(
+    [property: Description("The share of the map view tinted, in percent.")] double ViewPercent,
+    [property: Description("The tinted area on the ground, in square kilometres (to the tint mask's resolution).")] double AreaSquareKilometres,
+    [property: Description("South edge of the tinted area; null when nothing is tinted.")] double? South,
+    [property: Description("West edge of the tinted area; null when nothing is tinted.")] double? West,
+    [property: Description("North edge of the tinted area; null when nothing is tinted.")] double? North,
+    [property: Description("East edge of the tinted area (less than west across the antimeridian); null when nothing is tinted.")] double? East,
+    [property: Description("Tint mask columns over the view (a cell is a few screen pixels).")] int MaskWidth,
+    [property: Description("Tint mask rows over the view.")] int MaskHeight)
+{
+    /// <summary>The DTO of a tint.</summary>
+    public static LegendFindTintDto From(LegendBandTint tint)
+    {
+        ArgumentNullException.ThrowIfNull(tint);
+        var b = tint.Bounds;
+        return new LegendFindTintDto(
+            Math.Round(tint.ViewFraction * 100, 2),
+            Math.Round(tint.AreaSquareKilometres, 3),
+            b?.South, b?.West, b?.North, b?.East,
+            tint.Width, tint.Height);
+    }
+}
+
 /// <summary>What hover to find rings now (D19, #1412).</summary>
 [Description("The features a hovered (or set_legend findRow) Legend row rings on the map.")]
 internal sealed record LegendFindDto(
     [property: Description("The row's section id.")] string Section,
     [property: Description("The row's label.")] string Row,
-    [property: Description("'features' when the row's drawn features are ringed; 'band' for a band of a colour or arrow ramp (S-102 depths, a weather field, S-111 speeds), whose area isn't ringed yet; 'none' when no drawn sub-layer has the row.")] string Kind,
-    [property: Description("How many drawn features in the map view match the row.")] int Matched,
-    [property: Description("How many are ringed: at most 100, top of the stack first.")] int Ringed,
-    [property: Description("The rings (an area of several parts gives one per part).")] IReadOnlyList<LegendFindRingDto> Rings)
+    [property: Description("'features' when the row's drawn features are ringed; 'band' for a band of a colour or arrow ramp (S-102 depths, a weather field, S-111 speeds), whose area in view is tinted ('tint'); 'none' when no drawn sub-layer has the row.")] string Kind,
+    [property: Description("How many drawn features in the map view match the row; for a band, how many coverage layers tint part of the view.")] int Matched,
+    [property: Description("How many are ringed: at most 100, top of the stack first; 0 for a band.")] int Ringed,
+    [property: Description("The rings (an area of several parts gives one per part).")] IReadOnlyList<LegendFindRingDto> Rings,
+    [property: Description("For a band, the area tinted in the map view; null otherwise.")] LegendFindTintDto? Tint = null)
 {
     /// <summary>The DTO of a find.</summary>
     public static LegendFindDto From(LegendFeatureFind find)
@@ -225,7 +251,8 @@ internal sealed record LegendFindDto(
             },
             find.MatchCount,
             find.RingedCount,
-            [.. find.Rings.Select(Ring)]);
+            [.. find.Rings.Select(Ring)],
+            find.Tint is { } tint ? LegendFindTintDto.From(tint) : null);
     }
 
     private static LegendFindRingDto Ring(Tools.PickHighlightGeometry ring)
@@ -405,8 +432,9 @@ internal static class LegendMcpAdapter
             Description =
                 "Changes the live viewer's Legend tab: opens or closes it, sets In view or All loaded, expands or "
                 + "collapses a section, and rings a row's features on the map (findRow, as hovering the row does: up to 100 "
-                + "features drawn in the map view; a band of a colour or arrow ramp reports kind 'band' and rings nothing yet; "
-                + "the rings clear when the map moves). Every argument is optional; omitted ones are left as they are; with "
+                + "features drawn in the map view; a band of a colour or arrow ramp reports kind 'band' and tints the band's area in "
+                + "view instead, reported in find.tint; "
+                + "the rings and tint clear when the map moves). Every argument is optional; omitted ones are left as they are; with "
                 + "none it just reads the state, including what is ringed now. While the tab is "
                 + "shown the Check route map card hides (and the map's legend reserve drops to 0); the card shows the "
                 + "same 'RouteCheck' section while Check route is on. Returns the tab's scope and what get_legend returns "
