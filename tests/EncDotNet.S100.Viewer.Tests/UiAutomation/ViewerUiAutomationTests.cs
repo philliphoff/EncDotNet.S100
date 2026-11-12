@@ -76,13 +76,7 @@ public sealed class ViewerUiAutomationTests
         using var library = context.CreateService();
         library.Initialize();
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(

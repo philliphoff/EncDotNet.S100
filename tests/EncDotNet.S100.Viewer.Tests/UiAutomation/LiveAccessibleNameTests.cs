@@ -137,13 +137,7 @@ public sealed partial class LiveAccessibleNameTests
         using var library = context.CreateService();
         library.Initialize();
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, readers: new EncDotNet.S100.Collections.Library.LibraryCatalogueReaders(), timeProvider: TimeProvider.System),
             openKeys: null,
             connectionFactory: null);

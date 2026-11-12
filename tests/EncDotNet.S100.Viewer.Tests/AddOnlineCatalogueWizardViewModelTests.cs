@@ -34,7 +34,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
     private AddOnlineCatalogueWizardViewModel CreateWizard(params KnownCatalogueSource[] sources) =>
         new(
-            new CatalogueDirectoryDialogViewModel(sources, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            TestCatalogueDirectory.Create(sources),
             () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (uri, _) =>
@@ -293,7 +293,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
     {
         var gate = new TaskCompletionSource<NoaaEncProductCatalog>(TaskCreationOptions.RunContinuationsAsynchronously);
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel([Source("a")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            TestCatalogueDirectory.Create([Source("a")]),
             () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }, timeProvider: TimeProvider.System),
             openKeys: null,
             connectionFactory: null);

@@ -28,13 +28,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         using var library = context.CreateService();
 
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
@@ -75,13 +69,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         using var library = context.CreateService();
 
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 S100Catalogue = (uri, _) =>
@@ -127,13 +115,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         using var library = context.CreateService();
 
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
@@ -289,13 +271,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
     private static AddOnlineCatalogueWizardViewModel CreateNoaaEncWizard(CollectionLibrary library)
     {
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(

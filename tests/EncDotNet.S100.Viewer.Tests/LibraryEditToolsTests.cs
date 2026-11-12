@@ -37,7 +37,7 @@ public sealed class LibraryEditToolsTests : IDisposable
         _editor = new ViewerLibraryEditor(
             _library,
             reader,
-            new LibrarySourceAdder(Readers, userCatalogues: null, probe: null, time: TimeProvider.System),
+            new LibrarySourceAdder(Readers, userCatalogues: null, urls: null, time: TimeProvider.System),
             dispatch: work => work(),
             new ViewerLibraryActions(_workflows.Rows, reader, _workflows.Open, _workflows.Download, _downloader, new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
             _workflows.Names);

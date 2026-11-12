@@ -568,7 +568,7 @@ public partial class App : Application
                     new EncDotNet.S100.Mcp.Tools.Library.LibrarySourceAdder(
                         sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
                         () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
-                        sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
+                        sp.GetRequiredService<EncDotNet.S100.Collections.KnownSources.CatalogueUrlRecognizer>(),
                         sp.GetRequiredService<TimeProvider>()),
                     UiThread.InvokeAsync,
                     new ViewerLibraryActions(
@@ -579,7 +579,7 @@ public partial class App : Application
                         sp.GetRequiredService<Library.ILibraryDownloader>(),
                         new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
                     sp.GetRequiredService<Library.LibrarySourceNames>()),
-                sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServiceDirectory>(),
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
                 new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())),
             // Only with --mcp-test-hooks: set_test_clock and the ui_* tools are for scripted testing.
@@ -906,19 +906,21 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
-        services.AddTransient(sp =>
-        {
-            var urls = sp.GetService<IUrlOpener>();
-            var registry = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>();
-            return new CatalogueDirectoryDialogViewModel(
-                EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All,
-                urls is null ? null : uri => urls.Open(uri.AbsoluteUri),
-                sp.GetRequiredService<Library.UserCatalogueStore>(),
-                sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
-                loadSecomRegistry: (refresh, ct) => registry.GetServicesAsync(refresh, ct),
-                probeSecom: (uri, ct) => registry.ProbeAsync(uri, cancellationToken: ct),
-                session: sp.GetRequiredService<CatalogueDirectorySession>());
-        });
+        services.AddTransient(sp => new CatalogueDirectoryDialogViewModel(
+            EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All,
+            sp.GetRequiredService<IUrlOpener>(),
+            sp.GetRequiredService<Library.AddCatalogueByUrlWorkflow>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServiceDirectory>(),
+            sp.GetRequiredService<CatalogueDirectorySession>()));
+        // Recognises a catalogue URL, for the directory's Add by URL and MCP add_library_source (#1399).
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.KnownSources.CatalogueUrlRecognizer(
+            sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>()));
+        services.AddSingleton(sp => new Library.AddCatalogueByUrlWorkflow(
+            sp.GetRequiredService<EncDotNet.S100.Collections.KnownSources.CatalogueUrlRecognizer>(),
+            sp.GetRequiredService<Library.UserCatalogueStore>()));
+        // The registry's S-100 services, for the directory and MCP list_secom_services (#1399).
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomServiceDirectory(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>()));
         // The directory's last source and category, for the app's lifetime (Q5).
         services.AddSingleton<CatalogueDirectorySession>();
         // SECOM services from the MCP service registry (#822), cached with the feeds.

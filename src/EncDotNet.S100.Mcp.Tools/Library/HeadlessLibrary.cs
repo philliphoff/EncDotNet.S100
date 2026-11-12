@@ -61,7 +61,8 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         _userCatalogues = userCatalogues ?? (() => []);
         _health = health;
         _time = time;
-        _adder = new LibrarySourceAdder(readers ?? new LibraryCatalogueReaders(), _userCatalogues, probe, _time);
+        _adder = new LibrarySourceAdder(
+            readers ?? new LibraryCatalogueReaders(), _userCatalogues, probe is null ? null : new CatalogueUrlRecognizer(probe), _time);
     }
 
     private CollectionLibrary Library => _operations.Library;
