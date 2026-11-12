@@ -91,13 +91,19 @@ internal sealed record FindingsEntry(string Id, RouteFindingGroup Group, IReadOn
 internal sealed class RouteFindingsViewModel : ViewModelBase
 {
     private readonly RouteFindingsService _service;
+    private readonly INavigationalWarningNavigator _navigator;
     private IReadOnlyList<RouteFinding> _shown = [];
     private List<(RouteFindingGroup Group, bool Open, string Id, bool Expanded, IReadOnlyList<RouteFinding> Members)> _layout = [];
 
-    public RouteFindingsViewModel(RouteFindingsService service)
+    /// <summary>Creates the list over the findings service.</summary>
+    /// <param name="service">The checked route's findings and the list's view state.</param>
+    /// <param name="navigator">The Navigational warnings panel, which an S-124 finding's inline Warning card (#959, E1) links to, zooms through and opens in.</param>
+    public RouteFindingsViewModel(RouteFindingsService service, INavigationalWarningNavigator navigator)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(navigator);
         _service = service;
+        _navigator = navigator;
         Groups = new ObservableCollection<RouteFindingGroupViewModel>();
         FilterChips = new ObservableCollection<FindingsFilterChipViewModel>(
             Enum.GetValues<FindingsFilter>().Select(f => new FindingsFilterChipViewModel(f)));
@@ -124,7 +130,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         OpenInWarningsCommand = new RelayCommand(() =>
         {
             if (_card is not null && WarningEntry(_service.Selected) is { } entry)
-                _service.WarningNavigator!.Reveal(entry);
+                _navigator.Reveal(entry);
         });
         _service.Changed += (_, _) => Refresh();
         Refresh();
@@ -332,7 +338,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
             return;
         }
 
-        var navigator = _service.WarningNavigator;
+        var navigator = _navigator;
         var entry = WarningEntry(selected);
         if (_card is null || _cardId != selected.Id)
         {
@@ -342,7 +348,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
                 // E1: the list clips the text at 5 lines. E4: the provider's
                 // "not for navigation" label stays off; the verdict carries the disclaimer.
                 ClipAt = InlineClipLines,
-                IsNew = entry is not null && navigator!.IsNew(entry),
+                IsNew = entry is not null && navigator.IsNew(entry),
             };
             _cardId = selected.Id;
             _card.CopyRequested += OnCardCopyRequested;
@@ -354,8 +360,8 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
 
         _card.SetTimeFormat(_service.TimeFormat);
         _card.SetViewTime(warning.From);
-        _card.SetLinkTargets(navigator?.Warnings ?? []);
-        _card.SetWarningSet(navigator?.WarningSet ?? Datasets.Pipelines.NavigationalWarningSet.Empty);
+        _card.SetLinkTargets(navigator.Warnings);
+        _card.SetWarningSet(navigator.WarningSet);
         _card.SetStatusOnRoute(warning, StatusAtEta(warning, _service.Departure, _service.TimeFormat));
         _card.CanZoom = entry is { Extent: not null } || selected.Location is not null;
         CanOpenInWarnings = entry is not null;
@@ -389,8 +395,8 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     }
 
     private NavigationalWarningEntry? WarningEntry(RouteFinding? finding) =>
-        finding is { Details: WarningDetails, Feature: { } feature } && _service.WarningNavigator is { } navigator
-            ? navigator.Find(feature.DatasetId, feature.FeatureId)
+        finding is { Details: WarningDetails, Feature: { } feature }
+            ? _navigator.Find(feature.DatasetId, feature.FeatureId)
             : null;
 
     private void DetachCard()
@@ -415,13 +421,13 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         if (_service.Selected is not { } finding)
             return;
         if (WarningEntry(finding) is { Extent: not null } entry)
-            _service.WarningNavigator!.ZoomTo(entry);
+            _navigator.ZoomTo(entry);
         else
             _service.Select(finding);
     }
 
     private void OnCardLinkRequested(object? sender, NavigationalWarningEntry target) =>
-        _service.WarningNavigator?.Reveal(target);
+        _navigator.Reveal(target);
 }
 
 /// <summary>A source filter chip (D1): "All 7", "Route 1", "Warnings 6".</summary>

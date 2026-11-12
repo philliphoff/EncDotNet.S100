@@ -354,9 +354,9 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         await h.ImportAsync(edition2);
 
         Assert.Equal(2, h.Exchange.NewerSourceEdition(copy));
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(h.Routes, exchange: h.Exchange);
         h.Routes.Routes.SetActiveRoute(copy);
-        Assert.Equal("Source has a newer edition (ed. 2)", panel.NewerEditionText);
+        Assert.Equal("Source has a newer edition (ed. 2)", panel.Exchange.NewerEditionText);
     }
 
     [Fact]
@@ -563,7 +563,7 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         var h = new Harness();
         var received = await h.ImportAsync(Fixture("RTE-TEST-GBASIC.s421.gml"));
         var dialogs = new RecordingDialogs();
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: dialogs, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null);
+        var panel = TestRoutesPanel.Create(h.Routes, exchange: h.Exchange, dialogs: dialogs);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 
         Assert.True(host.IsShown("Routes.Import"));
@@ -607,9 +607,9 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         owned.SetPassageValue(RoutePassageField.Squat, 0.3);
         var path = Path.Combine(_temp, "dialog.gml");
         var dialogs = new RecordingDialogs(exportPath: path);
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: dialogs, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null);
+        var panel = TestRoutesPanel.Create(h.Routes, exchange: h.Exchange, dialogs: dialogs);
 
-        panel.ExportRouteCommand.Execute(panel.Routes.Single());
+        panel.Exchange.ExportRouteCommand.Execute(panel.Routes.Single());
         var dialog = Assert.IsType<RouteExportDialogViewModel>(Assert.Single(dialogs.Shown));
         using var host = ViewHost.Show(new RouteExportDialogView { DataContext = dialog }, width: 540, height: 700);
 
@@ -638,9 +638,9 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         File.WriteAllText(bad, "<notes />");
         var h = new Harness();
         var dialogs = new RecordingDialogs(importPath: bad);
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: dialogs, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null);
+        var panel = TestRoutesPanel.Create(h.Routes, exchange: h.Exchange, dialogs: dialogs);
 
-        await panel.ImportRouteCommand.ExecuteAsync(null);
+        await panel.Exchange.ImportRouteCommand.ExecuteAsync(null);
 
         var error = Assert.IsType<RouteImportErrorDialogViewModel>(Assert.Single(dialogs.Shown));
         using var host = ViewHost.Show(new RouteImportErrorDialogView { DataContext = error }, width: 460, height: 300);
@@ -651,7 +651,7 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
 
         // A good file opens with no dialog.
         var good = new RecordingDialogs(importPath: Fixture("RTE-TEST-GMIN.s421.gml"));
-        await new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: good, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null).ImportRouteCommand.ExecuteAsync(null);
+        await TestRoutesPanel.Create(h.Routes, exchange: h.Exchange, dialogs: good).Exchange.ImportRouteCommand.ExecuteAsync(null);
         Assert.Empty(good.Shown);
         Assert.True(h.Routes.Routes.ActiveRoute!.IsReadOnly);
     }
@@ -662,14 +662,14 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         var h = new Harness();
         var copy = h.Exchange.Copy(await h.ImportAsync(Fixture("RTE-TEST-GFULL.s421.gml")));
         copy.Preserved = copy.Preserved! with { ScheduleCount = 2 };
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, dialogs: null);
-        Assert.False(panel.HasStaleSchedules);
+        var panel = TestRoutesPanel.Create(h.Routes, exchange: h.Exchange);
+        Assert.False(panel.Exchange.HasStaleSchedules);
 
         copy.History.Execute(RouteEditLabels.DeleteWaypoint, () => copy.RemoveWaypoint(3));
-        Assert.Equal("2 schedules no longer match the route", panel.StaleSchedulesText);
-        panel.KeepStaleSchedulesCommand.Execute(null);
-        Assert.True(panel.IsKeepingStaleSchedules);
-        panel.DropStaleSchedulesCommand.Execute(null);
-        Assert.False(panel.HasStaleSchedules);
+        Assert.Equal("2 schedules no longer match the route", panel.Exchange.StaleSchedulesText);
+        panel.Exchange.KeepStaleSchedulesCommand.Execute(null);
+        Assert.True(panel.Exchange.IsKeepingStaleSchedules);
+        panel.Exchange.DropStaleSchedulesCommand.Execute(null);
+        Assert.False(panel.Exchange.HasStaleSchedules);
     }
 }

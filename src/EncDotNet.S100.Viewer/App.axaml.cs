@@ -1801,7 +1801,30 @@ public partial class App : Application
         });
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
-        services.AddSingleton<RoutesPanelViewModel>();
+        // The Routes panel (#1400): its Check route content and exchange footer are built here.
+        services.AddSingleton(sp => new DisplayFormatting(
+            sp.GetRequiredService<ITimeFormatProvider>(),
+            sp.GetRequiredService<IMarinerSettingsProvider>()));
+        services.AddSingleton(sp => new RouteFindingsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
+            // The findings list's inline Warning cards open warnings through the panel (#959 E1).
+            sp.GetRequiredService<NavigationalWarningsViewModel>()));
+        services.AddSingleton(sp => new PassageCheckViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+            sp.GetRequiredService<DisplayFormatting>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
+            sp.GetRequiredService<RouteFindingsViewModel>()));
+        services.AddSingleton(sp => new RouteExchangeFooterViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IRouteDialogs>()));
+        services.AddSingleton(sp => new RoutesPanelViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<DisplayFormatting>(),
+            sp.GetRequiredService<PassageCheckViewModel>(),
+            sp.GetRequiredService<RouteExchangeFooterViewModel>()));
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Aml.AmlNoticeStore(
             sp.GetRequiredService<ViewerDataPaths>().AmlNoticesFilePath,
             sp.GetRequiredService<ViewerSettings>().IsReadOnly,
@@ -1872,27 +1895,20 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
-        services.AddSingleton(sp =>
-        {
-            var findings = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>();
-            var panel = new NavigationalWarningsViewModel(
+        services.AddSingleton(sp => new NavigationalWarningsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.OpenNavigationalWarningWorkflow>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>(),
+            // #959 E3: the checked route's warnings.
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>(),
+            new NavigationalWarningNewOptionsViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.OpenNavigationalWarningWorkflow>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>(),
-                // #959 E3: the checked route's warnings.
-                findings,
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>(),
-                new NavigationalWarningNewOptionsViewModel(
-                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-                    sp.GetRequiredService<ViewerSettings>(),
-                    sp.GetRequiredService<TimeProvider>()),
-                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
-                sp.GetService<ITimeFormatProvider>(),
-                sp.GetRequiredService<TimeProvider>());
-            // The findings list's inline Warning cards open warnings through the panel (#959 E1).
-            findings.WarningNavigator = panel;
-            return panel;
-        });
+                sp.GetRequiredService<ViewerSettings>(),
+                sp.GetRequiredService<TimeProvider>()),
+            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetService<ITimeFormatProvider>(),
+            sp.GetRequiredService<TimeProvider>()));
         // The docks and activity tabs (#1203: split out of MainViewModel).
         services.AddSingleton(sp => new ShellLayoutViewModel(
             sp.GetRequiredService<ViewerSettings>(),

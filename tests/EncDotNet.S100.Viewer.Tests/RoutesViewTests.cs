@@ -7,7 +7,6 @@ using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.Tools;
-using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -22,7 +21,7 @@ public sealed class RoutesViewTests
     private static (RoutesService Service, Route Route, ViewHost Host) Show()
     {
         var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
-        var panel = new RoutesPanelViewModel(service, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(service);
         var route = service.Routes.CreateRoute("Solent");
         route.AppendWaypoint(new GeoPosition(50.70, -1.10));
         route.AppendWaypoint(new GeoPosition(50.75, -1.20));
@@ -114,14 +113,14 @@ public sealed class RoutesViewTests
     }
 
     [AvaloniaFact]
-    public void Check_passage_is_present_but_disabled_with_its_reason()
+    public void Check_passage_is_present_with_its_reason()
     {
         var (_, _, host) = Show();
         using var _host = host;
 
         var check = host.Find<ToggleButton>("Routes.CheckRouteToggle");
 
-        Assert.False(check.IsEnabled); // no check service in this panel
+        Assert.True(check.IsEnabled);
         Assert.Equal("Check the route against your settings; add a draft to check clearance too", ToolTip.GetTip(check));
         Assert.False(host.IsShown("Routes.Done"));
     }
@@ -134,7 +133,7 @@ public sealed class RoutesViewTests
         try
         {
             var fixture = new PassageCheckFixture(post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
-            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, viewport: null, marinerSettings: null, timeFormat: null, findings: null, exchange: null, dialogs: null);
+            var panel = TestRoutesPanel.Create(fixture.Routes, check: fixture.Check);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
             var check = host.Find<ToggleButton>("Routes.CheckRouteToggle");
@@ -191,7 +190,7 @@ public sealed class RoutesViewTests
                 post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
             var viewport = new RouteFindingsTests.RecordingViewport();
             using var findings = RouteFindingsTests.Findings(fixture, viewport);
-            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, findings: findings, viewport: null, marinerSettings: null, timeFormat: null, exchange: null, dialogs: null);
+            var panel = TestRoutesPanel.Create(fixture.Routes, check: fixture.Check, findings: findings);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
             host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));

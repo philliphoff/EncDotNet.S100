@@ -76,7 +76,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
         using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
-        var list = new RouteFindingsViewModel(s.Findings);
+        var list = new RouteFindingsViewModel(s.Findings, panel);
 
         var survey = Warning(s.Findings.Findings, 1);
         list.SelectCommand.Execute(list.Groups[0].Items.Single(r => r.Finding.Id == survey.Id));
@@ -131,7 +131,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
         using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
-        var list = new RouteFindingsViewModel(s.Findings);
+        var list = new RouteFindingsViewModel(s.Findings, panel);
         var revealed = 0;
         panel.RevealRequested += (_, _) => revealed++;
 
@@ -261,7 +261,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
         using var warnings = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(s.Routes, check: s.Check, findings: s.Findings, navigator: warnings, timeFormat: new Utc());
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 1600);
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));

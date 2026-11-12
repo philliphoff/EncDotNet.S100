@@ -61,7 +61,7 @@ public sealed class DepartureWindowViewTests
     public void The_verdict_card_shows_the_window_line_and_Depart_moves_into_the_window() => InCulture(() =>
     {
         var fixture = Fixture();
-        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check, viewport: null, marinerSettings: null, findings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(fixture.Routes, check: fixture.Check, timeFormat: new UtcTime());
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
@@ -92,7 +92,7 @@ public sealed class DepartureWindowViewTests
             depthDatum: null,
             tide: PassageCheckFixture.HighWaterUntil0750,
             post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
-        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check, viewport: null, marinerSettings: null, findings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(fixture.Routes, check: fixture.Check, timeFormat: new UtcTime());
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
         Assert.False(host.IsShown("Routes.Check.Confidence"));
 

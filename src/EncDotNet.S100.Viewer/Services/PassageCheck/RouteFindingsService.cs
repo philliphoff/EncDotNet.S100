@@ -167,13 +167,6 @@ internal sealed class RouteFindingsService : IDisposable
             : null;
 
     /// <summary>
-    /// The Navigational warnings panel, which an S-124 finding's inline
-    /// Warning card (#959, E1) links to, zooms through and opens in; set by
-    /// the panel. <c>null</c> without it.
-    /// </summary>
-    internal ViewModels.INavigationalWarningNavigator? WarningNavigator { get; set; }
-
-    /// <summary>
     /// Selects a finding (or clears the selection with <c>null</c>). A placed
     /// finding moves the profile cursor to it and, when
     /// <paramref name="zoom"/> is set, zooms the map to it (F3).

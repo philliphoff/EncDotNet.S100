@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
@@ -186,7 +185,7 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
         var selection = new ObjectInformationSelection();
         using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         var pick = new PickReportViewModel { Selection = selection, WarningNavigator = panel };
-        var check = new PassageCheckViewModel(s.Check, s.Routes, () => DepthUnit.Metres, () => TimeFormat.Utc, s.Findings, addDraft: null);
+        var check = TestRoutesPanel.Check(s.Routes, s.Check, s.Findings, panel, TestRoutesPanel.Formatting(new Utc()));
         Open(pick, Entry(s, 1));
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
         Assert.False(host.IsShown("PickReport.WarningCard.RouteFinding"));

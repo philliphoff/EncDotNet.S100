@@ -23,9 +23,8 @@ internal static class TestNavigationalWarnings
         ObjectInformationSelection? selection = null,
         RouteFindingsService? routeFindings = null,
         NavigationalWarningDrawingService? drawing = null,
-        NavigationalWarningNewOptionsViewModel? newOptions = null)
-    {
-        var panel = new NavigationalWarningsViewModel(
+        NavigationalWarningNewOptionsViewModel? newOptions = null) =>
+        new(
             service,
             Open(service, pick, loader, viewport),
             selection ?? new ObjectInformationSelection(),
@@ -35,11 +34,6 @@ internal static class TestNavigationalWarnings
             viewTime,
             timeFormat,
             clock);
-        // As the app does: the findings list's inline Warning cards open warnings through the panel.
-        if (routeFindings is not null)
-            routeFindings.WarningNavigator = panel;
-        return panel;
-    }
 
     /// <summary>The workflow the panel opens warnings through.</summary>
     public static OpenNavigationalWarningWorkflow Open(
