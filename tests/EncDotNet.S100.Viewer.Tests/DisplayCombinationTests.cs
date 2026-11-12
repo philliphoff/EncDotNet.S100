@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Viewer.McpTools;
@@ -423,6 +424,37 @@ public class DisplayCombinationServiceTests
         h.State.SetCategory(EcdisDisplayCategory.Standard);
 
         Assert.False(h.Service.IsModified);
+    }
+
+    [Fact]
+    public void A_saved_combination_keeps_the_layer_options_and_restores_them()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"combo-{Guid.NewGuid():N}.json");
+        try
+        {
+            string id;
+            {
+                using var h = new Harness(new ViewerSettings { SettingsFilePath = path });
+                h.Add("/data/102.h5", "S-102");
+                h.State.SetLayerVisible(S102Relief.LayerKey, true);
+                h.State.SetLayerOption(S102Relief.StrengthKey, "subtle");
+                id = h.Service.SaveCurrent("Harbour relief").Id;
+
+                h.State.SetLayerOption(S102Relief.StrengthKey, "strong");
+                Assert.True(h.Service.IsModified);
+                Assert.Contains(h.Service.Changes, c => c.Kind == DisplayCombinationChangeKind.Layer && c.Subject == S102Relief.StrengthKey);
+            }
+
+            using var again = new Harness(ViewerSettings.Load(path));
+            Assert.Equal("subtle", Assert.Single(again.Service.UserCombinations).LayerOptions[S102Relief.StrengthKey]);
+            again.State.SetLayerOption(S102Relief.StrengthKey, "strong");
+            again.Service.Apply(id);
+            Assert.Equal("subtle", again.State.GetLayerOption(S102Relief.StrengthKey));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

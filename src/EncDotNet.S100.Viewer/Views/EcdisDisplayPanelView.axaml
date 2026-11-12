@@ -28,6 +28,33 @@
         <Style Selector="Button.amlLink:pointerover">
             <Setter Property="Opacity" Value="0.8" />
         </Style>
+        <!-- The relief shading strength: a segmented strip, as the Library's state segments. -->
+        <Style Selector="Border.reliefSegments">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="3" />
+        </Style>
+        <Style Selector="RadioButton.reliefSegment">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Segment" CornerRadius="6" MinHeight="26" Padding="6,0" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.reliefSegment:checked /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <Style Selector="RadioButton.reliefSegment:not(:checked)">
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*">
@@ -252,6 +279,28 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefShading"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefShading}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefShading}" />
+                    </Grid>
+                    <!-- Strength, while relief is on (design note s102-relief-design.md section 2). -->
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" IsVisible="{Binding IsReliefShadingVisible}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefStrength}">
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Opacity="0.8"
+                                   Text="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefStrength}" />
+                        <Border Grid.Column="1" Classes="reliefSegments">
+                            <UniformGrid Rows="1">
+                                <RadioButton Classes="reliefSegment" GroupName="ReliefStrength" IsChecked="{Binding IsReliefSubtle}"
+                                             Content="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefSubtle}"
+                                             AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefStrength.Subtle"
+                                             AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefSubtle}" />
+                                <RadioButton Classes="reliefSegment" GroupName="ReliefStrength" IsChecked="{Binding IsReliefMedium}"
+                                             Content="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefMedium}"
+                                             AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefStrength.Medium"
+                                             AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefMedium}" />
+                                <RadioButton Classes="reliefSegment" GroupName="ReliefStrength" IsChecked="{Binding IsReliefStrong}"
+                                             Content="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefStrong}"
+                                             AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefStrength.Strong"
+                                             AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefStrong}" />
+                            </UniformGrid>
+                        </Border>
                     </Grid>
                 </StackPanel>
 

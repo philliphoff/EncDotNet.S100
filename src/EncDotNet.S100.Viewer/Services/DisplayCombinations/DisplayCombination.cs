@@ -60,6 +60,14 @@ internal sealed record DisplayCombination(
     /// </summary>
     public int? LadderStep { get; init; }
 
+    /// <summary>
+    /// Map-wide optional-layer settings that are more than on or off
+    /// (<see cref="EcdisDisplaySettings.LayerOptions"/>), such as the S-102
+    /// relief shading strength. Empty by default.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LayerOptions { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>True when <see cref="Products"/> is empty: every product is in.</summary>
     public bool IncludesEveryProduct => Products.Count == 0;
 

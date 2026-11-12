@@ -8079,6 +8079,25 @@
   <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
     <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
   </data>
+  <data name="EcdisPanel_Bathymetry_ReliefStrength" xml:space="preserve">
+    <value>Strength</value>
+    <comment>Label before the relief shading strength segments in the Display controls Bathymetry section.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefSubtle" xml:space="preserve">
+    <value>Subtle</value>
+    <comment>Relief shading strength segment: the lightest shading.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefMedium" xml:space="preserve">
+    <value>Medium</value>
+    <comment>Relief shading strength segment: the default.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefStrong" xml:space="preserve">
+    <value>Strong</value>
+    <comment>Relief shading strength segment: the strongest shading.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Bathymetry_ReliefStrength" xml:space="preserve">
+    <value>How strongly slopes are shaded. Subtle suits fine, high-resolution cells; Strong brings out gentle features but draws steep edges dark. At Dusk and Night slopes facing the light are lightened less, so they don't glare.</value>
+  </data>
   <data name="AmlDisplay_Legend" xml:space="preserve">
     <value>Legend</value>
     <comment>Link in the display panel's Additional Military Layers section that opens the Legend tab at the AML section</comment>

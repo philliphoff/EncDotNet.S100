@@ -19,6 +19,7 @@ internal sealed class EcdisDisplayState
     private readonly Dictionary<string, string?> _displayModes =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, bool> _layerVisibility = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _layerOptions = new(StringComparer.Ordinal);
     private EcdisDisplayCategory _category = EcdisDisplayCategory.Standard;
     private bool _showNavigationalWarnings = true;
     private readonly HashSet<string> _hiddenAmlProducts = new(StringComparer.OrdinalIgnoreCase);
@@ -322,6 +323,42 @@ internal sealed class EcdisDisplayState
     }
 
     /// <summary>
+    /// A map-wide setting of an optional product layer that is more than on or
+    /// off, such as the S-102 relief shading strength
+    /// (<c>"s102.relief.strength"</c>), or <see langword="null"/> when unset
+    /// (<see cref="EcdisDisplaySettings.LayerOptions"/>).
+    /// </summary>
+    /// <param name="key">The option key.</param>
+    public string? GetLayerOption(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        lock (_gate)
+        {
+            return _layerOptions.TryGetValue(key, out var value) ? value : null;
+        }
+    }
+
+    /// <summary>
+    /// Sets a map-wide layer option and raises <see cref="Changed"/> when it
+    /// differs, so every dataset of the product re-renders with it.
+    /// </summary>
+    /// <param name="key">The option key.</param>
+    /// <param name="value">The value.</param>
+    public void SetLayerOption(string key, string value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(value);
+        bool changed;
+        lock (_gate)
+        {
+            changed = !_layerOptions.TryGetValue(key, out var current)
+                || !string.Equals(current, value, StringComparison.Ordinal);
+            _layerOptions[key] = value;
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Clears every per-spec viewing-group override and raises
     /// <see cref="Changed"/> if anything was cleared.
     /// </summary>
@@ -388,6 +425,7 @@ internal sealed class EcdisDisplayState
                 ActiveDisplayModes = new Dictionary<string, string?>(
                     _displayModes, StringComparer.OrdinalIgnoreCase),
                 LayerVisibility = new Dictionary<string, bool>(_layerVisibility, StringComparer.Ordinal),
+                LayerOptions = new Dictionary<string, string>(_layerOptions, StringComparer.Ordinal),
             };
         }
     }
@@ -404,12 +442,14 @@ internal sealed class EcdisDisplayState
     /// <param name="show">Viewing-group ids to show, per product.</param>
     /// <param name="displayModes">Display-mode ids to select, per product.</param>
     /// <param name="layerVisibility">Map-wide optional-layer switches to set.</param>
+    /// <param name="layerOptions">Map-wide optional-layer settings to set, or <see langword="null"/> for none.</param>
     public void ApplyPicture(
         EcdisDisplayCategory? category,
         IReadOnlyDictionary<string, IReadOnlySet<int>> hide,
         IReadOnlyDictionary<string, IReadOnlySet<int>> show,
         IReadOnlyDictionary<string, string> displayModes,
-        IReadOnlyDictionary<string, bool> layerVisibility)
+        IReadOnlyDictionary<string, bool> layerVisibility,
+        IReadOnlyDictionary<string, string>? layerOptions = null)
     {
         ArgumentNullException.ThrowIfNull(hide);
         ArgumentNullException.ThrowIfNull(show);
@@ -456,6 +496,12 @@ internal sealed class EcdisDisplayState
                 _layerVisibility[key] = visible;
                 changed = true;
             }
+            foreach (var (key, value) in layerOptions ?? new Dictionary<string, string>())
+            {
+                if (_layerOptions.TryGetValue(key, out var current) && string.Equals(current, value, StringComparison.Ordinal)) continue;
+                _layerOptions[key] = value;
+                changed = true;
+            }
         }
         if (changed) Changed?.Invoke();
     }
@@ -474,7 +520,8 @@ internal sealed class EcdisDisplayState
         IReadOnlySet<DisplayPlane>? hiddenPlanes = null,
         IReadOnlyDictionary<string, string?>? displayModes = null,
         bool showNavigationalWarnings = true,
-        IReadOnlyDictionary<string, bool>? layerVisibility = null)
+        IReadOnlyDictionary<string, bool>? layerVisibility = null,
+        IReadOnlyDictionary<string, string>? layerOptions = null)
     {
         ArgumentNullException.ThrowIfNull(hidden);
         lock (_gate)
@@ -495,6 +542,12 @@ internal sealed class EcdisDisplayState
             {
                 foreach (var kv in layerVisibility)
                     _layerVisibility[kv.Key] = kv.Value;
+            }
+            _layerOptions.Clear();
+            if (layerOptions is not null)
+            {
+                foreach (var kv in layerOptions)
+                    _layerOptions[kv.Key] = kv.Value;
             }
             _displayModes.Clear();
             if (displayModes is not null)

@@ -120,6 +120,99 @@ public sealed class BathymetryDisplaySettingsTests
         Assert.True(state.GetLayerVisible(S102Relief.LayerKey));
     }
 
+    [Fact]
+    public void Strength_is_medium_until_a_segment_is_picked_and_reaches_the_display_settings()
+    {
+        var state = new EcdisDisplayState();
+        using var panel = Panel(state, new DatasetsViewModel(new FakeDatasetLoaderService()));
+        var changed = 0;
+        state.Changed += () => changed++;
+
+        Assert.Equal(ReliefStrength.Medium, panel.ReliefStrength);
+        Assert.True(panel.IsReliefMedium);
+        Assert.Empty(state.Snapshot().LayerOptions);
+
+        panel.IsReliefSubtle = true;
+        panel.IsReliefSubtle = true; // no-op
+        panel.IsReliefStrong = false; // unchecking a segment sets nothing
+
+        Assert.Equal(1, changed);
+        Assert.True(panel.IsReliefSubtle);
+        Assert.False(panel.IsReliefMedium);
+        Assert.Equal("subtle", state.GetLayerOption(S102Relief.StrengthKey));
+        Assert.Equal(ReliefStrength.Subtle, S102Relief.StrengthOf(state.Snapshot()));
+    }
+
+    [Fact]
+    public async Task Strength_is_read_and_set_through_MCP_and_a_wrong_value_is_refused()
+    {
+        var state = new EcdisDisplayState();
+        using var panel = Panel(state, new DatasetsViewModel(new FakeDatasetLoaderService()));
+        var tools = new BathymetryDisplayTools(panel, new ImmediateInvoker());
+        var ct = TestContext.Current.CancellationToken;
+
+        var read = Assert.IsType<ToolResult<BathymetryDisplayDto>.OkResult>(await tools.GetAsync(ct)).Value;
+        Assert.Equal("medium", read.ReliefStrength);
+
+        var set = Assert.IsType<ToolResult<BathymetryDisplayDto>.OkResult>(
+            await tools.SetAsync(reliefShading: true, reliefStrength: "Strong", cancellationToken: ct)).Value;
+        Assert.Equal("strong", set.ReliefStrength);
+        Assert.Equal("strong", state.GetLayerOption(S102Relief.StrengthKey));
+
+        foreach (var wrong in new[] { "harsh", "2" })
+        {
+            var error = Assert.IsType<ToolResult<BathymetryDisplayDto>.ErrResult>(
+                await tools.SetAsync(reliefStrength: wrong, cancellationToken: ct)).Error;
+            Assert.IsType<InvalidArgument>(error);
+        }
+        Assert.Equal("strong", state.GetLayerOption(S102Relief.StrengthKey));
+    }
+
+    [AvaloniaFact]
+    public void The_strength_segments_show_while_relief_is_on_and_set_the_strength()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/102NL005_518N044E.H5", "S-102");
+        var state = new EcdisDisplayState();
+        using var panel = Panel(state, datasets);
+        using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = panel }, width: 360, height: 800);
+
+        panel.IsReliefShadingVisible = true;
+        host.Settle();
+        var subtle = host.Find<RadioButton>("EcdisDisplayPanel.Bathymetry.ReliefStrength.Subtle");
+        Assert.Equal("Subtle", AutomationProperties.GetName(subtle));
+        Assert.True(host.Find<RadioButton>("EcdisDisplayPanel.Bathymetry.ReliefStrength.Medium").IsChecked);
+
+        host.Click(subtle);
+        host.Settle();
+        Assert.Equal("subtle", state.GetLayerOption(S102Relief.StrengthKey));
+
+        panel.IsReliefShadingVisible = false;
+        host.Settle();
+        Assert.False(subtle.IsEffectivelyVisible);
+    }
+
+    [Fact]
+    public void Strength_round_trips_through_the_settings_file()
+    {
+        var dir = Directory.CreateTempSubdirectory("relief-strength-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "settings.json");
+            var state = EcdisDisplayStatePersistence.Create(ViewerSettings.Load(path));
+            state.SetLayerOption(S102Relief.StrengthKey, "strong");
+
+            var reloaded = ViewerSettings.Load(path);
+            Assert.Equal("strong", reloaded.EcdisLayerOptions[S102Relief.StrengthKey]);
+            var restored = EcdisDisplayStatePersistence.Create(reloaded);
+            Assert.Equal(ReliefStrength.Strong, S102Relief.StrengthOf(restored.Snapshot()));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     private static EcdisDisplayPanelViewModel Panel(EcdisDisplayState state, DatasetsViewModel datasets) =>
         new(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null, amlDisplay: null);
 

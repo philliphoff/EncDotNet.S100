@@ -178,7 +178,8 @@ internal sealed class DisplayCombinationService : IDisposable
                 combination.HiddenViewingGroups,
                 combination.ShownViewingGroups,
                 combination.DisplayModes,
-                combination.LayerVisibility);
+                combination.LayerVisibility,
+                combination.LayerOptions);
 
             foreach (var entry in _datasets.Entries.ToArray())
             {
@@ -264,6 +265,7 @@ internal sealed class DisplayCombinationService : IDisposable
                 .ToDictionary(kv => kv.Key, kv => kv.Value!, StringComparer.OrdinalIgnoreCase),
             LayerVisibility = new Dictionary<string, bool>(display.LayerVisibility, StringComparer.Ordinal),
             SubLayerVisibility = subLayers,
+            LayerOptions = new Dictionary<string, string>(display.LayerOptions, StringComparer.Ordinal),
         };
     }
 
