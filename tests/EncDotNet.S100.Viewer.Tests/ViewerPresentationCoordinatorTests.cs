@@ -1,7 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -15,7 +14,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
@@ -45,7 +44,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
@@ -68,7 +67,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner, TimeProvider.System, new FakeAmlClbPresence());
@@ -98,7 +97,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var clb = new FakeAmlClbPresence();

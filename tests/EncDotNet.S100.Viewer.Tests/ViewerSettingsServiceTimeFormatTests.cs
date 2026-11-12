@@ -1,9 +1,8 @@
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
-public class SettingsViewModelTimeFormatTests
+public class ViewerSettingsServiceTimeFormatTests
 {
     private static ViewerSettings NewSettings()
     {
@@ -15,7 +14,7 @@ public class SettingsViewModelTimeFormatTests
     public void DefaultsTo_Local_When_Missing()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.Equal(TimeFormat.Local, vm.SelectedTimeFormat);
     }
 
@@ -24,7 +23,7 @@ public class SettingsViewModelTimeFormatTests
     {
         var s = NewSettings();
         s.TimeFormat = "utc";
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.Equal(TimeFormat.Utc, vm.SelectedTimeFormat);
     }
 
@@ -33,7 +32,7 @@ public class SettingsViewModelTimeFormatTests
     {
         var s = NewSettings();
         s.TimeFormat = "totally-bogus";
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.Equal(TimeFormat.Local, vm.SelectedTimeFormat);
     }
 
@@ -41,7 +40,7 @@ public class SettingsViewModelTimeFormatTests
     public void Setting_Raises_Event_And_Persists()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         TimeFormat? raised = null;
         vm.TimeFormatChanged += f => raised = f;
 
@@ -63,10 +62,10 @@ public class TimeFormatProviderTests
     }
 
     [Fact]
-    public void Current_Reflects_SettingsViewModel()
+    public void Current_Reflects_ViewerSettingsService()
     {
         var settings = NewSettings();
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
         var provider = new TimeFormatProvider(vm);
         Assert.Equal(TimeFormat.Local, provider.Current);
 
@@ -80,7 +79,7 @@ public class TimeFormatProviderTests
     public void Provider_ReBroadcasts_Change()
     {
         var settings = NewSettings();
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
         var provider = new TimeFormatProvider(vm);
         TimeFormat? heard = null;
         provider.TimeFormatChanged += f => heard = f;

@@ -2,7 +2,6 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -16,7 +15,7 @@ public class MapPresentationStateProjectionTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
@@ -44,7 +43,7 @@ public class MapPresentationStateProjectionTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var zone = TimeZoneInfo.CreateCustomTimeZone("Test+3", TimeSpan.FromHours(3), "Test+3", "Test+3");
         var projection = new MapPresentationStateProjection(
             settingsViewModel, new EcdisDisplayState(), new StubMarinerSettingsProvider(), new ZoneClock(zone), new FakeAmlClbPresence());
@@ -68,7 +67,7 @@ public class MapPresentationStateProjectionTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsViewModel = new ViewerSettingsService(settings);
         var clb = new FakeAmlClbPresence();
         var projection = new MapPresentationStateProjection(
             settingsViewModel, new EcdisDisplayState(), new StubMarinerSettingsProvider(), TimeProvider.System, clb);

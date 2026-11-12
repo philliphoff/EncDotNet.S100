@@ -1141,7 +1141,7 @@
                                         <!--
                                           S-100 map palette (PR-N1) — Day/Dusk/Night
                                           switch for the chart S-100 colour profile.
-                                          Bound to SettingsViewModel.SelectedPalette
+                                          Bound to ViewerSettingsService.SelectedPalette
                                           which already triggers a re-render through
                                           DatasetLoaderService.
                                         -->
@@ -1156,20 +1156,20 @@
                                                                  AutomationProperties.AutomationId="DisplaySettings.Palette.Day"
                                                                  GroupName="DisplaySettingsPalette"
                                                                  Content="{x:Static loc:Strings.Palette_Day}"
-                                                                 IsChecked="{Binding Settings.IsPaletteDay, Mode=OneWay}"
-                                                                 Command="{Binding Settings.SetPaletteDayCommand}" />
+                                                                 IsChecked="{Binding Palette.IsPaletteDay, Mode=OneWay}"
+                                                                 Command="{Binding Palette.SetPaletteDayCommand}" />
                                                     <RadioButton Classes="segment"
                                                                  AutomationProperties.AutomationId="DisplaySettings.Palette.Dusk"
                                                                  GroupName="DisplaySettingsPalette"
                                                                  Content="{x:Static loc:Strings.Palette_Dusk}"
-                                                                 IsChecked="{Binding Settings.IsPaletteDusk, Mode=OneWay}"
-                                                                 Command="{Binding Settings.SetPaletteDuskCommand}" />
+                                                                 IsChecked="{Binding Palette.IsPaletteDusk, Mode=OneWay}"
+                                                                 Command="{Binding Palette.SetPaletteDuskCommand}" />
                                                     <RadioButton Classes="segment"
                                                                  AutomationProperties.AutomationId="DisplaySettings.Palette.Night"
                                                                  GroupName="DisplaySettingsPalette"
                                                                  Content="{x:Static loc:Strings.Palette_Night}"
-                                                                 IsChecked="{Binding Settings.IsPaletteNight, Mode=OneWay}"
-                                                                 Command="{Binding Settings.SetPaletteNightCommand}" />
+                                                                 IsChecked="{Binding Palette.IsPaletteNight, Mode=OneWay}"
+                                                                 Command="{Binding Palette.SetPaletteNightCommand}" />
                                                 </UniformGrid>
                                             </Border>
                                         </StackPanel>

@@ -171,7 +171,7 @@ internal sealed partial class ViewerSettings
     // Mariner settings (S-100 Part 9 §4.2). Depth values are stored in
     // metres regardless of the user's chosen DepthUnit. All fields are
     // nullable so older settings.json files keep working — defaults are
-    // applied by SettingsViewModel / MarinerSettingsProvider when null.
+    // applied by ViewerSettingsService / MarinerSettingsProvider when null.
 
     /// <summary>Safety contour depth in metres.</summary>
     public double? SafetyContour { get; set; }

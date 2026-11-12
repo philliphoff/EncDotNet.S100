@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.GeneralSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:GeneralSettingsPageViewModel">
 
     <!-- Settings → General: units and time format (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"

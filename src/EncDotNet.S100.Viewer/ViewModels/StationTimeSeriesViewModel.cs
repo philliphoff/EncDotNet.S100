@@ -186,7 +186,7 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     /// <remarks>
     /// This responds to <b>chrome theme</b> (Light vs Dark), not the
     /// S-100 map palette (Day / Dusk / Night). The map palette is owned
-    /// by <see cref="SettingsViewModel.SelectedPalette"/> and is not
+    /// by <see cref="ViewerSettingsService.SelectedPalette"/> and is not
     /// consumed by these charts.
     /// </remarks>
     protected internal ChartTheme CurrentChartTheme { get; private set; }

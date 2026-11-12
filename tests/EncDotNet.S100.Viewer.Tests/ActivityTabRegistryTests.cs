@@ -79,7 +79,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
-        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsVm = new ViewerSettingsService(settings);
         var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var shellLayout = new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
@@ -92,7 +92,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            settingsViewModel: settingsVm,
+            palette: new PaletteMenuViewModel(settingsVm),
             pickReport: new PickReportViewModel(),
             timeline: timeline,
             routes: routeStore);

@@ -608,7 +608,7 @@ S-57 records.
 | ScaleMinimum | S-98 12.9 | — | Supported | `src/EncDotNet.S100.Renderers.Mapsui/TileScaleClass.cs` | SCAMIN per op and tile scale class, with an override. |
 | FullLightLines | — | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | FullLightLines context parameter. |
 | OtherLanguages | S-98 10.3 | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaDataProvider.cs` | NationalLanguage parameter selects chart text. |
-| Language Selections | S-98 10.3 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/SettingsViewModel.cs` | One language, not a ranked list; pick report not localised. |
+| Language Selections | S-98 10.3 | — | Partial | `src/EncDotNet.S100.Viewer/Services/ViewerSettingsService.cs` | One language, not a ranked list; pick report not localised. |
 | LanguagePacks | S-98 15.1 | InitialPowerUp | Gap | — | No language packs. |
 | DifferentPriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Ops draw by plane, then drawing priority, then geometry. The v2.0.0 data has no features for this test, so it can't run yet. |
 | SamePriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Equal priority draws area, line, point, text. |

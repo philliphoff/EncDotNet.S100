@@ -1,18 +1,17 @@
 using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Default <see cref="IRenderStateController"/> implementation — drives
-/// <see cref="SettingsViewModel.SelectedPalette"/> and
+/// <see cref="ViewerSettingsService.SelectedPalette"/> and
 /// <see cref="EcdisDisplayState.SetCategory"/> through the Avalonia UI
 /// dispatcher.
 /// </summary>
 /// <remarks>
-/// Setting <see cref="SettingsViewModel.SelectedPalette"/> raises
+/// Setting <see cref="ViewerSettingsService.SelectedPalette"/> raises
 /// <c>PropertyChanged</c> and <c>PaletteChanged</c>; bound view-models
 /// expect those notifications on the UI thread. We therefore marshal
 /// every setter through <see cref="Dispatcher.UIThread"/> regardless
@@ -20,10 +19,10 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class ViewerRenderStateController : IRenderStateController
 {
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly EcdisDisplayState _ecdis;
 
-    public ViewerRenderStateController(SettingsViewModel settings, EcdisDisplayState ecdis)
+    public ViewerRenderStateController(ViewerSettingsService settings, EcdisDisplayState ecdis)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(ecdis);

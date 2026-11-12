@@ -43,7 +43,7 @@ public class DatasetExtentIndicatorControllerTests
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private static SettingsViewModel NewSettings(bool indicatorsOn = true)
+    private static ViewerSettingsService NewSettings(bool indicatorsOn = true)
     {
         var path = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json");
@@ -52,7 +52,7 @@ public class DatasetExtentIndicatorControllerTests
             SettingsFilePath = path,
             ShowOutOfScaleExtentIndicators = indicatorsOn,
         };
-        return new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        return new ViewerSettingsService(settings);
     }
 
     private static DatasetEntry LoadedOutOfScaleEntry(DatasetsViewModel vm)

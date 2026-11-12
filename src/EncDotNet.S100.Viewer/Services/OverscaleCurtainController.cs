@@ -21,7 +21,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// re-projects and clips the fill per frame. The controller therefore caches the
 /// last resolution and skips recomputation on a pure pan, recomputing only when
 /// the zoom changes, a dataset is added/removed/(re)loaded/hidden/shown, or the
-/// mariner toggles <see cref="SettingsViewModel.ShowOverscaleIndication"/>.
+/// mariner toggles <see cref="ViewerSettingsService.ShowOverscaleIndication"/>.
 /// Because a zoom leaves the cells unchanged, the per-cell regions are
 /// memoised in an <see cref="OverscaleCurtainRegionCache"/>, so a zoom step
 /// only re-evaluates which cells are overscaled rather than re-running the
@@ -47,7 +47,7 @@ internal sealed class OverscaleCurtainController : IDisposable
     private readonly DatasetsViewModel _datasets;
     private readonly IDatasetLoaderService _loader;
     private readonly IMapViewportNotifier _viewport;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly Action<Action> _marshal;
     private readonly S100OverscaleCurtainLayer _curtain;
     private readonly OverscaleCurtainRegionCache _regions = new();
@@ -63,14 +63,14 @@ internal sealed class OverscaleCurtainController : IDisposable
     /// <param name="datasets">The datasets view-model to observe.</param>
     /// <param name="loader">Supplies the overscale cell inputs.</param>
     /// <param name="viewport">Publishes viewport (resolution) changes.</param>
-    /// <param name="settings">Settings view-model supplying the on/off toggle.</param>
+    /// <param name="settings">Settings service supplying the on/off toggle.</param>
     /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
     public OverscaleCurtainController(
         IMapLayerCollection layers,
         DatasetsViewModel datasets,
         IDatasetLoaderService loader,
         IMapViewportNotifier viewport,
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         Action<Action> marshal)
     {
         ArgumentNullException.ThrowIfNull(layers);

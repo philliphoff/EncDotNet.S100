@@ -24,7 +24,7 @@ internal sealed class MapToolsViewModel : ViewModelBase
         MeasureCardViewModel measureCard,
         RangeBearingState rangeBearing,
         RoutesService routes,
-        SettingsViewModel settings)
+        ViewerSettingsService settings)
     {
         ArgumentNullException.ThrowIfNull(measureAppearance);
         ArgumentNullException.ThrowIfNull(measure);

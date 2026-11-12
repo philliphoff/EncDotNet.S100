@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:keys="using:EncDotNet.S100.Viewer.ViewModels.Keys"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:settings="using:EncDotNet.S100.Viewer.Views.Settings"
              x:Class="EncDotNet.S100.Viewer.Views.SettingsView"
@@ -14,6 +15,30 @@
       Settings.* automation ids of its controls; a page's controls are in the
       visual tree only while its category is selected.
     -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:GeneralSettingsPageViewModel">
+            <settings:GeneralSettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:AppearanceSettingsPageViewModel">
+            <settings:AppearanceSettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:ChartSettingsPageViewModel">
+            <settings:ChartSettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:VesselsSettingsPageViewModel">
+            <settings:VesselsSettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:IntegrationsSettingsPageViewModel">
+            <settings:IntegrationsSettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="keys:KeysAndCertificatesViewModel">
+            <settings:KeysAndCertificatesSettingsPage />
+        </DataTemplate>
+        <DataTemplate DataType="vm:AdvancedSettingsPageViewModel">
+            <settings:AdvancedSettingsPage />
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
     <UserControl.Styles>
         <!-- Category list: a vertical strip of tabs beside the selected page. -->
         <Style Selector="TabControl.settingsNav">
@@ -43,7 +68,10 @@
                 </ControlTemplate>
             </Setter>
         </Style>
-        <Style Selector="TabControl.settingsNav > TabItem">
+        <Style Selector="TabControl.settingsNav > TabItem" x:DataType="vm:ISettingsPage">
+            <Setter Property="AutomationProperties.AutomationId" Value="{Binding AutomationId}" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding StatusText}" />
             <Setter Property="FontSize" Value="12.5" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
@@ -112,58 +140,38 @@
         </Style>
     </UserControl.Styles>
 
-    <!-- Tab order must match SettingsCategory: SelectedCategoryIndex is its value. -->
+    <!--
+      The pages are the view model's Pages (ISettingsPage, in their order); each
+      page's view comes from the data templates above, and its entry in the
+      category list takes its automation id and name from the page.
+    -->
     <TabControl Classes="settingsNav"
                 AutomationProperties.AutomationId="Settings.Categories"
                 AutomationProperties.Name="{x:Static loc:Strings.Label_SettingsCategories}"
-                SelectedIndex="{Binding SelectedCategoryIndex}">
-        <TabItem Header="{x:Static loc:Strings.Settings_Category_General}"
-                 AutomationProperties.AutomationId="Settings.Category.General"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_General}">
-            <settings:GeneralSettingsPage />
-        </TabItem>
-        <TabItem Header="{x:Static loc:Strings.Settings_Category_Appearance}"
-                 AutomationProperties.AutomationId="Settings.Category.Appearance"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Appearance}">
-            <settings:AppearanceSettingsPage />
-        </TabItem>
-        <TabItem Header="{x:Static loc:Strings.Settings_Category_Chart}"
-                 AutomationProperties.AutomationId="Settings.Category.Chart"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Chart}">
-            <settings:ChartSettingsPage />
-        </TabItem>
-        <TabItem Header="{x:Static loc:Strings.Settings_Category_Vessels}"
-                 AutomationProperties.AutomationId="Settings.Category.Vessels"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Vessels}">
-            <settings:VesselsSettingsPage />
-        </TabItem>
-        <TabItem Header="{x:Static loc:Strings.Settings_Category_Integrations}"
-                 AutomationProperties.AutomationId="Settings.Category.Integrations"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Integrations}">
-            <settings:IntegrationsSettingsPage />
-        </TabItem>
-        <!-- The status line under the label is the Settings warning for an
-             identity that ends within 30 days or was revoked (#845 A2). -->
-        <TabItem AutomationProperties.AutomationId="Settings.Category.Keys"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Keys}"
-                 AutomationProperties.HelpText="{Binding KeysAndCertificates.StatusText}"
-                 IsVisible="{Binding KeysAndCertificates, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TabItem.Header>
-                <StackPanel Spacing="2">
-                    <TextBlock Text="{x:Static loc:Strings.Settings_Category_Keys}" />
-                    <TextBlock Classes="settingsNavStatus"
-                               Classes.destructive="{Binding KeysAndCertificates.StatusIsDestructive, FallbackValue=False}"
-                               Classes.warning="{Binding KeysAndCertificates.StatusIsWarning, FallbackValue=False}"
-                               Text="{Binding KeysAndCertificates.StatusText}"
-                               IsVisible="{Binding KeysAndCertificates.HasStatus, FallbackValue=False}" />
-                </StackPanel>
-            </TabItem.Header>
-            <settings:KeysAndCertificatesSettingsPage DataContext="{Binding KeysAndCertificates}" />
-        </TabItem>
-        <TabItem Header="{x:Static loc:Strings.Settings_Category_Advanced}"
-                 AutomationProperties.AutomationId="Settings.Category.Advanced"
-                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Advanced}">
-            <settings:AdvancedSettingsPage />
-        </TabItem>
+                ItemsSource="{Binding Pages}"
+                SelectedItem="{Binding SelectedPage}">
+        <TabControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ISettingsPage">
+                <ContentControl Content="{Binding}">
+                    <ContentControl.DataTemplates>
+                        <!-- The status line under the label is the Settings warning for an
+                             identity that ends within 30 days or was revoked (#845 A2). -->
+                        <DataTemplate DataType="keys:KeysAndCertificatesViewModel">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Title}" />
+                                <TextBlock Classes="settingsNavStatus"
+                                           Classes.destructive="{Binding StatusIsDestructive}"
+                                           Classes.warning="{Binding StatusIsWarning}"
+                                           Text="{Binding StatusText}"
+                                           IsVisible="{Binding HasStatus}" />
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate DataType="vm:ISettingsPage">
+                            <TextBlock Text="{Binding Title}" />
+                        </DataTemplate>
+                    </ContentControl.DataTemplates>
+                </ContentControl>
+            </DataTemplate>
+        </TabControl.ItemTemplate>
     </TabControl>
 </UserControl>

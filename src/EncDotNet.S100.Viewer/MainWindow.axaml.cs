@@ -215,10 +215,10 @@ public partial class MainWindow : ShadUI.Window
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
         // viewer's palette and ECDIS display category without exposing
-        // SettingsViewModel / EcdisDisplayState directly.
+        // ViewerSettingsService / EcdisDisplayState directly.
         App.Services.GetRequiredService<IRenderStateControllerAccessor>().Current =
             new ViewerRenderStateController(
-                App.Services.GetRequiredService<ViewModels.SettingsViewModel>(),
+                App.Services.GetRequiredService<ViewerSettingsService>(),
                 App.Services.GetRequiredService<EcdisDisplayState>());
         // UI controller bridges MCP / scripted callers to the viewer's
         // activity-panel state (which docks are open and which tab each
@@ -332,14 +332,15 @@ public partial class MainWindow : ShadUI.Window
         // Apply persisted accent color. Both the user's colour choice and
         // the active chrome theme feed the effective brush, so re-apply on
         // either change (the low-light themes mute the accent).
-        ApplyAccentColor(_viewModel.Settings.AccentColor);
-        _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
+        var viewerSettingsService = App.Services.GetRequiredService<ViewerSettingsService>();
+        ApplyAccentColor(viewerSettingsService.AccentColor);
+        viewerSettingsService.AccentColorChanged += ApplyAccentColor;
         if (Application.Current is { } themedApp)
             themedApp.ActualThemeVariantChanged += (_, _) => ApplyAccentColor(_accentColor);
 
         // Apply persisted scale-bar distance unit and react to changes.
-        ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
-        _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
+        ScaleBar.Unit = viewerSettingsService.DistanceUnit;
+        viewerSettingsService.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
 
         // Surface DatasetsViewModel rejection of files no product recognises.
         _viewModel.Datasets.UnrecognizedFileEncountered += path =>
@@ -368,8 +369,8 @@ public partial class MainWindow : ShadUI.Window
         // Settings (or via --basemap). Keep a reference so swapping mode
         // can replace it live. Always sits at index 0, beneath datasets.
         _mapHost.SetBasemapLayer(
-            BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode));
-        _viewModel.Settings.BasemapModeChanged += OnBasemapModeChanged;
+            BasemapLayerFactory.TryCreate(viewerSettingsService.SelectedBasemapMode));
+        viewerSettingsService.BasemapModeChanged += OnBasemapModeChanged;
 
         // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
         // background so the unrendered area outside the tile layer's
@@ -507,7 +508,7 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<ViewerDatasetCatalog>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            App.Services.GetRequiredService<SettingsViewModel>(),
+            App.Services.GetRequiredService<ViewerSettingsService>(),
             UiThread.RunOrPost,
             warningDrawing: App.Services.GetService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>());
 
@@ -516,7 +517,7 @@ public partial class MainWindow : ShadUI.Window
             _mapHost,
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>(),
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            App.Services.GetRequiredService<SettingsViewModel>(),
+            App.Services.GetRequiredService<ViewerSettingsService>(),
             UiThread.RunOrPost);
 
         // Out-of-scale extent indicators: outline the extents of loaded
@@ -527,7 +528,7 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            App.Services.GetRequiredService<SettingsViewModel>(),
+            App.Services.GetRequiredService<ViewerSettingsService>(),
             UiThread.RunOrPost,
             UiThread.Post);
 
@@ -589,7 +590,7 @@ public partial class MainWindow : ShadUI.Window
             _loader,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
-            App.Services.GetRequiredService<SettingsViewModel>(),
+            App.Services.GetRequiredService<ViewerSettingsService>(),
             UiThread.RunOrPost);
         // Depth basis indicator (#1191): what the chart's depths are relative to.
         InitializeDepthBasis();

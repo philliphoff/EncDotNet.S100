@@ -11,7 +11,8 @@ internal sealed class MainViewModel : ViewModelBase
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
-    public SettingsViewModel Settings { get; }
+    /// <summary>The display toolbar's palette menu.</summary>
+    public PaletteMenuViewModel Palette { get; }
     public PickReportViewModel PickReport { get; }
     public TimelineViewModel Timeline { get; }
 
@@ -63,7 +64,7 @@ internal sealed class MainViewModel : ViewModelBase
         FeatureCataloguesViewModel featureCatalogues,
         PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
-        SettingsViewModel settingsViewModel,
+        PaletteMenuViewModel palette,
         PickReportViewModel pickReport,
         TimelineViewModel timeline,
         RoutesService routes)
@@ -77,7 +78,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(featureCatalogues);
         ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
-        ArgumentNullException.ThrowIfNull(settingsViewModel);
+        ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(routes);
@@ -93,7 +94,7 @@ internal sealed class MainViewModel : ViewModelBase
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
-        Settings = settingsViewModel;
+        Palette = palette;
         PickReport = pickReport;
         // Dismissing the Pick Report also drops the map highlight, so the
         // report and overlay stay in sync and a later pick re-opens the dock.

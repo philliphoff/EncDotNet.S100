@@ -1,7 +1,7 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -19,7 +19,7 @@ public sealed class ViewerLuaEngineTests
 
         Assert.Null(settings.LuaEngine);
         Assert.Equal(LuaEngineKind.LuaCSharp, settings.ResolveLuaEngine());
-        Assert.Equal(LuaEngineKind.LuaCSharp, new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null).SelectedLuaEngine);
+        Assert.Equal(LuaEngineKind.LuaCSharp, new ViewerSettingsService(settings).SelectedLuaEngine);
     }
 
     [Theory]
@@ -40,7 +40,7 @@ public sealed class ViewerLuaEngineTests
     {
         Assert.SkipWhen(ViewerLuaEngine.IsPinnedByEnvironment, "S100_LUA_ENGINE pins the engine.");
         var settings = NewSettings();
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
 
         vm.SelectedLuaEngine = LuaEngineKind.MoonSharp;
 

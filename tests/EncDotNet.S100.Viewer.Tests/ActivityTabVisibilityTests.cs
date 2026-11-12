@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using Avalonia.Controls;
-using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -92,7 +92,7 @@ public sealed class OwnShipTrackingVisibilitySourceTests
     public void IsVisible_ReflectsOverlayEnabled()
     {
         var settings = new ViewerSettings { OwnShipOverlayEnabled = true };
-        var svm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var svm = new ViewerSettingsService(settings);
         using var source = new OwnShipTrackingVisibilitySource(svm);
 
         Assert.True(source.IsVisible);
@@ -102,7 +102,7 @@ public sealed class OwnShipTrackingVisibilitySourceTests
     public void VisibilityChanged_RaisedOnOverlayToggle()
     {
         var settings = new ViewerSettings { OwnShipOverlayEnabled = false };
-        var svm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var svm = new ViewerSettingsService(settings);
         using var source = new OwnShipTrackingVisibilitySource(svm);
 
         bool? last = null;
@@ -121,7 +121,7 @@ public sealed class AisOverlayVisibilitySourceTests
     public void IsVisible_ReflectsAisEnabled()
     {
         var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = true } };
-        var svm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var svm = new ViewerSettingsService(settings);
         using var source = new AisOverlayVisibilitySource(svm);
 
         Assert.True(source.IsVisible);
@@ -131,7 +131,7 @@ public sealed class AisOverlayVisibilitySourceTests
     public void VisibilityChanged_RaisedOnAisToggle()
     {
         var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = false } };
-        var svm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var svm = new ViewerSettingsService(settings);
         using var source = new AisOverlayVisibilitySource(svm);
 
         bool? last = null;
@@ -147,7 +147,7 @@ public sealed class AisOverlayVisibilitySourceTests
     public void Dispose_UnsubscribesFromSettings()
     {
         var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = false } };
-        var svm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var svm = new ViewerSettingsService(settings);
         var source = new AisOverlayVisibilitySource(svm);
         source.Dispose();
 

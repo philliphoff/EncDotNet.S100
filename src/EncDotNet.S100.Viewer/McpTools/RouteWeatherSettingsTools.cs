@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
@@ -26,10 +26,10 @@ internal sealed class RouteWeatherSettingsTools
 
     private static readonly string[] Names = ["maxWindKnots", "maxWaveHeightMeters"];
 
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly IRouteEditInvoker _invoker;
 
-    public RouteWeatherSettingsTools(SettingsViewModel settings, IRouteEditInvoker invoker)
+    public RouteWeatherSettingsTools(ViewerSettingsService settings, IRouteEditInvoker invoker)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(invoker);
@@ -92,7 +92,7 @@ internal sealed class RouteWeatherSettingsTools
         });
     }
 
-    internal static RouteWeatherSettingsDto Dto(SettingsViewModel settings) =>
+    internal static RouteWeatherSettingsDto Dto(ViewerSettingsService settings) =>
         new(
             settings.RouteMaxWindKnots,
             settings.RouteMaxWaveHeightMetres,

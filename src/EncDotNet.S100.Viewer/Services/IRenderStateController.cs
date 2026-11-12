@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <see cref="ICapabilityAccessor{TCapability}"/>
 /// for state that lives in view-models and singletons rather than in the
 /// Mapsui control. Lets MCP tools mutate the live render state from
-/// off-UI threads without coupling them directly to <c>SettingsViewModel</c>
+/// off-UI threads without coupling them directly to <c>ViewerSettingsService</c>
 /// or <c>EcdisDisplayState</c>.
 /// </summary>
 internal interface IRenderStateController

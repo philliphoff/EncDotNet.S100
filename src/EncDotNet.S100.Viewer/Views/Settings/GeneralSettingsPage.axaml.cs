@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Viewer.Views.Settings;
 /// <summary>Settings → General: units and time format (#845).</summary>
 public partial class GeneralSettingsPage : UserControl
 {
-    /// <summary>Creates the page; its data context is the <c>SettingsViewModel</c>.</summary>
+    /// <summary>Creates the page; its data context is the <c>GeneralSettingsPageViewModel</c>.</summary>
     public GeneralSettingsPage()
     {
         InitializeComponent();
