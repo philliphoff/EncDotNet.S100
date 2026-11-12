@@ -14,6 +14,18 @@ month. For package versions and release assets, see
   mean sea level or a chart datum such as MLLW. Against NOAA's published
   predictions at five stations it agrees to under a millimetre RMS. See the
   [package README](../src/EncDotNet.S100.Tides/README.md).
+- **Tide stations.** The new `EncDotNet.S100.Tides.Stations` package is the
+  catalogue the predictions come from. It reads NOAA CO-OPS's tide stations,
+  harmonic constants, datums and subordinate-station offsets, keeps them in
+  a JSON file that works offline, finds stations near a point or in a box,
+  and predicts a station on a chart datum such as MLLW or LAT with its
+  provenance ("from Seattle 9447130, with offsets"). A cheap check says when
+  NOAA has newer data, such as a new tidal datum epoch. The same JSON format
+  lets you bring your own stations. `EncDotNet.S100.Tides` gains
+  `SubordinateTidePredictor`, which predicts a subordinate station by NOAA's
+  method; its highs and lows match NOAA's at three Puget Sound stations to
+  under a minute and a millimetre. See the
+  [package README](../src/EncDotNet.S100.Tides.Stations/README.md).
 - **Relief shading strength.** The S-102 Relief shading switch in Display
   controls gains a **Strength** control while it is on: Subtle, Medium (the
   default) or Strong. It is kept with the display settings and saved with

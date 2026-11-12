@@ -85,6 +85,43 @@ A high and a low less than a millimetre apart in height
 (`TidePredictor.MinimumTurnMeters`) are a stand, not a turn of the tide, and
 are left out.
 
+## Predict a subordinate station
+
+Most NOAA tide stations are subordinate: they have no constituents of their
+own, only time and height differences for high and low water against a
+reference station. `SubordinateTidePredictor` predicts one from the
+reference station's predictor, on the datum the differences apply on (MLLW
+for NOAA):
+
+```csharp
+var tacomaNarrows = new SubordinateTidePredictor(
+    new TidePredictor(onChartDatum),        // Seattle on MLLW
+    new SubordinateOffsets(
+        HighWaterTime: TimeSpan.FromMinutes(28),
+        LowWaterTime: TimeSpan.FromMinutes(23),
+        HighWaterHeight: 1.11,
+        LowWaterHeight: 1.02,
+        SubordinateHeightAdjustment.Ratio));
+
+var highsAndLows = tacomaNarrows.FindExtremes(now, now.AddDays(2));
+```
+
+It follows NOAA's method. Each reference high and low is moved by its time
+difference and its height multiplied by the ratio (or, for
+`SubordinateHeightAdjustment.Offset`, shifted by the metres given). Between
+them, the height is the reference curve with the time and height
+differences interpolated linearly from one high or low to the next, so the
+curve passes through every high and low but is less certain between them.
+A reference turn of under 3 mm (`MinimumReferenceTurnMeters`) is a stand
+and gives the subordinate station no high or low. Against NOAA's published
+highs and lows for 2026 at Tacoma Narrows Bridge, Port Ludlow and
+Marrowstone Point, every one matches, to under a minute and a millimetre.
+
+Both predictors implement `ITidePredictor`. The
+[`EncDotNet.S100.Tides.Stations`](../EncDotNet.S100.Tides.Stations/README.md)
+package reads stations, offsets and datums from NOAA and creates the right
+predictor for a station.
+
 ## How predictions are made
 
 The height is the sum of the constituents' cosines about the datum's mean,

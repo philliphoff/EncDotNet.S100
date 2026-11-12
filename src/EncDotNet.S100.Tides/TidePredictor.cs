@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Tides;
 /// from several threads at once.
 /// </para>
 /// </remarks>
-public sealed class TidePredictor
+public sealed class TidePredictor : ITidePredictor
 {
     /// <summary>
     /// Phasor series re-seed from the exact phases at least this often, so
@@ -91,6 +91,9 @@ public sealed class TidePredictor
 
     /// <summary>The station the predictions are for.</summary>
     public TideStation Station { get; }
+
+    /// <inheritdoc />
+    public string DatumName => Station.Datum.Name;
 
     /// <summary>The predicted height at a time.</summary>
     /// <param name="utc">The time (UTC).</param>
