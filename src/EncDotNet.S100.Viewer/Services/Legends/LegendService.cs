@@ -489,10 +489,14 @@ internal sealed class LegendService : IDisposable
         return null;
     }
 
+    // Transforms WGS-84 into a grid's CRS for a band row's tint (#1433).
+    private static readonly ICrsTransformFactory CrsTransforms = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+
     /// <summary>
     /// The features a legend row describes that are drawn in the current map
-    /// view (#1412, D19): what hovering the row rings. Read from the stack's
-    /// display lists; nothing is portrayed again.
+    /// view (#1412, D19): what hovering the row rings, or for a ramp band the
+    /// area it tints (#1433). Read from the stack's display lists and grids;
+    /// nothing is portrayed again.
     /// </summary>
     /// <param name="sectionId">The row's section.</param>
     /// <param name="rowLabel">The row's label.</param>
@@ -524,6 +528,8 @@ internal sealed class LegendService : IDisposable
             id => processors.GetValueOrDefault(id),
             TimelineMapScope.ViewOf(_viewport?.Current),
             ViewScale(),
+            LegendTintView.Of(_viewport?.Current),
+            CrsTransforms,
             maxRings);
     }
 

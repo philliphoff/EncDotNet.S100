@@ -349,7 +349,7 @@ public sealed class LegendFindTests
     }
 
     [Fact]
-    public void A_colour_band_row_reports_a_band_and_rings_nothing_yet()
+    public void A_colour_band_row_tints_its_area_in_view_and_rings_nothing()
     {
         var scene = new Scene(WaveFill("gfswave.grib2"));
         using var service = scene.Service;
@@ -359,6 +359,12 @@ public sealed class LegendFindTests
         Assert.NotNull(find);
         Assert.Equal(LegendFindKind.Band, find.Kind);
         Assert.Empty(find.Rings);
+        Assert.Equal(1, find.MatchCount);
+        // The one node at (10, 10) covers 9.5…10.5: the view's south-west quarter.
+        var tint = Assert.IsType<LegendBandTint>(find.Tint);
+        Assert.InRange(tint.ViewFraction, 0.23, 0.27);
+        Assert.InRange(tint.Bounds!.Value.North, 10.45, 10.5);
+        Assert.InRange(tint.Bounds!.Value.East, 10.45, 10.5);
     }
 
     [Fact]
@@ -385,7 +391,9 @@ public sealed class LegendFindTests
             _ => false,
             _ => null,
             view: null,
-            double.NaN);
+            double.NaN,
+            tintView: null,
+            new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         Assert.Equal(0, find.MatchCount);
     }

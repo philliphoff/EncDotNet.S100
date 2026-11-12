@@ -327,15 +327,24 @@ portrayed again:
   feature's class, which the processor's feature list gives.
 - A station or isoline layer with one row rings what it draws.
 - A band of a colour or arrow ramp (S-102 depths, a weather field, S-111
-  speeds) rings nothing yet; tinting its area is
-  [#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433).
+  speeds) tints its area instead
+  ([#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433)): an
+  accent wash, firmer along its edge, over the view's cells whose drawn value
+  is in the band. The tint is a mask of one cell per three screen pixels, at
+  most 256 on the long side. Each cell's centre goes into the grid's own CRS
+  (the inverse of the renderer's node projection), so a UTM S-102 cell or a
+  grid in a 0–360° frame tints where it's drawn. The top fill decides a cell,
+  as it hides the fills under it; arrows tint every grid cell in the band, not
+  only the thinned arrows drawn. A fill clipped to water isn't clipped for the
+  tint.
 
 The find waits until the pointer has rested on a row for 150 ms, and rings at
 most 100 features, top of the stack first. Keyboard focus on a row does the
 same as hover. The rings clear when the row is left, when the tab closes, and
 as soon as the map moves; while the row is still hovered they come back once
 the legend has followed the new view. `set_legend`'s `findRow` rings a row
-from MCP and its `find` reads what is ringed.
+from MCP and its `find` reads what is ringed, and for a band, what's tinted
+(`find.tint`: share of the view, area, bounds).
 
 **D20 (was Q8) — Zoom moves when the column wraps.** When the column wraps,
 the mode buttons keep their places on the right edge and the zoom buttons
