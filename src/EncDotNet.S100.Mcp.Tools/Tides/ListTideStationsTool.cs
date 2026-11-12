@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Pipelines;
@@ -13,11 +14,11 @@ namespace EncDotNet.S100.Mcp.Tools.Tides;
 /// <param name="Box">A box to look in instead of a point; stations are ranked from the point when one is given, else from its centre.</param>
 /// <param name="Limit">The most stations to return; <see cref="ListTideStationsTool.DefaultLimit"/> when null.</param>
 public sealed record ListTideStationsRequest(
-    double? Latitude,
-    double? Longitude,
-    double? RadiusMeters,
-    BoundingBox? Box,
-    int? Limit);
+    [property: Description("Latitude of the point to search round, decimal degrees WGS-84; with longitude.")] double? Latitude,
+    [property: Description("Longitude of the point to search round, decimal degrees WGS-84.")] double? Longitude,
+    [property: Description("How far from the point to look, in metres (default 50000).")] double? RadiusMeters,
+    [property: Description("A box to search in instead of round a point.")] BoundingBox? Box,
+    [property: Description("The most stations to return (default 10, max 500).")] int? Limit);
 
 /// <summary>
 /// Lists tide stations near a point or in a box, nearest first, from the

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Tides;
@@ -30,16 +31,16 @@ public enum TidePredictionMode
 /// <param name="Datum">The datum's name (MLLW, LAT, MSL, …); MLLW when null.</param>
 /// <param name="MaxPoints">The most series heights allowed.</param>
 public sealed record PredictTideRequest(
-    string? Station,
-    double? Latitude,
-    double? Longitude,
-    double? RadiusMeters,
-    DateTimeOffset? From,
-    DateTimeOffset? To,
-    TimeSpan? Step,
-    TidePredictionMode Mode,
-    string? Datum,
-    int MaxPoints);
+    [property: Description("A station id or name; null to use the nearest station to the point.")] string? Station,
+    [property: Description("Latitude of the point, decimal degrees WGS-84, when no station is named.")] double? Latitude,
+    [property: Description("Longitude of the point, decimal degrees WGS-84, when no station is named.")] double? Longitude,
+    [property: Description("How far from the point the station may be, in metres (default 10000).")] double? RadiusMeters,
+    [property: Description("The first time (default: now, rounded down to the step).")] DateTimeOffset? From,
+    [property: Description("The last time (default: 24 h after 'from'; at most 366 days).")] DateTimeOffset? To,
+    [property: Description("The time between series heights (default 30 minutes).")] TimeSpan? Step,
+    [property: Description("Series, highs and lows (extremes), or both.")] TidePredictionMode Mode,
+    [property: Description("The datum: MLLW (default), MLW, MSL, MHW, MHHW, LAT or HAT.")] string? Datum,
+    [property: Description("The most series heights allowed.")] int MaxPoints);
 
 /// <summary>A station chosen for a prediction, with its predictor on the datum asked for.</summary>
 /// <param name="Catalogue">The catalogue it comes from.</param>
