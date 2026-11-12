@@ -7,7 +7,7 @@ public class MapToolsViewModelTests
 {
     private static MapToolsViewModel CreateTools(RoutesService? routes = null) =>
         TestMapTools.Create(
-            new SettingsViewModel(new ViewerSettings(), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
+            new ViewerSettingsService(new ViewerSettings()),
             routes ?? new RoutesService(new ClockViewTime(TimeProvider.System)));
 
     [Fact]

@@ -1,9 +1,8 @@
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
-public class SettingsViewModelChromeThemeTests
+public class ViewerSettingsServiceChromeThemeTests
 {
     private static ViewerSettings NewSettings()
     {
@@ -15,7 +14,7 @@ public class SettingsViewModelChromeThemeTests
     public void DefaultsTo_Light_When_Missing()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.Equal(ChromeTheme.Light, vm.SelectedChromeTheme);
     }
 
@@ -30,7 +29,7 @@ public class SettingsViewModelChromeThemeTests
     {
         var s = NewSettings();
         s.ChromeTheme = persisted;
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.Equal(expected, vm.SelectedChromeTheme);
     }
 
@@ -39,7 +38,7 @@ public class SettingsViewModelChromeThemeTests
     {
         var s = NewSettings();
         s.ChromeTheme = "totally-bogus";
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.Equal(ChromeTheme.Light, vm.SelectedChromeTheme);
     }
 
@@ -47,7 +46,7 @@ public class SettingsViewModelChromeThemeTests
     public void Setting_Theme_Persists_To_Settings()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         vm.SelectedChromeTheme = ChromeTheme.S100Night;
         Assert.Equal("S100Night", s.ChromeTheme);
     }
@@ -56,7 +55,7 @@ public class SettingsViewModelChromeThemeTests
     public void Setting_Dusk_Theme_Persists_To_Settings()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         vm.SelectedChromeTheme = ChromeTheme.S100Dusk;
         Assert.Equal("S100Dusk", s.ChromeTheme);
     }
@@ -65,7 +64,7 @@ public class SettingsViewModelChromeThemeTests
     public void Setting_Dusk_Theme_Raises_ChromeThemeChanged()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         ChromeTheme? raised = null;
         vm.ChromeThemeChanged += t => raised = t;
 
@@ -78,7 +77,7 @@ public class SettingsViewModelChromeThemeTests
     public void Setting_Theme_Raises_ChromeThemeChanged()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         ChromeTheme? raised = null;
         vm.ChromeThemeChanged += t => raised = t;
 
@@ -91,7 +90,7 @@ public class SettingsViewModelChromeThemeTests
     public void Setting_Same_Theme_Does_Not_Raise_Event()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         var count = 0;
         vm.ChromeThemeChanged += _ => count++;
 

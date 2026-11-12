@@ -3,7 +3,6 @@ using EncDotNet.S100.DynamicSources.Nmea;
 using EncDotNet.S100.Nmea;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
-using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -34,7 +33,7 @@ internal static class NmeaWeatherServiceCollectionExtensions
             NmeaWeatherSource.FeatureKind,
             (sp, _) =>
             {
-                var settings = new Lazy<SettingsViewModel?>(sp.GetService<SettingsViewModel>);
+                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
                 return new PortrayedDynamicFeatureRenderer(
                     OwnShipWeatherPortrayal.Instance,
                     () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);

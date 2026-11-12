@@ -1,4 +1,5 @@
 using EncDotNet.S100.Collections.Secom;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Secom;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Keys;
@@ -224,9 +225,11 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     public void Settings_can_open_keys_and_certificates_on_a_tab()
     {
         using var page = _keys.Page();
-        var settings = new SettingsViewModel(_keys.Settings, keysAndCertificates: page, dataMaintenance: null, applicationControl: null, dialogManager: null);
+        var settings = TestSettings.Shell(new ViewerSettingsService(_keys.Settings), page);
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, _keys.Time, dispatch: UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
+        var layout = new ShellLayoutViewModel(_keys.Settings, [], timeline, UiThread.Post);
 
-        settings.ShowKeysAndCertificates(KeysTab.Authorities);
+        new KeysNavigator(() => page, () => settings, () => layout).Open(KeysTab.Authorities);
 
         Assert.Equal(SettingsCategory.KeysAndCertificates, settings.SelectedCategory);
         Assert.Equal(KeysTab.Authorities, page.SelectedTab);

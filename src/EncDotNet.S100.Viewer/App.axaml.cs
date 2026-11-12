@@ -272,7 +272,7 @@ public partial class App : Application
         // The status bar listens for the server's port conflict, so it has to
         // exist before the first Apply below; the main window comes later.
         _services.GetRequiredService<StatusBarViewModel>();
-        var settingsVm = _services.GetRequiredService<SettingsViewModel>();
+        var viewerSettings = _services.GetRequiredService<ViewerSettingsService>();
         // Judges which S-124 warnings the map draws from the first load on (#993),
         // and has the map stamp say "Display Not Real Time" while they're loaded
         // and the view time is pinned (S-98 §12.7.2).
@@ -291,7 +291,7 @@ public partial class App : Application
             Update();
         }
         WatchSecomIdentity();
-        settingsVm.McpSettingsChanged += () =>
+        viewerSettings.McpSettingsChanged += () =>
         {
             _ = mcpHost.Apply().ContinueWith(t =>
             {
@@ -304,7 +304,7 @@ public partial class App : Application
         // the user toggles the integration or edits the base URL (issue #442),
         // so the buttons appear/disappear without a catalogue reload or a new
         // pick.
-        settingsVm.ExaminerSettingsChanged += () =>
+        viewerSettings.ExaminerSettingsChanged += () =>
         {
             _services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
             _services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
@@ -323,11 +323,11 @@ public partial class App : Application
         // unless the user subsequently overrides SelectedPalette
         // independently.
         var themeService = _services.GetRequiredService<IThemeService>();
-        themeService.SetTheme(settingsVm.SelectedChromeTheme);
-        settingsVm.ChromeThemeChanged += chromeTheme =>
+        themeService.SetTheme(viewerSettings.SelectedChromeTheme);
+        viewerSettings.ChromeThemeChanged += chromeTheme =>
         {
             themeService.SetTheme(chromeTheme);
-            settingsVm.SelectedPalette = ChromeThemes.GetDefaultPaletteFor(chromeTheme);
+            viewerSettings.SelectedPalette = ChromeThemes.GetDefaultPaletteFor(chromeTheme);
         };
 
         // Re-publish own-ship fix when vessel dimensions change. Resolve
@@ -337,7 +337,7 @@ public partial class App : Application
         var ownShipGeom = _services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
         if (ownShipGeom is not null)
         {
-            settingsVm.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
+            viewerSettings.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
         }
 
         // Toggle the simulated own-ship overlay live from Settings. The
@@ -347,14 +347,14 @@ public partial class App : Application
         var ownShipSource = _services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
         if (ownShipSource is not null)
         {
-            settingsVm.OwnShipOverlayEnabledChanged += enabled => ownShipSource.IsEnabled = enabled;
+            viewerSettings.OwnShipOverlayEnabledChanged += enabled => ownShipSource.IsEnabled = enabled;
         }
 
         // Pirate mode: engage when the user picks "Take the helm of this
         // vessel" on an AIS hit in the pick report. The coordinator opens
         // the visibility gates, persists the source selection, and starts
         // the controller following. Routing the overlay-enable through
-        // settingsVm keeps the checkbox + persisted flag in sync.
+        // the settings service keeps the checkbox + persisted flag in sync.
         var pirateController = _services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>();
         var pickReport = _services.GetService<PickReportViewModel>();
         if (pirateController is not null)
@@ -363,7 +363,7 @@ public partial class App : Application
                 pirateController,
                 _services.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IS100DynamicSourceRegistry>(),
                 _services.GetRequiredService<ViewerSettings>(),
-                enabled => settingsVm.OwnShipOverlayEnabled = enabled);
+                enabled => viewerSettings.OwnShipOverlayEnabled = enabled);
 
             if (pickReport is not null)
             {
@@ -394,7 +394,7 @@ public partial class App : Application
             // excluded (hidden) while own-ship is also hidden, making the
             // vessel vanish entirely. Disengage clears the exclusion +
             // geometry override and reverts the source to Simulated.
-            settingsVm.OwnShipOverlayEnabledChanged += enabled =>
+            viewerSettings.OwnShipOverlayEnabledChanged += enabled =>
             {
                 if (!enabled && pirateController.IsActive)
                     pirateCoordinator.Disengage();
@@ -540,7 +540,7 @@ public partial class App : Application
                 catalog),
             new McpTools.Groups.DisplaySettingsMcpToolGroup(
                 sp.GetRequiredService<EcdisDisplayPanelViewModel>(),
-                sp.GetRequiredService<SettingsViewModel>(),
+                sp.GetRequiredService<ViewerSettingsService>(),
                 displayCombinations,
                 depthBasis),
             new McpTools.Groups.DiagnosticsMcpToolGroup(
@@ -945,6 +945,7 @@ public partial class App : Application
                 openKeys)));
         // The way from a SECOM certificate problem to Settings → Keys & certificates (#880).
         services.AddSingleton(sp => new Services.Secom.KeysNavigator(
+            () => sp.GetRequiredService<ViewModels.Keys.KeysAndCertificatesViewModel>(),
             () => sp.GetRequiredService<SettingsViewModel>(),
             () => sp.GetRequiredService<ShellLayoutViewModel>()));
         // Reads SECOM sources again when the identity or trusted authorities change (#880).
@@ -1655,11 +1656,23 @@ public partial class App : Application
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
-        services.AddSingleton<SettingsViewModel>();
+        // Settings (#1398): one service holds them; the Settings panel lists
+        // its pages, each registered as an ISettingsPage.
+        services.AddSingleton<ViewerSettingsService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings>(sp =>
-            sp.GetRequiredService<SettingsViewModel>());
+            sp.GetRequiredService<ViewerSettingsService>());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteWeatherLimits>(sp =>
-            sp.GetRequiredService<SettingsViewModel>());
+            sp.GetRequiredService<ViewerSettingsService>());
+        services.AddSingleton<ResetApplicationDataWorkflow>();
+        services.AddSettingsPage<GeneralSettingsPageViewModel>();
+        services.AddSettingsPage<AppearanceSettingsPageViewModel>();
+        services.AddSettingsPage<ChartSettingsPageViewModel>();
+        services.AddSettingsPage<VesselsSettingsPageViewModel>();
+        services.AddSettingsPage<IntegrationsSettingsPageViewModel>();
+        services.AddSingleton<ISettingsPage>(sp => sp.GetRequiredService<ViewModels.Keys.KeysAndCertificatesViewModel>());
+        services.AddSettingsPage<AdvancedSettingsPageViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<PaletteMenuViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<MapPresentationStateProjection>();
         services.AddSingleton(sp =>
@@ -1708,7 +1721,7 @@ public partial class App : Application
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>()));
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService(
-            sp.GetRequiredService<SettingsViewModel>(),
+            sp.GetRequiredService<ViewerSettingsService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ViewerWaterLevelCatalog>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(sp =>
@@ -1719,7 +1732,7 @@ public partial class App : Application
         // Legend tab, the route-check card and MCP get_legend read it.
         services.AddSingleton(sp =>
         {
-            var settings = sp.GetRequiredService<SettingsViewModel>();
+            var settings = sp.GetRequiredService<ViewerSettingsService>();
             var legend = new EncDotNet.S100.Viewer.Services.Legends.LegendService(
                 sp.GetRequiredService<IDatasetLoaderService>(),
                 sp.GetRequiredService<DatasetsViewModel>(),
@@ -1921,7 +1934,7 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
-            sp.GetRequiredService<SettingsViewModel>()));
+            sp.GetRequiredService<ViewerSettingsService>()));
         services.AddSingleton(sp => new StatusBarViewModel(
             sp.GetRequiredService<McpServerHost>(),
             sp.GetRequiredService<INotificationService>(),
@@ -2029,7 +2042,7 @@ public partial class App : Application
             iconFactory: static () => new FluentIcon { Icon = Icon.Flow, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
         // Vessels tab — shown only while the AIS overlay is enabled
-        // (its visibility source bridges SettingsViewModel.AisEnabled).
+        // (its visibility source bridges ViewerSettingsService.AisEnabled).
         services.AddActivityTab<VesselListViewModel, VesselListView>(
             id: "Vessels",
             order: 60,
@@ -2040,9 +2053,9 @@ public partial class App : Application
             persistAsLastSelected: false,
             visibilitySourceFactory: static sp =>
                 new EncDotNet.S100.Viewer.ViewModels.Activities.AisOverlayVisibilitySource(
-                    sp.GetRequiredService<SettingsViewModel>()));
+                    sp.GetRequiredService<ViewerSettingsService>()));
         // Helm tab — shown only while own-vessel tracking is enabled
-        // (its visibility source bridges SettingsViewModel.OwnShipOverlayEnabled).
+        // (its visibility source bridges ViewerSettingsService.OwnShipOverlayEnabled).
         services.AddActivityTab<HelmViewModel, HelmView>(
             id: "Helm",
             order: 70,
@@ -2053,7 +2066,7 @@ public partial class App : Application
             persistAsLastSelected: false,
             visibilitySourceFactory: static sp =>
                 new EncDotNet.S100.Viewer.ViewModels.Activities.OwnShipTrackingVisibilitySource(
-                    sp.GetRequiredService<SettingsViewModel>()));
+                    sp.GetRequiredService<ViewerSettingsService>()));
         services.AddActivityTab<FeatureCataloguesViewModel, FeatureCataloguesView>(
             id: "FeatureCatalogues",
             order: 80,

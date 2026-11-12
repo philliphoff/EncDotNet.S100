@@ -219,36 +219,37 @@ public sealed class RouteWeatherCheckTests : IDisposable
     public void The_settings_keep_the_limits_and_show_waves_in_the_depth_unit()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
+        var page = new ChartSettingsPageViewModel(vm);
         var raised = 0;
         vm.RouteWeatherLimitsChanged += () => raised++;
 
         Assert.Null(vm.Limits);
-        Assert.Equal(string.Empty, vm.RouteMaxWindDisplay);
+        Assert.Equal(string.Empty, page.RouteMaxWindDisplay);
 
-        vm.RouteMaxWindDisplay = "25";
-        vm.RouteMaxWaveDisplay = "3.5";
+        page.RouteMaxWindDisplay = "25";
+        page.RouteMaxWaveDisplay = "3.5";
 
         Assert.Equal(2, raised);
         Assert.Equal(25, settings.RouteMaxWindKnots);
         Assert.Equal(3.5, settings.RouteMaxWaveHeightMetres);
         Assert.Equal(25, vm.Limits!.MaxWind!.Value.TotalKnots, 9);
-        Assert.Equal("Wave height limit (m)", vm.RouteMaxWaveLabel);
+        Assert.Equal("Wave height limit (m)", page.RouteMaxWaveLabel);
 
         vm.SelectedDepthUnit = DepthUnit.Feet;
-        Assert.Equal("Wave height limit (ft)", vm.RouteMaxWaveLabel);
-        Assert.Equal("11.5", vm.RouteMaxWaveDisplay);
-        vm.RouteMaxWaveDisplay = "10";
+        Assert.Equal("Wave height limit (ft)", page.RouteMaxWaveLabel);
+        Assert.Equal("11.5", page.RouteMaxWaveDisplay);
+        page.RouteMaxWaveDisplay = "10";
         Assert.Equal(3.048, settings.RouteMaxWaveHeightMetres!.Value, 6);
 
         // Not a number leaves the limit; empty turns it off.
-        vm.RouteMaxWindDisplay = "lots";
+        page.RouteMaxWindDisplay = "lots";
         Assert.Equal(25, vm.RouteMaxWindKnots);
-        vm.RouteMaxWindDisplay = "";
+        page.RouteMaxWindDisplay = "";
         Assert.Null(vm.RouteMaxWindKnots);
         Assert.Null(settings.RouteMaxWindKnots);
 
-        var reloaded = new SettingsViewModel(ViewerSettings.Load(_settingsFile), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var reloaded = new ViewerSettingsService(ViewerSettings.Load(_settingsFile));
         Assert.Null(reloaded.RouteMaxWindKnots);
         Assert.Equal(3.048, reloaded.RouteMaxWaveHeightMetres!.Value, 6);
     }
@@ -256,8 +257,8 @@ public sealed class RouteWeatherCheckTests : IDisposable
     [AvaloniaFact]
     public void The_settings_page_has_the_two_limit_boxes()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsFile, RouteMaxWindKnots = 28 }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
-        using var host = ViewHost.Show(new ChartSettingsPage { DataContext = vm }, width: 500, height: 2400);
+        var vm = new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsFile, RouteMaxWindKnots = 28 });
+        using var host = ViewHost.Show(new ChartSettingsPage { DataContext = new ChartSettingsPageViewModel(vm) }, width: 500, height: 2400);
 
         var wind = host.Find<TextBox>("Settings.RouteMaxWind");
         var wave = host.Find<TextBox>("Settings.RouteMaxWave");
@@ -272,7 +273,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
     public async Task The_mcp_tools_read_and_set_the_limits()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
         var tools = new RouteWeatherSettingsTools(vm, new ImmediateInvoker());
         var ct = TestContext.Current.CancellationToken;
 

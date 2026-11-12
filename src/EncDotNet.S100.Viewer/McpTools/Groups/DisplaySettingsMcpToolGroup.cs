@@ -7,23 +7,23 @@ namespace EncDotNet.S100.Viewer.McpTools.Groups;
 internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
 {
     private readonly EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel _ecdisDisplay;
-    private readonly EncDotNet.S100.Viewer.ViewModels.SettingsViewModel _settingsViewModel;
+    private readonly Services.ViewerSettingsService _settings;
     private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService _displayCombinations;
     private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService _depthBasis;
 
     public DisplaySettingsMcpToolGroup(
         EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel ecdisDisplay,
-        EncDotNet.S100.Viewer.ViewModels.SettingsViewModel settingsViewModel,
+        Services.ViewerSettingsService settings,
         EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService displayCombinations,
         EncDotNet.S100.Viewer.Services.Depth.DepthBasisService depthBasis)
     {
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
-        ArgumentNullException.ThrowIfNull(settingsViewModel);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(displayCombinations);
         ArgumentNullException.ThrowIfNull(depthBasis);
 
         _ecdisDisplay = ecdisDisplay;
-        _settingsViewModel = settingsViewModel;
+        _settings = settings;
         _displayCombinations = displayCombinations;
         _depthBasis = depthBasis;
     }
@@ -44,7 +44,7 @@ internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
             yield return AmlDisplayMcpAdapters.CreateSet(amlDisplay);
         }
 
-        var routeWeather = new RouteWeatherSettingsTools(_settingsViewModel, new DispatcherRouteEditInvoker());
+        var routeWeather = new RouteWeatherSettingsTools(_settings, new DispatcherRouteEditInvoker());
         yield return RouteWeatherSettingsMcpAdapters.CreateGet(routeWeather);
         yield return RouteWeatherSettingsMcpAdapters.CreateSet(routeWeather);
 

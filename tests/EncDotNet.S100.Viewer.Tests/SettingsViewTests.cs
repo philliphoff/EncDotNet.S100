@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
@@ -23,7 +24,7 @@ public sealed class SettingsViewTests : IDisposable
     [AvaloniaFact]
     public void Clicking_a_category_shows_its_page()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = TestSettings.Shell(new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsPath }));
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
         Assert.True(host.IsShown("Settings.DistanceUnit"));
         Assert.False(host.IsShown("Settings.AisEnabled"));
@@ -38,7 +39,7 @@ public sealed class SettingsViewTests : IDisposable
     [AvaloniaFact]
     public void Setting_the_category_selects_its_tab()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = TestSettings.Shell(new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsPath }));
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
 
         vm.SelectedCategory = SettingsCategory.Advanced;
@@ -51,11 +52,11 @@ public sealed class SettingsViewTests : IDisposable
     [AvaloniaFact]
     public void Every_setting_is_on_exactly_one_category_page()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = TestSettings.Shell(new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsPath }));
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
         var pages = new Dictionary<string, List<SettingsCategory>>();
 
-        foreach (var category in Enum.GetValues<SettingsCategory>())
+        foreach (var category in vm.Pages.Select(p => p.Category))
         {
             vm.SelectedCategory = category;
             host.Settle();
@@ -80,5 +81,18 @@ public sealed class SettingsViewTests : IDisposable
 
         Assert.Empty(declared.Except(pages.Keys));
         Assert.All(pages, p => Assert.Single(p.Value));
+    }
+
+    [AvaloniaFact]
+    public void The_category_list_shows_the_pages_in_their_order_with_their_automation_ids()
+    {
+        var vm = new SettingsViewModel(TestSettings.Pages(new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsPath })).Reverse());
+        using var host = ViewHost.Show(new SettingsView { DataContext = vm });
+
+        Assert.Equal(
+            ["Settings.Category.General", "Settings.Category.Appearance", "Settings.Category.Chart", "Settings.Category.Vessels", "Settings.Category.Integrations", "Settings.Category.Advanced"],
+            host.All<TabItem>().Select(AutomationProperties.GetAutomationId));
+        Assert.Equal(vm.Pages.Select(p => p.Title), host.All<TabItem>().Select(AutomationProperties.GetName));
+        Assert.Equal(SettingsCategory.General, vm.SelectedCategory);
     }
 }

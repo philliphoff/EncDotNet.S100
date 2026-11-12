@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.VesselsSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:VesselsSettingsPageViewModel">
 
     <!-- Settings → Vessels: own vessel and the AIS overlay (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"

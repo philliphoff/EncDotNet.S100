@@ -1,10 +1,8 @@
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
-/// A page of the Settings panel, in the order the category list shows them
-/// (#845). <see cref="SettingsViewModel.SelectedCategoryIndex"/> is this
-/// value as an index, so the members' order must match the tabs in
-/// <c>SettingsView.axaml</c>.
+/// A page of the Settings panel (#845): what <see cref="ISettingsPage.Category"/>
+/// names. The category list orders the pages by <see cref="ISettingsPage.Order"/>.
 /// </summary>
 internal enum SettingsCategory
 {

@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Tools;
-using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
@@ -34,7 +33,7 @@ internal sealed class LegendFindOverlayController : IDisposable
     private readonly IMapLayerCollection _layers;
     private readonly LegendFindService _find;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
     private readonly MemoryLayer _tint;
@@ -50,7 +49,7 @@ internal sealed class LegendFindOverlayController : IDisposable
         IMapLayerCollection layers,
         LegendFindService find,
         IMeasureOverlayAppearanceProvider appearance,
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         Action<Action> marshal)
     {
         ArgumentNullException.ThrowIfNull(layers);

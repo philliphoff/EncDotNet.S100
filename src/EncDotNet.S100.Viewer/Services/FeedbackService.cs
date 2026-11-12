@@ -35,7 +35,7 @@ internal sealed class FeedbackService : IFeedbackService
     private readonly ILastErrorTracker _errors;
     private readonly ICrashHistory _crashes;
     private readonly IThemeService _theme;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly IAppScreenshotProvider _screenshot;
     private readonly ICapabilityAccessor<IImageRenderer> _mapRendererAccessor;
     private readonly LogBuffer? _logs;
@@ -46,7 +46,7 @@ internal sealed class FeedbackService : IFeedbackService
         ILastErrorTracker errors,
         ICrashHistory crashes,
         IThemeService theme,
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         IAppScreenshotProvider screenshot,
         ICapabilityAccessor<IImageRenderer> mapRendererAccessor,
         LogBuffer? logs)

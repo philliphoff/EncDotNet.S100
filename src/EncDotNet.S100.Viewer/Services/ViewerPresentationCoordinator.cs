@@ -1,7 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services.Depth;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -17,7 +16,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class ViewerPresentationCoordinator : IDisposable
 {
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly EcdisDisplayState _ecdisDisplay;
     private readonly IMarinerSettingsProvider _marinerSettings;
     private readonly MapPresentationStateProjection _projection;
@@ -26,7 +25,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
     private readonly IAmlClbPresence _amlClb;
 
     public ViewerPresentationCoordinator(
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
         MapPresentationStateProjection projection,

@@ -1,18 +1,16 @@
-using EncDotNet.S100.Viewer.ViewModels;
-
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Default <see cref="ITimeFormatProvider"/> implementation. Subscribes
-/// to <see cref="SettingsViewModel.TimeFormatChanged"/> and re-broadcasts
+/// to <see cref="ViewerSettingsService.TimeFormatChanged"/> and re-broadcasts
 /// the new value so viewmodels can refresh display strings without
-/// taking a direct dependency on the settings view-model.
+/// taking a direct dependency on the settings service.
 /// </summary>
 internal sealed class TimeFormatProvider : ITimeFormatProvider
 {
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
 
-    public TimeFormatProvider(SettingsViewModel settings)
+    public TimeFormatProvider(ViewerSettingsService settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         _settings = settings;

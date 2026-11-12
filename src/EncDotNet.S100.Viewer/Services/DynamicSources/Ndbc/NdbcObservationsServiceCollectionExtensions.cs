@@ -1,7 +1,6 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ndbc;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
-using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -52,7 +51,7 @@ internal static class NdbcObservationsServiceCollectionExtensions
             NdbcObservationSource.FeatureKind,
             (sp, _) =>
             {
-                var settings = new Lazy<SettingsViewModel?>(sp.GetService<SettingsViewModel>);
+                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
                 return new PortrayedDynamicFeatureRenderer(
                     NdbcStationPortrayal.Instance,
                     () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);

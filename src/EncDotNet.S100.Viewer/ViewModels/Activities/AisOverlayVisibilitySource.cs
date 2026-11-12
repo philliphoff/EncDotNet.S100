@@ -1,18 +1,20 @@
+using EncDotNet.S100.Viewer.Services;
+
 namespace EncDotNet.S100.Viewer.ViewModels.Activities;
 
 /// <summary>
 /// <see cref="ITabVisibilitySource"/> that shows the Vessels tab only
 /// while the AIS overlay is enabled. Bridges
-/// <see cref="SettingsViewModel.AisEnabled"/> /
-/// <see cref="SettingsViewModel.AisEnabledChanged"/> to the
+/// <see cref="ViewerSettingsService.AisEnabled"/> /
+/// <see cref="ViewerSettingsService.AisEnabledChanged"/> to the
 /// activity-tab visibility contract, mirroring
 /// <see cref="OwnShipTrackingVisibilitySource"/> for the Helm tab.
 /// </summary>
 internal sealed class AisOverlayVisibilitySource : ITabVisibilitySource, IDisposable
 {
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
 
-    public AisOverlayVisibilitySource(SettingsViewModel settings)
+    public AisOverlayVisibilitySource(ViewerSettingsService settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         _settings = settings;

@@ -1,5 +1,4 @@
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -9,14 +8,14 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 internal sealed class MapPresentationStateProjection
 {
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly EcdisDisplayState _ecdisDisplay;
     private readonly IMarinerSettingsProvider _marinerSettings;
     private readonly TimeProvider _time;
     private readonly IAmlClbPresence _amlClb;
 
     public MapPresentationStateProjection(
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
         TimeProvider time,
