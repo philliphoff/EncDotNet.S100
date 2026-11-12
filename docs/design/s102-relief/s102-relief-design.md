@@ -1,9 +1,10 @@
 # S-102 relief shading: design pass
 
-Status: recommendations for decision. Answers the six questions in the
-[brief](s102-relief-brief.md). Today SoundCharts has a Relief shading switch
+Status: decided 2026-11-11, all six as recommended. Answers the six questions
+in the [brief](s102-relief-brief.md). Today SoundCharts has a Relief shading switch
 in a Bathymetry section of Display controls (#1389), shown while S-102 is
-loaded, map-wide and off by default. Nothing below is built yet.
+loaded, map-wide and off by default. Questions 2 and 4 are built with this
+note; question 3 follows.
 
 The sheets are drawn from the real pipeline: the S-102 processor's band
 colours for each palette, shaded with `ReliefShading` and drawn one pixel per

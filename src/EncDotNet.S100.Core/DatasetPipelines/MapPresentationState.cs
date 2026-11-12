@@ -310,6 +310,7 @@ public sealed class MapPresentationState
             ActiveDisplayModes = settings.ActiveDisplayModes.ToFrozenDictionary(
                 StringComparer.OrdinalIgnoreCase),
             LayerVisibility = settings.LayerVisibility.ToFrozenDictionary(StringComparer.Ordinal),
+            LayerOptions = settings.LayerOptions.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
 }

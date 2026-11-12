@@ -303,7 +303,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 // Optional relief shading (off by default; not part of the
                 // S-102 portrayal): a hillshade over the band colours.
                 if (S102Relief.IsOn(context?.EcdisDisplay))
-                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
+                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, S102Relief.ShadingFor(context?.EcdisDisplay, context?.Palette ?? PaletteType.Day));
 
                 var depthLines = BuildDepthLineSubLayers(
                     styledLayer, mariner, crs, nativeToWgs84, adjustmentKey);
@@ -595,7 +595,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             styledLayer = S102Relief.Apply(
                 styledLayer,
                 nativeToWgs84.IsIdentity ? null : (x, y) => nativeToWgs84.Transform(x, y),
-                ReliefShading.Default);
+                S102Relief.ShadingFor(context?.EcdisDisplay, context?.Palette ?? PaletteType.Day));
         }
 
         var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);

@@ -143,6 +143,38 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// The relief shading strength: Subtle, Medium (the default) or Strong
+    /// (<see cref="S102Relief.StrengthKey"/>), map-wide and kept with the
+    /// display settings.
+    /// </summary>
+    public ReliefStrength ReliefStrength
+    {
+        get => S102Relief.ParseStrength(_state.GetLayerOption(S102Relief.StrengthKey));
+        set => _state.SetLayerOption(S102Relief.StrengthKey, S102Relief.OptionValue(value));
+    }
+
+    /// <summary>Whether the strength is Subtle; the segment's radio button.</summary>
+    public bool IsReliefSubtle
+    {
+        get => ReliefStrength == ReliefStrength.Subtle;
+        set { if (value) ReliefStrength = ReliefStrength.Subtle; }
+    }
+
+    /// <summary>Whether the strength is Medium; the segment's radio button.</summary>
+    public bool IsReliefMedium
+    {
+        get => ReliefStrength == ReliefStrength.Medium;
+        set { if (value) ReliefStrength = ReliefStrength.Medium; }
+    }
+
+    /// <summary>Whether the strength is Strong; the segment's radio button.</summary>
+    public bool IsReliefStrong
+    {
+        get => ReliefStrength == ReliefStrength.Strong;
+        set { if (value) ReliefStrength = ReliefStrength.Strong; }
+    }
+
+    /// <summary>
     /// Whether a weather dataset is loaded (a GRIB2 or NetCDF grid, a tropical
     /// cyclone or a surface analysis), which shows the Weather section (#1072,
     /// V26), as the per-spec sections show only for loaded specs. The switches
@@ -402,6 +434,10 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsPastTrackVisible));
         OnPropertyChanged(nameof(IsForecastTimesVisible));
         OnPropertyChanged(nameof(IsReliefShadingVisible));
+        OnPropertyChanged(nameof(ReliefStrength));
+        OnPropertyChanged(nameof(IsReliefSubtle));
+        OnPropertyChanged(nameof(IsReliefMedium));
+        OnPropertyChanged(nameof(IsReliefStrong));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));

@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Relief shading strength.** The S-102 Relief shading switch in Display
+  controls gains a **Strength** control while it is on: Subtle, Medium (the
+  default) or Strong. It is kept with the display settings and saved with
+  display combinations, and the MCP tool `set_bathymetry_display` takes
+  `reliefStrength`. At Dusk and Night, slopes facing the light are lightened
+  less (half and 30 %), so they don't glare on a dark display. The new
+  `EcdisDisplaySettings.LayerOptions` carries map-wide layer settings that
+  are more than on or off.
 - **Neighbouring S-102 cells join up.** Where two loaded S-102 cells meet,
   the dashed "limit of S-102 data" line no longer runs through the water
   between them, and SoundCharts no longer shows a light seam along the

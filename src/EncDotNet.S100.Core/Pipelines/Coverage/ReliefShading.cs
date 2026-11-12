@@ -46,6 +46,13 @@ public sealed record ReliefShading
     public double Strength { get; init; } = 0.6;
 
     /// <summary>
+    /// How much of the lightening on slopes facing the light is kept, from 0
+    /// (none: shading only darkens) to 1 (all of it). Darkening is unaffected.
+    /// A night display keeps less, so lit slopes don't glare.
+    /// </summary>
+    public double Lightening { get; init; } = 1.0;
+
+    /// <summary>
     /// Computes the brightness factor of every cell of a depth grid.
     /// </summary>
     /// <param name="depth">The depths, row-major (<c>row * columns + column</c>), positive down, in metres.</param>
@@ -82,6 +89,7 @@ public sealed record ReliefShading
         // The shade of flat ground, so flat cells keep their band colour.
         double flat = Math.Max(lightUp, 1e-6);
         double strength = Math.Clamp(Strength, 0.0, 1.0);
+        double lightening = Math.Clamp(Lightening, 0.0, 1.0);
         // Elevation is the negated depth; fold the sign and the exaggeration
         // into the Horn denominators.
         double scaleX = -VerticalExaggeration / (8.0 * cellWidthMetres);
@@ -123,7 +131,8 @@ public sealed record ReliefShading
                     / Math.Sqrt(dzdx * dzdx + dzdy * dzdy + 1.0);
                 if (shade < 0) shade = 0;
 
-                factors[index] = (float)(1.0 + strength * (shade / flat - 1.0));
+                double change = strength * (shade / flat - 1.0);
+                factors[index] = (float)(1.0 + (change > 0 ? change * lightening : change));
             }
         }
 

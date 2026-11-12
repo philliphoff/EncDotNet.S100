@@ -380,6 +380,15 @@ internal sealed partial class ViewerSettings
         = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Map-wide settings of optional layers that are more than on or off
+    /// (<c>EcdisDisplaySettings.LayerOptions</c>), such as
+    /// <c>s102.relief.strength</c> (<c>subtle</c>, <c>medium</c>, <c>strong</c>).
+    /// A missing key follows the layer's default.
+    /// </summary>
+    public Dictionary<string, string> EcdisLayerOptions { get; set; }
+        = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The mariner's own display combinations, saved with <b>Save current view
     /// as…</b> (design note <c>predefined-display-combinations.md</c> §3.2).
     /// Built-ins aren't written here. Empty by default.
