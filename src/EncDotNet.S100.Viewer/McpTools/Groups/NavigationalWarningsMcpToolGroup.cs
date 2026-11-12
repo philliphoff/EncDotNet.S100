@@ -8,16 +8,20 @@ internal sealed class NavigationalWarningsMcpToolGroup : IViewerMcpToolGroup
 {
     private readonly EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel _panel;
     private readonly NavigationalWarningsService _service;
+    private readonly EncDotNet.S100.Viewer.ViewModels.PickReportViewModel _pickReport;
 
     public NavigationalWarningsMcpToolGroup(
         EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel panel,
-        NavigationalWarningsService service)
+        NavigationalWarningsService service,
+        EncDotNet.S100.Viewer.ViewModels.PickReportViewModel pickReport)
     {
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(pickReport);
 
         _panel = panel;
         _service = service;
+        _pickReport = pickReport;
     }
 
     public IEnumerable<McpServerTool> CreateTools()
@@ -27,9 +31,9 @@ internal sealed class NavigationalWarningsMcpToolGroup : IViewerMcpToolGroup
         yield return NavigationalWarningsMcpAdapters.Create(new SelectNavigationalWarningTool(_panel, _service, invoker));
         yield return NavigationalWarningsMcpAdapters.Create(new RefreshNavigationalWarningsTool(_panel, _service, invoker));
         yield return NavigationalWarningsMcpAdapters.Create(new MarkNavigationalWarningsNewTool(_panel, _service, invoker));
-        yield return NavigationalWarningsMcpAdapters.Create(new GetWarningCardsTool(_panel, _service, invoker));
-        yield return NavigationalWarningsMcpAdapters.Create(new FollowWarningLinkTool(_panel, _service, invoker));
-        yield return NavigationalWarningsMcpAdapters.Create(new PreviewWarningCardTool(_panel, _service, invoker));
+        yield return NavigationalWarningsMcpAdapters.Create(new GetWarningCardsTool(_panel, _service, _pickReport, invoker));
+        yield return NavigationalWarningsMcpAdapters.Create(new FollowWarningLinkTool(_panel, _service, _pickReport, invoker));
+        yield return NavigationalWarningsMcpAdapters.Create(new PreviewWarningCardTool(_panel, _service, _pickReport, invoker));
         yield return NavigationalWarningsMcpAdapters.Create(new SetNavigationalWarningDisplayTool(_panel, _service, invoker));
         yield return NavigationalWarningsMcpAdapters.Create(new SetNavigationalWarningClassificationTool(_panel, _service, invoker));
     }
