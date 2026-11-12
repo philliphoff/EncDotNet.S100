@@ -121,6 +121,9 @@ public static class S104DatasetReader
 
         if (dataCodingFormat is 1 or 8)
         {
+            int? trendInterval = root.AttributeExists("trendInterval")
+                ? (int)root.ReadInt64Attribute("trendInterval")
+                : null;
             var (stations, axisOrder) = ReadStationSeriesGuarded(
                 root,
                 wlGroup,
@@ -146,6 +149,8 @@ public static class S104DatasetReader
                 DataCodingFormat = dataCodingFormat,
                 MethodWaterLevelProduct = methodWaterLevelProduct,
                 WaterLevelTrendThreshold = waterLevelTrendThreshold,
+                TrendInterval = trendInterval,
+                DataDynamicity = ReadDataDynamicity(wlGroup),
                 Stations = stations,
                 AxisOrder = axisOrder,
                 MinTime = minTime,
@@ -868,6 +873,25 @@ public static class S104DatasetReader
         return positions;
     }
 
+    /// <summary>
+    /// The <c>dataDynamicity</c> of the first <c>WaterLevel.NN</c> instance
+    /// that has one (S-104 Edition 2.0.0), or <c>null</c>.
+    /// </summary>
+    private static int? ReadDataDynamicity(IHdf5Group wlGroup)
+    {
+        foreach (var instanceName in wlGroup.GroupNames)
+        {
+            if (!instanceName.StartsWith("WaterLevel.", StringComparison.Ordinal))
+                continue;
+
+            var instance = wlGroup.OpenGroup(instanceName);
+            if (instance.AttributeExists("dataDynamicity"))
+                return (int)instance.ReadInt64Attribute("dataDynamicity");
+        }
+
+        return null;
+    }
+
     private static TimeSpan DeriveUniformInterval(IReadOnlyList<DateTime> sampleTimes)
     {
         if (sampleTimes.Count < 2)
@@ -1063,6 +1087,9 @@ public static class S104DatasetReader
             string stationId = group.AttributeExists("stationIdentification")
                 ? group.ReadStringAttribute("stationIdentification")
                 : groupName;
+            string? stationName = group.AttributeExists("stationName")
+                ? group.ReadStringAttribute("stationName")
+                : null;
 
             DateTime startTime = group.ReadRequiredDateTimeAttribute(
                 "startDateTime", "S-104", null, groupPath, spec);
@@ -1095,6 +1122,7 @@ public static class S104DatasetReader
             stations.Add(new WaterLevelStation
             {
                 Identifier = stationId,
+                Name = stationName,
                 Latitude = lat,
                 Longitude = lon,
                 StartTime = startTime,

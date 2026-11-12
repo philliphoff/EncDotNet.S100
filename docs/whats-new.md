@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tide predictions as S-104.** `EncDotNet.S100.Datasets.S104` writes
+  station series as S-104 Edition 2.0.0 files (data coding format 8), and
+  `S104TidePredictions` turns a station's harmonic predictions into one, on
+  the station's chart datum. Predicted files carry the producer code `ZZ01`
+  and say they're astronomical predictions, not an official product and not
+  for navigation. They read back through `S104DatasetReader` unchanged and
+  pass the S-104 validation pack. The HDF5 tree they're built from,
+  `Hdf5WriteGroup`, and `PureHdfWriter` are the project's first HDF5 writers.
+  See the [S-104 README](../src/EncDotNet.S100.Datasets.S104/README.md#write-a-station-series).
 - **Tide predictions.** The new `EncDotNet.S100.Tides` package predicts the
   astronomical tide at a station from its harmonic constituents: the height
   at a time, a series at a fixed step without allocating per sample, and the
