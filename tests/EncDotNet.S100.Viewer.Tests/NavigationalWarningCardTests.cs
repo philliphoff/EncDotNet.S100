@@ -176,7 +176,7 @@ public sealed class NavigationalWarningCardTests : IDisposable
     [Fact]
     public void PickReport_WarningHit_ShowsCardAndFoldsAttributesWithoutTheText()
     {
-        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: null, urlOpener: null, examinerLinks: null, viewTime: new FixedViewTime(Now));
+        var vm = TestPickReport.Create(viewTime: new FixedViewTime(Now));
         var warningInformation = new PickAttribute
         {
             Code = "warningInformation",
@@ -200,7 +200,7 @@ public sealed class NavigationalWarningCardTests : IDisposable
 
         vm.SetPicks([hit]);
 
-        Assert.True(vm.HasWarningCard);
+        Assert.True(vm.Warnings.HasCard);
         Assert.False(vm.ShowInlineAttributes);
         Assert.False(vm.WarningAttributesExpanded);
         Assert.Equal("NAVAREA X 106/26", hit.HitListLabel);
@@ -212,11 +212,11 @@ public sealed class NavigationalWarningCardTests : IDisposable
 
         string? copied = null;
         vm.CopyIdentityRequested += (_, t) => copied = t;
-        vm.WarningCard!.CopyCommand.Execute(null);
+        vm.Warnings.Card!.CopyCommand.Execute(null);
         Assert.Equal(Amsa106, copied);
 
         vm.Clear();
-        Assert.False(vm.HasWarningCard);
+        Assert.False(vm.Warnings.HasCard);
         Assert.True(vm.ShowInlineAttributes);
     }
 

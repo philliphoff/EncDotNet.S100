@@ -64,7 +64,7 @@ public class ExaminerViewModelTests
         var settings = NewSettings();
         var opener = new StubUrlOpener();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(settings, links, opener);
+        var vm = new FeatureCataloguesViewModel(settings, TestPickReport.Examiner(links, opener));
 
         vm.AddBuiltIn("S-101", "(built-in)");
         var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
@@ -79,7 +79,7 @@ public class ExaminerViewModelTests
     {
         var settings = NewSettings();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(settings, links, new StubUrlOpener());
+        var vm = new FeatureCataloguesViewModel(settings, TestPickReport.Examiner(links, new StubUrlOpener()));
 
         vm.AddBuiltIn("S-101", "(built-in)");
         var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
@@ -115,7 +115,7 @@ public class ExaminerViewModelTests
     {
         var settings = NewSettings();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(settings, links, new StubUrlOpener());
+        var vm = new FeatureCataloguesViewModel(settings, TestPickReport.Examiner(links, new StubUrlOpener()));
 
         vm.AddBuiltIn("S-101", "(built-in)");
         var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");

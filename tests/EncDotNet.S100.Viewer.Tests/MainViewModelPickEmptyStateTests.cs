@@ -82,11 +82,11 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
             appCommands: TestAppCommands.Create(),
             datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             mapChrome: TestMapChrome.Create(catalogues, datasets),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
             palette: new PaletteMenuViewModel(settingsVm),
-            pickReport: pick ?? new PickReportViewModel(),
+            pickReport: pick ?? TestPickReport.Create(),
             timeline: timeline,
             routes: routeStore);
     }
@@ -98,7 +98,7 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         // regardless of HasPick. The watermark inside the view handles the
         // empty state.
         var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
-        var pickVm = new PickReportViewModel();
+        var pickVm = TestPickReport.Create();
         var pickTab = new FakeTab
         {
             Id = "PickReport",

@@ -56,7 +56,7 @@ public class StationTimeSeriesTimeFormatTests
     {
         var snap = Synthetic();
         var tf = new StubTimeFormat(TimeFormat.Utc);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf, themeService: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(null, tf, null));
 
         var ticks = (double)new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc).Ticks;
         Assert.Equal("09:30", vm.TimeAxis.Labeler(ticks));
@@ -67,7 +67,7 @@ public class StationTimeSeriesTimeFormatTests
     {
         var snap = Synthetic();
         var tf = new StubTimeFormat(TimeFormat.Local);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf, themeService: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(null, tf, null));
 
         var dt = new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc);
         var ticks = (double)dt.Ticks;
@@ -80,7 +80,7 @@ public class StationTimeSeriesTimeFormatTests
     {
         var snap = Synthetic();
         var tf = new StubTimeFormat(TimeFormat.Local);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf, themeService: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(null, tf, null));
 
         var ticks = (double)new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc).Ticks;
 
@@ -94,7 +94,7 @@ public class StationTimeSeriesTimeFormatTests
     {
         var snap = Synthetic();
         var tf = new StubTimeFormat(TimeFormat.Utc);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf, themeService: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(null, tf, null));
 
         var utc = new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc);
         var label = vm.FormatTooltipDateTime(utc);
@@ -107,7 +107,7 @@ public class StationTimeSeriesTimeFormatTests
     {
         var snap = Synthetic();
         var tf = new StubTimeFormat(TimeFormat.Local);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf, themeService: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(null, tf, null));
 
         var utc = new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc);
         var label = vm.FormatTooltipDateTime(utc);

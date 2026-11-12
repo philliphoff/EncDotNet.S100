@@ -41,7 +41,7 @@ internal static class TestNavigationalWarnings
         IPickService? pick = null,
         IDatasetLoaderService? loader = null,
         ICapabilityAccessor<IMapViewportController>? viewport = null) =>
-        new(() => pick ?? new StubPickService(), loader ?? new FakeDatasetLoaderService(), viewport ?? new NoViewport(), service);
+        new(pick ?? new StubPickService(), loader ?? new FakeDatasetLoaderService(), viewport ?? new NoViewport(), service);
 
     /// <summary>A host with no map.</summary>
     private sealed class NoViewport : ICapabilityAccessor<IMapViewportController>

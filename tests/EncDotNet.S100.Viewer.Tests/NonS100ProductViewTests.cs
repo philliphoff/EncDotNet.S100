@@ -2,7 +2,6 @@ using EncDotNet.S100.Core.Metadata;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -37,7 +36,7 @@ public sealed class NonS100ProductViewTests : IDisposable
     [Fact]
     public void The_pick_report_leads_with_the_not_for_navigation_notice()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("WindSpeed", "Wind speed", "1", "gfs.grib2", FakeWeatherProduct.Spec, []);
 
         Assert.True(vm.HasNavigationNotice);
@@ -53,7 +52,7 @@ public sealed class NonS100ProductViewTests : IDisposable
     public void The_pick_report_uses_the_products_own_notice()
     {
         ProductRegistry.Default.Register(FakeWeatherProduct.Registration(FakeWeatherProduct.Notice));
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick("WindSpeed", "Wind speed", "1", "gfs.grib2", FakeWeatherProduct.Spec, []);
 
@@ -63,7 +62,7 @@ public sealed class NonS100ProductViewTests : IDisposable
     [Fact]
     public void The_portrayal_note_comes_from_the_registration()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick("WindSpeed", "Wind speed", "1", "gfs.grib2", FakeWeatherProduct.Spec, []);
 

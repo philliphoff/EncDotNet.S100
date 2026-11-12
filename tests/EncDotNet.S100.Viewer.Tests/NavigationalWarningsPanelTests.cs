@@ -44,6 +44,8 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
 
     private sealed class RecordingPick : IPickService
     {
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
         public List<(IDatasetProcessor Processor, int Ordinal, string Dataset)> Opened { get; } = [];
         public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }

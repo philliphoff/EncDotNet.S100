@@ -77,7 +77,7 @@ public sealed class PickReportWarningCardsTests
             Entry(point, S100GeometryType.Point),
             Entry(line, S100GeometryType.Curve),
         ]);
-        var pick = new PickReportViewModel { WarningNavigator = navigator };
+        var pick = TestPickReport.Create(navigator: navigator);
         pick.SetPicks([buoy, area, point, line]);
         return (pick, navigator, area, point, line, buoy);
     }
@@ -87,11 +87,11 @@ public sealed class PickReportWarningCardsTests
     {
         var (pick, _, area, point, line, buoy) = Fixture();
 
-        Assert.True(pick.HasWarningCardList);
+        Assert.True(pick.Warnings.HasList);
         Assert.False(pick.ShowHitList);
-        Assert.Equal([point, line, area], pick.WarningCards.Select(c => c.Hit));
-        Assert.Equal([buoy], pick.OtherHits);
-        Assert.True(pick.HasOtherHits);
+        Assert.Equal([point, line, area], pick.Warnings.Cards.Select(c => c.Hit));
+        Assert.Equal([buoy], pick.Warnings.OtherHits);
+        Assert.True(pick.Warnings.HasOtherHits);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class PickReportWarningCardsTests
     {
         var hits = new[] { Hit("a", Info("106/26")), Hit("b", Info("098/26")), Hit("c", Info("002/27")), Hit("d", Info("099/25")) };
 
-        var ordered = PickReportViewModel.OrderWarningHits(hits, _ => S100GeometryType.Point);
+        var ordered = PickWarningCardsViewModel.OrderWarningHits(hits, _ => S100GeometryType.Point);
 
         Assert.Equal(["d", "b", "a", "c"], ordered.Select(h => h.FeatureRef));
     }
@@ -110,23 +110,23 @@ public sealed class PickReportWarningCardsTests
         var (pick, _, _, point, _, _) = Fixture();
 
         Assert.Same(point, pick.SelectedHit);
-        Assert.Equal([true, false, false], pick.WarningCards.Select(c => c.IsOpen));
-        Assert.All(pick.WarningCards, c => Assert.True(c.IsCollapsible));
-        Assert.Same(pick.WarningCards[0], pick.WarningCard);
-        Assert.False(pick.HasSingleWarningCard);
+        Assert.Equal([true, false, false], pick.Warnings.Cards.Select(c => c.IsOpen));
+        Assert.All(pick.Warnings.Cards, c => Assert.True(c.IsCollapsible));
+        Assert.Same(pick.Warnings.Cards[0], pick.Warnings.Card);
+        Assert.False(pick.Warnings.HasSingleCard);
     }
 
     [Fact]
     public void Opening_a_collapsed_card_closes_the_other_and_selects_its_hit()
     {
         var (pick, _, area, _, _, _) = Fixture();
-        var areaCard = pick.WarningCards[2];
+        var areaCard = pick.Warnings.Cards[2];
 
         areaCard.ToggleCommand.Execute(null);
 
         Assert.Same(area, pick.SelectedHit);
-        Assert.Equal([false, false, true], pick.WarningCards.Select(c => c.IsOpen));
-        Assert.Same(areaCard, pick.WarningCard);
+        Assert.Equal([false, false, true], pick.Warnings.Cards.Select(c => c.IsOpen));
+        Assert.Same(areaCard, pick.Warnings.Card);
     }
 
     [Fact]
@@ -137,8 +137,8 @@ public sealed class PickReportWarningCardsTests
         pick.SelectedOtherHit = buoy;
 
         Assert.Same(buoy, pick.SelectedHit);
-        Assert.All(pick.WarningCards, c => Assert.False(c.IsOpen));
-        Assert.Null(pick.WarningCard);
+        Assert.All(pick.Warnings.Cards, c => Assert.False(c.IsOpen));
+        Assert.Null(pick.Warnings.Card);
         Assert.True(pick.ShowInlineAttributes);
     }
 
@@ -157,10 +157,10 @@ public sealed class PickReportWarningCardsTests
     {
         var (pick, _, _, _, line, _) = Fixture();
 
-        pick.SetWarningPreview(pick.WarningCards[1]);
+        pick.Warnings.SetPreview(pick.Warnings.Cards[1]);
         Assert.Same(line, pick.PreviewHit);
 
-        pick.SetWarningPreview(null);
+        pick.Warnings.SetPreview(null);
         Assert.Null(pick.PreviewHit);
     }
 
@@ -170,22 +170,22 @@ public sealed class PickReportWarningCardsTests
         var navigator = new FakeNavigator();
         var warning = Hit("w", Info("106/26"));
         navigator.Entries.Add(Entry(warning, S100GeometryType.Point));
-        var pick = new PickReportViewModel { WarningNavigator = navigator };
+        var pick = TestPickReport.Create(navigator: navigator);
 
         pick.SetPicks([warning, Hit("buoy", null)]);
 
-        Assert.False(pick.HasWarningCardList);
+        Assert.False(pick.Warnings.HasList);
         Assert.True(pick.ShowHitList);
-        Assert.True(pick.HasSingleWarningCard);
-        Assert.False(pick.WarningCard!.IsCollapsible);
-        Assert.True(pick.WarningCard.IsOpen);
+        Assert.True(pick.Warnings.HasSingleCard);
+        Assert.False(pick.Warnings.Card!.IsCollapsible);
+        Assert.True(pick.Warnings.Card.IsOpen);
     }
 
     [Fact]
     public void Zoom_to_frames_the_part_through_the_panel()
     {
         var (pick, navigator, area, _, _, _) = Fixture();
-        var areaCard = pick.WarningCards[2];
+        var areaCard = pick.Warnings.Cards[2];
 
         Assert.True(areaCard.CanZoom);
         areaCard.ZoomToCommand.Execute(null);
@@ -200,19 +200,19 @@ public sealed class PickReportWarningCardsTests
         var navigator = new FakeNavigator();
         var bulletin = Hit("bulletin", Info("110/26"));
         navigator.Entries.Add(Entry(bulletin, S100GeometryType.None));
-        var pick = new PickReportViewModel { WarningNavigator = navigator };
+        var pick = TestPickReport.Create(navigator: navigator);
 
         pick.SetPicks([bulletin]);
 
-        Assert.False(pick.WarningCard!.CanZoom);
-        Assert.False(pick.WarningCard.ZoomToCommand.CanExecute(null));
+        Assert.False(pick.Warnings.Card!.CanZoom);
+        Assert.False(pick.Warnings.Card.ZoomToCommand.CanExecute(null));
     }
 
     [Fact]
     public void Links_in_the_text_open_the_named_warning_through_the_panel()
     {
         var (pick, navigator, _, _, _, _) = Fixture();
-        var card = pick.WarningCard!;
+        var card = pick.Warnings.Card!;
 
         var link = Assert.Single(card.Links);
         Assert.Equal("098/26", link.Text);
@@ -227,13 +227,13 @@ public sealed class PickReportWarningCardsTests
         var navigator = new FakeNavigator();
         var bulletin = Hit("bulletin", Info("110/26", "IN FORCE: 106/26"));
         navigator.Entries.Add(Entry(bulletin, S100GeometryType.None));
-        var pick = new PickReportViewModel { WarningNavigator = navigator };
+        var pick = TestPickReport.Create(navigator: navigator);
         pick.SetPicks([bulletin]);
-        Assert.Empty(pick.WarningCard!.Links);
+        Assert.Empty(pick.Warnings.Card!.Links);
 
         navigator.Entries.Add(Entry(Hit("w", Info("106/26")), S100GeometryType.Point));
         navigator.Raise();
 
-        Assert.Equal("106/26", Assert.Single(pick.WarningCard.Links).Text);
+        Assert.Equal("106/26", Assert.Single(pick.Warnings.Card.Links).Text);
     }
 }

@@ -14,22 +14,18 @@ internal sealed class OpenNavigationalWarningWorkflow
     /// <summary>Half the side of the box a point warning frames, in EPSG:3857 metres (about 1 NM).</summary>
     internal const double PointFrameHalfMetres = 1852.0;
 
-    private readonly Func<IPickService> _pick;
+    private readonly IPickService _pick;
     private readonly IDatasetLoaderService _loader;
     private readonly ICapabilityAccessor<IMapViewportController> _viewport;
     private readonly NavigationalWarningsService _warnings;
 
     /// <summary>Creates the workflow.</summary>
-    /// <param name="pick">
-    /// Opens a feature in Object Information. Resolved when a warning opens:
-    /// the pick service holds the pick report, which links its Warning cards
-    /// to the warnings panel, which opens warnings through this workflow.
-    /// </param>
+    /// <param name="pick">Opens a feature in Object Information.</param>
     /// <param name="loader">The loaded datasets' processors.</param>
     /// <param name="viewport">The map, which is framed on the part.</param>
     /// <param name="warnings">Marks warnings seen.</param>
     public OpenNavigationalWarningWorkflow(
-        Func<IPickService> pick,
+        IPickService pick,
         IDatasetLoaderService loader,
         ICapabilityAccessor<IMapViewportController> viewport,
         NavigationalWarningsService warnings)
@@ -59,7 +55,7 @@ internal sealed class OpenNavigationalWarningWorkflow
         using (var processors = _loader.AcquireProcessors())
         {
             opened = processors.TryGetValue(entry.Dataset, out var processor)
-                && _pick().OpenFeatureAt(processor, entry.Ordinal, entry.DatasetId);
+                && _pick.OpenFeatureAt(processor, entry.Ordinal, entry.DatasetId);
         }
 
         var framed = frame && Frame(entry);

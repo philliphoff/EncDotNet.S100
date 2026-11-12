@@ -456,7 +456,7 @@ public sealed class LegendTabTests : IDisposable
         settings ??= new ViewerSettings { SettingsFilePath = _settingsPath };
         var (_, service) = TwoProducts();
         var legendVm = Tab(service);
-        var pickVm = new PickReportViewModel();
+        var pickVm = TestPickReport.Create();
         var pick = new Tab2 { Id = ShellLayoutViewModel.PickReportTabId, Order = 10, Title = "Object information", ViewModel = pickVm };
         var legend = new Tab2 { Id = ShellLayoutViewModel.LegendTabId, Order = 20, Title = "Legend", ViewModel = legendVm };
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(), dispatch: action => action(), refresher: null, progress: null, scope: null, library: null);

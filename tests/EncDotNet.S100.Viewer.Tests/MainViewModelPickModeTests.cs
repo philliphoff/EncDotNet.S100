@@ -57,11 +57,11 @@ public class MainViewModelPickModeTests
             appCommands: TestAppCommands.Create(),
             datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             mapChrome: TestMapChrome.Create(catalogues, datasets),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
             palette: new PaletteMenuViewModel(settingsVm),
-            pickReport: pickReport ?? new PickReportViewModel(),
+            pickReport: pickReport ?? TestPickReport.Create(),
             timeline: timeline,
             routes: routeStore);
     }
@@ -92,7 +92,7 @@ public class MainViewModelPickModeTests
     {
         // issue #374: dismissing the Pick Report must also drop the pick (and
         // its map highlight) so the report and overlay stay in sync.
-        var pickReport = new PickReportViewModel();
+        var pickReport = TestPickReport.Create();
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
@@ -110,7 +110,7 @@ public class MainViewModelPickModeTests
     {
         // issue #374: after a manual close clears the pick, a fresh pick is a
         // genuine HasPick false→true transition and re-opens the dock.
-        var pickReport = new PickReportViewModel();
+        var pickReport = TestPickReport.Create();
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);

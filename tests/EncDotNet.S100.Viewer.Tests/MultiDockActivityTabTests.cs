@@ -192,11 +192,11 @@ public sealed class MultiDockActivityTabTests : IDisposable
             appCommands: TestAppCommands.Create(),
             datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             mapChrome: TestMapChrome.Create(catalogues, datasets),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
             palette: new PaletteMenuViewModel(settingsVm),
-            pickReport: new PickReportViewModel(),
+            pickReport: TestPickReport.Create(),
             timeline: timelineVm,
             routes: routeStore);
     }

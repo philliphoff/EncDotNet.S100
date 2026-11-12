@@ -23,10 +23,8 @@ internal sealed class S104StationTimeSeriesViewModel : StationTimeSeriesViewMode
 
     public S104StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat,
-        IThemeService? themeService)
-        : base(snapshot, globalTime, timeFormat, themeService)
+        StationChartContext context)
+        : base(snapshot, context)
     {
         var channel = FindChannel(snapshot, "waterLevelHeight");
         var points = channel is null ? new List<DateTimePoint>() : ProjectChannel(snapshot.Times, channel);

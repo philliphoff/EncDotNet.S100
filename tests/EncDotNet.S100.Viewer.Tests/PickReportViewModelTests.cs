@@ -14,7 +14,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_PopulatesAllFieldsAndMarksHasPick()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick(
             featureType: "DepthArea",
@@ -44,7 +44,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_LiftsResolvedFileReferenceIntoTextCards()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         var fileRef = new PickAttribute
         {
@@ -75,7 +75,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_UnresolvedFileReferenceStaysInAttributeTable()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         var fileRef = new PickAttribute
         {
@@ -97,7 +97,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Clear_EmptiesTextCards()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var fileRef = new PickAttribute
         {
             Code = "fileReference",
@@ -117,7 +117,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_WithEmptyAttributes_ReportsHasAttributesFalse()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick(
             featureType: "Authority",
@@ -135,7 +135,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_PreservesReferencedTextThroughReformat()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         var fileRef = new PickAttribute
         {
@@ -159,7 +159,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_ReplacesPreviousPickContents()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick("First", null, "1", "a.gml", "S-101", new[] { Leaf("X", "1") });
         vm.SetPick("Second", null, "2", "b.gml", "S-124", new[] { Leaf("Y", "2") });
@@ -175,7 +175,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Clear_ResetsAllState()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("DepthArea", "Depth Area", "42", "test.000", "S-101",
             new[] { Leaf("DRVAL1", "10.0") });
 
@@ -194,7 +194,7 @@ public class PickReportViewModelTests
     [Fact]
     public void ClearCommand_InvokesClear()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("X", null, "1", null, null, System.Array.Empty<PickAttribute>());
 
         Assert.True(vm.HasPick);
@@ -206,7 +206,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_WithLocation_PopulatesLocationFields()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPicks(
             new[]
@@ -225,7 +225,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_WithoutLocation_LeavesLocationEmpty()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPicks(new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } });
 
@@ -238,9 +238,9 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_WithLocationDepth_ExposesSeriesAndFlag()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
-        var depth = MakeDepthViewModel();
+        var depth = MakeDepthResult();
 
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
@@ -249,22 +249,22 @@ public class PickReportViewModelTests
             depth);
 
         Assert.True(vm.HasLocationDepthSeries);
-        Assert.Same(depth, vm.LocationDepthSeries);
+        Assert.Same(depth, vm.LocationDepthSeries!.Result);
     }
 
     [Fact]
     public void SetPicks_ReplacingDepth_DisposesPriorSeries()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
-        var first = MakeDepthViewModel();
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "1" } },
             System.Array.Empty<DynamicPickHit>(),
             new PickLocation(51.9, 4.4),
-            first);
+            MakeDepthResult());
+        var first = vm.LocationDepthSeries!;
 
-        var second = MakeDepthViewModel();
+        var second = MakeDepthResult();
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "2" } },
             System.Array.Empty<DynamicPickHit>(),
@@ -272,20 +272,20 @@ public class PickReportViewModelTests
             second);
 
         Assert.True(first.IsDisposed);
-        Assert.Same(second, vm.LocationDepthSeries);
+        Assert.Same(second, vm.LocationDepthSeries!.Result);
     }
 
     [Fact]
     public void Clear_DisposesAndClearsDepthSeries()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
-        var depth = MakeDepthViewModel();
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
             System.Array.Empty<DynamicPickHit>(),
             new PickLocation(51.9, 4.4),
-            depth);
+            MakeDepthResult());
+        var depth = vm.LocationDepthSeries!;
 
         vm.Clear();
 
@@ -294,30 +294,17 @@ public class PickReportViewModelTests
         Assert.True(depth.IsDisposed);
     }
 
-    private static DepthOverTimeViewModel MakeDepthViewModel()
-    {
-        var result = new LocationDepthResult(
+    private static LocationDepthResult MakeDepthResult() =>
+        new(
             new BaseDepthResult(10.0, BaseDepthSource.Bathymetry, null, 23, null),
             null,
             new[] { new DepthOverTimePoint(new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Utc), 10.0) },
             null);
 
-        return new DepthOverTimeViewModel(
-            result,
-            "51.9 N, 4.4 E",
-            51.9,
-            4.4,
-            DepthUnit.Metres,
-            safetyDepthMetres: null,
-            globalTime: null,
-            timeFormat: null,
-            themeService: null);
-    }
-
     [Fact]
     public void Clear_ResetsLocation()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
@@ -334,7 +321,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_SeaIceWithEggCode_SurfacesEggViewModel()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var egg = IceEggCodeBuilder.Build("70", "[30, 30, 10, 4, 4]", "[91, 87, 85, 95, 99]", "[5, 4, 4, 4, 5]");
 
         vm.SetPicks(new[]
@@ -359,7 +346,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_FeatureWithoutEggCode_HasNoEggCode()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPicks(new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } });
 
@@ -370,7 +357,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Clear_ResetsEggCode()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(new[]
         {
             new PickHit
@@ -391,7 +378,7 @@ public class PickReportViewModelTests
     [Fact]
     public void CopyLocationCommand_RaisesRequestWithDecimalDegrees()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
             System.Array.Empty<DynamicPickHit>(),
@@ -408,7 +395,7 @@ public class PickReportViewModelTests
     [Fact]
     public void HasPickPropertyChanged_FiresOnSetPickAndClear()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) =>
         {
@@ -436,7 +423,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_MultipleHits_PopulatesAndSelectsFirst()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         var hits = new[]
         {
@@ -460,7 +447,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_SingleHit_HasMultipleHitsFalse()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPicks(new[] { Hit("DepthArea", "Depth Area", "1") });
 
@@ -472,7 +459,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_EmptyList_ClearsPanel()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(new[] { Hit("X", null!, "1") });
         Assert.True(vm.HasPick);
 
@@ -487,7 +474,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SelectedHit_Change_UpdatesDetailFields()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var hits = new[]
         {
             Hit("DepthArea", "Depth Area", "1", Leaf("DRVAL1", "10")),
@@ -508,7 +495,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Clear_AfterMultiHit_ResetsHitListAndSelection()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(new[]
         {
             Hit("A", null!, "1"),
@@ -549,7 +536,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_PopulatesReferencesFromSelectedHit()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var hit = new PickHit
         {
             FeatureType = "LightLateral",
@@ -569,7 +556,7 @@ public class PickReportViewModelTests
     [Fact]
     public void ChangingSelectedHit_RefreshesReferences()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var hits = new[]
         {
             new PickHit
@@ -595,7 +582,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Clear_EmptiesReferences()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(new[]
         {
             new PickHit
@@ -612,11 +599,12 @@ public class PickReportViewModelTests
     }
 
     [Fact]
-    public void NavigateCommand_RoutesParameterToHandler()
+    public void NavigateCommand_RoutesParameterToPickService()
     {
-        var vm = new PickReportViewModel();
+        var picks = new NavigatingPick();
+        var vm = TestPickReport.Create(picks);
         FeatureReference? captured = null;
-        vm.NavigateRequested += (_, r) => captured = r;
+        picks.Navigated += r => captured = r;
 
         var reference = Ref("role", "target");
         Assert.True(vm.NavigateCommand.CanExecute(reference));
@@ -629,14 +617,30 @@ public class PickReportViewModelTests
     [Fact]
     public void NavigateCommand_NullParameter_DoesNothing()
     {
-        var vm = new PickReportViewModel();
+        var picks = new NavigatingPick();
+        var vm = TestPickReport.Create(picks);
         var invoked = false;
-        vm.NavigateRequested += (_, _) => invoked = true;
+        picks.Navigated += _ => invoked = true;
 
         Assert.False(vm.NavigateCommand.CanExecute(null));
         vm.NavigateCommand.Execute(null);
 
         Assert.False(invoked);
+    }
+
+    private sealed class NavigatingPick : IPickService
+    {
+        public event Action<FeatureReference>? Navigated;
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+        public Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null) => Task.CompletedTask;
+        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
+        public bool NavigateToReference(FeatureReference reference)
+        {
+            Navigated?.Invoke(reference);
+            return true;
+        }
+        public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
+        public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => false;
     }
 
     private sealed class StubMarinerSettings : IMarinerSettingsProvider
@@ -655,7 +659,7 @@ public class PickReportViewModelTests
     public void SetPick_FormatsDepthAttribute_InCurrentDepthUnit()
     {
         var mariner = new StubMarinerSettings(new MarinerSettings { DepthUnit = DepthUnit.Feet });
-        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: mariner);
+        var vm = TestPickReport.Create(marinerSettings: mariner);
 
         vm.SetPick(
             featureType: "DepthArea",
@@ -684,7 +688,7 @@ public class PickReportViewModelTests
     public void DepthUnitChange_Rewrites_DepthAttribute_DisplayValue_Live()
     {
         var mariner = new StubMarinerSettings(new MarinerSettings { DepthUnit = DepthUnit.Metres });
-        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: mariner);
+        var vm = TestPickReport.Create(marinerSettings: mariner);
 
         vm.SetPick(
             featureType: "DepthArea",
@@ -729,7 +733,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_WithOnlyDynamicHits_MarksHasPickAndPopulatesDynamicSection()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
 
@@ -747,7 +751,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_WithBoth_KeepsDatasetSelectionAndDynamicList()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var datasetHit = new PickHit
         {
             FeatureType = "DepthArea",
@@ -768,7 +772,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Clear_AlsoClearsDynamicHits()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
         Assert.True(vm.HasDynamicHits);
 
@@ -782,7 +786,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_WithBothEmpty_ClearsState()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(new[] { new PickHit { FeatureType = "X", FeatureRef = "1" } }, Array.Empty<DynamicPickHit>());
         Assert.True(vm.HasPick);
 
@@ -821,7 +825,7 @@ public class PickReportViewModelTests
     [Fact]
     public void TakeHelmCommand_OnAisHit_RaisesRequestedWithMmsi()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         uint? raised = null;
         vm.TakeHelmRequested += (_, mmsi) => raised = mmsi;
 
@@ -835,7 +839,7 @@ public class PickReportViewModelTests
     [Fact]
     public void TakeHelmCommand_OnNonAisHit_IsDisabledAndDoesNotRaise()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var raised = false;
         vm.TakeHelmRequested += (_, _) => raised = true;
 
@@ -856,7 +860,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Identity_WithNamedFeature_LeadsWithNameAndClassPill()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "101GB00502793.000", "S-101",
             new[] { Leaf("name", "Number 10"), Leaf("colour", "3", "Colour") });
 
@@ -869,7 +873,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Identity_WithoutName_LeadsWithClassAndNoPill()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101",
             new[] { Leaf("DRVAL1", "10.0") });
 
@@ -882,7 +886,7 @@ public class PickReportViewModelTests
     [Fact]
     public void PortrayalNote_LabelsS104AsSoundChartsPortrayal()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("WaterLevel", "Water Level (Station)", "station:8665530", "104US00_ST.h5", "S-104",
             new[] { Leaf("waterLevelHeight", "1.42") });
 
@@ -899,7 +903,7 @@ public class PickReportViewModelTests
     [Fact]
     public void IdentityCaption_OmitsMissingSegments()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("Authority", null, "auth.1", null, null, System.Array.Empty<PickAttribute>());
 
         Assert.Equal("ID auth.1", vm.IdentityCaption);
@@ -908,7 +912,7 @@ public class PickReportViewModelTests
     [Fact]
     public void CopyIdentityCommand_RaisesRequestWithNameAndCaption()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "f.000", "S-101",
             new[] { Leaf("name", "Number 10") });
 
@@ -924,7 +928,7 @@ public class PickReportViewModelTests
     [Fact]
     public void Identity_ClearedAfterClear()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "f.000", "S-101",
             new[] { Leaf("name", "Number 10") });
 
@@ -960,7 +964,7 @@ public class PickReportViewModelTests
     {
         var opener = new StubUrlOpener();
         var links = new S100ExaminerLinkBuilder(ExaminerSettings());
-        var vm = new PickReportViewModel(null, null, opener, links);
+        var vm = TestPickReport.Create(examinerLinks: TestPickReport.Examiner(links, opener));
         vm.SetPick("Building", "Building", "1", "f.000", "S-101",
             new[] { Leaf("colour", "1") });
 
@@ -976,7 +980,7 @@ public class PickReportViewModelTests
     {
         var opener = new StubUrlOpener();
         var links = new S100ExaminerLinkBuilder(ExaminerSettings());
-        var vm = new PickReportViewModel(null, null, opener, links);
+        var vm = TestPickReport.Create(examinerLinks: TestPickReport.Examiner(links, opener));
         var attr = Leaf("colour", "1");
         vm.SetPick("Building", "Building", "1", "f.000", "S-101", new[] { attr });
 
@@ -993,7 +997,7 @@ public class PickReportViewModelTests
     {
         var opener = new StubUrlOpener();
         var links = new S100ExaminerLinkBuilder(ExaminerSettings());
-        var vm = new PickReportViewModel(null, null, opener, links);
+        var vm = TestPickReport.Create(examinerLinks: TestPickReport.Examiner(links, opener));
         vm.SetPick("Iceberg", "Iceberg", "1", "f.gml", "S-411",
             new[] { Leaf("name", "X") });
 
@@ -1006,7 +1010,7 @@ public class PickReportViewModelTests
     {
         var opener = new StubUrlOpener();
         var links = new S100ExaminerLinkBuilder(ExaminerSettings(enabled: false));
-        var vm = new PickReportViewModel(null, null, opener, links);
+        var vm = TestPickReport.Create(examinerLinks: TestPickReport.Examiner(links, opener));
         vm.SetPick("Building", "Building", "1", "f.000", "S-101",
             new[] { Leaf("colour", "1") });
 
@@ -1015,9 +1019,9 @@ public class PickReportViewModelTests
     }
 
     [Fact]
-    public void Examiner_Unavailable_WithoutLinkBuilder()
+    public void Examiner_Unavailable_WhenSwitchedOff()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("Building", "Building", "1", "f.000", "S-101",
             new[] { Leaf("colour", "1") });
 
@@ -1030,7 +1034,7 @@ public class PickReportViewModelTests
     {
         var settings = ExaminerSettings();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new PickReportViewModel(null, null, new StubUrlOpener(), links);
+        var vm = TestPickReport.Create(examinerLinks: TestPickReport.Examiner(links, new StubUrlOpener()));
         vm.SetPick("Building", "Building", "1", "f.000", "S-101",
             new[] { Leaf("colour", "1") });
         Assert.True(vm.IsExaminerAvailable);
@@ -1055,7 +1059,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPick_LiftsLongValuesIntoTextCardsAndDropsTheirRows()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var regulation = string.Join(' ', Enumerable.Repeat("Vessels shall not anchor within the area.", 4));
         var information = new PickAttribute
         {
@@ -1092,7 +1096,7 @@ public class PickReportViewModelTests
     [Fact]
     public void SetPicks_CarriesNotForNavigationToTextAndWarningCards()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         var fileRef = new PickAttribute
         {
             Code = "fileReference",
@@ -1130,7 +1134,7 @@ public class PickReportViewModelTests
     [Fact]
     public void TextCardCopy_RaisesCopyIdentityRequested()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         string? copied = null;
         vm.CopyIdentityRequested += (_, t) => copied = t;
         vm.SetPick("Regulation", null, "1", "s122.gml", "S-122", [Leaf("note", "A\nB", "Note")]);

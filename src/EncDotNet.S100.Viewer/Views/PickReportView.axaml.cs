@@ -73,14 +73,14 @@ public partial class PickReportView : UserControl
     private void OnWarningCardPointerEntered(object? sender, PointerEventArgs e)
     {
         if (sender is Control { DataContext: NavigationalWarningCardViewModel { IsCollapsible: true } card })
-            _subscribed?.SetWarningPreview(card);
+            _subscribed?.Warnings.SetPreview(card);
     }
 
     private void OnWarningCardPointerExited(object? sender, PointerEventArgs e)
     {
         if (sender is Control { DataContext: NavigationalWarningCardViewModel card }
             && ReferenceEquals(_subscribed?.PreviewHit, card.Hit))
-            _subscribed?.SetWarningPreview(null);
+            _subscribed?.Warnings.SetPreview(null);
     }
 
     // Depth-card header tap: toggle the collapsible detail region. Using a

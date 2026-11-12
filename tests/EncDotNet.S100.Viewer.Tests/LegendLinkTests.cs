@@ -89,7 +89,7 @@ public sealed class LegendLinkTests : IDisposable
 
         public PickReportViewModel Report()
         {
-            var report = new PickReportViewModel();
+            var report = TestPickReport.Create();
             report.AttachLegend(Service);
             return report;
         }
@@ -239,7 +239,7 @@ public sealed class LegendLinkTests : IDisposable
             [new PointInstruction { FeatureReference = "position" }, new AreaInstruction { FeatureReference = "area", FillColor = "CHMGD" }],
             [new SymbolLegendEntry("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"4\"/></svg>", "Warning position")]));
         using var service = f.Create();
-        var report = new PickReportViewModel();
+        var report = TestPickReport.Create();
         report.AttachLegend(service);
         PickHit Hit(string featureRef, S100GeometryType geometry) => new()
         {
@@ -293,7 +293,7 @@ public sealed class LegendLinkTests : IDisposable
         Assert.False(report.HasLegendKey);
 
         // And without a Legend tab there is no key at all.
-        var plain = new PickReportViewModel();
+        var plain = TestPickReport.Create();
         plain.SetPicks([scene.WaveHit("1.2")]);
         Assert.False(plain.HasLegendKey);
     }
