@@ -1,7 +1,8 @@
 # Tide and tidal current predictions: design pass
 
-Status: Proposed (2026-11-11): recommendations awaiting the maintainer's
-decisions. Answers the nine questions in the [brief](tide-predictions-brief.md)
+Status: Proposed (2026-11-11), revised 2026-11-12: recommendations awaiting
+the maintainer's decisions. Revision: the station keys moved from under the
+Layer stack rows to the Legend tab (maintainer's review). Answers the nine questions in the [brief](tide-predictions-brief.md)
 for the design slice
 [#1448](https://github.com/philliphoff/EncDotNet.S100/issues/1448) of epic
 [#1447](https://github.com/philliphoff/EncDotNet.S100/issues/1447). The viewer
@@ -33,7 +34,7 @@ them. Fonts may differ slightly from the canvas.
 |---|---|---|---|
 | Header | — | Recommendations in brief, and the fixture note | [00-header.png](screenshots/00-header.png) |
 | Q1a–Q1c | 1 | The source switch in Mariner Settings, the DEPTHS flyout's offer, and how the switch and the station overlay relate | [01-q1-turning-it-on.png](screenshots/01-q1-turning-it-on.png) |
-| Q2a, Q2b | 2 | A Layer stack row (recommended) and a Display controls section (alternative) | [02-q2-stations-placement-glyphs.png](screenshots/02-q2-stations-placement-glyphs.png) |
+| Q2a, Q2a′, Q2b | 2 | A Layer stack row with a **Legend ›** link (recommended), its key as Legend tab sections, and a Display controls section (alternative) | [02-q2-stations-placement-glyphs.png](screenshots/02-q2-stations-placement-glyphs.png) |
 | G1–G4 | 2 | Station glyph options beside today's S-104 gauge | ″ |
 | Q2c–Q2e | 2 | Puget Sound at 1:250,000: no decluttering, thinned (recommended), clustered | [03-q2-stations-declutter.png](screenshots/03-q2-stations-declutter.png) |
 | Q3a–Q3d | 3 | Pick cards for a harmonic station, a subordinate station, a station S-104 also covers, and a calendar-day curve (rejected) | [04-q3-station-pick.png](screenshots/04-q3-station-pick.png) |
@@ -89,13 +90,22 @@ separate switch (Q1a–Q1c).
 ## 2. Stations on the map
 
 Recommendation: a **Tide stations · predicted** row under *Other chart
-overlays* in the Layer stack, off by default and kept after a restart, with a
-small legend under the row (Q2a). Glyph G1. Thinning Q2d.
+overlays* in the Layer stack, off by default and kept after a restart (Q2a).
+Its key is a section in the Legend tab, with every other product's (Q2a′).
+Glyph G1. Thinning Q2d.
 
 - **Layer stack, not Display controls.** Display controls sections appear only
   while a product is loaded (Weather, Bathymetry, AML). Predictions have no
   loaded product, so a section would need a new rule to show. A live overlay
   with no dataset is what NDBC's row already is.
+- **The key goes in the Legend tab** ([legends](../legends.md) D1, D4, D8).
+  The row carries only the one-line **Legend ›** link that every Layer stack
+  entry with a legend now has. The Legend tab gets a **Tide stations ·
+  predicted** section while the row is on: rising, falling, turning, and the
+  height label, with the caption "Height above chart datum at the view time ·
+  dashed frame = predicted". It comes from an `ILegendSectionSource`, like the
+  route check and Library coverage, so MCP `get_legend` lists it too. The
+  S-104 section keeps explaining S-104's own gauges.
 - **Glyph: the S-104 gauge with a dashed frame** (G1): rising, falling or a
   bar for turning (within 20 minutes of a high or low). The height above the
   station datum sits beside it from 1:150,000, the name from 1:50,000.
@@ -270,7 +280,9 @@ a stale notice in the flyout (Q7c).
 ## 8. Tidal currents (T6)
 
 Recommendation: a **Current stations · predicted** row under Tide stations,
-off by default (Q8a, Q8b).
+off by default (Q8a, Q8b), with its key as a **Current stations · predicted**
+section in the Legend tab (Q2a′): S-111's speed bands, the slack bar, and the
+caption "Speed, kn · arrow points where the current flows".
 
 - **Glyph:** S-111's arrow and its nine speed-band colours, rising from the
   same dashed station frame, with the speed ("2.6 kn") and, from 1:50,000, the
@@ -333,7 +345,10 @@ Proposed, for #1453 (tides) and #1454 (currents) to cite once confirmed.
    it.
 3. **D3 Overlay and source are independent.** Neither turns the other on.
 4. **D4 Station overlay.** A **Tide stations · predicted** row under *Other
-   chart overlays*, off by default, kept after a restart, with a row legend.
+   chart overlays*, off by default, kept after a restart. Its key is a
+   **Tide stations · predicted** section in the Legend tab (legends D1, D4),
+   from an `ILegendSectionSource`; the row has only the **Legend ›** link
+   (legends D8). No legend on the map or under the row.
    Drawn from 1:500,000; heights from 1:150,000; names from 1:50,000.
 5. **D5 Predicted glyph.** The S-104 gauge symbol with a dashed frame
    (rising, falling, turning within 20 minutes of a high or low). Harmonic and
@@ -376,7 +391,7 @@ Proposed, for #1453 (tides) and #1454 (currents) to cite once confirmed.
     and **Refresh**. A date line under the switch. A stale notice in the
     flyout after 12 months.
 16. **D16 Current stations.** A **Current stations · predicted** row, off by
-    default. S-111 arrow and speed colours from a dashed frame, speed label,
+    default, with its key as a section in the Legend tab (as D4). S-111 arrow and speed colours from a dashed frame, speed label,
     slack bar with turn time. Hidden where S-111 covers. Pick card with
     slacks and maxima, flood and ebb directions, current depth, "Not used in
     route checks".
