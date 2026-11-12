@@ -10,6 +10,7 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Library;
 using EncDotNet.S100.Mcp.MutableTools;
+using EncDotNet.S100.Mcp.Tides;
 using EncDotNet.S100.Mcp.Tools.Library;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -89,6 +90,10 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [CommandOption("--data-dir <DIR>")]
         [Description("Keep the Library's index cache, catalogue cache, downloads (and collections.json) here between runs. Defaults to a temporary directory that is removed on exit.")]
         public string? DataDir { get; init; }
+
+        [CommandOption("--tide-catalogue <FILE>")]
+        [Description("The tide station catalogue for list_tide_stations and predict_tide: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
+        public string? TideCatalogue { get; init; }
 
         [CommandOption(LuaEngineOption.Template)]
         [Description(LuaEngineOption.Description)]
@@ -207,6 +212,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 catalog: catalog,
                 viewport: new StaticCapabilityAccessor<IViewportController>(session))
                 .Concat(LibraryMcpTools.Create(library, library, new EncDotNet.S100.Collections.Secom.SecomServiceDirectory(services.SecomRegistry), services.SecomTrust))
+                // Tide predictions (#1452), from the offline station catalogue.
+                .Concat(TideMcpTools.Create(TideCli.Source(TideCli.CataloguePath(settings.TideCatalogue)), TimeProvider.System))
                 .ToList();
 
             var collections = services.Library.Collections.Count(c => !c.IsSession);

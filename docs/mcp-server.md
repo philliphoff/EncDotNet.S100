@@ -243,6 +243,31 @@ SoundCharts only.
 | `follow_warning_link` | Yes | Follows the link `text` (such as `106/26`; `occurrence` picks among repeats, default 1) in the open card, or in the card `datasetId`/`featureId`, as clicking it does: the linked warning is selected in the **Navigational warnings** panel and its card opens. Returns what `get_warning_cards` returns. |
 | `preview_warning_card` | Yes | Previews the part `featureId` of `datasetId` on the map with the pick highlight, as pointing at its card does when a pick hits several warnings; omit `featureId` to end the preview. Returns what `get_warning_cards` returns. |
 
+### Tide tools
+
+Both hosts provide these tools. They read the offline tide station catalogue
+that [`s100 tides update`](cli.md#tides-update) downloads from NOAA CO-OPS,
+and need no network. `s100 mcp serve` takes another catalogue with
+`--tide-catalogue`. SoundCharts reads the same file as the CLI, or
+`tides/noaa-tide-stations.json.gz` under `--data-dir`. Without a catalogue,
+both tools return `tide_catalogue_not_available`, whose `hint` says how to
+get one.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_tide_stations` | No | Lists tide stations within `radiusMeters` (default 50,000) of `latitude` and `longitude`, or in a box (`south`, `west`, `north`, `east`), nearest first, up to `limit` (default 10, at most 500). Each station has its `id`, `name`, `type` (`tide`), `kind` (`harmonic` or `subordinate`), `position`, `distanceMeters`, `datums` (heights above `datumsReference`, MLLW where the station has it), `predictableDatums`, and for a subordinate station `referenceStationId`, `referenceStationName` and `offsets` (`highMinutes`, `lowMinutes`, `heightAdjustment`, and `highFactor` and `lowFactor` or `highOffsetMeters` and `lowOffsetMeters`). `catalogue` gives the `provider`, `date`, `ageDays`, `stale` (over 12 months old) and `stationCount`. `truncated` is `true` when more stations matched than `limit`. |
+| `predict_tide` | No | Predicts the astronomical tide at a `station` (id or name), or at the nearest station within `radiusMeters` (default 10,000) of `latitude` and `longitude` that can be predicted on the datum. `from` and `to` set the window (default: now, rounded down to the step, for 24 hours; at most 366 days). `mode` is `series` (default: heights every `stepMinutes`, default 30, at most 2,000), `extremes` (highs and lows, to the minute) or `both`. `datum` is `MLLW` (default), `MLW`, `MSL`, `MHW`, `MHHW`, `LAT` or `HAT`; subordinate stations are MLLW only. Returns the `station` (with `kind`, `referenceStationId` and `distanceMeters`), `kind: "prediction"`, the `datum` and its S-100 `verticalDatum` code, `series` and `extremes` with UTC times and heights in metres above the datum (positive up), `method` for a subordinate station, `caveat` and `catalogueDate`. |
+
+Errors: `tide_station_not_found` (with up to ten `candidates` when a name
+matches several stations), `no_tide_station_near`, and
+`tide_datum_not_available` (with the datums the station has).
+
+A prediction leaves out wind, pressure and river flow, which can move the
+water 0.5 m or more. Quote `caveat` ("Astronomical tide only, not a
+forecast.") with any value. Predictions aren't S-104 and aren't for
+navigation. `sample_coverage` doesn't fall back to predictions yet
+([#1452](https://github.com/philliphoff/EncDotNet.S100/issues/1452)).
+
 ### Library tools
 
 SoundCharts only.
@@ -759,6 +784,8 @@ statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
 - "List the datasets loaded in the viewer and their bounding boxes."
 - "What is the depth at 47.6062°N, 122.3321°W in the loaded S-102 dataset?"
 - "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
+- "When is the tide above 2 m at Seattle tomorrow afternoon?" See
+  [Find when the tide is above a height](scenarios/tide-above-a-height.md).
 - "Plan a mid-channel route from the harbour entrance to the marina: create a
   route, then add waypoints that stay clear of the charted safety contour, and
   set each leg's safety contour and cross-track limits."

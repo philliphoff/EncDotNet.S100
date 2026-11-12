@@ -71,19 +71,7 @@ public static class S104TidePredictions
         DateTime issuedUtc)
     {
         ArgumentNullException.ThrowIfNull(station);
-        RequireUtc(startUtc, nameof(startUtc));
-        RequireUtc(endUtc, nameof(endUtc));
-        RequireUtc(issuedUtc, nameof(issuedUtc));
-        if (endUtc < startUtc)
-        {
-            throw new ArgumentException("The end is before the start.", nameof(endUtc));
-        }
-
-        if (step <= TimeSpan.Zero || step.Ticks % TimeSpan.TicksPerSecond != 0 || step.TotalSeconds > ushort.MaxValue)
-        {
-            throw new ArgumentException(
-                $"The step must be a positive whole number of seconds, at most {ushort.MaxValue}.", nameof(step));
-        }
+        ValidateRun(startUtc, endUtc, step, issuedUtc);
 
         if (!TryGetVerticalDatum(station.Datum, out var datum))
         {
@@ -93,8 +81,65 @@ public static class S104TidePredictions
                 nameof(station));
         }
 
+        return CreateDataset(
+            new TidePredictor(station),
+            station.Id,
+            station.Name,
+            datum,
+            "from its harmonic constituents",
+            position,
+            startUtc,
+            endUtc,
+            step,
+            issuedUtc);
+    }
+
+    /// <summary>
+    /// Predicts the heights from any predictor, such as a subordinate
+    /// station's, and returns them as a station-series dataset. Synchronous
+    /// and CPU-bound.
+    /// </summary>
+    /// <param name="predictor">The predictor, giving heights on <paramref name="datum"/>.</param>
+    /// <param name="stationId">The station's identifier.</param>
+    /// <param name="stationName">The station's name.</param>
+    /// <param name="datum">The S-100 vertical datum the predictor's heights are on.</param>
+    /// <param name="basis">
+    /// How the heights are derived, for the method text, such as
+    /// <c>from its harmonic constituents</c> or
+    /// <c>from reference station 9447130, with offsets</c>.
+    /// </param>
+    /// <param name="position">The station's position (WGS 84).</param>
+    /// <param name="startUtc">The first time (UTC).</param>
+    /// <param name="endUtc">
+    /// The last time (UTC); the series runs from <paramref name="startUtc"/>
+    /// at <paramref name="step"/> up to and including it.
+    /// </param>
+    /// <param name="step">The time between heights: whole seconds, at most 65,535.</param>
+    /// <param name="issuedUtc">The dataset's issue time (UTC).</param>
+    /// <returns>The dataset.</returns>
+    /// <exception cref="ArgumentException">
+    /// A time isn't UTC, <paramref name="endUtc"/> is before <paramref name="startUtc"/>,
+    /// or the step isn't a positive whole number of seconds up to 65,535.
+    /// </exception>
+    public static S104StationSeriesDataset CreateDataset(
+        ITidePredictor predictor,
+        string stationId,
+        string stationName,
+        VerticalDatum datum,
+        string basis,
+        GeoPosition position,
+        DateTime startUtc,
+        DateTime endUtc,
+        TimeSpan step,
+        DateTime issuedUtc)
+    {
+        ArgumentNullException.ThrowIfNull(predictor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stationName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(basis);
+        ValidateRun(startUtc, endUtc, step, issuedUtc);
+
         int count = checked((int)((endUtc - startUtc).Ticks / step.Ticks) + 1);
-        var predictor = new TidePredictor(station);
         var heights = new double[count];
         predictor.Predict(startUtc, step, heights);
 
@@ -111,13 +156,13 @@ public static class S104TidePredictions
         {
             HorizontalCRS = 4326,
             VerticalDatum = (int)datum,
-            GeographicIdentifier = $"{station.Name} (predicted)",
+            GeographicIdentifier = $"{stationName} (predicted)",
             IssueDate = issued.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
             IssueTime = issued.ToString("HHmmss'Z'", CultureInfo.InvariantCulture),
             DataCodingFormat = 8,
             DataDynamicity = 2,
             MethodWaterLevelProduct =
-                $"{MethodPrefix} at station {station.Id} {station.Name}, from its harmonic constituents " +
+                $"{MethodPrefix} at station {stationId} {stationName}, {basis} " +
                 "(EncDotNet.S100.Tides). Astronomical tide only, no weather. Not an official product; not for navigation.",
             WaterLevelTrendThreshold = TrendThresholdMeters,
             TrendInterval = TrendIntervalMinutes,
@@ -125,8 +170,8 @@ public static class S104TidePredictions
             [
                 new WaterLevelStation
                 {
-                    Identifier = station.Id,
-                    Name = station.Name,
+                    Identifier = stationId,
+                    Name = stationName,
                     Latitude = position.Latitude,
                     Longitude = position.Longitude,
                     StartTime = start,
@@ -150,7 +195,20 @@ public static class S104TidePredictions
     public static string FileName(TideStation station)
     {
         ArgumentNullException.ThrowIfNull(station);
-        var id = new string([.. station.Id.Where(char.IsAsciiLetterOrDigit)]);
+        return FileName(station.Id);
+    }
+
+    /// <summary>
+    /// The S-100 file name for a station's predictions, by its identifier:
+    /// <c>104</c>, the producer code, and the identifier's letters and
+    /// digits, such as <c>104ZZ019447130.h5</c>.
+    /// </summary>
+    /// <param name="stationId">The station's identifier.</param>
+    /// <returns>The file name.</returns>
+    public static string FileName(string stationId)
+    {
+        ArgumentNullException.ThrowIfNull(stationId);
+        var id = new string([.. stationId.Where(char.IsAsciiLetterOrDigit)]);
         return $"104{ProducerCode}{id}.h5";
     }
 
@@ -212,6 +270,23 @@ public static class S104TidePredictions
         ["IGLD85"] = VerticalDatum.InternationalGreatLakesDatum1985,
         ["IGLD 1985"] = VerticalDatum.InternationalGreatLakesDatum1985,
     };
+
+    private static void ValidateRun(DateTime startUtc, DateTime endUtc, TimeSpan step, DateTime issuedUtc)
+    {
+        RequireUtc(startUtc, nameof(startUtc));
+        RequireUtc(endUtc, nameof(endUtc));
+        RequireUtc(issuedUtc, nameof(issuedUtc));
+        if (endUtc < startUtc)
+        {
+            throw new ArgumentException("The end is before the start.", nameof(endUtc));
+        }
+
+        if (step <= TimeSpan.Zero || step.Ticks % TimeSpan.TicksPerSecond != 0 || step.TotalSeconds > ushort.MaxValue)
+        {
+            throw new ArgumentException(
+                $"The step must be a positive whole number of seconds, at most {ushort.MaxValue}.", nameof(step));
+        }
+    }
 
     private static void RequireUtc(DateTime time, string name)
     {

@@ -21,6 +21,9 @@ internal static class SkillContent
             ["s101 convert"] = "Commands.S101Convert.md",
             ["mcp serve"] = "Commands.McpServe.md",
             ["route check"] = "Commands.RouteCheck.md",
+            ["tides stations"] = "Commands.TidesStations.md",
+            ["tides predict"] = "Commands.TidesPredict.md",
+            ["tides update"] = "Commands.TidesUpdate.md",
         };
 
     public static IReadOnlyCollection<string> GuidedCommandPaths { get; } =

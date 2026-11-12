@@ -23,6 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Tide station catalogues (NOAA's Puget Sound stations, and a hand-written one) for the tide tools (#1452). -->
+    <Content Include="..\datasets\Tides\Stations\*.json" CopyToOutputDirectory="PreserveNewest" Link="TestData\Tides\%(Filename)%(Extension)" />
     <!-- NOAA GFS and GFS-Wave subsets (issue #1074) for the weather check (#1093); see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
     <!-- Synthetic S-412 warnings (issue #841); see tests/datasets/S412/README.md. -->

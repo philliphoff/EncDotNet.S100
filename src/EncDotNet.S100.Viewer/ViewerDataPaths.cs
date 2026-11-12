@@ -248,6 +248,17 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "downloads")
             : Path.Combine(DefaultLocalDataDirectory, "Downloads");
 
+    /// <summary>
+    /// The tide station catalogue (<c>noaa-tide-stations.json.gz</c>) the tide
+    /// MCP tools read. By default it's the file <c>s100 tides update</c>
+    /// writes, so the CLI and the viewer share one download. Not a cache:
+    /// "clear caches" leaves it, because it takes minutes to download.
+    /// </summary>
+    public string TideStationCatalogueFile =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "tides", "noaa-tide-stations.json.gz")
+            : Path.Combine(DefaultLocalDataDirectory, "Tides", "noaa-tide-stations.json.gz");
+
     /// <summary>Directory for the warm tile cache (a render store kind).</summary>
     public string TileDiskCacheDirectory =>
         Path.Combine(RenderStoreDirectory, "tiles");

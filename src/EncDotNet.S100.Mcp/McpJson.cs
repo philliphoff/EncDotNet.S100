@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Mcp.Tools.Tides;
 using ModelContextProtocol;
 
 namespace EncDotNet.S100.Mcp;
@@ -112,6 +113,9 @@ public static class McpJson
 [JsonSerializable(typeof(RemoveSourceResult))]
 [JsonSerializable(typeof(SetSourceOptionsResult))]
 [JsonSerializable(typeof(LibraryIdleResult))]
+// Tide prediction tool results (#1452).
+[JsonSerializable(typeof(ListTideStationsResult))]
+[JsonSerializable(typeof(PredictTideResult))]
 // Sampled values, written polymorphically.
 [JsonSerializable(typeof(DepthSample))]
 [JsonSerializable(typeof(WaterLevelSample))]
@@ -138,6 +142,10 @@ public static class McpJson
 [JsonSerializable(typeof(LibrarySourceNotFound))]
 [JsonSerializable(typeof(LibraryItemNotFound))]
 [JsonSerializable(typeof(LibraryChangeRejected))]
+[JsonSerializable(typeof(TideCatalogueNotAvailable))]
+[JsonSerializable(typeof(TideStationNotFound))]
+[JsonSerializable(typeof(NoTideStationNear))]
+[JsonSerializable(typeof(TideDatumNotAvailable))]
 // Tool parameter types the SDK binds.
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonElement?))]

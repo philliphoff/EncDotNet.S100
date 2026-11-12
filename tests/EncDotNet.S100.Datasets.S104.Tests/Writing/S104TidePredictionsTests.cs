@@ -170,6 +170,27 @@ public sealed class S104TidePredictionsTests : IDisposable
         Assert.Equal(Start.AddMinutes(18), written.EndTime);
     }
 
+    [Fact]
+    public void AnyPredictor_WritesTheSameHeightsWithItsOwnBasis()
+    {
+        var station = NoaaFixture.StationOnMllw(Seattle);
+        var end = Start.AddHours(12);
+        var step = TimeSpan.FromMinutes(10);
+        var fromStation = S104TidePredictions.CreateDataset(station, SeattlePosition, Start, end, step, Issued);
+
+        var fromPredictor = S104TidePredictions.CreateDataset(
+            new TidePredictor(station), "sub-1", "Example Cove", VerticalDatum.MeanLowerLowWater,
+            "from reference station 9447130, with offsets", SeattlePosition, Start, end, step, Issued);
+
+        Assert.Equal(fromStation.Stations[0].Heights, fromPredictor.Stations[0].Heights);
+        Assert.Equal(fromStation.Stations[0].Trends, fromPredictor.Stations[0].Trends);
+        Assert.Equal((int)VerticalDatum.MeanLowerLowWater, fromPredictor.VerticalDatum);
+        Assert.Equal("Example Cove (predicted)", fromPredictor.GeographicIdentifier);
+        Assert.Contains("sub-1 Example Cove, from reference station 9447130, with offsets", fromPredictor.MethodWaterLevelProduct, StringComparison.Ordinal);
+        Assert.True(S104TidePredictions.IsPrediction(fromPredictor));
+        Assert.Equal("104ZZ01sub1.h5", S104TidePredictions.FileName("sub-1"));
+    }
+
     private S104StationSeriesDataset WriteAndRead(S104StationSeriesDataset dataset, string fileName)
     {
         var path = Path.Combine(_directory, fileName);

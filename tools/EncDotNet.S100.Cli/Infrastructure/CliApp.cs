@@ -75,6 +75,29 @@ internal static class CliApp
                     .WithExample("route", "check", "route.gml", "exchange-set/", "--departure", "2026-03-01T06:00Z", "--speed", "8", "--format", "json");
             });
 
+            config.AddBranch("tides", tides =>
+            {
+                tides.SetDescription("Predict tides offline from harmonic constituents (NOAA CO-OPS stations). Astronomical tide only, not a forecast; not for navigation.");
+
+                tides.AddCommand<TidesStationsCommand>("stations")
+                    .WithDescription("List tide stations near a point, nearest first, with their kind (harmonic or subordinate), reference station and datums.")
+                    .WithExample("tides", "stations", "--near", "47.6,-122.34")
+                    .WithExample("tides", "stations", "--near", "47.6,-122.34", "--radius", "20nm", "--limit", "5", "--format", "json");
+
+                tides.AddCommand<TidesPredictCommand>("predict")
+                    .WithDescription("Predict the tide at a station: heights at a step, or the highs and lows, as a table, CSV, JSON or an S-104 dataset.")
+                    .WithExample("tides", "predict", "9447130")
+                    .WithExample("tides", "predict", "Seattle", "--from", "2026-11-13T12:00", "--to", "2026-11-13T18:00", "--step", "10m")
+                    .WithExample("tides", "predict", "9447130", "--highs-lows", "--from", "2026-11-13", "--to", "2026-11-20")
+                    .WithExample("tides", "predict", "--near", "47.6,-122.34", "--datum", "LAT", "--format", "csv")
+                    .WithExample("tides", "predict", "9447130", "--from", "2026-11-13", "--to", "2026-11-20", "--step", "6m", "--format", "s104", "-o", "seattle.h5");
+
+                tides.AddCommand<TidesUpdateCommand>("update")
+                    .WithDescription("Download NOAA CO-OPS's tide stations into the offline catalogue (about 8 minutes), or check whether NOAA has newer data.")
+                    .WithExample("tides", "update")
+                    .WithExample("tides", "update", "--check");
+            });
+
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
                 .WithExample("validate", "warnings.gml")

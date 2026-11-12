@@ -121,6 +121,9 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
 | [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
+| [`tides stations`](#tides-stations) | Lists tide stations near a point, from the offline station catalogue. |
+| [`tides predict`](#tides-predict) | Predicts the tide at a station, as heights, highs and lows, or an S-104 dataset. |
+| [`tides update`](#tides-update) | Downloads NOAA's tide stations into the offline catalogue, or checks for newer data. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
@@ -888,6 +891,167 @@ and with code `7` when it does:
 A route file that can't be read, or datasets that can't be loaded, exit with
 code `2`.
 
+## tides stations
+
+```text
+s100 tides stations --near <lat,lon> [options]
+```
+
+`tides stations` lists the tide stations within a radius of a point, nearest
+first, from the offline station catalogue. Each station has its id, name and
+kind: **harmonic** stations are predicted from their own harmonic
+constituents, and **subordinate** stations from a reference station with time
+and height differences. The table shows a harmonic station's datums as heights
+above MLLW. A line under the table gives the catalogue's provider and age, and
+says when it's over 12 months old.
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | required | The point, latitude first, in decimal degrees: `--near 47.6,-122.34`. |
+| `--radius <distance>` | `50` (km) | How far to look: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
+| `--limit <n>` | `10` | The most stations to list, 1 to 500. |
+| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_tide_stations` MCP result, with each station's datums, predictable datums and a subordinate station's offsets. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file (`.json`, or `.json.gz` for gzip). |
+
+```bash
+s100 tides stations --near 47.6,-122.34
+s100 tides stations --near 47.6,-122.34 --radius 20nm --limit 5 --format json
+```
+
+```text
+╭─────────┬───────────────┬─────────────┬───────────┬──────────┬───────────────╮
+│ Id      │ Name          │ Kind        │ Reference │ Distance │ Datums (m     │
+│         │               │             │           │          │ above MLLW)   │
+├─────────┼───────────────┼─────────────┼───────────┼──────────┼───────────────┤
+│ 9447130 │ SEATTLE       │ harmonic    │ —         │   0.3 km │ MHHW 3.46 MSL │
+│         │ (Madison      │             │           │          │ 2.02 LAT      │
+│         │ St.), Elliott │             │           │          │ -1.31         │
+│         │ Bay           │             │           │          │               │
+│ 9446486 │ Tacoma        │ subordinate │ 9447130   │  39.9 km │ MLLW only     │
+│         │ Narrows       │             │           │          │               │
+│         │ Bridge        │             │           │          │               │
+╰─────────┴───────────────┴─────────────┴───────────┴──────────┴───────────────╯
+Stations: NOAA CO-OPS, retrieved 2026-11-11 (0 days ago), 3502 stations.
+```
+
+## tides predict
+
+```text
+s100 tides predict <station> [options]
+s100 tides predict --near <lat,lon> [options]
+```
+
+`tides predict` predicts the astronomical tide at a station from the offline
+catalogue. Name the station by id (`9447130`) or name (`Seattle`; a unique
+part of a name will do), or use `--near` for the nearest station within
+`--radius` that can be predicted on the datum. It prints heights in metres
+above the datum at each step, or with `--highs-lows` the high and low waters,
+with a note that the values are predicted.
+
+A prediction is astronomical: it leaves out wind, pressure and river flow,
+which can move the water 0.5 m or more. It isn't a forecast, isn't S-104, and
+isn't for navigation. The engine is
+[`EncDotNet.S100.Tides`](../src/EncDotNet.S100.Tides/README.md) and the
+catalogue is
+[`EncDotNet.S100.Tides.Stations`](../src/EncDotNet.S100.Tides.Stations/README.md).
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | none | Predict at the nearest station to this point instead of a named one. |
+| `--radius <distance>` | `10` (km) | With `--near`, how far away the station may be: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
+| `--from <time>` | now, rounded down to the step | The first time: ISO 8601 (`2026-11-18T12:00`, `2026-11-18T20:00Z`) or a date. Without an offset, it's in this computer's time zone. |
+| `--to <time>` | 24 hours after `--from` | The last time, like `--from`. At most 366 days after it. |
+| `--step <step>` | `30` (minutes) | The time between heights: minutes, or with a unit (`10m`, `1h`, `90s`). |
+| `--highs-lows` | off | Lists the high and low waters instead of heights at each step. |
+| `--datum <datum>` | `MLLW` | `MLLW`, `MLW`, `MSL`, `MHW`, `MHHW`, `LAT` or `HAT`. A harmonic station can use any datum NOAA gives it; a subordinate station is MLLW only. |
+| `--utc` | off | Reads and prints times in UTC rather than this computer's time zone. |
+| `--format <format>` | `table` | `table`, `csv`, `json` or `s104`. JSON is the `predict_tide` MCP result, with times in UTC. |
+| `-o`, `--output <file>` | `104ZZ01<station>.h5` | With `--format s104`, the file to write. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file. |
+
+```bash
+s100 tides predict 9447130
+s100 tides predict Seattle --from 2026-11-18T12:00 --to 2026-11-18T18:00 --step 10m
+s100 tides predict 9447130 --highs-lows --from 2026-11-18 --to 2026-11-25
+s100 tides predict --near 47.27,-122.55 --format csv
+```
+
+```text
+SEATTLE (Madison St.), Elliott Bay 9447130, harmonic, predicted on MLLW
+╭─────────────────────────┬──────────┬──────────────────────────╮
+│ Time                    │ High/low │ Predicted (m above MLLW) │
+├─────────────────────────┼──────────┼──────────────────────────┤
+│ 2026-11-18 04:35 -08:00 │ Low      │                     0.80 │
+│ 2026-11-18 11:55 -08:00 │ High     │                     3.42 │
+│ 2026-11-18 18:55 -08:00 │ Low      │                     1.41 │
+╰─────────────────────────┴──────────┴──────────────────────────╯
+Astronomical tide only, not a forecast. Weather and river flow can move the
+water 0.5 m or more. Not for navigation.
+Stations: NOAA CO-OPS, retrieved 2026-11-11 (7 days ago).
+```
+
+CSV has a header row (`time,predicted_m_above_mllw`, or
+`time,kind,predicted_m_above_mllw` with `--highs-lows`) and ISO 8601 times
+with their offset. The station and the note go to standard error.
+
+### Write an S-104 dataset
+
+`--format s104` writes the series as an S-104 Edition 2.0.0 dataset with one
+station (data coding format 8), which SoundCharts and the other `s100`
+commands open like any S-104 file:
+
+```bash
+s100 tides predict 9447130 --from 2026-11-18 --to 2026-11-25 --step 6m --format s104 -o seattle.h5
+```
+
+The dataset says it's a prediction: its producer code is `ZZ01`, which no
+real producer has, its data dynamicity is astronomical prediction, and its
+method text names the station and says it's not an official product. The
+step must be a whole number of seconds up to 65,535 (18 h 12 min), and the
+datum must have an S-100 code (all the datums above do). The file is written
+with PureHDF, whose writer doesn't work in a NativeAOT build; the `s100`
+release builds aren't NativeAOT.
+
+## tides update
+
+```text
+s100 tides update [--check] [--catalogue <file>]
+```
+
+`tides update` downloads NOAA CO-OPS's tide stations, with their harmonic
+constituents, datums and subordinate-station offsets, into the offline
+catalogue. It reads about 2,500 pages from NOAA's metadata API at a pace the
+API accepts, so it takes about 8 minutes. The other `tides` commands,
+`s100 mcp serve` and SoundCharts read the catalogue with no network.
+
+The catalogue is `noaa-tide-stations.json.gz` in an `EncDotNet.S100/Tides`
+folder in your local application data:
+
+| Platform | Folder |
+|---|---|
+| Windows | `%LOCALAPPDATA%\EncDotNet.S100\Tides` |
+| macOS | `~/Library/Application Support/EncDotNet.S100/Tides` |
+| Linux | `~/.local/share/EncDotNet.S100/Tides` |
+
+`--catalogue` keeps it somewhere else. The file format is documented in the
+[station catalogue README](../src/EncDotNet.S100.Tides.Stations/README.md#bring-your-own-stations),
+so you can also write your own.
+
+`--check` asks NOAA whether it has newer data than the catalogue, with a few
+requests: a new datum epoch, stations added, removed or moved, and datums
+accepted again. It exits with code `8` when there's newer data. Without a
+network, a catalogue over 12 months old counts as stale.
+
+| Option | Default | Description |
+|---|---|---|
+| `--check` | off | Only checks for newer data. Exits with `0` when the catalogue is current and `8` when it isn't. |
+| `--catalogue <file>` | the offline cache | Where to keep the catalogue. |
+
+```bash
+s100 tides update
+s100 tides update --check
+```
+
 ## list-specs
 
 ```text
@@ -995,7 +1159,9 @@ The server provides the read-only query tools and these session tools:
 and `render_to_image`. The session tools change only the server's in-memory
 state: they never edit the source datasets or write files. `open_dataset`
 adds more datasets while the server runs. Each process is one session, so
-start another process for a separate session. [MCP tools](mcp-server.md#mcp-tools)
+start another process for a separate session. The tide tools
+`list_tide_stations` and `predict_tide` read the offline station catalogue
+(see [`tides update`](#tides-update)). [MCP tools](mcp-server.md#mcp-tools)
 lists them all.
 
 | Option | Default | Description |
@@ -1003,6 +1169,7 @@ lists them all.
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
+| `--tide-catalogue <file>` | the offline cache | The tide station catalogue `list_tide_stations` and `predict_tide` read. See [`tides update`](#tides-update). |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
@@ -1132,12 +1299,13 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. An HDF5 file is detected only from its root `productSpecification` attribute, which S-100 requires; when that's missing, names a product the CLI doesn't read, or the file can't be read as HDF5 (for example an encrypted S-100 dataset outside its exchange set), the message says so. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. An HDF5 file is detected only from its root `productSpecification` attribute, which S-100 requires; when that's missing, names a product the CLI doesn't read, or the file can't be read as HDF5 (for example an encrypted S-100 dataset outside its exchange set), the message says so. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. For `tides stations` and `tides predict`: there's no station catalogue, no station matches, or the station can't be predicted on the datum. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
 | `6` | `validate` only: failing findings, or failed signature or checksum checks. |
 | `7` | `route check` only: findings at or above `--fail-on`. |
+| `8` | `tides update --check` only: NOAA has newer data than the catalogue. |
 | other non-zero | Invalid arguments, such as a missing file or an unknown palette. |
 
 ## See also
@@ -1146,6 +1314,8 @@ in its light description. Lua-CSharp lists them as reference Lua does.
   the `render` command.
 - [Compose S-101 and S-102](scenarios/compose-s101-s102.md): a composite
   render of a chart and a bathymetry surface.
+- [Find when the tide is above a height](scenarios/tide-above-a-height.md):
+  `tides predict` and the `predict_tide` MCP tool at Seattle.
 - [S-98 interoperability](design/s98-interoperability.md): how composite
   layers are ordered.
 - [PMTiles](https://docs.protomaps.com/pmtiles/): the single-file tile
