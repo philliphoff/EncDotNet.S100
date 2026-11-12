@@ -1,8 +1,8 @@
 # Tide and tidal current predictions: design pass
 
-Status: Proposed (2026-11-11), revised 2026-11-12. The maintainer's review
-moved the station keys to the Legend tab and resolved the seven open
-questions (D18–D23). D1–D17 await acceptance. Answers the nine questions in the [brief](tide-predictions-brief.md)
+Status: **Accepted** (2026-11-12). All decisions, D1–D23, are accepted. The
+maintainer's review moved the station keys to the Legend tab and resolved the
+seven open questions (D18–D23). Answers the nine questions in the [brief](tide-predictions-brief.md)
 for the design slice
 [#1448](https://github.com/philliphoff/EncDotNet.S100/issues/1448) of epic
 [#1447](https://github.com/philliphoff/EncDotNet.S100/issues/1447). The viewer
