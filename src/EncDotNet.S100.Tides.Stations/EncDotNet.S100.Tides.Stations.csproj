@@ -3,7 +3,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>A catalogue of tide stations for EncDotNet.S100.Tides: harmonic and subordinate stations with their constituents, time and height differences and tidal datums, a NOAA CO-OPS metadata client with a cheap check for newer data, a documented JSON file format for an offline cache or your own stations, and stations near a point or in a box. Predicts a station on a chosen S-100 vertical datum, with its provenance.</Description>
+    <Description>A catalogue of tide and tidal current stations for EncDotNet.S100.Tides: harmonic and subordinate stations with their constituents, time and height differences and tidal datums, a NOAA CO-OPS metadata client with a cheap check for newer data, a documented JSON file format for an offline cache or your own stations, and stations near a point or in a box. Predicts a station on a chosen S-100 vertical datum, with its provenance.</Description>
   </PropertyGroup>
 
   <ItemGroup>

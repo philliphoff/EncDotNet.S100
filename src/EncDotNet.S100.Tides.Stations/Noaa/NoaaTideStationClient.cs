@@ -10,9 +10,11 @@ using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Tides.Stations.Noaa;
 
 /// <summary>
-/// Reads tide stations from the NOAA CO-OPS metadata API: the tide
-/// prediction station list with subordinate stations' offsets, and each
-/// reference station's harmonic constituents and tidal datums.
+/// Reads tide and tidal current stations from the NOAA CO-OPS metadata API:
+/// the tide prediction station list with subordinate stations' offsets,
+/// each reference station's harmonic constituents and tidal datums, and the
+/// current prediction station list with each harmonic current station's
+/// constituents.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,11 +35,38 @@ namespace EncDotNet.S100.Tides.Stations.Noaa;
 /// and ratios (<c>R</c>) or metres (<c>F</c>) applied on MLLW. NOAA data is
 /// a work of the US Government and in the public domain.
 /// </para>
+/// <para>
+/// <b>Currents.</b> A current station is a station and a depth bin,
+/// identified as NOAA's offsets are, <c>PUG1701_33</c>; NOAA lists each
+/// station once per bin it predicts. Harmonic current stations (type
+/// <c>H</c>) carry their major- and minor-axis constituents, mean currents
+/// and major-axis direction for that bin; subordinate ones (type <c>S</c>)
+/// their reference station and bin, time differences and speed ratios.
+/// Flood and ebb directions are NOAA's <c>meanFloodDir</c> and
+/// <c>meanEbbDir</c>; where NOAA gives one, the other is opposite it, and
+/// where it gives neither, a harmonic station's are its major axis and a
+/// subordinate station's its reference station's. Stations of
+/// weak and variable current (type <c>W</c>) have no predictions and are
+/// left out. A harmonic station whose M2 current ellipse is at least
+/// <see cref="RotaryEllipseRatio"/> as wide as long is marked rotary.
+/// </para>
 /// </remarks>
 public sealed partial class NoaaTideStationClient
 {
     /// <summary>The provider name a downloaded catalogue carries.</summary>
     public const string ProviderName = "NOAA CO-OPS";
+
+    /// <summary>
+    /// A harmonic current station whose M2 constituent's minor-axis
+    /// amplitude is at least this fraction of its major-axis amplitude is
+    /// marked rotary (see <see cref="CurrentStationEntry.IsRotary"/>): its
+    /// current turns round the compass rather than running to and fro.
+    /// NOAA's own predictions give only the major axis.
+    /// </summary>
+    public const double RotaryEllipseRatio = 0.5;
+
+    /// <summary>Centimetres per second in a metre per second: NOAA's metric current unit.</summary>
+    private const double CentimetresPerMetre = 100;
 
     private readonly HttpClient _http;
     private readonly NoaaTideStationClientOptions _options;
@@ -120,16 +149,20 @@ public sealed partial class NoaaTideStationClient
 
     /// <summary>
     /// Downloads NOAA's whole tide prediction catalogue: the station list,
-    /// and each reference station's constituents and datums.
+    /// and each reference station's constituents and datums; and, unless
+    /// <see cref="NoaaTideStationClientOptions.IncludeCurrentStations"/> is
+    /// off, the current prediction station list and each harmonic current
+    /// station's constituents.
     /// </summary>
     /// <remarks>
-    /// About 2,500 requests, paced by <see cref="NoaaTideStationClientOptions.MaxConcurrency"/>
-    /// and <see cref="NoaaTideStationClientOptions.RequestInterval"/>, so it
+    /// About 2,500 requests for tides and 900 for currents, paced by
+    /// <see cref="NoaaTideStationClientOptions.MaxConcurrency"/> and
+    /// <see cref="NoaaTideStationClientOptions.RequestInterval"/>, so it
     /// takes some minutes. A reference station NOAA has no constituents for
     /// stays in the catalogue but can't be predicted, and neither can its
     /// subordinate stations.
     /// </remarks>
-    /// <param name="progress">Receives progress as reference stations are read; <c>null</c> for none.</param>
+    /// <param name="progress">Receives progress as reference and harmonic current stations are read; <c>null</c> for none.</param>
     /// <param name="cancellationToken">Cancels the download.</param>
     /// <returns>The catalogue, dated now.</returns>
     /// <exception cref="HttpRequestException">A request failed after its retries.</exception>
@@ -139,8 +172,18 @@ public sealed partial class NoaaTideStationClient
         var listing = await GetStationsAsync(cancellationToken).ConfigureAwait(false);
         var references = listing.Where(s => s.Kind == TideStationKind.Harmonic).ToArray();
         var details = new (IReadOnlyList<TideConstituent> Constituents, StationDatums? Datums)[references.Length];
+        var currentListing = _options.IncludeCurrentStations
+            ? await GetCurrentListingAsync(cancellationToken).ConfigureAwait(false)
+            : [];
+        var currentReferences = currentListing
+            .Where(s => s.Kind == TideStationKind.Harmonic)
+            .Select(s => s.NoaaId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var currentHarmonics = new Dictionary<string, IReadOnlyList<CurrentHarconRowDto>>(StringComparer.Ordinal);
+        var total = references.Length + currentReferences.Length;
         var completed = 0;
-        progress?.Report(new NoaaDownloadProgress(0, references.Length));
+        progress?.Report(new NoaaDownloadProgress(0, total));
 
         using var gate = new SemaphoreSlim(_options.MaxConcurrency);
         var tasks = references.Select(async (station, index) =>
@@ -159,9 +202,28 @@ public sealed partial class NoaaTideStationClient
                 gate.Release();
             }
 
-            progress?.Report(new NoaaDownloadProgress(Interlocked.Increment(ref completed), references.Length));
+            progress?.Report(new NoaaDownloadProgress(Interlocked.Increment(ref completed), total));
         });
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+        var currentTasks = currentReferences.Select(async id =>
+        {
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var rows = await GetCurrentHarmonicsAsync(id, cancellationToken).ConfigureAwait(false);
+                await PauseAsync(cancellationToken).ConfigureAwait(false);
+                lock (currentHarmonics)
+                {
+                    currentHarmonics[id] = rows;
+                }
+            }
+            finally
+            {
+                gate.Release();
+            }
+
+            progress?.Report(new NoaaDownloadProgress(Interlocked.Increment(ref completed), total));
+        });
+        await Task.WhenAll(tasks.Concat(currentTasks)).ConfigureAwait(false);
 
         var byId = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < references.Length; i++)
@@ -192,7 +254,23 @@ public sealed partial class NoaaTideStationClient
             }
         }
 
-        return new TideStationCatalogue(stations, ProviderName, _time.GetUtcNow());
+        var currents = new List<CurrentStationEntry>(currentListing.Count);
+        foreach (var listed in currentListing)
+        {
+            if (listed.Kind == TideStationKind.Subordinate)
+            {
+                if (listed.Entry is { } subordinate)
+                {
+                    currents.Add(subordinate);
+                }
+            }
+            else if (currentHarmonics.TryGetValue(listed.NoaaId, out var rows) && ToHarmonicEntry(listed, rows) is { } harmonic)
+            {
+                currents.Add(harmonic);
+            }
+        }
+
+        return new TideStationCatalogue(stations, currents, ProviderName, _time.GetUtcNow());
     }
 
     /// <summary>
@@ -204,8 +282,11 @@ public sealed partial class NoaaTideStationClient
     /// <remarks>
     /// It finds stations NOAA has added, removed or moved, changed
     /// subordinate offsets, a new tidal datum epoch, and sentinel stations
-    /// whose datums NOAA has accepted again. A change to one station's
-    /// constituents alone isn't seen: NOAA revises those with its datums.
+    /// whose datums NOAA has accepted again. When the catalogue has current
+    /// stations, it reads the current station list too (one more request)
+    /// and finds current stations added, removed, moved or with changed
+    /// directions or offsets. A change to one station's constituents alone
+    /// isn't seen: NOAA revises those with its datums.
     /// </remarks>
     /// <param name="catalogue">The catalogue to check, as downloaded by <see cref="DownloadCatalogueAsync"/>.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
@@ -234,6 +315,26 @@ public sealed partial class NoaaTideStationClient
         }
 
         var removed = catalogue.Stations.Where(s => !listed.Contains(s.Id)).Select(s => s.Id).ToList();
+
+        if (catalogue.CurrentStations.Count > 0)
+        {
+            var currentListing = await GetCurrentListingAsync(cancellationToken).ConfigureAwait(false);
+            var listedCurrents = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var station in currentListing)
+            {
+                listedCurrents.Add(station.Id);
+                if (catalogue.FindCurrentStation(station.Id) is not { } cached)
+                {
+                    added.Add(station.Id);
+                }
+                else if (HasChanged(cached, station))
+                {
+                    changed.Add(station.Id);
+                }
+            }
+
+            removed.AddRange(catalogue.CurrentStations.Where(s => !listedCurrents.Contains(s.Id)).Select(s => s.Id));
+        }
 
         string? newEpoch = null;
         var revised = new List<string>();
@@ -266,6 +367,16 @@ public sealed partial class NoaaTideStationClient
         };
     }
 
+    private static bool HasChanged(CurrentStationEntry cached, CurrentListing listed) =>
+        cached.Kind != listed.Kind
+        || Math.Abs(cached.Position.Latitude - listed.Position.Latitude) > 1e-4
+        || Math.Abs(cached.Position.Longitude - listed.Position.Longitude) > 1e-4
+        || listed.FloodDirectionDegrees is { } flood && Math.Abs(cached.FloodDirectionDegrees - flood) > 0.05
+        || listed.EbbDirectionDegrees is { } ebb && Math.Abs(cached.EbbDirectionDegrees - ebb) > 0.05
+        || listed.Kind == TideStationKind.Subordinate
+            && (!string.Equals(cached.ReferenceStationId, listed.Entry?.ReferenceStationId, StringComparison.Ordinal)
+                || !Equals(cached.Offsets, listed.Entry?.Offsets));
+
     private static bool HasChanged(TideStationEntry cached, TideStationEntry listed) =>
         cached.Kind != listed.Kind
         || Math.Abs(cached.Position.Latitude - listed.Position.Latitude) > 1e-4
@@ -281,6 +392,211 @@ public sealed partial class NoaaTideStationClient
         && int.TryParse(epoch.AsSpan(5, 4), NumberStyles.None, CultureInfo.InvariantCulture, out var to)
         && from > 1800
         && to > from;
+
+    /// <summary>
+    /// Reads NOAA's current prediction station list: a station per depth
+    /// bin, and for a subordinate station its finished entry.
+    /// </summary>
+    private async Task<IReadOnlyList<CurrentListing>> GetCurrentListingAsync(CancellationToken cancellationToken)
+    {
+        var list = await GetAsync(
+            "stations.json?type=currentpredictions&expand=currentpredictionoffsets&units=metric",
+            NoaaJsonContext.Default.CurrentStationListDto,
+            cancellationToken).ConfigureAwait(false);
+        var result = new List<CurrentListing>(list?.Stations?.Count ?? 0);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var station in list?.Stations ?? [])
+        {
+            if (ToListing(station) is { } listing && seen.Add(listing.Id))
+            {
+                result.Add(listing);
+            }
+        }
+
+        // A subordinate station NOAA gives no directions for takes its
+        // reference station's.
+        var byId = result.ToDictionary(l => l.Id, StringComparer.Ordinal);
+        for (var i = result.Count - 1; i >= 0; i--)
+        {
+            if (result[i].Entry is not { } entry || double.IsFinite(entry.FloodDirectionDegrees))
+            {
+                continue;
+            }
+
+            if (byId.GetValueOrDefault(entry.ReferenceStationId!) is { FloodDirectionDegrees: { } flood } reference)
+            {
+                result[i] = result[i] with
+                {
+                    Entry = new CurrentStationEntry
+                    {
+                        Id = entry.Id,
+                        Name = entry.Name,
+                        Position = entry.Position,
+                        Kind = entry.Kind,
+                        DepthMeters = entry.DepthMeters,
+                        FloodDirectionDegrees = flood,
+                        EbbDirectionDegrees = reference.EbbDirectionDegrees ?? Opposite(flood),
+                        ReferenceStationId = entry.ReferenceStationId,
+                        Offsets = entry.Offsets,
+                    },
+                };
+            }
+            else
+            {
+                result.RemoveAt(i);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Reads a current station's constituents for all its bins (NOAA's harcon.json for currents).</summary>
+    private async Task<IReadOnlyList<CurrentHarconRowDto>> GetCurrentHarmonicsAsync(string stationId, CancellationToken cancellationToken)
+    {
+        var harcon = await GetAsync(
+            $"stations/{Uri.EscapeDataString(stationId)}/harcon.json?units=metric",
+            NoaaJsonContext.Default.CurrentHarconDto,
+            cancellationToken).ConfigureAwait(false);
+        var scale = harcon?.Units?.Contains("knot", StringComparison.OrdinalIgnoreCase) == true
+            ? TidalCurrent.MetersPerSecondPerKnot
+            : 1 / CentimetresPerMetre;
+        var rows = harcon?.HarmonicConstituents ?? [];
+        foreach (var row in rows)
+        {
+            row.Scale = scale;
+        }
+
+        return rows;
+    }
+
+    private static CurrentListing? ToListing(CurrentStationDto dto)
+    {
+        if (string.IsNullOrEmpty(dto.Id) || dto.Lat is not { } lat || dto.Lng is not { } lng || dto.CurrBin is not { } bin)
+        {
+            return null;
+        }
+
+        var kind = dto.Type switch
+        {
+            "H" => TideStationKind.Harmonic,
+            "S" => TideStationKind.Subordinate,
+            _ => (TideStationKind?)null,
+        };
+        if (kind is null)
+        {
+            return null;
+        }
+
+        var offsets = dto.Offsets;
+        var listing = new CurrentListing(
+            dto.Id,
+            $"{dto.Id}_{bin}",
+            bin,
+            dto.Name ?? dto.Id,
+            new GeoPosition(lat, lng),
+            kind.Value,
+            dto.Depth,
+            offsets?.MeanFloodDir,
+            offsets?.MeanEbbDir,
+            null);
+        if (kind == TideStationKind.Harmonic)
+        {
+            return listing;
+        }
+
+        if (offsets is not
+            {
+                RefStationId: { Length: > 0 } reference,
+                RefStationBin: { } referenceBin,
+                SbfTimeAdjMin: { } sbf,
+                MfcTimeAdjMin: { } mfc,
+                SbeTimeAdjMin: { } sbe,
+                MecTimeAdjMin: { } mec,
+                MfcAmpAdj: { } floodRatio,
+                MecAmpAdj: { } ebbRatio,
+            })
+        {
+            return null;
+        }
+
+        // NOAA leaves out an ebb direction at a few stations, and both at
+        // one: an unknown one is opposite the other, and both unknown are
+        // filled from the reference station by the caller (NaN until then).
+        var flood = offsets.MeanFloodDir ?? (offsets.MeanEbbDir is { } e ? Opposite(e) : double.NaN);
+        var ebb = offsets.MeanEbbDir ?? (offsets.MeanFloodDir is { } f ? Opposite(f) : double.NaN);
+        return listing with
+        {
+            Entry = new CurrentStationEntry
+            {
+                Id = listing.Id,
+                Name = listing.Name,
+                Position = listing.Position,
+                Kind = TideStationKind.Subordinate,
+                DepthMeters = dto.Depth,
+                FloodDirectionDegrees = flood,
+                EbbDirectionDegrees = ebb,
+                ReferenceStationId = $"{reference}_{referenceBin}",
+                Offsets = new SubordinateCurrentOffsets(
+                    TimeSpan.FromMinutes(sbf),
+                    TimeSpan.FromMinutes(mfc),
+                    TimeSpan.FromMinutes(sbe),
+                    TimeSpan.FromMinutes(mec),
+                    floodRatio,
+                    ebbRatio),
+            },
+        };
+    }
+
+    private static double Opposite(double degrees) => (degrees + 180) % 360;
+
+    /// <summary>A harmonic current station's entry from its listing and its station's constituents for all bins.</summary>
+    private static CurrentStationEntry? ToHarmonicEntry(CurrentListing listing, IReadOnlyList<CurrentHarconRowDto> rows)
+    {
+        var constituents = new List<CurrentConstituent>();
+        CurrentHarconRowDto? first = null;
+        foreach (var row in rows)
+        {
+            if (row.BinNbr != listing.Bin
+                || row.ConstituentName is not { } name
+                || !HarmonicConstituents.Contains(name)
+                || constituents.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            first ??= row;
+            var major = (row.MajorAmplitude ?? 0) * row.Scale;
+            var minor = (row.MinorAmplitude ?? 0) * row.Scale;
+            if (major != 0 || minor != 0)
+            {
+                constituents.Add(new CurrentConstituent(name, major, row.MajorPhaseGmt ?? 0, minor, row.MinorPhaseGmt ?? 0));
+            }
+        }
+
+        if (first is null || constituents.Count == 0)
+        {
+            return null;
+        }
+
+        var axis = first.Azi ?? listing.FloodDirectionDegrees ?? 0;
+        var m2 = constituents.FirstOrDefault(c => string.Equals(c.Name, "M2", StringComparison.OrdinalIgnoreCase));
+        return new CurrentStationEntry
+        {
+            Id = listing.Id,
+            Name = listing.Name,
+            Position = listing.Position,
+            Kind = TideStationKind.Harmonic,
+            DepthMeters = listing.DepthMeters ?? first.BinDepth,
+            FloodDirectionDegrees = listing.FloodDirectionDegrees ?? axis,
+            EbbDirectionDegrees = listing.EbbDirectionDegrees ?? (listing.FloodDirectionDegrees is { } f ? Opposite(f) : Opposite(axis)),
+            Constituents = constituents,
+            MajorAxisDirectionDegrees = axis,
+            MajorMeanVelocity = (first.MajorMeanSpeed ?? 0) * first.Scale,
+            MinorMeanVelocity = (first.MinorMeanSpeed ?? 0) * first.Scale,
+            IsRotary = m2 is { MajorAmplitudeMetersPerSecond: > 0 }
+                && Math.Abs(m2.MinorAmplitudeMetersPerSecond) >= RotaryEllipseRatio * m2.MajorAmplitudeMetersPerSecond,
+        };
+    }
 
     private Task PauseAsync(CancellationToken cancellationToken) =>
         _options.RequestInterval > TimeSpan.Zero
@@ -555,9 +871,146 @@ public sealed partial class NoaaTideStationClient
         public double? Value { get; set; }
     }
 
+    /// <summary>A current station as NOAA lists it, per depth bin.</summary>
+    /// <param name="NoaaId">NOAA's station identifier, such as <c>PUG1701</c>.</param>
+    /// <param name="Id">The catalogue identifier, station and bin, such as <c>PUG1701_33</c>.</param>
+    /// <param name="Bin">The depth bin.</param>
+    /// <param name="Name">The station's name.</param>
+    /// <param name="Position">The station's position.</param>
+    /// <param name="Kind">Harmonic or subordinate.</param>
+    /// <param name="DepthMeters">The bin's depth below the surface, or <c>null</c>.</param>
+    /// <param name="FloodDirectionDegrees">NOAA's mean flood direction, or <c>null</c>.</param>
+    /// <param name="EbbDirectionDegrees">NOAA's mean ebb direction, or <c>null</c>.</param>
+    /// <param name="Entry">A subordinate station's finished entry; <c>null</c> for a harmonic station.</param>
+    private sealed record CurrentListing(
+        string NoaaId,
+        string Id,
+        int Bin,
+        string Name,
+        GeoPosition Position,
+        TideStationKind Kind,
+        double? DepthMeters,
+        double? FloodDirectionDegrees,
+        double? EbbDirectionDegrees,
+        CurrentStationEntry? Entry);
+
+    internal sealed class CurrentStationListDto
+    {
+        [JsonPropertyName("stations")]
+        public List<CurrentStationDto>? Stations { get; set; }
+    }
+
+    internal sealed class CurrentStationDto
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("currbin")]
+        public int? CurrBin { get; set; }
+
+        [JsonPropertyName("depth")]
+        public double? Depth { get; set; }
+
+        [JsonPropertyName("lat")]
+        public double? Lat { get; set; }
+
+        [JsonPropertyName("lng")]
+        public double? Lng { get; set; }
+
+        [JsonPropertyName("currentpredictionoffsets")]
+        public CurrentOffsetsDto? Offsets { get; set; }
+    }
+
+    internal sealed class CurrentOffsetsDto
+    {
+        [JsonPropertyName("refStationId")]
+        public string? RefStationId { get; set; }
+
+        [JsonPropertyName("refStationBin")]
+        public int? RefStationBin { get; set; }
+
+        [JsonPropertyName("meanFloodDir")]
+        public double? MeanFloodDir { get; set; }
+
+        [JsonPropertyName("meanEbbDir")]
+        public double? MeanEbbDir { get; set; }
+
+        [JsonPropertyName("mfcTimeAdjMin")]
+        public double? MfcTimeAdjMin { get; set; }
+
+        [JsonPropertyName("sbeTimeAdjMin")]
+        public double? SbeTimeAdjMin { get; set; }
+
+        [JsonPropertyName("mecTimeAdjMin")]
+        public double? MecTimeAdjMin { get; set; }
+
+        [JsonPropertyName("sbfTimeAdjMin")]
+        public double? SbfTimeAdjMin { get; set; }
+
+        [JsonPropertyName("mfcAmpAdj")]
+        public double? MfcAmpAdj { get; set; }
+
+        [JsonPropertyName("mecAmpAdj")]
+        public double? MecAmpAdj { get; set; }
+    }
+
+    internal sealed class CurrentHarconDto
+    {
+        [JsonPropertyName("units")]
+        public string? Units { get; set; }
+
+        [JsonPropertyName("HarmonicConstituents")]
+        public List<CurrentHarconRowDto>? HarmonicConstituents { get; set; }
+    }
+
+    internal sealed class CurrentHarconRowDto
+    {
+        [JsonPropertyName("binNbr")]
+        public int? BinNbr { get; set; }
+
+        [JsonPropertyName("binDepth")]
+        public double? BinDepth { get; set; }
+
+        [JsonPropertyName("constituentName")]
+        public string? ConstituentName { get; set; }
+
+        [JsonPropertyName("majorAmplitude")]
+        public double? MajorAmplitude { get; set; }
+
+        [JsonPropertyName("majorPhaseGMT")]
+        public double? MajorPhaseGmt { get; set; }
+
+        [JsonPropertyName("minorAmplitude")]
+        public double? MinorAmplitude { get; set; }
+
+        [JsonPropertyName("minorPhaseGMT")]
+        public double? MinorPhaseGmt { get; set; }
+
+        [JsonPropertyName("majorMeanSpeed")]
+        public double? MajorMeanSpeed { get; set; }
+
+        [JsonPropertyName("minorMeanSpeed")]
+        public double? MinorMeanSpeed { get; set; }
+
+        [JsonPropertyName("azi")]
+        public double? Azi { get; set; }
+
+        /// <summary>Metres per second per unit of NOAA's amplitudes; set after reading.</summary>
+        [JsonIgnore]
+        public double Scale { get; set; } = 1 / CentimetresPerMetre;
+    }
+
     [JsonSourceGenerationOptions(NumberHandling = JsonNumberHandling.AllowReadingFromString)]
     [JsonSerializable(typeof(StationListDto))]
     [JsonSerializable(typeof(HarconDto))]
     [JsonSerializable(typeof(DatumsDto))]
+    [JsonSerializable(typeof(CurrentStationListDto))]
+    [JsonSerializable(typeof(CurrentHarconDto))]
     private sealed partial class NoaaJsonContext : JsonSerializerContext;
 }

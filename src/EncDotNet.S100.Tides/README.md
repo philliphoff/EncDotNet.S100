@@ -2,9 +2,11 @@
 
 `EncDotNet.S100.Tides` predicts the astronomical tide at a station from its
 harmonic constituents. It gives the predicted height at a time, a series of
-heights at a fixed step, and the high and low waters in a period. Reference
-it when you have a station's constituents, such as NOAA's, and need a water
-level where there's no S-104 dataset.
+heights at a fixed step, and the high and low waters in a period. It also
+predicts tidal currents: the current at a time, and slack waters and
+maximum floods and ebbs. Reference it when you have a station's
+constituents, such as NOAA's, and need a water level or current where
+there's no S-104 or S-111 dataset.
 
 The package is pure managed code with no dependencies, and is trimming and
 NativeAOT compatible. Times are `DateTime` in UTC and heights are metres,
@@ -121,6 +123,68 @@ Both predictors implement `ITidePredictor`. The
 [`EncDotNet.S100.Tides.Stations`](../EncDotNet.S100.Tides.Stations/README.md)
 package reads stations, offsets and datums from NOAA and creates the right
 predictor for a station.
+
+## Predict tidal currents
+
+A current station is predicted the same way, along its major axis: the
+direction the current mostly flows in, positive toward the flood. NOAA
+publishes each current station's constituents per depth, with amplitudes
+along the major and minor axes, the mean current along each, the major
+axis's direction and the station's flood and ebb directions:
+
+```csharp
+var deceptionPass = new CurrentStation(
+    "PUG1701_33",                          // NOAA station and depth bin
+    "Deception Pass (Narrows)",
+    [
+        new CurrentConstituent("M2", 2.6802, 241.2, 0.0062, 31.3),
+        // ... the station's other constituents, in m/s and Greenwich degrees
+    ],
+    majorAxisDirectionDegrees: 101.5,
+    majorMeanVelocity: -0.3179,
+    minorMeanVelocity: 0.1451,
+    floodDirectionDegrees: 108,
+    ebbDirectionDegrees: 277,
+    isRotary: false);
+
+var currents = new CurrentPredictor(deceptionPass);
+TidalCurrent now = currents.CurrentAt(DateTime.UtcNow);   // speed, direction, flood or ebb
+var events = currents.FindEvents(DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
+```
+
+`FindEvents` returns slack before flood and slack before ebb, where the
+velocity along the major axis crosses zero, and between them every turn
+of the flood or ebb: a maximum, or where a mixed or diurnal tide makes the
+current weaken and strengthen again, two maxima with a minimum between. A
+minimum within an hour of a maximum is a pause, not a turn, and is left
+out with the weaker maximum (`MinimumTurnSeparation`). `Predict` fills a
+span with velocities at a fixed step, as for heights.
+
+A **rectilinear** current sets toward the flood direction while it floods
+and the ebb direction while it ebbs. A **rotary** current (`isRotary: true`)
+gets its speed and direction from both axes, the minor axis 90° clockwise
+from the major. `M2EllipseRatio` says how wide the M2 current ellipse is.
+
+`SubordinateCurrentPredictor` predicts a subordinate current station by
+NOAA's method: each of the reference station's slacks and turns moved by
+the time difference for its kind, and the flood and ebb speeds multiplied
+by their ratios (`SubordinateCurrentOffsets`). Between them the reference
+curve is used with the time differences interpolated, as for tides. Both
+implement `ICurrentPredictor`.
+
+Against NOAA's own published current predictions for 2026 at Deception
+Pass, the Golden Gate, The Race and Mobile Bay Entrance, the 6-minute
+velocities agree to about 1 mm/s RMS (worst 2.3 mm/s), and slacks and
+maxima to a minute and 3 mm/s. At the two subordinate stations recorded,
+Golden Gate Bridge 0.8 mile east of and Montauk Point 1.2 miles east of,
+every event matches. Mobile Bay Entrance, a weak diurnal current, differs
+in under 5% of events where the current nearly stops without turning: NOAA
+lists such a near-stop as a slack and leaves out maxima under about 0.1 kn,
+where this predictor lists a minimum and the maxima.
+
+Velocities are metres per second; `TidalCurrent.SpeedKnots` converts. A
+current prediction is astronomical only: wind and river flow change real
+currents, and isn't for navigation.
 
 ## How predictions are made
 

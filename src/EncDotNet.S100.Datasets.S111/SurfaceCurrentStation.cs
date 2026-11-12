@@ -15,6 +15,9 @@ public sealed class SurfaceCurrentStation
     /// <summary>Identifier of the station (S-111 <c>stationIdentification</c>).</summary>
     public required string Identifier { get; init; }
 
+    /// <summary>The station's name (S-111 <c>stationName</c>), or <c>null</c> when not given.</summary>
+    public string? Name { get; init; }
+
     /// <summary>Station latitude in decimal degrees (WGS-84).</summary>
     public required double Latitude { get; init; }
 
