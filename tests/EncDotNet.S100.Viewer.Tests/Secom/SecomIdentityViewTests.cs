@@ -81,9 +81,8 @@ public sealed class SecomIdentityViewTests
         library.Initialize();
         library.AddCollection("SECOM", [new SecomSource(Guid.NewGuid(), "KHRA S-124", new Uri("https://secom.khra.example/api/secom/"), SecomFilter.All) { Identity = bridge.Id }]);
         await library.WhenIdle();
-        using var panel = TestLibrary.Panel(library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Tree.Identities = new SecomIdentityDirectory(keys.Identities, keys.Time);
-        panel.Tree.Sync();
+        using var panel = TestLibrary.Panel(library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null,
+            identities: new SecomIdentityDirectory(keys.Identities, keys.Time));
         panel.Tree.SelectedNode = panel.Tree.Nodes.Single().Children.Single();
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
 

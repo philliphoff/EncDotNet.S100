@@ -24,7 +24,8 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
     private LibraryNodeViewModel? _selectedNode;
     private bool _hasSynced;
     private bool _refreshPosted;
-    private Services.Secom.SecomIdentityDirectory? _identities;
+    private readonly Services.Secom.SecomIdentityDirectory? _identities;
+    private readonly Action<Keys.KeysTab>? _openKeys;
 
     /// <summary>Creates the tree and fills it from <paramref name="library"/>.</summary>
     /// <param name="library">The Library the tree shows.</param>
@@ -33,13 +34,21 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
     /// <param name="timeFormat">The Local/UTC setting; <see langword="null"/> shows UTC.</param>
     /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
     /// <param name="time">The clock SECOM identities' expiry is counted by.</param>
+    /// <param name="identities">
+    /// The identities SECOM sources choose from (#883): with them, SECOM rows
+    /// show their identity and the details pane shows a selected source's
+    /// Connection. <see langword="null"/> where the host has no keys.
+    /// </param>
+    /// <param name="openKeys">Opens Settings → Keys &amp; certificates on a tab; <see langword="null"/> where the host has no Settings.</param>
     public LibraryTreeViewModel(
         CollectionLibrary library,
         ILibraryImporter importer,
         LibraryNodeStatus status,
         Services.ITimeFormatProvider? timeFormat,
         Action<Action> dispatch,
-        TimeProvider time)
+        TimeProvider time,
+        Services.Secom.SecomIdentityDirectory? identities,
+        Action<Keys.KeysTab>? openKeys)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(importer);
@@ -75,6 +84,15 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
         KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
 
+        _openKeys = openKeys;
+        _identities = identities;
+        if (identities is not null)
+        {
+            identities.Changed += (_, _) => _dispatch(UpdateSecomIdentities);
+            SecomDetails = new Secom.SecomSourceDetailsViewModel(
+                identities, (collectionId, source) => _library.UpdateSource(collectionId, source), tab => _openKeys?.Invoke(tab), _time);
+        }
+
         _library.Changed += OnLibraryChanged;
         Sync();
     }
@@ -100,6 +118,25 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
 
     /// <summary>True when the library has no collection.</summary>
     public bool IsEmpty => Nodes.Count == 0;
+
+    /// <summary>
+    /// Selects the tree node of a remote catalogue's area (a map tap on it
+    /// when zoomed out; #685): its group node, or the source when it shows no
+    /// area nodes. The collection and source open so the node is visible.
+    /// </summary>
+    public void SelectArea(Guid sourceId, string folder)
+    {
+        foreach (var collection in Nodes)
+        {
+            if (collection.Children.FirstOrDefault(c => c.Id == sourceId) is not { } source)
+                continue;
+
+            collection.IsExpanded = true;
+            source.IsExpanded = true;
+            SelectedNode = source.Children.FirstOrDefault(c => c.GroupId == folder) ?? source;
+            return;
+        }
+    }
 
     /// <summary>The selected collection or source.</summary>
     public LibraryNodeViewModel? SelectedNode
@@ -205,32 +242,8 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
     /// <summary>True when the selected node is an area of a remote S-100 catalogue (S-102).</summary>
     public bool CanAddCurrentsForArea => _selectedNode is { IsGroup: true, Source.Definition: S100CatalogueFeedSource };
 
-    /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
-    internal Action<Keys.KeysTab>? OpenKeys { get; set; }
-
-    /// <summary>
-    /// The identities SECOM sources choose from (#883); set by the host. With
-    /// it, SECOM rows show their identity and the details pane shows a selected
-    /// source's Connection.
-    /// </summary>
-    internal Services.Secom.SecomIdentityDirectory? Identities
-    {
-        get => _identities;
-        set
-        {
-            _identities = value;
-            if (value is null)
-                return;
-            value.Changed += (_, _) => _dispatch(UpdateSecomIdentities);
-            SecomDetails = new Secom.SecomSourceDetailsViewModel(
-                value, (collectionId, source) => _library.UpdateSource(collectionId, source), tab => OpenKeys?.Invoke(tab), _time);
-            OnPropertyChanged(nameof(SecomDetails));
-            UpdateSecomIdentities();
-        }
-    }
-
-    /// <summary>A selected SECOM source's Connection details (#883 D3); null without <see cref="Identities"/>.</summary>
-    public Secom.SecomSourceDetailsViewModel? SecomDetails { get; private set; }
+    /// <summary>A selected SECOM source's Connection details (#883 D3); null without SECOM identities.</summary>
+    public Secom.SecomSourceDetailsViewModel? SecomDetails { get; }
 
     /// <summary>
     /// The persisted collection new sources are added to by default: the
@@ -365,10 +378,10 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
                 SecomDetails.OpenPicker();
                 break;
             case SecomFix.TrustedAuthorities:
-                OpenKeys?.Invoke(Keys.KeysTab.Authorities);
+                _openKeys?.Invoke(Keys.KeysTab.Authorities);
                 break;
             case not null:
-                OpenKeys?.Invoke(Keys.KeysTab.Identities);
+                _openKeys?.Invoke(Keys.KeysTab.Identities);
                 break;
         }
     }

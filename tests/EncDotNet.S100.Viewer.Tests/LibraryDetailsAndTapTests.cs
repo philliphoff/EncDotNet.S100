@@ -90,6 +90,26 @@ public sealed class LibraryDetailsAndTapTests : IDisposable
         Assert.False(tap.HasLocation);
     }
 
+    [Fact]
+    public async Task The_panel_hands_the_list_selection_to_the_details()
+    {
+        var (library, _) = await OnlineRowsAsync();
+        using var panel = library.CreatePanel(new RecordingLibraryImporter(), action => action(), coalesce: action => action(),
+            time: TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
+        panel.Tree.SelectedNode = panel.Tree.Nodes.Single(n => n.Source is null && n.Children.Count > 0).Children.Single();
+        Assert.True(panel.ShowsItemPlaceholder);
+
+        panel.List.SelectedItem = panel.List.Items[1];
+
+        Assert.Same(panel.List.Items[1], panel.Details.Item);
+        Assert.False(panel.ShowsItemPlaceholder);
+        Assert.Same(panel.List.Tap, panel.Tap);
+
+        panel.List.SelectedItem = null;
+        Assert.Null(panel.Details.Item);
+        Assert.True(panel.ShowsItemPlaceholder);
+    }
+
     /// <summary>A list of fixed rows that records what the taps ask it to list.</summary>
     private sealed class FakeList(IReadOnlyList<LibraryItemViewModel> items) : ILibraryTapList
     {

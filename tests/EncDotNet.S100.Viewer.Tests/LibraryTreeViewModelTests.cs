@@ -27,7 +27,7 @@ public sealed class LibraryTreeViewModelTests : IDisposable
 
     private LibraryTreeViewModel Tree(TestLibrary library) =>
         new(_library, new RecordingLibraryImporter(), new LibraryNodeStatus(_downloader, library.Download, sync: null, feedHealth: null, TimeProvider.System),
-            timeFormat: null, action => action(), TimeProvider.System);
+            timeFormat: null, action => action(), TimeProvider.System, identities: null, openKeys: null);
 
     private async Task<LibrarySource> OnlineAsync(string name = "Online")
     {

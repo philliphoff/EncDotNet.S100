@@ -97,14 +97,14 @@ public sealed class ForecastPairingTests : IDisposable
 
         foreach (var scale in new[] { 50_000d, 5_000_000d })
         {
-            var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.Items, scale));
+            var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.List.Items, scale));
             Assert.Equal("cbofs", domain.Area.Model);
             Assert.Equal(2, domain.Items.Count);
-            Assert.Empty(LibraryCoverageOverlayController.Candidates(panel.Items, scale));
+            Assert.Empty(LibraryCoverageOverlayController.Candidates(panel.List.Items, scale));
         }
 
         // The two adjacent tiles make one shape.
-        Assert.Single(LibraryCoverageOverlayController.Areas(panel.Items, 50_000)[0].Area.Rings);
+        Assert.Single(LibraryCoverageOverlayController.Areas(panel.List.Items, 50_000)[0].Area.Rings);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public sealed class ForecastPairingTests : IDisposable
         using var panel = await PanelAsync(withBathymetry: false);
         panel.Tree.SelectedNode = SourceOf(panel, "Currents");
 
-        var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.Items, 50_000));
+        var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.List.Items, 50_000));
 
         Assert.Equal(LibraryPrimaryAvailability.Expired, LibraryCoverageOverlayController.AreaState(domain.Items));
     }
@@ -131,8 +131,8 @@ public sealed class ForecastPairingTests : IDisposable
         panel.Tap.ListModelsAt(new GeoPosition(37.6, -76.6), [(source.Id, "cbofs")]);
 
         Assert.True(panel.Tap.HasLocation);
-        Assert.True(panel.SelectedItem!.IsModelHeader);
-        Assert.Equal("cbofs", panel.SelectedItem.Name);
+        Assert.True(panel.List.SelectedItem!.IsModelHeader);
+        Assert.Equal("cbofs", panel.List.SelectedItem.Name);
     }
 
     [Fact]
@@ -140,9 +140,9 @@ public sealed class ForecastPairingTests : IDisposable
     {
         using var panel = await PanelAsync();
         panel.Tree.SelectedNode = SourceOf(panel, "Currents");
-        panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
+        panel.List.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
 
-        panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
+        panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
         var pairing = Assert.IsType<LibraryPairing>(panel.Details.Pairing);
         Assert.True(panel.Details.HasPairing);
@@ -154,7 +154,7 @@ public sealed class ForecastPairingTests : IDisposable
         Assert.Equal(["102US004VA1DD"], _downloader.Requested);
 
         // A tile whose cell has no S-102 tile listed offers nothing.
-        panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DE");
+        panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DE");
         Assert.Null(panel.Details.Pairing);
     }
 
@@ -165,8 +165,8 @@ public sealed class ForecastPairingTests : IDisposable
         using (var panel = await PanelAsync())
         {
             panel.Tree.SelectedNode = SourceOf(panel, "Currents");
-            panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
-            panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
+            panel.List.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
+            panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
             Assert.False(panel.Details.Pairing!.CanGet);
             Assert.Contains("· Local", panel.Details.Pairing.Detail, StringComparison.Ordinal);
@@ -178,9 +178,9 @@ public sealed class ForecastPairingTests : IDisposable
     {
         using var panel = await PanelAsync(withBathymetry: false);
         panel.Tree.SelectedNode = SourceOf(panel, "Currents");
-        panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
+        panel.List.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
 
-        panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
+        panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
         Assert.False(panel.Details.HasPairing);
     }

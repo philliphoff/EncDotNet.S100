@@ -1548,20 +1548,16 @@ public partial class App : Application
                 },
                 sp.GetRequiredService<TimeProvider>());
         });
-        services.AddSingleton(sp =>
-        {
-            var tree = new LibraryTreeViewModel(
-                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
-                sp.GetRequiredService<ILibraryImporter>(),
-                sp.GetRequiredService<LibraryNodeStatus>(),
-                sp.GetService<ITimeFormatProvider>(),
-                UiThread.RunOrPost,
-                sp.GetRequiredService<TimeProvider>());
-            tree.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+        services.AddSingleton(sp => new LibraryTreeViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<ILibraryImporter>(),
+            sp.GetRequiredService<LibraryNodeStatus>(),
+            sp.GetService<ITimeFormatProvider>(),
+            UiThread.RunOrPost,
+            sp.GetRequiredService<TimeProvider>(),
             // SECOM rows name their identity; a selected source's details choose it (#883).
-            tree.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
-            return tree;
-        });
+            sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>(),
+            sp.GetRequiredService<Services.Secom.KeysNavigator>().Open));
         services.AddSingleton(sp => new LibraryDetailsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<Library.ILibraryDownloader>(),
@@ -1571,25 +1567,19 @@ public partial class App : Application
             sp.GetRequiredService<Library.LoadLatestWeatherRunWorkflow>(),
             sp.GetRequiredService<Library.PinWeatherRunWorkflow>(),
             sp.GetRequiredService<GlobalTimeService>()));
-        services.AddSingleton(sp =>
-        {
-            var panel = new LibraryPanelViewModel(
-                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
-                sp.GetRequiredService<LibraryTreeViewModel>(),
-                sp.GetRequiredService<LibraryDetailsViewModel>(),
-                sp.GetRequiredService<Library.ILibraryLoader>(),
-                sp.GetRequiredService<Library.ILibraryDownloader>(),
-                sp.GetRequiredService<Library.LibraryRows>(),
-                sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
-                sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
-                UiThread.RunOrPost,
-                UiThread.Post,
-                sp.GetRequiredService<TimeProvider>(),
-                viewTime: sp.GetRequiredService<GlobalTimeService>(),
-                timeFormat: sp.GetService<ITimeFormatProvider>());
-            panel.PortrayalWarm = sp.GetRequiredService<PortrayalWarmStatusViewModel>();
-            return panel;
-        });
+        services.AddSingleton(sp => new LibraryListViewModel(
+            sp.GetRequiredService<LibraryTreeViewModel>(),
+            sp.GetRequiredService<Library.LibraryRows>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Services.Notifications.IUiDispatcher>(),
+            sp.GetRequiredService<GlobalTimeService>()));
+        services.AddSingleton(sp => new LibraryPanelViewModel(
+            sp.GetRequiredService<LibraryTreeViewModel>(),
+            sp.GetRequiredService<LibraryListViewModel>(),
+            sp.GetRequiredService<LibraryDetailsViewModel>(),
+            sp.GetRequiredService<PortrayalWarmStatusViewModel>()));
         // The Library's rows and workflows (#1394): the panel, the Timeline and
         // the MCP Library tools open and download items through the same ones.
         services.AddSingleton(sp => new Library.LibrarySourceNames(
@@ -1652,7 +1642,7 @@ public partial class App : Application
             sp.GetRequiredService<Library.LibraryRows>(),
             sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
             sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
-            (sourceId, key) => sp.GetRequiredService<LibraryPanelViewModel>().Reveal(sourceId, key),
+            (sourceId, key) => sp.GetRequiredService<LibraryListViewModel>().Reveal(sourceId, key),
             sp.GetRequiredService<TimeProvider>(),
             // Always defers, even on the UI thread, so a burst of changes raises Changed once.
             UiThread.Post));

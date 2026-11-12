@@ -27,6 +27,6 @@ internal sealed class LibraryTimelineLink
             layout.IsBottomDockOpen = true;
             time.SetCurrentTime(at);
         };
-        library.Revealed += (_, _) => layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+        library.List.Revealed += (_, _) => layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
     }
 }

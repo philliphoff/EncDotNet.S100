@@ -43,10 +43,10 @@ public sealed partial class LiveAccessibleNameTests
             timeFormat: null,
             sync: null);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
-        Assert.NotEmpty(panel.Items);
-        host.Click(host.Find<Avalonia.Controls.ListBoxItem>(r => ReferenceEquals(r.DataContext, panel.Items[0])));
+        Assert.NotEmpty(panel.List.Items);
+        host.Click(host.Find<Avalonia.Controls.ListBoxItem>(r => ReferenceEquals(r.DataContext, panel.List.Items[0])));
 
-        await AssertRealNamesAsync(host, minimumRows: panel.Items.Count + 2);
+        await AssertRealNamesAsync(host, minimumRows: panel.List.Items.Count + 2);
     }
 
     [AvaloniaFact]

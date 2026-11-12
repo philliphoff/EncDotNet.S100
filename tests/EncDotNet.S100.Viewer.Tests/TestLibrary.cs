@@ -5,8 +5,10 @@ using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Routing.Persistence;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Services.Secom;
 using EncDotNet.S100.Viewer.Tests.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.ViewModels.Keys;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -105,9 +107,11 @@ internal sealed class TestLibrary
         INotificationService? notifications,
         GlobalTimeService? viewTime,
         ITimeFormatProvider? timeFormat,
-        LibrarySync? sync) =>
+        LibrarySync? sync,
+        SecomIdentityDirectory? identities = null,
+        Action<KeysTab>? openKeys = null) =>
         new TestLibrary(library, loader, downloader, time, timeFormat, notifications)
-            .CreatePanel(importer, dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync);
+            .CreatePanel(importer, dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync, identities, openKeys);
 
     /// <summary>A Library panel, and its tree and details, over these rows and workflows.</summary>
     public LibraryPanelViewModel CreatePanel(
@@ -118,13 +122,23 @@ internal sealed class TestLibrary
         Func<CollectionSource, FeedHealth?>? feedHealth,
         GlobalTimeService? viewTime,
         ITimeFormatProvider? timeFormat,
-        LibrarySync? sync)
+        LibrarySync? sync,
+        SecomIdentityDirectory? identities = null,
+        Action<KeysTab>? openKeys = null)
     {
         var tree = new LibraryTreeViewModel(
-            _library, importer, new LibraryNodeStatus(_downloader, Download, sync, feedHealth, time), timeFormat, dispatch, time);
+            _library, importer, new LibraryNodeStatus(_downloader, Download, sync, feedHealth, time), timeFormat, dispatch, time, identities, openKeys);
         var details = new LibraryDetailsViewModel(_library, _downloader, Open, Download, OpenAsRoute, LoadLatest, PinRun, viewTime);
-        return new(_library, tree, details, _loader, _downloader, Rows, Open, Download,
-            dispatch, coalesce, time, viewTime, timeFormat);
+        var list = new LibraryListViewModel(tree, Rows, _downloader, Open, Download, new CoalescingUiDispatcher(coalesce), viewTime);
+        return new(tree, list, details, portrayalWarm: null);
+    }
+
+    /// <summary>A UI thread that is always current, and queues posted work with <c>coalesce</c> (inline, or held for the test to run).</summary>
+    private sealed class CoalescingUiDispatcher(Action<Action> coalesce) : IUiDispatcher
+    {
+        public bool IsOnUiThread => true;
+
+        public void Post(Action action) => coalesce(action);
     }
 
     private sealed class UtcFormat : ITimeFormatProvider

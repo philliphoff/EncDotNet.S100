@@ -468,7 +468,7 @@
                                   AutomationProperties.AutomationId="Library.ShowCoverage"
                                   AutomationProperties.Name="{x:Static loc:Strings.Label_ShowCoverage}"
                                   AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ShowCoverage}"
-                                  IsChecked="{Binding ShowCoverage}"
+                                  IsChecked="{Binding List.ShowCoverage}"
                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
                         <ic:FluentIcon Icon="Map" FontSize="16" />
                     </ToggleButton>
@@ -647,22 +647,22 @@
                         </Grid>
                     </Panel>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
-                        <TextBox Grid.Column="0" Text="{Binding FilterText}"
+                        <TextBox Grid.Column="0" Text="{Binding List.FilterText}"
                                  AutomationProperties.Name="{x:Static loc:Strings.Label_Filter}"
                                  AutomationProperties.HelpText="{x:Static loc:Strings.Library_FilterWatermark}"
                                  AutomationProperties.AutomationId="Library.Filter"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
-                                <TextBlock Text="{Binding ItemsSummary}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
+                                <TextBlock Text="{Binding List.ItemsSummary}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                            VerticalAlignment="Center" Margin="4,0,8,0" />
                             </TextBox.InnerRightContent>
                         </TextBox>
                         <!-- #711 G2: only data valid at the Timeline's view time (with any segment). -->
                         <ToggleButton Grid.Column="1" Classes="Icon libraryIcon coverageToggle"
                                       AutomationProperties.AutomationId="Library.AtViewTime"
-                                      IsVisible="{Binding HasViewTime}"
-                                      IsChecked="{Binding IsAtViewTime}"
-                                      ToolTip.Tip="{Binding AtViewTimeTooltip}"
+                                      IsVisible="{Binding List.HasViewTime}"
+                                      IsChecked="{Binding List.IsAtViewTime}"
+                                      ToolTip.Tip="{Binding List.AtViewTimeTooltip}"
                                       AutomationProperties.Name="{x:Static loc:Strings.Library_State_AtViewTime}">
                             <ic:FluentIcon Icon="Clock" FontSize="16" />
                         </ToggleButton>
@@ -672,7 +672,7 @@
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
-                                    <CheckBox IsChecked="{Binding ShowCancelled}"
+                                    <CheckBox IsChecked="{Binding List.ShowCancelled}"
                                               AutomationProperties.AutomationId="Library.FilterOptions.ShowCancelled"
                                               Content="{x:Static loc:Strings.Library_ShowCancelled}" />
                                 </Flyout>
@@ -683,28 +683,28 @@
                     <!-- State segments: what do I have, what can I get, what is new. -->
                     <Border Classes="librarySegments">
                         <UniformGrid Rows="1">
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}" AutomationProperties.AutomationId="Library.State.All" AutomationProperties.Name="{x:Static loc:Strings.Library_State_All}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateAll}" AutomationProperties.AutomationId="Library.State.All" AutomationProperties.Name="{x:Static loc:Strings.Library_State_All}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_All}" />
-                                    <TextBlock Text="{Binding AllCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.AllCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Local}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Local}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Local}" />
-                                    <TextBlock Text="{Binding LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Online}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Online}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Online}" />
-                                    <TextBlock Text="{Binding OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Updates}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Updates}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
-                                    <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                         </UniformGrid>
@@ -712,71 +712,71 @@
                     <!-- The AML chip and its product menu, while the list holds AML cells (#1370).
                          On a line of its own, so the segments keep their width in a narrow panel. -->
                     <Button Classes="Outline libraryAmlChip" HorizontalAlignment="Left"
-                            Classes.active="{Binding IsAmlFilterActive}"
-                            IsVisible="{Binding HasAml}"
+                            Classes.active="{Binding List.IsAmlFilterActive}"
+                            IsVisible="{Binding List.HasAml}"
                             AutomationProperties.AutomationId="Library.AmlFilter"
-                            AutomationProperties.Name="{Binding AmlFilterText}"
+                            AutomationProperties.Name="{Binding List.AmlFilterText}"
                             ToolTip.Tip="{x:Static loc:Strings.Aml_Filter_ToolTip}">
                         <Button.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                <MenuItem Header="{x:Static loc:Strings.Aml_Filter_AllProducts}" Command="{Binding SetAmlFilterCommand}" CommandParameter="all"
+                                <MenuItem Header="{x:Static loc:Strings.Aml_Filter_AllProducts}" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="all"
                                           AutomationProperties.AutomationId="Library.AmlFilter.All" />
-                                <MenuItem Header="CLB" Command="{Binding SetAmlFilterCommand}" CommandParameter="CLB" AutomationProperties.AutomationId="Library.AmlFilter.CLB" />
-                                <MenuItem Header="ESB" Command="{Binding SetAmlFilterCommand}" CommandParameter="ESB" AutomationProperties.AutomationId="Library.AmlFilter.ESB" />
-                                <MenuItem Header="LBO" Command="{Binding SetAmlFilterCommand}" CommandParameter="LBO" AutomationProperties.AutomationId="Library.AmlFilter.LBO" />
-                                <MenuItem Header="SBO" Command="{Binding SetAmlFilterCommand}" CommandParameter="SBO" AutomationProperties.AutomationId="Library.AmlFilter.SBO" />
-                                <MenuItem Header="MFF" Command="{Binding SetAmlFilterCommand}" CommandParameter="MFF" AutomationProperties.AutomationId="Library.AmlFilter.MFF" />
-                                <MenuItem Header="RAL" Command="{Binding SetAmlFilterCommand}" CommandParameter="RAL" AutomationProperties.AutomationId="Library.AmlFilter.RAL" />
-                                <MenuItem Header="3.0" Command="{Binding SetAmlFilterCommand}" CommandParameter="3.0" AutomationProperties.AutomationId="Library.AmlFilter.Aml30" />
-                                <Separator IsVisible="{Binding IsAmlFilterActive}" />
-                                <MenuItem Header="{x:Static loc:Strings.Aml_Filter_Clear}" Command="{Binding SetAmlFilterCommand}" CommandParameter="off"
-                                          IsVisible="{Binding IsAmlFilterActive}"
+                                <MenuItem Header="CLB" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="CLB" AutomationProperties.AutomationId="Library.AmlFilter.CLB" />
+                                <MenuItem Header="ESB" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="ESB" AutomationProperties.AutomationId="Library.AmlFilter.ESB" />
+                                <MenuItem Header="LBO" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="LBO" AutomationProperties.AutomationId="Library.AmlFilter.LBO" />
+                                <MenuItem Header="SBO" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="SBO" AutomationProperties.AutomationId="Library.AmlFilter.SBO" />
+                                <MenuItem Header="MFF" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="MFF" AutomationProperties.AutomationId="Library.AmlFilter.MFF" />
+                                <MenuItem Header="RAL" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="RAL" AutomationProperties.AutomationId="Library.AmlFilter.RAL" />
+                                <MenuItem Header="3.0" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="3.0" AutomationProperties.AutomationId="Library.AmlFilter.Aml30" />
+                                <Separator IsVisible="{Binding List.IsAmlFilterActive}" />
+                                <MenuItem Header="{x:Static loc:Strings.Aml_Filter_Clear}" Command="{Binding List.SetAmlFilterCommand}" CommandParameter="off"
+                                          IsVisible="{Binding List.IsAmlFilterActive}"
                                           AutomationProperties.AutomationId="Library.AmlFilter.Clear" />
                             </MenuFlyout>
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{Binding AmlFilterText}" FontWeight="SemiBold" VerticalAlignment="Center"
+                            <TextBlock Text="{Binding List.AmlFilterText}" FontWeight="SemiBold" VerticalAlignment="Center"
                                        AutomationProperties.AutomationId="Library.AmlFilter.Text" />
                             <ic:FluentIcon Icon="ChevronDown" FontSize="12" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                     <!-- One bulk bar: what the buttons act on, then Download (or Cancel) and On pan. -->
-                    <Border IsVisible="{Binding HasBulkBar}" Background="{DynamicResource MutedBackgroundColor}"
+                    <Border IsVisible="{Binding List.HasBulkBar}" Background="{DynamicResource MutedBackgroundColor}"
                             CornerRadius="8" Padding="10,6">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0">
-                                <TextBlock Text="{Binding BulkSummary}" FontWeight="SemiBold"
+                                <TextBlock Text="{Binding List.BulkSummary}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding BulkScope}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
+                                <TextBlock Text="{Binding List.BulkScope}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <Panel Grid.Column="1" VerticalAlignment="Center">
                                 <Button Classes="Primary libraryCompact"
                                         AutomationProperties.AutomationId="Library.Bulk.Download"
-                                        IsVisible="{Binding HasDownloadable}"
-                                        Content="{Binding DownloadListedText}"
-                                        Command="{Binding DownloadListedCommand}"
+                                        IsVisible="{Binding List.HasDownloadable}"
+                                        Content="{Binding List.DownloadListedText}"
+                                        Command="{Binding List.DownloadListedCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}" />
                                 <Button Classes="Primary libraryCompact"
                                         AutomationProperties.AutomationId="Library.Bulk.CheckForRuns"
-                                        IsVisible="{Binding IsCheckForRuns}"
+                                        IsVisible="{Binding List.IsCheckForRuns}"
                                         Content="{x:Static loc:Strings.Library_BulkCheckForRuns}"
                                         Command="{Binding Tree.RefreshCommand}" />
                                 <Button Classes="Primary libraryCompact" IsEnabled="False"
                                         AutomationProperties.AutomationId="Library.Bulk.Update"
-                                        IsVisible="{Binding IsBulkOffline}"
+                                        IsVisible="{Binding List.IsBulkOffline}"
                                         Content="{x:Static loc:Strings.Library_BulkUpdate}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_BulkOffline}" />
                                 <Button Classes="Primary libraryCompact"
                                         AutomationProperties.AutomationId="Library.Bulk.Cancel"
-                                        IsVisible="{Binding IsBulkDownloading}"
+                                        IsVisible="{Binding List.IsBulkDownloading}"
                                         Content="{x:Static loc:Strings.Button_Cancel}"
-                                        Command="{Binding CancelDownloadsCommand}" />
+                                        Command="{Binding List.CancelDownloadsCommand}" />
                             </Panel>
                             <Button Grid.Column="2" Classes="Outline libraryCompact"
                                     AutomationProperties.AutomationId="Library.Bulk.LoadAsYouPan"
                                     Content="{x:Static loc:Strings.Library_BulkOnPan}"
-                                    Command="{Binding LoadAsYouPanCommand}"
+                                    Command="{Binding List.LoadAsYouPanCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}" />
                         </Grid>
                     </Border>
@@ -790,8 +790,8 @@
 
                 <ListBox x:Name="ItemList"
                          AutomationProperties.AutomationId="Library.Items"
-                         ItemsSource="{Binding Items}"
-                         SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                         ItemsSource="{Binding List.Items}"
+                         SelectedItem="{Binding List.SelectedItem, Mode=TwoWay}"
                          Classes="accentList"
                          Background="Transparent"
                          BorderThickness="0"
@@ -934,27 +934,27 @@
                                    Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
                                    Opacity="0.6" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" TextAlignment="Center" />
-                        <StackPanel IsVisible="{Binding HasSelectedItem}" Spacing="2">
+                        <StackPanel IsVisible="{Binding List.HasSelectedItem}" Spacing="2">
                             <!-- Swatch, name (truncating), and the actions as compact icon buttons. -->
                             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                <views:LibrarySwatch Grid.Column="0" State="{Binding SelectedItem.PrimaryAvailability, FallbackValue=Listed}"
+                                <views:LibrarySwatch Grid.Column="0" State="{Binding List.SelectedItem.PrimaryAvailability, FallbackValue=Listed}"
                                                      Width="18" VerticalAlignment="Center" />
-                                <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedItem.Name}"
+                                <SelectableTextBlock Grid.Column="1" Text="{Binding List.SelectedItem.Name}"
                                                      FontFamily="{StaticResource MonoFontFamily}"
                                                      FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                                      VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                     <!-- An AML cell's marking above UNCLASSIFIED, as on its row (#1370). -->
                                     <views:AmlMarkingChip Margin="0,0,4,0"
-                                                          IsVisible="{Binding SelectedItem.HasAmlRowMarking, FallbackValue=False}"
-                                                          Marking="{Binding SelectedItem.AmlRowMarking, FallbackValue={x:Null}}"
+                                                          IsVisible="{Binding List.SelectedItem.HasAmlRowMarking, FallbackValue=False}"
+                                                          Marking="{Binding List.SelectedItem.AmlRowMarking, FallbackValue={x:Null}}"
                                                           AutomationProperties.AutomationId="Library.Details.AmlMarking" />
                                     <Button Classes="Primary libraryHeaderAction"
                                             Command="{Binding Details.DownloadOnlyCommand}"
                                             AutomationProperties.AutomationId="Library.Details.Download"
-                                            IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
-                                            ToolTip.Tip="{Binding SelectedItem.DownloadTooltip}"
-                                            AutomationProperties.Name="{Binding SelectedItem.DownloadTooltip}">
+                                            IsVisible="{Binding List.SelectedItem.CanDownload, FallbackValue=False}"
+                                            ToolTip.Tip="{Binding List.SelectedItem.DownloadTooltip}"
+                                            AutomationProperties.Name="{Binding List.SelectedItem.DownloadTooltip}">
                                         <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
                                     </Button>
                                     <!-- #711 G3: the dataset's window on the Timeline. -->
@@ -993,49 +993,49 @@
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding Details.LoadOrDownloadCommand}"
                                             AutomationProperties.AutomationId="Library.Details.Load"
-                                            ToolTip.Tip="{Binding SelectedItem.LoadTooltip}"
-                                            AutomationProperties.Name="{Binding SelectedItem.LoadTooltip}">
+                                            ToolTip.Tip="{Binding List.SelectedItem.LoadTooltip}"
+                                            AutomationProperties.Name="{Binding List.SelectedItem.LoadTooltip}">
                                         <ic:FluentIcon Icon="Layer" FontSize="16" />
                                     </Button>
                                 </StackPanel>
                             </Grid>
                             <!-- Title and state, indented to the name's left edge (swatch 18 + spacing 10). -->
-                            <TextBlock Text="{Binding SelectedItem.Subtitle}" IsVisible="{Binding SelectedItem.HasSubtitle, FallbackValue=False}"
+                            <TextBlock Text="{Binding List.SelectedItem.Subtitle}" IsVisible="{Binding List.SelectedItem.HasSubtitle, FallbackValue=False}"
                                        Margin="28,0,0,0"
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding SelectedItem.PrimaryStateText}" Margin="28,0,0,0"
+                            <TextBlock Text="{Binding List.SelectedItem.PrimaryStateText}" Margin="28,0,0,0"
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
                             <!-- A weather source's credit (#1075): its attribution and licence. -->
-                            <SelectableTextBlock Text="{Binding SelectedItem.Credit, FallbackValue=''}" Margin="28,0,0,0"
-                                                 IsVisible="{Binding SelectedItem.HasCredit, FallbackValue=False}"
+                            <SelectableTextBlock Text="{Binding List.SelectedItem.Credit, FallbackValue=''}" Margin="28,0,0,0"
+                                                 IsVisible="{Binding List.SelectedItem.HasCredit, FallbackValue=False}"
                                                  AutomationProperties.AutomationId="Library.Details.Credit"
                                                  AutomationProperties.Name="{x:Static loc:Strings.Library_DataCreditName}"
                                                  FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" TextWrapping="Wrap" />
                             <!-- A weather run (#1075): stale past 12 hours, with "Load latest run"; pin or unpin it. -->
-                            <TextBlock Text="{Binding SelectedItem.StaleRunText, FallbackValue=''}" Margin="28,2,0,0"
-                                       IsVisible="{Binding SelectedItem.IsStaleRun, FallbackValue=False}"
+                            <TextBlock Text="{Binding List.SelectedItem.StaleRunText, FallbackValue=''}" Margin="28,2,0,0"
+                                       IsVisible="{Binding List.SelectedItem.IsStaleRun, FallbackValue=False}"
                                        AutomationProperties.AutomationId="Library.Details.StaleRun"
-                                       AutomationProperties.Name="{Binding SelectedItem.StaleRunText, FallbackValue=''}"
+                                       AutomationProperties.Name="{Binding List.SelectedItem.StaleRunText, FallbackValue=''}"
                                        Foreground="{DynamicResource WarningColor}"
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
-                            <WrapPanel Margin="28,4,0,0" IsVisible="{Binding SelectedItem.IsWeatherRun, FallbackValue=False}">
+                            <WrapPanel Margin="28,4,0,0" IsVisible="{Binding List.SelectedItem.IsWeatherRun, FallbackValue=False}">
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
                                         Command="{Binding Details.LoadLatestRunCommand}"
-                                        IsVisible="{Binding SelectedItem.CanLoadLatestRun, FallbackValue=False}"
+                                        IsVisible="{Binding List.SelectedItem.CanLoadLatestRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.LoadLatestRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_LoadLatestRun}"
                                         FontSize="{StaticResource LibrarySecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_LoadLatestRun}" />
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
                                         Command="{Binding Details.PinRunCommand}"
-                                        IsVisible="{Binding SelectedItem.CanPinRun, FallbackValue=False}"
+                                        IsVisible="{Binding List.SelectedItem.CanPinRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.PinRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_PinRun}"
                                         FontSize="{StaticResource LibrarySecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_PinRun}" />
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
                                         Command="{Binding Details.UnpinRunCommand}"
-                                        IsVisible="{Binding SelectedItem.IsPinnedRun, FallbackValue=False}"
+                                        IsVisible="{Binding List.SelectedItem.IsPinnedRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.UnpinRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_UnpinRun}"
                                         FontSize="{StaticResource LibrarySecondaryFontSize}"
@@ -1111,21 +1111,21 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <ScrollViewer IsVisible="{Binding HasSelectedItem}"
+                <ScrollViewer IsVisible="{Binding List.HasSelectedItem}"
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="10" Margin="8,4,8,8">
                         <!-- An AML cell (#1370, decision 6): military overlay data, not a chart. -->
-                        <Border IsVisible="{Binding SelectedItem.HasAmlNote, FallbackValue=False}"
+                        <Border IsVisible="{Binding List.SelectedItem.HasAmlNote, FallbackValue=False}"
                                 Background="{DynamicResource MutedBackgroundColor}" CornerRadius="6" Padding="10,8">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                                 <ic:FluentIcon Icon="Info" FontSize="16" VerticalAlignment="Top" Margin="0,1,0,0" />
-                                <TextBlock Grid.Column="1" Text="{Binding SelectedItem.AmlNote, FallbackValue=''}"
+                                <TextBlock Grid.Column="1" Text="{Binding List.SelectedItem.AmlNote, FallbackValue=''}"
                                            AutomationProperties.AutomationId="Library.Details.AmlNote"
                                            FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
                             </Grid>
                         </Border>
-                        <Border IsVisible="{Binding SelectedItem.NotForNavigation, FallbackValue=False}"
+                        <Border IsVisible="{Binding List.SelectedItem.NotForNavigation, FallbackValue=False}"
                                 Background="#FFE4B5" BorderBrush="#B8860B" BorderThickness="1"
                                 CornerRadius="4" Padding="10,8">
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -1136,7 +1136,7 @@
                         </Border>
 
                         <!-- Product, Coverage, Source. -->
-                        <ItemsControl ItemsSource="{Binding SelectedItem.Details}" Grid.IsSharedSizeScope="True">
+                        <ItemsControl ItemsSource="{Binding List.SelectedItem.Details}" Grid.IsSharedSizeScope="True">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Spacing="10" />

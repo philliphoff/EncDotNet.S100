@@ -12,9 +12,12 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// One dataset row in the Library panel: a <see cref="CollectionItem"/> plus
 /// display formatting. Availability is resolved lazily (on first display)
 /// because it touches the file system and lists can hold thousands of rows.
+/// Rows read their state through a <see cref="LibraryRowContext"/> their list
+/// shares (#1396).
 /// </summary>
 internal sealed class LibraryItemViewModel : ViewModelBase
 {
+    private readonly LibraryRowContext _context;
     private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
     private readonly ILibraryDownloader? _downloader;
     private readonly string? _collectionName;
@@ -23,30 +26,29 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private LibraryAvailability? _availability;
     private LibraryItemState? _state;
     private readonly TimeProvider _time;
-    private readonly Func<TimeFormat>? _timeFormat;
     private IReadOnlyList<LibraryItemViewModel> _members = [];
 
+    /// <param name="item">The indexed item.</param>
+    /// <param name="source">The source it was indexed from.</param>
+    /// <param name="context">What the row reads its state through, shared by its list.</param>
+    /// <param name="collectionName">The name of the collection the source is in, for the details.</param>
     public LibraryItemViewModel(
         CollectionItem item,
         LibrarySource source,
-        Func<CollectionItem, LibraryLoadState>? loadState,
-        ILibraryDownloader? downloader,
-        string? collectionName,
-        Func<LibraryItemViewModel, Task>? download,
-        TimeProvider time,
-        Func<TimeFormat>? timeFormat)
+        LibraryRowContext context,
+        string? collectionName)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(context);
         Item = item;
         Source = source;
-        _loadState = loadState;
-        _downloader = downloader;
+        _context = context;
+        _loadState = context.LoadState;
+        _downloader = context.Downloader;
         _collectionName = collectionName;
-        _download = download;
-        _time = time;
-        _timeFormat = timeFormat;
+        _download = context.Retry;
+        _time = context.Time;
         RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
             () => _download?.Invoke(this) ?? Task.CompletedTask);
         CancelDownloadCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => _downloader?.Cancel(Item));
@@ -213,7 +215,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForPackageGroup(
         LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time,
-        DateTimeOffset? publishedAt = null, string productSpec = "S-57")
+        DateTimeOffset? publishedAt, string productSpec)
     {
         var item = new CollectionItem
         {
@@ -225,7 +227,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Properties = new Dictionary<string, string> { ["package"] = package },
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
+        header = new LibraryItemViewModel(item, source, LibraryRowContext.Detached(time), null)
         {
             IsGroupHeader = true,
             GroupKey = (source.Id, package),
@@ -244,8 +246,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForModelGroup(
         LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle,
-        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider time,
-        Func<TimeFormat>? timeFormat)
+        LibraryRowContext context)
     {
         var first = members[0].Item;
         var model = ForecastRuns.ModelOf(first) ?? first.Name;
@@ -258,7 +259,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Bounds = GeoBounds.UnionAll(members.Select(m => m.Item.Bounds).OfType<GeoBounds>()),
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, loadState, downloader, null, null, time, timeFormat)
+        // The model's row shows its tiles' state, but never retries a download itself.
+        header = new LibraryItemViewModel(item, source, new LibraryRowContext(context.Time, context.TimeFormat, context.LoadState, context.Downloader, retry: null), null)
         {
             IsGroupHeader = true,
             IsModelHeader = true,
@@ -287,7 +289,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Location = NoItemLocation.Instance,
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
+        header = new LibraryItemViewModel(item, source, LibraryRowContext.Detached(time), null)
         {
             IsGroupHeader = true,
             IsAmlSection = true,
@@ -472,7 +474,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>A run time as the user reads it: their Local/UTC setting (#730); UTC without one.</summary>
     private string FormatRun(DateTimeOffset time) =>
-        ForecastRunText.FormatRun(time, _timeFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone);
+        ForecastRunText.FormatRun(time, _context.CurrentTimeFormat(), _time.LocalTimeZone);
 
     /// <summary>Re-reads the run times after the user's Local/UTC setting changed (#730).</summary>
     internal void RefreshTimeFormat()
@@ -738,7 +740,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LoadState = _loadState,
         CollectionName = _collectionName,
         LocalRun = LocalRun,
-        TimeFormat = ForecastRunText.ToLibrary(_timeFormat?.Invoke() ?? TimeFormat.Utc),
+        TimeFormat = ForecastRunText.ToLibrary(_context.CurrentTimeFormat()),
         TimeZone = _time.LocalTimeZone,
         Now = _time.GetUtcNow(),
     };

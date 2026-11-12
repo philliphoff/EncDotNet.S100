@@ -28,7 +28,7 @@ internal static class AmlNoticeDetails
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(layout);
 
-        if (FindLibraryItem(library, cell) is { } found && library.Reveal(found.SourceId, found.Key))
+        if (FindLibraryItem(library, cell) is { } found && library.List.Reveal(found.SourceId, found.Key))
             return;
 
         // Not in the Library: show the set in the Datasets panel instead.

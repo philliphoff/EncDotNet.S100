@@ -17,8 +17,6 @@ internal sealed class LibraryRows
     private readonly ILibraryLoader _loader;
     private readonly ILibraryDownloader _downloader;
     private readonly DownloadLibraryItemsWorkflow _download;
-    private readonly TimeProvider _time;
-    private readonly Func<TimeFormat> _timeFormat;
 
     /// <summary>Creates the rows.</summary>
     /// <param name="library">The Library the items are indexed in.</param>
@@ -45,8 +43,25 @@ internal sealed class LibraryRows
         _loader = loader;
         _downloader = downloader;
         _download = download;
-        _time = time;
-        _timeFormat = () => timeFormat.Current;
+        Context = new LibraryRowContext(time, timeFormat, loader.StateOf, downloader, RetryAsync);
+    }
+
+    /// <summary>What the rows read their state through: the clock, the Local/UTC setting, load and download state, Retry.</summary>
+    public LibraryRowContext Context { get; }
+
+    /// <summary>Raised when an item opened, closed or downloaded (not when the Library re-indexed).</summary>
+    public event EventHandler? StateChanged
+    {
+        add
+        {
+            _loader.Changed += value;
+            _downloader.Changed += value;
+        }
+        remove
+        {
+            _loader.Changed -= value;
+            _downloader.Changed -= value;
+        }
     }
 
     /// <summary>Raised when a row's state may have changed: the Library re-indexed, or an item opened, closed or downloaded.</summary>
@@ -98,7 +113,7 @@ internal sealed class LibraryRows
     /// <param name="source">The source it was indexed from.</param>
     /// <param name="collectionName">The name of the collection the source is in.</param>
     public LibraryItemViewModel Create(CollectionItem item, LibrarySource source, string? collectionName) =>
-        new(item, source, _loader.StateOf, _downloader, collectionName, RetryAsync, _time, _timeFormat);
+        new(item, source, Context, collectionName);
 
     /// <summary>The row for the item with the id <paramref name="itemId"/> (<c>source:key</c>), or <see langword="null"/> when the Library has no such item.</summary>
     /// <param name="itemId">The item's id.</param>

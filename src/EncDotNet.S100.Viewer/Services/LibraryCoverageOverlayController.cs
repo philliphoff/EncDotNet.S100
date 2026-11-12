@@ -112,7 +112,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
         _marshal = marshal;
         _layer = new MemoryLayer { Name = LayerName, Style = null, Features = new List<IFeature>() };
 
-        _panel.PropertyChanged += OnPanelChanged;
+        _panel.List.PropertyChanged += OnPanelChanged;
         _panel.Details.ZoomRequested += OnZoomRequested;
         _panel.Details.CenterRequested += OnCenterRequested;
         _layout.PropertyChanged += OnLayoutChanged;
@@ -128,7 +128,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
 
     /// <summary>True when the Library tab is showing and its coverage toggle is on.</summary>
     public bool IsActive =>
-        _panel.ShowCoverage
+        _panel.List.ShowCoverage
         && _layout.IsLeftDockOpen
         && string.Equals(_layout.SelectedLeftTabId, LibraryImportCoordinator.LibraryPanelId, StringComparison.Ordinal);
 
@@ -163,7 +163,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
 
         // A forecast model's domain (E1): list everything under the point, the
         // smallest domain's model selected. Zoomed out, an S-102 area selects its node.
-        var areaHits = AreaHits(Areas(_panel.Items, scale), tap.Position);
+        var areaHits = AreaHits(Areas(_panel.List.Items, scale), tap.Position);
         if (areaHits.Where(a => a.Area.Model is not null).ToArray() is { Length: > 0 } models)
         {
             _lastTap = null;
@@ -175,11 +175,11 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
         {
             _lastTap = null;
             _panel.Tap.ClearTap();
-            _panel.SelectArea(hit.SourceId, area.Folder);
+            _panel.Tree.SelectArea(hit.SourceId, area.Folder);
             return true;
         }
 
-        var hits = Hits(_panel.Items, _panel.SelectedItem, tap.Position, scale, tap.Resolution);
+        var hits = Hits(_panel.List.Items, _panel.List.SelectedItem, tap.Position, scale, tap.Resolution);
         if (hits.Count == 0)
         {
             _lastTap = null;
@@ -323,9 +323,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
 
     private void OnPanelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(LibraryPanelViewModel.Items)
-            or nameof(LibraryPanelViewModel.SelectedItem)
-            or nameof(LibraryPanelViewModel.ShowCoverage))
+        if (e.PropertyName is nameof(LibraryListViewModel.Items)
+            or nameof(LibraryListViewModel.SelectedItem)
+            or nameof(LibraryListViewModel.ShowCoverage))
         {
             ScheduleRebuild();
         }
@@ -396,7 +396,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
             var view = ViewBounds(_viewport.Current);
             var scale = CurrentScale();
             var resolution = _viewport.Current?.MercatorResolution ?? 0;
-            var selected = _panel.SelectedItem;
+            var selected = _panel.List.SelectedItem;
             var appearance = _appearance.Current;
             var casing = new MapsuiColor(appearance.ChartBackground.R, appearance.ChartBackground.G, appearance.ChartBackground.B);
 
@@ -404,7 +404,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
             var opacity = selected is null ? LibraryOutlineStyles.LineOpacity : LibraryOutlineStyles.DimmedLineOpacity;
 
             var mercatorView = view is { } v ? MercatorView(v) : null;
-            foreach (var (_, area, items) in Areas(_panel.Items, scale))
+            foreach (var (_, area, items) in Areas(_panel.List.Items, scale))
             {
                 if (mercatorView is { } mv && !mv.Intersects(area.Extent))
                     continue;
@@ -414,7 +414,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
                 OutlinedCount++;
             }
 
-            var candidates = Candidates(_panel.Items, scale)
+            var candidates = Candidates(_panel.List.Items, scale)
                 // Loaded datasets speak for themselves on the chart.
                 .Where(i => !ReferenceEquals(i, selected)
                     && i.Availability != LibraryAvailability.Loaded
@@ -611,7 +611,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSec
             return;
         _disposed = true;
 
-        _panel.PropertyChanged -= OnPanelChanged;
+        _panel.List.PropertyChanged -= OnPanelChanged;
         _panel.Details.ZoomRequested -= OnZoomRequested;
         _panel.Details.CenterRequested -= OnCenterRequested;
         _layout.PropertyChanged -= OnLayoutChanged;
