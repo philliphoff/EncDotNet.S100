@@ -14,6 +14,11 @@ month. For package versions and release assets, see
   less (half and 30 %), so they don't glare on a dark display. The new
   `EcdisDisplaySettings.LayerOptions` carries map-wide layer settings that
   are more than on or off.
+- **Relief shading is marked on the map.** While S-102 relief shading is on
+  and S-102 is in view, the status bar's `DEPTHS` pill reads
+  `Charted · Relief`, and its popup says relief is on, as a display aid that
+  leaves depth colours and values unchanged, with an **Off** button. The
+  S-102 legend ends with a *Relief shading (display aid)* row.
 - **Neighbouring S-102 cells join up.** Where two loaded S-102 cells meet,
   the dashed "limit of S-102 data" line no longer runs through the water
   between them, and SoundCharts no longer shows a light seam along the

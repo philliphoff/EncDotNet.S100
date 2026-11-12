@@ -35,6 +35,61 @@ public sealed class DepthBasisIndicatorViewTests
         return vm;
     }
 
+    internal static DepthBasis ChartedWithS102 { get; } = new(
+        DepthBasisKind.Charted, DepthBasisReason.None, null, ViewTime, null, true, null,
+        [new DepthBasisSource("US5WA22M", "S-101", 12), new DepthBasisSource("102NL005_518N044E", "S-102", 12)], []);
+
+    [Fact]
+    public void Relief_marks_the_pill_only_while_S102_is_in_view()
+    {
+        var vm = Pill(Charted);
+        vm.SetRelief(true, () => { });
+
+        // No S-102 in view: nothing to mark.
+        Assert.False(vm.IsReliefShown);
+        Assert.Equal("Charted", vm.FullText);
+
+        vm.Update(ChartedWithS102, waterLevelLoaded: false, TimeFormat.Utc);
+
+        Assert.True(vm.IsReliefShown);
+        Assert.Equal("Charted · Relief", vm.FullText);
+        Assert.Equal("Charted · Relief", vm.ShortText);
+        Assert.Equal("Charted · R", vm.CompactText);
+        Assert.Equal("Depth basis: Charted, relief shading on", vm.AccessibleName);
+
+        vm.SetRelief(false, () => { });
+
+        Assert.False(vm.IsReliefShown);
+        Assert.Equal("Charted", vm.FullText);
+        Assert.Equal("Depth basis: Charted", vm.AccessibleName);
+    }
+
+    [Fact]
+    public void Off_in_the_flyout_turns_relief_off()
+    {
+        var vm = Pill(ChartedWithS102);
+        var turnedOff = 0;
+        vm.SetRelief(true, () => turnedOff++);
+
+        vm.TurnOffReliefCommand.Execute(null);
+
+        Assert.Equal(1, turnedOff);
+    }
+
+    [AvaloniaFact]
+    public void The_pill_reads_relief_while_it_is_on()
+    {
+        var vm = Pill(ChartedWithS102);
+        using var host = ViewHost.Show(new DepthBasisIndicatorView { DataContext = vm }, width: 400, height: 40);
+        var button = host.Find<Button>("Map.DepthBasis");
+
+        vm.SetRelief(true, () => { });
+        host.Settle();
+
+        Assert.Equal("Charted · Relief", ToolTip.GetTip(button));
+        Assert.Equal("Depth basis: Charted, relief shading on", AutomationProperties.GetName(button));
+    }
+
     [AvaloniaFact]
     public void The_pill_is_hidden_without_depths()
     {

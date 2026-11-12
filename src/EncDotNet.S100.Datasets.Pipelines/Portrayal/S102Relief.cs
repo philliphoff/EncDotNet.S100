@@ -19,6 +19,31 @@ public static class S102Relief
     public static bool IsOn(EcdisDisplaySettings? display) =>
         display?.IsLayerVisible(LayerKey, defaultVisible: false) ?? false;
 
+    /// <summary>The label of the legend row that marks relief shading as a display aid.</summary>
+    public const string LegendLabel = "Relief shading (display aid)";
+
+    /// <summary>
+    /// The S-102 legend row shown while relief shading is on: a swatch of
+    /// <paramref name="color"/>, lit from the north-west, labelled
+    /// <see cref="LegendLabel"/> (design note <c>s102-relief-design.md</c> §3).
+    /// </summary>
+    /// <param name="color">The swatch's band colour (<c>#RRGGBB</c>), e.g. a middle band in the active palette.</param>
+    public static SymbolLegendEntry LegendEntry(string color)
+    {
+        ArgumentNullException.ThrowIfNull(color);
+        var svg =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\">" +
+            "<defs><linearGradient id=\"l\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">" +
+            "<stop offset=\"0\" stop-color=\"#FFFFFF\" stop-opacity=\"0.45\"/>" +
+            "<stop offset=\"0.5\" stop-color=\"#FFFFFF\" stop-opacity=\"0\"/>" +
+            "<stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\"0.45\"/>" +
+            "</linearGradient></defs>" +
+            $"<rect x=\"1\" y=\"1\" width=\"14\" height=\"14\" rx=\"2\" fill=\"{color}\"/>" +
+            "<rect x=\"1\" y=\"1\" width=\"14\" height=\"14\" rx=\"2\" fill=\"url(#l)\"/>" +
+            "</svg>";
+        return new SymbolLegendEntry(svg, LegendLabel);
+    }
+
     /// <summary>
     /// The display option for the shading strength
     /// (<see cref="EcdisDisplaySettings.LayerOptions"/>): <c>"subtle"</c>,

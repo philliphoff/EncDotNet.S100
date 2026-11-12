@@ -1,3 +1,5 @@
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Services.Depth;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -40,16 +42,16 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
     public bool IsVisible => _basis.Kind != DepthBasisKind.None;
 
     /// <summary>The full form: the tooltip, the flyout's first line and <c>get_depth_basis</c>'s <c>display</c>.</summary>
-    public string FullText => _forms.Full;
+    public string FullText => _forms.Full + ReliefSuffix;
 
     /// <summary>The short form.</summary>
-    public string ShortText => _forms.Short;
+    public string ShortText => _forms.Short + ReliefSuffix;
 
     /// <summary>The compact form.</summary>
-    public string CompactText => _forms.Compact;
+    public string CompactText => _forms.Compact + ReliefCompactSuffix;
 
     /// <summary>The forms, longest first, for the view to measure.</summary>
-    public IReadOnlyList<string> FormTexts => [_forms.Full, _forms.Short, _forms.Compact];
+    public IReadOnlyList<string> FormTexts => [FullText, ShortText, CompactText];
 
     /// <summary>The form drawn; set by the view from the room the status bar has.</summary>
     public DepthBasisForm Form
@@ -65,9 +67,9 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
     /// <summary>The value drawn on the pill: one whole form, never truncated.</summary>
     public string DisplayedText => _form switch
     {
-        DepthBasisForm.Short => _forms.Short,
-        DepthBasisForm.Compact => _forms.Compact,
-        _ => _forms.Full,
+        DepthBasisForm.Short => ShortText,
+        DepthBasisForm.Compact => CompactText,
+        _ => FullText,
     };
 
     /// <summary>True when the state has an icon (S-104 in view, not applied); it stays in every form.</summary>
@@ -143,6 +145,61 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
 
     private IReadOnlyList<string> _whereAppliedLines = DepthBasisText.WhereAppliedLines(chartAdjustmentOn: false);
 
+    private bool _reliefSwitchOn;
+    private string _plainAccessibleName = Resources.Strings.Label_DepthBasis;
+    private Action? _turnOffRelief;
+
+    /// <summary>
+    /// True while S-102 relief shading is on and an S-102 dataset is among the
+    /// depth sources in view: the pill reads "Charted · Relief" and the flyout
+    /// says it's on, with Off (design note <c>s102-relief-design.md</c> §3).
+    /// Relief is a display aid, not the S-102 portrayal.
+    /// </summary>
+    public bool IsReliefShown =>
+        _reliefSwitchOn && _basis.DepthSources.Any(s => string.Equals(s.Spec, "S-102", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Turns relief shading off from the flyout.</summary>
+    public ICommand TurnOffReliefCommand { get; }
+
+    /// <summary>Creates the indicator.</summary>
+    public DepthBasisIndicatorViewModel()
+    {
+        TurnOffReliefCommand = new RelayCommand(() => _turnOffRelief?.Invoke());
+    }
+
+    /// <summary>
+    /// Shows whether the S-102 relief shading switch is on, and how the
+    /// flyout's Off turns it off.
+    /// </summary>
+    /// <param name="on">The Display controls Relief shading switch.</param>
+    /// <param name="turnOff">Turns the switch off.</param>
+    public void SetRelief(bool on, Action turnOff)
+    {
+        ArgumentNullException.ThrowIfNull(turnOff);
+        _turnOffRelief = turnOff;
+        if (_reliefSwitchOn == on)
+            return;
+        _reliefSwitchOn = on;
+        RaiseRelief();
+    }
+
+    private string ReliefSuffix => IsReliefShown ? Resources.Strings.Status_DepthBasis_ReliefSuffix : string.Empty;
+
+    private string ReliefCompactSuffix => IsReliefShown ? Resources.Strings.Status_DepthBasis_ReliefSuffix_Compact : string.Empty;
+
+    private void RaiseRelief()
+    {
+        OnPropertyChanged(nameof(IsReliefShown));
+        OnPropertyChanged(nameof(FullText));
+        OnPropertyChanged(nameof(ShortText));
+        OnPropertyChanged(nameof(CompactText));
+        OnPropertyChanged(nameof(FormTexts));
+        OnPropertyChanged(nameof(DisplayedText));
+        AccessibleName = IsReliefShown
+            ? _plainAccessibleName + Resources.Strings.Status_DepthBasis_ReliefAccessibleSuffix
+            : _plainAccessibleName;
+    }
+
     /// <summary>Shows a basis.</summary>
     /// <param name="basis">The basis.</param>
     /// <param name="waterLevelLoaded">True when an active S-104 dataset is loaded, in view or not.</param>
@@ -165,7 +222,8 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsAdjustedTone));
         OnPropertyChanged(nameof(IsCautionTone));
         WhereAppliedLines = DepthBasisText.WhereAppliedLines(basis.Kind == DepthBasisKind.Adjusted || basis.Reason == DepthBasisReason.WaterLevel);
-        AccessibleName = DepthBasisText.AccessibleName(basis, format);
+        _plainAccessibleName = DepthBasisText.AccessibleName(basis, format);
+        RaiseRelief();
 
         if (basis.Kind == DepthBasisKind.None)
         {

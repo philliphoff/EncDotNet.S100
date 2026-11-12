@@ -129,6 +129,19 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <!-- S-102 relief shading is on and in view: a display aid,
+                             not the portrayal (s102-relief-design.md section 3). -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,4,0,0"
+                              IsVisible="{Binding IsReliefShown}">
+                            <TextBlock Grid.Column="0" Classes="flyoutLine" TextWrapping="Wrap"
+                                       Text="{x:Static loc:Strings.Status_DepthBasisPopup_ReliefOn}" />
+                            <Button Grid.Column="1" VerticalAlignment="Top"
+                                    Content="{x:Static loc:Strings.Status_DepthBasisPopup_ReliefOff}"
+                                    Command="{Binding TurnOffReliefCommand}"
+                                    AutomationProperties.AutomationId="DepthBasis.Relief.Off"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Status_DepthBasisPopup_ReliefOff}" />
+                        </Grid>
+
                         <TextBlock Classes="flyoutHeader" Margin="0,6,0,0"
                                    Text="{x:Static loc:Strings.Status_DepthBasisPopup_WaterLevelHeader}" />
                         <ItemsControl ItemsSource="{Binding WaterLevelLines}">

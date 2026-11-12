@@ -18,4 +18,14 @@ internal static partial class Strings
     public static string EcdisPanel_Bathymetry_ReliefStrong => Get(nameof(EcdisPanel_Bathymetry_ReliefStrong));
 
     public static string Tooltip_EcdisPanel_Bathymetry_ReliefStrength => Get(nameof(Tooltip_EcdisPanel_Bathymetry_ReliefStrength));
+
+    public static string Status_DepthBasis_ReliefSuffix => Get(nameof(Status_DepthBasis_ReliefSuffix));
+
+    public static string Status_DepthBasis_ReliefSuffix_Compact => Get(nameof(Status_DepthBasis_ReliefSuffix_Compact));
+
+    public static string Status_DepthBasis_ReliefAccessibleSuffix => Get(nameof(Status_DepthBasis_ReliefAccessibleSuffix));
+
+    public static string Status_DepthBasisPopup_ReliefOn => Get(nameof(Status_DepthBasisPopup_ReliefOn));
+
+    public static string Status_DepthBasisPopup_ReliefOff => Get(nameof(Status_DepthBasisPopup_ReliefOff));
 }
