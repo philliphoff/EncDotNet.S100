@@ -304,7 +304,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 // S-102 portrayal): a hillshade over the band colours.
                 if (S102Relief.IsOn(context?.EcdisDisplay))
                 {
-                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
+                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, S102Relief.ShadingFor(context?.EcdisDisplay, context?.Palette ?? PaletteType.Day));
 
                     // The legend says relief is on, as a display aid, swatched
                     // in a middle band's colour: the deepest band is too pale
@@ -603,7 +603,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             styledLayer = S102Relief.Apply(
                 styledLayer,
                 nativeToWgs84.IsIdentity ? null : (x, y) => nativeToWgs84.Transform(x, y),
-                ReliefShading.Default);
+                S102Relief.ShadingFor(context?.EcdisDisplay, context?.Palette ?? PaletteType.Day));
         }
 
         var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);

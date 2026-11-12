@@ -64,7 +64,8 @@ internal static class EcdisDisplayStatePersistence
         state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null,
             displayModes.Count > 0 ? displayModes : null,
             settings.EcdisShowNavigationalWarnings,
-            settings.EcdisLayerVisibility);
+            settings.EcdisLayerVisibility,
+            settings.EcdisLayerOptions);
 
         state.HydrateAml(
             (settings.EcdisHiddenAmlProducts ?? string.Empty)
@@ -93,6 +94,9 @@ internal static class EcdisDisplayStatePersistence
             settings.EcdisLayerVisibility.Clear();
             foreach (var kv in snap.LayerVisibility)
                 settings.EcdisLayerVisibility[kv.Key] = kv.Value;
+            settings.EcdisLayerOptions.Clear();
+            foreach (var kv in snap.LayerOptions)
+                settings.EcdisLayerOptions[kv.Key] = kv.Value;
             Save(settings);
         };
         state.NavigationalWarningsChanged += () =>

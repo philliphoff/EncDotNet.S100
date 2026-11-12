@@ -149,6 +149,57 @@ public sealed class ReliefShadingTests
         Assert.Same(layer.Coverage, shaded.Coverage);
     }
 
+    [Fact]
+    public void Lightening_scales_only_the_slopes_facing_the_light()
+    {
+        var facingWest = Grid(3, 3, (_, c) => 12f - c);
+        var facingEast = Grid(3, 3, (_, c) => 10f + c);
+        var scaled = ReliefShading.Default with { Lightening = 0.3 };
+
+        float lit = ReliefShading.Default.Compute(facingWest, 3, 3, NoData, 20, 20)[4];
+        float litScaled = scaled.Compute(facingWest, 3, 3, NoData, 20, 20)[4];
+        float dark = ReliefShading.Default.Compute(facingEast, 3, 3, NoData, 20, 20)[4];
+        float darkScaled = scaled.Compute(facingEast, 3, 3, NoData, 20, 20)[4];
+
+        Assert.Equal(1f + ((lit - 1f) * 0.3f), litScaled, precision: 5);
+        Assert.Equal(dark, darkScaled, precision: 6);
+        Assert.All(
+            (ReliefShading.Default with { Lightening = 0 }).Compute(facingWest, 3, 3, NoData, 20, 20),
+            f => Assert.True(f <= 1f, $"{f}"));
+    }
+
+    [Theory]
+    [InlineData(null, 0.6)]
+    [InlineData("subtle", 0.35)]
+    [InlineData("medium", 0.6)]
+    [InlineData("strong", 0.85)]
+    [InlineData("harsh", 0.6)]
+    public void The_strength_option_picks_the_shading_strength(string? option, double strength)
+    {
+        var display = option is null
+            ? new EcdisDisplaySettings()
+            : new EcdisDisplaySettings { LayerOptions = new Dictionary<string, string> { [S102Relief.StrengthKey] = option } };
+
+        Assert.Equal(strength, S102Relief.ShadingFor(display, PaletteType.Day).Strength);
+        Assert.Equal(0.6, S102Relief.ShadingFor(null, PaletteType.Day).Strength);
+    }
+
+    [Theory]
+    [InlineData(PaletteType.Day, 1.0)]
+    [InlineData(PaletteType.Dusk, 0.5)]
+    [InlineData(PaletteType.Night, 0.3)]
+    public void Dusk_and_night_lighten_less(PaletteType palette, double lightening)
+    {
+        Assert.Equal(lightening, S102Relief.ShadingFor(null, palette).Lightening);
+    }
+
+    [Fact]
+    public void Strength_option_values_round_trip()
+    {
+        foreach (var strength in Enum.GetValues<ReliefStrength>())
+            Assert.Equal(strength, S102Relief.ParseStrength(S102Relief.OptionValue(strength)));
+    }
+
     private static StyledCoverageLayer Layer(float[] depths, int rows, int columns, double spacing)
     {
         var metadata = new GridMetadata

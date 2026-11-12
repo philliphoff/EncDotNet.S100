@@ -76,8 +76,9 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     public async Task The_row_shows_only_while_checking_and_names_the_leg()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = new PickReportViewModel { Selection = selection, WarningNavigator = panel };
         Open(pick, Entry(s, 1));
         var card = pick.WarningCard!;
         Assert.False(card.HasRouteFinding);
@@ -110,8 +111,9 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     {
         using var s = WarningsRouteCheck.Create(fixture);
         SplitInsideTheSurvey(s);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = new PickReportViewModel { Selection = selection, WarningNavigator = panel };
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
         var opened = 0;
@@ -136,9 +138,10 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     {
         using var s = WarningsRouteCheck.Create(fixture);
         SplitInsideTheSurvey(s);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
-        var cards = new GetWarningCardsTool(panel, s.Warnings, new InlineInvoker());
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = new PickReportViewModel { Selection = selection, WarningNavigator = panel };
+        var cards = new GetWarningCardsTool(panel, s.Warnings, pick, new InlineInvoker());
         var list = new ListNavigationalWarningsTool(panel, s.Warnings, new InlineInvoker());
         var ct = TestContext.Current.CancellationToken;
         Open(pick, Entry(s, 1));
@@ -180,8 +183,9 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = new PickReportViewModel { Selection = selection, WarningNavigator = panel };
         var check = new PassageCheckViewModel(s.Check, s.Routes, () => DepthUnit.Metres, () => TimeFormat.Utc, s.Findings, addDraft: null);
         Open(pick, Entry(s, 1));
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
@@ -211,8 +215,9 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
         SplitInsideTheSurvey(s);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = new PickReportViewModel { Selection = selection, WarningNavigator = panel };
         Open(pick, Entry(s, 1));
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
 

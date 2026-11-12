@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Relief shading strength.** The S-102 Relief shading switch in Display
+  controls gains a **Strength** control while it is on: Subtle, Medium (the
+  default) or Strong. It is kept with the display settings and saved with
+  display combinations, and the MCP tool `set_bathymetry_display` takes
+  `reliefStrength`. At Dusk and Night, slopes facing the light are lightened
+  less (half and 30 %), so they don't glare on a dark display. The new
+  `EcdisDisplaySettings.LayerOptions` carries map-wide layer settings that
+  are more than on or off.
 - **Relief shading is marked on the map.** While S-102 relief shading is on
   and S-102 is in view, the status bar's `DEPTHS` pill reads
   `Charted · Relief`, and its popup says relief is on, as a display aid that

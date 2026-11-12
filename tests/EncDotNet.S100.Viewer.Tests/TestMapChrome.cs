@@ -29,7 +29,7 @@ internal static class TestMapChrome
             new TextGroupToolbarViewModel(display, catalogues, datasets),
             new DisplayModeToolbarViewModel(display, loader),
             new DisplayCombinationsViewModel(new DisplayCombinationService(display, loader, datasets, settings, post: null), ui: null),
-            new NavigationalWarningsViewModel(warnings, pick: null, pickReport: null, viewTime: viewTime, timeFormat: null, viewport: null, loader: null, clock: TimeProvider.System) { Drawing = drawing },
+            TestNavigationalWarnings.Panel(warnings, pick: null, viewTime: viewTime, timeFormat: null, viewport: null, loader: null, clock: TimeProvider.System, drawing: drawing),
             drawing);
     }
 }

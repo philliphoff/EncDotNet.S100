@@ -86,6 +86,8 @@ internal static class CellSceneKey
             sb.Append("|plane:").Append(plane);
         foreach (var (layer, visible) in display.LayerVisibility.OrderBy(p => p.Key, StringComparer.Ordinal))
             sb.Append("|layer:").Append(layer).Append('=').Append(visible ? '1' : '0');
+        foreach (var (key, value) in display.LayerOptions.OrderBy(p => p.Key, StringComparer.Ordinal))
+            sb.Append("|option:").Append(key).Append('=').Append(value);
 
         foreach (var assembly in new[]
                  {

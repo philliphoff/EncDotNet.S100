@@ -589,7 +589,8 @@ public partial class App : Application
                 settings.McpTestHooks ? ViewerUiAutomation.ForApplication() : null),
             new McpTools.Groups.NavigationalWarningsMcpToolGroup(
                 sp.GetRequiredService<NavigationalWarningsViewModel>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+                sp.GetRequiredService<PickReportViewModel>()),
             new McpTools.Groups.RouteMcpToolGroup(
                 routes,
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
@@ -1681,7 +1682,12 @@ public partial class App : Application
                 sp.GetService<IMarinerSettingsProvider>(),
                 sp.GetService<IUrlOpener>(),
                 sp.GetService<IS100ExaminerLinkBuilder>(),
-                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>());
+                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>())
+            {
+                Selection = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>(),
+                // Warning cards link to, zoom through and open in the warnings panel (#932).
+                WarningNavigator = sp.GetRequiredService<NavigationalWarningsViewModel>(),
+            };
             // The depth card's "The chart shows charted depths" line (#1191).
             if (sp.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is { } depthBasis)
             {
@@ -1857,22 +1863,35 @@ public partial class App : Application
             activeRoute: () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>().Routes.ActiveRoute?.Waypoints
                 .Select(w => w.Position).ToList(),
             classifications: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore>()));
-        services.AddSingleton(sp => new NavigationalWarningsViewModel(
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-            sp.GetRequiredService<IPickService>(),
-            sp.GetRequiredService<PickReportViewModel>(),
-            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
-            sp.GetService<ITimeFormatProvider>(),
-            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
+        // What Object Information shows (#1397): the pick report publishes it,
+        // the warnings panel and the warning drawing follow it.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>();
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.OpenNavigationalWarningWorkflow(
+            // Lazily: the pick service holds the pick report, whose Warning cards open warnings through the panel.
+            () => sp.GetRequiredService<IPickService>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
-            sp.GetRequiredService<TimeProvider>())
+            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
+        services.AddSingleton(sp =>
         {
-            NewOptions = new NavigationalWarningNewOptionsViewModel(
+            var findings = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>();
+            var panel = new NavigationalWarningsViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-                sp.GetRequiredService<ViewerSettings>(),
-                sp.GetRequiredService<TimeProvider>()),
-            // #959 E3: the checked route's warnings, and the findings list's inline cards' navigator.
-            RouteFindings = sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.OpenNavigationalWarningWorkflow>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>(),
+                // #959 E3: the checked route's warnings.
+                findings,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>(),
+                new NavigationalWarningNewOptionsViewModel(
+                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+                    sp.GetRequiredService<ViewerSettings>(),
+                    sp.GetRequiredService<TimeProvider>()),
+                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+                sp.GetService<ITimeFormatProvider>(),
+                sp.GetRequiredService<TimeProvider>());
+            // The findings list's inline Warning cards open warnings through the panel (#959 E1).
+            findings.WarningNavigator = panel;
+            return panel;
         });
         // The docks and activity tabs (#1203: split out of MainViewModel).
         services.AddSingleton(sp => new ShellLayoutViewModel(
@@ -1925,8 +1944,7 @@ public partial class App : Application
                 sp.GetRequiredService<TimeProvider>(),
                 UiThread.Post,
                 sp.GetRequiredService<EcdisDisplayState>());
-            drawing.Follow(sp.GetRequiredService<PickReportViewModel>());
-            sp.GetRequiredService<NavigationalWarningsViewModel>().Drawing = drawing;
+            drawing.Follow(sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>());
             return drawing;
         });
 

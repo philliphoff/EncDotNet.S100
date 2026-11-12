@@ -153,20 +153,16 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Follows <paramref name="pickReport"/>'s open Warning card
-    /// (<see cref="PickReportViewModel.WarningCard"/>), which stays drawn
-    /// while it is open.
+    /// Follows Object Information's open Warning card
+    /// (<see cref="ObjectInformationSelection.OpenWarning"/>), which stays
+    /// drawn while it is open.
     /// </summary>
-    /// <param name="pickReport">The pick report that shows the cards.</param>
-    public void Follow(PickReportViewModel pickReport)
+    /// <param name="selection">What Object Information shows.</param>
+    public void Follow(ObjectInformationSelection selection)
     {
-        ArgumentNullException.ThrowIfNull(pickReport);
-        void Update() => SetOpenWarning(pickReport.WarningCard?.Hit?.DatasetFileName, pickReport.WarningCard?.Hit?.FeatureRef);
-        pickReport.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(PickReportViewModel.WarningCard) or null)
-                Update();
-        };
+        ArgumentNullException.ThrowIfNull(selection);
+        void Update() => SetOpenWarning(selection.OpenWarning?.DatasetFileName, selection.OpenWarning?.FeatureRef);
+        selection.OpenWarningChanged += (_, _) => Update();
         Update();
     }
 

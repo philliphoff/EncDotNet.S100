@@ -139,8 +139,8 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
                 Sources.ByEntry[KhraEntry] = new NavigationalWarningSource(KhraId, "KHRA", Oct(14, 8, 5), IsStale: false);
             Seen = new NavigationalWarningSeenStore(seenPath);
             Service = new NavigationalWarningsService(Loader, sources: Sources, seen: Seen, clock: Clock, ownShip: ownShip, datasets: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
-            Panel = new NavigationalWarningsViewModel(
-                Service, new RecordingPick(), timeFormat: new Utc(), loader: Loader, clock: Clock, pickReport: null, viewTime: null, viewport: null);
+            Panel = TestNavigationalWarnings.Panel(
+                Service, pick: new RecordingPick(), timeFormat: new Utc(), loader: Loader, clock: Clock, viewTime: null, viewport: null);
         }
 
         /// <summary>AMSA refreshes at <paramref name="at"/>, now listing <paramref name="parts"/>.</summary>
@@ -236,7 +236,7 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
         var files = new FakeDatasetLoaderService();
         var file = new DatasetEntry("/tmp/opened.gml", "S-124");
         files.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [file] = new FakeProcessor(Warning("NAVAREA X", "105/26", Oct(10))) };
-        var panel = new NavigationalWarningsViewModel(new NavigationalWarningsService(files, sources: new FakeSources(), datasets: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), clock: new Clock(Now), pick: null, pickReport: null, viewTime: null, timeFormat: null, viewport: null, loader: null);
+        var panel = TestNavigationalWarnings.Panel(new NavigationalWarningsService(files, sources: new FakeSources(), datasets: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), clock: new Clock(Now), pick: null, viewTime: null, timeFormat: null, viewport: null, loader: null);
         Assert.False(panel.CanRefresh);
         Assert.False(panel.RefreshCommand.CanExecute(null));
         Assert.Equal(0, panel.RefreshSources());
