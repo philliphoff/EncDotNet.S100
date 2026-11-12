@@ -840,6 +840,12 @@ internal sealed class ClearanceViewModel : ViewModelBase
         WaterLevelText = water.HeightMeters is { } h ? PassageFormatting.Format(h, PassageQuantity.Depth, unit) : "—";
         WaterLevelSource = water.Status switch
         {
+            // "Predicted · Edmonds 9447427 · 15:05" (tide predictions design D10).
+            WaterLevelStatus.Applied when water.Source is { IsPredicted: true } src => string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.Clearance_SourcePredictedFormat,
+                src.StationLabel ?? src.DatasetId,
+                water.StepTime is { } at ? TimeFormatting.Format(new DateTimeOffset(DateTime.SpecifyKind(at, DateTimeKind.Utc)), TimeFormat) : "—"),
             WaterLevelStatus.Applied when water.Source is { } src => string.Format(
                 CultureInfo.CurrentCulture,
                 src.Kind == WaterLevelSourceKind.Station ? Strings.Clearance_SourceS104StationFormat : Strings.Clearance_SourceS104GridFormat,
@@ -905,9 +911,11 @@ internal sealed class ClearanceViewModel : ViewModelBase
         SourceGroups.Add(new ClearanceSourceGroup(
             Strings.Clearance_SourcesS104,
             OrNone(sources.WaterLevelSources
-                .Select(w => w.StationId is { } station
-                    ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_StationFormat, w.DatasetId, station)
-                    : string.Format(CultureInfo.CurrentCulture, Strings.Clearance_GridFormat, w.DatasetId))
+                .Select(w => w.IsPredicted
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_PredictedStationFormat, w.StationLabel ?? w.DatasetId)
+                    : w.StationId is { } station
+                        ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_StationFormat, w.DatasetId, station)
+                        : string.Format(CultureInfo.CurrentCulture, Strings.Clearance_GridFormat, w.DatasetId))
                 .ToList())));
         SourceGroups.Add(new ClearanceSourceGroup(
             Strings.Clearance_SourcesUncertainty,
@@ -973,6 +981,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
         PassageStretchKind.WaterLevelNoData => Strings.Clearance_Gap_WaterLevelNoData,
         PassageStretchKind.DatumMismatch => Strings.Clearance_Gap_DatumMismatch,
         PassageStretchKind.ChartedDepthFromS101 => Strings.Clearance_Gap_ChartedDepthFromS101,
+        PassageStretchKind.WaterLevelPredicted => Strings.Clearance_Gap_WaterLevelPredicted,
         _ => Strings.Clearance_Gap_DatumUnconfirmed,
     };
 }

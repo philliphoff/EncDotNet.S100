@@ -151,6 +151,13 @@ internal sealed class ChartSettingsPageViewModel : SettingsPageViewModel
         set => Settings.WaterLevelApplyUndeclaredDatum = value;
     }
 
+    /// <inheritdoc cref="ViewerSettingsService.UseTidePredictions" />
+    public bool UseTidePredictions
+    {
+        get => Settings.UseTidePredictions;
+        set => Settings.UseTidePredictions = value;
+    }
+
     /// <inheritdoc cref="ViewerSettingsService.CycloneCheckAgainstKnots" />
     public int CycloneCheckAgainstKnots
     {

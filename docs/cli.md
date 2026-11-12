@@ -838,6 +838,7 @@ Other options:
 | `--cyclone-must-review <knots>` | `50` | The weakest radius whose findings are Must review: 64, 50, 34 or `never`. Weaker radii and the cone are Check. |
 | `--no-cyclone-cpa` | off | Doesn't report the route's closest approach to each storm. |
 | `--window` | off | Also sweeps departures across the S-104 time range to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit). |
+| `--tide-predictions <file>` | off | A tide station list (the `tide-stations` file, `.json` or `.json.gz`) to predict water level from where no S-104 covers. A station reaches 10 km through the loaded charts' water. Predictions are the astronomical tide only, not a forecast: the text output names the stations and says so. |
 | `--only <specs>` | all | Exchange set or folder only. Loads only these product specifications, comma-separated. |
 | `--fail-on <level>` | `must-review` | When to exit with code `7`: `must-review`, `check` or `never`. See [Exit codes for CI](#exit-codes-for-ci). |
 | `--format <format>` | `text` | `text` or `json`. |
@@ -853,6 +854,7 @@ s100 route check route.rtz exchange-set.zip --corridor 100 --fail-on check
 s100 route check route.gml exchange-set/ --departure 2026-03-01T06:00Z --speed 8 --window --format json
 s100 route check route.rtz enc.000 gfs.t06z.pgrb2.0p25 gfswave.t06z.grib2 --max-wind 25 --max-wave 3
 s100 route check route.rtz enc.000 al142026_5day_017.zip --cyclone-radius 50 --cyclone-must-review 64
+s100 route check route.rtz enc/ bathy.h5 --draft 7 --tide-predictions tide-stations.json.gz
 ```
 
 The text output gives the verdict, the checks that didn't run in full, the

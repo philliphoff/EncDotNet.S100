@@ -117,6 +117,10 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         [DefaultValue(false)]
         public bool Window { get; init; }
 
+        [CommandOption("--tide-predictions <FILE>")]
+        [Description("A tide station list (the tide-stations file format, .json or .json.gz) to predict water level from where no S-104 covers. Predictions are the astronomical tide only, not a forecast; a station reaches 10 km through the loaded charts' water.")]
+        public string? TidePredictions { get; init; }
+
         [CommandOption("--only <SPECS>")]
         [Description("Exchange-set datasets only: restrict loading to a comma-separated list of product specifications (e.g. --only S101,S102,S124).")]
         public string? Only { get; init; }
@@ -146,6 +150,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 return ValidationResult.Error("A route file is required.");
             if (Datasets.Length == 0)
                 return ValidationResult.Error("At least one dataset, exchange set or folder is required.");
+            if (TidePredictions is { } stations && !File.Exists(stations))
+                return ValidationResult.Error($"Tide station list not found: {stations}");
 
             foreach (var (name, value, allowZero) in new (string, double?, bool)[]
             {
@@ -256,7 +262,21 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 },
             };
 
-            var sources = new RouteCheckSourceCache(transforms).Get(catalog.Datasets);
+            EncDotNet.S100.Tides.Stations.TideStationCatalogue? tideStations = null;
+            if (settings.TidePredictions is { } stationsPath)
+            {
+                try
+                {
+                    tideStations = EncDotNet.S100.Tides.Stations.TideStationCatalogueFile.LoadAsync(stationsPath, cancellationToken).GetAwaiter().GetResult();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or System.Text.Json.JsonException or ArgumentException or InvalidDataException)
+                {
+                    Console.Error.WriteLine($"Can't read the tide station list {stationsPath}: {ex.Message}");
+                    return 2;
+                }
+            }
+
+            var sources = new RouteCheckSourceCache(transforms, new RouteCheckSourceOptions { TidePredictions = tideStations }).Get(catalog.Datasets);
             RouteCheckReport report;
             try
             {
@@ -478,6 +498,13 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 console.MarkupLineInterpolated($"  Minimum UKC {min.UkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m (required {min.RequiredUkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m) at {min.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {min.Leg + 1}");
             if (clearance.Confidence.Count > 0)
                 console.MarkupLineInterpolated($"  Lower confidence: {string.Join(", ", clearance.Confidence)}");
+            var predicted = clearance.Sources.WaterLevels.Where(w => w.Kind == "prediction").ToList();
+            if (predicted.Count > 0)
+            {
+                var stations = predicted.Select(w => w.StationName is { } name ? $"{name} {w.Station}" : w.Station ?? w.Dataset);
+                console.MarkupLineInterpolated($"  Water level predicted: {string.Join(", ", stations)}");
+                console.MarkupLineInterpolated($"  [grey]{CheckRouteResult.PredictionCaveat}[/]");
+            }
             if (clearance.Window is { } window)
             {
                 var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();

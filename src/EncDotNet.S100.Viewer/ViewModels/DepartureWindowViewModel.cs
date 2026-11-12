@@ -153,6 +153,8 @@ internal sealed class DepartureWindowViewModel : ViewModelBase
             parts.Add(Strings.Check_WindowCaveatDatum);
         if (reasons.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
             parts.Add(Strings.Check_WindowCaveatS101);
+        if (reasons.HasFlag(ConfidenceReasons.WaterLevelPredicted))
+            parts.Add(Strings.Check_WindowCaveatPredicted);
         return parts.Count == 0 ? null : string.Join(", ", parts);
     }
 

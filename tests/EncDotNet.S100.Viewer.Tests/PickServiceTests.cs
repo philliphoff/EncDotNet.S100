@@ -67,6 +67,7 @@ public class PickServiceTests
     {
         public EncDotNet.S100.Viewer.Services.Depth.WaterLevelAdjustmentMode WaterLevelAdjustment => default;
         public bool WaterLevelApplyUndeclaredDatum => false;
+        public bool UseTidePredictions => false;
         public event Action? WaterLevelAdjustmentChanged { add { } remove { } }
     }
 

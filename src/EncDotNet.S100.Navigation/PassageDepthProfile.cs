@@ -38,7 +38,9 @@ internal sealed class PassageDepthProfile
     /// The time range of the water-level series that cover any sample: from
     /// the earliest first step to the latest last step (UTC), or <c>null</c>
     /// when no series covers the route. This is the range the departure
-    /// window is swept over.
+    /// window is swept over. Harmonic predictions
+    /// (<see cref="WaterLevelSourceKind.Prediction"/>) have no start or end,
+    /// so they're left out: a route only predictions cover has no range.
     /// </summary>
     /// <returns>The range, or <c>null</c>.</returns>
     public (DateTime Start, DateTime End)? WaterLevelTimeRange()
@@ -49,6 +51,11 @@ internal sealed class PassageDepthProfile
         {
             foreach (var series in point.Series)
             {
+                if (series.Source.IsPredicted)
+                {
+                    continue;
+                }
+
                 if (start is null || series.Start < start)
                 {
                     start = series.Start;

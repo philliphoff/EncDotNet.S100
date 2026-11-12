@@ -122,6 +122,8 @@ public sealed class ChartWaterLevelAdjustmentServiceTests
 
         public bool WaterLevelApplyUndeclaredDatum { get; private set; }
 
+        public bool UseTidePredictions { get; set; }
+
         public event Action? WaterLevelAdjustmentChanged;
 
         public void Set(WaterLevelAdjustmentMode mode)

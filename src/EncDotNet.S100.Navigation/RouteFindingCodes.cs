@@ -169,6 +169,19 @@ public static class RouteFindingCodes
     /// <summary>A stretch where a depth or water-level datum isn't declared, so the two can't be confirmed to match. CHECK.</summary>
     public static RouteFindingCode DatumUnconfirmed { get; } = new("confidence.datum_unconfirmed", RouteFindingCategory.Confidence, RouteFindingGroup.Check);
 
+    /// <summary>
+    /// A stretch where the water level is a harmonic prediction, not S-104:
+    /// the astronomical tide only, not a forecast. INFO.
+    /// </summary>
+    public static RouteFindingCode WaterLevelPredicted { get; } = new("confidence.water_level_predicted", RouteFindingCategory.Confidence, RouteFindingGroup.Info);
+
+    /// <summary>
+    /// A stretch whose clearance is Tight or below your UKC setting and rests
+    /// on a predicted water level: the tight margin (0.5 m by default) is no
+    /// wider than what weather can move the real water level. CHECK.
+    /// </summary>
+    public static RouteFindingCode TightOnPredicted { get; } = new("clearance.tight_on_predicted", RouteFindingCategory.Clearance, RouteFindingGroup.Check);
+
     /// <summary>The water-level data ends before the vessel reaches a stretch, so the tide isn't applied there. CHECK.</summary>
     public static RouteFindingCode WaterLevelEnds { get; } = new("data.water_level_ends", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
@@ -247,8 +260,8 @@ public static class RouteFindingCodes
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
         TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce, AreaKindOff,
         WarningOnRoute, WarningNearRoute, WarningNotInForce, WarningCancelled,
-        BelowSetting,
-        ChartedDepthFromS101, DatumUnconfirmed,
+        BelowSetting, TightOnPredicted,
+        ChartedDepthFromS101, DatumUnconfirmed, WaterLevelPredicted,
         OutsideChartCoverage, WaterLevelEnds, WaterLevelStartsLate, NoWaterLevelCoverage,
         WaterLevelNoData, DatumMismatch, NoChartedDepth,
         WindAboveLimit, WavesAboveLimit, WeatherForecastEnds, WeatherForecastStartsLate, NoWeatherCoverage, WeatherNoData,

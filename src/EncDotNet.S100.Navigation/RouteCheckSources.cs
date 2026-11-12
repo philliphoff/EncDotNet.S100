@@ -39,8 +39,19 @@ public sealed class RouteCheckSources
     /// </summary>
     public IChartedDepthSource? Depth { get; init; }
 
-    /// <summary>S-104 water level, for the clearance check.</summary>
+    /// <summary>
+    /// Water level for the clearance check: S-104, then harmonic tide
+    /// predictions where no S-104 covers a point and time, when the host
+    /// turns them on.
+    /// </summary>
     public IWaterLevelSource? WaterLevel { get; init; }
+
+    /// <summary>
+    /// Where the loaded charts have land and water: what a station's reach is
+    /// measured through (<see cref="WaterReach"/>), and what the
+    /// adjusted-area edge is clipped to. <c>null</c> when the host has none.
+    /// </summary>
+    public IWaterMask? WaterMask { get; init; }
 
     /// <summary>S-101 regulated areas and S-122 protected areas, for the area check.</summary>
     public IRouteAreaSource? Areas { get; init; }

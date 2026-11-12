@@ -563,9 +563,14 @@ How it samples and classifies:
   cell is skipped. Each sample stands for at most `sampleSpacingMeters`
   (default 50) and keeps the shallowest depth in its stretch.
 - **Water level** comes from S-104 at the ETA, interpolated between time
-  steps. Grids are used first, then the nearest station within 10 km. Outside
-  the S-104 extent or time range, or where a value is NoData, the sample is
-  `no_data` ("water level not applied").
+  steps. Grids are used first, then the nearest station within 10 km
+  measured through the loaded charts' water. Where the host has turned tide
+  predictions on, a harmonic prediction at the tide station nearest by water
+  fills in where no S-104 covers; its `waterLevels` entry has `kind:
+  "prediction"`, the station, its name, any reference station and the caveat
+  "Astronomical tide only, not a forecast." Outside the S-104 extent or time
+  range, with no prediction in reach, or where a value is NoData, the sample
+  is `no_data` ("water level not applied").
 - **Datums.** When the S-102 or S-101 and S-104 vertical datums differ, the
   water level is reported but not applied, and the stretch is a
   `datum_mismatch` gap. When a datum isn't declared, or isn't an S-100 code,
@@ -577,7 +582,8 @@ How it samples and classifies:
   - `below_setting`
   - `no_data`
 - **Confidence** is reported separately from the state, as a list of
-  reasons: `charted_depth_from_s101` and `datum_unconfirmed`, or an empty
+  reasons: `charted_depth_from_s101`, `datum_unconfirmed` and
+  `water_level_predicted`, or an empty
   list at full confidence. A sample on S-101 depth that meets the required
   UKC is `meets_settings` with `confidence: ["charted_depth_from_s101"]`.
   SoundCharts draws it in the band's colour, dashed. The result, `minimum`,

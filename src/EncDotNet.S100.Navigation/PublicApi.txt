@@ -126,6 +126,7 @@ namespace EncDotNet.S100.Navigation
         public System.DateTimeOffset StartTime { get; init; }
         public EncDotNet.S100.Navigation.UkcState? State { get; init; }
         public EncDotNet.S100.Navigation.PassageStretchKind? Stretch { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WaterLevelSourceInfo> WaterLevelSources { get; init; }
     }
     public static class ClearanceFindings
     {
@@ -138,6 +139,7 @@ namespace EncDotNet.S100.Navigation
         None = 0,
         ChartedDepthFromS101 = 1,
         DatumUnconfirmed = 2,
+        WaterLevelPredicted = 4,
     }
     public sealed class CycloneCheckStorm : System.IEquatable<EncDotNet.S100.Navigation.CycloneCheckStorm>
     {
@@ -306,6 +308,11 @@ namespace EncDotNet.S100.Navigation
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint { get; }
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IWaterLevelSeries> Locate(EncDotNet.S100.DataModel.GeoPosition position);
     }
+    public interface IWaterMask
+    {
+        EncDotNet.S100.Navigation.WaterMaskClass Classify(EncDotNet.S100.DataModel.GeoPosition position);
+        void Classify(EncDotNet.S100.Navigation.WaterMaskGrid grid, System.Span<EncDotNet.S100.Navigation.WaterMaskClass> result);
+    }
     public enum LegGeometry
     {
         Rhumb = 0,
@@ -452,6 +459,7 @@ namespace EncDotNet.S100.Navigation
         DatumMismatch = 5,
         ChartedDepthFromS101 = 6,
         DatumUnconfirmed = 7,
+        WaterLevelPredicted = 8,
     }
     public enum PassageVerdict
     {
@@ -706,6 +714,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.IChartedDepthSource? Depth { get; init; }
         public EncDotNet.S100.Navigation.IRouteWarningSource? Warnings { get; init; }
         public EncDotNet.S100.Navigation.IWaterLevelSource? WaterLevel { get; init; }
+        public EncDotNet.S100.Navigation.IWaterMask? WaterMask { get; init; }
         public EncDotNet.S100.Navigation.IRouteWeatherSource? Weather { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckSources Empty { get; }
     }
@@ -865,6 +874,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode SoundingsBelowSafetyContour { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode StructureInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode StructureOnTrack { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode TightOnPredicted { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode TrafficArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WarningCancelled { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WarningNearRoute { get; }
@@ -872,6 +882,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode WarningOnRoute { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelEnds { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelNoData { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelPredicted { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelStartsLate { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WavesAboveLimit { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WeatherForecastEnds { get; }
@@ -954,16 +965,19 @@ namespace EncDotNet.S100.Navigation
         protected virtual string MinAtFormat { get; }
         protected virtual string MinFormat { get; }
         protected virtual string MinutesFormat { get; }
+        protected virtual string MoreStationsFormat { get; }
         protected virtual string NoChartedDepth { get; }
         protected virtual string NoDepthSource { get; }
         protected virtual string NoValue { get; }
         protected virtual string NoWaterLevelCoverage { get; }
         protected virtual string NoWeatherCoverageFormat { get; }
+        protected virtual string NotAForecast { get; }
         protected virtual string Obstruction { get; }
         protected virtual string OnTrack { get; }
         protected virtual string OutsideChartCoverage { get; }
         protected virtual string OutsideS102Format { get; }
         protected virtual string OverheadOverTrackFormat { get; }
+        protected virtual string PredictedStationsFormat { get; }
         protected virtual string RangeFormat { get; }
         protected virtual string Rock { get; }
         protected virtual string S102CellFormat { get; }
@@ -977,6 +991,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string StretchLengthFormat { get; }
         protected virtual string TideNotApplied { get; }
         protected virtual string TideNotAppliedForFormat { get; }
+        protected virtual string TightOnPredictedFormat { get; }
         protected virtual string TimeWindowFormat { get; }
         public System.TimeZoneInfo? TimeZone { get; }
         protected virtual string ToPortFormat { get; }
@@ -999,6 +1014,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string WarningNotInForceFormat { get; }
         protected virtual string WaterLevelEnds { get; }
         protected virtual string WaterLevelNoData { get; }
+        protected virtual string WaterLevelPredictedFormat { get; }
         protected virtual string WaterLevelStartsLate { get; }
         protected virtual string WavesAboveDistanceFormat { get; }
         protected virtual string WavesAboveForFormat { get; }
@@ -1039,6 +1055,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string HazardKind(string featureType) { }
         protected virtual string LegLabel(int firstLeg, int lastLeg) { }
         public virtual string Meta(EncDotNet.S100.Navigation.RouteFinding finding) { }
+        protected virtual string PredictedStations(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WaterLevelSourceInfo> sources) { }
         public EncDotNet.S100.Navigation.RouteFinding Render(EncDotNet.S100.Navigation.RouteFinding finding) { }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Render(System.Collections.Generic.IEnumerable<EncDotNet.S100.Navigation.RouteFinding> findings) { }
         protected virtual string RestrictionLabel(int code) { }
@@ -1387,18 +1404,29 @@ namespace EncDotNet.S100.Navigation
     }
     public sealed class WaterLevelSourceInfo : System.IEquatable<EncDotNet.S100.Navigation.WaterLevelSourceInfo>
     {
+        public const string PredictionDatasetId = "tide-predictions";
         public WaterLevelSourceInfo(string DatasetId, EncDotNet.S100.Navigation.WaterLevelSourceKind Kind, int? VerticalDatum, string? StationId = null, double? DistanceMeters = default, string? GridCell = null) { }
         public string DatasetId { get; init; }
         public double? DistanceMeters { get; init; }
         public string? GridCell { get; init; }
+        public bool IsPredicted { get; }
         public EncDotNet.S100.Navigation.WaterLevelSourceKind Kind { get; init; }
+        public string? ReferenceStationId { get; init; }
+        public string? ReferenceStationName { get; init; }
         public string? StationId { get; init; }
+        public string? StationLabel { get; }
+        public string? StationName { get; init; }
         public int? VerticalDatum { get; init; }
     }
     public enum WaterLevelSourceKind
     {
         Grid = 0,
         Station = 1,
+        Prediction = 2,
+    }
+    public static class WaterLevelSources
+    {
+        public static EncDotNet.S100.Navigation.IWaterLevelSource WithFallback(EncDotNet.S100.Navigation.IWaterLevelSource primary, EncDotNet.S100.Navigation.IWaterLevelSource fallback) { }
     }
     public enum WaterLevelStatus
     {
@@ -1408,6 +1436,37 @@ namespace EncDotNet.S100.Navigation
         AfterEnd = 3,
         NoData = 4,
         DatumMismatch = 5,
+    }
+    public enum WaterMaskClass
+    {
+        Water = 0,
+        Land = 1,
+        Uncharted = 2,
+    }
+    public readonly struct WaterMaskGrid : System.IEquatable<EncDotNet.S100.Navigation.WaterMaskGrid>
+    {
+        public WaterMaskGrid(double South, double West, double LatitudeStep, double LongitudeStep, int Rows, int Columns) { }
+        public int Columns { get; init; }
+        public int Count { get; }
+        public double East { get; }
+        public double LatitudeStep { get; init; }
+        public double LongitudeStep { get; init; }
+        public double North { get; }
+        public int Rows { get; init; }
+        public double South { get; init; }
+        public double West { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition PositionAt(int row, int column) { }
+    }
+    public sealed class WaterReach
+    {
+        public const double DefaultCellSizeMeters = 100D;
+        public const double DefaultReachMeters = 10000D;
+        public const double StationLandToleranceMeters = 300D;
+        public WaterReach(EncDotNet.S100.Navigation.IWaterMask? mask, double reachMeters = 10000, double cellSizeMeters = 100) { }
+        public bool ByWater { get; }
+        public double CellSizeMeters { get; }
+        public double ReachMeters { get; }
+        public double? DistanceMeters(EncDotNet.S100.DataModel.GeoPosition station, EncDotNet.S100.DataModel.GeoPosition point) { }
     }
     public sealed class WeatherCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.WeatherCheckResult>
     {
