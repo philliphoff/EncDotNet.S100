@@ -10,8 +10,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class FeatureCataloguesViewModel : ViewModelBase
 {
     private readonly ViewerSettings _settings;
-    private readonly Services.IS100ExaminerLinkBuilder? _examinerLinks;
-    private readonly Services.IUrlOpener? _urlOpener;
+    private readonly Services.ExaminerLinks _examinerLinks;
 
     public ObservableCollection<CatalogueEntry> Entries { get; } = new();
 
@@ -24,19 +23,15 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     /// </summary>
     public ICommand OpenInExaminerCommand { get; }
 
-    public FeatureCataloguesViewModel(ViewerSettings settings)
-        : this(settings, examinerLinks: null, urlOpener: null)
+    /// <summary>Creates the Feature Catalogues tab.</summary>
+    /// <param name="settings">The settings that hold the user's catalogue paths.</param>
+    /// <param name="examinerLinks">Opens a catalogue in the eXaminer.</param>
+    public FeatureCataloguesViewModel(ViewerSettings settings, Services.ExaminerLinks examinerLinks)
     {
-    }
-
-    public FeatureCataloguesViewModel(
-        ViewerSettings settings,
-        Services.IS100ExaminerLinkBuilder? examinerLinks,
-        Services.IUrlOpener? urlOpener)
-    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(examinerLinks);
         _settings = settings;
         _examinerLinks = examinerLinks;
-        _urlOpener = urlOpener;
         AddCommand = new RelayCommand<string?>(_ => { }); // wired up from view
         RemoveCommand = new RelayCommand<CatalogueEntry>(Remove);
         OpenInExaminerCommand = new RelayCommand<CatalogueEntry>(OpenInExaminer);
@@ -45,11 +40,8 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
 
     private void OpenInExaminer(CatalogueEntry? entry)
     {
-        if (entry is null || _examinerLinks is null || _urlOpener is null)
-            return;
-        var url = _examinerLinks.BuildCatalogueUrl(entry.ProductSpec);
-        if (!string.IsNullOrEmpty(url))
-            _urlOpener.Open(url);
+        if (entry is not null)
+            _examinerLinks.OpenCatalogue(entry.ProductSpec);
     }
 
     public void Reload()
@@ -92,7 +84,7 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     }
 
     private bool ExaminerSupports(string spec) =>
-        _examinerLinks?.SupportsSpec(spec) ?? false;
+        _examinerLinks.SupportsSpec(spec);
 
     /// <summary>
     /// Re-evaluates <see cref="CatalogueEntry.CanOpenInExaminer"/> for every

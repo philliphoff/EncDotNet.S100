@@ -47,6 +47,8 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
 
     private sealed class NoPick : IPickService
     {
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
         public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
         public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;

@@ -103,7 +103,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
         Assert.True(entry.HasCredit);
         Assert.Equal(string.Format(Strings.Library_DataCreditFormat, entry.Credit), entry.CreditText);
 
-        var pick = new PickReportViewModel();
+        var pick = TestPickReport.Create();
         pick.SetPicks([new PickHit { FeatureType = "WaveHeight", FeatureRef = "1", ProductSpec = "GRIB2", Credit = entry.Credit }]);
         Assert.True(pick.HasDataCredit);
         Assert.Equal(entry.CreditText, pick.DataCredit);

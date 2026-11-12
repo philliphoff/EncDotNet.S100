@@ -10,7 +10,6 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -106,7 +105,7 @@ public sealed class GribViewerLoadPathTests : IDisposable
     [Fact]
     public void The_pick_report_leads_with_the_notice_and_names_the_portrayal()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick("WeatherGridPoint", "Weather grid point", "(15,5)", "gfswave.grib2", "GRIB2", []);
 

@@ -93,7 +93,7 @@ public sealed class PickReportSingleNoticeTests : IDisposable
     [Fact]
     public void An_S100_pick_keeps_a_notice_row_the_panel_does_not_lead_with()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101",
             [PickAttribute.NavigationNotice("Survey data, not for navigation.")]);
@@ -109,7 +109,7 @@ public sealed class PickReportSingleNoticeTests : IDisposable
         Assert.Equal(PickAttribute.NavigationNoticeCode, info.Attributes[0].Code);
         Assert.Equal(notice, info.Attributes[0].DisplayText);
 
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(
         [
             new PickHit
@@ -137,7 +137,7 @@ public sealed class PickReportSingleNoticeTests : IDisposable
 
     private static void AssertDynamicNoticeOnce(DynamicPickHit hit, string sourceRow)
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks([], [hit]);
 
         Assert.Null(vm.NavigationNotice);

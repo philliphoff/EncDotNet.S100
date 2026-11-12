@@ -58,7 +58,7 @@ public sealed class PickReportAmlTests : IDisposable
     public void A_standard_class_with_AML_attributes_shows_the_strip_the_marks_and_not_drawn()
     {
         var processor = Lbo();
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks([Hit(processor, "10")]);
 
         Assert.True(vm.HasAml);
@@ -85,7 +85,7 @@ public sealed class PickReportAmlTests : IDisposable
     [AvaloniaFact]
     public void An_AML_class_is_named_as_one_and_carries_no_marks()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks([Hit(Lbo(), "11")]);
 
         Assert.Equal("Contact", vm.PrimaryLabel);
@@ -115,7 +115,7 @@ public sealed class PickReportAmlTests : IDisposable
                 Drawn = true,
             },
         };
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks([drawn]);
 
         Assert.Null(vm.AmlNotDrawnNote);
@@ -125,7 +125,7 @@ public sealed class PickReportAmlTests : IDisposable
     [Fact]
     public void Other_products_have_no_strip_and_keep_the_spec_caption()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101", []);
 
         Assert.False(vm.HasAml);

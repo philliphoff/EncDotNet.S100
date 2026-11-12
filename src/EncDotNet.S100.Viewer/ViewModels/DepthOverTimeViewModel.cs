@@ -51,31 +51,13 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     /// <summary>
     /// Constructs a depth-over-time view model for a picked location.
     /// </summary>
-    /// <param name="result">The assimilated depth result for the location.</param>
-    /// <param name="locationLabel">Formatted location label shown on the card.</param>
-    /// <param name="latitude">Pick latitude in decimal degrees (WGS-84).</param>
-    /// <param name="longitude">Pick longitude in decimal degrees (WGS-84).</param>
-    /// <param name="depthUnit">The mariner's selected depth display unit.</param>
-    /// <param name="safetyDepthMetres">
-    /// The mariner safety depth in metres to draw as a reference line, or
-    /// <c>null</c> when unset.
-    /// </param>
-    /// <param name="globalTime">Global time service driving the now-marker.</param>
-    /// <param name="timeFormat">Optional time-format provider.</param>
-    /// <param name="themeService">Optional chrome-theme service.</param>
-    public DepthOverTimeViewModel(
-        LocationDepthResult result,
-        string locationLabel,
-        double latitude,
-        double longitude,
-        DepthUnit depthUnit,
-        double? safetyDepthMetres,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat,
-        IThemeService? themeService)
-        : base(BuildSnapshot(result, locationLabel, latitude, longitude, depthUnit), globalTime, timeFormat, themeService)
+    /// <param name="card">The assimilated depth at the location, and how to show it.</param>
+    /// <param name="context">The time, formatting and theme the chart follows.</param>
+    public DepthOverTimeViewModel(LocationDepthCard card, StationChartContext context)
+        : base(BuildSnapshot(card), context)
     {
-        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(card);
+        var (result, locationLabel, _, _, depthUnit, safetyDepthMetres) = card;
         Result = result;
         LocationLabel = locationLabel;
         _depthUnit = depthUnit;
@@ -123,7 +105,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
         DepthSections = sections;
 
-        RefreshNow(globalTime?.CurrentTime);
+        RefreshNow(context.Time.CurrentTime);
     }
 
     /// <summary>The assimilated depth result backing this view model.</summary>
@@ -470,14 +452,10 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         };
     }
 
-    private static StationTimeSeriesSnapshot BuildSnapshot(
-        LocationDepthResult result,
-        string locationLabel,
-        double latitude,
-        double longitude,
-        DepthUnit depthUnit)
+    private static StationTimeSeriesSnapshot BuildSnapshot(LocationDepthCard card)
     {
-        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(card);
+        var (result, locationLabel, latitude, longitude, depthUnit, _) = card;
 
         var times = result.DepthOverTime.Select(p => p.Time).ToList();
         var values = result.DepthOverTime
@@ -503,3 +481,25 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         };
     }
 }
+
+/// <summary>
+/// The data of a depth-over-time card (#1401): the assimilated depth at a
+/// picked location, where it is, and the depth unit and safety depth it is
+/// shown with.
+/// </summary>
+/// <param name="Result">The assimilated depth result for the location.</param>
+/// <param name="LocationLabel">Formatted location label shown on the card.</param>
+/// <param name="Latitude">Pick latitude in decimal degrees (WGS-84).</param>
+/// <param name="Longitude">Pick longitude in decimal degrees (WGS-84).</param>
+/// <param name="DepthUnit">The mariner's selected depth display unit.</param>
+/// <param name="SafetyDepthMetres">
+/// The mariner safety depth in metres to draw as a reference line, or
+/// <see langword="null"/> for none.
+/// </param>
+internal sealed record LocationDepthCard(
+    LocationDepthResult Result,
+    string LocationLabel,
+    double Latitude,
+    double Longitude,
+    DepthUnit DepthUnit,
+    double? SafetyDepthMetres);

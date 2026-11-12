@@ -146,7 +146,7 @@ public sealed class SurfaceAnalysisTimeViewerTests
     [Fact]
     public void The_pick_report_shows_a_stale_analysis_as_a_line_under_the_notice()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(
         [
             new PickHit

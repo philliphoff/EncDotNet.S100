@@ -1320,9 +1320,9 @@
                         MaxWidth="{Binding #PickRoot.Bounds.Width, Converter={x:Static conv:WidthInsetConverter.Instance}, ConverterParameter=24}"
                         HorizontalAlignment="Stretch">
                 <!-- A lone warning's card (#932); see WarningCardTemplate. -->
-                <ContentControl IsVisible="{Binding HasSingleWarningCard}"
+                <ContentControl IsVisible="{Binding Warnings.HasSingleCard}"
                                 Margin="0,8,0,0"
-                                Content="{Binding WarningCard}"
+                                Content="{Binding Warnings.Card}"
                                 ContentTemplate="{StaticResource WarningCardTemplate}" />
 
                 <!--
@@ -1330,15 +1330,15 @@
                     cards are the pick list. Hovering one previews its part
                     on the map; the other features follow as rows.
                 -->
-                <StackPanel IsVisible="{Binding HasWarningCardList}"
+                <StackPanel IsVisible="{Binding Warnings.HasList}"
                             Margin="0,8,0,0"
                             Spacing="8">
                     <TextBlock FontSize="10"
                                FontWeight="Normal"
                                LetterSpacing="1"
                                Opacity="0.7"
-                               Text="{Binding WarningCards.Count, StringFormat={x:Static loc:Strings.Pick_WarningCardsHeader}}" />
-                    <ItemsControl ItemsSource="{Binding WarningCards}"
+                               Text="{Binding Warnings.Cards.Count, StringFormat={x:Static loc:Strings.Pick_WarningCardsHeader}}" />
+                    <ItemsControl ItemsSource="{Binding Warnings.Cards}"
                                   AutomationProperties.AutomationId="PickReport.WarningCards"
                                   AutomationProperties.Name="{x:Static loc:Strings.Pick_WarningCards}"
                                   ItemTemplate="{StaticResource WarningCardTemplate}">
@@ -1348,8 +1348,8 @@
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
-                    <ListBox ItemsSource="{Binding OtherHits}"
-                             IsVisible="{Binding HasOtherHits}"
+                    <ListBox ItemsSource="{Binding Warnings.OtherHits}"
+                             IsVisible="{Binding Warnings.HasOtherHits}"
                              AutomationProperties.AutomationId="PickReport.OtherHits"
                              AutomationProperties.Name="{x:Static loc:Strings.Pick_OtherHits}"
                              SelectedItem="{Binding SelectedOtherHit, Mode=TwoWay}"
@@ -1553,7 +1553,7 @@
                 </Border>
 
                 <!-- Beneath a Warning card the attributes fold, closed by default. -->
-                <Expander IsVisible="{Binding HasWarningCard}"
+                <Expander IsVisible="{Binding Warnings.HasCard}"
                           AutomationProperties.AutomationId="PickReport.WarningAttributes"
                           AutomationProperties.Name="{x:Static loc:Strings.Pick_AttributesFold}"
                           IsExpanded="{Binding WarningAttributesExpanded, Mode=TwoWay}"

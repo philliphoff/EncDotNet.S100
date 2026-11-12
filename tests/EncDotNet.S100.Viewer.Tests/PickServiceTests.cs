@@ -21,10 +21,53 @@ public class PickServiceTests
         MainViewModel viewModel,
         out NotificationService notifications)
     {
-        // The pick service surfaces its picks through the view-model's shared
-        // PickReport; failed reference navigations surface as notifications.
+        // The pick service publishes its picks, which the view-model's shared
+        // PickReport shows; failed reference navigations surface as notifications.
         notifications = Notifications.TestNotifications.Create();
-        return new PickService(loader, viewModel.PickReport, notifications, globalTime: null, timeFormat: null, themeService: null, marinerSettings: null, catalog: null, routeSources: null, waterLevelSettings: null);
+        var service = new PickService(
+            loader,
+            notifications,
+            viewModel.PickReport.Selection,
+            new GlobalTimeService(),
+            new ViewerDatasetCatalog(loader),
+            new EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache(new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()),
+            new NoWaterLevelSettings());
+        Assert.True(LatePicks.TryGetValue(viewModel, out var late));
+        late.Inner = service;
+        return service;
+    }
+
+    // The pick report of each view-model, over a pick service made later.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MainViewModel, LatePick> LatePicks = new();
+
+    /// <summary>A pick service that forwards to one set after the pick report is made.</summary>
+    private sealed class LatePick : IPickService
+    {
+        private IPickService? _inner;
+
+        public IPickService Inner
+        {
+            get => _inner ?? throw new InvalidOperationException("No pick service yet.");
+            set
+            {
+                _inner = value;
+                value.Picked += (_, result) => Picked?.Invoke(this, result);
+            }
+        }
+
+        public event EventHandler<PickResult>? Picked;
+        public Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null) => Inner.HandlePickAsync(worldPosition, resolution, dynamicHits);
+        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) => Inner.PresentGeographicPick(latitude, longitude, features);
+        public bool NavigateToReference(FeatureReference reference) => Inner.NavigateToReference(reference);
+        public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => Inner.OpenFeature(processor, featureRef, datasetFileName);
+        public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => Inner.OpenFeatureAt(processor, ordinal, datasetFileName);
+    }
+
+    private sealed class NoWaterLevelSettings : EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings
+    {
+        public EncDotNet.S100.Viewer.Services.Depth.WaterLevelAdjustmentMode WaterLevelAdjustment => default;
+        public bool WaterLevelApplyUndeclaredDatum => false;
+        public event Action? WaterLevelAdjustmentChanged { add { } remove { } }
     }
 
 
@@ -60,20 +103,23 @@ public class PickServiceTests
         var settingsVm = new ViewerSettingsService(settings);
         var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var shellLayout = new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
-        return new MainViewModel(
+        var picks = new LatePick();
+        var viewModel = new MainViewModel(
             layout: shellLayout,
             mapTools: TestMapTools.Create(settingsVm, routeStore),
             statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
             appCommands: TestAppCommands.Create(),
             datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             mapChrome: TestMapChrome.Create(catalogues, datasets),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
             palette: new PaletteMenuViewModel(settingsVm),
-            pickReport: new PickReportViewModel(),
+            pickReport: TestPickReport.Create(picks),
             timeline: timeline,
             routes: routeStore);
+        LatePicks.Add(viewModel, picks);
+        return viewModel;
     }
 
     [Fact]

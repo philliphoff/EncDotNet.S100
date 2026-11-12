@@ -27,12 +27,12 @@ internal sealed class PickHit
     public string? ProductSpec { get; init; }
 
     /// <summary>
-    /// Optional time-series view model used by the pick panel to render a
-    /// chart when this hit represents a fixed-station observation
-    /// (S-104 / S-111 dcf=8). <c>null</c> for every other feature shape;
-    /// when set, the panel shows a chart section above the attribute list.
+    /// The station's time series when this hit is a fixed-station observation
+    /// (S-104 / S-111 dcf=8); <c>null</c> for every other feature shape.
+    /// Object Information charts it above the attribute list (#1401: the pick
+    /// report builds the chart).
     /// </summary>
-    public StationTimeSeriesViewModel? StationSeries { get; init; }
+    public StationTimeSeriesSnapshot? StationSeries { get; init; }
 
     /// <summary>
     /// WMO / SIGRID-3 ice egg-code projection for the hit when it is an S-411

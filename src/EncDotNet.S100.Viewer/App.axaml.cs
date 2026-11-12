@@ -1272,6 +1272,9 @@ public partial class App : Application
         // S-100 Feature Catalogue eXaminer deep-links (issue #442).
         services.AddSingleton<IS100ExaminerLinkBuilder>(
             sp => new S100ExaminerLinkBuilder(sp.GetRequiredService<ViewerSettings>()));
+        services.AddSingleton(sp => new ExaminerLinks(
+            sp.GetRequiredService<IS100ExaminerLinkBuilder>(),
+            sp.GetRequiredService<IUrlOpener>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(
             _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider(assembly: null));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(sp =>
@@ -1529,8 +1532,7 @@ public partial class App : Application
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
             sp.GetRequiredService<ViewerSettings>(),
-            sp.GetService<IS100ExaminerLinkBuilder>(),
-            sp.GetService<IUrlOpener>()));
+            sp.GetRequiredService<ExaminerLinks>()));
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton(sp =>
@@ -1690,19 +1692,25 @@ public partial class App : Application
         services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
+        // What the S-104, S-111 and depth charts of Object Information follow (#1401).
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.StationChartContext(
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<ITimeFormatProvider>(),
+            sp.GetRequiredService<IMarinerSettingsProvider>(),
+            sp.GetRequiredService<IThemeService>()));
+        // Warning cards link to, zoom through and open in the warnings panel (#932).
+        services.AddSingleton(sp => new PickWarningCardsViewModel(
+            sp.GetRequiredService<NavigationalWarningsViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetRequiredService<ITimeFormatProvider>()));
         services.AddSingleton<PickReportViewModel>(sp =>
         {
             var pick = new PickReportViewModel(
-                sp.GetService<ITimeFormatProvider>(),
-                sp.GetService<IMarinerSettingsProvider>(),
-                sp.GetService<IUrlOpener>(),
-                sp.GetService<IS100ExaminerLinkBuilder>(),
-                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>())
-            {
-                Selection = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>(),
-                // Warning cards link to, zoom through and open in the warnings panel (#932).
-                WarningNavigator = sp.GetRequiredService<NavigationalWarningsViewModel>(),
-            };
+                sp.GetRequiredService<IPickService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.StationChartContext>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ExaminerLinks>(),
+                sp.GetRequiredService<PickWarningCardsViewModel>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>());
             // The depth card's "The chart shows charted depths" line (#1191).
             if (sp.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is { } depthBasis)
             {
@@ -1905,8 +1913,7 @@ public partial class App : Application
         // the warnings panel and the warning drawing follow it.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>();
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.OpenNavigationalWarningWorkflow(
-            // Lazily: the pick service holds the pick report, whose Warning cards open warnings through the panel.
-            () => sp.GetRequiredService<IPickService>(),
+            sp.GetRequiredService<IPickService>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));

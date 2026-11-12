@@ -181,7 +181,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
     {
         var f = new Fixture();
         var cancelled = f.Find(3);
-        var pick = new PickReportViewModel();
+        var pick = TestPickReport.Create();
         f.Drawing.Follow(pick.Selection);
 
         pick.SetPicks([new PickHit
@@ -193,7 +193,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
             NavigationalWarning = cancelled.Warning,
         }]);
 
-        Assert.NotNull(pick.WarningCard);
+        Assert.NotNull(pick.Warnings.Card);
         Assert.DoesNotContain(cancelled.FeatureRef, f.Hidden);
 
         pick.Clear();

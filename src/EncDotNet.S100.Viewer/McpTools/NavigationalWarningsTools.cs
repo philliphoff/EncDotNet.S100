@@ -579,13 +579,13 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
     {
         if (pick is null)
             return new WarningCardsDto([], false, []);
-        IReadOnlyList<NavigationalWarningCardViewModel> cards = pick.HasWarningCardList
-            ? pick.WarningCards
-            : pick.WarningCard is { } lone ? [lone] : [];
+        IReadOnlyList<NavigationalWarningCardViewModel> cards = pick.Warnings.HasList
+            ? pick.Warnings.Cards
+            : pick.Warnings.Card is { } lone ? [lone] : [];
         return new WarningCardsDto(
             cards.Select(c => ToDto(c, pick)).ToList(),
-            pick.HasWarningCardList,
-            pick.OtherHits.Select(h => h.HitListLabel).ToList());
+            pick.Warnings.HasList,
+            pick.Warnings.OtherHits.Select(h => h.HitListLabel).ToList());
     }
 
     private static WarningCardDto ToDto(NavigationalWarningCardViewModel card, PickReportViewModel pick) => new(
@@ -618,9 +618,9 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
     /// <summary>The card for a part, or the open card when no part is named.</summary>
     protected static NavigationalWarningCardViewModel? FindCard(PickReportViewModel pick, string? datasetId, string? featureId)
     {
-        IEnumerable<NavigationalWarningCardViewModel> cards = pick.HasWarningCardList
-            ? pick.WarningCards
-            : pick.WarningCard is { } lone ? [lone] : [];
+        IEnumerable<NavigationalWarningCardViewModel> cards = pick.Warnings.HasList
+            ? pick.Warnings.Cards
+            : pick.Warnings.Card is { } lone ? [lone] : [];
         return string.IsNullOrWhiteSpace(featureId)
             ? cards.FirstOrDefault(c => c.IsOpen)
             : cards.FirstOrDefault(c =>
@@ -693,17 +693,17 @@ internal sealed class PreviewWarningCardTool : WarningCardsToolBase
                 return ToolResult<WarningCardsDto>.Ok(ToDto(null));
             if (string.IsNullOrWhiteSpace(featureId))
             {
-                pick.SetWarningPreview(null);
+                pick.Warnings.SetPreview(null);
                 return ToolResult<WarningCardsDto>.Ok(ToDto(pick));
             }
 
-            if (!pick.HasWarningCardList || FindCard(pick, datasetId, featureId) is not { } card)
+            if (!pick.Warnings.HasList || FindCard(pick, datasetId, featureId) is not { } card)
             {
                 return ToolResult<WarningCardsDto>.Err(new InvalidArgument(
                     "featureId", $"no Warning card for '{featureId}' in a pick of several warnings; read the cards with get_warning_cards"));
             }
 
-            pick.SetWarningPreview(card);
+            pick.Warnings.SetPreview(card);
             return ToolResult<WarningCardsDto>.Ok(ToDto(pick));
         });
     }
