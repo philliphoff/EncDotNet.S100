@@ -303,7 +303,15 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 // Optional relief shading (off by default; not part of the
                 // S-102 portrayal): a hillshade over the band colours.
                 if (S102Relief.IsOn(context?.EcdisDisplay))
+                {
                     styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
+
+                    // The legend says relief is on, as a display aid, swatched
+                    // in a middle band's colour: the deepest band is too pale
+                    // for the shading to show.
+                    if (depthLegend is not null && styledLayer.ColorScheme?.Bands is { Count: > 0 } bands)
+                        depthLegend = [.. depthLegend, S102Relief.LegendEntry(bands.OrderBy(b => b.MinValue).ElementAt(bands.Count / 2).Color)];
+                }
 
                 var depthLines = BuildDepthLineSubLayers(
                     styledLayer, mariner, crs, nativeToWgs84, adjustmentKey);

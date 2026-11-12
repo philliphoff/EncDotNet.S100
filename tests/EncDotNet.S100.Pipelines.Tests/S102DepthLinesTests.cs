@@ -343,6 +343,42 @@ public sealed class S102DepthLinesTests
     }
 
     [Fact]
+    public async Task With_relief_on_the_depth_legend_ends_with_a_display_aid_row()
+    {
+        var path = S102Grids.Write(8, 8, (r, _) => 10f + r);
+        using var manager = CreateCatalogueManager();
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
+        try
+        {
+            var ct = TestContext.Current.CancellationToken;
+            async Task<IReadOnlyList<LegendEntry>> LegendWith(bool relief)
+            {
+                var result = await processor.BuildCoveragePortrayalAsync(new RenderContext
+                {
+                    EcdisDisplay = new EcdisDisplaySettings
+                    {
+                        LayerVisibility = new Dictionary<string, bool> { [S102Relief.LayerKey] = relief },
+                    },
+                }, ct);
+                return result.SubLayers.OfType<GridCoverageSubLayer>().Single().Legend!;
+            }
+
+            var off = await LegendWith(relief: false);
+            var on = await LegendWith(relief: true);
+
+            Assert.DoesNotContain(off, e => e.Label == S102Relief.LegendLabel);
+            Assert.Equal(off.Count + 1, on.Count);
+            var row = Assert.IsType<SymbolLegendEntry>(on[^1]);
+            Assert.Equal("Relief shading (display aid)", row.Label);
+            Assert.Contains("<svg", row.Svg, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task Processor_reuses_the_traced_lines_until_the_safety_contour_or_region_changes()
     {
         var path = S102Grids.Write(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);

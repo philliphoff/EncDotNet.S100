@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
@@ -1853,6 +1854,17 @@ public partial class MainWindow : ShadUI.Window
         void Push() => _viewModel.StatusBar.UpdateDepthBasis(
             depthBasis.Current, depthBasis.WaterLevelLoaded, timeFormat?.Current ?? TimeFormat.Utc);
         depthBasis.Changed += (_, _) => Push();
+
+        // Relief shading on marks the pill (s102-relief-design.md section 3).
+        if (App.Services.GetService<EcdisDisplayState>() is { } display)
+        {
+            void PushRelief() => _viewModel.StatusBar.DepthBasis.SetRelief(
+                display.GetLayerVisible(S102Relief.LayerKey) ?? false,
+                () => display.SetLayerVisible(S102Relief.LayerKey, false));
+            display.Changed += () => Dispatcher.UIThread.Post(PushRelief);
+            PushRelief();
+        }
+
         if (timeFormat is not null)
             timeFormat.TimeFormatChanged += _ => Dispatcher.UIThread.Post(Push);
 

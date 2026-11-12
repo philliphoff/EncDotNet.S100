@@ -8079,6 +8079,26 @@
   <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
     <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
   </data>
+  <data name="Status_DepthBasis_ReliefSuffix" xml:space="preserve">
+    <value> · Relief</value>
+    <comment>Appended to the DEPTHS status pill's value (e.g. "Charted · Relief") while S-102 relief shading is on and S-102 is in view. Keep the leading space and dot.</comment>
+  </data>
+  <data name="Status_DepthBasis_ReliefSuffix_Compact" xml:space="preserve">
+    <value> · R</value>
+    <comment>The compact form of the relief suffix on the DEPTHS pill when the status bar is short of room.</comment>
+  </data>
+  <data name="Status_DepthBasis_ReliefAccessibleSuffix" xml:space="preserve">
+    <value>, relief shading on</value>
+    <comment>Appended to the DEPTHS pill's accessible name while relief shading shows.</comment>
+  </data>
+  <data name="Status_DepthBasisPopup_ReliefOn" xml:space="preserve">
+    <value>Relief shading on. A display aid that shades the S-102 depth surface by its slope; depth colours and values are unchanged.</value>
+    <comment>Line in the DEPTHS popup while S-102 relief shading is on and S-102 is in view.</comment>
+  </data>
+  <data name="Status_DepthBasisPopup_ReliefOff" xml:space="preserve">
+    <value>Off</value>
+    <comment>Button beside the relief line in the DEPTHS popup: turns S-102 relief shading off.</comment>
+  </data>
   <data name="AmlDisplay_Legend" xml:space="preserve">
     <value>Legend</value>
     <comment>Link in the display panel's Additional Military Layers section that opens the Legend tab at the AML section</comment>
