@@ -84,4 +84,10 @@
     <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- NOAA tide station fixtures (T1, #1449) for the S-104 prediction writer (#1455). -->
+    <Compile Include="..\EncDotNet.S100.Tides.Tests\NoaaFixture.cs" Link="TestSupport\NoaaFixture.cs" />
+    <Content Include="..\datasets\Tides\NOAA\9447130\*" CopyToOutputDirectory="PreserveNewest" LinkBase="TestData\Tides\NOAA\9447130" />
+  </ItemGroup>
+
 </Project>

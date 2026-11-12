@@ -251,7 +251,7 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Datasets.S101** | S-101 ENC reader (incl. sequential updates), Lua portrayal pipeline, validation pack (`S101DatasetView` façade + 10 rules). |
 | **EncDotNet.S100.Datasets.S102** | S-102 bathymetry reader, coverage pipeline, validation pack. |
-| **EncDotNet.S100.Datasets.S104** | S-104 water level reader, coverage pipeline, validation pack. |
+| **EncDotNet.S100.Datasets.S104** | S-104 water level reader, station-series writer (including tide predictions), coverage pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S111** | S-111 surface currents reader, coverage pipeline (per-feature arrow symbology), validation pack. |
 | **EncDotNet.S100.Datasets.S122** | S-122 marine protected areas reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S124** | S-124 navigational warnings reader, XSLT portrayal pipeline, validation pack. |

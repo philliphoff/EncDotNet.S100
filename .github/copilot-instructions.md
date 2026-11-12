@@ -42,7 +42,7 @@ src/
   EncDotNet.S100.Scripting.MoonSharp/ # ILuaEngine implementation using MoonSharp (Lua 5.2) — selectable
   EncDotNet.S100.Datasets.S101/      # S-101 ENC reader + Lua portrayal pipeline
   EncDotNet.S100.Datasets.S102/      # S-102 bathymetry reader + coverage pipeline
-  EncDotNet.S100.Datasets.S104/      # S-104 water level reader + coverage pipeline
+  EncDotNet.S100.Datasets.S104/      # S-104 water level reader, station-series writer + coverage pipeline
   EncDotNet.S100.Datasets.S111/      # S-111 surface currents reader + coverage pipeline
   EncDotNet.S100.Datasets.S122/      # S-122 marine protected areas reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal

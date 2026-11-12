@@ -2,7 +2,9 @@
 
 This package reads S-104 Water Level Information for Surface Navigation
 datasets from HDF5 files: water-level grids per time step, and time series at
-fixed stations. It also draws them, as station gauges and surface isolines, and validates
+fixed stations. It writes station series too, including harmonic tide
+predictions from [`EncDotNet.S100.Tides`](../EncDotNet.S100.Tides/README.md).
+It also draws them, as station gauges and surface isolines, and validates
 them against the S-104 Edition 2.0.0 checklist. Reference it when you need the
 water levels directly, for example to sample a tide curve at a position. To
 open and render a dataset without wiring catalogues yourself, use the
@@ -47,6 +49,66 @@ vertical datum and a `Trend`: 1 (decreasing), 2 (increasing), 3 (steady) or
 0 (unknown). Grid cells without data hold the fill value `-9999`. For more,
 see [Reading product data](../../docs/reading-product-data.md).
 
+## Write a station series
+
+`S104StationSeriesWriter.Encode` turns an `S104StationSeriesDataset` into an
+S-104 Edition 2.0.0 file in data coding format 8 (time series at fixed
+stations), the layout the reader above reads back. It returns an HDF5 tree
+(`Hdf5WriteGroup`, in `EncDotNet.S100.Core`); `PureHdfWriter` writes it out.
+
+To write tide predictions for a station, `S104TidePredictions.CreateDataset`
+predicts the heights from the station's harmonic constituents and fills in the
+dataset:
+
+```csharp
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.S104.Writing;
+using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Tides;
+
+// A station on its chart datum (MLLW); see the Tides README.
+var seattle = new TideStation(
+    "9447130",
+    "Seattle",
+    [
+        new TideConstituent("M2", 1.063, 10.8),
+        new TideConstituent("K1", 0.834, 276.8),
+        // ... the station's other constituents
+    ],
+    new TideDatum("MLLW", 4.443 - 2.419));
+var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+var dataset = S104TidePredictions.CreateDataset(
+    seattle,
+    new GeoPosition(47.6026, -122.3393),
+    startUtc: start,
+    endUtc: start.AddDays(7),
+    step: TimeSpan.FromMinutes(6),
+    issuedUtc: DateTime.UtcNow);
+
+PureHdfWriter.Write(
+    S104StationSeriesWriter.Encode(dataset),
+    S104TidePredictions.FileName(seattle));   // 104ZZ019447130.h5
+```
+
+A predicted dataset isn't an official product, and says so:
+
+- Its producer code is `ZZ01` (`S104TidePredictions.ProducerCode`). `ZZ`
+  codes are never a real producer's; the scenario generator's synthetic data
+  uses `ZZ00`.
+- Its `dataDynamicity` is astronomical prediction, and its
+  `methodWaterLevelProduct` names the station and says the data is a harmonic
+  prediction, not an official product and not for navigation.
+  `S104TidePredictions.IsPrediction` recognises it.
+- The heights are on the station's datum, written as the S-100 vertical datum
+  code (`MLLW` is 12, `LAT` 23). A datum with no code, such as station datum,
+  mean tide level or NAVD88, throws `ArgumentException`.
+- Each trend compares the rise over an hour with 0.2 m, as NOAA's S-104 files
+  do: steady below it, otherwise increasing or decreasing.
+
+PureHDF's writer needs runtime code generation, so writing works in a trimmed
+application but not under NativeAOT. Reading works under both.
+
 ## Main types
 
 - **`S104Dataset`**: a gridded dataset, with its horizontal CRS, vertical
@@ -72,7 +134,11 @@ see [Reading product data](../../docs/reading-product-data.md).
   coverage, such as `/WaterLevel/WaterLevel.01`. Validation findings use it as
   `RelatedFeatureId`.
 - **`S104StationSeriesDataset`** and **`WaterLevelStation`**: a station series
-  and one station's heights and trends.
+  and one station's name, heights and trends, with the dataset's
+  `DataDynamicity` and `TrendInterval` when it gives them.
+- **`S104StationSeriesWriter`** and **`S104TidePredictions`** (namespace
+  `EncDotNet.S100.Datasets.S104.Writing`): write a station series, and turn
+  tide predictions into one. See [Write a station series](#write-a-station-series).
 - **`S104TimeSeriesSampler`**: samples a regular-grid (format 2) dataset at a
   geographic position across its time steps. It returns an `S104TimeSeries`:
   the nearest cell and an `S104TimeSeriesPoint` per step with height and
