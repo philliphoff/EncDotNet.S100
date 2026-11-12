@@ -1,0 +1,14 @@
+{
+  "id": "LIS1001",
+  "refStationId": "",
+  "refStationBin": null,
+  "meanFloodDir": 291.0,
+  "meanEbbDir": 106.0,
+  "mfcTimeAdjMin": null,
+  "sbeTimeAdjMin": null,
+  "mecTimeAdjMin": null,
+  "sbfTimeAdjMin": null,
+  "mfcAmpAdj": null,
+  "mecAmpAdj": null,
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/LIS1001_13/currentpredictionoffsets.json"
+}

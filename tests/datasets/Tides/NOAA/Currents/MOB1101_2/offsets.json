@@ -1,0 +1,14 @@
+{
+  "id": "MOB1101",
+  "refStationId": "",
+  "refStationBin": null,
+  "meanFloodDir": 14.0,
+  "meanEbbDir": 201.0,
+  "mfcTimeAdjMin": null,
+  "sbeTimeAdjMin": null,
+  "mecTimeAdjMin": null,
+  "sbfTimeAdjMin": null,
+  "mfcAmpAdj": null,
+  "mecAmpAdj": null,
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/MOB1101_2/currentpredictionoffsets.json"
+}
