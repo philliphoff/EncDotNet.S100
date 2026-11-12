@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tide predictions.** The new `EncDotNet.S100.Tides` package predicts the
+  astronomical tide at a station from its harmonic constituents: the height
+  at a time, a series at a fixed step without allocating per sample, and the
+  high and low waters in a period. It knows NOAA's 37 standard constituents
+  and the 83 further ones NOAA lists at some stations, and gives heights on
+  mean sea level or a chart datum such as MLLW. Against NOAA's published
+  predictions at five stations it agrees to under a millimetre RMS. See the
+  [package README](../src/EncDotNet.S100.Tides/README.md).
 - **Relief shading strength.** The S-102 Relief shading switch in Display
   controls gains a **Strength** control while it is on: Subtle, Medium (the
   default) or Strong. It is kept with the display settings and saved with

@@ -80,6 +80,8 @@
       href: EncDotNet.S100.Navigation/README.md
     - name: EncDotNet.S100.Routes.Rtz
       href: EncDotNet.S100.Routes.Rtz/README.md
+    - name: EncDotNet.S100.Tides
+      href: EncDotNet.S100.Tides/README.md
 - name: Rendering
   items:
     - name: EncDotNet.S100.Rendering.Scene
