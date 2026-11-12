@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
