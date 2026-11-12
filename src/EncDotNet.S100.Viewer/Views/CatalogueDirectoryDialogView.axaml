@@ -236,7 +236,7 @@
                 <DockPanel>
                 <!-- Add by URL from any category: it opens My sources, where the form is (D10). -->
                 <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
-                        Padding="10,8,0,0" IsVisible="{Binding CanAddByUrl}">
+                        Padding="10,8,0,0">
                     <Button Classes="link" HorizontalAlignment="Left" Command="{Binding ShowAddByUrlCommand}"
                             AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryAddByUrl}"
                             AutomationProperties.AutomationId="Catalogues.AddByUrl">
@@ -414,7 +414,7 @@
                     <TextBlock Text="{Binding NoMatchesText}" Classes="muted" FontSize="13" TextWrapping="Wrap"
                                TextAlignment="Center" />
                     <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryAddItByUrl}" FontSize="13"
-                            HorizontalAlignment="Center" IsVisible="{Binding CanAddByUrl}"
+                            HorizontalAlignment="Center"
                             Command="{Binding ShowAddByUrlCommand}"
                             AutomationProperties.AutomationId="Catalogues.NoMatches.AddByUrl" />
                 </StackPanel>

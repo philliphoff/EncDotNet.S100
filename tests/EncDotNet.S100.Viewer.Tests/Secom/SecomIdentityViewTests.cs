@@ -35,7 +35,7 @@ public sealed class SecomIdentityViewTests
         keys.Identities.Import(keys.Identities.Load(keys.IdentityFile("org", "urn:mrn:mcp:org:mcc:soundcharts"), "secret"), "SoundCharts organisation", makeDefault: false);
         var directory = new SecomIdentityDirectory(keys.Identities, keys.Time);
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel([Khra], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            TestCatalogueDirectory.Create([Khra]),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 Secom = (_, _, _, _) => throw new HttpRequestException("403"),

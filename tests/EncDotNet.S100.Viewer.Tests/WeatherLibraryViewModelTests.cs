@@ -114,7 +114,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
     [Fact]
     public void The_directory_labels_weather_services_and_shows_their_forecast_chips()
     {
-        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
+        var directory = TestCatalogueDirectory.Create(KnownCatalogueSources.All);
         var aws = directory.Entries.Single(e => e.Source.Id == "noaa-aws-gfswave");
         var nomads = directory.Entries.Single(e => e.Source.Id == "noaa-nomads-gfs");
 

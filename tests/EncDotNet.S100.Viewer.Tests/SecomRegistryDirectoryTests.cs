@@ -22,13 +22,7 @@ public sealed class SecomRegistryDirectoryTests
 
     private static CatalogueDirectoryDialogViewModel Directory(
         Func<Uri, SecomProbeResult> probe, Func<SecomRegistryListing>? listing = null) =>
-        new(KnownCatalogueSources.All,
-            loadSecomRegistry: (_, _) => Task.FromResult((listing ?? Listing)()),
-            probeSecom: (uri, _) => Task.FromResult(probe(uri)),
-            openUrl: null,
-            userCatalogues: null,
-            probe: null,
-            session: null);
+        TestCatalogueDirectory.Create(KnownCatalogueSources.All, registry: new FakeSecomRegistry(_ => (listing ?? Listing)(), probe));
 
     private static async Task SettleAsync(Func<bool> done)
     {
@@ -74,17 +68,11 @@ public sealed class SecomRegistryDirectoryTests
     public async Task Secom_services_offer_the_registry_as_a_row_and_refresh_reads_past_the_cache()
     {
         var refreshes = new List<bool>();
-        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All,
-            loadSecomRegistry: (refresh, _) =>
-            {
-                refreshes.Add(refresh);
-                return Task.FromResult(Listing());
-            },
-            openUrl: null,
-            userCatalogues: null,
-            probe: null,
-            probeSecom: null,
-            session: null);
+        var directory = TestCatalogueDirectory.Create(KnownCatalogueSources.All, registry: new FakeSecomRegistry(refresh =>
+        {
+            refreshes.Add(refresh);
+            return Listing();
+        }));
 
         // Not in any other category.
         Assert.DoesNotContain(directory.Rows, r => r.IsRegistryRow);
@@ -366,7 +354,7 @@ public sealed class SecomRegistryDirectoryTests
     public async Task List_secom_services_filters_by_product_and_probes_when_asked()
     {
         var registry = new SecomRegistry(new HttpClient(new Server()));
-        var tool = new ListSecomServicesTool(registry);
+        var tool = new ListSecomServicesTool(new SecomServiceDirectory(registry));
 
         Assert.True((await tool.InvokeAsync("s124", probe: false, TestContext.Current.CancellationToken)).TryGetValue(out var s124));
         Assert.Equal(3, s124!.Services.Count);
