@@ -104,6 +104,16 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             OpenAttributeInExaminer,
             a => IsExaminerAvailable && a is not null && !string.IsNullOrWhiteSpace(a.Code));
 
+        // Object Information's selection, for those that follow it without
+        // holding the pick report (#1397): the warnings panel and the drawing.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SelectedHit) or nameof(HasPick))
+                Selection.SetHit(_selectedHit);
+            if (e.PropertyName is nameof(WarningCard) or null)
+                Selection.SetOpenWarning(_warningCard?.Hit);
+        };
+
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
 
@@ -788,23 +798,24 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public void SetWarningPreview(NavigationalWarningCardViewModel? card) => PreviewHit = card?.Hit;
 
     /// <summary>
+    /// What Object Information shows, published for those that follow it
+    /// (#1397); its own unless the host shares one.
+    /// </summary>
+    public ObjectInformationSelection Selection { get; init; } = new();
+
+    /// <summary>
     /// The Navigational warnings panel, which Warning cards link to and zoom
-    /// through. Set by the panel; <c>null</c> without it, when cards neither
-    /// link nor zoom.
+    /// through; given at construction. <c>null</c> without it, when cards
+    /// neither link nor zoom.
     /// </summary>
     public INavigationalWarningNavigator? WarningNavigator
     {
         get => _warningNavigator;
-        set
+        init
         {
-            if (ReferenceEquals(_warningNavigator, value))
-                return;
-            if (_warningNavigator is not null)
-                _warningNavigator.WarningsChanged -= OnWarningsChanged;
             _warningNavigator = value;
             if (_warningNavigator is not null)
                 _warningNavigator.WarningsChanged += OnWarningsChanged;
-            RefreshWarningTargets();
         }
     }
 

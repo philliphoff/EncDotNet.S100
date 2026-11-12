@@ -118,14 +118,13 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
                 [new DatasetEntry("/tmp/auscoast_200.gml", "S-124")] = new FakeProcessor(Bulletin("AUSCOAST", 200, Oct(12))),
             };
             Service = new NavigationalWarningsService(Loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
-            Panel = new NavigationalWarningsViewModel(
+            Panel = TestNavigationalWarnings.Panel(
                 Service,
-                new NoPick(),
+                pick: new NoPick(),
                 viewTime: new ViewTime(at),
                 timeFormat: new Utc(),
                 loader: Loader,
                 clock: new FixedClock(Now),
-                pickReport: null,
                 viewport: null);
         }
 
@@ -261,7 +260,7 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
             },
         };
         var service = new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
-        var panel = new NavigationalWarningsViewModel(service, new NoPick(), viewTime: new ViewTime(Oct(14)), timeFormat: new Utc(), loader: loader, clock: new FixedClock(Now), pickReport: null, viewport: null);
+        var panel = TestNavigationalWarnings.Panel(service, pick: new NoPick(), viewTime: new ViewTime(Oct(14)), timeFormat: new Utc(), loader: loader, clock: new FixedClock(Now), viewport: null);
 
         var group = Assert.Single(panel.Items.OfType<NavigationalWarningGroupItem>());
         Assert.Equal(("NAVAREA XI", 0, "NAVAREA XI coordinator"), (group.Name, group.Count, group.Source));

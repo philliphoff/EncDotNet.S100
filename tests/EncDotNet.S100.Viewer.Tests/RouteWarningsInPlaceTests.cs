@@ -73,7 +73,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     public async Task Selecting_an_s124_finding_opens_its_card_at_the_eta_and_a_new_departure_re_judges_it()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
         var list = new RouteFindingsViewModel(s.Findings);
@@ -128,7 +128,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     public async Task Open_in_navigational_warnings_selects_the_warning_in_the_panel()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
         var list = new RouteFindingsViewModel(s.Findings);
@@ -150,15 +150,15 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     {
         // The oracle's "near" is the routes' 100 m cross-track limit.
         using var s = WarningsRouteCheck.Create(fixture, options: new RouteWarningOptions { NearDistanceMeters = RouteWarnings.NearDistanceMeters });
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
-        Assert.False(panel.IsRouteScopeAvailable);
-        panel.Scope = NavigationalWarningsScope.Route;
-        Assert.True(panel.IsAllScope);
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        Assert.False(panel.RouteScope.IsRouteScopeAvailable);
+        panel.RouteScope.Scope = NavigationalWarningsScope.Route;
+        Assert.True(panel.RouteScope.IsAllScope);
 
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
-        Assert.True(panel.IsRouteScopeAvailable);
-        Assert.True(panel.IsRouteScope);
+        Assert.True(panel.RouteScope.IsRouteScopeAvailable);
+        Assert.True(panel.RouteScope.IsRouteScope);
 
         var definition = SyntheticScenarios.WarningsOnRoute();
         var expected = RouteWarnings.For(definition, definition.Routes[0])
@@ -171,23 +171,23 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
             .Order()
             .ToList();
         Assert.Equal(expected, listed);
-        Assert.Equal(expected.Count, panel.OnRouteCount);
+        Assert.Equal(expected.Count, panel.RouteScope.OnRouteCount);
         Assert.Equal(
             s.Findings.Findings.Where(f => f.Category == RouteFindingCategory.Warning).Select(f => ((WarningDetails)f.Details!).Info.Reference!.Number).Order(),
             listed);
-        Assert.Equal($"On {s.Findings.CheckedRouteName} {expected.Count}", panel.RouteScopeText);
+        Assert.Equal($"On {s.Findings.CheckedRouteName} {expected.Count}", panel.RouteScope.RouteScopeText);
 
         // E3: each row says when the vessel is there.
         var survey = panel.Items.OfType<NavigationalWarningRowItem>().Single(r => r.Entry.Warning.Reference!.Number == 1);
         Assert.Equal("On route · 06:08Z", survey.RouteText);
 
         // All lists every part, and still marks the ones on the route; Check route off hides the scope.
-        panel.Scope = NavigationalWarningsScope.All;
-        Assert.Equal($"All {s.Warnings.Warnings.Count}", panel.AllScopeText);
+        panel.RouteScope.Scope = NavigationalWarningsScope.All;
+        Assert.Equal($"All {s.Warnings.Warnings.Count}", panel.RouteScope.AllScopeText);
         s.Routes.IsCheckModeActive = false;
         await s.Findings.WhenIdle();
-        Assert.False(panel.IsRouteScopeAvailable);
-        Assert.Equal(NavigationalWarningsScope.All, panel.Scope);
+        Assert.False(panel.RouteScope.IsRouteScopeAvailable);
+        Assert.Equal(NavigationalWarningsScope.All, panel.RouteScope.Scope);
         Assert.Null(panel.RouteFindingFor(survey.Entry));
     }
 
@@ -195,7 +195,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     public async Task List_navigational_warnings_gives_the_route_scope_and_each_warnings_relation()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         var tool = new ListNavigationalWarningsTool(panel, s.Warnings, new InlineInvoker());
         var ct = TestContext.Current.CancellationToken;
 
@@ -217,7 +217,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
 
         var route = Value(await tool.InvokeAsync("route", ct));
         Assert.Equal(("route", 6, 6), (route.Scope, route.OnRoute, route.Warnings.Count));
-        Assert.True(panel.IsRouteScope);
+        Assert.True(panel.RouteScope.IsRouteScope);
         Assert.DoesNotContain(route.Warnings, w => w.Route!.Relation == "off");
         Assert.True((await tool.InvokeAsync("nearby", ct)).TryGetError(out _));
     }
@@ -260,7 +260,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        using var warnings = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        using var warnings = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 1600);
 
@@ -298,23 +298,23 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
         using var host = ViewHost.Show(new NavigationalWarningsView { DataContext = panel }, width: 360, height: 900);
         Assert.False(host.IsShown("NavigationalWarnings.Scope.Route"));
 
         s.Routes.IsCheckModeActive = true;
-        WaitFor(host, () => panel.OnRouteCount > 0);
+        WaitFor(host, () => panel.RouteScope.OnRouteCount > 0);
         Assert.True(host.IsShown("NavigationalWarnings.Scope.All"));
         Assert.True(host.IsShown("NavigationalWarnings.Scope.Route"));
 
         host.Click(host.Find<RadioButton>("NavigationalWarnings.Scope.Route"));
-        Assert.True(panel.IsRouteScope);
+        Assert.True(panel.RouteScope.IsRouteScope);
         var lines = host.FindAll<TextBlock>("NavigationalWarnings.Row.Route");
-        Assert.Equal(panel.OnRouteCount, lines.Count);
+        Assert.Equal(panel.RouteScope.OnRouteCount, lines.Count);
         Assert.Contains(lines, l => Normalise(l.Text) == "On route · 06:08Z");
 
         s.Routes.IsCheckModeActive = false;
-        WaitFor(host, () => !panel.IsRouteScopeAvailable);
+        WaitFor(host, () => !panel.RouteScope.IsRouteScopeAvailable);
         Assert.False(host.IsShown("NavigationalWarnings.Scope.Route"));
         Assert.Empty(host.FindAll<TextBlock>("NavigationalWarnings.Row.Route"));
     }

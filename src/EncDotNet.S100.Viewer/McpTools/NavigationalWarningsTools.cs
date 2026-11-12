@@ -253,23 +253,23 @@ internal abstract class NavigationalWarningsToolBase
     internal static NavigationalWarningsDto ToDto(NavigationalWarningsViewModel panel, NavigationalWarningsService service)
     {
         var dto = ListDto(panel, service);
-        if (!panel.IsRouteScopeAvailable)
+        if (!panel.RouteScope.IsRouteScopeAvailable)
             return dto;
 
-        var departure = panel.RouteFindings?.Departure;
+        var departure = panel.RouteScope.Departure;
         var format = panel.TimeFormat;
         var warnings = dto.Warnings
             .Select(w => (Dto: w, Finding: service.Find(w.DatasetId, w.FeatureId) is { } entry ? panel.RouteFindingFor(entry) : null))
-            .Where(w => !panel.IsRouteScope || w.Finding is not null)
+            .Where(w => !panel.RouteScope.IsRouteScope || w.Finding is not null)
             .Select(w => w.Dto with { Route = RouteDto(w.Finding, departure, format) })
             .ToList();
         return dto with
         {
             Warnings = warnings,
-            Scope = panel.IsRouteScope ? "route" : "all",
+            Scope = panel.RouteScope.IsRouteScope ? "route" : "all",
             RouteScopeAvailable = true,
-            RouteName = panel.RouteName,
-            OnRoute = panel.OnRouteCount,
+            RouteName = panel.RouteScope.RouteName,
+            OnRoute = panel.RouteScope.OnRouteCount,
         };
     }
 
@@ -406,12 +406,12 @@ internal sealed class ListNavigationalWarningsTool : NavigationalWarningsToolBas
                 switch (scope.ToLowerInvariant())
                 {
                     case "all":
-                        Panel.Scope = NavigationalWarningsScope.All;
+                        Panel.RouteScope.Scope = NavigationalWarningsScope.All;
                         break;
                     case "route":
-                        if (!Panel.IsRouteScopeAvailable)
+                        if (!Panel.RouteScope.IsRouteScopeAvailable)
                             return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("scope", "the route scope needs Check route on; turn it on with set_check_mode"));
-                        Panel.Scope = NavigationalWarningsScope.Route;
+                        Panel.RouteScope.Scope = NavigationalWarningsScope.Route;
                         break;
                     default:
                         return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("scope", $"'{scope}' isn't a scope; use all or route"));
@@ -565,8 +565,15 @@ internal sealed class RefreshNavigationalWarningsTool : NavigationalWarningsTool
 /// <summary>Shared plumbing for the Warning card tools.</summary>
 internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
 {
-    protected WarningCardsToolBase(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
-        : base(panel, service, invoker) { }
+    protected WarningCardsToolBase(NavigationalWarningsViewModel panel, NavigationalWarningsService service, PickReportViewModel pickReport, IRouteEditInvoker invoker)
+        : base(panel, service, invoker)
+    {
+        ArgumentNullException.ThrowIfNull(pickReport);
+        PickReport = pickReport;
+    }
+
+    /// <summary>Object Information, where the Warning cards show.</summary>
+    protected PickReportViewModel PickReport { get; }
 
     internal static WarningCardsDto ToDto(PickReportViewModel? pick)
     {
@@ -627,13 +634,13 @@ internal sealed class GetWarningCardsTool : WarningCardsToolBase
 {
     public const string Name = "get_warning_cards";
 
-    public GetWarningCardsTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
-        : base(panel, service, invoker) { }
+    public GetWarningCardsTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, PickReportViewModel pickReport, IRouteEditInvoker invoker)
+        : base(panel, service, pickReport, invoker) { }
 
     public Task<ToolResult<WarningCardsDto>> InvokeAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Invoker.InvokeAsync(() => ToolResult<WarningCardsDto>.Ok(ToDto(Panel.PickReport)));
+        return Invoker.InvokeAsync(() => ToolResult<WarningCardsDto>.Ok(ToDto(PickReport)));
     }
 }
 
@@ -642,8 +649,8 @@ internal sealed class FollowWarningLinkTool : WarningCardsToolBase
 {
     public const string Name = "follow_warning_link";
 
-    public FollowWarningLinkTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
-        : base(panel, service, invoker) { }
+    public FollowWarningLinkTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, PickReportViewModel pickReport, IRouteEditInvoker invoker)
+        : base(panel, service, pickReport, invoker) { }
 
     public Task<ToolResult<WarningCardsDto>> InvokeAsync(
         string text, int? occurrence = null, string? datasetId = null, string? featureId = null, CancellationToken cancellationToken = default)
@@ -653,7 +660,7 @@ internal sealed class FollowWarningLinkTool : WarningCardsToolBase
         {
             if (string.IsNullOrWhiteSpace(text))
                 return ToolResult<WarningCardsDto>.Err(new InvalidArgument("text", "required; read the links with get_warning_cards"));
-            if (Panel.PickReport is not { } pick || FindCard(pick, datasetId, featureId) is not { } card)
+            if (PickReport is not { } pick || FindCard(pick, datasetId, featureId) is not { } card)
                 return ToolResult<WarningCardsDto>.Err(new InvalidArgument("featureId", "no Warning card is open; open one with select_navigational_warning or pick_features"));
             var matches = card.Links.Where(l => string.Equals(l.Text, text.Trim(), StringComparison.Ordinal)).ToList();
             var n = occurrence ?? 1;
@@ -664,7 +671,7 @@ internal sealed class FollowWarningLinkTool : WarningCardsToolBase
             }
 
             card.OpenLinkCommand.Execute(matches[n - 1].Target);
-            return ToolResult<WarningCardsDto>.Ok(ToDto(Panel.PickReport));
+            return ToolResult<WarningCardsDto>.Ok(ToDto(PickReport));
         });
     }
 }
@@ -674,15 +681,15 @@ internal sealed class PreviewWarningCardTool : WarningCardsToolBase
 {
     public const string Name = "preview_warning_card";
 
-    public PreviewWarningCardTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
-        : base(panel, service, invoker) { }
+    public PreviewWarningCardTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, PickReportViewModel pickReport, IRouteEditInvoker invoker)
+        : base(panel, service, pickReport, invoker) { }
 
     public Task<ToolResult<WarningCardsDto>> InvokeAsync(string? datasetId = null, string? featureId = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Invoker.InvokeAsync(() =>
         {
-            if (Panel.PickReport is not { } pick)
+            if (PickReport is not { } pick)
                 return ToolResult<WarningCardsDto>.Ok(ToDto(null));
             if (string.IsNullOrWhiteSpace(featureId))
             {
