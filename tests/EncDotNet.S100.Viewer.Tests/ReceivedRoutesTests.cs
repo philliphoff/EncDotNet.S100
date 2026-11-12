@@ -520,7 +520,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     {
         var h = new Harness();
         h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
-        var panel = new RoutesPanelViewModel(h.Routes, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(h.Routes);
 
         Assert.True(panel.IsActiveReadOnly);
         Assert.False(panel.CanEditActiveRoute);
@@ -555,14 +555,16 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     {
         var h = new Harness();
         var entry = h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
-        var panel = new RoutesPanelViewModel(h.Routes, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(h.Routes);
         panel.Passage.IsExpanded = true;
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 
         Assert.True(host.IsShown("Routes.Active.ReadOnlyBadge"));
         Assert.Equal("S-421 · BASIC.00001 ed. 1", host.Find<TextBlock>("Routes.Active.Source").Text);
         Assert.False(host.IsShown("Routes.Active.Rename"));
-        Assert.False(host.Find<ToggleButton>("Routes.EditToggle").IsEnabled);
+        // Copy to edit takes Edit's place (A8).
+        Assert.True(host.IsShown("Routes.CopyToEdit"));
+        Assert.False(host.IsShown("Routes.EditToggle"));
         Assert.True(host.IsShown("Routes.Passage.CheckSettings"));
         Assert.True(host.IsShown("Routes.Passage.RouteValues"));
         Assert.True(host.Find<TextBox>("Routes.Passage.Speed").IsReadOnly);

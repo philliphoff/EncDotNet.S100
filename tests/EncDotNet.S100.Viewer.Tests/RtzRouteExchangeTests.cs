@@ -530,9 +530,9 @@ public sealed class RtzRouteExchangeTests : IDisposable
         var received = await h.ImportAsync(Fixture("rtz-1.0-solent.rtz"));
         var path = Path.Combine(_temp, "dialog.rtz");
         var dialogs = new RecordingDialogs(exportPath: path);
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: dialogs, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null);
+        var panel = TestRoutesPanel.Create(h.Routes, exchange: h.Exchange, dialogs: dialogs);
 
-        panel.ExportRouteCommand.Execute(panel.Routes.Single());
+        panel.Exchange.ExportRouteCommand.Execute(panel.Routes.Single());
         var dialog = Assert.IsType<RouteExportDialogViewModel>(Assert.Single(dialogs.Shown));
         using (var host = ViewHost.Show(new RouteExportDialogView { DataContext = dialog }, width: 540, height: 700))
         {

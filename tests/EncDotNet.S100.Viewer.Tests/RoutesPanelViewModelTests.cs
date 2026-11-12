@@ -11,7 +11,7 @@ public class RoutesPanelViewModelTests
     private static (RoutesService Service, RoutesPanelViewModel Vm) Create()
     {
         var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
-        var vm = new RoutesPanelViewModel(svc, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
+        var vm = TestRoutesPanel.Create(svc);
         return (svc, vm);
     }
 
@@ -429,7 +429,7 @@ public class RoutesPanelViewModelTests
 
         TwoPointRoute(svc);
 
-        Assert.False(vm.CanCheckPassage); // no check service in this panel
+        Assert.True(vm.CanCheckPassage);
         Assert.False(vm.IsCheckingPassage);
         Assert.Equal("Check the route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
     }

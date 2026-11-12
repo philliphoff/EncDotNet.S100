@@ -224,7 +224,7 @@ public sealed class RouteCheckReportTests : IDisposable
             Finding("route_check.warning.0", RouteFindingGroup.Check, 1500));
         var f = NoDraft(stub);
         using var findings = Findings(f);
-        var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(f.Routes, check: f.Check, findings: findings, timeFormat: new Utc());
         var clearance = new ClearanceViewModel(f.Check, mariner: null, timeFormat: null, theme: null);
 
         Assert.False(panel.HasDraft);
@@ -510,7 +510,7 @@ public sealed class RouteCheckReportTests : IDisposable
             void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
             var f = NoDraft(Post, new StubCheck("stub", Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000)));
             using var findings = Findings(f);
-            var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+            var panel = TestRoutesPanel.Create(f.Routes, check: f.Check, findings: findings, timeFormat: new Utc());
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
             var toggle = host.Find<Avalonia.Controls.Primitives.ToggleButton>("Routes.CheckRouteToggle");

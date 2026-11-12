@@ -91,7 +91,7 @@ public sealed partial class LiveAccessibleNameTests
     public async Task Route_rows_have_real_names()
     {
         var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
-        var routes = new RoutesPanelViewModel(service, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
+        var routes = TestRoutesPanel.Create(service);
         var route = service.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(0, 1));
