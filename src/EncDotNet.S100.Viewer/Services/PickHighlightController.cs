@@ -38,7 +38,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Appearance combines the user's accent colour (from the shared
 /// <see cref="IMeasureOverlayAppearanceProvider"/>, so the highlight tracks
 /// accent changes exactly like the measure overlay) with the active chart
-/// palette (from <see cref="SettingsViewModel"/>): the marker's white casing
+/// palette (from <see cref="ViewerSettingsService"/>): the marker's white casing
 /// is dimmed against a dark Dusk/Night basemap to avoid glare.
 /// </para>
 /// </remarks>
@@ -48,7 +48,7 @@ internal sealed class PickHighlightController : IDisposable
     private readonly PickReportViewModel _pickReport;
     private readonly IDatasetCatalog _catalog;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
     private readonly NavigationalWarningDrawingService? _warningDrawing;
@@ -65,7 +65,7 @@ internal sealed class PickHighlightController : IDisposable
     /// <param name="catalog">Loaded-dataset catalog used to resolve feature geometry.</param>
     /// <param name="appearance">Accent/theme provider for the highlight colours.</param>
     /// <param name="settings">
-    /// Settings view-model supplying the active chart palette, which drives the
+    /// Settings service supplying the active chart palette, which drives the
     /// marker's casing colour (dimmed against a dark Dusk/Night basemap).
     /// </param>
     /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
@@ -79,7 +79,7 @@ internal sealed class PickHighlightController : IDisposable
         PickReportViewModel pickReport,
         IDatasetCatalog catalog,
         IMeasureOverlayAppearanceProvider appearance,
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         Action<Action> marshal,
         NavigationalWarningDrawingService? warningDrawing)
     {

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <Description>A catalogue of tide stations for EncDotNet.S100.Tides: harmonic and subordinate stations with their constituents, time and height differences and tidal datums, a NOAA CO-OPS metadata client with a cheap check for newer data, a documented JSON file format for an offline cache or your own stations, and stations near a point or in a box. Predicts a station on a chosen S-100 vertical datum, with its provenance.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Tides.Stations.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Tides\EncDotNet.S100.Tides.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -27,12 +27,12 @@ internal sealed class PickHit
     public string? ProductSpec { get; init; }
 
     /// <summary>
-    /// Optional time-series view model used by the pick panel to render a
-    /// chart when this hit represents a fixed-station observation
-    /// (S-104 / S-111 dcf=8). <c>null</c> for every other feature shape;
-    /// when set, the panel shows a chart section above the attribute list.
+    /// The station's time series when this hit is a fixed-station observation
+    /// (S-104 / S-111 dcf=8); <c>null</c> for every other feature shape.
+    /// Object Information charts it above the attribute list (#1401: the pick
+    /// report builds the chart).
     /// </summary>
-    public StationTimeSeriesViewModel? StationSeries { get; init; }
+    public StationTimeSeriesSnapshot? StationSeries { get; init; }
 
     /// <summary>
     /// WMO / SIGRID-3 ice egg-code projection for the hit when it is an S-411
@@ -55,8 +55,22 @@ internal sealed class PickHit
     /// </summary>
     public bool NotForNavigation { get; init; }
 
+    /// <summary>
+    /// The provenance strip when the hit is a NATO Additional Military Layers
+    /// feature (AML tag, cell, marking, drawn state; #1372); <see langword="null"/>
+    /// for every other product.
+    /// </summary>
+    public AmlPickProvenance? Aml { get; init; }
+
     /// <summary>The data's credit from its Library source (#1075), "NOAA/NCEP GFS-Wave · Public domain"; null for none.</summary>
     public string? Credit { get; init; }
+
+    /// <summary>
+    /// The session id (<see cref="DatasetEntry.Id"/>) of the loaded dataset the
+    /// hit came from, which finds the hit's Legend section and row (#1410);
+    /// <see langword="null"/> when no loaded entry owns it.
+    /// </summary>
+    public string? DatasetId { get; init; }
 
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];

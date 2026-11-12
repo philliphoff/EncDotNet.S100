@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// controller stays focused on AIS→helm kinematics and remains testable
 /// without settings/registry doubles. The overlay-enable side effect is
 /// injected as a delegate so it can route through
-/// <c>SettingsViewModel.OwnShipOverlayEnabled</c> (which persists and
+/// <c>ViewerSettingsService.OwnShipOverlayEnabled</c> (which persists and
 /// raises the wired change event) rather than poking the source directly.
 /// </remarks>
 internal sealed class PirateModeCoordinator

@@ -25,7 +25,7 @@ public class ExaminerViewModelTests
     public void Settings_default_examiner_links_enabled()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         Assert.True(vm.ExaminerLinksEnabled);
         Assert.Equal(ViewerSettings.DefaultS100ExaminerBaseUrl, vm.ExaminerBaseUrl);
     }
@@ -34,7 +34,7 @@ public class ExaminerViewModelTests
     public void Settings_toggle_persists()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null) { ExaminerLinksEnabled = false };
+        var vm = new ViewerSettingsService(s) { ExaminerLinksEnabled = false };
         Assert.False(s.S100ExaminerLinksEnabled);
     }
 
@@ -42,10 +42,10 @@ public class ExaminerViewModelTests
     public void Settings_base_url_persists_and_resets()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null) { ExaminerBaseUrl = "https://mirror.example.org/" };
+        var vm = new ViewerSettingsService(s) { ExaminerBaseUrl = "https://mirror.example.org/" };
         Assert.Equal("https://mirror.example.org/", s.S100ExaminerBaseUrl);
 
-        vm.ResetExaminerBaseUrlCommand.Execute(null);
+        new IntegrationsSettingsPageViewModel(vm).ResetExaminerBaseUrlCommand.Execute(null);
         Assert.Equal(ViewerSettings.DefaultS100ExaminerBaseUrl, vm.ExaminerBaseUrl);
         Assert.Equal(ViewerSettings.DefaultS100ExaminerBaseUrl, s.S100ExaminerBaseUrl);
     }
@@ -54,7 +54,7 @@ public class ExaminerViewModelTests
     public void Settings_blank_base_url_falls_back_to_default()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null) { ExaminerBaseUrl = "   " };
+        var vm = new ViewerSettingsService(s) { ExaminerBaseUrl = "   " };
         Assert.Equal(ViewerSettings.DefaultS100ExaminerBaseUrl, vm.ExaminerBaseUrl);
     }
 
@@ -64,7 +64,7 @@ public class ExaminerViewModelTests
         var settings = NewSettings();
         var opener = new StubUrlOpener();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(settings, links, opener);
+        var vm = new FeatureCataloguesViewModel(settings, TestPickReport.Examiner(links, opener));
 
         vm.AddBuiltIn("S-101", "(built-in)");
         var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
@@ -79,7 +79,7 @@ public class ExaminerViewModelTests
     {
         var settings = NewSettings();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(settings, links, new StubUrlOpener());
+        var vm = new FeatureCataloguesViewModel(settings, TestPickReport.Examiner(links, new StubUrlOpener()));
 
         vm.AddBuiltIn("S-101", "(built-in)");
         var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
@@ -100,7 +100,7 @@ public class ExaminerViewModelTests
     public void Settings_change_raises_examiner_settings_changed()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(s);
         var count = 0;
         vm.ExaminerSettingsChanged += () => count++;
 
@@ -115,7 +115,7 @@ public class ExaminerViewModelTests
     {
         var settings = NewSettings();
         var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(settings, links, new StubUrlOpener());
+        var vm = new FeatureCataloguesViewModel(settings, TestPickReport.Examiner(links, new StubUrlOpener()));
 
         vm.AddBuiltIn("S-101", "(built-in)");
         var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");

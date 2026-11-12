@@ -171,7 +171,7 @@ internal sealed partial class ViewerSettings
     // Mariner settings (S-100 Part 9 §4.2). Depth values are stored in
     // metres regardless of the user's chosen DepthUnit. All fields are
     // nullable so older settings.json files keep working — defaults are
-    // applied by SettingsViewModel / MarinerSettingsProvider when null.
+    // applied by ViewerSettingsService / MarinerSettingsProvider when null.
 
     /// <summary>Safety contour depth in metres.</summary>
     public double? SafetyContour { get; set; }
@@ -350,6 +350,20 @@ internal sealed partial class ViewerSettings
     public bool EcdisShowNavigationalWarnings { get; set; } = true;
 
     /// <summary>
+    /// The AML products the display panel's Additional Military Layers section
+    /// has switched off, as a comma-separated list of product codes
+    /// (<c>CLB</c>, <c>RAL</c>, …, <c>3.0</c>). Empty by default: every
+    /// product shows (AML handoff decision 24).
+    /// </summary>
+    public string EcdisHiddenAmlProducts { get; set; } = "";
+
+    /// <summary>
+    /// The Additional Military Layers section's Follow AML scale bands switch
+    /// (AML handoff decision 26). On by default.
+    /// </summary>
+    public bool EcdisFollowAmlScaleBands { get; set; } = true;
+
+    /// <summary>
     /// The Display controls' map-wide switches for optional product layers,
     /// keyed by the processor's sub-layer key: today the Weather section's
     /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
@@ -363,6 +377,15 @@ internal sealed partial class ViewerSettings
     /// of isotherms, precipitation, thunderstorm risk and cloud cover off).
     /// </summary>
     public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
+        = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Map-wide settings of optional layers that are more than on or off
+    /// (<c>EcdisDisplaySettings.LayerOptions</c>), such as
+    /// <c>s102.relief.strength</c> (<c>subtle</c>, <c>medium</c>, <c>strong</c>).
+    /// A missing key follows the layer's default.
+    /// </summary>
+    public Dictionary<string, string> EcdisLayerOptions { get; set; }
         = new(StringComparer.Ordinal);
 
     /// <summary>

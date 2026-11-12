@@ -4,7 +4,6 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Routing.Exchange;
 using EncDotNet.S100.Viewer.Services;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
@@ -426,8 +425,4 @@ internal static class ReceivedRouteMcpAdapters
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }

@@ -13,7 +13,7 @@ using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class DatasetEntry : ViewModelBase
+internal sealed partial class DatasetEntry : ViewModelBase
 {
     private readonly MapDatasetId _id;
     private MapDataset? _mapDataset;
@@ -276,7 +276,11 @@ internal sealed class DatasetEntry : ViewModelBase
     public bool IsLoading
     {
         get => _isLoading;
-        set => SetProperty(ref _isLoading, value);
+        set
+        {
+            if (SetProperty(ref _isLoading, value) && IsAml)
+                OnPropertyChanged(nameof(AmlStateText));
+        }
     }
 
     /// <summary>
@@ -395,7 +399,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public bool IsVisible
     {
-        get => _mapDataset?.IsVisible ?? _isVisible;
+        get => _isVisible;
         set
         {
             if (IsVisible != value)
@@ -404,7 +408,29 @@ internal sealed class DatasetEntry : ViewModelBase
                 UpdateMapDataset();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RowOpacity));
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
             }
+        }
+    }
+
+    private bool _isHiddenByDisplay;
+    /// <summary>
+    /// Whether a display control hides this dataset on the map, whatever
+    /// <see cref="IsVisible"/> says: today the AML product switches and scale
+    /// bands (<c>AmlDisplayService</c>, AML handoff decisions 24 and 26). Unlike
+    /// <see cref="IsVisible"/> it isn't the row's own setting, so the row's eye
+    /// keeps its state. Changing it doesn't re-render the dataset.
+    /// </summary>
+    public bool IsHiddenByDisplay
+    {
+        get => _isHiddenByDisplay;
+        set
+        {
+            if (_isHiddenByDisplay == value) return;
+            _isHiddenByDisplay = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 
@@ -881,6 +907,7 @@ internal sealed class DatasetEntry : ViewModelBase
             ReconcileSubLayerProjectionSubscriptions();
             UpdateMapDataset();
             OnPropertyChanged(nameof(HasSubLayers));
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         };
     }
 
@@ -906,7 +933,7 @@ internal sealed class DatasetEntry : ViewModelBase
         _id,
         DisplayName,
         metadata,
-        _isVisible,
+        _isVisible && !_isHiddenByDisplay,
         _isActive,
         _opacity,
         _availableTimes,
@@ -938,6 +965,8 @@ internal sealed class DatasetEntry : ViewModelBase
         if (e.PropertyName == nameof(DatasetSubLayer.State))
         {
             UpdateMapDataset();
+            if (_aml is not null)
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 }
@@ -1315,6 +1344,39 @@ internal sealed class DatasetsViewModel : ViewModelBase
     public ICommand ResetOpacityCommand { get; }
 
     /// <summary>
+    /// Opens the Legend tab at the dataset's section: <b>Show legend</b> in a
+    /// row's menu (#1410, legends design note D3). Enabled, and shown, only
+    /// for a dataset that draws legend rows; nothing until
+    /// <see cref="AttachLegend"/>.
+    /// </summary>
+    public IRelayCommand<DatasetEntry> ShowLegendCommand { get; }
+
+    private Services.Legends.LegendService? _legend;
+
+    /// <summary>Connects <see cref="ShowLegendCommand"/> to the Legend tab's service.</summary>
+    /// <param name="legend">The legend service.</param>
+    internal void AttachLegend(Services.Legends.LegendService legend)
+    {
+        ArgumentNullException.ThrowIfNull(legend);
+        if (_legend is not null)
+            _legend.Changed -= OnLegendChanged;
+        _legend = legend;
+        legend.Changed += OnLegendChanged;
+        ShowLegendCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnLegendChanged(object? sender, EventArgs e) => ShowLegendCommand.NotifyCanExecuteChanged();
+
+    private string? LegendSectionOf(DatasetEntry? entry) =>
+        entry is null ? null : _legend?.SectionIdOfDataset(entry.Id.Value);
+
+    private void ShowLegend(DatasetEntry? entry)
+    {
+        if (LegendSectionOf(entry) is { } sectionId)
+            _legend!.Show(sectionId);
+    }
+
+    /// <summary>
     /// Raised with the file's path when <see cref="LoadFromPathAsync"/> (or
     /// <see cref="ReportUnrecognizedFile"/>) rejects a file because no product
     /// recognised it. The window shows it as a warning toast, saying why when
@@ -1375,6 +1437,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         HideAllCommand = new RelayCommand(HideAll);
         IsolateCommand = new RelayCommand<DatasetEntry>(Isolate);
         ResetOpacityCommand = new RelayCommand(ResetOpacity);
+        ShowLegendCommand = new RelayCommand<DatasetEntry>(ShowLegend, entry => LegendSectionOf(entry) is not null);
 
         // Re-apply paint order whenever the entries collection is
         // mutated by reorder commands. Add/remove side-effects flow

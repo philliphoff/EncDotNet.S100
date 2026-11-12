@@ -1,6 +1,7 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S124.DataModel;
 using EncDotNet.S100.Datasets.S124.Validation;
@@ -137,12 +138,78 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             return null;
         }
 
-        var parts = _dataset.Features.Where(IsPart).ToList();
-        if (parts.Count == 0 || !parts.All(p => hidden.Contains(p.Id)))
+        if (!HidesEveryPart(_dataset, hidden))
             return null;
 
         _undrawn = _dataset.Features.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
         return $"S-124 Navigational Warnings — {FileName}\nHidden (no warning drawn)";
+    }
+
+    /// <summary>The S-124 catalogue's point symbol for a warning position.</summary>
+    public const string WarningSymbol = "NavigationalWarningFeaturePart";
+
+    /// <summary>The S-124 catalogue's symbol marking a warning area.</summary>
+    public const string WarningAreaSymbol = "NavigationalWarningFeaturePartPoint";
+
+    /// <summary>The S-124 catalogue's symbol for an approximate position.</summary>
+    public const string ApproximatePositionSymbol = "ApproximatePosition";
+
+    /// <summary>The S-124 catalogue's line style for a warning line or restricted area.</summary>
+    public const string WarningLineStyle = "NavigationalWarningFeaturePartLine";
+
+    /// <summary>
+    /// The S-124 key: one row for each kind of mark the catalogue drew for
+    /// this dataset, in the catalogue's own symbols, line style and colours:
+    /// the warning area outline (drawn inline by <c>NavwarnPart.xsl</c>), the
+    /// warning line, and the position, area and approximate-position symbols.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions just emitted.</param>
+    /// <param name="legend">The legend builder over the catalogue's assets.</param>
+    protected override IReadOnlyList<LegendEntry>? BuildLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend) =>
+        BuildWarningLegend(instructions, legend);
+
+    /// <summary>
+    /// Builds the S-124 key for <paramref name="instructions"/> (see
+    /// <see cref="BuildLegend"/>): area, line, position, area mark and
+    /// approximate position, in that order, each only when drawn.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions.</param>
+    /// <param name="legend">The legend builder over the S-124 catalogue's assets.</param>
+    internal static IReadOnlyList<LegendEntry> BuildWarningLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend)
+    {
+        var symbols = instructions.OfType<PointInstruction>()
+            .Select(p => p.SymbolReference)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var lines = instructions.OfType<LineInstruction>().ToList();
+
+        var rows = new List<LegendEntry>();
+        if (lines.FirstOrDefault(l =>
+                l.LineColor is not null && l.LineStyleReference is null or LineInstruction.SimpleLineStyleReference) is { } outline)
+            rows.Add(CatalogueLegendBuilder.Area("Warning area", legend.Sample(outline)));
+        if (lines.Any(l => l.LineStyleReference == WarningLineStyle))
+            TryAdd(() => legend.Line(WarningLineStyle, "Warning line or restricted area"));
+        if (symbols.Contains(WarningSymbol))
+            TryAdd(() => legend.Symbol(WarningSymbol, "Warning position"));
+        if (symbols.Contains(WarningAreaSymbol))
+            TryAdd(() => legend.Symbol(WarningAreaSymbol, "Warning area mark"));
+        if (symbols.Contains(ApproximatePositionSymbol))
+            TryAdd(() => legend.Symbol(ApproximatePositionSymbol, "Approximate position"));
+        return rows;
+
+        // A missing catalogue asset drops its row rather than the portrayal.
+        void TryAdd(Func<LegendEntry> row)
+        {
+            try
+            {
+                rows.Add(row());
+            }
+            catch (KeyNotFoundException)
+            {
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -152,7 +219,33 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
     /// The features a render with <paramref name="hidden"/> leaves out: the
     /// hidden parts and what only they reference.
     /// </summary>
-    internal IReadOnlySet<string> UndrawnFeatures(IReadOnlySet<string>? hidden)
+    internal IReadOnlySet<string> UndrawnFeatures(IReadOnlySet<string>? hidden) =>
+        UndrawnFeatures(_dataset, hidden);
+
+    /// <summary>
+    /// The features of <paramref name="dataset"/> a render with
+    /// <paramref name="hidden"/> neither draws nor picks: every feature when
+    /// every part is hidden, else the hidden parts and what only they
+    /// reference. For the catalog's identify and pick.
+    /// </summary>
+    /// <param name="dataset">The dataset.</param>
+    /// <param name="hidden">The hidden part ids, or null for none.</param>
+    internal static IReadOnlySet<string> UndrawnFeaturesOf(S124Dataset dataset, IReadOnlySet<string>? hidden)
+    {
+        if (hidden is not { Count: > 0 })
+            return Empty;
+        return HidesEveryPart(dataset, hidden)
+            ? dataset.Features.Select(f => f.Id).ToHashSet(StringComparer.Ordinal)
+            : UndrawnFeatures(dataset, hidden);
+    }
+
+    private static bool HidesEveryPart(S124Dataset dataset, IReadOnlySet<string> hidden)
+    {
+        var parts = dataset.Features.Where(IsPart).ToList();
+        return parts.Count > 0 && parts.All(p => hidden.Contains(p.Id));
+    }
+
+    private static IReadOnlySet<string> UndrawnFeatures(S124Dataset dataset, IReadOnlySet<string>? hidden)
     {
         if (hidden is not { Count: > 0 })
             return Empty;
@@ -161,7 +254,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
         // Areas and texts referenced by at least one drawn part.
         var kept = new HashSet<string>(StringComparer.Ordinal);
         var referencedByHidden = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var feature in _dataset.Features)
+        foreach (var feature in dataset.Features)
         {
             if (!IsPart(feature))
                 continue;
@@ -175,7 +268,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             }
         }
 
-        foreach (var feature in _dataset.Features)
+        foreach (var feature in dataset.Features)
         {
             if (feature.FeatureType is "NavwarnAreaAffected" or "TextPlacement"
                 && referencedByHidden.Contains(feature.Id)

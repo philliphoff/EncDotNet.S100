@@ -759,6 +759,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            if (context?.SafetyContourHalo == true)
+                prepared = SafetyContourHalo.Apply(prepared);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
 
@@ -891,6 +893,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         _portrayalTimeIntervals = PortrayalTimeFilter.Intervals(unfiltered);
         var prepared = PortrayalTimeFilter.Apply(
             VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
+        // AML CLB drawn over the chart: the safety contour keeps its weight
+        // and gains a halo (AML design handoff decision 22).
+        if (context?.SafetyContourHalo == true)
+            prepared = SafetyContourHalo.Apply(prepared);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
         _drawingPriorities = DrawingPriorities(prepared);
 
@@ -1001,6 +1007,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             LayerNames = new[] { $"{LayerKeyPrefix}.areas", $"{LayerKeyPrefix}.linework" },
@@ -1288,6 +1295,24 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     /// cell declares none.
     /// </summary>
     public CellRank? CellRank => CellExtent.Rank;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// DSID <c>DSED</c> (its leading whole number), the dataset reference date,
+    /// and the last update applied (<see cref="UpdateReport"/>) or else the
+    /// update number in the file name.
+    /// </remarks>
+    public ChartCellEdition? Edition =>
+        _dataset.Document.Identification is { EditionNumber: int edition } id
+            ? new ChartCellEdition(
+                edition,
+                _updateReport?.AppliedThroughUpdateNumber ?? id.UpdateNumber,
+                ChartCellEditions.Date(id.DatasetReferenceDate))
+            : null;
+
+    /// <inheritdoc/>
+    /// <remarks>The finest <c>DataCoverage.maximumDisplayScale</c>.</remarks>
+    public int? CompilationScale => Metadata.DisplayScale?.Maximum;
 
     /// <summary>
     /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell

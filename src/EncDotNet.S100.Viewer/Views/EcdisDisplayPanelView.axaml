@@ -7,6 +7,56 @@
              x:Class="EncDotNet.S100.Viewer.Views.EcdisDisplayPanelView"
              x:DataType="vm:EcdisDisplayPanelViewModel">
 
+    <UserControl.Styles>
+        <!-- The AML section's Legend link: text only, in the accent colour. -->
+        <Style Selector="Button.amlLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                                      Background="Transparent" Foreground="{TemplateBinding Foreground}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.amlLink:pointerover">
+            <Setter Property="Opacity" Value="0.8" />
+        </Style>
+        <!-- The relief shading strength: a segmented strip, as the Library's state segments. -->
+        <Style Selector="Border.reliefSegments">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="3" />
+        </Style>
+        <Style Selector="RadioButton.reliefSegment">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Segment" CornerRadius="6" MinHeight="26" Padding="6,0" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.reliefSegment:checked /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <Style Selector="RadioButton.reliefSegment:not(:checked)">
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+    </UserControl.Styles>
+
     <Grid RowDefinitions="Auto,*">
         <!-- With nothing to control yet, the View section still shows above
              the empty state: a view chosen now applies to what loads later. -->
@@ -92,6 +142,107 @@
                     </Grid>
                 </StackPanel>
 
+                <!-- Additional Military Layers (AML handoff B4a, decisions 23, 24, 26;
+                     #1374): a switch per product, loaded ones first; Follow AML scale
+                     bands; the fixed no-checks note; and the Legend link, which opens
+                     the Legend tab at the AML section (legends D8, D18, #1409).
+                     Shown only while an AML cell is loaded. -->
+                <Panel IsVisible="{Binding HasAml}">
+                    <StackPanel Spacing="4"
+                                DataContext="{Binding Aml}"
+                                x:DataType="vm:AmlDisplaySectionViewModel"
+                                AutomationProperties.AutomationId="EcdisDisplayPanel.Aml">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Classes="amlLink"
+                                    Content="{x:Static loc:Strings.AmlDisplay_Legend}"
+                                    Command="{Binding ShowLegendCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.AmlDisplay_LegendLinkName}"
+                                    AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.Legend"
+                                    AutomationProperties.Name="{x:Static loc:Strings.AmlDisplay_LegendLinkName}" />
+                            <TextBlock Text="{x:Static loc:Strings.Aml_Heading}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="0.5"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding Products}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AmlProductRowViewModel">
+                                    <Grid ColumnDefinitions="Auto,Auto,40,*,Auto"
+                                          Margin="0,2"
+                                          Opacity="{Binding RowOpacity}"
+                                          ToolTip.Tip="{Binding ToolTip}">
+                                        <CheckBox Grid.Column="0"
+                                                  IsChecked="{Binding IsVisible}"
+                                                  IsVisible="{Binding IsLoaded}"
+                                                  MinWidth="0"
+                                                  Padding="0"
+                                                  Margin="0,0,6,0"
+                                                  VerticalAlignment="Center"
+                                                  AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.Product"
+                                                  AutomationProperties.Name="{Binding Code}"
+                                                  AutomationProperties.HelpText="{Binding ToolTip}" />
+                                        <!-- Keeps an unloaded row's text in line with the loaded rows. -->
+                                        <Border Grid.Column="0" Width="26" IsVisible="{Binding !IsLoaded}" />
+                                        <Border Grid.Column="1"
+                                                Width="10"
+                                                Height="10"
+                                                CornerRadius="2"
+                                                Margin="0,0,8,0"
+                                                Background="{Binding Swatch}"
+                                                IsVisible="{Binding IsLoaded}"
+                                                VerticalAlignment="Center" />
+                                        <Border Grid.Column="1" Width="18" IsVisible="{Binding !IsLoaded}" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Code}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding Name}"
+                                                   Opacity="0.75"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,8,0"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="4"
+                                                   Text="{Binding CountText}"
+                                                   FontSize="11"
+                                                   Opacity="0.6"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{x:Static loc:Strings.AmlDisplay_ScaleHeader}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   LetterSpacing="0.5"
+                                   Opacity="0.6"
+                                   Margin="0,6,0,0" />
+                        <CheckBox Content="{x:Static loc:Strings.AmlDisplay_FollowScaleBands}"
+                                  IsChecked="{Binding FollowScaleBands}"
+                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_AmlDisplay_FollowScaleBands}"
+                                  AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.FollowScaleBands"
+                                  AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_AmlDisplay_FollowScaleBands}" />
+                        <Border Background="{DynamicResource MutedBackgroundColor}"
+                                CornerRadius="6"
+                                Padding="10,8"
+                                Margin="0,4,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Width="12" Height="12" Opacity="0.7" VerticalAlignment="Top" Margin="0,2,0,0"
+                                          Data="M12,2A10,10 0 1,0 22,12A10,10 0 0,0 12,2M11,7H13V9H11V7M11,11H13V17H11V11Z" />
+                                <TextBlock Text="{Binding NoChecksNote}"
+                                           FontSize="11"
+                                           Opacity="0.8"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="240"
+                                           AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.NoChecksNote" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Panel>
+
                 <!-- Product overlays the mariner switches on and off (S-98 §6.1.1).
                      Navigational warnings (#995): off draws no S-124 warning at all;
                      the Navigational warnings panel still lists them. -->
@@ -108,6 +259,48 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.NavigationalWarnings"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_NavigationalWarnings}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_NavigationalWarnings}" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Bathymetry: the S-102 relief shading switch, map-wide and kept
+                     between sessions. Shown while an S-102 dataset is loaded.
+                     Relief shading is a display aid, not S-102 portrayal, so it
+                     is off until switched on. -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasBathymetryData}">
+                    <TextBlock Text="{x:Static loc:Strings.EcdisPanel_BathymetryHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefShading}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefShading}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsReliefShadingVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefShading"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefShading}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefShading}" />
+                    </Grid>
+                    <!-- Strength, while relief is on (design note s102-relief-design.md section 2). -->
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" IsVisible="{Binding IsReliefShadingVisible}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefStrength}">
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Opacity="0.8"
+                                   Text="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefStrength}" />
+                        <Border Grid.Column="1" Classes="reliefSegments">
+                            <UniformGrid Rows="1">
+                                <RadioButton Classes="reliefSegment" GroupName="ReliefStrength" IsChecked="{Binding IsReliefSubtle}"
+                                             Content="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefSubtle}"
+                                             AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefStrength.Subtle"
+                                             AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefSubtle}" />
+                                <RadioButton Classes="reliefSegment" GroupName="ReliefStrength" IsChecked="{Binding IsReliefMedium}"
+                                             Content="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefMedium}"
+                                             AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefStrength.Medium"
+                                             AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefMedium}" />
+                                <RadioButton Classes="reliefSegment" GroupName="ReliefStrength" IsChecked="{Binding IsReliefStrong}"
+                                             Content="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefStrong}"
+                                             AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefStrength.Strong"
+                                             AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefStrong}" />
+                            </UniformGrid>
+                        </Border>
                     </Grid>
                 </StackPanel>
 

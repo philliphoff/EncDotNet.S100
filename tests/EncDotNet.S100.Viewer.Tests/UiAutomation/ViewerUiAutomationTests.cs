@@ -76,13 +76,7 @@ public sealed class ViewerUiAutomationTests
         using var library = context.CreateService();
         library.Initialize();
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null)),
-                openUrl: null,
-                userCatalogues: null,
-                loadSecomRegistry: null,
-                probeSecom: null,
-                session: null),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
@@ -126,7 +120,7 @@ public sealed class ViewerUiAutomationTests
         library.Initialize();
         library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, context.CreateS57ExchangeSet("Charts"))]);
         await library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,
@@ -135,7 +129,7 @@ public sealed class ViewerUiAutomationTests
             sync: null);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
         var automation = Automation(host);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
 
         var tree = await automation.GetTreeAsync(Interactive with { Root = new UiTarget("Library.Tree", null) });
         var node = Flatten(tree.Roots[0].Element).First(e => e.Role == "treeItem" && e.Name == "Charts");
@@ -151,11 +145,11 @@ public sealed class ViewerUiAutomationTests
         // desktop the menu is a popup root, listed as a root of kind "popup".)
         var source = collection.Children.Single();
         var sourceNode = Flatten(tree.Roots[0].Element).Last(e => e.Role == "treeItem");
-        Assert.Same(collection, panel.SelectedNode);
+        Assert.Same(collection, panel.Tree.SelectedNode);
         await automation.ActAsync(new UiTarget(null, sourceNode.Ref), UiAction.ContextMenu, null);
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.ContextMenu, null);
-        Assert.Same(collection, panel.SelectedNode);
+        Assert.Same(collection, panel.Tree.SelectedNode);
         var withMenu = await automation.GetTreeAsync(Interactive);
         Assert.Contains(withMenu.Roots.SelectMany(r => Flatten(r.Element)), e => e.Id == "Library.NodeMenu.Rename");
         await automation.ActAsync(new UiTarget("Library.NodeMenu.Rename", null), UiAction.Invoke, null);

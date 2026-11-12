@@ -88,6 +88,7 @@ public sealed class MapPresentationState
         Mariner = mariner ?? source.Mariner;
         DepthAdjustment = source.DepthAdjustment;
         DisplayTimeZone = source.DisplayTimeZone;
+        SafetyContourHalo = source.SafetyContourHalo;
     }
 
     private MapPresentationState(MapPresentationState source, IDepthAdjustment? depthAdjustment)
@@ -100,6 +101,12 @@ public sealed class MapPresentationState
         : this(source)
     {
         DisplayTimeZone = displayTimeZone;
+    }
+
+    private MapPresentationState(MapPresentationState source, bool safetyContourHalo)
+        : this(source)
+    {
+        SafetyContourHalo = safetyContourHalo;
     }
 
     /// <summary>The S-100 colour palette applied across the map.</summary>
@@ -187,6 +194,19 @@ public sealed class MapPresentationState
         new(this, depthAdjustment);
 
     /// <summary>
+    /// Whether the chart's safety contour gets a halo
+    /// (<see cref="RenderContext.SafetyContourHalo"/>): on while another
+    /// product draws contours over the chart, as AML CLB does.
+    /// </summary>
+    public bool SafetyContourHalo { get; }
+
+    /// <summary>Returns a copy with <see cref="SafetyContourHalo"/> replaced.</summary>
+    /// <param name="safetyContourHalo">Whether the safety contour gets a halo.</param>
+    /// <returns>A new presentation state, or this one when it is unchanged.</returns>
+    public MapPresentationState WithSafetyContourHalo(bool safetyContourHalo) =>
+        safetyContourHalo == SafetyContourHalo ? this : new(this, safetyContourHalo);
+
+    /// <summary>
     /// Returns a copy of this snapshot with <see cref="Mariner"/> replaced.
     /// </summary>
     /// <param name="mariner">The mariner-configurable portrayal settings.</param>
@@ -234,6 +254,7 @@ public sealed class MapPresentationState
             Mariner = Mariner,
             DepthAdjustment = DepthAdjustment,
             DisplayTimeZone = DisplayTimeZone,
+            SafetyContourHalo = SafetyContourHalo,
         };
 
         var displayModeId = EcdisDisplay.ActiveDisplayModes.GetValueOrDefault(
@@ -289,6 +310,7 @@ public sealed class MapPresentationState
             ActiveDisplayModes = settings.ActiveDisplayModes.ToFrozenDictionary(
                 StringComparer.OrdinalIgnoreCase),
             LayerVisibility = settings.LayerVisibility.ToFrozenDictionary(StringComparer.Ordinal),
+            LayerOptions = settings.LayerOptions.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
 }

@@ -125,6 +125,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedRightTabId));
                 OnPropertyChanged(nameof(RightDockTitle));
+                OnPropertyChanged(nameof(RightDockEdgeTooltip));
+                OnPropertyChanged(nameof(IsLegendTabShown));
+                UpdateRightTabsShown();
 
                 // PR-M3: persist the selected right-dock tab id so the
                 // user's last choice survives restart. Both user clicks
@@ -243,10 +246,25 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         get => _isRightDockOpen;
         set
         {
+            // Legends D9: opening the dock where it would leave the map under
+            // 480 px opens it folded to its edge tab instead.
+            if (value && !_isRightDockOpen && !_isRightDockFolded && WouldLeaveMapNarrow())
+            {
+                _isRightDockFolded = true;
+                _isRightDockNarrowFolded = true;
+                OnPropertyChanged(nameof(IsRightDockFolded));
+            }
+            else if (!value && _isRightDockNarrowFolded)
+            {
+                // Closing forgets the narrow fold; the next open measures again.
+                _isRightDockNarrowFolded = false;
+                _isRightDockOverlaid = false;
+                _isRightDockFolded = false;
+                OnPropertyChanged(nameof(IsRightDockFolded));
+            }
             if (!SetProperty(ref _isRightDockOpen, value))
                 return;
-            OnPropertyChanged(nameof(IsRightDockShown));
-            OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+            OnRightDockShownChanged();
             if (_settingsInitialized)
             {
                 _settings.IsRightDockOpen = value;
@@ -268,9 +286,104 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         {
             if (!SetProperty(ref _isRightDockFolded, value))
                 return;
-            OnPropertyChanged(nameof(IsRightDockShown));
-            OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+            if (!value)
+            {
+                _isRightDockNarrowFolded = false;
+                _isRightDockOverlaid = false;
+            }
+            OnRightDockShownChanged();
         }
+    }
+
+    /// <summary>
+    /// The narrowest the map may be left by opening the right dock (legends
+    /// design note D9): below it the dock opens folded to its edge tab.
+    /// </summary>
+    internal const double NarrowMapMinimumWidth = 480;
+
+    /// <summary>The right dock's width before the user has resized it, as the content grid declares it.</summary>
+    internal const double RightDockDefaultWidth = 360;
+
+    /// <summary>The right dock's narrowest width, as the content grid declares it.</summary>
+    internal const double RightDockMinimumWidth = 240;
+
+    /// <summary>How much of the map stays uncovered, at least, by a dock shown over it (D9).</summary>
+    internal const double RightDockOverlayMapMargin = 48;
+
+    /// <summary>The splitter between the map and the right dock.</summary>
+    private const double RightDockSplitterWidth = 4;
+
+    private bool _isRightDockNarrowFolded;
+    private bool _isRightDockOverlaid;
+
+    /// <summary>
+    /// True when the dock is folded because docking it would leave the map
+    /// narrower than <see cref="NarrowMapMinimumWidth"/> (D9), rather than by
+    /// Check passage.
+    /// </summary>
+    public bool IsRightDockNarrowFolded => _isRightDockNarrowFolded;
+
+    /// <summary>
+    /// True while a narrow-folded dock (D9) is shown over the map's right
+    /// edge, without resizing the map. Escape or a map click folds it again
+    /// (<see cref="FoldOverlaidRightDock"/>).
+    /// </summary>
+    public bool IsRightDockOverlaid
+    {
+        get => _isRightDockOverlaid;
+        private set
+        {
+            if (!SetProperty(ref _isRightDockOverlaid, value))
+                return;
+            OnRightDockShownChanged();
+        }
+    }
+
+    /// <summary>Whether the user can see the right dock's panel: docked beside the map, or over it (D9).</summary>
+    public bool IsRightDockPanelVisible => IsRightDockShown || (IsRightDockOpen && _isRightDockOverlaid);
+
+    /// <summary>
+    /// True when docking the right dock now would leave the map narrower than
+    /// <see cref="NarrowMapMinimumWidth"/>. Measured while the dock isn't in
+    /// its column, so <see cref="MapWidth"/> still has the room it would take.
+    /// </summary>
+    private bool WouldLeaveMapNarrow() =>
+        !double.IsInfinity(_mapWidth)
+        && _mapWidth - (_rightDockSavedWidth ?? RightDockDefaultWidth) - RightDockSplitterWidth < NarrowMapMinimumWidth;
+
+    /// <summary>
+    /// Shows a folded right dock: a narrow fold (D9) shows over the map, a
+    /// Check passage fold unfolds into its column.
+    /// </summary>
+    public void ShowFoldedRightDock()
+    {
+        if (_isRightDockNarrowFolded)
+            IsRightDockOverlaid = true;
+        else
+            IsRightDockFolded = false;
+    }
+
+    /// <summary>
+    /// Folds a dock shown over the map back to its edge tab (D9: Escape or a
+    /// map click). Returns true when it was over the map.
+    /// </summary>
+    public bool FoldOverlaidRightDock()
+    {
+        if (!_isRightDockOverlaid)
+            return false;
+        IsRightDockOverlaid = false;
+        return true;
+    }
+
+    private void OnRightDockShownChanged()
+    {
+        OnPropertyChanged(nameof(IsRightDockShown));
+        OnPropertyChanged(nameof(IsRightDockNarrowFolded));
+        OnPropertyChanged(nameof(IsRightDockOverlaid));
+        OnPropertyChanged(nameof(IsRightDockPanelVisible));
+        OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+        OnPropertyChanged(nameof(IsLegendTabShown));
+        UpdateRightTabsShown();
     }
 
     /// <summary>Whether the right dock's panel is shown: open and not folded.</summary>
@@ -279,8 +392,19 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>Whether the folded dock's edge tab is shown.</summary>
     public bool IsRightDockEdgeTabVisible => IsRightDockOpen && IsRightDockFolded;
 
+    /// <summary>The folded dock's edge tab tooltip and name: "Show Object information", "Show Legend".</summary>
+    public string RightDockEdgeTooltip => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, Resources.Strings.Tooltip_ShowDockTabFormat, _selectedRightTab?.Name ?? string.Empty);
+
     /// <summary>Unfolds the right dock from its edge tab.</summary>
-    public ICommand UnfoldRightDockCommand => _unfoldRightDockCommand ??= new RelayCommand(() => IsRightDockFolded = false);
+    public ICommand UnfoldRightDockCommand => _unfoldRightDockCommand ??= new RelayCommand(() =>
+    {
+        // D9: the edge tab of a narrow fold shows the dock over the map, and hides it again.
+        if (_isRightDockOverlaid)
+            IsRightDockOverlaid = false;
+        else
+            ShowFoldedRightDock();
+    });
 
     private ICommand? _unfoldRightDockCommand;
 
@@ -607,6 +731,11 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     {
         if (tab.Dock == TabDock.Bottom)
             OnBottomTabVisibilityChanged(tab);
+        if (tab.Dock == TabDock.Right)
+        {
+            OnPropertyChanged(nameof(VisibleRightTabs));
+            OnPropertyChanged(nameof(HasRightDockTabs));
+        }
 
         if (tab.IsVisible) return;
 
@@ -655,6 +784,92 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
             if (tab.ViewModel is IActivityTabShown shown)
                 shown.IsTabShown = IsBottomDockShown && ReferenceEquals(_selectedBottomTab, tab);
         }
+    }
+
+    /// <summary>Id of the Object information tab in the right dock.</summary>
+    internal const string PickReportTabId = "PickReport";
+
+    /// <summary>Id of the Legend tab in the right dock (#1404, legends design note D2).</summary>
+    internal const string LegendTabId = "Legend";
+
+    /// <summary>
+    /// Tells the right-dock tabs that care (<see cref="IActivityTabShown"/>)
+    /// whether the user can see them now: the Legend tab tells
+    /// <see cref="Services.Legends.LegendService.IsTabShown"/>.
+    /// </summary>
+    private void UpdateRightTabsShown()
+    {
+        foreach (var tab in RightTabs)
+        {
+            if (tab.ViewModel is IActivityTabShown shown)
+                shown.IsTabShown = IsRightDockPanelVisible && ReferenceEquals(_selectedRightTab, tab);
+        }
+    }
+
+    /// <summary>The right-dock tabs that can be shown now, for the dock's tab strip (D2).</summary>
+    public IReadOnlyList<IActivityTab> VisibleRightTabs => RightTabs.Where(t => t.IsVisible).ToArray();
+
+    /// <summary>Whether the right dock shows a tab strip instead of a title: more than one tab is available.</summary>
+    public bool HasRightDockTabs => RightTabs.Count(t => t.IsVisible) > 1;
+
+    /// <summary>Whether the right dock is showing the Legend tab (View › Legend's check mark).</summary>
+    public bool IsLegendTabShown => IsRightDockPanelVisible && SelectedRightTabId == LegendTabId;
+
+    private IActivityTab? _rightTabBeforeLegend;
+    private bool _rightDockOpenBeforeLegend;
+
+    /// <summary>
+    /// View › Legend (Ctrl+Shift+L): shows the Legend tab, unfolding the dock
+    /// if Check passage folded it; pressed again, puts back the tab the dock
+    /// showed before, or closes the dock if it was closed (D3, D15).
+    /// </summary>
+    public ICommand ToggleLegendCommand => _toggleLegendCommand ??= new RelayCommand(ToggleLegend);
+
+    private ICommand? _toggleLegendCommand;
+
+    private void ToggleLegend()
+    {
+        if (!_tabsById.TryGetValue(LegendTabId, out var legend) || !legend.IsVisible)
+            return;
+
+        // D9: pressed again on a narrow fold already labelled LEGEND, it shows the dock over the map.
+        if (_isRightDockNarrowFolded && !_isRightDockOverlaid && IsRightDockOpen && SelectedRightTabId == LegendTabId)
+        {
+            IsRightDockOverlaid = true;
+            return;
+        }
+
+        if (IsLegendTabShown)
+        {
+            if (_rightDockOpenBeforeLegend && _rightTabBeforeLegend is { IsVisible: true } previous && !ReferenceEquals(previous, legend))
+            {
+                SelectedRightTab = previous;
+            }
+            else
+            {
+                IsRightDockOpen = false;
+                RightDockClosed?.Invoke(legend);
+            }
+            return;
+        }
+
+        ShowLegendTab(legend);
+    }
+
+    /// <summary>Shows the Legend tab, remembering what the dock showed so the toggle can put it back.</summary>
+    private void ShowLegendTab(IActivityTab legend)
+    {
+        if (!IsLegendTabShown)
+        {
+            _rightDockOpenBeforeLegend = IsRightDockPanelVisible;
+            _rightTabBeforeLegend = _selectedRightTab;
+        }
+        // A Check passage fold unfolds; a narrow fold (D9) stays folded, and
+        // opening the dock may fold it.
+        if (IsRightDockFolded && !_isRightDockNarrowFolded)
+            IsRightDockFolded = false;
+        SelectedRightTab = legend;
+        IsRightDockOpen = true;
     }
 
     /// <summary>Opens the bottom dock on the Logs tab (Help › Show logs, #1080).</summary>
@@ -917,8 +1132,8 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
 
         TogglePickPanelCommand = new RelayCommand(() =>
         {
-            if (IsRightDockFolded)
-                IsRightDockFolded = false;
+            if (IsRightDockFolded && !_isRightDockOverlaid)
+                ShowFoldedRightDock();
             else
                 IsRightDockOpen = !IsRightDockOpen;
         });
@@ -990,6 +1205,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         // Setters check this flag to avoid writing during initial assignment.
         _settingsInitialized = true;
         UpdateBottomTabsShown();
+        UpdateRightTabsShown();
     }
 
     private void WireAutoOpenSubscriptions()
@@ -1007,6 +1223,10 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
                     case TabDock.Left:
                         SelectedLeftTab = captured;
                         IsLeftDockOpen = true;
+                        break;
+                    case TabDock.Right when captured.Id == LegendTabId:
+                        // LegendService.Show: a link opened the tab (D8).
+                        ShowLegendTab(captured);
                         break;
                     case TabDock.Right:
                         SelectedRightTab = captured;

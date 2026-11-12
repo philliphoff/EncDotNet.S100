@@ -524,10 +524,13 @@ public sealed class TropicalCycloneDatasetProcessor :
 
     /// <summary>
     /// The parts of the advisory drawn and hit, for the catalog's identify and
-    /// pick (<see cref="Spec.FeatureAccessor"/>).
+    /// pick (<see cref="Spec.FeatureAccessor"/>), with the storm where it is
+    /// at <paramref name="timeStep"/>.
     /// </summary>
-    internal static IEnumerable<IS100Feature> DrawnFeatures(TropicalCycloneAdvisory advisory) =>
-        BuildFixedParts(advisory).Concat(BuildTimedParts(advisory, StormOf(advisory, timeStep: null)));
+    /// <param name="advisory">The advisory.</param>
+    /// <param name="timeStep">The time step (UTC), or null for none.</param>
+    internal static IEnumerable<IS100Feature> DrawnFeatures(TropicalCycloneAdvisory advisory, DateTime? timeStep) =>
+        BuildFixedParts(advisory).Concat(BuildTimedParts(advisory, StormOf(advisory, timeStep)));
 
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() => new TropicalCycloneDatasetData(Advisory, _metadata);

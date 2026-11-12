@@ -112,6 +112,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [DefaultValue("day")]
         public string Palette { get; init; } = "day";
 
+        [CommandOption("--national-language <CODE>")]
+        [Description("The ISO 639-2 language (e.g. fra) to prefer for chart text such as feature names, where the product's portrayal supports it (S-101, S-131). Features without a name in that language use their default name. Default: the catalogue's default (eng).")]
+        public string? NationalLanguage { get; init; }
+
         [CommandOption("--symbol-scale")]
         [Description("Symbol scale factor (default 1.0).")]
         [DefaultValue(1.0)]
@@ -220,6 +224,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
             if (!TryParsePalette(Palette, out _))
                 return ValidationResult.Error($"Unknown palette '{Palette}'. Use day, dusk, or night.");
+
+            if (!TryParseNationalLanguage(NationalLanguage, out _))
+                return ValidationResult.Error(NationalLanguageError(NationalLanguage));
 
             if (TimeStep < 0)
                 return ValidationResult.Error("--time-step must be zero or greater.");
@@ -443,7 +450,8 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
-                ResolveBasemap(settings), displayModeId, viewport);
+                ResolveBasemap(settings), displayModeId, viewport,
+                nationalLanguage: ResolveNationalLanguage(settings.NationalLanguage));
             if (settings.ShowLayer is { } shown)
             {
                 renderContext = renderContext with
@@ -648,6 +656,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 Viewport = ResolveViewport(settings),
                 Basemap = ResolveBasemap(settings),
                 DisplayModeId = displayModeId,
+                Mariner = ResolveNationalLanguage(settings.NationalLanguage) is { } nationalLanguage
+                    ? MarinerSettings.Default with { NationalLanguage = nationalLanguage }
+                    : null,
             };
 
             using var renderer = new PngS100DatasetRenderer(LuaEngineOption.Resolve(settings.LuaEngine));
@@ -879,6 +890,35 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             case "webp": format = SKEncodedImageFormat.Webp; return true;
             default: format = SKEncodedImageFormat.Png; return false;
         }
+    }
+
+    /// <summary>
+    /// Parses a <c>--national-language</c> value: blank means "not set"
+    /// (<see langword="null"/>); otherwise a three-letter ISO 639-2 code,
+    /// returned in lower case as the portrayal catalogues compare it.
+    /// </summary>
+    internal static bool TryParseNationalLanguage(string? value, out string? language)
+    {
+        language = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        var code = value.Trim();
+        if (code.Length != 3 || !code.All(char.IsAsciiLetter))
+            return false;
+
+        language = code.ToLowerInvariant();
+        return true;
+    }
+
+    internal static string NationalLanguageError(string? value) =>
+        $"Invalid --national-language '{value}'. Use a three-letter ISO 639-2 code, e.g. eng, fra or deu.";
+
+    /// <summary>The validated <c>--national-language</c>, or <see langword="null"/> when not set.</summary>
+    internal static string? ResolveNationalLanguage(string? value)
+    {
+        TryParseNationalLanguage(value, out var language);
+        return language;
     }
 
     internal static bool TryParsePalette(string value, out PaletteType palette)

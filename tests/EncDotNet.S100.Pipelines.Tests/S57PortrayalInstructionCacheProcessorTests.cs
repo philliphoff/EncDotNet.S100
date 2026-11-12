@@ -31,10 +31,15 @@ public class S57PortrayalInstructionCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var first = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)));
+            var firstKind = EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions);
+            var first = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(firstKind));
             var firstResult = await first.BuildVectorPortrayalAsync(cancellationToken: ct);
             Assert.Equal(1, first.RuleRunCount);
             Assert.Equal(0, first.SharedInstructionCacheHits);
+
+            // The cache writes behind the render: wait for the entry to land
+            // on disk before the "restart" reads the folder.
+            Assert.True(firstKind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
             // A new cache over the same folder stands in for a restart.
             var second = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)));

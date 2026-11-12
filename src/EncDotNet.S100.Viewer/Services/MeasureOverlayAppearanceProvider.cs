@@ -1,13 +1,12 @@
 using Avalonia;
 using Avalonia.Media;
 using EncDotNet.S100.Viewer.Tools;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Bridges <see cref="SettingsViewModel.AccentColor"/>,
-/// <see cref="SettingsViewModel.SelectedPalette"/> (for the chart
+/// Bridges <see cref="ViewerSettingsService.AccentColor"/>,
+/// <see cref="ViewerSettingsService.SelectedPalette"/> (for the chart
 /// background) and <see cref="IThemeService.IsDarkTheme"/> into a single
 /// <see cref="IMeasureOverlayAppearanceProvider"/> so map tools can
 /// observe one source of truth instead of subscribing to several
@@ -19,7 +18,7 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class MeasureOverlayAppearanceProvider : IMeasureOverlayAppearanceProvider, IDisposable
 {
     private readonly IThemeService _theme;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly Application? _application;
     private bool _disposed;
 
@@ -38,7 +37,7 @@ internal sealed class MeasureOverlayAppearanceProvider : IMeasureOverlayAppearan
         }
     }
 
-    public MeasureOverlayAppearanceProvider(IThemeService theme, SettingsViewModel settings)
+    public MeasureOverlayAppearanceProvider(IThemeService theme, ViewerSettingsService settings)
     {
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(settings);

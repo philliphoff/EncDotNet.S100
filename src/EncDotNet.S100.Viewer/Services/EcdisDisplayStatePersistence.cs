@@ -64,7 +64,13 @@ internal static class EcdisDisplayStatePersistence
         state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null,
             displayModes.Count > 0 ? displayModes : null,
             settings.EcdisShowNavigationalWarnings,
-            settings.EcdisLayerVisibility);
+            settings.EcdisLayerVisibility,
+            settings.EcdisLayerOptions);
+
+        state.HydrateAml(
+            (settings.EcdisHiddenAmlProducts ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            settings.EcdisFollowAmlScaleBands);
 
         // Persist on every change. Cheap because settings.json is small.
         state.Changed += () =>
@@ -88,6 +94,9 @@ internal static class EcdisDisplayStatePersistence
             settings.EcdisLayerVisibility.Clear();
             foreach (var kv in snap.LayerVisibility)
                 settings.EcdisLayerVisibility[kv.Key] = kv.Value;
+            settings.EcdisLayerOptions.Clear();
+            foreach (var kv in snap.LayerOptions)
+                settings.EcdisLayerOptions[kv.Key] = kv.Value;
             Save(settings);
         };
         state.NavigationalWarningsChanged += () =>
@@ -95,6 +104,18 @@ internal static class EcdisDisplayStatePersistence
             if (settings.EcdisShowNavigationalWarnings == state.ShowNavigationalWarnings)
                 return;
             settings.EcdisShowNavigationalWarnings = state.ShowNavigationalWarnings;
+            Save(settings);
+        };
+        state.AmlDisplayChanged += () =>
+        {
+            var hidden = string.Join(",", state.HiddenAmlProducts.Order(StringComparer.OrdinalIgnoreCase));
+            if (settings.EcdisHiddenAmlProducts == hidden
+                && settings.EcdisFollowAmlScaleBands == state.FollowAmlScaleBands)
+            {
+                return;
+            }
+            settings.EcdisHiddenAmlProducts = hidden;
+            settings.EcdisFollowAmlScaleBands = state.FollowAmlScaleBands;
             Save(settings);
         };
         return state;

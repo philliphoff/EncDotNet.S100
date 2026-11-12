@@ -449,6 +449,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             entry.SetVersionAssessment(processor.VersionAssessment);
             entry.SetAxisOrder(processor.AxisOrder);
             entry.SetPortrayalSpec(processor.PortrayalSpec.Name);
+            // AML rows, outlines and the MARKING pill follow the portrayal's
+            // real drawn state (#1371), not a fixed "not drawn".
+            entry.SetAml(processor is AmlDatasetProcessor aml
+                ? new ViewModels.AmlCellState(aml.Info, aml.Drawn, aml.Features.Count, aml.Coverage)
+                : null);
             entry.AvailableTimes = [];
             entry.CurrentTime = null;
             entry.SetLoadedState(processor.Metadata);
@@ -1670,6 +1675,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
         if (e.PropertyName is not (
             nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsHiddenByDisplay)
             or nameof(DatasetEntry.IsActive)
             or nameof(DatasetEntry.Opacity)))
             return;

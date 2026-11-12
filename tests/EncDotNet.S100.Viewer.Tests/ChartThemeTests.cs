@@ -142,7 +142,7 @@ public class ChartThemeTests
     [Fact]
     public void StationTimeSeriesViewModel_DefaultsToLightWhenNoThemeService()
     {
-        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), globalTime: null, timeFormat: null, themeService: null);
+        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), TestStationCharts.Context());
         Assert.Equal(ChartTheme.Resolve(false).SeriesPrimary, GetStrokeColor(vm.HeightSeries[0]));
     }
 
@@ -151,7 +151,7 @@ public class ChartThemeTests
     {
         var theme = new StubThemeService();
         theme.Set(dark: true);
-        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), null, null, theme);
+        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), TestStationCharts.Context(null, null, theme));
         Assert.Equal(ChartTheme.Resolve(true).SeriesPrimary, GetStrokeColor(vm.HeightSeries[0]));
     }
 
@@ -159,7 +159,7 @@ public class ChartThemeTests
     public void S104_HeightStroke_FollowsThemeChange()
     {
         var theme = new StubThemeService();
-        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), null, null, theme);
+        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), TestStationCharts.Context(null, null, theme));
 
         Assert.Equal(ChartTheme.Resolve(false).SeriesPrimary, GetStrokeColor(vm.HeightSeries[0]));
 
@@ -173,7 +173,7 @@ public class ChartThemeTests
     public void S111_SpeedAndDirectionStrokes_FollowThemeChange()
     {
         var theme = new StubThemeService();
-        using var vm = new S111StationTimeSeriesViewModel(CurrentsSnapshot(), null, null, theme);
+        using var vm = new S111StationTimeSeriesViewModel(CurrentsSnapshot(), TestStationCharts.Context(null, null, theme));
 
         Assert.Equal(ChartTheme.Resolve(false).SeriesSpeed, GetStrokeColor(vm.SpeedSeries[0]));
         Assert.Equal(ChartTheme.Resolve(false).SeriesDirection, GetStrokeColor(vm.DirectionSeries[0]));
@@ -188,7 +188,7 @@ public class ChartThemeTests
     public void NowMarkerStroke_FollowsThemeChange()
     {
         var theme = new StubThemeService();
-        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), null, null, theme);
+        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), TestStationCharts.Context(null, null, theme));
 
         var nowPaint = (SolidColorPaint)vm.Sections[0].Stroke!;
         Assert.Equal(ChartTheme.Resolve(false).NowMarker, nowPaint.Color);
@@ -202,7 +202,7 @@ public class ChartThemeTests
     public void Dispose_UnsubscribesFromThemeChanged()
     {
         var theme = new StubThemeService();
-        var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), null, null, theme);
+        var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), TestStationCharts.Context(null, null, theme));
         var stroke = GetStrokePaint(vm.HeightSeries[0]);
         var initial = stroke.Color;
 

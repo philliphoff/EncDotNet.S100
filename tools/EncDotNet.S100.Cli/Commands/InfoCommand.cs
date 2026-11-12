@@ -1,7 +1,9 @@
+using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Hdf5;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -42,6 +44,12 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             table.AddColumn("Value");
 
             table.AddRow("Dataset", Markup.Escape(settings.DatasetPath));
+
+            // AML: what the data is first, its protective marking second (#1236, decision 14).
+            var aml = processor as AmlDatasetProcessor;
+            if (aml is not null)
+                AddAmlHeadRows(table, aml.Info);
+
             table.AddRow("Specification", Markup.Escape(processor.Spec.Name));
             table.AddRow("Edition", Markup.Escape(DescribeDeclaredEdition(processor.Spec)));
 
@@ -71,7 +79,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             }
 
             // S-104 defines no portrayal, so say whose symbology render draws (issue #937).
-            if (ProductRegistry.Default.PortrayalOf(processor.Spec.Name).AsApplication is { } portrayal)
+            if (aml is null && ProductRegistry.Default.PortrayalOf(processor.Spec.Name).AsApplication is { } portrayal)
             {
                 table.AddRow("Portrayal", Markup.Escape(portrayal.Note));
             }
@@ -97,7 +105,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             // Weather data (GRIB2, NetCDF, CAP, TC) isn't S-100 and isn't for
             // navigation (design note weather-sources.md §3.1).
-            if (!ProductRegistry.Default.IsS100(processor.Spec.Name))
+            if (aml is null && !ProductRegistry.Default.IsS100(processor.Spec.Name))
             {
                 var notice = ProductRegistry.Default.TryResolve(processor.Spec.Name, out var registration)
                     && registration.PickReportNotice is { Length: > 0 } own
@@ -115,6 +123,9 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                     "Alerts",
                     $"{capAlerts.Warnings.Document.Alerts.Count} ({capAlerts.Warnings.Areas.Count} areas, {capAlerts.Warnings.Areas.Count(a => a.IsDrawable)} drawn)");
             }
+
+            if (aml is not null)
+                AddAmlRows(table, aml);
 
             if (processor is SurfaceAnalysisDatasetProcessor surface)
                 AddSurfaceAnalysisRows(table, surface.Bulletin);
@@ -360,6 +371,51 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine("[grey]Radii are NE/SE/SW/NW in nautical miles.[/]");
     }
+
+    /// <summary>
+    /// The first rows of an AML cell's info: that it's Additional Military
+    /// Layers, not a chart, then its protective marking.
+    /// </summary>
+    private static void AddAmlHeadRows(Table table, AmlDatasetInfo info)
+    {
+        table.AddRow("Notice", $"[yellow]{Markup.Escape(AmlDatasetProcessor.NotAChartNotice.TrimEnd('.'))}[/]");
+        table.AddRow("Protective marking", Markup.Escape(AmlMarkingText(info)));
+    }
+
+    /// <summary>The AML facts: product, version, IDO status, owner, caveat, scale band, title, coverage and whether it's drawn.</summary>
+    private static void AddAmlRows(Table table, AmlDatasetProcessor aml)
+    {
+        var info = aml.Info;
+        table.AddRow("Product", Markup.Escape(info.Version is { } version ? $"{info.ProductDisplay} (AML {version})" : info.ProductDisplay));
+        if (info.IdoStatus is { } ido)
+            table.AddRow("IDO status", Markup.Escape(ido));
+        if (info.OwnerAuthority is { } owner)
+            table.AddRow("Owner authority", Markup.Escape(owner));
+        if (info.Caveat is { } caveat)
+            table.AddRow("Caveat", Markup.Escape(caveat));
+        if (info.ScaleBand is { } band)
+            table.AddRow("Scale band", band.ToString(CultureInfo.InvariantCulture));
+        if (info.Title is { } title)
+            table.AddRow("Title", Markup.Escape(title));
+        if (info.FromName is { } name)
+        {
+            table.AddRow(
+                "From the cell name",
+                Markup.Escape(string.Create(CultureInfo.InvariantCulture,
+                    $"producer {name.Producer}, product {name.Product ?? "none"}, band {name.ScaleBand}, marking {name.ClassificationLetter}")));
+        }
+
+        table.AddRow("Features", aml.Features.Count.ToString(CultureInfo.InvariantCulture));
+        table.AddRow("Coverage", aml.CoverageIsBoundingBox ? "bounding box (no M_COVR)" : $"M_COVR ({aml.Coverage.Count} areas)");
+        table.AddRow("Drawn", aml.Drawn ? "yes" : "no (recognised, not translated)");
+    }
+
+    private static string AmlMarkingText(AmlDatasetInfo info) => info.ProtectiveMarking switch
+    {
+        null => "none given",
+        { } marking when info.MarkingSource == AmlMarkingSource.CellName => $"{marking} (from cell name)",
+        { } marking => marking,
+    };
 
     private static void AddSurfaceAnalysisRows(Table table, Datasets.Weather.CodedSurfaceBulletin bulletin)
     {

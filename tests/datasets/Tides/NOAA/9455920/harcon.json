@@ -1,0 +1,1206 @@
+{
+  "units": "meters",
+  "HarmonicConstituents": [
+    {
+      "number": 1,
+      "name": "M2",
+      "description": "Principal lunar semidiurnal constituent",
+      "amplitude": 3.505,
+      "phase_GMT": 105.2,
+      "phase_local": 204.3,
+      "speed": 28.984104,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 2,
+      "name": "S2",
+      "description": "Principal solar semidiurnal constituent",
+      "amplitude": 0.977,
+      "phase_GMT": 147.4,
+      "phase_local": 237.4,
+      "speed": 30.0,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 3,
+      "name": "N2",
+      "description": "Larger lunar elliptic semidiurnal constituent",
+      "amplitude": 0.597,
+      "phase_GMT": 79.2,
+      "phase_local": 183.2,
+      "speed": 28.43973,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 4,
+      "name": "K1",
+      "description": "Lunar diurnal constituent",
+      "amplitude": 0.671,
+      "phase_GMT": 342.1,
+      "phase_local": 206.7,
+      "speed": 15.041069,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 5,
+      "name": "M4",
+      "description": "Shallow water overtides of principal lunar constituent",
+      "amplitude": 0.271,
+      "phase_GMT": 80.7,
+      "phase_local": 279.0,
+      "speed": 57.96821,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 6,
+      "name": "O1",
+      "description": "Lunar diurnal constituent",
+      "amplitude": 0.371,
+      "phase_GMT": 325.0,
+      "phase_local": 199.5,
+      "speed": 13.943035,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 7,
+      "name": "M6",
+      "description": "Shallow water overtides of principal lunar constituent",
+      "amplitude": 0.154,
+      "phase_GMT": 18.2,
+      "phase_local": 315.7,
+      "speed": 86.95232,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 8,
+      "name": "MK3",
+      "description": "Shallow water terdiurnal",
+      "amplitude": 0.082,
+      "phase_GMT": 8.8,
+      "phase_local": 332.5,
+      "speed": 44.025173,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 9,
+      "name": "S4",
+      "description": "Shallow water overtides of principal solar constituent",
+      "amplitude": 0.02,
+      "phase_GMT": 207.0,
+      "phase_local": 27.0,
+      "speed": 60.0,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 10,
+      "name": "MN4",
+      "description": "Shallow water quarter diurnal constituent",
+      "amplitude": 0.096,
+      "phase_GMT": 60.0,
+      "phase_local": 263.1,
+      "speed": 57.423832,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 11,
+      "name": "NU2",
+      "description": "Larger lunar evectional constituent",
+      "amplitude": 0.172,
+      "phase_GMT": 82.3,
+      "phase_local": 185.6,
+      "speed": 28.512583,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 12,
+      "name": "S6",
+      "description": "Shallow water overtides of principal solar constituent",
+      "amplitude": 0.002,
+      "phase_GMT": 278.4,
+      "phase_local": 188.4,
+      "speed": 90.0,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 13,
+      "name": "MU2",
+      "description": "Variational constituent",
+      "amplitude": 0.212,
+      "phase_GMT": 234.0,
+      "phase_local": 342.3,
+      "speed": 27.968208,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 14,
+      "name": "2N2",
+      "description": "Lunar elliptical semidiurnal second-order constituent",
+      "amplitude": 0.057,
+      "phase_GMT": 48.1,
+      "phase_local": 157.1,
+      "speed": 27.895355,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 15,
+      "name": "OO1",
+      "description": "Lunar diurnal",
+      "amplitude": 0.018,
+      "phase_GMT": 79.3,
+      "phase_local": 294.0,
+      "speed": 16.139101,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 16,
+      "name": "LAM2",
+      "description": "Smaller lunar evectional constituent",
+      "amplitude": 0.093,
+      "phase_GMT": 111.1,
+      "phase_local": 206.0,
+      "speed": 29.455626,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 17,
+      "name": "S1",
+      "description": "Solar diurnal constituent",
+      "amplitude": 0.003,
+      "phase_GMT": 74.2,
+      "phase_local": 299.2,
+      "speed": 15.0,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 18,
+      "name": "M1",
+      "description": "Smaller lunar elliptic diurnal constituent",
+      "amplitude": 0.03,
+      "phase_GMT": 40.2,
+      "phase_local": 269.7,
+      "speed": 14.496694,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 19,
+      "name": "J1",
+      "description": "Smaller lunar elliptic diurnal constituent",
+      "amplitude": 0.025,
+      "phase_GMT": 65.2,
+      "phase_local": 285.0,
+      "speed": 15.5854435,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 20,
+      "name": "MM",
+      "description": "Lunar monthly constituent",
+      "amplitude": 0.051,
+      "phase_GMT": 36.1,
+      "phase_local": 31.2,
+      "speed": 0.5443747,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 21,
+      "name": "SSA",
+      "description": "Solar semiannual constituent",
+      "amplitude": 0.024,
+      "phase_GMT": 283.0,
+      "phase_local": 282.3,
+      "speed": 0.0821373,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 22,
+      "name": "SA",
+      "description": "Solar annual constituent",
+      "amplitude": 0.096,
+      "phase_GMT": 217.4,
+      "phase_local": 217.0,
+      "speed": 0.0410686,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 23,
+      "name": "MSF",
+      "description": "Lunisolar synodic fortnightly constituent",
+      "amplitude": 0.135,
+      "phase_GMT": 39.6,
+      "phase_local": 30.5,
+      "speed": 1.0158958,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 24,
+      "name": "MF",
+      "description": "Lunisolar fortnightly constituent",
+      "amplitude": 0.025,
+      "phase_GMT": 94.7,
+      "phase_local": 84.8,
+      "speed": 1.0980331,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 25,
+      "name": "RHO",
+      "description": "Larger lunar evectional diurnal constituent",
+      "amplitude": 0.014,
+      "phase_GMT": 296.2,
+      "phase_local": 175.0,
+      "speed": 13.471515,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 26,
+      "name": "Q1",
+      "description": "Larger lunar elliptic diurnal constituent",
+      "amplitude": 0.06,
+      "phase_GMT": 330.6,
+      "phase_local": 210.0,
+      "speed": 13.398661,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 27,
+      "name": "T2",
+      "description": "Larger solar elliptic constituent",
+      "amplitude": 0.054,
+      "phase_GMT": 128.7,
+      "phase_local": 219.1,
+      "speed": 29.958933,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 28,
+      "name": "R2",
+      "description": "Smaller solar elliptic constituent",
+      "amplitude": 0.011,
+      "phase_GMT": 233.5,
+      "phase_local": 323.1,
+      "speed": 30.041067,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 29,
+      "name": "2Q1",
+      "description": "Larger elliptic diurnal",
+      "amplitude": 0.005,
+      "phase_GMT": 328.4,
+      "phase_local": 212.7,
+      "speed": 12.854286,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 30,
+      "name": "P1",
+      "description": "Solar diurnal constituent",
+      "amplitude": 0.176,
+      "phase_GMT": 340.9,
+      "phase_local": 206.3,
+      "speed": 14.958931,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 31,
+      "name": "2SM2",
+      "description": "Shallow water semidiurnal constituent",
+      "amplitude": 0.057,
+      "phase_GMT": 348.6,
+      "phase_local": 69.4,
+      "speed": 31.015896,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 32,
+      "name": "M3",
+      "description": "Lunar terdiurnal constituent",
+      "amplitude": 0.018,
+      "phase_GMT": 148.0,
+      "phase_local": 116.7,
+      "speed": 43.47616,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 33,
+      "name": "L2",
+      "description": "Smaller lunar elliptic semidiurnal constituent",
+      "amplitude": 0.211,
+      "phase_GMT": 125.2,
+      "phase_local": 219.4,
+      "speed": 29.528479,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 34,
+      "name": "2MK3",
+      "description": "Shallow water terdiurnal constituent",
+      "amplitude": 0.099,
+      "phase_GMT": 21.2,
+      "phase_local": 354.9,
+      "speed": 42.92714,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 35,
+      "name": "K2",
+      "description": "Lunisolar semidiurnal constituent",
+      "amplitude": 0.271,
+      "phase_GMT": 138.1,
+      "phase_local": 227.4,
+      "speed": 30.082138,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 36,
+      "name": "M8",
+      "description": "Shallow water eighth diurnal constituent",
+      "amplitude": 0.045,
+      "phase_GMT": 346.2,
+      "phase_local": 22.8,
+      "speed": 115.93642,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 37,
+      "name": "MS4",
+      "description": "Shallow water quarter diurnal constituent",
+      "amplitude": 0.175,
+      "phase_GMT": 128.2,
+      "phase_local": 317.3,
+      "speed": 58.984104,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 38,
+      "name": "SIGMA1",
+      "description": null,
+      "amplitude": 0.047,
+      "phase_GMT": 24.4,
+      "phase_local": 268.0,
+      "speed": 12.92714,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 39,
+      "name": "MP1",
+      "description": null,
+      "amplitude": 0.066,
+      "phase_GMT": 67.2,
+      "phase_local": 300.9,
+      "speed": 14.025173,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 40,
+      "name": "CHI1",
+      "description": null,
+      "amplitude": 0.007,
+      "phase_GMT": 278.4,
+      "phase_local": 147.2,
+      "speed": 14.569548,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 41,
+      "name": "2PO1",
+      "description": null,
+      "amplitude": 0.018,
+      "phase_GMT": 143.0,
+      "phase_local": 359.2,
+      "speed": 15.974827,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 42,
+      "name": "SO1",
+      "description": null,
+      "amplitude": 0.074,
+      "phase_GMT": 151.1,
+      "phase_local": 6.6,
+      "speed": 16.056965,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 43,
+      "name": "MSN2",
+      "description": null,
+      "amplitude": 0.05,
+      "phase_GMT": 335.1,
+      "phase_local": 60.2,
+      "speed": 30.544374,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 44,
+      "name": "MNS2",
+      "description": null,
+      "amplitude": 0.059,
+      "phase_GMT": 201.8,
+      "phase_local": 315.0,
+      "speed": 27.423834,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 45,
+      "name": "OP2",
+      "description": null,
+      "amplitude": 0.007,
+      "phase_GMT": 100.5,
+      "phase_local": 200.3,
+      "speed": 28.901966,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 46,
+      "name": "MKS2",
+      "description": null,
+      "amplitude": 0.016,
+      "phase_GMT": 300.1,
+      "phase_local": 38.5,
+      "speed": 29.066242,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 47,
+      "name": "2NS2",
+      "description": null,
+      "amplitude": 0.009,
+      "phase_GMT": 167.2,
+      "phase_local": 285.3,
+      "speed": 26.87946,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 48,
+      "name": "MLN2S2",
+      "description": null,
+      "amplitude": 0.039,
+      "phase_GMT": 201.5,
+      "phase_local": 319.0,
+      "speed": 26.952312,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 49,
+      "name": "2ML2S2",
+      "description": null,
+      "amplitude": 0.025,
+      "phase_GMT": 43.4,
+      "phase_local": 155.9,
+      "speed": 27.496687,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 50,
+      "name": "SKM2",
+      "description": null,
+      "amplitude": 0.024,
+      "phase_GMT": 340.7,
+      "phase_local": 60.8,
+      "speed": 31.098034,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 51,
+      "name": "2MS2K2",
+      "description": null,
+      "amplitude": 0.005,
+      "phase_GMT": 245.0,
+      "phase_local": 354.8,
+      "speed": 27.803934,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 52,
+      "name": "MKL2S2",
+      "description": null,
+      "amplitude": 0.003,
+      "phase_GMT": 108.5,
+      "phase_local": 211.2,
+      "speed": 28.59472,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 53,
+      "name": "M2KS2",
+      "description": null,
+      "amplitude": 0.007,
+      "phase_GMT": 126.9,
+      "phase_local": 224.5,
+      "speed": 29.148378,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 54,
+      "name": "2SNMK2",
+      "description": null,
+      "amplitude": 0.001,
+      "phase_GMT": 137.7,
+      "phase_local": 233.3,
+      "speed": 29.373487,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 55,
+      "name": "2KMSN2",
+      "description": null,
+      "amplitude": 0.002,
+      "phase_GMT": 167.5,
+      "phase_local": 251.1,
+      "speed": 30.708649,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 56,
+      "name": "SO3",
+      "description": null,
+      "amplitude": 0.053,
+      "phase_GMT": 31.4,
+      "phase_local": 355.9,
+      "speed": 43.943035,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 57,
+      "name": "SK3",
+      "description": null,
+      "amplitude": 0.042,
+      "phase_GMT": 67.6,
+      "phase_local": 22.3,
+      "speed": 45.04107,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 58,
+      "name": "NO3",
+      "description": null,
+      "amplitude": 0.041,
+      "phase_GMT": 353.7,
+      "phase_local": 332.2,
+      "speed": 42.382767,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 59,
+      "name": "MK4",
+      "description": null,
+      "amplitude": 0.043,
+      "phase_GMT": 122.2,
+      "phase_local": 310.6,
+      "speed": 59.066242,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 60,
+      "name": "SN4",
+      "description": null,
+      "amplitude": 0.022,
+      "phase_GMT": 146.9,
+      "phase_local": 340.9,
+      "speed": 58.439728,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 61,
+      "name": "2MLS4",
+      "description": null,
+      "amplitude": 0.028,
+      "phase_GMT": 220.8,
+      "phase_local": 63.4,
+      "speed": 57.49669,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 62,
+      "name": "3MS4",
+      "description": null,
+      "amplitude": 0.037,
+      "phase_GMT": 161.2,
+      "phase_local": 8.7,
+      "speed": 56.952312,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 63,
+      "name": "ML4",
+      "description": null,
+      "amplitude": 0.028,
+      "phase_GMT": 72.6,
+      "phase_local": 266.0,
+      "speed": 58.512585,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 64,
+      "name": "N4",
+      "description": null,
+      "amplitude": 0.018,
+      "phase_GMT": 36.4,
+      "phase_local": 244.5,
+      "speed": 56.87946,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 65,
+      "name": "SL4",
+      "description": null,
+      "amplitude": 0.021,
+      "phase_GMT": 117.4,
+      "phase_local": 301.7,
+      "speed": 59.52848,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 66,
+      "name": "MNO5",
+      "description": null,
+      "amplitude": 0.019,
+      "phase_GMT": 249.7,
+      "phase_local": 327.4,
+      "speed": 71.36687,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 67,
+      "name": "2MO5",
+      "description": null,
+      "amplitude": 0.035,
+      "phase_GMT": 268.3,
+      "phase_local": 341.1,
+      "speed": 71.91125,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 68,
+      "name": "2MK5",
+      "description": null,
+      "amplitude": 0.061,
+      "phase_GMT": 256.3,
+      "phase_local": 319.2,
+      "speed": 73.00928,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 69,
+      "name": "MSK5",
+      "description": null,
+      "amplitude": 0.029,
+      "phase_GMT": 324.6,
+      "phase_local": 18.4,
+      "speed": 74.02517,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 70,
+      "name": "3KM5",
+      "description": null,
+      "amplitude": 0.01,
+      "phase_GMT": 305.5,
+      "phase_local": 358.6,
+      "speed": 74.10731,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 71,
+      "name": "2MP5",
+      "description": null,
+      "amplitude": 0.028,
+      "phase_GMT": 285.1,
+      "phase_local": 348.8,
+      "speed": 72.92714,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 72,
+      "name": "3MP5",
+      "description": null,
+      "amplitude": 0.022,
+      "phase_GMT": 357.4,
+      "phase_local": 69.4,
+      "speed": 71.99338,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 73,
+      "name": "MNK5",
+      "description": null,
+      "amplitude": 0.021,
+      "phase_GMT": 239.1,
+      "phase_local": 307.0,
+      "speed": 72.464905,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 74,
+      "name": "2SM6",
+      "description": null,
+      "amplitude": 0.027,
+      "phase_GMT": 114.6,
+      "phase_local": 33.7,
+      "speed": 88.98411,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 75,
+      "name": "2MN6",
+      "description": null,
+      "amplitude": 0.081,
+      "phase_GMT": 352.7,
+      "phase_local": 295.0,
+      "speed": 86.407936,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 76,
+      "name": "MSN6",
+      "description": null,
+      "amplitude": 0.027,
+      "phase_GMT": 48.1,
+      "phase_local": 341.3,
+      "speed": 87.423836,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 77,
+      "name": "2MS6",
+      "description": null,
+      "amplitude": 0.144,
+      "phase_GMT": 59.4,
+      "phase_local": 347.7,
+      "speed": 87.96821,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 78,
+      "name": "2NMLS6",
+      "description": null,
+      "amplitude": 0.024,
+      "phase_GMT": 297.7,
+      "phase_local": 249.1,
+      "speed": 85.392044,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 79,
+      "name": "2NM6",
+      "description": null,
+      "amplitude": 0.021,
+      "phase_GMT": 325.4,
+      "phase_local": 272.6,
+      "speed": 85.86356,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 80,
+      "name": "MSL6",
+      "description": null,
+      "amplitude": 0.033,
+      "phase_GMT": 70.2,
+      "phase_local": 353.5,
+      "speed": 88.51258,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 81,
+      "name": "2ML6",
+      "description": null,
+      "amplitude": 0.025,
+      "phase_GMT": 34.3,
+      "phase_local": 326.8,
+      "speed": 87.49669,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 82,
+      "name": "MSK6",
+      "description": null,
+      "amplitude": 0.017,
+      "phase_GMT": 91.8,
+      "phase_local": 10.2,
+      "speed": 89.06624,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 83,
+      "name": "2MLNS6",
+      "description": null,
+      "amplitude": 0.031,
+      "phase_GMT": 325.1,
+      "phase_local": 271.7,
+      "speed": 85.93642,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 84,
+      "name": "3MLS6",
+      "description": null,
+      "amplitude": 0.03,
+      "phase_GMT": 176.1,
+      "phase_local": 117.8,
+      "speed": 86.48079,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 85,
+      "name": "2MK6",
+      "description": null,
+      "amplitude": 0.038,
+      "phase_GMT": 46.7,
+      "phase_local": 334.2,
+      "speed": 88.05035,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 86,
+      "name": "2MNO7",
+      "description": null,
+      "amplitude": 0.015,
+      "phase_GMT": 245.7,
+      "phase_local": 62.6,
+      "speed": 100.350975,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 87,
+      "name": "2NMK7",
+      "description": null,
+      "amplitude": 0.004,
+      "phase_GMT": 204.4,
+      "phase_local": 16.2,
+      "speed": 100.90463,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 88,
+      "name": "2MSO7",
+      "description": null,
+      "amplitude": 0.025,
+      "phase_GMT": 293.2,
+      "phase_local": 96.0,
+      "speed": 101.91125,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 89,
+      "name": "MSKO7",
+      "description": null,
+      "amplitude": 0.031,
+      "phase_GMT": 122.5,
+      "phase_local": 275.4,
+      "speed": 103.00928,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 90,
+      "name": "2MSN8",
+      "description": null,
+      "amplitude": 0.024,
+      "phase_GMT": 14.0,
+      "phase_local": 46.3,
+      "speed": 116.407936,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 91,
+      "name": "3MS8",
+      "description": null,
+      "amplitude": 0.064,
+      "phase_GMT": 26.0,
+      "phase_local": 53.4,
+      "speed": 116.95232,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 92,
+      "name": "2MS8",
+      "description": null,
+      "amplitude": 0.023,
+      "phase_GMT": 80.3,
+      "phase_local": 98.5,
+      "speed": 117.96821,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 93,
+      "name": "2MN8",
+      "description": null,
+      "amplitude": 0.011,
+      "phase_GMT": 292.9,
+      "phase_local": 339.3,
+      "speed": 114.847664,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 94,
+      "name": "3MN8",
+      "description": null,
+      "amplitude": 0.033,
+      "phase_GMT": 319.3,
+      "phase_local": 0.7,
+      "speed": 115.392044,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 95,
+      "name": "2MSL8",
+      "description": null,
+      "amplitude": 0.02,
+      "phase_GMT": 30.1,
+      "phase_local": 52.6,
+      "speed": 117.49669,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 96,
+      "name": "4MLS8",
+      "description": null,
+      "amplitude": 0.014,
+      "phase_GMT": 128.4,
+      "phase_local": 169.2,
+      "speed": 115.4649,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 97,
+      "name": "3ML8",
+      "description": null,
+      "amplitude": 0.008,
+      "phase_GMT": 350.6,
+      "phase_local": 22.2,
+      "speed": 116.48079,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 98,
+      "name": "3MK8",
+      "description": null,
+      "amplitude": 0.014,
+      "phase_GMT": 16.8,
+      "phase_local": 43.5,
+      "speed": 117.03445,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 99,
+      "name": "2MSK8",
+      "description": null,
+      "amplitude": 0.014,
+      "phase_GMT": 62.5,
+      "phase_local": 80.1,
+      "speed": 118.05035,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 100,
+      "name": "2M2NK9",
+      "description": null,
+      "amplitude": 0.003,
+      "phase_GMT": 144.4,
+      "phase_local": 55.4,
+      "speed": 129.88873,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 101,
+      "name": "3MNK9",
+      "description": null,
+      "amplitude": 0.007,
+      "phase_GMT": 171.4,
+      "phase_local": 77.5,
+      "speed": 130.4331,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 102,
+      "name": "4MK9",
+      "description": null,
+      "amplitude": 0.009,
+      "phase_GMT": 201.2,
+      "phase_local": 102.4,
+      "speed": 130.97748,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 103,
+      "name": "3MSK9",
+      "description": null,
+      "amplitude": 0.014,
+      "phase_GMT": 244.7,
+      "phase_local": 136.8,
+      "speed": 131.99338,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 104,
+      "name": "4MN10",
+      "description": null,
+      "amplitude": 0.016,
+      "phase_GMT": 273.1,
+      "phase_local": 53.7,
+      "speed": 144.37614,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 105,
+      "name": "M10",
+      "description": null,
+      "amplitude": 0.017,
+      "phase_GMT": 299.2,
+      "phase_local": 75.0,
+      "speed": 144.92052,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 106,
+      "name": "3MNS10",
+      "description": null,
+      "amplitude": 0.02,
+      "phase_GMT": 315.2,
+      "phase_local": 86.7,
+      "speed": 145.39204,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 107,
+      "name": "4MS10",
+      "description": null,
+      "amplitude": 0.034,
+      "phase_GMT": 336.3,
+      "phase_local": 102.9,
+      "speed": 145.93642,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 108,
+      "name": "3MSL10",
+      "description": null,
+      "amplitude": 0.013,
+      "phase_GMT": 346.3,
+      "phase_local": 107.9,
+      "speed": 146.48079,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 109,
+      "name": "3M2S10",
+      "description": null,
+      "amplitude": 0.019,
+      "phase_GMT": 22.5,
+      "phase_local": 139.9,
+      "speed": 146.95232,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 110,
+      "name": "4MSK11",
+      "description": null,
+      "amplitude": 0.009,
+      "phase_GMT": 204.0,
+      "phase_local": 195.2,
+      "speed": 160.97748,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 111,
+      "name": "4MNS12",
+      "description": null,
+      "amplitude": 0.014,
+      "phase_GMT": 276.2,
+      "phase_local": 146.9,
+      "speed": 174.37614,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 112,
+      "name": "5MS12",
+      "description": null,
+      "amplitude": 0.018,
+      "phase_GMT": 298.3,
+      "phase_local": 164.0,
+      "speed": 174.92052,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 113,
+      "name": "4MSL12",
+      "description": null,
+      "amplitude": 0.008,
+      "phase_GMT": 307.0,
+      "phase_local": 167.8,
+      "speed": 175.46489,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 114,
+      "name": "4M2S12",
+      "description": null,
+      "amplitude": 0.014,
+      "phase_GMT": 343.0,
+      "phase_local": 199.6,
+      "speed": 175.93642,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 115,
+      "name": "TK1",
+      "description": null,
+      "amplitude": 0.009,
+      "phase_GMT": 352.9,
+      "phase_local": 218.6,
+      "speed": 14.917865,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 116,
+      "name": "RP1",
+      "description": null,
+      "amplitude": 0.008,
+      "phase_GMT": 322.1,
+      "phase_local": 186.4,
+      "speed": 15.082135,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 117,
+      "name": "KP1",
+      "description": null,
+      "amplitude": 0.004,
+      "phase_GMT": 324.7,
+      "phase_local": 188.6,
+      "speed": 15.123206,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 118,
+      "name": "THETA1",
+      "description": null,
+      "amplitude": 0.012,
+      "phase_GMT": 310.7,
+      "phase_local": 171.0,
+      "speed": 15.512589,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 119,
+      "name": "KJ2",
+      "description": null,
+      "amplitude": 0.005,
+      "phase_GMT": 314.9,
+      "phase_local": 39.3,
+      "speed": 30.626513,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    },
+    {
+      "number": 120,
+      "name": "OO2",
+      "description": null,
+      "amplitude": 0.025,
+      "phase_GMT": 31.0,
+      "phase_local": 144.9,
+      "speed": 27.341696,
+      "comments": "5-year (2012-2016) Vector Averaged.  Mm, Msf, Mf from average of 20 years (1996-2016).  Sa and SSa from 20year analysis."
+    }
+  ],
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/9455920/harcon.json"
+}

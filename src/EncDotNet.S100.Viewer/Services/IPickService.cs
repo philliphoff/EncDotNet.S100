@@ -4,14 +4,21 @@ using Mapsui;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Dispatches map picks (single-tap, modifier-click, long-press) to the pick
-/// report view-model. Lifts the find-owning-entry +
+/// Resolves map picks (single-tap, modifier-click, long-press) and publishes
+/// them as <see cref="PickResult"/>s, which Object Information shows. Lifts the find-owning-entry +
 /// <see cref="EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor.GetFeatureInfo"/>
 /// logic out of <see cref="MainWindow"/>; the window keeps the gesture
 /// detection and routes the clicked world position here.
 /// </summary>
 internal interface IPickService
 {
+    /// <summary>
+    /// Raised with every pick result: a map pick, a geographic pick, a feature
+    /// opened by search or a followed reference. An empty result clears
+    /// Object Information. Raised on the UI thread.
+    /// </summary>
+    event EventHandler<PickResult>? Picked;
+
     /// <summary>
     /// Picks the drawn features at <paramref name="worldPosition"/> (EPSG:3857;
     /// null for a tap off the map) through the map session's engine pick and
@@ -52,10 +59,10 @@ internal interface IPickService
     /// Resolves an xlink-style reference from the currently selected hit
     /// to its target feature within the same dataset and re-opens the
     /// Object Info panel on it. Returns <c>true</c> when navigation
-    /// succeeded, <c>false</c> when the target could not be found (the
-    /// caller is responsible for surfacing
-    /// <see cref="EncDotNet.S100.Viewer.Resources.Strings.Status_FeatureRefNotFound"/>
-    /// or equivalent).
+    /// succeeded, <c>false</c> when the target could not be found, after
+    /// showing a toast
+    /// (<see cref="EncDotNet.S100.Viewer.Resources.Strings.Status_FeatureRefNotFound"/>)
+    /// so the user knows the click registered.
     /// </summary>
     bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference);
 

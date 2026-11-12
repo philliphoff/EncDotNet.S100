@@ -181,6 +181,15 @@ internal sealed class ViewerDataPaths
             : Path.Combine(DefaultSettingsDirectory, "navigational-warnings.json");
 
     /// <summary>
+    /// Path of the file listing the AML sets whose first-open notification
+    /// has been shown (#1371). Placed like <see cref="CollectionsFilePath"/>.
+    /// </summary>
+    public string AmlNoticesFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "aml-notices.txt")
+            : Path.Combine(DefaultSettingsDirectory, "aml-notices.txt");
+
+    /// <summary>
     /// Absolute path of <c>navigational-warning-classifications.json</c>:
     /// the mariner's on chart / off chart / information classification of
     /// each navigational warning (#996). Placed like <see cref="CollectionsFilePath"/>.

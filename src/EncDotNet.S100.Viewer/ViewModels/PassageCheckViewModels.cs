@@ -43,54 +43,56 @@ internal sealed class PassageCheckViewModel : ViewModelBase
 {
     private readonly PassageCheckService _service;
     private readonly RoutesService _routes;
-    private readonly Func<DepthUnit> _depthUnit;
-    private readonly Func<TimeFormat> _timeFormat;
-    private readonly RouteFindingsService? _findings;
+    private readonly DisplayFormatting _formatting;
+    private readonly RouteFindingsService _findings;
 
+    /// <summary>Creates the check-mode content of the Routes panel.</summary>
+    /// <param name="service">The clearance check and route checks of the active route.</param>
+    /// <param name="routes">The routes, for the active route's passage values.</param>
+    /// <param name="formatting">The depth unit and time format the text uses.</param>
+    /// <param name="findings">The checked route's findings.</param>
+    /// <param name="findingsList">The Findings tab's list over <paramref name="findings"/>.</param>
     public PassageCheckViewModel(
         PassageCheckService service,
         RoutesService routes,
-        Func<DepthUnit> depthUnit,
-        Func<TimeFormat> timeFormat,
-        RouteFindingsService? findings,
-        Action? addDraft)
+        DisplayFormatting formatting,
+        RouteFindingsService findings,
+        RouteFindingsViewModel findingsList)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(routes);
+        ArgumentNullException.ThrowIfNull(formatting);
+        ArgumentNullException.ThrowIfNull(findings);
+        ArgumentNullException.ThrowIfNull(findingsList);
         _service = service;
         _routes = routes;
-        _depthUnit = depthUnit;
-        _timeFormat = timeFormat;
+        _formatting = formatting;
         _findings = findings;
+        Findings = findingsList;
         Legs = new ObservableCollection<PassageCheckLegRowViewModel>();
         SummaryRows = new ObservableCollection<CheckSummaryRowViewModel>();
-        Window = new DepartureWindowViewModel(service, timeFormat);
+        Window = new DepartureWindowViewModel(service, () => _formatting.TimeFormat);
         HoverLegCommand = new RelayCommand<PassageCheckLegRowViewModel>(row =>
         {
             if (row is not null)
                 _service.SetCursor(row.MidDistanceMeters);
         });
-        AddDraftCommand = new RelayCommand(() => addDraft?.Invoke(), () => addDraft is not null);
+        AddDraftCommand = new RelayCommand(() => AddDraftRequested?.Invoke(this, EventArgs.Empty));
         SelectSummaryCommand = new RelayCommand<CheckSummaryRowViewModel>(row =>
         {
             if (row is null)
                 return;
-            if (Findings is not null)
-                Findings.Filter = row.Filter;
+            Findings.Filter = row.Filter;
             ShowFindings = true;
         });
-        if (findings is not null)
+        Findings.CountChanged += (_, _) =>
         {
-            Findings = new RouteFindingsViewModel(findings);
-            Findings.CountChanged += (_, _) =>
-            {
-                OnPropertyChanged(nameof(FindingsLabel));
-                OnPropertyChanged(nameof(FindingsCount));
-            };
-            findings.Changed += (_, _) => Refresh();
-            // #959: a Warning card's "Crosses route" row opens its finding here.
-            findings.OpenRequested += (_, _) => ShowFindings = true;
-        }
+            OnPropertyChanged(nameof(FindingsLabel));
+            OnPropertyChanged(nameof(FindingsCount));
+        };
+        findings.Changed += (_, _) => Refresh();
+        // #959: a Warning card's "Crosses route" row opens its finding here.
+        findings.OpenRequested += (_, _) => ShowFindings = true;
         _service.Changed += (_, _) => Refresh();
         Window.PropertyChanged += (_, e) =>
         {
@@ -103,8 +105,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     /// <summary>The verdict card's departure-window line and <b>Depart {HH:MM}</b> (#903).</summary>
     public DepartureWindowViewModel Window { get; }
 
-    /// <summary>The Findings tab's list (#905), or <c>null</c> without a findings service.</summary>
-    public RouteFindingsViewModel? Findings { get; }
+    /// <summary>The Findings tab's list (#905).</summary>
+    public RouteFindingsViewModel Findings { get; }
 
     /// <summary>The check-mode leg rows (C5).</summary>
     public ObservableCollection<PassageCheckLegRowViewModel> Legs { get; }
@@ -115,8 +117,11 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     /// <summary>Moves the profile cursor and ghost to the middle of a leg (C5 hover).</summary>
     public ICommand HoverLegCommand { get; }
 
-    /// <summary>"+ Add draft" (A5): expands the Passage card and focuses Draft.</summary>
+    /// <summary>"+ Add draft" (A5): raises <see cref="AddDraftRequested"/>, which the panel answers by expanding the Passage card and focusing Draft.</summary>
     public ICommand AddDraftCommand { get; }
+
+    /// <summary>Raised by <see cref="AddDraftCommand"/>.</summary>
+    public event EventHandler? AddDraftRequested;
 
     /// <summary>A summary row's click (B3): filters the findings list to that row's checks and shows it.</summary>
     public ICommand SelectSummaryCommand { get; }
@@ -285,10 +290,10 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     public bool ShowLegs => !ShowFindings;
 
     /// <summary>The Findings tab label, "Findings {N}" (C4).</summary>
-    public string FindingsLabel => string.Format(CultureInfo.CurrentCulture, Strings.Check_TabFindingsFormat, Findings?.Count ?? 0);
+    public string FindingsLabel => string.Format(CultureInfo.CurrentCulture, Strings.Check_TabFindingsFormat, Findings.Count);
 
     /// <summary>The Findings tab's count, shown in the secondary colour after its label.</summary>
-    public string FindingsCount => (Findings?.Count ?? 0).ToString(CultureInfo.CurrentCulture);
+    public string FindingsCount => (Findings.Count).ToString(CultureInfo.CurrentCulture);
 
     /// <summary>Re-reads the service state.</summary>
     public void Refresh()
@@ -297,10 +302,10 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         var input = _service.IsActive ? _service.Input : null;
         NeedsDraft = input is { HasDraft: false };
         var current = input is { HasDraft: true } ? _service.Current : null;
-        IsStale = (current is not null && _service.IsStale) || (input is not null && (_findings?.IsStale ?? false));
+        IsStale = (current is not null && _service.IsStale) || (input is not null && _findings.IsStale);
         HeaderMeta = BuildHeaderMeta(input, current);
 
-        var verdict = RouteCheckCard.For(_service, _findings, _depthUnit(), _timeFormat());
+        var verdict = RouteCheckCard.For(_service, _findings, _formatting.DepthUnit, _formatting.TimeFormat);
         if (verdict is null)
         {
             HasVerdict = false;
@@ -330,7 +335,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
             RebuildLegs(input);
         else
             Legs.Clear();
-        UpdateBadges(_findings?.Findings ?? []);
+        UpdateBadges(_findings.Findings);
     }
 
     // D4: each leg's worst route-check group and how many findings it has.
@@ -361,7 +366,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
                 row = new PassageCheckLegRowViewModel(i);
                 Legs.Add(row);
             }
-            row.Update(schedule.Legs[i], input.Departure, _timeFormat());
+            row.Update(schedule.Legs[i], input.Departure, _formatting.TimeFormat);
         }
     }
 
@@ -399,7 +404,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
                 row = new PassageCheckLegRowViewModel(i);
                 Legs.Add(row);
             }
-            row.Update(legs[i], current.LegPlaceNames[i], current.Result.Departure, _depthUnit(), _timeFormat());
+            row.Update(legs[i], current.LegPlaceNames[i], current.Result.Departure, _formatting.DepthUnit, _formatting.TimeFormat);
         }
     }
 
@@ -416,7 +421,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
             if (route.Info.Vessel?.Name is { Length: > 0 } vessel)
                 parts.Add(vessel);
             if (route.Passage.DraftMeters is { } draft)
-                parts.Add(PassageFormatting.Format(draft, PassageQuantity.Depth, _depthUnit()));
+                parts.Add(PassageFormatting.Format(draft, PassageQuantity.Depth, _formatting.DepthUnit));
             if (current is not null)
                 AddTimes(parts, current.Result.Departure, current.Result.Arrival);
         }
@@ -424,7 +429,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         {
             parts.Add(Strings.Check_NoDraftHeader);
             if (route.Passage.SpeedKnots is { } speed)
-                parts.Add(PassageFormatting.Format(speed, PassageQuantity.Speed, _depthUnit()));
+                parts.Add(PassageFormatting.Format(speed, PassageQuantity.Speed, _formatting.DepthUnit));
             if (route.Passage.Departure is not null)
                 AddTimes(parts, input.Departure, PassageSchedule.Compute(input.Legs, input.Departure).Arrival);
         }
@@ -435,11 +440,11 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     private void AddTimes(List<string> parts, DateTimeOffset departure, DateTimeOffset? arrival)
     {
         parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_DepartureFormat,
-            PassageFormatting.FormatEta(departure, departure, _timeFormat())));
+            PassageFormatting.FormatEta(departure, departure, _formatting.TimeFormat)));
         if (arrival is { } a)
         {
             parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_ArrivalFormat,
-                PassageFormatting.FormatEta(a, departure, _timeFormat())));
+                PassageFormatting.FormatEta(a, departure, _formatting.TimeFormat)));
         }
     }
 

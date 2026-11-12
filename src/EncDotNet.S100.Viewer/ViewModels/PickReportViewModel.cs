@@ -1,10 +1,9 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -24,14 +23,11 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </remarks>
 internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer.ViewModels.Activities.IActivityTabContentSignal
 {
-    private readonly ITimeFormatProvider? _timeFormat;
-    private readonly IMarinerSettingsProvider? _marinerSettings;
-    private readonly IUrlOpener? _urlOpener;
-    private readonly IS100ExaminerLinkBuilder? _examinerLinks;
-    private readonly IViewTime? _viewTime;
-    private NavigationalWarningCardViewModel? _warningCard;
-    private INavigationalWarningNavigator? _warningNavigator;
-    private PickHit? _previewHit;
+    private readonly IPickService _picks;
+    private readonly StationChartContext _charts;
+    private readonly ExaminerLinks _examinerLinks;
+    private readonly Dictionary<PickHit, StationTimeSeriesViewModel> _stationCharts = new(ReferenceEqualityComparer.Instance);
+    private StationTimeSeriesViewModel? _stationChart;
     private bool _warningAttributesExpanded;
     private string? _featureType;
     private string? _featureTypeName;
@@ -44,45 +40,34 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private PickLocation? _location;
     private DepthOverTimeViewModel? _locationDepth;
     private string _chartBasisLine = string.Empty;
+    private Services.Legends.LegendService? _legend;
 
-    public PickReportViewModel()
-        : this(timeFormat: null, marinerSettings: null)
-    {
-    }
-
-    public PickReportViewModel(ITimeFormatProvider? timeFormat)
-        : this(timeFormat, marinerSettings: null)
-    {
-    }
-
+    /// <summary>Creates Object Information.</summary>
+    /// <param name="picks">The picks it shows, and follows references through.</param>
+    /// <param name="charts">
+    /// The time, formatting and theme of its station and depth charts; it
+    /// formats attribute times and depths the same way.
+    /// </param>
+    /// <param name="examinerLinks">Opens the picked feature and its attributes in the eXaminer.</param>
+    /// <param name="warnings">The Warning cards of a pick that hit navigational warnings.</param>
+    /// <param name="selection">What it shows, published for those that follow it (#1397).</param>
     public PickReportViewModel(
-        ITimeFormatProvider? timeFormat,
-        IMarinerSettingsProvider? marinerSettings)
-        : this(timeFormat, marinerSettings, urlOpener: null, examinerLinks: null)
+        IPickService picks,
+        StationChartContext charts,
+        ExaminerLinks examinerLinks,
+        PickWarningCardsViewModel warnings,
+        ObjectInformationSelection selection)
     {
-    }
-
-    public PickReportViewModel(
-        ITimeFormatProvider? timeFormat,
-        IMarinerSettingsProvider? marinerSettings,
-        IUrlOpener? urlOpener,
-        IS100ExaminerLinkBuilder? examinerLinks)
-        : this(timeFormat, marinerSettings, urlOpener, examinerLinks, viewTime: null)
-    {
-    }
-
-    public PickReportViewModel(
-        ITimeFormatProvider? timeFormat,
-        IMarinerSettingsProvider? marinerSettings,
-        IUrlOpener? urlOpener,
-        IS100ExaminerLinkBuilder? examinerLinks,
-        IViewTime? viewTime)
-    {
-        _timeFormat = timeFormat;
-        _viewTime = viewTime;
-        _marinerSettings = marinerSettings;
-        _urlOpener = urlOpener;
+        ArgumentNullException.ThrowIfNull(picks);
+        ArgumentNullException.ThrowIfNull(charts);
+        ArgumentNullException.ThrowIfNull(examinerLinks);
+        ArgumentNullException.ThrowIfNull(warnings);
+        ArgumentNullException.ThrowIfNull(selection);
+        _picks = picks;
+        _charts = charts;
         _examinerLinks = examinerLinks;
+        Warnings = warnings;
+        Selection = selection;
         ClearCommand = new RelayCommand(Clear);
         CopyLocationCommand = new RelayCommand(
             () => { if (_location is { } loc) CopyLocationRequested?.Invoke(this, LatLonFormatter.FormatDecimal(loc.Latitude, loc.Longitude)); },
@@ -90,57 +75,67 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         CopyIdentityCommand = new RelayCommand(
             () => { var text = IdentityClipboardText; if (!string.IsNullOrEmpty(text)) CopyIdentityRequested?.Invoke(this, text); },
             () => _selectedHit is not null);
+        // A followed reference that isn't found says so in a toast.
         NavigateCommand = new RelayCommand<FeatureReference>(
-            r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
+            r => { if (r is not null) _picks.NavigateToReference(r); },
             r => r is not null);
         TakeHelmCommand = new RelayCommand<DynamicPickHit>(
             hit => { if (hit is not null && TryGetAisMmsi(hit, out var mmsi)) TakeHelmRequested?.Invoke(this, mmsi); },
             hit => hit is not null && TryGetAisMmsi(hit, out _));
         OpenFeatureInExaminerCommand = new RelayCommand(
-            OpenFeatureInExaminer,
+            () => _examinerLinks.OpenFeature(ProductSpec, FeatureType),
             () => IsExaminerAvailable && !string.IsNullOrWhiteSpace(FeatureType));
         OpenAttributeInExaminerCommand = new RelayCommand<PickAttribute>(
-            OpenAttributeInExaminer,
+            a => { if (a is not null) _examinerLinks.OpenAttribute(ProductSpec, FeatureType, a.Code); },
             a => IsExaminerAvailable && a is not null && !string.IsNullOrWhiteSpace(a.Code));
 
-        if (_timeFormat is not null)
-            _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
+        // Object Information's selection, for those that follow it without
+        // holding the pick report (#1397): the warnings panel and the drawing.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SelectedHit) or nameof(HasPick))
+                Selection.SetHit(_selectedHit);
+        };
+        Warnings.PropertyChanged += OnWarningsPropertyChanged;
+        Warnings.SelectRequested += (_, hit) => SelectedHit = hit;
+        Warnings.CopyRequested += OnCardCopyRequested;
 
-        if (_marinerSettings is not null)
-            _marinerSettings.Changed += OnMarinerSettingsChanged;
-
-        if (_viewTime is not null)
-            _viewTime.Changed += OnViewTimeChanged;
-    }
-
-    private void OnViewTimeChanged(object? sender, EventArgs e)
-    {
-        foreach (var card in AllWarningCards())
-            card.SetViewTime(CurrentViewTime);
-    }
-
-    private DateTimeOffset CurrentViewTime => _viewTime?.Current ?? DateTimeOffset.UtcNow;
-
-    private void OnTimeFormatChanged(TimeFormat format)
-    {
-        ReformatAttributesFromSelectedHit();
-        foreach (var card in AllWarningCards())
-            card.SetTimeFormat(format);
-    }
-
-    private void OnMarinerSettingsChanged(MarinerSettings _)
-    {
+        _picks.Picked += (_, result) => SetPicks(result);
+        _charts.TimeFormat.TimeFormatChanged += _ => ReformatAttributesFromSelectedHit();
         // DepthUnit is the only mariner setting the pick panel renders;
         // re-run the same projection used for time-format changes so
         // depth-typed rows pick up the new unit immediately.
-        ReformatAttributesFromSelectedHit();
+        _charts.MarinerSettings.Changed += _ => ReformatAttributesFromSelectedHit();
+    }
+
+    private void OnWarningsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(PickWarningCardsViewModel.Card):
+                Selection.SetOpenWarning(Warnings.Card?.Hit);
+                break;
+            case nameof(PickWarningCardsViewModel.HasCard):
+                OnPropertyChanged(nameof(ShowInlineAttributes));
+                break;
+            case nameof(PickWarningCardsViewModel.HasList):
+                OnPropertyChanged(nameof(ShowHitList));
+                OnPropertyChanged(nameof(SelectedOtherHit));
+                break;
+            case nameof(PickWarningCardsViewModel.PreviewHit):
+                OnPropertyChanged(nameof(PreviewHit));
+                break;
+        }
     }
 
     private void ReformatAttributesFromSelectedHit()
     {
         if (_selectedHit is null) return;
-        PopulateAttributeSections(ReformatTypedAttributes(_selectedHit.Attributes));
+        PopulateAttributeSections(FormatAttributes(_selectedHit.Attributes));
     }
+
+    private IReadOnlyList<PickAttribute> FormatAttributes(IReadOnlyList<PickAttribute> attributes) =>
+        PickAttributeFormatter.Format(attributes, _charts.TimeFormat.Current, _charts.MarinerSettings.Current.DepthUnit);
 
     /// <summary>
     /// Splits the reformatted attribute tree into the key/value
@@ -157,15 +152,15 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         // S-100; the processor's own notice row (kept for MCP, the CLI and
         // the Mapsui pick query) would repeat it (#1096).
         if (NavigationNotice is not null)
-            reformatted = WithoutNavigationNotice(reformatted);
+            reformatted = PickAttributeFormatter.WithoutNavigationNotice(reformatted);
         // The stale line shows under the notice (StaleNotice), not as a row.
         if (reformatted.Any(r => r.IsStaleNotice))
             reformatted = [.. reformatted.Where(r => !r.IsStaleNotice)];
         var rows = FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted);
         if (_selectedHit?.NavigationalWarning is not null)
-            rows = WithoutWarningText(rows);
+            rows = PickAttributeFormatter.WithoutWarningText(rows);
         var longValues = new List<(PickAttribute Attribute, PickAttribute? Parent)>();
-        rows = WithoutLongValues(rows, longValues);
+        rows = PickAttributeFormatter.WithoutLongValues(rows, longValues);
         foreach (var a in rows)
             Attributes.Add(a);
         OnPropertyChanged(nameof(HasAttributes));
@@ -191,196 +186,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         foreach (var card in TextCards)
             card.CopyRequested -= OnCardCopyRequested;
         TextCards.Clear();
-    }
-
-    /// <summary>
-    /// Drops the not-for-navigation notice rows
-    /// (<see cref="PickAttribute.IsNavigationNotice"/>) that
-    /// <see cref="NavigationNotice"/> already shows.
-    /// </summary>
-    internal static IReadOnlyList<PickAttribute> WithoutNavigationNotice(IReadOnlyList<PickAttribute> rows)
-    {
-        ArgumentNullException.ThrowIfNull(rows);
-        return rows.Any(r => r.IsNavigationNotice)
-            ? rows.Where(r => !r.IsNavigationNotice).ToList()
-            : rows;
-    }
-
-    /// <summary>
-    /// Drops the long text values (see
-    /// <see cref="PickTextCardViewModel.IsLongValue"/>) from the table rows,
-    /// adding each to <paramref name="lifted"/> with its complex parent. A
-    /// complex row left with no children is dropped.
-    /// </summary>
-    internal static IReadOnlyList<PickAttribute> WithoutLongValues(
-        IReadOnlyList<PickAttribute> rows, List<(PickAttribute Attribute, PickAttribute? Parent)> lifted)
-    {
-        ArgumentNullException.ThrowIfNull(rows);
-        ArgumentNullException.ThrowIfNull(lifted);
-
-        var result = new List<PickAttribute>(rows.Count);
-        foreach (var row in rows)
-        {
-            if (row.Children.Count == 0)
-            {
-                if (PickTextCardViewModel.IsLongValue(row))
-                    lifted.Add((row, null));
-                else
-                    result.Add(row);
-                continue;
-            }
-
-            var kept = new List<PickAttribute>(row.Children.Count);
-            foreach (var child in row.Children)
-            {
-                if (PickTextCardViewModel.IsLongValue(child))
-                    lifted.Add((child, row));
-                else
-                    kept.Add(child);
-            }
-
-            if (kept.Count == row.Children.Count)
-                result.Add(row);
-            else if (kept.Count > 0)
-                result.Add(WithChildren(row, kept));
-        }
-        return result;
-    }
-
-    /// <summary>
-    /// Drops the warning text rows (S-124 <c>warningInformation/information</c>)
-    /// that the Warning card shows, keeping the rest of the complex attribute
-    /// (its <c>navwarnTypeDetails</c>).
-    /// </summary>
-    internal static IReadOnlyList<PickAttribute> WithoutWarningText(IReadOnlyList<PickAttribute> rows)
-    {
-        static bool IsText(PickAttribute child) =>
-            child.Code.Equals("information", StringComparison.OrdinalIgnoreCase)
-            || child.Code.StartsWith("information.", StringComparison.OrdinalIgnoreCase);
-
-        var result = new List<PickAttribute>(rows.Count);
-        foreach (var row in rows)
-        {
-            if (!row.Code.Equals("warningInformation", StringComparison.OrdinalIgnoreCase))
-            {
-                result.Add(row);
-                continue;
-            }
-
-            var kept = row.Children.Where(c => !IsText(c)).ToList();
-            if (kept.Count == 0)
-                continue;
-            result.Add(WithChildren(row, kept));
-        }
-        return result;
-    }
-
-    private static PickAttribute WithChildren(PickAttribute row, IReadOnlyList<PickAttribute> children) => new()
-    {
-        Code = row.Code,
-        Name = row.Name,
-        RawValue = row.RawValue,
-        DisplayValue = row.DisplayValue,
-        DateTimeValue = row.DateTimeValue,
-        DateTimeRangeValue = row.DateTimeRangeValue,
-        DepthMetresValue = row.DepthMetresValue,
-        ExternalText = row.ExternalText,
-        IsNavigationNotice = row.IsNavigationNotice,
-        IsStaleNotice = row.IsStaleNotice,
-        Children = children,
-    };
-
-    private IReadOnlyList<PickAttribute> ReformatTypedAttributes(IReadOnlyList<PickAttribute> source)
-    {
-        var timeFmt = _timeFormat?.Current ?? TimeFormat.Local;
-        var depthUnit = _marinerSettings?.Current.DepthUnit ?? DepthUnit.Metres;
-        var list = new List<PickAttribute>(source.Count);
-        foreach (var attr in source)
-        {
-            list.Add(ReformatOne(attr, timeFmt, depthUnit));
-        }
-        return list;
-    }
-
-    private PickAttribute ReformatOne(PickAttribute attr, TimeFormat timeFmt, DepthUnit depthUnit)
-    {
-        var children = attr.Children.Count == 0
-            ? attr.Children
-            : (IReadOnlyList<PickAttribute>)ReformatTypedAttributes(attr.Children);
-
-        if (attr.DateTimeValue is { } dt)
-        {
-            return new PickAttribute
-            {
-                Code = attr.Code,
-                Name = attr.Name,
-                RawValue = attr.RawValue,
-                DisplayValue = TimeFormatting.Format(dt, timeFmt),
-                DateTimeValue = attr.DateTimeValue,
-                DateTimeRangeValue = attr.DateTimeRangeValue,
-                DepthMetresValue = attr.DepthMetresValue,
-                ExternalText = attr.ExternalText,
-                IsNavigationNotice = attr.IsNavigationNotice,
-                IsStaleNotice = attr.IsStaleNotice,
-                Children = children,
-            };
-        }
-
-        if (attr.DateTimeRangeValue is { } range)
-        {
-            return new PickAttribute
-            {
-                Code = attr.Code,
-                Name = attr.Name,
-                RawValue = attr.RawValue,
-                DisplayValue = TimeFormatting.FormatTimeRange(range.Start, range.End, timeFmt),
-                DateTimeValue = attr.DateTimeValue,
-                DateTimeRangeValue = attr.DateTimeRangeValue,
-                DepthMetresValue = attr.DepthMetresValue,
-                ExternalText = attr.ExternalText,
-                IsNavigationNotice = attr.IsNavigationNotice,
-                IsStaleNotice = attr.IsStaleNotice,
-                Children = children,
-            };
-        }
-
-        if (attr.DepthMetresValue is { } metres)
-        {
-            return new PickAttribute
-            {
-                Code = attr.Code,
-                Name = attr.Name,
-                RawValue = attr.RawValue,
-                DisplayValue = DepthFormatting.Format(metres, depthUnit),
-                DateTimeValue = attr.DateTimeValue,
-                DateTimeRangeValue = attr.DateTimeRangeValue,
-                DepthMetresValue = attr.DepthMetresValue,
-                ExternalText = attr.ExternalText,
-                IsNavigationNotice = attr.IsNavigationNotice,
-                IsStaleNotice = attr.IsStaleNotice,
-                Children = children,
-            };
-        }
-
-        if (attr.Children.Count != 0 && !ReferenceEquals(children, attr.Children))
-        {
-            return new PickAttribute
-            {
-                Code = attr.Code,
-                Name = attr.Name,
-                RawValue = attr.RawValue,
-                DisplayValue = attr.DisplayValue,
-                DateTimeValue = attr.DateTimeValue,
-                DateTimeRangeValue = attr.DateTimeRangeValue,
-                DepthMetresValue = attr.DepthMetresValue,
-                ExternalText = attr.ExternalText,
-                IsNavigationNotice = attr.IsNavigationNotice,
-                IsStaleNotice = attr.IsStaleNotice,
-                Children = children,
-            };
-        }
-
-        return attr;
     }
 
     /// <summary>The picked feature's class/type code (e.g. "DepthArea", "LateralBuoy").</summary>
@@ -451,6 +256,11 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (_selectedHit is null)
                 return null;
 
+            // An AML feature's spec, cell and marking are on its provenance
+            // strip; the caption names its class instead (#1372).
+            if (_selectedHit.Aml is { } aml)
+                return $"{FeatureType} · {aml.ClassKindText(_selectedHit.Attributes)}";
+
             var segments = new List<string>(3);
             if (!string.IsNullOrEmpty(FeatureRef))
                 segments.Add(string.Format(CultureInfo.CurrentCulture, Strings.Pick_IdCaption, FeatureRef));
@@ -469,10 +279,32 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// the user clicked isn't IHO symbology; <see langword="null"/> otherwise
     /// (issue #937).
     /// </summary>
-    public string? PortrayalNote => _selectedHit is null ? null : PortrayalNoteText.For(ProductSpec);
+    /// <remarks>An AML feature the map doesn't draw has no symbol to explain; it says <see cref="AmlNotDrawnNote"/> instead.</remarks>
+    public string? PortrayalNote => _selectedHit is null || _selectedHit.Aml is { Drawn: false }
+        ? null
+        : PortrayalNoteText.For(ProductSpec);
 
     /// <summary>True when <see cref="PortrayalNote"/> has a value to show.</summary>
     public bool HasPortrayalNote => PortrayalNote is not null;
+
+    /// <summary>
+    /// The provenance strip of the selected hit when it's a NATO Additional
+    /// Military Layers feature: AML tag, cell and protective marking (#1372,
+    /// design decision 13); <see langword="null"/> otherwise.
+    /// </summary>
+    public AmlPickProvenance? Aml => _selectedHit?.Aml;
+
+    /// <summary>True when <see cref="Aml"/> has a strip to show.</summary>
+    public bool HasAml => Aml is not null;
+
+    /// <summary>
+    /// "Not drawn. Picked from its position." when the selected hit is an AML
+    /// feature the map doesn't draw; <see langword="null"/> otherwise.
+    /// </summary>
+    public string? AmlNotDrawnNote => Aml is { Drawn: false } ? Strings.Pick_AmlNotDrawn : null;
+
+    /// <summary>True when <see cref="AmlNotDrawnNote"/> has a value to show.</summary>
+    public bool HasAmlNotDrawnNote => AmlNotDrawnNote is not null;
 
     /// <summary>
     /// The pick report's first line for a product that isn't S-100, such as
@@ -518,6 +350,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             var identity = string.IsNullOrEmpty(caption)
                 ? PrimaryLabel
                 : $"{PrimaryLabel}\n{caption}";
+            if (Aml is { } aml)
+                identity = $"{aml.TagText} · {aml.CellName}{(aml.HasMarking ? " · " + aml.Marking : string.Empty)}\n{identity}";
             return NavigationNotice is { } notice ? $"{notice}\n{identity}" : identity;
         }
     }
@@ -532,8 +366,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (SetProperty(ref _hasPick, value) && !wasHasPick && value)
             {
                 // false→true transition: signal that the Pick Report dock
-                // should auto-open (PR-M4). Subsequent updates while still
-                // HasPick=true do NOT re-raise.
+                // should auto-open (PR-M4). SetPicks raises it again for each
+                // later pick, so a pick switches the dock back to this tab.
                 ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -598,13 +432,61 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public void SetDepthBasis(Services.Depth.DepthBasis basis)
     {
         ArgumentNullException.ThrowIfNull(basis);
-        _chartBasisLine = Services.Depth.DepthBasisText.CardLine(basis, _timeFormat?.Current ?? TimeFormat.Local);
+        _chartBasisLine = Services.Depth.DepthBasisText.CardLine(basis, _charts.TimeFormat.Current);
         if (_locationDepth is not null)
             _locationDepth.ChartBasisLine = _chartBasisLine;
     }
 
     /// <summary>True when a depth-assimilation card is available for the pick.</summary>
     public bool HasLocationDepthSeries => _locationDepth is not null;
+
+    /// <summary>
+    /// Shows the picked features' Legend rows as key lines (#1410, legends
+    /// design note D3, D16), each with an <b>In legend</b> link that opens the
+    /// Legend tab at the row. The lines follow the legend as it rebuilds (a
+    /// palette change, a pan). Without a legend the report has no key.
+    /// </summary>
+    /// <param name="legend">The legend service.</param>
+    internal void AttachLegend(Services.Legends.LegendService legend)
+    {
+        ArgumentNullException.ThrowIfNull(legend);
+        if (_legend is not null)
+            _legend.Changed -= OnLegendChanged;
+        _legend = legend;
+        legend.Changed += OnLegendChanged;
+        RefreshLegendKey();
+    }
+
+    /// <summary>
+    /// One key line per picked feature that a Legend row matches, in hit
+    /// order, each row once: "S-102 · 2–10 m" with its swatch (round 3's C).
+    /// </summary>
+    public ObservableCollection<PickLegendKeyLine> LegendKey { get; } = new();
+
+    /// <summary>True when <see cref="LegendKey"/> has lines to show.</summary>
+    public bool HasLegendKey => LegendKey.Count > 0;
+
+    private void OnLegendChanged(object? sender, EventArgs e) => RefreshLegendKey();
+
+    private void RefreshLegendKey()
+    {
+        LegendKey.Clear();
+        if (_legend is { } legend)
+        {
+            var tile = Legends.LegendViewModel.TileOf(legend.Palette);
+            var seen = new HashSet<(string Section, string Row)>();
+            foreach (var hit in Hits)
+            {
+                if (legend.FindRow(hit, _location?.Latitude) is { } match
+                    && seen.Add((match.Section.Id, match.Row.Label)))
+                {
+                    LegendKey.Add(new PickLegendKeyLine(match, tile, legend.Show));
+                }
+            }
+        }
+        OnPropertyChanged(nameof(HasLegendKey));
+    }
+
 
     /// <summary>
     /// Mariner-friendly degrees-decimal-minutes rendering of
@@ -652,36 +534,25 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// Whether the hit list shows: several hits, unless they include several
     /// navigational warnings, whose cards are the list instead (#932).
     /// </summary>
-    public bool ShowHitList => HasMultipleHits && !HasWarningCardList;
+    public bool ShowHitList => HasMultipleHits && !Warnings.HasList;
 
     /// <summary>
-    /// One Warning card per navigational warning part the pick hit, when it
-    /// hit two or more (#932): points before lines before areas, then by
-    /// number. One card is open at a time, the selected hit's. Empty
-    /// otherwise; a lone warning shows as <see cref="WarningCard"/>.
+    /// The Warning cards of the pick (#932): a card per navigational warning
+    /// part when it hit two or more, which replace the hit list, else the lone
+    /// card of a selected warning.
     /// </summary>
-    public ObservableCollection<NavigationalWarningCardViewModel> WarningCards { get; } = new();
-
-    /// <summary>Whether <see cref="WarningCards"/> replaces the hit list.</summary>
-    public bool HasWarningCardList => WarningCards.Count > 0;
+    public PickWarningCardsViewModel Warnings { get; }
 
     /// <summary>
-    /// The hits beneath the Warning cards that aren't warnings, listed as
-    /// rows below them. Empty unless <see cref="HasWarningCardList"/>.
-    /// </summary>
-    public ObservableCollection<PickHit> OtherHits { get; } = new();
-
-    /// <summary>Whether <see cref="OtherHits"/> has rows.</summary>
-    public bool HasOtherHits => OtherHits.Count > 0;
-
-    /// <summary>
-    /// The selected row in <see cref="OtherHits"/>: <see cref="SelectedHit"/>
-    /// when it is one of them, else <c>null</c>. Setting <c>null</c> keeps the
-    /// selection, so opening a card doesn't bounce off the rows.
+    /// The selected row in the hits listed below the Warning cards
+    /// (<see cref="PickWarningCardsViewModel.OtherHits"/>):
+    /// <see cref="SelectedHit"/> when it is one of them, else <c>null</c>.
+    /// Setting <c>null</c> keeps the selection, so opening a card doesn't
+    /// bounce off the rows.
     /// </summary>
     public PickHit? SelectedOtherHit
     {
-        get => _selectedHit is not null && OtherHits.Contains(_selectedHit) ? _selectedHit : null;
+        get => _selectedHit is not null && Warnings.OtherHits.Contains(_selectedHit) ? _selectedHit : null;
         set
         {
             if (value is not null)
@@ -692,175 +563,13 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     }
 
     /// <summary>
-    /// The hit whose card the pointer is over, previewed on the map with the
-    /// pick highlight; <c>null</c> when none is.
+    /// The hit whose Warning card the pointer is over, previewed on the map
+    /// with the pick highlight; <c>null</c> when none is.
     /// </summary>
-    public PickHit? PreviewHit
-    {
-        get => _previewHit;
-        private set => SetProperty(ref _previewHit, value);
-    }
+    public PickHit? PreviewHit => Warnings.PreviewHit;
 
-    /// <summary>Previews <paramref name="card"/>'s part on the map, or ends the preview with <c>null</c>.</summary>
-    public void SetWarningPreview(NavigationalWarningCardViewModel? card) => PreviewHit = card?.Hit;
-
-    /// <summary>
-    /// The Navigational warnings panel, which Warning cards link to and zoom
-    /// through. Set by the panel; <c>null</c> without it, when cards neither
-    /// link nor zoom.
-    /// </summary>
-    public INavigationalWarningNavigator? WarningNavigator
-    {
-        get => _warningNavigator;
-        set
-        {
-            if (ReferenceEquals(_warningNavigator, value))
-                return;
-            if (_warningNavigator is not null)
-                _warningNavigator.WarningsChanged -= OnWarningsChanged;
-            _warningNavigator = value;
-            if (_warningNavigator is not null)
-                _warningNavigator.WarningsChanged += OnWarningsChanged;
-            RefreshWarningTargets();
-        }
-    }
-
-    private void OnWarningsChanged(object? sender, EventArgs e) => RefreshWarningTargets();
-
-    private void RefreshWarningTargets()
-    {
-        foreach (var card in AllWarningCards())
-            UpdateTargets(card);
-    }
-
-    private void UpdateTargets(NavigationalWarningCardViewModel card)
-    {
-        card.SetLinkTargets(_warningNavigator?.Warnings ?? []);
-        card.SetWarningSet(_warningNavigator?.WarningSet ?? Datasets.Pipelines.NavigationalWarningSet.Empty);
-        var entry = FindEntry(card.Hit);
-        card.CanZoom = entry is { Extent: not null };
-        card.CanClassify = entry is not null;
-        card.Classification = entry is null ? Services.NavigationalWarningClassification.OnChart : _warningNavigator!.ClassificationOf(entry);
-        card.SetRouteFinding(entry is null ? null : _warningNavigator!.RouteFindingFor(entry));
-    }
-
-    private Services.NavigationalWarningEntry? FindEntry(PickHit? hit) =>
-        hit is { DatasetFileName: { } datasetId } && _warningNavigator is { } navigator
-            ? navigator.Find(datasetId, hit.FeatureRef)
-            : null;
-
-    private IEnumerable<NavigationalWarningCardViewModel> AllWarningCards()
-    {
-        foreach (var card in WarningCards)
-            yield return card;
-        if (_warningCard is not null && !WarningCards.Contains(_warningCard))
-            yield return _warningCard;
-    }
-
-    private NavigationalWarningCardViewModel CreateWarningCard(PickHit hit, bool collapsible)
-    {
-        var card = new NavigationalWarningCardViewModel(
-            hit.NavigationalWarning!,
-            hit.DatasetFileName,
-            _timeFormat?.Current ?? TimeFormat.Local,
-            CurrentViewTime)
-        {
-            Hit = hit,
-            IsCollapsible = collapsible,
-            IsOpen = !collapsible,
-            NotForNavigation = hit.NotForNavigation,
-            // As the card is made: opening it marks the warning seen, and the card keeps saying it was new.
-            IsNew = FindEntry(hit) is { } entry && _warningNavigator!.IsNew(entry),
-        };
-        UpdateTargets(card);
-        card.CopyRequested += OnCardCopyRequested;
-        card.OpenRequested += OnWarningOpenRequested;
-        card.ZoomRequested += OnWarningZoomRequested;
-        card.LinkRequested += OnWarningLinkRequested;
-        card.ClassificationRequested += OnWarningClassificationRequested;
-        card.RouteFindingRequested += OnWarningRouteFindingRequested;
-        return card;
-    }
-
-    private void DetachWarningCard(NavigationalWarningCardViewModel card)
-    {
-        card.CopyRequested -= OnCardCopyRequested;
-        card.OpenRequested -= OnWarningOpenRequested;
-        card.ZoomRequested -= OnWarningZoomRequested;
-        card.LinkRequested -= OnWarningLinkRequested;
-        card.ClassificationRequested -= OnWarningClassificationRequested;
-        card.RouteFindingRequested -= OnWarningRouteFindingRequested;
-    }
-
-    // The navigator raises WarningsChanged, which updates every card (#996).
-    private void OnWarningClassificationRequested(object? sender, Services.NavigationalWarningClassification classification)
-    {
-        if (sender is NavigationalWarningCardViewModel { Hit: { } hit } && FindEntry(hit) is { } entry)
-            _warningNavigator!.SetClassification(entry, classification);
-    }
-
-    private void OnWarningOpenRequested(object? sender, EventArgs e)
-    {
-        if (sender is NavigationalWarningCardViewModel { Hit: { } hit })
-            SelectedHit = hit;
-    }
-
-    private void OnWarningZoomRequested(object? sender, EventArgs e)
-    {
-        if (sender is not NavigationalWarningCardViewModel { Hit: { } hit } || FindEntry(hit) is not { } entry)
-            return;
-        SelectedHit = hit;
-        _warningNavigator!.ZoomTo(entry);
-    }
-
-    private void OnWarningLinkRequested(object? sender, Services.NavigationalWarningEntry target) =>
-        _warningNavigator?.Select(target);
-
-    // #959: "Crosses route · leg 3 → 4" opens the finding in the Findings list.
-    private void OnWarningRouteFindingRequested(object? sender, EncDotNet.S100.Navigation.RouteFinding finding) =>
-        _warningNavigator?.OpenRouteFinding(finding);
-
-    /// <summary>
-    /// Orders the warning parts of one pick for their cards: points, then
-    /// lines, then areas, then parts with no location; within each, by year
-    /// and number, then label.
-    /// </summary>
-    internal static IReadOnlyList<PickHit> OrderWarningHits(
-        IEnumerable<PickHit> hits, Func<PickHit, S100GeometryType> geometryOf)
-    {
-        ArgumentNullException.ThrowIfNull(hits);
-        ArgumentNullException.ThrowIfNull(geometryOf);
-        return hits
-            .OrderBy(h => GeometryRank(geometryOf(h)))
-            .ThenBy(h => NumberKey(h.NavigationalWarning?.Number))
-            .ThenBy(h => h.NavigationalWarning?.Label ?? h.FeatureRef, StringComparer.Ordinal)
-            .ToList();
-    }
-
-    private static int GeometryRank(S100GeometryType geometry) => geometry switch
-    {
-        S100GeometryType.Point => 0,
-        S100GeometryType.Curve => 1,
-        S100GeometryType.Surface => 2,
-        _ => 3,
-    };
-
-    // "106/26" sorts as (26, 106); a number without a year sorts by number
-    // alone, and no number last.
-    private static (int Year, int Number) NumberKey(string? number)
-    {
-        if (number is null)
-            return (int.MaxValue, int.MaxValue);
-        var slash = number.IndexOf('/', StringComparison.Ordinal);
-        var digits = slash < 0 ? number : number[..slash];
-        var year = slash < 0 ? -1 : int.TryParse(number.AsSpan(slash + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var y) ? y : -1;
-        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var n)
-            ? (year, n)
-            : (int.MaxValue, int.MaxValue);
-    }
-
-    private S100GeometryType GeometryOf(PickHit hit) =>
-        FindEntry(hit)?.Geometry ?? S100GeometryType.None;
+    /// <summary>What Object Information shows, published for those that follow it (#1397).</summary>
+    public ObjectInformationSelection Selection { get; }
 
     /// <summary>
     /// Attribute rows for the picked feature, decoded against the dataset's
@@ -883,38 +592,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         attribute.Children.Count == 0 ? 1 : attribute.Children.Sum(LeafCount);
 
     /// <summary>
-    /// The Warning card for the selected hit when it is part of a
-    /// navigational warning (#932); <c>null</c> otherwise. Its status follows
-    /// the view time.
-    /// </summary>
-    public NavigationalWarningCardViewModel? WarningCard
-    {
-        get => _warningCard;
-        private set
-        {
-            if (ReferenceEquals(_warningCard, value))
-                return;
-            if (_warningCard is not null && !WarningCards.Contains(_warningCard))
-                DetachWarningCard(_warningCard);
-            _warningCard = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(HasWarningCard));
-            OnPropertyChanged(nameof(HasSingleWarningCard));
-            OnPropertyChanged(nameof(ShowInlineAttributes));
-        }
-    }
-
-    /// <summary>True when <see cref="WarningCard"/> is shown.</summary>
-    public bool HasWarningCard => _warningCard is not null;
-
-    /// <summary>True when <see cref="WarningCard"/> shows alone, not as one of <see cref="WarningCards"/>.</summary>
-    public bool HasSingleWarningCard => _warningCard is not null && !HasWarningCardList;
-
-    /// <summary>
     /// Whether the attribute table shows inline: not when a station chart
     /// or a Warning card leads, where it folds into an expander.
     /// </summary>
-    public bool ShowInlineAttributes => !HasStationSeries && !HasWarningCard;
+    public bool ShowInlineAttributes => !HasStationSeries && !Warnings.HasCard;
 
     /// <summary>
     /// Whether the attributes folded beneath a Warning card are open. Closed
@@ -954,11 +635,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>
     /// Invoked from the References list. Parameter is the
-    /// <see cref="FeatureReference"/> to follow; the view-model raises
-    /// <see cref="NavigateRequested"/> and the pick service (or any
-    /// other subscriber) performs the actual lookup. The view-model
-    /// owns no service references directly so unit tests can drive it
-    /// without a pick-service double.
+    /// <see cref="FeatureReference"/> to follow, which the pick service
+    /// opens in the selected hit's dataset (saying so when it isn't found).
     /// </summary>
     public ICommand NavigateCommand { get; }
 
@@ -1030,25 +708,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// and hosts a catalogue for the selected hit's product spec. Gates the
     /// feature- and attribute-level "open in eXaminer" affordances.
     /// </summary>
-    public bool IsExaminerAvailable => _examinerLinks?.SupportsSpec(ProductSpec) ?? false;
-
-    private void OpenFeatureInExaminer()
-    {
-        if (_urlOpener is null || _examinerLinks is null)
-            return;
-        var url = _examinerLinks.BuildFeatureUrl(ProductSpec, FeatureType);
-        if (!string.IsNullOrEmpty(url))
-            _urlOpener.Open(url);
-    }
-
-    private void OpenAttributeInExaminer(PickAttribute? attribute)
-    {
-        if (_urlOpener is null || _examinerLinks is null || attribute is null)
-            return;
-        var url = _examinerLinks.BuildAttributeUrl(ProductSpec, FeatureType, attribute.Code);
-        if (!string.IsNullOrEmpty(url))
-            _urlOpener.Open(url);
-    }
+    public bool IsExaminerAvailable => _examinerLinks.SupportsSpec(ProductSpec);
 
     /// <summary>
     /// Re-evaluates the examiner affordances against the current settings.
@@ -1064,7 +724,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
     }
 
-    /// represents an AIS target. AIS feature ids follow the
+    /// <summary>
+    /// Reads the MMSI of <paramref name="hit"/> when it represents an AIS
+    /// target. AIS feature ids follow the
     /// <c>"ais:{mmsi}"</c> convention defined by
     /// <c>AisDynamicFeatureSource.FeatureIdForMmsi</c>.
     /// </summary>
@@ -1080,14 +742,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     }
 
     /// <summary>
-    /// Raised when the user clicks a row in the References list.
-    /// Subscribers (typically <see cref="Services.PickService"/>) are
-    /// expected to resolve the reference and re-open the panel on the
-    /// target feature.
-    /// </summary>
-    public event EventHandler<FeatureReference>? NavigateRequested;
-
-    /// <summary>
     /// Dynamic-source hits collected by
     /// <see cref="Services.DynamicSources.IDynamicSourcePickService"/>.
     /// Rendered in a sibling section beneath the dataset hit list. The
@@ -1099,76 +753,52 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasDynamicHits => DynamicHits.Count > 0;
 
     /// <summary>
-    /// Replaces the current pick with the supplied list of hits. The first
-    /// hit is selected by default. An empty list is equivalent to
-    /// <see cref="Clear"/>.
+    /// Shows a pick result: its dataset hits AND dynamic-source hits. Either
+    /// list may be empty; both being empty is equivalent to
+    /// <see cref="Clear"/>. When dataset hits are non-empty the first hit (or
+    /// the first Warning card's) drives the detail view; when only dynamic hits
+    /// are present the detail view is left empty and only the dynamic section
+    /// is shown. The pick's location is surfaced in the panel and copyable to
+    /// the clipboard, with the depth card when the result has a depth there.
     /// </summary>
-    public void SetPicks(IReadOnlyList<PickHit> hits)
-        => SetPicks(hits, Array.Empty<DynamicPickHit>());
-
-    /// <summary>
-    /// Replaces the current pick with the supplied dataset hits AND
-    /// dynamic-source hits. Either list may be empty; both being empty
-    /// is equivalent to <see cref="Clear"/>. When dataset hits are
-    /// non-empty the first hit drives the detail view (existing
-    /// behaviour); when only dynamic hits are present the detail view
-    /// is left empty and only the dynamic section is shown.
-    /// </summary>
-    /// <param name="hits">Dataset-owned feature hits.</param>
-    /// <param name="dynamicHits">Dynamic-source hits (AIS, own-ship, …).</param>
-    /// <param name="location">
-    /// Geographic location of the click that produced the pick, or
-    /// <c>null</c> when no location is available (e.g. a programmatic
-    /// open). Surfaced in the panel and copyable to the clipboard.
-    /// </param>
-    public void SetPicks(
-        IReadOnlyList<PickHit> hits,
-        IReadOnlyList<DynamicPickHit> dynamicHits,
-        PickLocation? location = null,
-        DepthOverTimeViewModel? locationDepth = null)
+    /// <param name="result">What the pick found.</param>
+    public void SetPicks(PickResult result)
     {
-        ArgumentNullException.ThrowIfNull(hits);
-        ArgumentNullException.ThrowIfNull(dynamicHits);
+        ArgumentNullException.ThrowIfNull(result);
+        var hits = result.Hits;
+        var dynamicHits = result.DynamicHits;
 
         DisposeHitResources();
-        ClearWarningCards();
         Hits.Clear();
         foreach (var hit in hits)
             Hits.Add(hit);
-
-        var warningHits = hits.Where(h => h.NavigationalWarning is not null).ToList();
-        if (warningHits.Count > 1)
-        {
-            foreach (var hit in OrderWarningHits(warningHits, GeometryOf))
-                WarningCards.Add(CreateWarningCard(hit, collapsible: true));
-            foreach (var hit in hits)
-            {
-                if (hit.NavigationalWarning is null)
-                    OtherHits.Add(hit);
-            }
-        }
+        Warnings.Show(hits);
 
         DynamicHits.Clear();
         foreach (var dh in dynamicHits)
             DynamicHits.Add(dh);
 
-        if (hits.Count == 0 && dynamicHits.Count == 0)
+        if (result.IsEmpty)
         {
-            locationDepth?.Dispose();
             Clear();
             return;
         }
 
-        Location = location;
-        if (locationDepth is not null)
-            locationDepth.ChartBasisLine = _chartBasisLine;
-        LocationDepthSeries = locationDepth;
+        Location = result.Location;
+        LocationDepthSeries = BuildDepthCard(result);
+        var hadPick = _hasPick;
         HasPick = true;
+        // Every pick shows Object information, even while the right dock is on
+        // another tab such as the Legend (#1404, legends design note D2).
+        if (hadPick)
+            ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
         OnPropertyChanged(nameof(HasMultipleHits));
-        RaiseWarningListChanged();
+        OnPropertyChanged(nameof(ShowHitList));
+        OnPropertyChanged(nameof(SelectedOtherHit));
         OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
-        SelectedHit = WarningCards.Count > 0 ? WarningCards[0].Hit : hits.Count > 0 ? hits[0] : null;
+        SelectedHit = Warnings.Cards.Count > 0 ? Warnings.Cards[0].Hit : hits.Count > 0 ? hits[0] : null;
+        RefreshLegendKey();
         if (hits.Count == 0)
         {
             // ApplyHitToDetailFields(null) cleared the detail fields;
@@ -1179,43 +809,30 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         }
     }
 
-    /// <summary>
-    /// Convenience overload that wraps a single-feature pick into the
-    /// multi-hit shape. Preserved for callers that haven't migrated to
-    /// <see cref="SetPicks"/>.
-    /// </summary>
-    public void SetPick(
-        string featureType,
-        string? featureTypeName,
-        string featureRef,
-        string? datasetFileName,
-        string? productSpec,
-        IReadOnlyList<PickAttribute> attributes)
+    // The depth card for the pick's location, in the mariner's depth unit and
+    // with their safety depth, saying how the chart's depths relate (#1191).
+    private DepthOverTimeViewModel? BuildDepthCard(PickResult result)
     {
-        ArgumentNullException.ThrowIfNull(featureType);
-        ArgumentNullException.ThrowIfNull(featureRef);
-        ArgumentNullException.ThrowIfNull(attributes);
-
-        SetPicks(new[]
-        {
-            new PickHit
-            {
-                FeatureType = featureType,
-                FeatureTypeName = featureTypeName,
-                FeatureRef = featureRef,
-                DatasetFileName = datasetFileName,
-                ProductSpec = productSpec,
-                Attributes = attributes,
-            },
-        });
+        if (result is not { LocationDepth: { } depth, Location: { } location })
+            return null;
+        var settings = _charts.MarinerSettings.Current;
+        var card = new LocationDepthCard(
+            depth,
+            LatLonFormatter.FormatDecimal(location.Latitude, location.Longitude),
+            location.Latitude,
+            location.Longitude,
+            settings.DepthUnit,
+            settings.SafetyDepth.TotalMetres);
+        return new DepthOverTimeViewModel(card, _charts) { ChartBasisLine = _chartBasisLine };
     }
 
     /// <summary>Clears all pick state and sets <see cref="HasPick"/> to false.</summary>
     public void Clear()
     {
         DisposeHitResources();
-        ClearWarningCards();
-        RaiseWarningListChanged();
+        Warnings.Clear();
+        OnPropertyChanged(nameof(ShowHitList));
+        OnPropertyChanged(nameof(SelectedOtherHit));
         Hits.Clear();
         DynamicHits.Clear();
         // SelectedHit setter rejects identical references; clear the backing
@@ -1236,49 +853,28 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ClearTextCards();
         References.Clear();
         _eggCode = null;
-        WarningCard = null;
+        _stationChart = null;
         Location = null;
         LocationDepthSeries = null;
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(HasTextCards));
         OnPropertyChanged(nameof(HasReferences));
+        OnPropertyChanged(nameof(SelectedStationSeries));
+        OnPropertyChanged(nameof(HasStationSeries));
+        OnPropertyChanged(nameof(ShowInlineAttributes));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
-    }
-
-    private void ClearWarningCards()
-    {
-        PreviewHit = null;
-        if (_warningCard is not null)
-        {
-            DetachWarningCard(_warningCard);
-            _warningCard = null;
-            OnPropertyChanged(nameof(WarningCard));
-            OnPropertyChanged(nameof(HasWarningCard));
-            OnPropertyChanged(nameof(HasSingleWarningCard));
-            OnPropertyChanged(nameof(ShowInlineAttributes));
-        }
-        foreach (var card in WarningCards)
-            DetachWarningCard(card);
-        WarningCards.Clear();
-        OtherHits.Clear();
-    }
-
-    private void RaiseWarningListChanged()
-    {
-        OnPropertyChanged(nameof(HasWarningCardList));
-        OnPropertyChanged(nameof(ShowHitList));
-        OnPropertyChanged(nameof(HasOtherHits));
-        OnPropertyChanged(nameof(HasSingleWarningCard));
-        OnPropertyChanged(nameof(SelectedOtherHit));
+        RefreshLegendKey();
     }
 
     private void ApplyHitToDetailFields(PickHit? hit)
     {
+        Warnings.Select(hit);
+        _stationChart = hit is null ? null : StationChartFor(hit);
         if (hit is null)
         {
             FeatureType = null;
@@ -1290,7 +886,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             ClearTextCards();
             References.Clear();
             _eggCode = null;
-            WarningCard = null;
             OnPropertyChanged(nameof(HasAttributes));
             OnPropertyChanged(nameof(HasTextCards));
             OnPropertyChanged(nameof(HasReferences));
@@ -1309,21 +904,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DatasetFileName = hit.DatasetFileName;
         ProductSpec = hit.ProductSpec;
 
-        if (WarningCards.Count > 0)
-        {
-            // One card open at a time: the selected hit's, or none when a
-            // row below the cards is selected.
-            var open = WarningCards.FirstOrDefault(c => ReferenceEquals(c.Hit, hit));
-            foreach (var card in WarningCards)
-                card.IsOpen = ReferenceEquals(card, open);
-            WarningCard = open;
-        }
-        else
-        {
-            WarningCard = hit.NavigationalWarning is not null ? CreateWarningCard(hit, collapsible: false) : null;
-        }
-
-        PopulateAttributeSections(ReformatTypedAttributes(hit.Attributes));
+        PopulateAttributeSections(FormatAttributes(hit.Attributes));
 
         References.Clear();
         foreach (var reference in hit.References)
@@ -1340,6 +921,25 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         RaiseIdentityChanged();
     }
 
+    // A station hit's chart, made when it is first selected and kept until the
+    // next pick: S-104 charts the water level, S-111 speed and direction.
+    private StationTimeSeriesViewModel? StationChartFor(PickHit hit)
+    {
+        if (hit.StationSeries is not { } snapshot)
+            return null;
+        if (_stationCharts.TryGetValue(hit, out var chart))
+            return chart;
+        chart = hit.ProductSpec switch
+        {
+            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _charts),
+            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _charts),
+            _ => null,
+        };
+        if (chart is not null)
+            _stationCharts[hit] = chart;
+        return chart;
+    }
+
     /// <summary>
     /// Raises change notifications for the identity-block properties derived
     /// from <see cref="SelectedHit"/> and refreshes the copy-identity
@@ -1354,6 +954,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(IdentityCaption));
         OnPropertyChanged(nameof(PortrayalNote));
         OnPropertyChanged(nameof(HasPortrayalNote));
+        OnPropertyChanged(nameof(Aml));
+        OnPropertyChanged(nameof(HasAml));
+        OnPropertyChanged(nameof(AmlNotDrawnNote));
+        OnPropertyChanged(nameof(HasAmlNotDrawnNote));
         OnPropertyChanged(nameof(NavigationNotice));
         OnPropertyChanged(nameof(HasNavigationNotice));
         OnPropertyChanged(nameof(DataCredit));
@@ -1367,14 +971,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     }
 
     /// <summary>
-    /// Station time-series view model attached to <see cref="SelectedHit"/>,
-    /// or <c>null</c> when the selected hit is not a station observation.
-    /// Bound by the pick panel's chart section.
+    /// The station chart of <see cref="SelectedHit"/>, or <c>null</c> when
+    /// the selected hit is not an S-104 or S-111 station observation. Bound
+    /// by the pick panel's chart section.
     /// </summary>
-    public StationTimeSeriesViewModel? SelectedStationSeries => _selectedHit?.StationSeries;
+    public StationTimeSeriesViewModel? SelectedStationSeries => _stationChart;
 
     /// <summary>True when <see cref="SelectedStationSeries"/> is non-null.</summary>
-    public bool HasStationSeries => _selectedHit?.StationSeries is not null;
+    public bool HasStationSeries => _stationChart is not null;
 
     /// <summary>
     /// WMO / SIGRID-3 ice egg-code view model attached to
@@ -1389,7 +993,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     private void DisposeHitResources()
     {
-        foreach (var hit in Hits)
-            hit.StationSeries?.Dispose();
+        foreach (var chart in _stationCharts.Values)
+            chart.Dispose();
+        _stationCharts.Clear();
     }
 }

@@ -153,22 +153,29 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.Equal("M", ghost.ClassLetter); // Ian was a major hurricane.
         Assert.StartsWith("at ETA ", ghost.Label, StringComparison.Ordinal);
         Assert.EndsWith(" NM", ghost.Label, StringComparison.Ordinal);
-        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState(settings: null)))
-            Assert.True(legend.HasStormAtEta);
+        using (var source = new RouteCheckLegendSource(s.Routes, s.Check, () => PaletteType.Day))
+        {
+            Assert.True(source.HasStormAtEta);
+            Assert.Contains(RouteCheckLegendSource.WeatherGroupKey, source.Sections.Single().Groups.Select(g => g.Key));
+        }
 
         // Without the closest approach there's no ghost.
         s.Limits.Cyclones = TropicalCycloneCheckSettings.Default with { ReportClosestApproach = false };
         report = await Settled(s.Check);
         Assert.Empty(RouteCheckMap.Build(route, report.Findings, null, RouteCheckColors.For(PaletteType.Day), SKColors.Blue, PaletteType.Day, Synoptic, TimeFormat.Utc, 50).Storms);
-        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState(settings: null)))
-            Assert.False(legend.HasStormAtEta);
+        using (var source = new RouteCheckLegendSource(s.Routes, s.Check, () => PaletteType.Day))
+        {
+            Assert.False(source.HasStormAtEta);
+            Assert.DoesNotContain(RouteCheckLegendSource.WeatherGroupKey, source.Sections.Single().Groups.Select(g => g.Key));
+        }
     }
 
     [Fact]
     public void The_settings_keep_the_cyclone_rows_and_must_review_never_sits_outside_check_against()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
+        var page = new ChartSettingsPageViewModel(vm);
         var raised = 0;
         vm.RouteWeatherLimitsChanged += () => raised++;
 
@@ -177,13 +184,13 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.True(vm.CycloneReportClosestApproach);
         Assert.Equal(50, vm.CycloneMustReviewInsideKnots);
         Assert.Equal("Inside the 50 kt and 64 kt radii: Must review. The 34 kt radius and the cone: Check.", vm.CycloneMappingText);
-        Assert.Equal(["34 kt radius", "50 kt radius", "64 kt radius"], vm.AvailableCycloneCheckAgainst.Select(o => o.DisplayName));
-        Assert.Equal(["64 kt radius", "50 kt radius", "34 kt radius", "Never"], vm.AvailableCycloneMustReviewInside.Select(o => o.DisplayName));
+        Assert.Equal(["34 kt radius", "50 kt radius", "64 kt radius"], page.AvailableCycloneCheckAgainst.Select(o => o.DisplayName));
+        Assert.Equal(["64 kt radius", "50 kt radius", "34 kt radius", "Never"], page.AvailableCycloneMustReviewInside.Select(o => o.DisplayName));
 
         // Narrowing Check against past Must review inside moves it in too.
         vm.CycloneCheckAgainstKnots = 64;
         Assert.Equal(64, vm.CycloneMustReviewInsideKnots);
-        Assert.Equal([64, 0], vm.AvailableCycloneMustReviewInside.Select(o => o.Knots));
+        Assert.Equal([64, 0], page.AvailableCycloneMustReviewInside.Select(o => o.Knots));
         Assert.Equal("Inside the 64 kt radius: Must review. The cone: Check.", vm.CycloneMappingText);
 
         // A radius outside Check against isn't taken.
@@ -196,7 +203,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.Equal(3, raised);
         Assert.Equal(new TropicalCycloneCheckSettings { CheckAgainst = TropicalCycloneRadius.Knots64, ReportClosestApproach = false, MustReviewInside = null }, vm.Cyclones);
 
-        var reloaded = new SettingsViewModel(ViewerSettings.Load(_settingsFile), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var reloaded = new ViewerSettingsService(ViewerSettings.Load(_settingsFile));
         Assert.Equal(vm.Cyclones, reloaded.Cyclones);
 
         vm.CycloneCheckAgainstKnots = 34;
@@ -207,8 +214,9 @@ public sealed class RouteCycloneCheckTests : IDisposable
     [AvaloniaFact]
     public void The_settings_page_has_the_three_cyclone_rows()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsFile }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
-        using var host = ViewHost.Show(new ChartSettingsPage { DataContext = vm }, width: 500, height: 2800);
+        var vm = new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsFile });
+        var page = new ChartSettingsPageViewModel(vm);
+        using var host = ViewHost.Show(new ChartSettingsPage { DataContext = page }, width: 500, height: 2800);
 
         var against = host.Find<ComboBox>("Settings.CycloneCheckAgainst");
         var cpa = host.Find<ToggleSwitch>("Settings.CycloneReportClosestApproach");
@@ -224,7 +232,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.False(string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetHelpText(cpa)));
 
         // Choosing 64 kt narrows Must review inside to 64 kt or Never.
-        against.SelectedItem = vm.AvailableCycloneCheckAgainst.Single(o => o.Knots == 64);
+        against.SelectedItem = page.AvailableCycloneCheckAgainst.Single(o => o.Knots == 64);
         Assert.Equal(64, vm.CycloneCheckAgainstKnots);
         Assert.Equal(2, inside.ItemCount);
         Assert.Equal("64 kt radius", Assert.IsType<CycloneRadiusOption>(inside.SelectedItem).DisplayName);
@@ -237,7 +245,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
     public async Task The_mcp_tools_read_and_set_the_cyclone_settings()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var vm = new ViewerSettingsService(settings);
         var tools = new RouteWeatherSettingsTools(vm, new ImmediateInvoker());
         var ct = TestContext.Current.CancellationToken;
 

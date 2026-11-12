@@ -1147,7 +1147,12 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// </summary>
     internal sealed class TextDrawScratch : IDisposable
     {
-        private readonly Dictionary<(float, TextFontWeight, TextFontProportion), SKFont> _fonts = new();
+        private readonly Dictionary<(float, TextFontWeight, TextFontProportion, TextFontSlant), SKFont> _fonts = new();
+
+        // Italic text is drawn as a synthetic oblique of the label face, so it
+        // looks the same on every platform whether or not an italic face is
+        // installed.
+        private const float ItalicSkewX = -0.2f;
 
         /// <summary>The shared antialiased fill paint; set its colour per op.</summary>
         public SKPaint Paint { get; } = new() { IsAntialias = true };
@@ -1162,18 +1167,21 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 
         /// <summary>Returns a cached regular font for <paramref name="sizePx"/>, creating it on first use.</summary>
         public SKFont FontFor(float sizePx) =>
-            FontFor(sizePx, TextFontWeight.Medium, TextFontProportion.Proportional);
+            FontFor(sizePx, TextFontWeight.Medium, TextFontProportion.Proportional, TextFontSlant.Upright);
 
         /// <summary>Returns the cached font a text op is drawn and measured with.</summary>
         public SKFont FontFor(TextPaintOp op) =>
-            FontFor((float)op.FontSizePx, op.FontWeight, op.FontProportion);
+            FontFor((float)op.FontSizePx, op.FontWeight, op.FontProportion, op.FontSlant);
 
-        private SKFont FontFor(float sizePx, TextFontWeight weight, TextFontProportion proportion)
+        private SKFont FontFor(float sizePx, TextFontWeight weight, TextFontProportion proportion, TextFontSlant slant)
         {
-            if (!_fonts.TryGetValue((sizePx, weight, proportion), out var font))
+            if (!_fonts.TryGetValue((sizePx, weight, proportion, slant), out var font))
             {
-                font = new SKFont(RendererFonts.For(weight, proportion), sizePx);
-                _fonts[(sizePx, weight, proportion)] = font;
+                font = new SKFont(RendererFonts.For(weight, proportion), sizePx)
+                {
+                    SkewX = slant == TextFontSlant.Italics ? ItalicSkewX : 0f,
+                };
+                _fonts[(sizePx, weight, proportion, slant)] = font;
             }
             return font;
         }

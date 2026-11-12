@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <Description>Predicts the astronomical tide at a station from its harmonic constituents: the height at a time, a series at a fixed step, and the high and low waters in a period. Implements the 37 NOAA constituents with equilibrium arguments and node factors from Schureman (US Coast and Geodetic Survey Special Publication 98). Pure managed code with no dependencies.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Tides.Tests" />
+  </ItemGroup>
+
+</Project>

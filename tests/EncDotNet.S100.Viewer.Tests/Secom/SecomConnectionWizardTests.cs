@@ -194,7 +194,7 @@ public sealed class SecomConnectionWizardTests : IDisposable
     {
         var directory = new SecomIdentityDirectory(_keys.Identities, _keys.Time);
         return new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(sources.Length > 0 ? sources : [Khra], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            TestCatalogueDirectory.Create(sources.Length > 0 ? sources : [Khra]),
             () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
             {
                 Secom = (_, _, identity, _) =>

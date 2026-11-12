@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.ChartSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:ChartSettingsPageViewModel">
 
     <!-- Settings → Chart display: basemap, scale indicators and mariner settings (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"

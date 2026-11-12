@@ -52,4 +52,38 @@ public interface IChartDepthCell
     /// <see langword="null"/> when the cell declares none.
     /// </summary>
     int? SoundingDatum => null;
+
+    /// <summary>
+    /// The cell's edition, the last update applied to it and its issue date,
+    /// for the S-98 legend (Main §12.10.1 items 9 and 10); <see langword="null"/>
+    /// when the cell declares no edition number.
+    /// </summary>
+    ChartCellEdition? Edition => null;
+
+    /// <summary>
+    /// The scale the cell was compiled for, as a denominator: the S-57 DSPM
+    /// compilation scale (CSCL, Appendix B.1 §7.3.1.1), or for S-101 the
+    /// finest <c>DataCoverage.maximumDisplayScale</c> (FC §3.1.1), the scale
+    /// past which the display is overscaled. <see langword="null"/> when the
+    /// cell declares neither.
+    /// </summary>
+    int? CompilationScale => null;
+}
+
+/// <summary>A chart cell's edition (S-57 DSID EDTN/UPDN/ISDT; S-101 DSID DSED and update number).</summary>
+/// <param name="Number">The edition number.</param>
+/// <param name="Update">The last update applied: 0 for a base cell with none.</param>
+/// <param name="IssueDate">The issue (S-101 reference) date, or <see langword="null"/> when not declared.</param>
+public sealed record ChartCellEdition(int Number, int Update, DateOnly? IssueDate);
+
+/// <summary>Reads <see cref="ChartCellEdition"/> fields from DSID text.</summary>
+internal static class ChartCellEditions
+{
+    /// <summary>A DSID number subfield, which S-57 and S-101 hold as text.</summary>
+    public static int? Number(string? value) =>
+        int.TryParse(value?.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
+
+    /// <summary>A DSID date subfield (<c>YYYYMMDD</c>).</summary>
+    public static DateOnly? Date(string? value) =>
+        DateOnly.TryParseExact(value?.Trim(), "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
 }

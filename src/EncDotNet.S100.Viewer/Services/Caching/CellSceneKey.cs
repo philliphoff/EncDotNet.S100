@@ -72,6 +72,7 @@ internal static class CellSceneKey
             .Append("|symbolScale:").Append(presentation.SymbolScale.ToString("R", c))
             .Append("|textScale:").Append(presentation.TextScale.ToString("R", c))
             .Append("|category:").Append(display.Category)
+            .Append("|halo:").Append(presentation.SafetyContourHalo ? '1' : '0')
             .Append("|mode:").Append(ChartEngine.Options.SceneMode);
 
         foreach (var (product, groups) in display.HiddenViewingGroups.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
@@ -85,6 +86,8 @@ internal static class CellSceneKey
             sb.Append("|plane:").Append(plane);
         foreach (var (layer, visible) in display.LayerVisibility.OrderBy(p => p.Key, StringComparer.Ordinal))
             sb.Append("|layer:").Append(layer).Append('=').Append(visible ? '1' : '0');
+        foreach (var (key, value) in display.LayerOptions.OrderBy(p => p.Key, StringComparer.Ordinal))
+            sb.Append("|option:").Append(key).Append('=').Append(value);
 
         foreach (var assembly in new[]
                  {

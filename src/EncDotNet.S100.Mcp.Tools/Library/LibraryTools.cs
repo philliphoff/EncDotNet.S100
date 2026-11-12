@@ -374,7 +374,8 @@ public sealed class SetSecomIdentityTool(
 }
 
 /// <summary>Lists SECOM services from the MCP service registry (MCP <c>list_secom_services</c>, #822).</summary>
-public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomRegistry registry)
+/// <remarks>Lists and probes through the same <see cref="EncDotNet.S100.Collections.Secom.SecomServiceDirectory"/> as the viewer's directory (#1399).</remarks>
+public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomServiceDirectory directory)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "list_secom_services";
@@ -382,26 +383,22 @@ public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Secom
     /// <summary>The most services probed in one call.</summary>
     public const int MaxProbed = 60;
 
-    private readonly EncDotNet.S100.Collections.Secom.SecomRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+    private readonly EncDotNet.S100.Collections.Secom.SecomServiceDirectory _directory = directory ?? throw new ArgumentNullException(nameof(directory));
 
     /// <summary>Lists them, optionally for one product, optionally probing each.</summary>
     public async Task<ToolResult<SecomServicesDto>> InvokeAsync(string? product, bool? probe, CancellationToken ct = default)
     {
-        EncDotNet.S100.Collections.Secom.SecomRegistryListing listing;
+        EncDotNet.S100.Collections.Secom.SecomServiceListing listing;
         try
         {
-            listing = await _registry.GetServicesAsync(cancellationToken: ct).ConfigureAwait(false);
+            listing = await _directory.ListS100Async(product: product, cancellationToken: ct).ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
             return ToolResult<SecomServicesDto>.Err(new LibraryChangeRejected($"the service registry could not be read ({ex.Message})"));
         }
 
-        var wanted = EncDotNet.S100.Collections.Secom.SecomRegistry.NormalizeProduct(product);
-        var services = listing.Services
-            .Where(s => s.IsS100Product && (wanted is null || string.Equals(s.ProductSpec, wanted, StringComparison.OrdinalIgnoreCase)))
-            .ToArray();
-
+        var services = listing.Services;
         var probes = new Dictionary<string, EncDotNet.S100.Collections.Secom.SecomProbeResult>(StringComparer.Ordinal);
         if (probe == true)
         {
@@ -411,7 +408,7 @@ public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Secom
                 await gate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    return (s.InstanceId, Result: await _registry.ProbeAsync(s.EndpointUri, cancellationToken: ct).ConfigureAwait(false));
+                    return (s.InstanceId, Result: await _directory.ProbeAsync(s.EndpointUri, ct).ConfigureAwait(false));
                 }
                 finally
                 {
@@ -439,7 +436,7 @@ public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Secom
                     ? anchored.Revocation.ToString()
                     : null))],
             listing.Listed,
-            listing.Listed - services.Length,
+            listing.Hidden,
             listing.FetchedAt,
             listing.Stale));
     }

@@ -188,7 +188,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var path = CreateManifest();
         _library.AddCollection("Test", [new LocalManifestSource(Guid.NewGuid(), "Test", path, LocalManifestFilter.All)]);
         await _library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,
@@ -196,7 +196,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
             timeFormat: null,
             sync: null);
 
-        var source = Assert.Single(Assert.Single(panel.Nodes).Children);
+        var source = Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
         Assert.Equal("JSON", source.KindTag);
         Assert.Equal("test.s100collection.json", source.SecondaryName);
         Assert.True(source.CanChooseGroups);
@@ -208,11 +208,11 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         Assert.Equal("Path not found", peru.StatusLine);
         Assert.True(peru.IsStatusWarning);
 
-        panel.SelectedNode = source.Children[1];
-        Assert.Equal(2, panel.Items.Count);
-        Assert.All(panel.Items, i => Assert.Equal("BE", i.Item.Properties["group"]));
+        panel.Tree.SelectedNode = source.Children[1];
+        Assert.Equal(2, panel.List.Items.Count);
+        Assert.All(panel.List.Items, i => Assert.Equal("BE", i.Item.Properties["group"]));
 
-        var group = panel.Items[0].Details.Single(g => g.Title == "Source").Fields;
+        var group = panel.List.Items[0].Details.Single(g => g.Title == "Source").Fields;
         Assert.Contains(group, f => f.Label == "Group" && f.Value == "Belgium (BE)");
         Assert.DoesNotContain(group, f => f.Label is "group" or "groupName" or "Group name");
 
@@ -220,8 +220,8 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var belgium = source.Children[1];
         _library.Refresh();
         await _library.WhenIdle();
-        panel.Sync();
-        Assert.Same(belgium, panel.SelectedNode);
+        panel.Tree.Sync();
+        Assert.Same(belgium, panel.Tree.SelectedNode);
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         _library.AddCollection("Test", [new LocalManifestSource(
             Guid.NewGuid(), null, path, new LocalManifestFilter { Groups = ["AU"] })]);
         await _library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,
@@ -240,7 +240,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
             timeFormat: null,
             sync: null);
 
-        var source = Assert.Single(Assert.Single(panel.Nodes).Children);
+        var source = Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
         Assert.Empty(source.Children);
         Assert.Null(source.SecondaryName);
         Assert.Equal("2", source.Status);

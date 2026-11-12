@@ -414,6 +414,18 @@ S-111 currents and model currents never draw over each other. It does this by
 blanking the arrows' speed cell by cell. Only S-111 grids report an extent;
 station and mesh datasets leave the model arrows alone.
 
+R-102-102-A joins neighbouring S-102 cells. Each S-102 cell draws a dashed
+line along the limit of its own data, where S-101 takes over (Part A
+§A-6.9.1). Where cells overlap or abut, one cell's limit can run through
+the other's depths. The rule probes each limit segment on its no-data side
+and hides it where another active S-102 cell has data there, so the line
+only marks the limit of all the S-102 data. Each cell reports where it has
+data as `CoveragePortrayalResult.DataArea`. The rule also passes each S-102
+surface its neighbours' data areas (`GridCoverageSubLayer.NeighbourDataAreas`).
+The viewer then carries a surface's edge colour two pixels on under its
+neighbour, so the faded edges of the two rasters don't leave a light seam.
+Only cells whose extents meet are neighbours.
+
 ### 3.5 Deferred — explicit non-goals for v1
 
 The mariner-facing side of predefined combinations (Annex A §11, Part B

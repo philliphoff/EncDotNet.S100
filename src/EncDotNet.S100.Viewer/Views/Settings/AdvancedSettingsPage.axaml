@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.AdvancedSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:AdvancedSettingsPageViewModel">
 
     <!-- Settings → Advanced: renderer tuning and maintenance (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"

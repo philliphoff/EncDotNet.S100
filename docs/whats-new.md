@@ -6,6 +6,119 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tide predictions as S-104.** `EncDotNet.S100.Datasets.S104` writes
+  station series as S-104 Edition 2.0.0 files (data coding format 8), and
+  `S104TidePredictions` turns a station's harmonic predictions into one, on
+  the station's chart datum. Predicted files carry the producer code `ZZ01`
+  and say they're astronomical predictions, not an official product and not
+  for navigation. They read back through `S104DatasetReader` unchanged and
+  pass the S-104 validation pack. The HDF5 tree they're built from,
+  `Hdf5WriteGroup`, and `PureHdfWriter` are the project's first HDF5 writers.
+  See the [S-104 README](../src/EncDotNet.S100.Datasets.S104/README.md#write-a-station-series).
+- **Tide predictions.** The new `EncDotNet.S100.Tides` package predicts the
+  astronomical tide at a station from its harmonic constituents: the height
+  at a time, a series at a fixed step without allocating per sample, and the
+  high and low waters in a period. It knows NOAA's 37 standard constituents
+  and the 83 further ones NOAA lists at some stations, and gives heights on
+  mean sea level or a chart datum such as MLLW. Against NOAA's published
+  predictions at five stations it agrees to under a millimetre RMS. See the
+  [package README](../src/EncDotNet.S100.Tides/README.md).
+- **Tide stations.** The new `EncDotNet.S100.Tides.Stations` package is the
+  catalogue the predictions come from. It reads NOAA CO-OPS's tide stations,
+  harmonic constants, datums and subordinate-station offsets, keeps them in
+  a JSON file that works offline, finds stations near a point or in a box,
+  and predicts a station on a chart datum such as MLLW or LAT with its
+  provenance ("from Seattle 9447130, with offsets"). A cheap check says when
+  NOAA has newer data, such as a new tidal datum epoch. The same JSON format
+  lets you bring your own stations. `EncDotNet.S100.Tides` gains
+  `SubordinateTidePredictor`, which predicts a subordinate station by NOAA's
+  method; its highs and lows match NOAA's at three Puget Sound stations to
+  under a minute and a millimetre. See the
+  [package README](../src/EncDotNet.S100.Tides.Stations/README.md).
+- **Relief shading strength.** The S-102 Relief shading switch in Display
+  controls gains a **Strength** control while it is on: Subtle, Medium (the
+  default) or Strong. It is kept with the display settings and saved with
+  display combinations, and the MCP tool `set_bathymetry_display` takes
+  `reliefStrength`. At Dusk and Night, slopes facing the light are lightened
+  less (half and 30 %), so they don't glare on a dark display. The new
+  `EcdisDisplaySettings.LayerOptions` carries map-wide layer settings that
+  are more than on or off.
+- **Relief shading is marked on the map.** While S-102 relief shading is on
+  and S-102 is in view, the status bar's `DEPTHS` pill reads
+  `Charted · Relief`, and its popup says relief is on, as a display aid that
+  leaves depth colours and values unchanged, with an **Off** button. The
+  S-102 legend ends with a *Relief shading (display aid)* row.
+- **Neighbouring S-102 cells join up.** Where two loaded S-102 cells meet,
+  the dashed "limit of S-102 data" line no longer runs through the water
+  between them, and SoundCharts no longer shows a light seam along the
+  join. The limit line stays wherever S-102 data ends and S-101 takes over.
+  A new S-98 rule, R-102-102-A, does this. It reads where each cell has
+  data from the new `CoveragePortrayalResult.DataArea`.
+- **Legend tab.** SoundCharts' right dock gains a tab strip, **Object
+  information** · **Legend**, and the legends of what the map draws move to
+  the Legend tab: one collapsible section per product or overlay (weather
+  fields, tropical cyclones, fronts, AML), in draw order, with **In view |
+  All loaded**, a filter and **Collapse all**. Swatches sit on the chart
+  background of the current palette. Open it with **View** > **Legend**
+  (Ctrl+Shift+L) or the **Legend** link under a Layer stack entry, which
+  replaces the entry's inline legend. It never opens by itself, and a pick
+  switches the dock back to Object information. When the dock is too narrow
+  for the tab labels, the tabs show icons only.
+- **Route check in the Legend tab.** While Check route is on, the route
+  check's legend (UKC at ETA, findings, storm at ETA) is the top section of
+  the Legend tab. The compact card at the map's bottom left shows the same
+  rows while the tab isn't shown, and hides when it is. The MCP tool
+  `set_legend` opens or closes the tab, sets In view and expands or collapses
+  a section; it and `get_legend` replace `get_map_legend` and
+  `set_map_legend`, which are removed.
+- **Hover to find in the Legend tab.** Resting the pointer on a Legend row,
+  or moving keyboard focus to it, rings the features that row describes on
+  the map, in the pick highlight's accent: a catalogue symbol (S-101, S-57),
+  a front, a warning area or an AML class, up to 100 features drawn in the
+  current view. A band of a colour or arrow ramp (S-102 depths, a weather
+  field, S-111 speeds) tints its area in view instead
+  ([#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433)). The
+  rings and tint clear when you leave the row or move the map. The MCP tool
+  `set_legend` takes `findRow` to ring a row and returns what is ringed, or
+  tinted, as `find`.
+- **S-102 relief shading.** An optional hillshade over the S-102 depth bands
+  shows the shape of the seabed (dredged pits, sand waves, berth toes) in
+  high-resolution bathymetry. It lights the depth surface from the north-west
+  and darkens or lightens each band colour by slope, so the bands and the
+  safety contour keep their meaning. It isn't part of the S-102 portrayal, so
+  it's off by default. In SoundCharts, switch it on in the new **Bathymetry**
+  section of Display controls, shown while an S-102 dataset is loaded, or with
+  the `get_bathymetry_display` and `set_bathymetry_display` MCP tools.
+  `s100 render --show-layer s102.relief` draws it. `ReliefShading` and
+  `S102Relief` are the library types, and `StyledCoverageLayer.ReliefShade`
+  carries the shading to the coverage renderers. Zoomed out, SoundCharts draws
+  the shaded surface with mipmaps (`SmoothRasterStyle`), so the shading
+  averages out smoothly instead of turning into a speckled pattern. The shaded
+  surface goes to the map as an image, without a PNG round trip, so relief
+  costs about the same as the flat surface: on six 1 m BSH cells, portrayal
+  takes 7.1 s with relief against 9.2 s without (it was 16.8 s).
+- **Additional Military Layers portrayal.** The new
+  `EncDotNet.S100.Datasets.Aml` package draws NATO AML cells with
+  SoundCharts' own portrayal (not the restricted official one): dash-dot lines
+  on a halo, unfilled areas with inward ticks, framed point symbols and italic
+  labels, in air, operational, seabed and environmental colour families for
+  Day, Dusk and Night. It covers the RAL air and operational classes, which
+  the AML 3.0 air trials share; airspace shows its limits as a stacked
+  fraction. Styles are data in modules, and the legend is built from them. A
+  new S-98 plane, `S98DisplayPlane.AdditionalMilitaryLayers` (45), sits
+  between the chart overlays and the cautions. Text instructions gain
+  `FontSlant` for italic labels. See the
+  [Datasets.Aml README](../src/EncDotNet.S100.Datasets.Aml/README.md).
+- **Additional Military Layers display controls.** SoundCharts' display
+  panel gains an **Additional Military Layers** section while an AML cell is
+  loaded: a switch per AML product with its cell count, **Follow AML scale
+  bands** (on by default) and a **Legend** flyout built from the AML styles.
+  With the bands followed, each AML cell shows out to its scale band's
+  coarsest display scale, and a finer band of the same product wins where its
+  cells cover a coarser cell (`AmlScaleBandVisibility`). A corner chip says
+  CLB isn't used for depth checks while CLB is drawn. The switches are kept
+  after a restart, and the `get_aml_display` and `set_aml_display` MCP tools
+  read and set them.
 - **S-412 Marine Weather Warnings (draft).** The new
   `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
   significant wave height, restricted visibility, thunderstorm and ice
@@ -24,6 +137,14 @@ month. For package versions and release assets, see
   `describe_feature` decodes a warning's threshold, Beaufort force and
   message in each language. See the
   [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
+- **Picks match the map's time.** MCP `identify_features` takes an optional
+  `time` and returns only the S-412 and CAP warnings in force then, the
+  surface analysis valid then and a tropical cyclone's position then. In
+  SoundCharts, `identify_features` without a time and `pick_features` follow
+  the map: its view time and the S-124 parts it hides. Hosts supply what
+  their map draws through `IMapDrawState` (`S100McpServerOptions.MapDrawState`),
+  and `FeatureAccessor.GetFeatures` has an overload that takes the time.
+  `PickFeaturesTool` now takes the `IdentifyFeaturesTool` it uses.
 - **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
   The CLI and `s100 mcp serve` now render through the chart engine
   (`EncDotNet.S100.Rendering.Engine`): cells parse, portray and build their

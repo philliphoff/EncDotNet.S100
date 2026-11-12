@@ -739,4 +739,143 @@
     <value>Bulletins</value>
     <comment>Heading over the WPC bulletins to include: the analysis and the forecast fronts</comment>
   </data>
+  <data name="SpecName_AML" xml:space="preserve">
+    <value>Additional Military Layers</value>
+  </data>
+  <data name="Aml_Chip" xml:space="preserve">
+    <value>AML</value>
+    <comment>The short name in chips and tags (decision 1). Never 'military chart'.</comment>
+  </data>
+  <data name="Aml_Heading" xml:space="preserve">
+    <value>Additional Military Layers</value>
+    <comment>Headings and tooltips</comment>
+  </data>
+  <data name="Aml_ProtectiveMarking" xml:space="preserve">
+    <value>Protective marking</value>
+    <comment>Details label. Never 'Classification'.</comment>
+  </data>
+  <data name="Aml_MarkingPill" xml:space="preserve">
+    <value>MARKING</value>
+    <comment>Status-bar pill label</comment>
+  </data>
+  <data name="Aml_State_RecognisedNotDrawn" xml:space="preserve">
+    <value>Recognised, not drawn</value>
+    <comment>The state of AML data SoundCharts reads but doesn't draw. Neutral, never a failure.</comment>
+  </data>
+  <data name="Aml_NotAChart" xml:space="preserve">
+    <value>Additional Military Layers, not a chart</value>
+    <comment>First line wherever AML data is described</comment>
+  </data>
+  <data name="Aml_ItemNote" xml:space="preserve">
+    <value>Military overlay data, not a chart. SoundCharts shows where it is but doesn't draw it.</value>
+    <comment>Note at the top of an AML item's details</comment>
+  </data>
+  <data name="Aml_Field_Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Aml_Field_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Aml_Field_IdoStatus" xml:space="preserve">
+    <value>IDO status</value>
+  </data>
+  <data name="Aml_Field_OwnerAuthority" xml:space="preserve">
+    <value>Owner authority</value>
+  </data>
+  <data name="Aml_Field_Caveat" xml:space="preserve">
+    <value>Caveat</value>
+  </data>
+  <data name="Aml_Field_ScaleBand" xml:space="preserve">
+    <value>Scale band</value>
+  </data>
+  <data name="Aml_ScaleBandFormat" xml:space="preserve">
+    <value>Band {0}</value>
+    <comment>An AML scale band (0–9), not an ENC usage band</comment>
+  </data>
+  <data name="Aml_VersionFormat" xml:space="preserve">
+    <value>AML {0}</value>
+    <comment>The AML version, e.g. 'AML 1.0'</comment>
+  </data>
+  <data name="Aml_FromCellName" xml:space="preserve">
+    <value>From the cell name</value>
+    <comment>Group of facts decoded from the cell name</comment>
+  </data>
+  <data name="Aml_MarkingFromCellNameFormat" xml:space="preserve">
+    <value>{0} (from cell name)</value>
+    <comment>A marking taken from the cell name's classification letter because the cell gives none</comment>
+  </data>
+  <data name="Aml_NoDepthChecks" xml:space="preserve">
+    <value>AML depths aren't used for depth answers or route checks.</value>
+  </data>
+  <data name="Library_Property_amlProductSpecification" xml:space="preserve">
+    <value>AML product specification</value>
+  </data>
+  <data name="Library_Property_amlProduct" xml:space="preserve">
+    <value>AML product</value>
+  </data>
+  <data name="Library_Property_amlProductName" xml:space="preserve">
+    <value>AML product name</value>
+  </data>
+  <data name="Library_Property_amlVersion" xml:space="preserve">
+    <value>AML version</value>
+  </data>
+  <data name="Library_Property_amlTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Library_Property_amlProtectiveMarking" xml:space="preserve">
+    <value>Protective marking</value>
+  </data>
+  <data name="Library_Property_amlMarkingSource" xml:space="preserve">
+    <value>Marking from</value>
+  </data>
+  <data name="Library_Property_amlIdoStatus" xml:space="preserve">
+    <value>IDO status</value>
+  </data>
+  <data name="Library_Property_amlOwnerAuthority" xml:space="preserve">
+    <value>Owner authority</value>
+  </data>
+  <data name="Library_Property_amlCaveat" xml:space="preserve">
+    <value>Caveat</value>
+  </data>
+  <data name="Library_Property_amlScaleBand" xml:space="preserve">
+    <value>Scale band</value>
+  </data>
+  <data name="Library_Property_amlUpdate" xml:space="preserve">
+    <value>AML update cell</value>
+  </data>
+  <data name="Aml_ItemNoteDrawn" xml:space="preserve">
+    <value>Military overlay data, not a chart.</value>
+    <comment>Note at the top of an AML item's details once SoundCharts draws its product</comment>
+  </data>
+  <data name="Aml_Field_Producer" xml:space="preserve">
+    <value>Producer</value>
+    <comment>From the cell name: the producer nation code</comment>
+  </data>
+  <data name="Aml_FromName_MatchesFormat" xml:space="preserve">
+    <value>{0} · matches the header</value>
+    <comment>From the cell name: what a part of the name says, when the cell's header agrees</comment>
+  </data>
+  <data name="Aml_FromName_HeaderWinsFormat" xml:space="preserve">
+    <value>{0} · the header says {1}, which wins</value>
+    <comment>From the cell name: the name and the header disagree; {1} is the header's value, which is used</comment>
+  </data>
+  <data name="Aml_FromName_UsedFormat" xml:space="preserve">
+    <value>{0} · used, as the cell gives none</value>
+    <comment>From the cell name: the name's marking is used because the cell itself gives no marking</comment>
+  </data>
+  <data name="Aml_Filter_AllProducts" xml:space="preserve">
+    <value>All products</value>
+    <comment>AML filter menu: every AML product</comment>
+  </data>
+  <data name="Aml_Filter_Clear" xml:space="preserve">
+    <value>Show all data</value>
+    <comment>AML filter menu: turns the AML filter off</comment>
+  </data>
+  <data name="Aml_Filter_ToolTip" xml:space="preserve">
+    <value>Show only Additional Military Layers cells, by product</value>
+  </data>
+  <data name="Aml_Field_Cells" xml:space="preserve">
+    <value>Cells</value>
+    <comment>Details of the Additional Military Layers group header: how many cells it holds</comment>
+  </data>
 </root>

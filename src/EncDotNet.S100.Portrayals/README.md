@@ -88,7 +88,7 @@ catalogue does:
   one palette, from the same tokens, symbols and line styles the portrayal
   draws with: colour swatches, outlined areas, point symbols and line
   samples. A viewer shows them under the sub-layer's layer stack entry
-  (`VectorSubLayer.Legend`, `GridCoverageSubLayer.Legend`).
+  (`VectorSubLayer.Legend`, `CoverageSubLayerBase.Legend`).
 - `IDynamicFeaturePortrayal` is a code-defined portrayal of a dynamic
   feature source's features: drawing instructions (feature reference = the
   feature id), with the palette and symbols they resolve against. The NDBC

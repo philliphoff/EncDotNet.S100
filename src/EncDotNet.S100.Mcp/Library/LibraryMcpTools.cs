@@ -10,13 +10,13 @@ public static class LibraryMcpTools
     /// <summary>Creates the Library tools a host supports.</summary>
     /// <param name="reader">Reads the Library; the read tools are left out when null.</param>
     /// <param name="editor">Changes the Library; the edit tools are left out when null.</param>
-    /// <param name="secomRegistry">Finds SECOM services; <c>list_secom_services</c> is left out when null (or without a reader).</param>
+    /// <param name="secomServices">Lists SECOM services; <c>list_secom_services</c> is left out when null (or without a reader).</param>
     /// <param name="secomTrust">The SECOM trust whose identity is set; <c>set_secom_identity</c> is left out when null (or without an editor).</param>
     /// <param name="secomIdentities">The host's stored SECOM identities, for reference ids; none when null.</param>
     public static IReadOnlyList<McpServerTool> Create(
         ILibraryReader? reader,
         ILibraryEditor? editor,
-        SecomRegistry? secomRegistry = null,
+        SecomServiceDirectory? secomServices = null,
         SecomServerTrust? secomTrust = null,
         ISecomIdentityReferences? secomIdentities = null)
     {
@@ -27,8 +27,8 @@ public static class LibraryMcpTools
             tools.Add(LibraryMcpAdapters.Create(new QueryLibraryItemsTool(reader)));
             tools.Add(LibraryMcpAdapters.Create(new DescribeLibraryItemTool(reader)));
             tools.Add(LibraryMcpAdapters.Create(new ListKnownSourcesTool(reader)));
-            if (secomRegistry is not null)
-                tools.Add(LibraryMcpAdapters.Create(new ListSecomServicesTool(secomRegistry)));
+            if (secomServices is not null)
+                tools.Add(LibraryMcpAdapters.Create(new ListSecomServicesTool(secomServices)));
         }
 
         if (editor is not null)

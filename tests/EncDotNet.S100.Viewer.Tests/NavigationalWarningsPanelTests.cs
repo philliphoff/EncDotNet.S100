@@ -44,6 +44,8 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
 
     private sealed class RecordingPick : IPickService
     {
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
         public List<(IDatasetProcessor Processor, int Ordinal, string Dataset)> Opened { get; } = [];
         public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
@@ -103,6 +105,7 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
         public RouteFindingsTests.RecordingViewport Viewport { get; } = new();
         public DatasetEntry Entry { get; } = new("/tmp/amsa.gml", "S-124");
         public NavigationalWarningsService Service { get; }
+        public ObjectInformationSelection Selection { get; } = new();
         public NavigationalWarningsViewModel Panel { get; }
 
         public Fixture(bool viewTime = false, FakeProcessor? processor = null)
@@ -116,15 +119,15 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
                 (Warning("AUSCOAST", "320/26", "Dredging", "Port Phillip", Oct(18), Oct(30)), new GeoPosition(-38.1, 144.9)));
             Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [Entry] = processor };
             Service = new NavigationalWarningsService(Loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
-            Panel = new NavigationalWarningsViewModel(
+            Panel = TestNavigationalWarnings.Panel(
                 Service,
-                Pick,
+                pick: Pick,
                 viewTime: new ViewTime(viewTime ? ViewAt : Now),
                 timeFormat: new Utc(),
                 viewport: new StaticCapabilityAccessor<IMapViewportController>(Viewport),
                 loader: Loader,
                 clock: new FixedClock(Now),
-                pickReport: null);
+                selection: Selection);
         }
 
         public NavigationalWarningRowItem Row(string number) =>
@@ -254,8 +257,49 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
         Assert.Equal(0, opened.Ordinal);
         Assert.Equal("amsa.gml", opened.Dataset);
         var zoom = Assert.Single(f.Viewport.Zooms);
-        Assert.Equal(2 * NavigationalWarningsViewModel.PointFrameHalfMetres, zoom.Width, 3);
+        Assert.Equal(2 * OpenNavigationalWarningWorkflow.PointFrameHalfMetres, zoom.Width, 3);
         Assert.Null(f.Panel.MapNote);
+    }
+
+    [Fact]
+    public void The_workflow_opens_a_card_and_frames_only_when_asked()
+    {
+        var f = new Fixture();
+        var open = TestNavigationalWarnings.Open(f.Service, f.Pick, f.Loader, new StaticCapabilityAccessor<IMapViewportController>(f.Viewport));
+        var entry = f.Row("112/26").Entry;
+
+        Assert.Equal(new OpenNavigationalWarningOutcome(Opened: true, Framed: false), open.Open(entry, frame: false));
+        Assert.Single(f.Pick.Opened);
+        Assert.Empty(f.Viewport.Zooms);
+
+        Assert.True(open.Frame(entry));
+        Assert.Single(f.Viewport.Zooms);
+        Assert.Single(f.Pick.Opened);  // framing alone doesn't open the card
+
+        f.Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor>();
+        Assert.False(open.Open(entry, frame: false).Opened);
+    }
+
+    [Fact]
+    public void A_warning_picked_on_the_map_is_selected_in_the_list()
+    {
+        var f = new Fixture();
+        var row = f.Row("111/26");
+
+        f.Selection.SetHit(new PickHit
+        {
+            FeatureType = "NavwarnPart",
+            FeatureRef = row.Entry.FeatureRef,
+            DatasetFileName = row.Entry.DatasetId,
+            ProductSpec = "S-124",
+            NavigationalWarning = row.Entry.Warning,
+        });
+
+        Assert.Same(row, f.Panel.SelectedItem);
+        Assert.Empty(f.Pick.Opened);  // following a pick doesn't open it again
+
+        f.Selection.SetHit(null);
+        Assert.Null(f.Panel.SelectedItem);
     }
 
     [Fact]
@@ -301,7 +345,7 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
     public void No_S124_datasets_shows_the_no_sources_state()
     {
         var loader = new FakeDatasetLoaderService();
-        var panel = new NavigationalWarningsViewModel(new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), pick: null, pickReport: null, viewTime: null, timeFormat: null, viewport: null, loader: null, clock: TimeProvider.System);
+        var panel = TestNavigationalWarnings.Panel(new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), pick: null, viewTime: null, timeFormat: null, viewport: null, loader: null, clock: TimeProvider.System);
         var openedLibrary = false;
         panel.OpenLibraryRequested += (_, _) => openedLibrary = true;
 
@@ -335,7 +379,7 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
         var datasets = new DatasetsViewModel(loader);
         var entry = new DatasetEntry("/tmp/navwarn.gml", "S-124") { IsLoading = true };
         datasets.Entries.Add(entry);
-        var panel = new NavigationalWarningsViewModel(new NavigationalWarningsService(loader, datasets, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), pick: null, pickReport: null, viewTime: null, timeFormat: null, viewport: null, loader: null, clock: TimeProvider.System);
+        var panel = TestNavigationalWarnings.Panel(new NavigationalWarningsService(loader, datasets, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), pick: null, viewTime: null, timeFormat: null, viewport: null, loader: null, clock: TimeProvider.System);
 
         Assert.True(panel.IsLoadingState);
         Assert.False(panel.IsNoSourcesState);

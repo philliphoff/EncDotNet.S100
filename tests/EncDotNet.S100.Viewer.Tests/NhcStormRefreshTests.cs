@@ -50,16 +50,18 @@ public sealed class NhcStormRefreshTests : IDisposable
             Directory.Delete(_root, recursive: true);
     }
 
-    private async Task<(LibraryPanelViewModel Panel, Guid SourceId)> PanelAsync()
+    private async Task<(LibraryPanelViewModel Panel, WeatherRunMonitor Monitor, Guid SourceId)> PanelAsync()
     {
         var known = KnownCatalogueSources.Find("noaa-nhc-storms")!;
         var source = new WeatherFeedSource(Guid.NewGuid(), null, known.CatalogUri, known.Weather!, new WeatherSelection());
         _library.Initialize();
         _library.AddCollection("Weather", [source]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), notifications: _notifications, time: _time, coalesce: action => action(), feedHealth: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Sync();
-        return (panel, source.Id);
+        var library = new TestLibrary(_library, _loader, _downloader, _time, notifications: _notifications);
+        var panel = library.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: _time, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
+        panel.Tree.Sync();
+        // The monitor checks on its own minute clock, as in the app.
+        return (panel, library.Monitor(_time, action => action()), source.Id);
     }
 
     private static CollectionItem Storm(
@@ -92,13 +94,14 @@ public sealed class NhcStormRefreshTests : IDisposable
         _indexer.Storms = [Storm("al092022", "Ian", "20", Issued)];
         _downloader.Local["al092022"] = (Issued, "020");
         _loader.Loaded.Add("al092022");
-        var (panel, _) = await PanelAsync();
+        var (panel, monitor, _) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
 
         // NHC issues advisory 21; an hour on, the source is due.
         _indexer.Storms = [Storm("al092022", "Ian", "21", Issued.AddHours(6), wind: "110")];
         _time.Advance(TimeSpan.FromHours(1));
-        await RefreshAsync(panel, () => _notifications.Active.Count > 0);
+        await RefreshAsync(monitor, () => _notifications.Active.Count > 0);
 
         var notification = Assert.Single(_notifications.Active);
         Assert.Equal("HURRICANE IAN: advisory 21 is available", notification.Title);
@@ -112,7 +115,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         // Read again later: the same advisory isn't announced twice.
         var reads = _indexer.Reads;
         _time.Advance(TimeSpan.FromHours(1));
-        await RefreshAsync(panel, () => _indexer.Reads > reads);
+        await RefreshAsync(monitor, () => _indexer.Reads > reads);
         Assert.Single(_notifications.Active);
 
         // Its action downloads the new advisory, which replaces the old one.
@@ -126,14 +129,15 @@ public sealed class NhcStormRefreshTests : IDisposable
     {
         _indexer.Storms = [Storm("al092022", "Ian", "20", Issued)];
         _downloader.Local["al092022"] = (Issued, "020");
-        var (panel, _) = await PanelAsync();
+        var (panel, monitor, _) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
 
         _indexer.Storms = [Storm("al092022", "Ian", "21", Issued.AddHours(6)), Storm("al102022", "Julia", "1", Issued.AddHours(6))];
         _library.Refresh();
         await _library.WhenIdle();
         _time.Advance(TimeSpan.FromHours(2));
-        await panel.RefreshDueWeatherAsync();
+        await monitor.RefreshDueAsync();
 
         Assert.Empty(_notifications.Active);
         Assert.Empty(_downloader.Requested);
@@ -145,13 +149,14 @@ public sealed class NhcStormRefreshTests : IDisposable
         _indexer.Storms = [Storm("al092022", "Ian", "20", Issued)];
         _downloader.Local["al092022"] = (Issued, "020");
         _loader.Loaded.Add("al092022");
-        var (panel, _) = await PanelAsync();
+        var (panel, monitor, _) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
 
         _indexer.Storms = [];
         _time.Advance(TimeSpan.FromHours(1));
         var marker = Path.Combine(_root, "al092022", NhcAdvisoryFiles.FinalMarkerName("al092022"));
-        await RefreshAsync(panel, () => _loader.Opened.Count > 0);
+        await RefreshAsync(monitor, () => _loader.Opened.Count > 0);
 
         Assert.True(File.Exists(marker));
         Assert.Equal(["al092022"], _loader.Closed);
@@ -165,14 +170,15 @@ public sealed class NhcStormRefreshTests : IDisposable
         _indexer.Storms = [Storm("al092022", "Ian", "20", Issued)];
         _downloader.Local["al092022"] = (Issued, "020");
         _loader.Loaded.Add("al092022");
-        var (panel, _) = await PanelAsync();
+        var (panel, monitor, _) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
 
         _indexer.Storms = [];
         _indexer.Failing = true;
         var reads = _indexer.Reads;
         _time.Advance(TimeSpan.FromHours(1));
-        await RefreshAsync(panel, () => _indexer.Reads > reads);
+        await RefreshAsync(monitor, () => _indexer.Reads > reads);
 
         Assert.False(Directory.Exists(Path.Combine(_root, "al092022")) && File.Exists(Path.Combine(_root, "al092022", NhcAdvisoryFiles.FinalMarkerName("al092022"))));
         Assert.Empty(_loader.Closed);
@@ -183,14 +189,15 @@ public sealed class NhcStormRefreshTests : IDisposable
     {
         _indexer.Storms = [Storm("al092022", "Ian", "21", Issued.AddHours(6), wind: "110")];
         _downloader.Local["al092022"] = (Issued, "020");
-        var (panel, sourceId) = await PanelAsync();
+        var (panel, monitor, sourceId) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
         var source = _library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == sourceId);
         var item = Assert.Single(source.Index!.Items);
-        var row = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
+        var row = new LibraryItemViewModel(item, source, new LibraryRowContext(_time, null, _loader.StateOf, _downloader, retry: null), "Weather");
 
         // The source says how many storms are active (V27).
-        Assert.Equal("1 active", panel.Nodes.Single().StatusLine);
+        Assert.Equal("1 active", panel.Tree.Nodes.Single().StatusLine);
 
         Assert.True(row.IsStorm);
         Assert.False(row.ShowsOutlineSwatch);
@@ -207,7 +214,7 @@ public sealed class NhcStormRefreshTests : IDisposable
 
         // Eight hours after advisory 20, it's stale.
         _time.Advance(TimeSpan.FromHours(8));
-        var stale = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
+        var stale = new LibraryItemViewModel(item, source, new LibraryRowContext(_time, null, _loader.StateOf, _downloader, retry: null), "Weather");
         Assert.True(stale.IsStaleRun);
         Assert.Equal("Advisory 20 is over 7 hours old", stale.StaleRunText);
     }
@@ -237,15 +244,15 @@ public sealed class NhcStormRefreshTests : IDisposable
 
     /// <summary>
     /// Refreshes what's due until <paramref name="condition"/> holds. The
-    /// panel's minute clock may be refreshing already after the clock moved,
+    /// monitor's minute clock may be refreshing already after the clock moved,
     /// and a refresh asked for while one runs returns at once, so it's asked
     /// again; announcements are made once however often it runs.
     /// </summary>
-    private async Task RefreshAsync(LibraryPanelViewModel panel, Func<bool> condition)
+    private async Task RefreshAsync(WeatherRunMonitor monitor, Func<bool> condition)
     {
         for (var i = 0; i < 400 && !condition(); i++)
         {
-            await panel.RefreshDueWeatherAsync();
+            await monitor.RefreshDueAsync();
             await _library.WhenIdle();
             if (!condition())
                 await Task.Delay(25, TestContext.Current.CancellationToken);

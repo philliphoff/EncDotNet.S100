@@ -53,43 +53,14 @@
         <!-- Cmd+R / Ctrl+R toggles Range & bearing (#1130 D11). -->
         <KeyBinding Gesture="Cmd+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
         <KeyBinding Gesture="Ctrl+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
+        <!-- View › Legend (legends D3). -->
+        <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding Layout.ToggleLegendCommand}" />
         <!-- Enter / Backspace are tool actions while a tool is active. -->
         <KeyBinding Gesture="Enter" Command="{Binding MapTools.ToolCommitCommand}" />
         <KeyBinding Gesture="Back" Command="{Binding MapTools.ToolBackstepCommand}" />
     </shadui:Window.KeyBindings>
 
     <shadui:Window.Styles>
-        <!-- Bottom-dock tabs (#902 D1): upper-case labels, the selected one
-             underlined in the accent colour. -->
-        <Style Selector="ToggleButton.dockTab">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="MinHeight" Value="0" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="LetterSpacing" Value="1" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border x:Name="Underline"
-                            BorderThickness="0,0,0,2"
-                            BorderBrush="Transparent"
-                            Padding="0,6,0,4"
-                            Background="Transparent">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          Foreground="{TemplateBinding Foreground}"
-                                          VerticalAlignment="Center" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Setter Property="Opacity" Value="0.65" />
-        </Style>
-        <Style Selector="ToggleButton.dockTab:checked">
-            <Setter Property="Opacity" Value="1" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style Selector="ToggleButton.dockTab:checked /template/ Border#Underline">
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-        </Style>
         <!-- The Clearance tab's Distance / Time switch (#902 D1). -->
         <Style Selector="ToggleButton.dockSegment">
             <Setter Property="Height" Value="22" />
@@ -194,12 +165,34 @@
         <Style Selector="Button.MapOverlay ic|FluentIcon">
             <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}" />
         </Style>
+        <!--
+          A pressed overlay button (views:MapToggleButton, e.g. Map.Legend):
+          the same accent fill as the Pick and Measure buttons, including on
+          hover (ShadUI's HoverBackground border sits over the base).
+        -->
+        <Style Selector="Button.MapOverlay:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.MapOverlay:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Button.MapOverlay:checked ic|FluentIcon">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.MapOverlay:checked /template/ Border#HoverBackground">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
 
     </shadui:Window.Styles>
 
     <shadui:Window.RightWindowTitleBarContent>
         <StackPanel Orientation="Horizontal" Spacing="0">
-            <Button Command="{Binding ShowFeedbackCommand}"
+            <Button Command="{Binding AppCommands.ShowFeedbackCommand}"
                     AutomationProperties.AutomationId="MainWindow.Feedback"
                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReportFeedback}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReportFeedback}"
@@ -212,7 +205,7 @@
                 <ic:FluentIcon Icon="PersonFeedback" IconVariant="Regular" FontSize="16"
                                Foreground="{DynamicResource ForegroundColor}" />
             </Button>
-            <Button Command="{Binding ToggleThemeCommand}"
+            <Button Command="{Binding AppCommands.ToggleThemeCommand}"
                     AutomationProperties.AutomationId="MainWindow.ToggleTheme"
                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleTheme}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
@@ -226,11 +219,11 @@
                     <!-- Sun icon (shown in dark mode, click to go light) -->
                     <ic:FluentIcon Icon="WeatherSunny" IconVariant="Regular" FontSize="16"
                                    Foreground="{DynamicResource ForegroundColor}"
-                                   IsVisible="{Binding IsDarkTheme}" />
+                                   IsVisible="{Binding AppCommands.IsDarkTheme}" />
                     <!-- Moon icon (shown in light mode, click to go dark) -->
                     <ic:FluentIcon Icon="WeatherMoon" IconVariant="Regular" FontSize="16"
                                    Foreground="{DynamicResource ForegroundColor}"
-                                   IsVisible="{Binding !IsDarkTheme}" />
+                                   IsVisible="{Binding !AppCommands.IsDarkTheme}" />
                 </Panel>
             </Button>
         </StackPanel>
@@ -238,7 +231,7 @@
 
     <shadui:Window.Hosts>
         <!-- Hosts ShadUI modal dialogs (e.g. Report Feedback). -->
-        <shadui:DialogHost Manager="{Binding DialogManager}" x:Name="PART_DialogHost" />
+        <shadui:DialogHost Manager="{Binding AppCommands.DialogManager}" x:Name="PART_DialogHost" />
     </shadui:Window.Hosts>
 
     <Panel>
@@ -296,15 +289,15 @@
                                VerticalAlignment="Center" />
 
                     <!-- Cursor latitude / longitude -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding IsMouseLatLonVisible}" />
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMouseLatLonVisible}" />
                     <ic:FluentIcon Icon="MyLocation" IconVariant="Regular" FontSize="14"
                                    Opacity="0.6"
                                    VerticalAlignment="Center"
                                    Margin="0,0,6,0"
-                                   IsVisible="{Binding IsMouseLatLonVisible}"
+                                   IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
-                    <TextBlock Text="{Binding MouseLatText}"
-                               IsVisible="{Binding IsMouseLatLonVisible}"
+                    <TextBlock Text="{Binding StatusBar.MouseLatText}"
+                               IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.75"
@@ -312,8 +305,8 @@
                                TextAlignment="Right"
                                VerticalAlignment="Center"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
-                    <TextBlock Text="{Binding MouseLonText}"
-                               IsVisible="{Binding IsMouseLatLonVisible}"
+                    <TextBlock Text="{Binding StatusBar.MouseLonText}"
+                               IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.75"
@@ -324,22 +317,22 @@
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
 
                     <!-- Map scale, with the overscale pill immediately after -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding IsMapScaleVisible}" />
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMapScaleVisible}" />
                     <TextBlock Text="{x:Static loc:Strings.Status_ScaleLabel}"
                                FontSize="12"
                                Opacity="0.5"
                                VerticalAlignment="Center"
-                               IsVisible="{Binding IsMapScaleVisible}"
+                               IsVisible="{Binding StatusBar.IsMapScaleVisible}"
                                Margin="0,0,6,0"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
-                    <TextBlock Text="{Binding MapScaleText}"
+                    <TextBlock Text="{Binding StatusBar.MapScaleText}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.75"
                                MinWidth="92"
                                TextAlignment="Right"
                                VerticalAlignment="Center"
-                               IsVisible="{Binding IsMapScaleVisible}"
+                               IsVisible="{Binding StatusBar.IsMapScaleVisible}"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
                     <Button x:Name="OverscaleButton"
                             AutomationProperties.AutomationId="Map.Overscale"
@@ -353,7 +346,7 @@
                             Background="#26D97706"
                             BorderBrush="#80D97706"
                             Foreground="#B45309"
-                            IsVisible="{Binding IsOverscaleVisible}"
+                            IsVisible="{Binding StatusBar.IsOverscaleVisible}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_Overscale}">
                         <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                             <ic:FluentIcon Icon="Warning" IconVariant="Filled" FontSize="13"
@@ -364,7 +357,7 @@
                                        FontWeight="SemiBold"
                                        LetterSpacing="0.5"
                                        VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding OverscaleFactorText}"
+                            <TextBlock Text="{Binding StatusBar.OverscaleFactorText}"
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        FontFeatures="+tnum"
@@ -379,7 +372,7 @@
                                                    FontWeight="SemiBold"
                                                    LetterSpacing="0.8"
                                                    Opacity="0.7" />
-                                        <ItemsControl ItemsSource="{Binding OverscaleCells}">
+                                        <ItemsControl ItemsSource="{Binding StatusBar.OverscaleCells}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Grid ColumnDefinitions="*,Auto" Margin="0,2">
@@ -409,17 +402,22 @@
                          to. Never hidden while depths are drawn; steps down to a
                          shorter whole form when the status bar is narrow. -->
                     <views:DepthBasisIndicatorView x:Name="DepthBasisIndicator"
-                                                   DataContext="{Binding DepthBasis}" />
+                                                   DataContext="{Binding StatusBar.DepthBasis}" />
+
+                    <!-- Protective marking (#1371): the highest marking of the AML
+                         data loaded, after DEPTHS and before MCP. -->
+                    <views:AmlMarkingIndicatorView x:Name="AmlMarkingIndicator"
+                                                   DataContext="{Binding StatusBar.AmlMarking}" />
 
                     <!-- MCP server -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding IsMcpRunning}" />
-                    <TextBlock Text="{Binding McpStatusText}"
-                               IsVisible="{Binding IsMcpRunning}"
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMcpRunning}" />
+                    <TextBlock Text="{Binding StatusBar.McpStatusText}"
+                               IsVisible="{Binding StatusBar.IsMcpRunning}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.7"
                                VerticalAlignment="Center"
-                               ToolTip.Tip="{Binding McpTooltipText}" />
+                               ToolTip.Tip="{Binding StatusBar.McpTooltipText}" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -652,6 +650,31 @@
                                             HorizontalAlignment="Left"
                                             VerticalAlignment="Bottom"
                                             Margin="12,0,0,60" />
+                <!-- AML CLB chip (#1374, AML handoff decision 23): while CLB contours
+                     are drawn, say they're not used for depth checks. Bottom right,
+                     clear of the Check route legend (bottom left) and the Time HUD
+                     (bottom centre). DataContext is the AML display section, set in
+                     code-behind. -->
+                <Border x:Name="AmlClbChip"
+                        x:DataType="vm:AmlDisplaySectionViewModel"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,12,14"
+                        IsHitTestVisible="False"
+                        IsVisible="{Binding IsClbChipShown, FallbackValue=False}"
+                        AutomationProperties.AutomationId="Map.AmlClbChip"
+                        AutomationProperties.Name="{Binding ClbChipText, FallbackValue={x:Null}}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="#52525B"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,4">
+                    <TextBlock Text="{Binding ClbChipText, FallbackValue={x:Null}}"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ForegroundColor}"
+                               ToolTip.Tip="{x:Static loc:Strings.Aml_NoDepthChecks}" />
+                </Border>
                 <!-- Map stamp (#713 B4): the view time over the map while the
                      Timeline tab is shown in the dock, so the map (and any
                      screenshot of it) says which time it shows; the Time HUD
@@ -712,7 +735,7 @@
                         MaxWidth="300"
                         IsHitTestVisible="False"
                         AutomationProperties.AutomationId="Map.WarningNote"
-                        IsVisible="{Binding NavigationalWarnings.HasMapNote, FallbackValue=False}"
+                        IsVisible="{Binding MapChrome.NavigationalWarnings.HasMapNote, FallbackValue=False}"
                         Background="{DynamicResource MapOverlaySurfaceBrush}"
                         BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
@@ -725,9 +748,9 @@
                                        Margin="0,0,8,0"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource MutedColor}"
-                                       IsVisible="{Binding NavigationalWarnings.IsMapNoteTextOnly, FallbackValue=False}" />
+                                       IsVisible="{Binding MapChrome.NavigationalWarnings.IsMapNoteTextOnly, FallbackValue=False}" />
                         <TextBlock Grid.Column="1"
-                                   Text="{Binding NavigationalWarnings.MapNote, FallbackValue={x:Null}}"
+                                   Text="{Binding MapChrome.NavigationalWarnings.MapNote, FallbackValue={x:Null}}"
                                    FontSize="11.5"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource ForegroundColor}"
@@ -777,12 +800,12 @@
                         BorderBrush="{DynamicResource BorderColor}"
                         Background="{DynamicResource MapOverlaySurfaceBrush}"
                         Foreground="{DynamicResource ForegroundColor}"
-                        IsVisible="{Binding DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        IsVisible="{Binding MapChrome.DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
                         AutomationProperties.AutomationId="Map.View"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_DisplayCombination_Pill}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}">
-                    <TextBlock Text="{Binding DisplayCombinations.PillLabel, FallbackValue=''}"
+                    <TextBlock Text="{Binding MapChrome.DisplayCombinations.PillLabel, FallbackValue=''}"
                                FontSize="12"
                                FontWeight="Medium"
                                MaxWidth="260"
@@ -791,426 +814,455 @@
                         <Flyout Placement="BottomEdgeAlignedRight">
                             <Border Padding="14,12,14,12" Background="Transparent">
                                 <StackPanel Width="340" Spacing="8">
-                                    <views:DisplayCombinationsView DataContext="{Binding DisplayCombinations}" />
+                                    <views:DisplayCombinationsView DataContext="{Binding MapChrome.DisplayCombinations}" />
                                     <Button Classes="Ghost"
                                             HorizontalAlignment="Left"
                                             Padding="8,4"
                                             AutomationProperties.AutomationId="Map.View.Manage"
                                             AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}"
                                             Content="{x:Static loc:Strings.DisplayCombination_Manage}"
-                                            Command="{Binding DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
+                                            Command="{Binding MapChrome.DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}" />
                                 </StackPanel>
                             </Border>
                         </Flyout>
                     </Button.Flyout>
                 </Button>
-                <StackPanel Orientation="Vertical"
-                            Spacing="2"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top"
-                            Margin="0,12,12,0">
-                    <Button x:Name="PickModeButton"
-                            AutomationProperties.AutomationId="Map.PickMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Label_PickMode}"
-                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PickMode}"
-                            AutomationProperties.AcceleratorKey="I"
-                            Classes="Icon MapOverlay"
-                            Classes.pickActive="{Binding MapTools.IsPickModeActive}"
-                            Command="{Binding MapTools.TogglePickModeCommand}"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
-                        <Button.Styles>
-                            <!--
-                              When pick mode is active we add the "pickActive"
-                              class from code-behind; this fills the button with
-                              the accent color so the user can tell at a glance.
-                              Using Button (not ToggleButton) lets us keep the
-                              exact resting appearance of the adjacent zoom
-                              buttons — ShadUI's `Classes="Icon"` only styles
-                              Button, not ToggleButton.
-                            -->
-                            <Style Selector="Button#PickModeButton.pickActive">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                            </Style>
-                            <!--
-                              Force the FluentIcon child to inherit the
-                              button's Foreground so the toggled-on state
-                              actually paints the icon white. (The default
-                              FluentIcon Foreground is bound to the theme
-                              text color and would otherwise stay dark.)
-                            -->
-                            <Style Selector="Button#PickModeButton.pickActive ic|FluentIcon">
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <!--
-                              ShadUI's Button.Icon template stacks a separate
-                              Border#HoverBackground on top of the base whose
-                              Background is bound to ButtonAssist.HoverBackground
-                              (default GhostColor). Override it so the active
-                              fill stays accent-colored on hover.
-                            -->
-                            <Style Selector="Button#PickModeButton.pickActive /template/ Border#HoverBackground">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                <!--
+                  The overlay column (legends D15, D20): mode buttons above
+                  zoom and compass. On a map too short for both (the column
+                  plus 12 px margins), the panel wraps: the mode buttons stay
+                  on the right edge and zoom + compass move to a second
+                  column to their left, below the View pill (map y 48).
+                -->
+                <views:MapOverlayColumnPanel x:Name="MapOverlayColumn"
+                                             HorizontalAlignment="Right"
+                                             VerticalAlignment="Top"
+                                             Margin="0,12,12,12"
+                                             ColumnGap="8"
+                                             WrappedSecondTop="18">
+                    <StackPanel x:Name="MapModeButtons" Orientation="Vertical" Spacing="2">
+                        <Button x:Name="PickModeButton"
+                                AutomationProperties.AutomationId="Map.PickMode"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_PickMode}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PickMode}"
+                                AutomationProperties.AcceleratorKey="I"
+                                Classes="Icon MapOverlay"
+                                Classes.pickActive="{Binding MapTools.IsPickModeActive}"
+                                Command="{Binding MapTools.TogglePickModeCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
+                            <Button.Styles>
                                 <!--
-                                  Pin opacity to 1 so the 0→1 fade-in transition
-                                  doesn't briefly blend with the base layer when
-                                  the cursor enters the button.
+                                  When pick mode is active we add the "pickActive"
+                                  class from code-behind; this fills the button with
+                                  the accent color so the user can tell at a glance.
+                                  Using Button (not ToggleButton) lets us keep the
+                                  exact resting appearance of the adjacent zoom
+                                  buttons — ShadUI's `Classes="Icon"` only styles
+                                  Button, not ToggleButton.
                                 -->
-                                <Setter Property="Opacity" Value="1" />
-                            </Style>
-                        </Button.Styles>
-                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
-                    </Button>
-                    <!--
-                      Measure Mode toggle button. Same accent-fill pattern
-                      as PickModeButton above; ruler icon distinguishes the
-                      two. Cmd/Ctrl+M is the keyboard accelerator (see the
-                      Window.KeyBindings block at the top of this file).
-                    -->
-                    <Button x:Name="MeasureModeButton"
-                            AutomationProperties.AutomationId="Map.MeasureMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Label_MeasureMode}"
-                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureMode}"
-                            Classes="Icon MapOverlay"
-                            Classes.measureActive="{Binding MapTools.IsMeasureModeActive}"
-                            Command="{Binding MapTools.ToggleMeasureModeCommand}"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureMode}">
-                        <Button.Styles>
-                            <Style Selector="Button#MeasureModeButton.measureActive">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#MeasureModeButton.measureActive /template/ ContentPresenter">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                            </Style>
-                            <Style Selector="Button#MeasureModeButton.measureActive ic|FluentIcon">
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#MeasureModeButton.measureActive /template/ Border#HoverBackground">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Opacity" Value="1" />
-                            </Style>
-                        </Button.Styles>
-                        <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
-                    </Button>
-                    <!--
-                      Range & bearing toggle button (#1130 D11): an EBL/VRM
-                      pair from a chosen origin. Same accent-fill pattern as
-                      the Measure button; Cmd/Ctrl+R toggles it.
-                    -->
-                    <Button x:Name="RangeBearingModeButton"
-                            AutomationProperties.AutomationId="Map.RangeBearingMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Label_RangeBearingMode}"
-                            AutomationProperties.HelpText="{Binding MapTools.RangeBearingModeTooltip}"
-                            Classes="Icon MapOverlay"
-                            Classes.rangeBearingActive="{Binding MapTools.IsRangeBearingModeActive}"
-                            Command="{Binding MapTools.ToggleRangeBearingModeCommand}"
-                            ToolTip.Tip="{Binding MapTools.RangeBearingModeTooltip}">
-                        <Button.Styles>
-                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ ContentPresenter">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                            </Style>
-                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive ic|FluentIcon">
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ Border#HoverBackground">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Opacity" Value="1" />
-                            </Style>
-                        </Button.Styles>
-                        <ic:FluentIcon Icon="CompassNorthwest" IconVariant="Regular" FontSize="16" />
-                    </Button>
-                    <!--
-                      Route Edit Mode toggle button. Mirrors the Measure
-                      button's accent-fill pattern; the route icon
-                      distinguishes it. Clicking enters the interactive
-                      route editor (click to add waypoints, drag to move);
-                      Ctrl+E (⌘E) toggles it too (Tools/RouteEditorKeys).
-                    -->
-                    <Button x:Name="RouteEditModeButton"
-                            AutomationProperties.AutomationId="Map.RouteEditMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Label_RouteEditMode}"
-                            AutomationProperties.HelpText="{Binding MapTools.RouteEditModeTooltip}"
-                            Classes="Icon MapOverlay"
-                            Classes.routeActive="{Binding MapTools.IsRouteEditModeActive}"
-                            Command="{Binding MapTools.ToggleRouteEditModeCommand}"
-                            ToolTip.Tip="{Binding MapTools.RouteEditModeTooltip}">
-                        <Button.Styles>
-                            <Style Selector="Button#RouteEditModeButton.routeActive">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#RouteEditModeButton.routeActive /template/ ContentPresenter">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                            </Style>
-                            <Style Selector="Button#RouteEditModeButton.routeActive ic|FluentIcon">
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#RouteEditModeButton.routeActive /template/ Border#HoverBackground">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Opacity" Value="1" />
-                            </Style>
-                        </Button.Styles>
-                        <ic:FluentIcon Icon="Flow" IconVariant="Regular" FontSize="16" />
-                    </Button>
-                    <!--
-                      Consolidated display-settings button. Replaces the
-                      former Display category / Text / Palette pills with a
-                      single overlay panel that exposes all three as
-                      segmented toggles (see the segmented-control styles in
-                      App.axaml). The button adopts the accent fill while its
-                      flyout is open (:flyout-open), matching the Pick and
-                      Measure mode buttons above.
-                    -->
-                    <Button x:Name="DisplaySettingsButton"
-                            AutomationProperties.AutomationId="Map.DisplaySettings"
-                            AutomationProperties.Name="{x:Static loc:Strings.DisplaySettings_Title}"
-                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplaySettings}"
-                            Classes="Icon MapOverlay"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplaySettings}">
-                        <Button.Styles>
-                            <Style Selector="Button#DisplaySettingsButton:flyout-open">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#DisplaySettingsButton:flyout-open /template/ ContentPresenter">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                            </Style>
-                            <Style Selector="Button#DisplaySettingsButton:flyout-open ic|FluentIcon">
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style Selector="Button#DisplaySettingsButton:flyout-open /template/ Border#HoverBackground">
-                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                <Setter Property="Opacity" Value="1" />
-                            </Style>
-                        </Button.Styles>
-                        <ic:FluentIcon Icon="Options" IconVariant="Regular" FontSize="16" />
-                        <Button.Flyout>
-                            <Flyout Placement="Left">
-                                <!-- Fixed-width content inside a padded border:
-                                     the explicit Width keeps the panel from
-                                     nudging wider when a segment's label turns
-                                     semibold on selection, and the Border gives
-                                     the card breathing room on all edges. -->
-                                <Border Padding="16,14,16,16" Background="Transparent">
-                                <StackPanel Width="340" Spacing="14">
-                                    <!-- Header -->
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Grid.Column="0"
-                                                   Text="{x:Static loc:Strings.DisplaySettings_Title}"
-                                                   FontSize="11"
-                                                   FontWeight="SemiBold"
-                                                   LetterSpacing="0.8"
-                                                   Opacity="0.7"
-                                                   VerticalAlignment="Center" />
-                                        <Button Grid.Column="1"
-                                                AutomationProperties.AutomationId="DisplaySettings.Close"
-                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}"
-                                                Classes="Icon"
-                                                Width="28"
-                                                Height="28"
-                                                Padding="0"
-                                                Click="OnCloseDisplaySettings"
-                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}">
-                                            <ic:FluentIcon Icon="Dismiss"
-                                                           IconVariant="Regular"
-                                                           FontSize="16"
-                                                           Foreground="{DynamicResource ForegroundColor}" />
-                                        </Button>
-                                    </Grid>
-
-                                    <!-- Display base -->
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_DisplayBaseHeader}"
-                                                   FontSize="12"
-                                                   FontWeight="Medium"
-                                                   Opacity="0.8" />
-                                        <Border Classes="segmentTrack">
-                                            <UniformGrid Rows="1">
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Base"
-                                                             GroupName="DisplaySettingsCategory"
-                                                             Content="{x:Static loc:Strings.Segment_DisplayBase}"
-                                                             IsChecked="{Binding DisplayToolbar.IsDisplayBase, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetDisplayBaseCommand}" />
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Standard"
-                                                             GroupName="DisplaySettingsCategory"
-                                                             Content="{x:Static loc:Strings.DisplayCategory_Standard}"
-                                                             IsChecked="{Binding DisplayToolbar.IsStandard, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetStandardCommand}" />
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Other"
-                                                             GroupName="DisplaySettingsCategory"
-                                                             Content="{x:Static loc:Strings.Segment_DisplayOther}"
-                                                             IsChecked="{Binding DisplayToolbar.IsOtherInformation, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetOtherInformationCommand}" />
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Category.All"
-                                                             GroupName="DisplaySettingsCategory"
-                                                             Content="{x:Static loc:Strings.DisplayCategory_All}"
-                                                             IsChecked="{Binding DisplayToolbar.IsAll, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetAllCommand}" />
-                                            </UniformGrid>
-                                        </Border>
-                                    </StackPanel>
-
-                                    <!-- Text viewing groups -->
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_TextHeader}"
-                                                   FontSize="12"
-                                                   FontWeight="Medium"
-                                                   Opacity="0.8" />
-                                        <Border Classes="segmentTrack"
-                                                IsEnabled="{Binding TextToolbar.IsEnabled}">
-                                            <UniformGrid Rows="1">
-                                                <ToggleButton Classes="segment"
-                                                              AutomationProperties.AutomationId="DisplaySettings.Text.Important"
-                                                              Content="{x:Static loc:Strings.Segment_TextImportant}"
-                                                              IsChecked="{Binding TextToolbar.IsImportantVisible, Mode=OneWay}"
-                                                              Command="{Binding TextToolbar.ToggleImportantCommand}" />
-                                                <ToggleButton Classes="segment"
-                                                              AutomationProperties.AutomationId="DisplaySettings.Text.Other"
-                                                              Content="{x:Static loc:Strings.Segment_TextOther}"
-                                                              IsChecked="{Binding TextToolbar.IsOtherVisible, Mode=OneWay}"
-                                                              Command="{Binding TextToolbar.ToggleOtherCommand}" />
-                                                <ToggleButton Classes="segment"
-                                                              AutomationProperties.AutomationId="DisplaySettings.Text.All"
-                                                              Content="{x:Static loc:Strings.Segment_TextAll}"
-                                                              IsChecked="{Binding TextToolbar.IsAllVisible, Mode=OneWay}"
-                                                              Command="{Binding TextToolbar.ToggleAllCommand}" />
-                                            </UniformGrid>
-                                        </Border>
-                                    </StackPanel>
-
+                                <Style Selector="Button#PickModeButton.pickActive">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                </Style>
+                                <!--
+                                  Force the FluentIcon child to inherit the
+                                  button's Foreground so the toggled-on state
+                                  actually paints the icon white. (The default
+                                  FluentIcon Foreground is bound to the theme
+                                  text color and would otherwise stay dark.)
+                                -->
+                                <Style Selector="Button#PickModeButton.pickActive ic|FluentIcon">
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <!--
+                                  ShadUI's Button.Icon template stacks a separate
+                                  Border#HoverBackground on top of the base whose
+                                  Background is bound to ButtonAssist.HoverBackground
+                                  (default GhostColor). Override it so the active
+                                  fill stays accent-colored on hover.
+                                -->
+                                <Style Selector="Button#PickModeButton.pickActive /template/ Border#HoverBackground">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                                     <!--
-                                      S-100 map palette (PR-N1) — Day/Dusk/Night
-                                      switch for the chart S-100 colour profile.
-                                      Bound to SettingsViewModel.SelectedPalette
-                                      which already triggers a re-render through
-                                      DatasetLoaderService.
+                                      Pin opacity to 1 so the 0→1 fade-in transition
+                                      doesn't briefly blend with the base layer when
+                                      the cursor enters the button.
                                     -->
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_PaletteHeader}"
-                                                   FontSize="12"
-                                                   FontWeight="Medium"
-                                                   Opacity="0.8" />
-                                        <Border Classes="segmentTrack">
-                                            <UniformGrid Rows="1">
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Day"
-                                                             GroupName="DisplaySettingsPalette"
-                                                             Content="{x:Static loc:Strings.Palette_Day}"
-                                                             IsChecked="{Binding Settings.IsPaletteDay, Mode=OneWay}"
-                                                             Command="{Binding Settings.SetPaletteDayCommand}" />
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Dusk"
-                                                             GroupName="DisplaySettingsPalette"
-                                                             Content="{x:Static loc:Strings.Palette_Dusk}"
-                                                             IsChecked="{Binding Settings.IsPaletteDusk, Mode=OneWay}"
-                                                             Command="{Binding Settings.SetPaletteDuskCommand}" />
-                                                <RadioButton Classes="segment"
-                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Night"
-                                                             GroupName="DisplaySettingsPalette"
-                                                             Content="{x:Static loc:Strings.Palette_Night}"
-                                                             IsChecked="{Binding Settings.IsPaletteNight, Mode=OneWay}"
-                                                             Command="{Binding Settings.SetPaletteNightCommand}" />
-                                            </UniformGrid>
-                                        </Border>
+                                    <Setter Property="Opacity" Value="1" />
+                                </Style>
+                            </Button.Styles>
+                            <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <!--
+                          Measure Mode toggle button. Same accent-fill pattern
+                          as PickModeButton above; ruler icon distinguishes the
+                          two. Cmd/Ctrl+M is the keyboard accelerator (see the
+                          Window.KeyBindings block at the top of this file).
+                        -->
+                        <Button x:Name="MeasureModeButton"
+                                AutomationProperties.AutomationId="Map.MeasureMode"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_MeasureMode}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureMode}"
+                                Classes="Icon MapOverlay"
+                                Classes.measureActive="{Binding MapTools.IsMeasureModeActive}"
+                                Command="{Binding MapTools.ToggleMeasureModeCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureMode}">
+                            <Button.Styles>
+                                <Style Selector="Button#MeasureModeButton.measureActive">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#MeasureModeButton.measureActive /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                </Style>
+                                <Style Selector="Button#MeasureModeButton.measureActive ic|FluentIcon">
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#MeasureModeButton.measureActive /template/ Border#HoverBackground">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </Style>
+                            </Button.Styles>
+                            <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <!--
+                          Range & bearing toggle button (#1130 D11): an EBL/VRM
+                          pair from a chosen origin. Same accent-fill pattern as
+                          the Measure button; Cmd/Ctrl+R toggles it.
+                        -->
+                        <Button x:Name="RangeBearingModeButton"
+                                AutomationProperties.AutomationId="Map.RangeBearingMode"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_RangeBearingMode}"
+                                AutomationProperties.HelpText="{Binding MapTools.RangeBearingModeTooltip}"
+                                Classes="Icon MapOverlay"
+                                Classes.rangeBearingActive="{Binding MapTools.IsRangeBearingModeActive}"
+                                Command="{Binding MapTools.ToggleRangeBearingModeCommand}"
+                                ToolTip.Tip="{Binding MapTools.RangeBearingModeTooltip}">
+                            <Button.Styles>
+                                <Style Selector="Button#RangeBearingModeButton.rangeBearingActive">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                </Style>
+                                <Style Selector="Button#RangeBearingModeButton.rangeBearingActive ic|FluentIcon">
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ Border#HoverBackground">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </Style>
+                            </Button.Styles>
+                            <ic:FluentIcon Icon="CompassNorthwest" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <!--
+                          Route Edit Mode toggle button. Mirrors the Measure
+                          button's accent-fill pattern; the route icon
+                          distinguishes it. Clicking enters the interactive
+                          route editor (click to add waypoints, drag to move);
+                          Ctrl+E (⌘E) toggles it too (Tools/RouteEditorKeys).
+                        -->
+                        <Button x:Name="RouteEditModeButton"
+                                AutomationProperties.AutomationId="Map.RouteEditMode"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_RouteEditMode}"
+                                AutomationProperties.HelpText="{Binding MapTools.RouteEditModeTooltip}"
+                                Classes="Icon MapOverlay"
+                                Classes.routeActive="{Binding MapTools.IsRouteEditModeActive}"
+                                Command="{Binding MapTools.ToggleRouteEditModeCommand}"
+                                ToolTip.Tip="{Binding MapTools.RouteEditModeTooltip}">
+                            <Button.Styles>
+                                <Style Selector="Button#RouteEditModeButton.routeActive">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#RouteEditModeButton.routeActive /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                </Style>
+                                <Style Selector="Button#RouteEditModeButton.routeActive ic|FluentIcon">
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#RouteEditModeButton.routeActive /template/ Border#HoverBackground">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </Style>
+                            </Button.Styles>
+                            <ic:FluentIcon Icon="Flow" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <!--
+                          Consolidated display-settings button. Replaces the
+                          former Display category / Text / Palette pills with a
+                          single overlay panel that exposes all three as
+                          segmented toggles (see the segmented-control styles in
+                          App.axaml). The button adopts the accent fill while its
+                          flyout is open (:flyout-open), matching the Pick and
+                          Measure mode buttons above.
+                        -->
+                        <Button x:Name="DisplaySettingsButton"
+                                AutomationProperties.AutomationId="Map.DisplaySettings"
+                                AutomationProperties.Name="{x:Static loc:Strings.DisplaySettings_Title}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplaySettings}"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplaySettings}">
+                            <Button.Styles>
+                                <Style Selector="Button#DisplaySettingsButton:flyout-open">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#DisplaySettingsButton:flyout-open /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                </Style>
+                                <Style Selector="Button#DisplaySettingsButton:flyout-open ic|FluentIcon">
+                                    <Setter Property="Foreground" Value="White" />
+                                </Style>
+                                <Style Selector="Button#DisplaySettingsButton:flyout-open /template/ Border#HoverBackground">
+                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </Style>
+                            </Button.Styles>
+                            <ic:FluentIcon Icon="Options" IconVariant="Regular" FontSize="16" />
+                            <Button.Flyout>
+                                <Flyout Placement="Left">
+                                    <!-- Fixed-width content inside a padded border:
+                                         the explicit Width keeps the panel from
+                                         nudging wider when a segment's label turns
+                                         semibold on selection, and the Border gives
+                                         the card breathing room on all edges. -->
+                                    <Border Padding="16,14,16,16" Background="Transparent">
+                                    <StackPanel Width="340" Spacing="14">
+                                        <!-- Header -->
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{x:Static loc:Strings.DisplaySettings_Title}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="0.8"
+                                                       Opacity="0.7"
+                                                       VerticalAlignment="Center" />
+                                            <Button Grid.Column="1"
+                                                    AutomationProperties.AutomationId="DisplaySettings.Close"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}"
+                                                    Classes="Icon"
+                                                    Width="28"
+                                                    Height="28"
+                                                    Padding="0"
+                                                    Click="OnCloseDisplaySettings"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}">
+                                                <ic:FluentIcon Icon="Dismiss"
+                                                               IconVariant="Regular"
+                                                               FontSize="16"
+                                                               Foreground="{DynamicResource ForegroundColor}" />
+                                            </Button>
+                                        </Grid>
+
+                                        <!-- Display base -->
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="{x:Static loc:Strings.DisplaySettings_DisplayBaseHeader}"
+                                                       FontSize="12"
+                                                       FontWeight="Medium"
+                                                       Opacity="0.8" />
+                                            <Border Classes="segmentTrack">
+                                                <UniformGrid Rows="1">
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Category.Base"
+                                                                 GroupName="DisplaySettingsCategory"
+                                                                 Content="{x:Static loc:Strings.Segment_DisplayBase}"
+                                                                 IsChecked="{Binding MapChrome.DisplayToolbar.IsDisplayBase, Mode=OneWay}"
+                                                                 Command="{Binding MapChrome.DisplayToolbar.SetDisplayBaseCommand}" />
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Category.Standard"
+                                                                 GroupName="DisplaySettingsCategory"
+                                                                 Content="{x:Static loc:Strings.DisplayCategory_Standard}"
+                                                                 IsChecked="{Binding MapChrome.DisplayToolbar.IsStandard, Mode=OneWay}"
+                                                                 Command="{Binding MapChrome.DisplayToolbar.SetStandardCommand}" />
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Category.Other"
+                                                                 GroupName="DisplaySettingsCategory"
+                                                                 Content="{x:Static loc:Strings.Segment_DisplayOther}"
+                                                                 IsChecked="{Binding MapChrome.DisplayToolbar.IsOtherInformation, Mode=OneWay}"
+                                                                 Command="{Binding MapChrome.DisplayToolbar.SetOtherInformationCommand}" />
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Category.All"
+                                                                 GroupName="DisplaySettingsCategory"
+                                                                 Content="{x:Static loc:Strings.DisplayCategory_All}"
+                                                                 IsChecked="{Binding MapChrome.DisplayToolbar.IsAll, Mode=OneWay}"
+                                                                 Command="{Binding MapChrome.DisplayToolbar.SetAllCommand}" />
+                                                </UniformGrid>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!-- Text viewing groups -->
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="{x:Static loc:Strings.DisplaySettings_TextHeader}"
+                                                       FontSize="12"
+                                                       FontWeight="Medium"
+                                                       Opacity="0.8" />
+                                            <Border Classes="segmentTrack"
+                                                    IsEnabled="{Binding MapChrome.TextToolbar.IsEnabled}">
+                                                <UniformGrid Rows="1">
+                                                    <ToggleButton Classes="segment"
+                                                                  AutomationProperties.AutomationId="DisplaySettings.Text.Important"
+                                                                  Content="{x:Static loc:Strings.Segment_TextImportant}"
+                                                                  IsChecked="{Binding MapChrome.TextToolbar.IsImportantVisible, Mode=OneWay}"
+                                                                  Command="{Binding MapChrome.TextToolbar.ToggleImportantCommand}" />
+                                                    <ToggleButton Classes="segment"
+                                                                  AutomationProperties.AutomationId="DisplaySettings.Text.Other"
+                                                                  Content="{x:Static loc:Strings.Segment_TextOther}"
+                                                                  IsChecked="{Binding MapChrome.TextToolbar.IsOtherVisible, Mode=OneWay}"
+                                                                  Command="{Binding MapChrome.TextToolbar.ToggleOtherCommand}" />
+                                                    <ToggleButton Classes="segment"
+                                                                  AutomationProperties.AutomationId="DisplaySettings.Text.All"
+                                                                  Content="{x:Static loc:Strings.Segment_TextAll}"
+                                                                  IsChecked="{Binding MapChrome.TextToolbar.IsAllVisible, Mode=OneWay}"
+                                                                  Command="{Binding MapChrome.TextToolbar.ToggleAllCommand}" />
+                                                </UniformGrid>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!--
+                                          S-100 map palette (PR-N1) — Day/Dusk/Night
+                                          switch for the chart S-100 colour profile.
+                                          Bound to ViewerSettingsService.SelectedPalette
+                                          which already triggers a re-render through
+                                          DatasetLoaderService.
+                                        -->
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="{x:Static loc:Strings.DisplaySettings_PaletteHeader}"
+                                                       FontSize="12"
+                                                       FontWeight="Medium"
+                                                       Opacity="0.8" />
+                                            <Border Classes="segmentTrack">
+                                                <UniformGrid Rows="1">
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Palette.Day"
+                                                                 GroupName="DisplaySettingsPalette"
+                                                                 Content="{x:Static loc:Strings.Palette_Day}"
+                                                                 IsChecked="{Binding Palette.IsPaletteDay, Mode=OneWay}"
+                                                                 Command="{Binding Palette.SetPaletteDayCommand}" />
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Palette.Dusk"
+                                                                 GroupName="DisplaySettingsPalette"
+                                                                 Content="{x:Static loc:Strings.Palette_Dusk}"
+                                                                 IsChecked="{Binding Palette.IsPaletteDusk, Mode=OneWay}"
+                                                                 Command="{Binding Palette.SetPaletteDuskCommand}" />
+                                                    <RadioButton Classes="segment"
+                                                                 AutomationProperties.AutomationId="DisplaySettings.Palette.Night"
+                                                                 GroupName="DisplaySettingsPalette"
+                                                                 Content="{x:Static loc:Strings.Palette_Night}"
+                                                                 IsChecked="{Binding Palette.IsPaletteNight, Mode=OneWay}"
+                                                                 Command="{Binding Palette.SetPaletteNightCommand}" />
+                                                </UniformGrid>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!--
+                                          S-124 navigational warnings (#993): the map
+                                          draws only warnings in force at the view
+                                          time; this also draws those not yet in
+                                          force (S-98 §12.12.2). Shown while S-124
+                                          data is loaded.
+                                        -->
+                                        <StackPanel Spacing="6"
+                                                    IsVisible="{Binding Timeline.HasDateDependentData}">
+                                            <TextBlock Text="{x:Static loc:Strings.DisplaySettings_WarningsHeader}"
+                                                       FontSize="12"
+                                                       FontWeight="Medium"
+                                                       Opacity="0.8" />
+                                            <CheckBox AutomationProperties.AutomationId="DisplaySettings.ShowWarningsNotYetInForce"
+                                                      Content="{x:Static loc:Strings.DisplaySettings_ShowWarningsNotYetInForce}"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowWarningsNotYetInForce}"
+                                                      IsChecked="{Binding MapChrome.NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}"
+                                                      IsEnabled="{Binding MapChrome.NavigationalWarningDrawing.ShowNavigationalWarnings, FallbackValue=True}" />
+                                        </StackPanel>
+
+                                        <!--
+                                          S-411 sea-ice display mode (issue #416) —
+                                          a SEPARATE axis from the ECDIS display base
+                                          above, placed last. The reusable selector
+                                          is shared (same view model instance) with
+                                          the docked ECDIS Display Controls panel and
+                                          self-hides unless a loaded dataset declares
+                                          more than one mode (S-411 today).
+                                        -->
+                                        <views:DisplayModeSelectorView DataContext="{Binding MapChrome.DisplayModeToolbar}" />
                                     </StackPanel>
-
-                                    <!--
-                                      S-124 navigational warnings (#993): the map
-                                      draws only warnings in force at the view
-                                      time; this also draws those not yet in
-                                      force (S-98 §12.12.2). Shown while S-124
-                                      data is loaded.
-                                    -->
-                                    <StackPanel Spacing="6"
-                                                IsVisible="{Binding Timeline.HasDateDependentData}">
-                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_WarningsHeader}"
-                                                   FontSize="12"
-                                                   FontWeight="Medium"
-                                                   Opacity="0.8" />
-                                        <CheckBox AutomationProperties.AutomationId="DisplaySettings.ShowWarningsNotYetInForce"
-                                                  Content="{x:Static loc:Strings.DisplaySettings_ShowWarningsNotYetInForce}"
-                                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowWarningsNotYetInForce}"
-                                                  IsChecked="{Binding NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}"
-                                                  IsEnabled="{Binding NavigationalWarningDrawing.ShowNavigationalWarnings, FallbackValue=True}" />
-                                    </StackPanel>
-
-                                    <!--
-                                      S-411 sea-ice display mode (issue #416) —
-                                      a SEPARATE axis from the ECDIS display base
-                                      above, placed last. The reusable selector
-                                      is shared (same view model instance) with
-                                      the docked ECDIS Display Controls panel and
-                                      self-hides unless a loaded dataset declares
-                                      more than one mode (S-411 today).
-                                    -->
-                                    <views:DisplayModeSelectorView DataContext="{Binding DisplayModeToolbar}" />
-                                </StackPanel>
-                                </Border>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-
-                    <!--
-                      StackPanel with vertical margin gives the cluster its
-                      own visual grouping (separated from the Pick Mode
-                      button above and the compass rose below).
-                    -->
-                    <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
-                        <Button x:Name="ZoomInButton"
-                                AutomationProperties.AutomationId="Map.ZoomIn"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomIn}"
-                                Classes="Icon MapOverlay"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
-                            <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
+                                    </Border>
+                                </Flyout>
+                            </Button.Flyout>
                         </Button>
-                        <Button x:Name="ZoomOutButton"
-                                AutomationProperties.AutomationId="Map.ZoomOut"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomOut}"
-                                Classes="Icon MapOverlay"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
-                            <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
-                        </Button>
-                        <Button x:Name="ZoomToExtentButton"
-                                AutomationProperties.AutomationId="Map.ZoomToExtent"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomToExtent}"
-                                Classes="Icon MapOverlay"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
-                            <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
-                        </Button>
+                        <!--
+                          Legend (#1405, legends D14/D15): shows the right
+                          dock's Legend tab; pressed (accent fill, toggle
+                          pattern) while the tab is showing. Pressed again it
+                          puts back the tab the dock showed before, or closes
+                          the dock. It's the only way in from the map: the tab
+                          never opens by itself.
+                        -->
+                        <views:MapToggleButton x:Name="LegendButton"
+                                               AutomationProperties.AutomationId="Map.Legend"
+                                               AutomationProperties.Name="{x:Static loc:Strings.Label_MapLegend}"
+                                               AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MapLegend}"
+                                               Classes="Icon MapOverlay"
+                                               IsChecked="{Binding Layout.IsLegendTabShown}"
+                                               Command="{Binding Layout.ToggleLegendCommand}"
+                                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapLegend}">
+                            <ic:FluentIcon Icon="ColorLine" IconVariant="Regular" FontSize="16" />
+                        </views:MapToggleButton>
                     </StackPanel>
-                    <views:CompassRoseView x:Name="CompassRose"
-                                           Margin="0,4,0,0"
-                                           Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
-                                           Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
-                </StackPanel>
+                    <StackPanel x:Name="MapNavigation" Orientation="Vertical" Spacing="2" Margin="0,2,0,0">
+                        <!--
+                          StackPanel with vertical margin gives the cluster its
+                          own visual grouping (separated from the Pick Mode
+                          button above and the compass rose below).
+                        -->
+                        <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
+                            <Button x:Name="ZoomInButton"
+                                    AutomationProperties.AutomationId="Map.ZoomIn"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomIn}"
+                                    Classes="Icon MapOverlay"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
+                                <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <Button x:Name="ZoomOutButton"
+                                    AutomationProperties.AutomationId="Map.ZoomOut"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomOut}"
+                                    Classes="Icon MapOverlay"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
+                                <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <Button x:Name="ZoomToExtentButton"
+                                    AutomationProperties.AutomationId="Map.ZoomToExtent"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomToExtent}"
+                                    Classes="Icon MapOverlay"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
+                                <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                        </StackPanel>
+                        <views:CompassRoseView x:Name="CompassRose"
+                                               Margin="0,4,0,0"
+                                               Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
+                                               Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
+                    </StackPanel>
+                </views:MapOverlayColumnPanel>
                 </Grid>
 
                 <!-- Resize grip between map and bottom dock -->
@@ -1246,54 +1298,10 @@
                                        FontSize="11"
                                        LetterSpacing="1"
                                        VerticalAlignment="Center" />
-                            <ItemsControl ItemsSource="{Binding Layout.VisibleBottomTabs}"
-                                          IsVisible="{Binding Layout.HasBottomDockTabs}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="14" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="activities:IActivityTab">
-                                        <ToggleButton Classes="dockTab"
-                                                      AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}}"
-                                                      AutomationProperties.Name="{Binding Title}"
-                                                      Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
-                                                      CommandParameter="{Binding}">
-                                            <!-- The title, and a count badge such as the Logs tab's
-                                                 new warnings (#1080). -->
-                                            <StackPanel Orientation="Horizontal" Spacing="5">
-                                                <TextBlock Text="{Binding Title, Converter={x:Static conv:ToUpperConverter.Instance}}"
-                                                           VerticalAlignment="Center" />
-                                                <Border IsVisible="{Binding HasBadge}"
-                                                        IsHitTestVisible="False"
-                                                        VerticalAlignment="Center"
-                                                        MinWidth="15"
-                                                        Height="15"
-                                                        Padding="4,0"
-                                                        CornerRadius="7.5"
-                                                        Background="{DynamicResource AccentBrush}"
-                                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}Badge}"
-                                                        AutomationProperties.Name="{Binding BadgeName}">
-                                                    <TextBlock Text="{Binding BadgeCount}"
-                                                               FontSize="9.5"
-                                                               LetterSpacing="0"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="White"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
-                                                </Border>
-                                            </StackPanel>
-                                            <ToggleButton.IsChecked>
-                                                <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                                    <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedBottomTabId" />
-                                                    <Binding Path="Id" />
-                                                </MultiBinding>
-                                            </ToggleButton.IsChecked>
-                                        </ToggleButton>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <views:DockTabStrip Tabs="{Binding Layout.VisibleBottomTabs}"
+                                                SelectedTabId="{Binding Layout.SelectedBottomTabId}"
+                                                SelectCommand="{Binding Layout.SelectTabCommand}"
+                                                IsVisible="{Binding Layout.HasBottomDockTabs}" />
                         </Panel>
                     </views:ApplicationPanel.TitleContent>
                     <views:ApplicationPanel.HeaderContent>
@@ -1371,15 +1379,32 @@
                                     CloseCommand="{Binding Layout.CloseDockCommand}"
                                     CloseCommandParameter="Right"
                                     CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
-                                    IsVisible="{Binding Layout.IsRightDockShown}" />
+                                    IsVisible="{Binding Layout.IsRightDockPanelVisible}">
+                <!-- Legends D2: OBJECT INFORMATION · LEGEND, icons only when the
+                     dock is too narrow for the labels (D13, D21). -->
+                <views:ApplicationPanel.TitleContent>
+                    <Panel>
+                        <TextBlock Text="{Binding Layout.RightDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                   IsVisible="{Binding !Layout.HasRightDockTabs}"
+                                   FontSize="11"
+                                   LetterSpacing="1"
+                                   VerticalAlignment="Center" />
+                        <views:DockTabStrip x:Name="RightDockTabs"
+                                            Tabs="{Binding Layout.VisibleRightTabs}"
+                                            SelectedTabId="{Binding Layout.SelectedRightTabId}"
+                                            SelectCommand="{Binding Layout.SelectTabCommand}"
+                                            IsVisible="{Binding Layout.HasRightDockTabs}" />
+                    </Panel>
+                </views:ApplicationPanel.TitleContent>
+            </views:ApplicationPanel>
 
             <!-- Check passage folds the Object Information dock to a 26 px
                  edge tab with a vertical label (#901, C1); clicking it, or
                  turning the mode off, restores the dock. -->
             <Button Grid.Column="5"
                     AutomationProperties.AutomationId="Dock.ObjectInformationEdge"
-                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
+                    AutomationProperties.Name="{Binding Layout.RightDockEdgeTooltip}"
+                    ToolTip.Tip="{Binding Layout.RightDockEdgeTooltip}"
                     IsVisible="{Binding Layout.IsRightDockEdgeTabVisible}"
                     Command="{Binding Layout.UnfoldRightDockCommand}"
                     Width="26"
@@ -1396,7 +1421,7 @@
                     <LayoutTransformControl.LayoutTransform>
                         <RotateTransform Angle="90" />
                     </LayoutTransformControl.LayoutTransform>
-                    <TextBlock Text="{x:Static loc:Strings.Dock_ObjectInformationEdge}"
+                    <TextBlock Text="{Binding Layout.RightDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
                                FontSize="10.5"
                                FontWeight="SemiBold"
                                LetterSpacing="1"

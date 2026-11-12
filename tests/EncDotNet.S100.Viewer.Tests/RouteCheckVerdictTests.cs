@@ -135,7 +135,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     public async Task Without_a_draft_the_scenario_has_one_warning_to_review_and_two_near()
     {
         using var s = Create();
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(s.Routes, check: s.Check, findings: s.Findings, timeFormat: new Utc());
         Assert.True(panel.CanCheckPassage);
         panel.IsCheckingPassage = true;
         await s.Findings.WhenIdle();
@@ -193,7 +193,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = Create(Post);
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(s.Routes, check: s.Check, findings: s.Findings, timeFormat: new Utc());
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 
         // A1: the toggle is "Check route", enabled with two waypoints.

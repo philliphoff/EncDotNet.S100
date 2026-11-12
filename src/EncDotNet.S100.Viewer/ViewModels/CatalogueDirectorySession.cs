@@ -9,8 +9,11 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class CatalogueDirectorySession
 {
-    /// <summary>The id of the source last selected, or null before the dialog was first used.</summary>
-    public string? LastSourceId { get; set; }
+    /// <summary>
+    /// The id of the source last selected in each category, so switching back
+    /// to a category selects it again. Empty before the dialog was first used.
+    /// </summary>
+    public Dictionary<KnownCatalogueCategory, string> LastSourceIds { get; } = [];
 
     /// <summary>The category last open, or null before the dialog was first used.</summary>
     public KnownCatalogueCategory? LastCategory { get; set; }

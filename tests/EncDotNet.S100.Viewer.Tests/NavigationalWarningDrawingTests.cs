@@ -99,7 +99,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
             Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [Entry] = processor };
             Service = new NavigationalWarningsService(Loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
             Drawing = new NavigationalWarningDrawingService(Service, ViewTime, new ViewerSettings { IsReadOnly = true, ShowWarningsNotYetInForce = showNotYetInForce }, display: Display, loader: null, time: null, dispatch: action => action());
-            Panel = new NavigationalWarningsViewModel(Service, viewTime: ViewTime, clock: new FixedClock(Oct(15)), pick: null, pickReport: null, timeFormat: null, viewport: null, loader: null) { Drawing = Drawing };
+            Panel = TestNavigationalWarnings.Panel(Service, viewTime: ViewTime, clock: new FixedClock(Oct(15)), pick: null, timeFormat: null, viewport: null, loader: null, drawing: Drawing);
         }
 
         public NavigationalWarningEntry Find(int ordinal) => Service.Find(Entry.DisplayName, PartId(ordinal))!;
@@ -181,8 +181,8 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
     {
         var f = new Fixture();
         var cancelled = f.Find(3);
-        var pick = new PickReportViewModel();
-        f.Drawing.Follow(pick);
+        var pick = TestPickReport.Create();
+        f.Drawing.Follow(pick.Selection);
 
         pick.SetPicks([new PickHit
         {
@@ -193,7 +193,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
             NavigationalWarning = cancelled.Warning,
         }]);
 
-        Assert.NotNull(pick.WarningCard);
+        Assert.NotNull(pick.Warnings.Card);
         Assert.DoesNotContain(cancelled.FeatureRef, f.Hidden);
 
         pick.Clear();

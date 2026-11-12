@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -11,9 +12,12 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// One dataset row in the Library panel: a <see cref="CollectionItem"/> plus
 /// display formatting. Availability is resolved lazily (on first display)
 /// because it touches the file system and lists can hold thousands of rows.
+/// Rows read their state through a <see cref="LibraryRowContext"/> their list
+/// shares (#1396).
 /// </summary>
 internal sealed class LibraryItemViewModel : ViewModelBase
 {
+    private readonly LibraryRowContext _context;
     private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
     private readonly ILibraryDownloader? _downloader;
     private readonly string? _collectionName;
@@ -22,30 +26,29 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private LibraryAvailability? _availability;
     private LibraryItemState? _state;
     private readonly TimeProvider _time;
-    private readonly Func<TimeFormat>? _timeFormat;
     private IReadOnlyList<LibraryItemViewModel> _members = [];
 
+    /// <param name="item">The indexed item.</param>
+    /// <param name="source">The source it was indexed from.</param>
+    /// <param name="context">What the row reads its state through, shared by its list.</param>
+    /// <param name="collectionName">The name of the collection the source is in, for the details.</param>
     public LibraryItemViewModel(
         CollectionItem item,
         LibrarySource source,
-        Func<CollectionItem, LibraryLoadState>? loadState,
-        ILibraryDownloader? downloader,
-        string? collectionName,
-        Func<LibraryItemViewModel, Task>? download,
-        TimeProvider time,
-        Func<TimeFormat>? timeFormat)
+        LibraryRowContext context,
+        string? collectionName)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(context);
         Item = item;
         Source = source;
-        _loadState = loadState;
-        _downloader = downloader;
+        _context = context;
+        _loadState = context.LoadState;
+        _downloader = context.Downloader;
         _collectionName = collectionName;
-        _download = download;
-        _time = time;
-        _timeFormat = timeFormat;
+        _download = context.Retry;
+        _time = context.Time;
         RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
             () => _download?.Invoke(this) ?? Task.CompletedTask);
         CancelDownloadCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => _downloader?.Cancel(Item));
@@ -117,7 +120,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
     /// (or its group, once unpacked) is named by its description instead.
     /// </summary>
-    public string Name => IsModelHeader ? Item.Name
+    public string Name => IsModelHeader || IsAmlSection ? Item.Name
         : IsStorm ? StormItemText.Name(Item)
         : IsPackageEntry || IsGroupHeader
         ? Item.Title is { } title ? PackageTitles.Clean(title) : Item.Name
@@ -184,7 +187,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _groupCount, value))
+            {
                 OnPropertyChanged(nameof(Summary));
+                OnPropertyChanged(nameof(SectionHeader));
+            }
         }
     }
 
@@ -209,7 +215,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForPackageGroup(
         LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time,
-        DateTimeOffset? publishedAt = null, string productSpec = "S-57")
+        DateTimeOffset? publishedAt, string productSpec)
     {
         var item = new CollectionItem
         {
@@ -221,7 +227,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Properties = new Dictionary<string, string> { ["package"] = package },
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
+        header = new LibraryItemViewModel(item, source, LibraryRowContext.Detached(time), null)
         {
             IsGroupHeader = true,
             GroupKey = (source.Id, package),
@@ -240,8 +246,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForModelGroup(
         LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle,
-        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider time,
-        Func<TimeFormat>? timeFormat)
+        LibraryRowContext context)
     {
         var first = members[0].Item;
         var model = ForecastRuns.ModelOf(first) ?? first.Name;
@@ -254,7 +259,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Bounds = GeoBounds.UnionAll(members.Select(m => m.Item.Bounds).OfType<GeoBounds>()),
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, loadState, downloader, null, null, time, timeFormat)
+        // The model's row shows its tiles' state, but never retries a download itself.
+        header = new LibraryItemViewModel(item, source, new LibraryRowContext(context.Time, context.TimeFormat, context.LoadState, context.Downloader, retry: null), null)
         {
             IsGroupHeader = true,
             IsModelHeader = true,
@@ -266,6 +272,85 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         header._isExpanded = isExpanded;
         return header;
     }
+
+    /// <summary>
+    /// Creates the header row of a source's NATO Additional Military Layers
+    /// cells (#1370, decision 5): "Additional Military Layers · 19", listed
+    /// below the source's charts and expandable to its cells.
+    /// </summary>
+    internal static LibraryItemViewModel ForAmlSection(
+        LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time)
+    {
+        var item = new CollectionItem
+        {
+            Key = AmlSectionKey,
+            ProductSpec = AmlDatasetInfo.SpecName,
+            Name = Strings.Aml_Heading,
+            Location = NoItemLocation.Instance,
+        };
+        LibraryItemViewModel? header = null;
+        header = new LibraryItemViewModel(item, source, LibraryRowContext.Detached(time), null)
+        {
+            IsGroupHeader = true,
+            IsAmlSection = true,
+            GroupKey = (source.Id, AmlSectionKey),
+            ToggleCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => toggle(header!)),
+        };
+        header._members = members;
+        header._groupCount = members.Count;
+        header._isExpanded = isExpanded;
+        return header;
+    }
+
+    /// <summary>The key of a source's AML section header (never an item key: items have no colon prefix like it).</summary>
+    internal const string AmlSectionKey = "section:aml";
+
+    /// <summary>True for the header row of a source's AML cells.</summary>
+    public bool IsAmlSection { get; private init; }
+
+    /// <summary>For the AML section header: "ADDITIONAL MILITARY LAYERS · 19".</summary>
+    public string? SectionHeader => IsAmlSection
+        ? string.Format(CultureInfo.CurrentCulture, "{0} · {1:N0}", Item.Name.ToUpper(CultureInfo.CurrentCulture), GroupCount)
+        : null;
+
+    private AmlDatasetInfo? _aml;
+    private bool _amlRead;
+
+    /// <summary>The cell's AML facts, for a NATO Additional Military Layers item; otherwise <see langword="null"/>.</summary>
+    internal AmlDatasetInfo? Aml
+    {
+        get
+        {
+            if (!_amlRead)
+            {
+                _aml = IsGroupHeader ? null : AmlLibraryProperties.Read(Item.Properties, Item.Name);
+                _amlRead = true;
+            }
+
+            return _aml;
+        }
+    }
+
+    /// <summary>True for a NATO Additional Military Layers cell.</summary>
+    public bool IsAml => Aml is not null;
+
+    /// <summary>
+    /// The protective marking the row shows before its AML tag: only above
+    /// UNCLASSIFIED (decision 4), so the one that matters isn't buried.
+    /// </summary>
+    public string? AmlRowMarking => Aml is { IsMarkedAboveUnclassified: true } aml ? aml.ProtectiveMarking : null;
+
+    /// <summary>True when the row shows <see cref="AmlRowMarking"/>.</summary>
+    public bool HasAmlRowMarking => AmlRowMarking is not null;
+
+    /// <summary>
+    /// The note at the top of an AML item's details (decision 6), following
+    /// whether SoundCharts draws it; <see langword="null"/> for other items.
+    /// </summary>
+    public string? AmlNote => Aml is { } aml ? AmlLibraryRows.ItemNote(aml, AmlLibraryRows.IsDrawn(aml)) : null;
+
+    /// <summary>True when the details show <see cref="AmlNote"/>.</summary>
+    public bool HasAmlNote => AmlNote is not null;
 
     /// <summary>For a model row, its tiles (in the latest run listed).</summary>
     internal IReadOnlyList<LibraryItemViewModel> Members
@@ -389,7 +474,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>A run time as the user reads it: their Local/UTC setting (#730); UTC without one.</summary>
     private string FormatRun(DateTimeOffset time) =>
-        ForecastRunText.FormatRun(time, _timeFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone);
+        ForecastRunText.FormatRun(time, _context.CurrentTimeFormat(), _time.LocalTimeZone);
 
     /// <summary>Re-reads the run times after the user's Local/UTC setting changed (#730).</summary>
     internal void RefreshTimeFormat()
@@ -488,6 +573,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         {
             if (IsForecast)
                 return ForecastSummary();
+            if (IsAmlSection)
+                return string.Empty;
             if (IsGroupHeader)
             {
                 // "116 datasets · published 23.10.2025 15:17" — the package number is already in its name.
@@ -626,6 +713,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 return tags;
             }
 
+            if (IsAmlSection)
+                return [];
+
             if (IsGroupHeader)
             {
                 return
@@ -641,7 +731,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>A core tag as the row shows it; a failed download's tag retries it when clicked.</summary>
     private LibraryItemTag Tag(LibraryTag tag) =>
-        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null);
+        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null, tag.ToolTip);
 
     /// <summary>The row as the Library core describes it (#792): tags and details in shared words.</summary>
     private LibraryItemTextInput TextInput => new(Item, Source, Availability, EffectiveItem)
@@ -650,7 +740,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LoadState = _loadState,
         CollectionName = _collectionName,
         LocalRun = LocalRun,
-        TimeFormat = ForecastRunText.ToLibrary(_timeFormat?.Invoke() ?? TimeFormat.Utc),
+        TimeFormat = ForecastRunText.ToLibrary(_context.CurrentTimeFormat()),
         TimeZone = _time.LocalTimeZone,
         Now = _time.GetUtcNow(),
     };
@@ -740,6 +830,15 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         get
         {
+            if (IsAmlSection)
+            {
+                var source = new List<LibraryDetailField>();
+                if (!string.IsNullOrWhiteSpace(_collectionName))
+                    source.Add(new LibraryDetailField(Strings.Library_Field_Collection, _collectionName));
+                source.Add(new LibraryDetailField(Strings.Aml_Field_Cells, GroupCount.ToString("N0", CultureInfo.CurrentCulture)));
+                return [new LibraryDetailGroup(Strings.Aml_Heading, source)];
+            }
+
             if (IsGroupHeader && !IsModelHeader)
             {
                 // An unpacked package: where it came from and what it held.
@@ -762,5 +861,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// True when the item matches a free-text filter (name, title, spec, or a
     /// property value such as a state code), case-insensitively.
     /// </summary>
-    public bool Matches(string filter) => State.Matches(filter);
+    /// <remarks>An AML cell also matches its tag ("AML 3.0 · CLB"), so "AML" or a product code finds it (decision 5).</remarks>
+    public bool Matches(string filter) =>
+        State.Matches(filter) || (Aml?.TagText.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
 }

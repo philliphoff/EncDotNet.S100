@@ -60,18 +60,18 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _library.Initialize();
         _library.AddCollection("S-102", [new S100CatalogueFeedSource(Guid.NewGuid(), null, CatalogUri, S100CatalogueFilter.All)]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(
+        var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), _downloader, action => action(), feedHealth: _ => _health, coalesce: action => action(), time: TimeProvider.System,
             notifications: null,
             viewTime: null,
             timeFormat: null,
             sync: null);
-        panel.Sync();
-        panel.SelectedNode = Source(panel);
+        panel.Tree.Sync();
+        panel.Tree.SelectedNode = Source(panel);
         return panel;
     }
 
-    private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Nodes).Children);
+    private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
 
     [Fact]
     public async Task The_source_counts_what_is_local_and_what_has_updates()
@@ -94,7 +94,7 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         Assert.Equal(LibraryNodeStatusKind.Warning, source.StatusKind);
 
         // A one-source collection shows its source's line.
-        Assert.Equal(source.StatusLine, Assert.Single(panel.Nodes).StatusLine);
+        Assert.Equal(source.StatusLine, Assert.Single(panel.Tree.Nodes).StatusLine);
     }
 
     [Fact]
@@ -103,12 +103,12 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _downloader.Have("102US005MA1AB", 2);
         using var panel = await PanelAsync();
 
-        var outdated = panel.Items.Single(i => i.Name == "102US005MA1AB");
+        var outdated = panel.List.Items.Single(i => i.Name == "102US005MA1AB");
         Assert.Equal(LibraryPrimaryAvailability.Update, outdated.PrimaryAvailability);
         Assert.Empty(outdated.Tags);
         Assert.Equal("S-102 · Port 4 m · Ed 2 → Ed 3 online · " + LibraryItemViewModel.FormatBytes(3_000_000), outdated.Summary);
 
-        var online = panel.Items.Single(i => i.Name == "102US004SC1AA");
+        var online = panel.List.Items.Single(i => i.Name == "102US004SC1AA");
         Assert.Equal(LibraryPrimaryAvailability.Online, online.PrimaryAvailability);
         Assert.Equal("S-102 · Transit 16 m · Ed 5 · 2026-08-14 · " + LibraryItemViewModel.FormatBytes(3_000_000), online.Summary);
     }
@@ -120,12 +120,12 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _downloader.Have("102US005MA1AB", 2);
         using var panel = await PanelAsync();
 
-        Assert.True(panel.IsUpdateMode);
-        Assert.Equal("1 updates · " + LibraryItemViewModel.FormatBytes(3_000_000), panel.BulkSummary);
-        Assert.Equal("2 of 4 local · newer editions online", panel.BulkScope);
-        Assert.Equal("Update 1", panel.DownloadListedText);
+        Assert.True(panel.List.IsUpdateMode);
+        Assert.Equal("1 updates · " + LibraryItemViewModel.FormatBytes(3_000_000), panel.List.BulkSummary);
+        Assert.Equal("2 of 4 local · newer editions online", panel.List.BulkScope);
+        Assert.Equal("Update 1", panel.List.DownloadListedText);
 
-        panel.DownloadListedCommand.Execute(null);
+        panel.List.DownloadListedCommand.Execute(null);
 
         Assert.Equal(["102US005MA1AB"], _downloader.Requested);
     }
@@ -136,9 +136,9 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _downloader.Have("102US005MA1AA", 3);
         using var panel = await PanelAsync();
 
-        Assert.False(panel.IsUpdateMode);
-        Assert.StartsWith("3 to download", panel.BulkSummary, StringComparison.Ordinal);
-        Assert.Equal("Download 3", panel.DownloadListedText);
+        Assert.False(panel.List.IsUpdateMode);
+        Assert.StartsWith("3 to download", panel.List.BulkSummary, StringComparison.Ordinal);
+        Assert.Equal("Download 3", panel.List.DownloadListedText);
     }
 
     [Fact]
@@ -149,10 +149,10 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _health = new FeedHealth(DateTimeOffset.UtcNow, "Connection refused", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(-2));
         using var panel = await PanelAsync();
 
-        Assert.True(panel.IsBulkOffline);
-        Assert.Equal("Offline · 2 local", panel.BulkSummary);
-        Assert.False(panel.HasDownloadable);
-        Assert.False(panel.DownloadListedCommand.CanExecute(null));
+        Assert.True(panel.List.IsBulkOffline);
+        Assert.Equal("Offline · 2 local", panel.List.BulkSummary);
+        Assert.False(panel.List.HasDownloadable);
+        Assert.False(panel.List.DownloadListedCommand.CanExecute(null));
         Assert.EndsWith("· 2 local", Source(panel).StatusLine, StringComparison.Ordinal);
     }
 
@@ -163,7 +163,7 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _downloader.Have("102US005MA1AB", 2);
         using var panel = await PanelAsync();
 
-        var areas = LibraryCoverageOverlayController.Areas(panel.Items, scale: 5_000_000);
+        var areas = LibraryCoverageOverlayController.Areas(panel.List.Items, scale: 5_000_000);
         Assert.Equal(["Northeast/Boston", "Southeast/Wilmington"], areas.Select(a => a.Area.Folder).Order());
         var boston = areas.Single(a => a.Area.Folder == "Northeast/Boston");
         Assert.Equal(LibraryPrimaryAvailability.Update, LibraryCoverageOverlayController.AreaState(boston.Items));
@@ -172,11 +172,11 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
 
         // The two adjacent Boston tiles are one shape; zoomed out no tile is outlined (or tapped) on its own.
         Assert.Single(boston.Area.Rings);
-        Assert.Empty(LibraryCoverageOverlayController.Candidates(panel.Items, scale: 5_000_000));
+        Assert.Empty(LibraryCoverageOverlayController.Candidates(panel.List.Items, scale: 5_000_000));
 
         // Zoomed in, tiles are drawn as before.
-        Assert.Empty(LibraryCoverageOverlayController.Areas(panel.Items, scale: 100_000));
-        Assert.Equal(4, LibraryCoverageOverlayController.Candidates(panel.Items, scale: 100_000).Count());
+        Assert.Empty(LibraryCoverageOverlayController.Areas(panel.List.Items, scale: 100_000));
+        Assert.Equal(4, LibraryCoverageOverlayController.Candidates(panel.List.Items, scale: 100_000).Count());
     }
 
     [Fact]
@@ -185,11 +185,11 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         using var panel = await PanelAsync();
         var source = Source(panel);
 
-        panel.SelectArea(source.Id, "Southeast/Wilmington");
+        panel.Tree.SelectArea(source.Id, "Southeast/Wilmington");
 
-        Assert.Same(source.Children.Single(c => c.GroupId == "Southeast/Wilmington"), panel.SelectedNode);
+        Assert.Same(source.Children.Single(c => c.GroupId == "Southeast/Wilmington"), panel.Tree.SelectedNode);
         Assert.True(source.IsExpanded);
-        Assert.Equal(2, panel.Items.Count);
+        Assert.Equal(2, panel.List.Items.Count);
     }
 
     private sealed class TileIndexer : ICollectionSourceIndexer

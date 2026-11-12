@@ -26,7 +26,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, _downloader, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+    private LibraryPanelViewModel CreateViewModel() => TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
 
     private async Task<DatasetCollection> AddS57CollectionAsync(string name = "Charts")
     {
@@ -40,9 +40,9 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         using var vm = CreateViewModel();
 
-        Assert.True(vm.IsEmpty);
-        Assert.Empty(vm.Nodes);
-        Assert.Empty(vm.Items);
+        Assert.True(vm.Tree.IsEmpty);
+        Assert.Empty(vm.Tree.Nodes);
+        Assert.Empty(vm.List.Items);
     }
 
     [Fact]
@@ -51,13 +51,13 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        var node = Assert.Single(vm.Nodes);
+        var node = Assert.Single(vm.Tree.Nodes);
         Assert.Equal("Charts", node.Name);
         Assert.Equal("2", node.Status);
         Assert.Single(node.Children);
-        Assert.Same(node, vm.SelectedNode);
-        Assert.Equal(["US5WA51M", "US5WA52M"], vm.Items.Select(i => i.Name));
-        Assert.All(vm.Items, i => Assert.Equal(LibraryAvailability.Local, i.Availability));
+        Assert.Same(node, vm.Tree.SelectedNode);
+        Assert.Equal(["US5WA51M", "US5WA52M"], vm.List.Items.Select(i => i.Name));
+        Assert.All(vm.List.Items, i => Assert.Equal(LibraryAvailability.Local, i.Availability));
     }
 
     [Fact]
@@ -66,11 +66,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        vm.FilterText = "52m";
+        vm.List.FilterText = "52m";
 
-        Assert.Equal("US5WA52M", Assert.Single(vm.Items).Name);
-        Assert.Contains("1", vm.ItemsSummary);
-        Assert.Contains("2", vm.ItemsSummary);
+        Assert.Equal("US5WA52M", Assert.Single(vm.List.Items).Name);
+        Assert.Contains("1", vm.List.ItemsSummary);
+        Assert.Contains("2", vm.List.ItemsSummary);
     }
 
     [Fact]
@@ -78,30 +78,30 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        var total = vm.Items.Count;
+        var total = vm.List.Items.Count;
         Assert.True(total > 0);
 
-        Assert.True(vm.IsStateAll);
-        Assert.Equal((total, total, 0, 0), (vm.AllCount, vm.LocalCount, vm.OnlineCount, vm.UpdatesCount));
-        Assert.Equal(total.ToString(System.Globalization.CultureInfo.CurrentCulture), vm.ItemsSummary);
+        Assert.True(vm.List.IsStateAll);
+        Assert.Equal((total, total, 0, 0), (vm.List.AllCount, vm.List.LocalCount, vm.List.OnlineCount, vm.List.UpdatesCount));
+        Assert.Equal(total.ToString(System.Globalization.CultureInfo.CurrentCulture), vm.List.ItemsSummary);
 
-        vm.IsStateOnline = true;
-        Assert.Equal(LibraryStateFilter.Online, vm.StateFilter);
-        Assert.Empty(vm.Items);
-        Assert.StartsWith("0 of ", vm.ItemsSummary);
+        vm.List.IsStateOnline = true;
+        Assert.Equal(LibraryStateFilter.Online, vm.List.StateFilter);
+        Assert.Empty(vm.List.Items);
+        Assert.StartsWith("0 of ", vm.List.ItemsSummary);
 
         // A newer edition online moves them from Local to Updates.
         _downloader.Outdated = true;
         _downloader.RaiseChanged();
-        Assert.Equal((0, total), (vm.LocalCount, vm.UpdatesCount));
+        Assert.Equal((0, total), (vm.List.LocalCount, vm.List.UpdatesCount));
 
-        vm.IsStateUpdates = true;
-        Assert.Equal(total, vm.Items.Count);
+        vm.List.IsStateUpdates = true;
+        Assert.Equal(total, vm.List.Items.Count);
 
         // Updating them (no newer edition any more) empties the segment.
         _downloader.Outdated = false;
         _downloader.RaiseChanged();
-        Assert.Empty(vm.Items);
+        Assert.Empty(vm.List.Items);
     }
 
     [Fact]
@@ -109,15 +109,15 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync("First");
         using var vm = CreateViewModel();
-        var first = vm.SelectedNode;
-        vm.SelectedItem = vm.Items[1];
+        var first = vm.Tree.SelectedNode;
+        vm.List.SelectedItem = vm.List.Items[1];
 
         await AddS57CollectionAsync("Second");
 
-        Assert.Equal(2, vm.Nodes.Count);
-        Assert.Same(first, vm.Nodes[0]);
-        Assert.Same(first, vm.SelectedNode);
-        Assert.Equal("US5WA52M", vm.SelectedItem!.Name);
+        Assert.Equal(2, vm.Tree.Nodes.Count);
+        Assert.Same(first, vm.Tree.Nodes[0]);
+        Assert.Same(first, vm.Tree.SelectedNode);
+        Assert.Equal("US5WA52M", vm.List.SelectedItem!.Name);
     }
 
     [Fact]
@@ -128,11 +128,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await _library.WhenIdle();
         using var vm = CreateViewModel();
 
-        Assert.Equal(4, vm.Items.Count);
-        vm.SelectedNode = vm.Nodes[0].Children[1];
+        Assert.Equal(4, vm.List.Items.Count);
+        vm.Tree.SelectedNode = vm.Tree.Nodes[0].Children[1];
 
-        Assert.Equal(2, vm.Items.Count);
-        Assert.All(vm.Items, i => Assert.Equal(vm.Nodes[0].Children[1].Id, i.Source.Id));
+        Assert.Equal(2, vm.List.Items.Count);
+        Assert.All(vm.List.Items, i => Assert.Equal(vm.Tree.Nodes[0].Children[1].Id, i.Source.Id));
     }
 
     [Fact]
@@ -141,11 +141,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        Assert.True(vm.RemoveCommand.CanExecute(null));
-        vm.RemoveCommand.Execute(null);
+        Assert.True(vm.Tree.RemoveCommand.CanExecute(null));
+        vm.Tree.RemoveCommand.Execute(null);
 
-        Assert.True(vm.IsEmpty);
-        Assert.Null(vm.SelectedNode);
+        Assert.True(vm.Tree.IsEmpty);
+        Assert.Null(vm.Tree.SelectedNode);
         Assert.Empty(_library.Collections);
     }
 
@@ -155,7 +155,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var collection = await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        vm.AddOnlineCatalogueCommand.Execute(null);
+        vm.Tree.AddOnlineCatalogueCommand.Execute(null);
 
         Assert.Equal(("online", (Guid?)collection.Id), _importer.Calls.Single());
     }
@@ -166,7 +166,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var collection = await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        vm.AddSharedFeedCommand.Execute(null);
+        vm.Tree.AddSharedFeedCommand.Execute(null);
 
         Assert.Equal(("feed", (Guid?)collection.Id), _importer.Calls.Single());
     }
@@ -176,32 +176,32 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync("Charts");
         using var vm = CreateViewModel();
-        var collection = vm.Nodes.Single();
+        var collection = vm.Tree.Nodes.Single();
 
-        vm.RenameCommand.Execute(null);
+        vm.Tree.RenameCommand.Execute(null);
         Assert.True(collection.IsRenaming);
         Assert.Equal("Charts", collection.RenameText);
         collection.RenameText = "  Harbour charts ";
-        vm.CommitRenameCommand.Execute(null);
+        vm.Tree.CommitRenameCommand.Execute(null);
         await _library.WhenIdle();
 
         Assert.False(collection.IsRenaming);
         Assert.Equal("Harbour charts", Assert.Single(_library.Collections).Definition.Name);
 
-        vm.SelectedNode = vm.Nodes.Single().Children.Single();
-        vm.RenameCommand.Execute(null);
-        vm.SelectedNode!.RenameText = "Survey 2026";
-        vm.CommitRenameCommand.Execute(null);
+        vm.Tree.SelectedNode = vm.Tree.Nodes.Single().Children.Single();
+        vm.Tree.RenameCommand.Execute(null);
+        vm.Tree.SelectedNode!.RenameText = "Survey 2026";
+        vm.Tree.CommitRenameCommand.Execute(null);
         await _library.WhenIdle();
 
         Assert.Equal("Survey 2026", Assert.Single(Assert.Single(_library.Collections).Sources).Definition.DisplayName);
-        Assert.Equal("Survey 2026", vm.Nodes.Single().Children.Single().Name);
+        Assert.Equal("Survey 2026", vm.Tree.Nodes.Single().Children.Single().Name);
 
         // Escape leaves the name alone.
-        vm.RenameCommand.Execute(null);
-        vm.SelectedNode!.RenameText = "Something else";
-        vm.CancelRenameCommand.Execute(null);
-        Assert.Equal("Survey 2026", vm.Nodes.Single().Children.Single().Name);
+        vm.Tree.RenameCommand.Execute(null);
+        vm.Tree.SelectedNode!.RenameText = "Something else";
+        vm.Tree.CancelRenameCommand.Execute(null);
+        Assert.Equal("Survey 2026", vm.Tree.Nodes.Single().Children.Single().Name);
     }
 
     [Fact]
@@ -211,11 +211,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _library.AddSessionCatalogue("sample", path, S128Dataset.Open(path));
         using var vm = CreateViewModel();
 
-        vm.SelectedNode = vm.Nodes[0].Children[0];
+        vm.Tree.SelectedNode = vm.Tree.Nodes[0].Children[0];
 
-        Assert.False(vm.RemoveCommand.CanExecute(null));
-        Assert.True(vm.KeepInLibraryCommand.CanExecute(null));
-        Assert.All(vm.Items, i => Assert.Equal(LibraryAvailability.Listed, i.Availability));
+        Assert.False(vm.Tree.RemoveCommand.CanExecute(null));
+        Assert.True(vm.Tree.KeepInLibraryCommand.CanExecute(null));
+        Assert.All(vm.List.Items, i => Assert.Equal(LibraryAvailability.Listed, i.Availability));
     }
 
     private static GeoPosition CentreOf(LibraryItemViewModel item) =>
@@ -227,30 +227,30 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        var node = vm.SelectedNode;
-        var items = vm.Items.ToArray();
+        var node = vm.Tree.SelectedNode;
+        var items = vm.List.Items.ToArray();
         var point = CentreOf(items[1]);
 
-        vm.SelectTapHits(point, [items[1], items[0]], sameSpot: false);
+        vm.Tap.SelectTapHits(point, [items[1], items[0]], sameSpot: false);
 
-        Assert.Same(items[1], vm.SelectedItem);
-        Assert.Equal(items, vm.Items);
-        Assert.Same(node, vm.SelectedNode);
-        Assert.False(vm.HasLocation);
-        Assert.True(vm.HasTap);
-        Assert.Equal("2 here", vm.TapHitsText);
-        Assert.Equal("· 1 of 2", vm.TapPositionText);
+        Assert.Same(items[1], vm.List.SelectedItem);
+        Assert.Equal(items, vm.List.Items);
+        Assert.Same(node, vm.Tree.SelectedNode);
+        Assert.False(vm.Tap.HasLocation);
+        Assert.True(vm.Tap.HasTap);
+        Assert.Equal("2 here", vm.Tap.TapHitsText);
+        Assert.Equal("· 1 of 2", vm.Tap.TapPositionText);
 
         // The same spot again steps to the next hit; Next does the same and wraps round.
-        vm.SelectTapHits(point, [items[1], items[0]], sameSpot: true);
-        Assert.Same(items[0], vm.SelectedItem);
-        Assert.Equal("· 2 of 2", vm.TapPositionText);
-        vm.NextTapHitCommand.Execute(null);
-        Assert.Same(items[1], vm.SelectedItem);
+        vm.Tap.SelectTapHits(point, [items[1], items[0]], sameSpot: true);
+        Assert.Same(items[0], vm.List.SelectedItem);
+        Assert.Equal("· 2 of 2", vm.Tap.TapPositionText);
+        vm.Tap.NextTapHitCommand.Execute(null);
+        Assert.Same(items[1], vm.List.SelectedItem);
 
         // A new spot starts from the top hit again.
-        vm.SelectTapHits(point, [items[0], items[1]], sameSpot: false);
-        Assert.Same(items[0], vm.SelectedItem);
+        vm.Tap.SelectTapHits(point, [items[0], items[1]], sameSpot: false);
+        Assert.Same(items[0], vm.List.SelectedItem);
     }
 
     [Fact]
@@ -258,21 +258,21 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        var target = vm.Items[0];
+        var target = vm.List.Items[0];
 
-        vm.SelectTapHits(CentreOf(target), [target], sameSpot: false);
-        Assert.False(vm.NextTapHitCommand.CanExecute(null));
-        vm.ListTapHitsCommand.Execute(null);
+        vm.Tap.SelectTapHits(CentreOf(target), [target], sameSpot: false);
+        Assert.False(vm.Tap.NextTapHitCommand.CanExecute(null));
+        vm.Tap.ListTapHitsCommand.Execute(null);
 
-        Assert.True(vm.HasLocation);
-        Assert.False(vm.HasTap);
-        Assert.Contains(vm.Items, i => i.Name == target.Name);
-        Assert.Equal(target.Name, vm.SelectedItem!.Name);
-        Assert.Equal(vm.Items.Count, vm.LocationHitCount);
+        Assert.True(vm.Tap.HasLocation);
+        Assert.False(vm.Tap.HasTap);
+        Assert.Contains(vm.List.Items, i => i.Name == target.Name);
+        Assert.Equal(target.Name, vm.List.SelectedItem!.Name);
+        Assert.Equal(vm.List.Items.Count, vm.Tap.LocationHitCount);
 
-        vm.ClearLocationCommand.Execute(null);
-        Assert.False(vm.HasLocation);
-        Assert.Equal(2, vm.Items.Count);
+        vm.Tap.ClearLocationCommand.Execute(null);
+        Assert.False(vm.Tap.HasLocation);
+        Assert.Equal(2, vm.List.Items.Count);
     }
 
     [Fact]
@@ -280,18 +280,18 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        vm.SelectTapHits(CentreOf(vm.Items[0]), [vm.Items[0]], sameSpot: false);
+        vm.Tap.SelectTapHits(CentreOf(vm.List.Items[0]), [vm.List.Items[0]], sameSpot: false);
 
-        vm.ClearTapCommand.Execute(null);
+        vm.Tap.ClearTapCommand.Execute(null);
 
-        Assert.False(vm.HasTap);
-        Assert.Null(vm.SelectedItem);
-        Assert.Equal(2, vm.Items.Count);
+        Assert.False(vm.Tap.HasTap);
+        Assert.Null(vm.List.SelectedItem);
+        Assert.Equal(2, vm.List.Items.Count);
 
         // A tap where nothing is outlined clears a hand-picked selection too.
-        vm.SelectedItem = vm.Items[1];
-        vm.ClearTap();
-        Assert.Null(vm.SelectedItem);
+        vm.List.SelectedItem = vm.List.Items[1];
+        vm.Tap.ClearTap();
+        Assert.Null(vm.List.SelectedItem);
     }
 
     [Fact]
@@ -299,32 +299,32 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        var items = vm.Items.ToArray();
+        var items = vm.List.Items.ToArray();
         var point = CentreOf(items[0]);
 
         // Picking a row that is one of the hits keeps the banner; another row ends it.
-        vm.SelectTapHits(point, [items[0], items[1]], sameSpot: false);
-        vm.SelectedItem = items[1];
-        Assert.True(vm.HasTap);
-        vm.SelectTapHits(point, [items[0]], sameSpot: false);
-        vm.SelectedItem = items[1];
-        Assert.False(vm.HasTap);
-        Assert.Same(items[1], vm.SelectedItem);
+        vm.Tap.SelectTapHits(point, [items[0], items[1]], sameSpot: false);
+        vm.List.SelectedItem = items[1];
+        Assert.True(vm.Tap.HasTap);
+        vm.Tap.SelectTapHits(point, [items[0]], sameSpot: false);
+        vm.List.SelectedItem = items[1];
+        Assert.False(vm.Tap.HasTap);
+        Assert.Same(items[1], vm.List.SelectedItem);
 
         // The text filter ends it.
-        vm.SelectTapHits(point, [items[0]], sameSpot: false);
-        vm.FilterText = "US5";
-        Assert.False(vm.HasTap);
+        vm.Tap.SelectTapHits(point, [items[0]], sameSpot: false);
+        vm.List.FilterText = "US5";
+        Assert.False(vm.Tap.HasTap);
 
         // So does the state filter.
-        vm.SelectTapHits(point, [vm.Items[0]], sameSpot: false);
-        vm.StateFilter = LibraryStateFilter.Local;
-        Assert.False(vm.HasTap);
+        vm.Tap.SelectTapHits(point, [vm.List.Items[0]], sameSpot: false);
+        vm.List.StateFilter = LibraryStateFilter.Local;
+        Assert.False(vm.Tap.HasTap);
 
         // And selecting a tree node.
-        vm.SelectTapHits(point, [vm.Items[0]], sameSpot: false);
-        vm.SelectedNode = vm.Nodes[0].Children[0];
-        Assert.False(vm.HasTap);
+        vm.Tap.SelectTapHits(point, [vm.List.Items[0]], sameSpot: false);
+        vm.Tree.SelectedNode = vm.Tree.Nodes[0].Children[0];
+        Assert.False(vm.Tap.HasTap);
     }
 
     [Fact]
@@ -332,21 +332,21 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        var target = vm.Items[0];
+        var target = vm.List.Items[0];
         var point = CentreOf(target);
 
         // The synthetic cells are band 5 (harbour): outlined at harbour scale, not at overview.
-        var harbour = EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, null, point, 20_000);
+        var harbour = EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.List.Items, null, point, 20_000);
         Assert.Contains(harbour, h => ReferenceEquals(h, target));
-        Assert.Empty(EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, null, point, 10_000_000));
+        Assert.Empty(EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.List.Items, null, point, 10_000_000));
 
         // The selection is always drawn, so it can always be hit.
-        var selected = EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, target, point, 10_000_000);
+        var selected = EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.List.Items, target, point, 10_000_000);
         Assert.Same(target, Assert.Single(selected));
 
         // Only listed datasets are candidates.
-        vm.FilterText = "nothing matches this";
-        Assert.Empty(EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, null, point, 20_000));
+        vm.List.FilterText = "nothing matches this";
+        Assert.Empty(EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.List.Items, null, point, 20_000));
     }
 
     [Fact]
@@ -355,21 +355,21 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
         GeoPosition? requested = null;
-        vm.CenterRequested += (_, p) => requested = p;
+        vm.Details.CenterRequested += (_, p) => requested = p;
 
-        vm.CenterOnSelected();
+        vm.Details.CenterOnItem();
         Assert.Null(requested);
 
-        vm.SelectedItem = vm.Items[0];
-        vm.CenterOnSelected();
+        vm.List.SelectedItem = vm.List.Items[0];
+        vm.Details.CenterOnItem();
 
-        Assert.Equal(CentreOf(vm.Items[0]), requested);
+        Assert.Equal(CentreOf(vm.List.Items[0]), requested);
     }
 
     [Fact]
     public void The_centre_of_bounds_crossing_the_antimeridian_is_across_it()
     {
-        var centre = LibraryPanelViewModel.CenterOf(new GeoBounds(50, 170, 60, -170));
+        var centre = LibraryDetailsViewModel.CenterOf(new GeoBounds(50, 170, 60, -170));
 
         Assert.Equal(55, centre.Latitude);
         Assert.Equal(180, Math.Abs(centre.Longitude), 6);
@@ -381,13 +381,13 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
         GeoBounds? requested = null;
-        vm.ZoomRequested += (_, b) => requested = b;
+        vm.Details.ZoomRequested += (_, b) => requested = b;
 
-        Assert.False(vm.ZoomToCommand.CanExecute(null));
-        vm.SelectedItem = vm.Items[0];
-        vm.ZoomToCommand.Execute(null);
+        Assert.False(vm.Details.ZoomToCommand.CanExecute(null));
+        vm.List.SelectedItem = vm.List.Items[0];
+        vm.Details.ZoomToCommand.Execute(null);
 
-        Assert.Equal(vm.Items[0].Item.Bounds, requested);
+        Assert.Equal(vm.List.Items[0].Item.Bounds, requested);
     }
 
     [Fact]
@@ -396,10 +396,10 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        Assert.False(vm.LoadCommand.CanExecute(null));
-        vm.SelectedItem = vm.Items[1];
-        vm.LoadCommand.Execute(null);
-        vm.LoadAsYouPanCommand.Execute(null);
+        Assert.False(vm.Details.LoadCommand.CanExecute(null));
+        vm.List.SelectedItem = vm.List.Items[1];
+        vm.Details.LoadCommand.Execute(null);
+        vm.List.LoadAsYouPanCommand.Execute(null);
 
         Assert.Equal((false, 1), (_loader.Calls[0].Defer, _loader.Calls[0].Count));
         Assert.Equal((true, 2), (_loader.Calls[1].Defer, _loader.Calls[1].Count));
@@ -409,37 +409,33 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     public async Task Open_as_route_loads_an_S421_dataset_then_opens_it_as_a_route()
     {
         await AddS57CollectionAsync();
-        using var vm = CreateViewModel();
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "S421", "RTE-TEST-GBASIC.s421.gml"), Path.Combine(_context.Root, "RTE-TEST-GBASIC.s421.gml"));
+        var library = new TestLibrary(_library, _loader, _downloader);
+        using var vm = library.CreatePanel(_importer, action => action(), action => action(), TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
+        var file = Path.Combine(_context.Root, "RTE-TEST-GBASIC.s421.gml");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "S421", "RTE-TEST-GBASIC.s421.gml"), file);
         var folder = new LibrarySource(new LocalFolderSource(Guid.NewGuid(), null, _context.Root), null, LibrarySourceState.Ready);
-        var route = vm.CreateItem(new CollectionItem
+        var route = library.Rows.Create(new CollectionItem
         {
             Key = "route",
             ProductSpec = "S-421",
             Name = "RTE-TEST-GBASIC",
             Location = new LocalItemLocation(_context.Root, "RTE-TEST-GBASIC.s421.gml", []),
         }, folder);
-        var opened = new List<CollectionItem>();
 
-        // Without the host's route opener, and on other products, there's no Open as route.
-        vm.SelectedItem = route;
-        Assert.False(vm.CanOpenAsRoute);
-        vm.OpenRoute = item =>
-        {
-            opened.Add(item);
-            return Task.CompletedTask;
-        };
-        vm.SelectedItem = vm.Items.First(i => i.Item.ProductSpec != "S-421");
-        Assert.False(vm.CanOpenAsRoute);
-        Assert.False(vm.OpenAsRouteCommand.CanExecute(null));
+        // Other products have no Open as route.
+        vm.List.SelectedItem = vm.List.Items.First(i => i.Item.ProductSpec != "S-421");
+        Assert.False(vm.Details.CanOpenAsRoute);
+        Assert.False(vm.Details.OpenAsRouteCommand.CanExecute(null));
 
-        vm.SelectedItem = route;
-        Assert.True(vm.CanOpenAsRoute);
-        vm.OpenAsRouteCommand.Execute(null);
+        vm.List.SelectedItem = route;
+        Assert.True(vm.Details.CanOpenAsRoute);
+        _loader.Entry = new DatasetEntry(file, "S-421") { IsLoaded = true };
+        vm.Details.OpenAsRouteCommand.Execute(null);
 
         // An explicit load first, then the route.
         Assert.Equal((false, 1), (_loader.Calls.Single().Defer, _loader.Calls.Single().Count));
-        Assert.Same(route.EffectiveItem, Assert.Single(opened));
+        var opened = Assert.Single(library.Routes.Routes.Routes);
+        Assert.Same(opened, library.Routes.Routes.ActiveRoute);
     }
 
     [Fact]
@@ -447,13 +443,13 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        Assert.Equal(LibraryAvailability.Local, vm.Items[0].Availability);
+        Assert.Equal(LibraryAvailability.Local, vm.List.Items[0].Availability);
 
         _loader.State = LibraryLoadState.Loaded;
         _loader.RaiseChanged();
 
-        Assert.Equal(LibraryAvailability.Loaded, vm.Items[0].Availability);
-        Assert.Equal("Loaded", vm.Items[0].AvailabilityText);
+        Assert.Equal(LibraryAvailability.Loaded, vm.List.Items[0].Availability);
+        Assert.Equal("Loaded", vm.List.Items[0].AvailabilityText);
     }
 
     [Fact]
@@ -462,7 +458,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var item = LibraryDownloadServiceTests.Cell();
         var source = new LibrarySource(new NoaaEncFeedSource(Guid.NewGuid(), null, NoaaEncFeedSource.DefaultCatalogUri, NoaaEncFilter.All),
             new SourceIndex(Guid.NewGuid(), DateTimeOffset.UnixEpoch, "fp", [item], []), LibrarySourceState.Ready);
-        var vmItem = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, collectionName: null, download: null, time: TimeProvider.System, timeFormat: null);
+        var vmItem = new LibraryItemViewModel(item, source, new LibraryRowContext(TimeProvider.System, null, _loader.StateOf, _downloader, retry: null), collectionName: null);
 
         Assert.Equal(LibraryAvailability.Online, vmItem.Availability);
         Assert.True(vmItem.CanDownload);
@@ -482,27 +478,27 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         using var vm = CreateViewModel();
 
         // Nothing online: the bar names the listed datasets and offers only On pan.
-        Assert.True(vm.HasBulkBar);
-        Assert.False(vm.HasDownloadable);
-        Assert.Equal("Nothing to download", vm.BulkScope);
+        Assert.True(vm.List.HasBulkBar);
+        Assert.False(vm.List.HasDownloadable);
+        Assert.Equal("Nothing to download", vm.List.BulkScope);
 
         _downloader.CanDownloadAll = true;
         _downloader.Outdated = true;
         _downloader.RaiseChanged();
-        Assert.True(vm.HasDownloadable);
-        Assert.StartsWith($"{vm.Items.Count} to download", vm.BulkSummary);
-        Assert.Equal("All listed datasets", vm.BulkScope);
-        vm.FilterText = "52m";
-        Assert.Equal("Filtered set", vm.BulkScope);
+        Assert.True(vm.List.HasDownloadable);
+        Assert.StartsWith($"{vm.List.Items.Count} to download", vm.List.BulkSummary);
+        Assert.Equal("All listed datasets", vm.List.BulkScope);
+        vm.List.FilterText = "52m";
+        Assert.Equal("Filtered set", vm.List.BulkScope);
 
         _downloader.Progress = new LibraryDownloadProgress(1, 0, 4, 500_000, 1_000_000);
         _downloader.RaiseProgress();
-        Assert.True(vm.IsBulkDownloading);
-        Assert.False(vm.HasDownloadable);  // the primary button is Cancel now
-        Assert.StartsWith("3 to download", vm.BulkSummary);
-        Assert.StartsWith("Downloading 2 of 4", vm.BulkScope);
-        Assert.True(vm.CancelDownloadsCommand.CanExecute(null));
-        vm.CancelDownloadsCommand.Execute(null);
+        Assert.True(vm.List.IsBulkDownloading);
+        Assert.False(vm.List.HasDownloadable);  // the primary button is Cancel now
+        Assert.StartsWith("3 to download", vm.List.BulkSummary);
+        Assert.StartsWith("Downloading 2 of 4", vm.List.BulkScope);
+        Assert.True(vm.List.CancelDownloadsCommand.CanExecute(null));
+        vm.List.CancelDownloadsCommand.Execute(null);
         Assert.True(_downloader.CancelledAll);
     }
 
@@ -511,19 +507,19 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        vm.SelectedItem = vm.Items[0];
+        vm.List.SelectedItem = vm.List.Items[0];
 
         // Local: loads.
-        Assert.True(vm.LoadOrDownloadCommand.CanExecute(null));
-        vm.LoadOrDownloadCommand.Execute(null);
+        Assert.True(vm.Details.LoadOrDownloadCommand.CanExecute(null));
+        vm.Details.LoadOrDownloadCommand.Execute(null);
         Assert.Equal(0, _downloader.Downloads);
         Assert.Single(_loader.Calls);
 
         // Outdated (downloadable, still loadable): the button loads the local copy.
         _downloader.CanDownloadAll = true;
         _downloader.Outdated = true;
-        vm.SelectedItem.RefreshAvailability();
-        Assert.Equal("Load", vm.SelectedItem.LoadTooltip);
+        vm.List.SelectedItem.RefreshAvailability();
+        Assert.Equal("Load", vm.List.SelectedItem.LoadTooltip);
     }
 
     [Fact]
@@ -531,12 +527,12 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        vm.SelectedItem = vm.Items[0];
+        vm.List.SelectedItem = vm.List.Items[0];
         _downloader.CanDownloadAll = true;
         _downloader.Outdated = true;
-        vm.SelectedItem.RefreshAvailability();
+        vm.List.SelectedItem.RefreshAvailability();
 
-        vm.DownloadOnlyCommand.Execute(null);
+        vm.Details.DownloadOnlyCommand.Execute(null);
 
         Assert.Equal(1, _downloader.Downloads);
         Assert.Empty(_loader.Calls);
@@ -547,13 +543,13 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        vm.SelectedItem = vm.Items[0];
+        vm.List.SelectedItem = vm.List.Items[0];
         _downloader.CanDownloadAll = true;
         _downloader.Outdated = true;
-        vm.SelectedItem.RefreshAvailability();
+        vm.List.SelectedItem.RefreshAvailability();
 
-        Assert.True(vm.DownloadCommand.CanExecute(null));
-        vm.DownloadCommand.Execute(null);
+        Assert.True(vm.Details.DownloadCommand.CanExecute(null));
+        vm.Details.DownloadCommand.Execute(null);
 
         Assert.Equal(1, _downloader.Downloads);
         Assert.Equal((false, 1), (_loader.Calls.Single().Defer, _loader.Calls.Single().Count));
@@ -569,11 +565,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Community", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        vm.SelectedItem = vm.Items.Single();
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        vm.List.SelectedItem = vm.List.Items.Single();
         var indexed = indexer.Calls;
 
-        vm.DownloadCommand.Execute(null);
+        vm.Details.DownloadCommand.Execute(null);
         await library.WhenIdle();
 
         Assert.Equal(1, _downloader.Downloads);
@@ -591,11 +587,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Shared", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        vm.SelectedItem = vm.Items.Single();
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        vm.List.SelectedItem = vm.List.Items.Single();
         var indexed = indexer.Calls;
 
-        vm.DownloadCommand.Execute(null);
+        vm.Details.DownloadCommand.Execute(null);
         await library.WhenIdle();
 
         Assert.Equal(1, _downloader.Downloads);
@@ -625,10 +621,10 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var order = new List<string>();
         _loader.Closing = () => order.Add("close");
         _downloader.Downloading = () => order.Add("download");
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        vm.SelectedItem = vm.Items.Single();
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        vm.List.SelectedItem = vm.List.Items.Single();
 
-        (load ? vm.DownloadCommand : vm.DownloadOnlyCommand).Execute(null);
+        (load ? vm.Details.DownloadCommand : vm.Details.DownloadOnlyCommand).Execute(null);
         await library.WhenIdle();
 
         Assert.Equal(["close", "download"], order);
@@ -648,40 +644,40 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Romania", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/RO_IENC_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
 
         // Base1 is unpacked (a collapsed group); Base2 is still a package.
-        Assert.Equal(2, vm.Items.Count);
-        var group = vm.Items[0];
+        Assert.Equal(2, vm.List.Items.Count);
+        var group = vm.List.Items[0];
         Assert.True(group.IsGroupHeader);
         Assert.Equal("Dunărea 790 - 0 (Base1)", group.Name);
         Assert.Equal((3, false), (group.GroupCount, group.IsExpanded));
         Assert.Equal("Unpacked", Assert.Single(group.Tags).Text);
         Assert.False(group.CanLoad);
-        var package = vm.Items[1];
+        var package = vm.List.Items[1];
         Assert.True(package.IsPackageEntry);
         Assert.Equal("Dunărea 1750 - 790 (Base2)", package.Name);
         Assert.False(package.IsNameMono);
         Assert.Equal("Package", Assert.Single(package.Tags).Text);
         Assert.StartsWith("Base2 · published 2024-08-23", package.Summary);
-        Assert.Equal(4, vm.AllCount);  // counts are datasets, not rows
-        Assert.Equal("4", vm.ItemsSummary);  // a collapsed group's datasets count; its header doesn't
+        Assert.Equal(4, vm.List.AllCount);  // counts are datasets, not rows
+        Assert.Equal("4", vm.List.ItemsSummary);  // a collapsed group's datasets count; its header doesn't
         Assert.StartsWith("3 datasets · published ", group.Summary);
 
         group.ToggleCommand!.Execute(null);
-        Assert.Equal(5, vm.Items.Count);
-        Assert.All(vm.Items.Skip(1).Take(3), i => Assert.True(i.IsGroupChild));
-        Assert.Equal("4", vm.ItemsSummary);
+        Assert.Equal(5, vm.List.Items.Count);
+        Assert.All(vm.List.Items.Skip(1).Take(3), i => Assert.True(i.IsGroupChild));
+        Assert.Equal("4", vm.List.ItemsSummary);
         // Children don't repeat the package's title.
-        Assert.All(vm.Items.Skip(1).Take(3), i => Assert.False(i.HasSubtitle));
-        vm.SelectedItem = vm.Items[2];
-        var selected = vm.SelectedItem;
+        Assert.All(vm.List.Items.Skip(1).Take(3), i => Assert.False(i.HasSubtitle));
+        vm.List.SelectedItem = vm.List.Items[2];
+        var selected = vm.List.SelectedItem;
 
         // A text match inside a collapsed group opens it, keeping the selection.
-        vm.Items[0].ToggleCommand!.Execute(null);
-        vm.FilterText = "3R7D";
-        Assert.Equal(3, vm.Items.Count);
-        Assert.Same(selected, vm.Items.Single(i => ReferenceEquals(i, selected)));
+        vm.List.Items[0].ToggleCommand!.Execute(null);
+        vm.List.FilterText = "3R7D";
+        Assert.Equal(3, vm.List.Items.Count);
+        Assert.Same(selected, vm.List.Items.Single(i => ReferenceEquals(i, selected)));
     }
 
     /// <summary>Indexes a community source as a single online package entry.</summary>

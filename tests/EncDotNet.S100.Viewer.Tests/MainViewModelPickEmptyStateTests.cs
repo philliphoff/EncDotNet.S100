@@ -43,14 +43,6 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
     }
 
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme => false;
-        public event System.EventHandler? ThemeChanged { add { } remove { } }
-        public bool ToggleTheme() => false;
-        public ChromeTheme Current => ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { }
-    }
 
     private sealed class NoopLoader : IDatasetLoaderService
     {
@@ -80,27 +72,22 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
-        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsVm = new ViewerSettingsService(settings);
         var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var shellLayout = new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
-            layout: new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
+            layout: shellLayout,
             mapTools: TestMapTools.Create(settingsVm, routeStore),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
+            mapChrome: TestMapChrome.Create(catalogues, datasets),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new NoopLoader(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: settingsVm,
-            pickReport: pick ?? new PickReportViewModel(),
+            palette: new PaletteMenuViewModel(settingsVm),
+            pickReport: pick ?? TestPickReport.Create(),
             timeline: timeline,
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            notifications: Notifications.TestNotifications.Create(),
-            dialogManager: new ShadUI.DialogManager(),
             routes: routeStore);
     }
 
@@ -111,7 +98,7 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         // regardless of HasPick. The watermark inside the view handles the
         // empty state.
         var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
-        var pickVm = new PickReportViewModel();
+        var pickVm = TestPickReport.Create();
         var pickTab = new FakeTab
         {
             Id = "PickReport",

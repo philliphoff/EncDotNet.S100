@@ -29,7 +29,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// (i.e. a display-scale minimum that actually suppresses it). Datasets that
 /// never disappear on zoom-out contribute nothing. The whole overlay is
 /// suppressed when the mariner disables
-/// <see cref="SettingsViewModel.ShowOutOfScaleExtentIndicators"/>.
+/// <see cref="ViewerSettingsService.ShowOutOfScaleExtentIndicators"/>.
 /// </para>
 /// </remarks>
 internal sealed class DatasetExtentIndicatorController : IDisposable
@@ -44,7 +44,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly Action<Action> _marshal;
 
     // Runs a coalesced rebuild. Unlike DispatcherMarshal it always defers, so a
@@ -63,14 +63,14 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     /// <param name="layers">Target map layer collection.</param>
     /// <param name="datasets">The datasets view-model to observe.</param>
     /// <param name="appearance">Accent/theme provider for the border colour.</param>
-    /// <param name="settings">Settings view-model supplying the on/off toggle.</param>
+    /// <param name="settings">Settings service supplying the on/off toggle.</param>
     /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
     /// <param name="coalesce">Queues a rebuild for later on the UI thread, even from it (the app passes <see cref="UiThread.Post"/>).</param>
     public DatasetExtentIndicatorController(
         IMapLayerCollection layers,
         DatasetsViewModel datasets,
         IMeasureOverlayAppearanceProvider appearance,
-        SettingsViewModel settings,
+        ViewerSettingsService settings,
         Action<Action> marshal,
         Action<Action> coalesce)
     {
@@ -145,7 +145,8 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
             or nameof(DatasetEntry.ContentMaxVisibleResolution)
             or nameof(DatasetEntry.IsLoaded)
             or nameof(DatasetEntry.IsDeferred)
-            or nameof(DatasetEntry.IsVisible))
+            or nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsHiddenByDisplay))
         {
             ScheduleRebuild();
         }
@@ -185,7 +186,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 // outline, consistent with a hidden loaded dataset.
                 if (entry.IsDeferred)
                 {
-                    if (entry.IsVisible && entry.GeographicBounds is { } bounds)
+                    if (entry.IsVisible && !entry.IsHiddenByDisplay && entry.GeographicBounds is { } bounds)
                     {
                         foreach (var deferredExtent in ToMercatorExtents(bounds))
                             indicators.Add(new S100DatasetExtentIndicator(deferredExtent, 0.0));
@@ -193,7 +194,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                     continue;
                 }
 
-                if (!entry.IsLoaded || !entry.IsVisible)
+                if (!entry.IsLoaded || !entry.IsVisible || entry.IsHiddenByDisplay)
                     continue;
                 if (entry.MercatorExtent is not { } extent)
                     continue;

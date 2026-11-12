@@ -26,6 +26,8 @@
     <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
     <Compile Include="..\_shared\ReferenceLuaSort.cs" Link="TestSupport\ReferenceLuaSort.cs" />
     <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
+    <Compile Include="..\_shared\SyntheticAmlCell.cs" Link="TestSupport\SyntheticAmlCell.cs" />
+    <Compile Include="..\_shared\AmlFixtures.cs" Link="TestSupport\AmlFixtures.cs" />
     <Compile Include="..\_shared\SyntheticS128Catalogue.cs" Link="TestSupport\SyntheticS128Catalogue.cs" />
     <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
@@ -80,6 +82,12 @@
     <Content Include="..\datasets\TC\**\*.zip" CopyToOutputDirectory="PreserveNewest" Link="TestData\TC\%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- WPC coded surface bulletins, three real and one hand-written (issue #1295); see tests/datasets/CODSUS/README.md. -->
     <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NOAA tide station fixtures (T1, #1449) for the S-104 prediction writer (#1455). -->
+    <Compile Include="..\EncDotNet.S100.Tides.Tests\NoaaFixture.cs" Link="TestSupport\NoaaFixture.cs" />
+    <Content Include="..\datasets\Tides\NOAA\9447130\*" CopyToOutputDirectory="PreserveNewest" LinkBase="TestData\Tides\NOAA\9447130" />
   </ItemGroup>
 
 </Project>

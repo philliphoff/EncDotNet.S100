@@ -251,7 +251,7 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Datasets.S101** | S-101 ENC reader (incl. sequential updates), Lua portrayal pipeline, validation pack (`S101DatasetView` façade + 10 rules). |
 | **EncDotNet.S100.Datasets.S102** | S-102 bathymetry reader, coverage pipeline, validation pack. |
-| **EncDotNet.S100.Datasets.S104** | S-104 water level reader, coverage pipeline, validation pack. |
+| **EncDotNet.S100.Datasets.S104** | S-104 water level reader, station-series writer (including tide predictions), coverage pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S111** | S-111 surface currents reader, coverage pipeline (per-feature arrow symbology), validation pack. |
 | **EncDotNet.S100.Datasets.S122** | S-122 marine protected areas reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S124** | S-124 navigational warnings reader, XSLT portrayal pipeline, validation pack. |
@@ -269,6 +269,7 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.Weather** | Shared in-memory model for GRIB2 and NetCDF-CF wind and wave grids: the canonical parameter table, normalisation to the coverage grid order, and an `ICoverageSource` with lazily decoded time steps, overview levels and wind speed and direction derived from U and V. Not for navigation. |
 | **EncDotNet.S100.Datasets.Cap** | CAP 1.2 marine weather warnings: one CAP alert, an Atom feed of them, or the NWS GeoJSON from `api.weather.gov/alerts`. Polygons, circles and NWS marine zone codes (resolved against a bundled, simplified NWS marine zone layer) become outlines, drawn while in force with hatching and outlines by severity. Drawn by `CapDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 | **EncDotNet.S100.Datasets.TropicalCyclones** | Tropical cyclone advisories from NHC's GIS shapefile zips: the storm, the advisory, every forecast point with its intensity and 34/50/64 kt radii by quadrant, the cone (split at 72 hours) and the past track. Loaded by `TropicalCycloneDatasetProcessor` in Datasets.Pipelines under the format name `TC`. Not for navigation. |
+| **EncDotNet.S100.Datasets.Aml** | SoundCharts' own portrayal of NATO Additional Military Layers (AML) cells read with EncDotNet.S57: dash-dot lines on a halo, unfilled ticked areas, framed point symbols and italic labels in four colour families (air, operational, seabed, environmental), on the *Additional military layers* display plane. Draws the RAL air and operational classes so far. Not the official AML portrayal; never used for depths or route checks. Not for navigation. |
 | **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. |
 | **EncDotNet.S100.Datasets.NetCdf** | Managed NetCDF-CF reader for wind and wave grids: NetCDF-3 (classic, 64-bit offset) and NetCDF-4 (on PureHDF, deflate and shuffle), with the CF interpretation that builds a weather grid set. Drawn by `NetCdfDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 
@@ -278,6 +279,8 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Navigation** | Leg ETAs and an under-keel clearance check along a route: charted depth (S-102, S-101 fallback) plus S-104 water level, minus draft and squat, at each sample's ETA. Depends only on Core. |
 | **EncDotNet.S100.Routes.Rtz** | RTZ route plan reader and writer (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2), keeping unknown attributes and vendor extensions for round trips. Depends only on Core. |
+| **EncDotNet.S100.Tides** | Harmonic tide prediction at a station: height at a time, a series at a fixed step, and high and low waters, for NOAA's 37 standard constituents and the 83 further ones it lists at some stations. Equilibrium arguments and node factors from Schureman (SP 98). No dependencies. Not for navigation. |
+| **EncDotNet.S100.Tides.Stations** | Tide station catalogue for `EncDotNet.S100.Tides`: NOAA CO-OPS reference and subordinate stations with constituents, offsets and datums (MLLW, MLW, MHW, MHHW, LAT, HAT), a cheap check for newer NOAA data, an offline JSON cache that is also the format for your own stations, stations near a point or in a box, and predictions on an S-100 vertical datum with their provenance. Not for navigation. |
 
 The **EncDotNet.S100.Datasets.S129.Fusion** library (project reference,
 not published to NuGet) is a purely additive cross-product helper that

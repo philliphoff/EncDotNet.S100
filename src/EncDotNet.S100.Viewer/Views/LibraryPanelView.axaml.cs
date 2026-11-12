@@ -50,14 +50,14 @@ public partial class LibraryPanelView : UserControl
 
         if (_viewModel is not null)
         {
-            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-            _viewModel.Revealed -= OnRevealed;
+            _viewModel.List.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.List.Revealed -= OnRevealed;
         }
         _viewModel = DataContext as LibraryPanelViewModel;
         if (_viewModel is not null)
         {
-            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-            _viewModel.Revealed += OnRevealed;
+            _viewModel.List.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.List.Revealed += OnRevealed;
         }
     }
 
@@ -71,8 +71,8 @@ public partial class LibraryPanelView : UserControl
     /// <summary>A map tap selects a dataset without changing the list: bring its row into view.</summary>
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(LibraryPanelViewModel.SelectedItem)
-            || _viewModel is not { HasTap: true, SelectedItem: { } item }
+        if (e.PropertyName != nameof(LibraryListViewModel.SelectedItem)
+            || _viewModel is not { Tap.HasTap: true, List.SelectedItem: { } item }
             || this.FindControl<ListBox>("ItemList") is not { } list)
         {
             return;
@@ -149,13 +149,13 @@ public partial class LibraryPanelView : UserControl
             box.LostFocus += (_, _) =>
             {
                 if (box.IsVisible && DataContext is LibraryPanelViewModel vm)
-                    vm.CommitRenameCommand.Execute(null);
+                    vm.Tree.CommitRenameCommand.Execute(null);
             };
         }
     }
 
     private void OnCopySourceUrl(object? sender, RoutedEventArgs e) =>
-        CopyToClipboard((DataContext as LibraryPanelViewModel)?.SelectedNode?.SourceUrl?.AbsoluteUri);
+        CopyToClipboard((DataContext as LibraryPanelViewModel)?.Tree.SelectedNode?.SourceUrl?.AbsoluteUri);
 
     private void CopyToClipboard(string? text)
     {
@@ -189,7 +189,7 @@ public partial class LibraryPanelView : UserControl
     {
         // Only Enter on the row itself: a tag's button inside the row has its own.
         if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None && e.Source is ListBoxItem
-            && (DataContext as LibraryPanelViewModel)?.SelectedItem is not null)
+            && (DataContext as LibraryPanelViewModel)?.List.SelectedItem is not null)
         {
             OpenSelected();
             e.Handled = true;
@@ -200,9 +200,9 @@ public partial class LibraryPanelView : UserControl
     {
         if (DataContext is not LibraryPanelViewModel vm)
             return;
-        vm.CenterOnSelected();
-        if (vm.LoadCommand.CanExecute(null))
-            vm.LoadCommand.Execute(null);
+        vm.Details.CenterOnItem();
+        if (vm.Details.LoadCommand.CanExecute(null))
+            vm.Details.LoadCommand.Execute(null);
     }
 
     private void OnListContainerPrepared(object? sender, ContainerPreparedEventArgs e)
@@ -222,6 +222,6 @@ public partial class LibraryPanelView : UserControl
     private void OnItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is LibraryPanelViewModel vm && sender is ListBoxItem { DataContext: LibraryItemViewModel entry })
-            vm.SelectedItem = entry;
+            vm.List.SelectedItem = entry;
     }
 }

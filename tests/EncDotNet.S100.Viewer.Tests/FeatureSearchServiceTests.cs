@@ -162,6 +162,8 @@ public class FeatureSearchServiceTests
 
     private sealed class RecordingPick : IPickService
     {
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
         private readonly Action<IDatasetProcessor, int, string> _openAt;
         public RecordingPick(Action<IDatasetProcessor, int, string> openAt) { _openAt = openAt; }
         public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;

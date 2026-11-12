@@ -73,13 +73,13 @@
     <value>{0}</value>
     <comment>{0} = number of layer entries in this S-98 display plane.</comment>
   </data>
-  <data name="LayerStack_LegendNameFormat" xml:space="preserve">
-    <value>Legend of {0}, {1} bands</value>
-    <comment>Accessible name of a colour fill's legend in the Layer Stack (#1072). {0} is the layer name, e.g. "Wave height: gfswave.grib2"; {1} the number of colour bands.</comment>
+  <data name="LayerStack_LegendLink" xml:space="preserve">
+    <value>Legend</value>
+    <comment>One-line link under a Layer Stack entry whose layer has a legend; opens the Legend tab at its section (legends D8)</comment>
   </data>
-  <data name="LayerStack_LegendRowsNameFormat" xml:space="preserve">
-    <value>Legend of {0}, {1} items</value>
-    <comment>Accessible name of a Layer Stack legend with symbol or line rows (#1293), e.g. a storm's symbols or a surface analysis's fronts. {0} is the layer name; {1} the number of rows.</comment>
+  <data name="LayerStack_LegendLinkNameFormat" xml:space="preserve">
+    <value>Show the legend of {0}</value>
+    <comment>Accessible name and tooltip of the Layer Stack's Legend link; {0} is the layer name, e.g. "Wave height: gfswave.grib2"</comment>
   </data>
   <data name="LayerStack_PriorityFormat" xml:space="preserve">
     <value>#{0}</value>
@@ -99,6 +99,9 @@
   </data>
   <data name="LayerStack_Plane_OtherChartOverlays" xml:space="preserve">
     <value>Other chart overlays</value>
+  </data>
+  <data name="LayerStack_Plane_AdditionalMilitaryLayers" xml:space="preserve">
+    <value>Additional military layers</value>
   </data>
   <data name="LayerStack_Plane_CautionsAndWarnings" xml:space="preserve">
     <value>Cautions and warnings</value>
@@ -896,7 +899,7 @@
 
   <!-- Pick (Object Information) panel -->
   <data name="Pick_PanelTitle" xml:space="preserve">
-    <value>OBJECT INFORMATION</value>
+    <value>Object information</value>
   </data>
   <data name="PickReport_EmptyTitle" xml:space="preserve">
     <value>No feature picked</value>
@@ -1069,6 +1072,26 @@
   <data name="Pick_ReferencesHeader" xml:space="preserve">
     <value>REFERENCES</value>
     <comment>Header above the references list in the Object Information panel.</comment>
+  </data>
+  <data name="Pick_LegendKeyHeading" xml:space="preserve">
+    <value>KEY · WHAT YOU SEE HERE</value>
+    <comment>Header above the picked features' legend rows in Object information (legends design note D3, D16)</comment>
+  </data>
+  <data name="Pick_LegendKeyLineFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A key line in Object information; {0} is the product ("S-102", "Wave height"), {1} the legend row ("2–10 m")</comment>
+  </data>
+  <data name="Pick_InLegend" xml:space="preserve">
+    <value>In legend</value>
+    <comment>Link on a key line in Object information that opens the Legend tab at the row</comment>
+  </data>
+  <data name="Pick_InLegendNameFormat" xml:space="preserve">
+    <value>Show {0} in the legend</value>
+    <comment>Accessible name and tooltip of the In legend link; {0} is the key line ("S-102 · 2–10 m")</comment>
+  </data>
+  <data name="Menu_ShowDatasetLegend" xml:space="preserve">
+    <value>Show legend</value>
+    <comment>Datasets row menu item that opens the Legend tab at the dataset's section</comment>
   </data>
   <data name="Pick_ReferenceItemFormat" xml:space="preserve">
     <value>{0} → {1}</value>
@@ -1780,6 +1803,70 @@
   <data name="Status_OverscaleFactor" xml:space="preserve">
     <value>{0:0.0}×</value>
   </data>
+  <data name="PositionLegend_Heading" xml:space="preserve">
+    <value>AT VIEW CENTRE</value>
+    <comment>Caps heading of the Legend tab's position row (S-98 position legend, legends D17)</comment>
+  </data>
+  <data name="PositionLegend_Name" xml:space="preserve">
+    <value>Position legend at the view centre</value>
+    <comment>Accessible name of the Legend tab's position row</comment>
+  </data>
+  <data name="PositionLegend_DepthsMetres" xml:space="preserve">
+    <value>Depths in metres</value>
+    <comment>Position legend: depth unit (S-98 §9.1.4)</comment>
+  </data>
+  <data name="PositionLegend_DepthsFeet" xml:space="preserve">
+    <value>Depths in feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathomsFeet" xml:space="preserve">
+    <value>Depths in fathoms and feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathoms" xml:space="preserve">
+    <value>Depths in fathoms</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_SafetyContourFormat" xml:space="preserve">
+    <value>Safety contour {0}</value>
+    <comment>Position legend: the Mariner setting; {0} is the depth with its unit, e.g. "10 m"</comment>
+  </data>
+  <data name="PositionLegend_DatumNotDeclared" xml:space="preserve">
+    <value>Datum not declared</value>
+    <comment>Position legend when the cell at the view centre declares no sounding datum</comment>
+  </data>
+  <data name="PositionLegend_NoChart" xml:space="preserve">
+    <value>No chart at the view centre</value>
+    <comment>Position legend when no chart cell covers the view centre (D17)</comment>
+  </data>
+  <data name="PositionLegend_EditionFormat" xml:space="preserve">
+    <value>ed. {0}</value>
+    <comment>Position legend: the cell's edition number</comment>
+  </data>
+  <data name="PositionLegend_EditionUpdateFormat" xml:space="preserve">
+    <value>ed. {0} upd. {1}</value>
+    <comment>Position legend: the cell's edition and the last update applied</comment>
+  </data>
+  <data name="PositionLegend_CompiledFormat" xml:space="preserve">
+    <value>compiled {0}</value>
+    <comment>Position legend: the cell's compilation scale, e.g. "compiled 1:12 000"</comment>
+  </data>
+  <data name="PositionLegend_ShownFormat" xml:space="preserve">
+    <value>shown {0}</value>
+    <comment>Position legend: the display scale, e.g. "shown 1:22 000"</comment>
+  </data>
+  <data name="PositionLegend_OverscaleFormat" xml:space="preserve">
+    <value>{0:0.0}× overscale</value>
+    <comment>Position legend: the display is finer than the cell's compilation scale</comment>
+  </data>
+  <data name="PositionLegend_Separator" xml:space="preserve">
+    <value> · </value>
+    <comment>Separator between position legend items</comment>
+  </data>
+  <data name="Tooltip_PositionLegend" xml:space="preserve">
+    <value>Units, depth datum and safety contour, then the chart cell at the view centre with its edition and compilation scale against the display scale. Updates when the map stops moving.</value>
+    <comment>Tooltip of the Legend tab's position row</comment>
+  </data>
   <data name="Status_OverscalePopupHeader" xml:space="preserve">
     <value>Overscaled cells in view</value>
   </data>
@@ -2375,6 +2462,14 @@
   </data>
   <data name="Tooltip_DisplaySettings" xml:space="preserve">
     <value>Display settings (category, text, palette)</value>
+  </data>
+  <data name="Label_MapLegend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Accessible name of the map's Legend button (overlay column, legends D15)</comment>
+  </data>
+  <data name="Tooltip_MapLegend" xml:space="preserve">
+    <value>Legend: what the map draws</value>
+    <comment>Tooltip of the map's Legend button; it shows or hides the Legend tab in the right dock</comment>
   </data>
   <data name="Tooltip_CloseDisplaySettings" xml:space="preserve">
     <value>Close display settings</value>
@@ -6172,6 +6267,26 @@
   <data name="Map_LegendNoDraft" xml:space="preserve">
     <value>No draft: the line isn't coloured by clearance.</value>
   </data>
+  <data name="Legend_RouteCheckSpec" xml:space="preserve">
+    <value>Route</value>
+    <comment>The route check section's chip in the Legend tab (#1408).</comment>
+  </data>
+  <data name="Legend_RouteCheckTitle" xml:space="preserve">
+    <value>Route check</value>
+    <comment>The route check section's name in the Legend tab.</comment>
+  </data>
+  <data name="Legend_RouteCheckUkc" xml:space="preserve">
+    <value>UKC at ETA</value>
+    <comment>The route check section's group of clearance line styles.</comment>
+  </data>
+  <data name="Legend_RouteCheckFindings" xml:space="preserve">
+    <value>Findings</value>
+    <comment>The route check section's group of finding markers.</comment>
+  </data>
+  <data name="Legend_RouteCheckWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>The route check section's group for the storm at ETA.</comment>
+  </data>
   <data name="Tooltip_MapLegendFold" xml:space="preserve">
     <value>Fold the legend</value>
   </data>
@@ -6187,11 +6302,9 @@
   <data name="Tooltip_CheckLowConfidence" xml:space="preserve">
     <value>Lower confidence: charted depth from S-101, or datums that can't be confirmed to agree. The tint still shows the clearance.</value>
   </data>
-  <data name="Dock_ObjectInformationEdge" xml:space="preserve">
-    <value>OBJECT INFORMATION</value>
-  </data>
-  <data name="Tooltip_ObjectInformationEdge" xml:space="preserve">
-    <value>Show Object Information</value>
+  <data name="Tooltip_ShowDockTabFormat" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>Tooltip and name of the folded right dock's edge tab; {0} is the tab it shows, "Object information" or "Legend"</comment>
   </data>
   <data name="Clearance_Title" xml:space="preserve">
     <value>Clearance</value>
@@ -7954,5 +8067,366 @@
   <data name="Findings_TagWeather" xml:space="preserve">
     <value>Weather</value>
     <comment>Tag of a weather finding in the findings list</comment>
+  </data>
+  <data name="EcdisPanel_BathymetryHeader" xml:space="preserve">
+    <value>Bathymetry</value>
+    <comment>Display controls section header for S-102 bathymetry. Shown while an S-102 dataset is loaded.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
+    <value>Relief shading</value>
+    <comment>Display controls switch: a hillshade over the S-102 depth bands so the seabed's shape shows. Not part of the S-102 portrayal.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
+    <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefStrength" xml:space="preserve">
+    <value>Strength</value>
+    <comment>Label before the relief shading strength segments in the Display controls Bathymetry section.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefSubtle" xml:space="preserve">
+    <value>Subtle</value>
+    <comment>Relief shading strength segment: the lightest shading.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefMedium" xml:space="preserve">
+    <value>Medium</value>
+    <comment>Relief shading strength segment: the default.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefStrong" xml:space="preserve">
+    <value>Strong</value>
+    <comment>Relief shading strength segment: the strongest shading.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Bathymetry_ReliefStrength" xml:space="preserve">
+    <value>How strongly slopes are shaded. Subtle suits fine, high-resolution cells; Strong brings out gentle features but draws steep edges dark. At Dusk and Night slopes facing the light are lightened less, so they don't glare.</value>
+  </data>
+  <data name="Status_DepthBasis_ReliefSuffix" xml:space="preserve">
+    <value> · Relief</value>
+    <comment>Appended to the DEPTHS status pill's value (e.g. "Charted · Relief") while S-102 relief shading is on and S-102 is in view. Keep the leading space and dot.</comment>
+  </data>
+  <data name="Status_DepthBasis_ReliefSuffix_Compact" xml:space="preserve">
+    <value> · R</value>
+    <comment>The compact form of the relief suffix on the DEPTHS pill when the status bar is short of room.</comment>
+  </data>
+  <data name="Status_DepthBasis_ReliefAccessibleSuffix" xml:space="preserve">
+    <value>, relief shading on</value>
+    <comment>Appended to the DEPTHS pill's accessible name while relief shading shows.</comment>
+  </data>
+  <data name="Status_DepthBasisPopup_ReliefOn" xml:space="preserve">
+    <value>Relief shading on. A display aid that shades the S-102 depth surface by its slope; depth colours and values are unchanged.</value>
+    <comment>Line in the DEPTHS popup while S-102 relief shading is on and S-102 is in view.</comment>
+  </data>
+  <data name="Status_DepthBasisPopup_ReliefOff" xml:space="preserve">
+    <value>Off</value>
+    <comment>Button beside the relief line in the DEPTHS popup: turns S-102 relief shading off.</comment>
+  </data>
+  <data name="AmlDisplay_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Link in the display panel's Additional Military Layers section that opens the Legend tab at the AML section</comment>
+  </data>
+  <data name="AmlDisplay_LegendLinkName" xml:space="preserve">
+    <value>Show the AML legend</value>
+    <comment>Tooltip and accessible name of the AML display section's Legend link, which opens the Legend tab at the AML section</comment>
+  </data>
+  <data name="AmlDisplay_ScaleHeader" xml:space="preserve">
+    <value>Scale</value>
+    <comment>Sub-heading above Follow AML scale bands</comment>
+  </data>
+  <data name="AmlDisplay_FollowScaleBands" xml:space="preserve">
+    <value>Follow AML scale bands</value>
+    <comment>Switch in the Additional Military Layers section (AML decision 26)</comment>
+  </data>
+  <data name="Tooltip_AmlDisplay_FollowScaleBands" xml:space="preserve">
+    <value>Each AML cell shows from its scale band out to the band's smallest display scale, and the finer band wins where it covers a coarser one. Off shows every AML cell at every scale.</value>
+  </data>
+  <data name="AmlDisplay_NotLoaded" xml:space="preserve">
+    <value>Not loaded</value>
+    <comment>An AML product row with no cell loaded</comment>
+  </data>
+  <data name="AmlDisplay_CellCountOne" xml:space="preserve">
+    <value>{0} cell</value>
+    <comment>An AML product row's cell count, one cell. {0}: the count</comment>
+  </data>
+  <data name="AmlDisplay_CellCountFormat" xml:space="preserve">
+    <value>{0} cells</value>
+    <comment>An AML product row's cell count. {0}: the count</comment>
+  </data>
+  <data name="AmlDisplay_ProductToolTipFormat" xml:space="preserve">
+    <value>{0} · {1}: {2} of {3} cells shown at this scale</value>
+    <comment>Tooltip of an AML product row. {0}: code; {1}: product name; {2}: cells shown; {3}: cells loaded</comment>
+  </data>
+  <data name="AmlDisplay_ClbChip" xml:space="preserve">
+    <value>AML · CLB not used for depth checks</value>
+    <comment>Corner chip on the map while AML CLB contours are drawn (AML decision 23)</comment>
+  </data>
+  <data name="Aml_TagFormat" xml:space="preserve">
+    <value>AML · {0}</value>
+    <comment>The AML tag before a cell loads, from the cell name's product code. {0}: the code, e.g. CLB</comment>
+  </data>
+  <data name="Aml_Row_ProductFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+    <comment>Second line of an AML dataset row. {0}: the tag, e.g. 'AML · CLB'; {1}: the product name</comment>
+  </data>
+  <data name="Aml_Row_Opening" xml:space="preserve">
+    <value>Opening…</value>
+    <comment>Third line of an AML dataset row while the cell opens</comment>
+  </data>
+  <data name="Aml_Row_DrawnFormat" xml:space="preserve">
+    <value>Drawn · {0:N0} features</value>
+    <comment>Third line of an AML dataset row the AML portrayal draws. {0}: feature count</comment>
+  </data>
+  <data name="Aml_Row_NotDrawnOutlinedFormat" xml:space="preserve">
+    <value>{0}. Its coverage is outlined on the map.</value>
+    <comment>Third line of the first not-drawn AML row of a set. {0}: 'Recognised, not drawn'</comment>
+  </data>
+  <data name="Aml_Row_NotDrawnIconToolTip" xml:space="preserve">
+    <value>Recognised, not drawn. The eye shows or hides its coverage outline.</value>
+    <comment>Tooltip on the dashed frame of a not-drawn AML row</comment>
+  </data>
+  <data name="Aml_Header_HighestOfFormat" xml:space="preserve">
+    <value>highest of {0}</value>
+    <comment>After the marking chip on an AML exchange-set header. {0}: number of AML cells in the set</comment>
+  </data>
+  <data name="Aml_Outline_NotDrawn" xml:space="preserve">
+    <value>Not drawn</value>
+    <comment>Label card on the coverage outline of an AML cell that isn't drawn</comment>
+  </data>
+  <data name="Aml_Outline_Hidden" xml:space="preserve">
+    <value>Hidden</value>
+    <comment>Label card on the coverage outline of a drawn AML cell whose layers are hidden</comment>
+  </data>
+  <data name="Aml_Pill_ToolTip" xml:space="preserve">
+    <value>Protective marking of the Additional Military Layers data loaded. The highest wins.</value>
+    <comment>Tooltip of the status-bar MARKING pill</comment>
+  </data>
+  <data name="Aml_Pill_AccessibleNameFormat" xml:space="preserve">
+    <value>Protective marking {0}</value>
+    <comment>Accessible name of the MARKING pill. {0}: the marking</comment>
+  </data>
+  <data name="Aml_Pill_FlyoutHeader" xml:space="preserve">
+    <value>PROTECTIVE MARKING</value>
+    <comment>Header of the MARKING pill's flyout</comment>
+  </data>
+  <data name="Aml_Pill_FlyoutRule" xml:space="preserve">
+    <value>Highest wins: UNCLASSIFIED, then RESTRICTED, then NATO RESTRICTED, then any other marking as written.</value>
+    <comment>Footnote of the MARKING pill's flyout</comment>
+  </data>
+  <data name="Aml_Pill_SetCellsFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A set line in the MARKING flyout. {0}: set name; {1}: its cell count text</comment>
+  </data>
+  <data name="Aml_CellCountOne" xml:space="preserve">
+    <value>1 cell</value>
+    <comment>AML cell count, singular</comment>
+  </data>
+  <data name="Aml_CellCountFormat" xml:space="preserve">
+    <value>{0} cells</value>
+    <comment>AML cell count, plural. {0}: count</comment>
+  </data>
+  <data name="Aml_Notice_TitleFormat" xml:space="preserve">
+    <value>{0} is military data</value>
+    <comment>First-open notification title. {0}: exchange set name</comment>
+  </data>
+  <data name="Aml_Notice_NotDrawnOneFormat" xml:space="preserve">
+    <value>1 Additional Military Layers cell ({0}). SoundCharts shows where it is but doesn't draw it.</value>
+    <comment>First-open notification body, one cell not drawn. {0}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_NotDrawnFormat" xml:space="preserve">
+    <value>{0} Additional Military Layers cells ({1}). SoundCharts shows where they are but doesn't draw them.</value>
+    <comment>First-open notification body. {0}: count; {1}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_DrawnOneFormat" xml:space="preserve">
+    <value>1 Additional Military Layers cell ({0}). SoundCharts draws it as an overlay, not a chart.</value>
+    <comment>First-open notification body, one cell drawn. {0}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_DrawnFormat" xml:space="preserve">
+    <value>{0} Additional Military Layers cells ({1}). SoundCharts draws them as an overlay, not a chart.</value>
+    <comment>First-open notification body, cells drawn. {0}: count; {1}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_MarkedFormat" xml:space="preserve">
+    <value>Marked {0}.</value>
+    <comment>Added to the first-open notification when the marking is above UNCLASSIFIED. {0}: the marking</comment>
+  </data>
+  <data name="Aml_Notice_Details" xml:space="preserve">
+    <value>Details</value>
+    <comment>First-open notification action: opens the Library item</comment>
+  </data>
+  <data name="Pick_AmlClass" xml:space="preserve">
+    <value>AML class</value>
+    <comment>Object Information class line for a class an AML catalogue adds (#1372)</comment>
+  </data>
+  <data name="Pick_AmlStandardClassWithAml" xml:space="preserve">
+    <value>S-57 class with AML attributes</value>
+    <comment>Object Information class line for a standard S-57 class carrying AML-only attributes (#1372)</comment>
+  </data>
+  <data name="Pick_AmlStandardClass" xml:space="preserve">
+    <value>S-57 class</value>
+    <comment>Object Information class line for a standard S-57 class in an AML cell (#1372)</comment>
+  </data>
+  <data name="Pick_AmlNotDrawn" xml:space="preserve">
+    <value>Not drawn. Picked from its position.</value>
+    <comment>Object Information line for an AML feature the map doesn't draw (#1372)</comment>
+  </data>
+  <data name="Pick_AmlAttributeMarkToolTip" xml:space="preserve">
+    <value>Added by Additional Military Layers to this S-57 class</value>
+    <comment>Tooltip of the AML mark before an AML-only attribute (#1372)</comment>
+  </data>
+  <data name="Pick_AmlProvenanceName" xml:space="preserve">
+    <value>AML provenance</value>
+    <comment>Accessible name of the AML provenance strip in Object Information (#1372)</comment>
+  </data>
+  <data name="Legend_LibrarySpec" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Legend_LibraryTitle" xml:space="preserve">
+    <value>Coverage outlines</value>
+  </data>
+  <data name="Legend_LibraryOutlinedFormat" xml:space="preserve">
+    <value>{0} outlined</value>
+  </data>
+  <data name="Legend_LibraryOutlinedOneFormat" xml:space="preserve">
+    <value>1 outlined</value>
+  </data>
+  <data name="Legend_LibrarySelected" xml:space="preserve">
+    <value>Selected</value>
+  </data>
+  <data name="Legend_ProductS101" xml:space="preserve">
+    <value>Electronic navigational chart</value>
+  </data>
+  <data name="Legend_CatalogueSomeFormat" xml:space="preserve">
+    <value>{0} of {1} symbols drawn in view</value>
+  </data>
+  <data name="Legend_CatalogueAll" xml:space="preserve">
+    <value>Symbols drawn in view</value>
+  </data>
+  <data name="Legend_SourceCountFormat" xml:space="preserve">
+    <value>{0} datasets</value>
+    <comment>Legend section source summary when several datasets make the section; {0} is the count</comment>
+  </data>
+  <data name="Legend_ProductS102" xml:space="preserve">
+    <value>Bathymetric surface</value>
+    <comment>Legend section title of S-102</comment>
+  </data>
+  <data name="Legend_ProductS122" xml:space="preserve">
+    <value>Marine protected areas</value>
+    <comment>Legend section title of S-122</comment>
+  </data>
+  <data name="Legend_ProductS124" xml:space="preserve">
+    <value>Navigational warnings</value>
+    <comment>Legend section title of S-124</comment>
+  </data>
+  <data name="Legend_ProductS129" xml:space="preserve">
+    <value>Under keel clearance management</value>
+    <comment>Legend section title of S-129</comment>
+  </data>
+  <data name="Legend_ProductAml" xml:space="preserve">
+    <value>Additional Military Layers</value>
+    <comment>Legend section title of AML</comment>
+  </data>
+  <data name="Legend_TabTitle" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Title of the Legend tab in the right dock (legends D2)</comment>
+  </data>
+  <data name="Label_Activity_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Accessible name of the Legend tab</comment>
+  </data>
+  <data name="Tooltip_Legend" xml:space="preserve">
+    <value>Legend of what the map draws</value>
+    <comment>Tooltip of the Legend tab</comment>
+  </data>
+  <data name="Menu_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>View › Appearance › Legend: shows or hides the Legend tab (legends D3)</comment>
+  </data>
+  <data name="Legend_ScopeName" xml:space="preserve">
+    <value>Which legends to show</value>
+    <comment>Accessible name of the In view | All loaded switch</comment>
+  </data>
+  <data name="Legend_ScopeInView" xml:space="preserve">
+    <value>In view</value>
+    <comment>Legend toolbar: only products drawn in the map view (legends D4)</comment>
+  </data>
+  <data name="Legend_ScopeAllLoaded" xml:space="preserve">
+    <value>All loaded</value>
+    <comment>Legend toolbar: every loaded product with a legend</comment>
+  </data>
+  <data name="Tooltip_LegendScopeInView" xml:space="preserve">
+    <value>Products drawn in the map view</value>
+  </data>
+  <data name="Tooltip_LegendScopeAllLoaded" xml:space="preserve">
+    <value>Every loaded product with a legend, in view or not</value>
+  </data>
+  <data name="Legend_FilterWatermark" xml:space="preserve">
+    <value>Filter</value>
+    <comment>Watermark of the Legend filter field</comment>
+  </data>
+  <data name="Legend_FilterName" xml:space="preserve">
+    <value>Filter legend rows</value>
+    <comment>Accessible name of the Legend filter field</comment>
+  </data>
+  <data name="Legend_CollapseAll" xml:space="preserve">
+    <value>Collapse all</value>
+    <comment>Legend toolbar button</comment>
+  </data>
+  <data name="Tooltip_LegendCollapseAll" xml:space="preserve">
+    <value>Collapse every section</value>
+  </data>
+  <data name="Legend_SectionNameFormat" xml:space="preserve">
+    <value>{0} {1}, {2} entries</value>
+    <comment>Accessible name of a Legend section (legends D11); {0} product chip, {1} product name, {2} row count</comment>
+  </data>
+  <data name="Legend_SectionNameOneFormat" xml:space="preserve">
+    <value>{0} {1}, 1 entry</value>
+    <comment>Accessible name of a Legend section with one row; {0} product chip, {1} product name</comment>
+  </data>
+  <data name="Legend_SectionTooltipFormat" xml:space="preserve">
+    <value>{0} {1}
+{2}</value>
+    <comment>Tooltip of a Legend section header; {0} product chip, {1} name, {2} source and time</comment>
+  </data>
+  <data name="Legend_SourceAndTimeFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>Legend section header detail; {0} source, {1} time summary</comment>
+  </data>
+  <data name="Legend_NoDataAtFormat" xml:space="preserve">
+    <value>No data at {0}</value>
+    <comment>Legend section header when the product has no data at the view time (legends D5); {0} is the view time of day</comment>
+  </data>
+  <data name="Legend_NotInViewFormat" xml:space="preserve">
+    <value>{0} more loaded, not in view</value>
+    <comment>Muted line under the In view sections; {0} is how many loaded products are not in view. Clicking it shows All loaded</comment>
+  </data>
+  <data name="Legend_NotInViewOneFormat" xml:space="preserve">
+    <value>1 more loaded, not in view</value>
+    <comment>As Legend_NotInViewFormat, for one product</comment>
+  </data>
+  <data name="Legend_EmptyTitle" xml:space="preserve">
+    <value>No legends yet</value>
+    <comment>Legend tab empty state</comment>
+  </data>
+  <data name="Legend_EmptyDescription" xml:space="preserve">
+    <value>Weather overlays, AML and other products that have a legend show it here once loaded.</value>
+    <comment>Legend tab empty state</comment>
+  </data>
+  <data name="Legend_NothingInViewTitle" xml:space="preserve">
+    <value>Nothing in view</value>
+    <comment>Legend tab empty state with In view selected</comment>
+  </data>
+  <data name="Legend_NothingInViewDescription" xml:space="preserve">
+    <value>No product with a legend is drawn in the map view.</value>
+  </data>
+  <data name="Legend_NoMatchTitle" xml:space="preserve">
+    <value>No matches</value>
+    <comment>Legend tab empty state when the filter matches nothing</comment>
+  </data>
+  <data name="Legend_NoMatchDescriptionFormat" xml:space="preserve">
+    <value>No section or row matches “{0}”.</value>
+    <comment>{0} is the filter text</comment>
+  </data>
+  <data name="Legend_RowsName" xml:space="preserve">
+    <value>Legend rows</value>
+    <comment>Accessible name of a Legend sections list of rows</comment>
+  </data>
+  <data name="Tooltip_LegendClearFilter" xml:space="preserve">
+    <value>Clear the filter</value>
   </data>
 </root>

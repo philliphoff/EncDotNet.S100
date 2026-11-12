@@ -132,8 +132,8 @@ public sealed class SurfaceAnalysisTimeViewerTests
             },
         };
 
-        var fresh = new LibraryItemViewModel(item, source, time: new FakeTimeProvider(run.AddHours(5)), loadState: null, downloader: null, collectionName: null, download: null, timeFormat: null);
-        var stale = new LibraryItemViewModel(item, source, time: new FakeTimeProvider(run.AddHours(7)), loadState: null, downloader: null, collectionName: null, download: null, timeFormat: null);
+        var fresh = new LibraryItemViewModel(item, source, LibraryRowContext.Detached(new FakeTimeProvider(run.AddHours(5))), collectionName: null);
+        var stale = new LibraryItemViewModel(item, source, LibraryRowContext.Detached(new FakeTimeProvider(run.AddHours(7))), collectionName: null);
 
         Assert.False(fresh.IsStaleRun);
         Assert.True(stale.IsStaleRun);
@@ -146,7 +146,7 @@ public sealed class SurfaceAnalysisTimeViewerTests
     [Fact]
     public void The_pick_report_shows_a_stale_analysis_as_a_line_under_the_notice()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
         vm.SetPicks(
         [
             new PickHit

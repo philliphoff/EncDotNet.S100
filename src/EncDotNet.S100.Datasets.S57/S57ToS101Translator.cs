@@ -887,9 +887,21 @@ public sealed partial class S57ToS101Translator
     /// enumerate values dropped during translation. Pass <c>null</c> (the
     /// default) to disable collection with zero overhead.
     /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="s57"/> is a NATO Additional Military Layers cell
+    /// (<c>DSID</c> <c>PRSP</c> 51–57). AML is military overlay data, not a
+    /// chart: translating it to S-101 would drop its AML classes and draw the
+    /// rest as chart content, so it's opened as AML instead.
+    /// </exception>
     public S101Document Translate(EncDotNet.S57.S57Document s57, S57TranslationDiagnostics? diagnostics)
     {
         ArgumentNullException.ThrowIfNull(s57);
+        if (AmlDatasetInfo.IsAml(s57))
+        {
+            throw new ArgumentException(
+                $"'{s57.DataSetIdentification?.DataSetName}' is an Additional Military Layers (AML) cell, not a chart; it isn't translated to S-101.",
+                nameof(s57));
+        }
 
         var ctx = new TranslationContext(
             s57, _mapping, _allowedEnumValues, _featureBindings, diagnostics, _target.InlineTextualInformation);

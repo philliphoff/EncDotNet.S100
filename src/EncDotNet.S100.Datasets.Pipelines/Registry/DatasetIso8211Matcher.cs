@@ -99,4 +99,14 @@ public readonly record struct Iso8211RootInfo
         => HasDataSetParameterField
             && S57ProductSpecification.TryParse(ProductSpecification, out var declared)
             && declared == code;
+
+    /// <summary>
+    /// Whether this is an S-57 encoded NATO Additional Military Layers cell:
+    /// <see cref="HasDataSetParameterField"/> and a <c>PRSP</c> of 51–57
+    /// (<see cref="AmlProducts.IsAmlProductSpecification"/>).
+    /// </summary>
+    public bool DeclaresAmlProductSpecification
+        => HasDataSetParameterField
+            && S57ProductSpecification.TryParse(ProductSpecification, out var declared)
+            && AmlProducts.IsAmlProductSpecification(declared);
 }

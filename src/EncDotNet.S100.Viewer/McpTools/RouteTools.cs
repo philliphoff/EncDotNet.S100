@@ -102,20 +102,6 @@ internal abstract class RouteToolBase
         return null;
     }
 
-    /// <summary>Applies any supplied waypoint metadata in place.</summary>
-    protected static void ApplyWaypointMetadata(
-        RouteWaypoint waypoint, int? number, string? name, bool? @fixed, double? turnRadiusNm)
-    {
-        if (number.HasValue) waypoint.Number = number;
-        if (name is not null) waypoint.Name = name;
-        if (@fixed.HasValue) waypoint.Fixed = @fixed;
-        if (turnRadiusNm.HasValue) waypoint.TurnRadiusNm = turnRadiusNm;
-    }
-
-    /// <summary>Whether any waypoint-metadata field was supplied.</summary>
-    protected static bool HasWaypointMetadata(int? number, string? name, bool? @fixed, double? turnRadiusNm)
-        => number.HasValue || name is not null || @fixed.HasValue || turnRadiusNm.HasValue;
-
     private protected static bool NotFinite(double v) => double.IsNaN(v) || double.IsInfinity(v);
 
     private protected static ToolResult<RouteDetail> Ok(Route route, RoutesService routes)
@@ -321,15 +307,10 @@ internal sealed class AppendWaypointTool : RouteToolBase
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
-            route.History.Execute(RouteEditLabels.AppendWaypoint, () =>
-            {
-                var waypoint = route.AppendWaypoint(new GeoPosition(request.Lat, request.Lon));
-                if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
-                {
-                    ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
-                    route.NotifyChanged();
-                }
-            });
+            RouteEditCommands.AppendWaypoint(
+                route,
+                new GeoPosition(request.Lat, request.Lon),
+                new RouteWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm));
             return Ok(route, Routes);
         });
     }
@@ -382,15 +363,11 @@ internal sealed class InsertWaypointTool : RouteToolBase
                     "index",
                     $"value {request.Index} is outside the insertable range [0, {route.Waypoints.Count}]"));
 
-            route.History.Execute(RouteEditLabels.InsertWaypoint, () =>
-            {
-                var waypoint = route.InsertWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon));
-                if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
-                {
-                    ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
-                    route.NotifyChanged();
-                }
-            });
+            RouteEditCommands.InsertWaypoint(
+                route,
+                request.Index,
+                new GeoPosition(request.Lat, request.Lon),
+                new RouteWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm));
             return Ok(route, Routes);
         });
     }
@@ -485,7 +462,7 @@ internal sealed class DeleteWaypointTool : RouteToolBase
                     "index",
                     $"value {request.Index} is outside the waypoint range [0, {route.Waypoints.Count - 1}]"));
 
-            route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(request.Index));
+            RouteEditCommands.DeleteWaypoint(route, request.Index);
             return Ok(route, Routes);
         });
     }
@@ -636,38 +613,34 @@ internal sealed class SetLegAttributesTool : RouteToolBase
                     "legIndex",
                     $"value {request.LegIndex} is outside the leg range [0, {route.Legs.Count - 1}]"));
 
-            var leg = route.Legs[request.LegIndex];
-            route.History.Execute(RouteEditLabels.EditLeg, () =>
-            {
-                // Passage overrides go through the route so the "only when it
-                // differs" rule holds.
-                for (var i = 0; i < overrides.Length; i++)
+            RouteEditCommands.EditLeg(
+                route,
+                request.LegIndex,
+                overrides: r =>
                 {
-                    var (name, field) = OverrideParameters[i];
-                    if (clear.Contains(name))
-                        route.ResetLegOverride(request.LegIndex, field);
-                    else if (overrides[i].HasValue)
-                        route.SetLegOverride(request.LegIndex, field, overrides[i]);
-                }
-
-                // The plain attributes are set in place; notify only when one
-                // changed, so a no-op call records no undo step.
-                var before = leg.Clone();
-                if (geometry.HasValue) leg.GeometryType = geometry.Value;
-                for (var i = 0; i < envelope.Length; i++)
+                    for (var i = 0; i < overrides.Length; i++)
+                    {
+                        var (name, field) = OverrideParameters[i];
+                        if (clear.Contains(name))
+                            r.ResetLegOverride(request.LegIndex, field);
+                        else if (overrides[i].HasValue)
+                            r.SetLegOverride(request.LegIndex, field, overrides[i]);
+                    }
+                },
+                attributes: leg =>
                 {
-                    var (name, set) = EnvelopeParameters[i];
-                    if (clear.Contains(name))
-                        set(leg, null);
-                    else if (envelope[i].HasValue)
-                        set(leg, envelope[i]);
-                }
-                if (clear.Contains("note")) leg.Note = null;
-                else if (request.Note is not null) leg.Note = request.Note;
-
-                if (!before.HasSameAttributes(leg))
-                    route.NotifyChanged();
-            });
+                    if (geometry.HasValue) leg.GeometryType = geometry.Value;
+                    for (var i = 0; i < envelope.Length; i++)
+                    {
+                        var (name, set) = EnvelopeParameters[i];
+                        if (clear.Contains(name))
+                            set(leg, null);
+                        else if (envelope[i].HasValue)
+                            set(leg, envelope[i]);
+                    }
+                    if (clear.Contains("note")) leg.Note = null;
+                    else if (request.Note is not null) leg.Note = request.Note;
+                });
             return Ok(route, Routes);
         });
     }

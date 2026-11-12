@@ -23,7 +23,7 @@ public sealed class LibraryItemViewModelTests
         };
 
     private static LibraryItemViewModel Row(CollectionItem item, LibraryLoadState state = LibraryLoadState.None, bool outdated = false) =>
-        new(item, Source, _ => state, new StubDownloader(outdated), null, null, TimeProvider.System, null);
+        new(item, Source, new LibraryRowContext(TimeProvider.System, null, _ => state, new StubDownloader(outdated), null), null);
 
     [Theory]
     [InlineData("Local", "Local")]
@@ -114,7 +114,7 @@ public sealed class LibraryItemViewModelTests
                 ["notForNavigation"] = "true",
             },
         };
-        var row = new LibraryItemViewModel(item, Source, _ => LibraryLoadState.None, new StubDownloader(false), "USACE rivers", download: null, time: TimeProvider.System, timeFormat: null);
+        var row = new LibraryItemViewModel(item, Source, new LibraryRowContext(TimeProvider.System, null, _ => LibraryLoadState.None, new StubDownloader(false), retry: null), "USACE rivers");
 
         Assert.Equal(["Product", "Coverage", "Source"], row.Details.Select(g => g.Title));
         Assert.Equal("PRODUCT", row.Details[0].Header);
@@ -145,7 +145,7 @@ public sealed class LibraryItemViewModelTests
         {
             File.WriteAllBytes(Path.Combine(dir.FullName, "x.000"), new byte[2048]);
             var local = new LibraryItemViewModel(Online() with { Location = new LocalItemLocation(dir.FullName, "x.000", []) }, Source,
-                _ => LibraryLoadState.None, new StubDownloader(false), collectionName: null, download: null, time: TimeProvider.System, timeFormat: null);
+                new LibraryRowContext(TimeProvider.System, null, _ => LibraryLoadState.None, new StubDownloader(false), retry: null), collectionName: null);
             Assert.Equal("Local · 2 KB", local.PrimaryStateText);
         }
         finally
@@ -163,7 +163,7 @@ public sealed class LibraryItemViewModelTests
     {
         var downloader = new StubDownloader(false);
         var retried = 0;
-        var row = new LibraryItemViewModel(Online(), Source, _ => LibraryLoadState.None, downloader, null, _ => { retried++; return Task.CompletedTask; }, time: TimeProvider.System, timeFormat: null);
+        var row = new LibraryItemViewModel(Online(), Source, new LibraryRowContext(TimeProvider.System, null, _ => LibraryLoadState.None, downloader, _ => { retried++; return Task.CompletedTask; }), null);
 
         downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Queued, 0, 3_040_870);
         row.RefreshDownload();
@@ -193,7 +193,7 @@ public sealed class LibraryItemViewModelTests
         // the list has not shown yet; once downloaded, such a row must open its
         // local copy, not stay online until restart.
         var downloader = new StubDownloader(false);
-        var row = new LibraryItemViewModel(Online(), Source, _ => LibraryLoadState.None, downloader, collectionName: null, download: null, time: TimeProvider.System, timeFormat: null);
+        var row = new LibraryItemViewModel(Online(), Source, new LibraryRowContext(TimeProvider.System, null, _ => LibraryLoadState.None, downloader, retry: null), collectionName: null);
         Assert.IsType<RemoteItemLocation>(row.EffectiveItem.Location);
 
         downloader.LocalCopy = Online() with { Location = new LocalItemLocation("/downloads/US4OH1MK", "US4OH1MK.000", []) };

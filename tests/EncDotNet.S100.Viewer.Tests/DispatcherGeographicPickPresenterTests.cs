@@ -7,6 +7,8 @@ public class DispatcherGeographicPickPresenterTests
 {
     private sealed class CapturingPickService : IPickService
     {
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
         public (double Lat, double Lon, IReadOnlyList<GeographicPickFeature> Features)? Presented { get; private set; }
 
         public void PresentGeographicPick(

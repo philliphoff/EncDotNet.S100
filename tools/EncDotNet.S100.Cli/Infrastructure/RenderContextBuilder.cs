@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// <summary>
 /// Builds the <see cref="RenderContext"/> the dataset processors expect,
 /// mapping CLI options (palette, scales, time-step index, hidden instruction
-/// categories) onto it. Time-series specs
+/// categories, national language) onto it. Time-series specs
 /// resolve their <c>--time-step</c> index, or the step nearest an explicit
 /// instant, against <see cref="ITimeAwareDatasetProcessor"/>.
 /// </summary>
@@ -23,7 +23,8 @@ internal static class RenderContextBuilder
         BasemapKind basemap = BasemapKind.None,
         string? displayModeId = null,
         Viewport? viewport = null,
-        DateTime? instant = null)
+        DateTime? instant = null,
+        string? nationalLanguage = null)
     {
         DateTime? timeStep = instant is { } at
             ? NearestTimeStep(processor, at)
@@ -39,6 +40,10 @@ internal static class RenderContextBuilder
             Basemap = basemap,
             DisplayModeId = displayModeId,
             Viewport = viewport,
+            // Only set when chosen, so processors keep their own defaults otherwise.
+            Mariner = string.IsNullOrEmpty(nationalLanguage)
+                ? null
+                : MarinerSettings.Default with { NationalLanguage = nationalLanguage },
         };
     }
 

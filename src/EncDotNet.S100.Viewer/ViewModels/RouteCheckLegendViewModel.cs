@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
-using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.Services.PassageCheck;
 using EncDotNet.S100.Viewer.Tools;
 using SkiaSharp;
@@ -11,74 +11,68 @@ using SkiaSharp;
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
-/// The Check route map legend (#959, handoff C8): one box at the map's
-/// bottom left with "UKC AT ETA" (with a draft) and "FINDINGS" (the three
-/// marker shapes, a sleeve and the corridor edge). Its header folds it to a
-/// 28 px "Legend" chip; the fold is kept per user.
+/// The Check route map card (#959, handoff C8; legends design note D6,
+/// #1408): the route check's Legend section
+/// (<see cref="RouteCheckLegendSource"/>), drawn compact at the map's bottom
+/// left: "UKC AT ETA" (with a draft), "FINDINGS" (the three marker shapes, a
+/// sleeve and the corridor edge) and "WEATHER" (the storm at ETA). It shows
+/// while Check route is on and the Legend tab isn't shown; when the tab shows,
+/// the card hides and the map's legend reserve drops to 0. Its header folds it
+/// to a 28 px "Legend" chip; the fold is kept per user.
 /// </summary>
 /// <remarks>
-/// The swatches use the route's state tones for the chart palette
+/// The swatches use the route's state tones for the legend's palette
 /// (<see cref="RouteCheckColors"/>), as the map does, so the tones pass
 /// (#934) changes them in one place.
 /// </remarks>
 internal sealed class RouteCheckLegendViewModel : ViewModelBase, IDisposable
 {
-    private readonly RoutesService _routes;
-    private readonly PassageCheckService? _check;
-    private readonly IMeasureOverlayAppearanceProvider? _appearance;
+    private readonly LegendService _legend;
     private readonly RouteCheckLegendState _state;
+    private LegendSection? _section;
     private RouteCheckColors _colors;
     private PaletteType _palette = (PaletteType)(-1);
 
-    public RouteCheckLegendViewModel(
-        RoutesService routes,
-        PassageCheckService? check,
-        IMeasureOverlayAppearanceProvider? appearance,
-        RouteCheckLegendState state)
+    /// <summary>Creates the card over the legend service.</summary>
+    /// <param name="legend">The legend service; the card draws its <see cref="RouteCheckLegendSource.SectionId"/> section.</param>
+    /// <param name="state">The card's fold, kept per user.</param>
+    public RouteCheckLegendViewModel(LegendService legend, RouteCheckLegendState state)
     {
-        ArgumentNullException.ThrowIfNull(routes);
+        ArgumentNullException.ThrowIfNull(legend);
         ArgumentNullException.ThrowIfNull(state);
-        _routes = routes;
-        _check = check;
-        _appearance = appearance;
+        _legend = legend;
         _state = state;
         ToggleCommand = new RelayCommand(() => _state.IsOpen = !_state.IsOpen);
 
-        _routes.CheckModeChanged += OnChanged;
+        _legend.Changed += OnChanged;
         _state.Changed += OnChanged;
-        if (_check is not null)
-            _check.Changed += OnChanged;
-        if (_appearance is not null)
-            _appearance.Changed += OnChanged;
         Refresh();
     }
 
-    /// <summary>Whether the legend shows: while Check route is on.</summary>
-    public bool IsVisible => _routes.IsCheckModeActive && _check is not null;
+    /// <summary>The route check's section, while Check route is on; otherwise null.</summary>
+    public LegendSection? Section => _section;
+
+    /// <summary>
+    /// Whether the card shows (D6): while Check route is on and the Legend tab
+    /// isn't shown. The map reserves its height only then.
+    /// </summary>
+    public bool IsVisible => _section is not null && !_legend.IsTabShown;
 
     /// <summary>Whether the legend is open; otherwise it's the "Legend" chip.</summary>
     public bool IsOpen => _state.IsOpen;
 
     /// <summary>
-    /// Whether the "UKC AT ETA" section shows: the report's clearance check
-    /// ran, so the line is coloured by clearance. Until the checked route's
-    /// first report lands, whether it has a draft.
+    /// Whether the "UKC AT ETA" section shows: the section has its clearance
+    /// group, so the line is coloured by clearance.
     /// </summary>
-    public bool HasClearance =>
-        _check is { IsActive: true } check
-        && (check.Report is { } report && check.ReportRouteId == check.Input?.RouteId
-            ? report.Status(ClearanceCheck.CheckName) is { State: not RouteCheckState.Skipped }
-            : check.HasDraft);
+    public bool HasClearance => HasGroup(RouteCheckLegendSource.UkcGroupKey);
 
     /// <summary>
     /// Whether the "WEATHER" section shows (#1299): the checked route's report
     /// has a closest approach to a tropical cyclone, drawn as the storm-at-ETA
     /// ghost.
     /// </summary>
-    public bool HasStormAtEta =>
-        _check is { IsActive: true, Report: { } report } check
-        && check.ReportRouteId == check.Input?.RouteId
-        && report.Findings.Any(f => f.Code == RouteFindingCodes.CycloneClosestApproach);
+    public bool HasStormAtEta => HasGroup(RouteCheckLegendSource.WeatherGroupKey);
 
     /// <summary>The storm-at-ETA glyph's ink.</summary>
     public IBrush InkBrush { get; private set; } = Brushes.Transparent;
@@ -126,19 +120,19 @@ internal sealed class RouteCheckLegendViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
-        _routes.CheckModeChanged -= OnChanged;
+        _legend.Changed -= OnChanged;
         _state.Changed -= OnChanged;
-        if (_check is not null)
-            _check.Changed -= OnChanged;
-        if (_appearance is not null)
-            _appearance.Changed -= OnChanged;
     }
+
+    private bool HasGroup(string key) =>
+        _section?.Groups.Any(g => string.Equals(g.Key, key, StringComparison.Ordinal)) == true;
 
     private void OnChanged(object? sender, EventArgs e) => Refresh();
 
     private void Refresh()
     {
-        var palette = _appearance?.Current.Palette ?? PaletteType.Day;
+        _section = _legend.Sections.FirstOrDefault(s => string.Equals(s.Id, RouteCheckLegendSource.SectionId, StringComparison.Ordinal));
+        var palette = _legend.Palette;
         if (palette != _palette)
         {
             _palette = palette;
@@ -157,7 +151,7 @@ internal sealed class RouteCheckLegendViewModel : ViewModelBase, IDisposable
             InkBrush = Brush(_colors.Ink);
         }
 
-        // Every property can change at once (mode, draft, fold, palette).
+        // Every property can change at once (mode, draft, fold, palette, tab).
         OnPropertyChanged(string.Empty);
     }
 

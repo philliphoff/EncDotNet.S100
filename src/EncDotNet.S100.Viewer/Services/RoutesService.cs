@@ -188,7 +188,7 @@ internal sealed class RoutesService
     {
         if (Routes.ActiveRoute is not { IsReadOnly: false } route || SelectedWaypointIndex is not { } index)
             return false;
-        route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(index));
+        RouteEditCommands.DeleteWaypoint(route, index);
         SelectedWaypointIndex = null;
         return true;
     }

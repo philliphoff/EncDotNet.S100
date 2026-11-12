@@ -42,7 +42,7 @@ public sealed class LibraryPanelViewTests : IDisposable
     [AvaloniaFact]
     public void The_empty_states_quick_actions_start_their_add_flows()
     {
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
         host.Click(host.Find<Button>("Library.Quick.Online"));
@@ -57,23 +57,23 @@ public sealed class LibraryPanelViewTests : IDisposable
         var collection = await AddS57CollectionAsync();
         _library.AddSources(collection.Id, [new ExchangeSetSource(Guid.NewGuid(), null, _context.CreateS57ExchangeSet("extra"))]);
         await _library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
         Assert.Equal(4, VisibleRows(host).Count);
 
-        var source = panel.Nodes[0].Children[1];
+        var source = panel.Tree.Nodes[0].Children[1];
         host.Click(NodeLabel(host, source));
 
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         Assert.Equal(2, VisibleRows(host).Count);
-        Assert.All(panel.Items, i => Assert.Equal(source.Id, i.Source.Id));
+        Assert.All(panel.List.Items, i => Assert.Equal(source.Id, i.Source.Id));
     }
 
     [AvaloniaFact]
     public async Task Typing_in_the_filter_box_narrows_the_list()
     {
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
         host.Click(host.Find<TextBox>("Library.Filter"));
@@ -87,12 +87,12 @@ public sealed class LibraryPanelViewTests : IDisposable
     public async Task Clicking_a_row_shows_it_in_the_details_and_load_loads_it()
     {
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
-        var item = panel.Items[1];
+        var item = panel.List.Items[1];
         host.Click(Row(host, item));
-        Assert.Same(item, panel.SelectedItem);
+        Assert.Same(item, panel.List.SelectedItem);
 
         host.Click(host.Find<Button>("Library.Details.Load"));
         await _library.WhenIdle();
@@ -104,13 +104,13 @@ public sealed class LibraryPanelViewTests : IDisposable
     public async Task Double_clicking_a_row_loads_it()
     {
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
-        host.DoubleClick(Row(host, panel.Items[0]));
+        host.DoubleClick(Row(host, panel.List.Items[0]));
         await _library.WhenIdle();
 
-        Assert.Same(panel.Items[0], panel.SelectedItem);
+        Assert.Same(panel.List.Items[0], panel.List.SelectedItem);
         Assert.Equal([(false, 1)], _loader.Calls);
     }
 
@@ -118,13 +118,13 @@ public sealed class LibraryPanelViewTests : IDisposable
     public async Task Enter_on_a_selected_row_loads_it_as_a_double_click_does()
     {
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
         // The keyboard path: focus the list, arrow to the second row, Enter.
-        host.Click(Row(host, panel.Items[0]));
+        host.Click(Row(host, panel.List.Items[0]));
         host.Press(PhysicalKey.ArrowDown);
-        Assert.Same(panel.Items[1], panel.SelectedItem);
+        Assert.Same(panel.List.Items[1], panel.List.SelectedItem);
         host.Press(PhysicalKey.Enter);
         await _library.WhenIdle();
 
@@ -137,17 +137,17 @@ public sealed class LibraryPanelViewTests : IDisposable
         // The pointer-press selection fallback is pointer-only; automation
         // clients and screen readers select through the ListBoxItem's peer.
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
         var automation = new ViewerUiAutomation(() => [host.Window]);
-        var row = Row(host, panel.Items[1]);
+        var row = Row(host, panel.List.Items[1]);
 
-        var node = await RowNodeAsync(automation, panel.Items[1]);
+        var node = await RowNodeAsync(automation, panel.List.Items[1]);
         await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.Select, null);
         host.Settle();
 
         Assert.True(row.IsSelected);
-        Assert.Same(panel.Items[1], panel.SelectedItem);
+        Assert.Same(panel.List.Items[1], panel.List.SelectedItem);
     }
 
     [AvaloniaFact]
@@ -155,16 +155,16 @@ public sealed class LibraryPanelViewTests : IDisposable
     {
         await AddS57CollectionAsync();
         _downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, "404");
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        var row = Row(host, panel.Items[0]);
+        var row = Row(host, panel.List.Items[0]);
 
         host.Click(host.Find<Button>("Library.Row.Tag", row));
         await _library.WhenIdle();
         Assert.Equal(1, _downloader.Downloads);
 
         var automation = new ViewerUiAutomation(() => [host.Window]);
-        var rowNode = await RowNodeAsync(automation, panel.Items[0]);
+        var rowNode = await RowNodeAsync(automation, panel.List.Items[0]);
         var tag = Assert.Single(rowNode.Children!, c => c.Id == "Library.Row.Tag");
         Assert.Equal(Strings.Library_Tag_FailedRetry, tag.Name);
         Assert.Contains("invoke", tag.Patterns);
@@ -178,7 +178,7 @@ public sealed class LibraryPanelViewTests : IDisposable
     public async Task Tags_without_an_action_are_not_buttons()
     {
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
         Assert.Empty(host.FindAll<Button>("Library.Row.Tag"));
@@ -188,10 +188,10 @@ public sealed class LibraryPanelViewTests : IDisposable
     public async Task The_copy_button_copies_a_detail_value_in_full()
     {
         await AddS57CollectionAsync();
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        host.Click(Row(host, panel.Items[0]));
-        var field = panel.Items[0].Details.SelectMany(g => g.Fields).Single(f => f.IsCopyable);
+        host.Click(Row(host, panel.List.Items[0]));
+        var field = panel.List.Items[0].Details.SelectMany(g => g.Fields).Single(f => f.IsCopyable);
 
         var automation = new ViewerUiAutomation(() => [host.Window]);
         var copy = await automation.ActAsync(new UiTarget("Library.Details.Field.Copy", null), UiAction.Invoke, null);
@@ -205,14 +205,14 @@ public sealed class LibraryPanelViewTests : IDisposable
     public async Task Rename_from_the_context_menu_edits_in_place_and_enter_commits()
     {
         await AddS57CollectionAsync("Charts");
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
         var source = collection.Children.Single();
 
         // The menu acts on the node under the pointer, which it selects first.
         var menu = host.RightClick(NodeLabel(host, source));
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         host.Click(host.Find<MenuItem>("Library.NodeMenu.Rename", menu));
 
         // The box opens focused with the old name selected, so typing replaces it.
@@ -226,16 +226,16 @@ public sealed class LibraryPanelViewTests : IDisposable
 
         Assert.False(source.IsRenaming);
         Assert.Equal("Survey 2026", Assert.Single(Assert.Single(_library.Collections).Sources).Definition.DisplayName);
-        Assert.Equal("Survey 2026", panel.Nodes.Single().Children.Single().Name);
+        Assert.Equal("Survey 2026", panel.Tree.Nodes.Single().Children.Single().Name);
     }
 
     [AvaloniaFact]
     public async Task Escape_in_the_rename_box_keeps_the_old_name()
     {
         await AddS57CollectionAsync("Charts");
-        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
 
         var menu = host.RightClick(NodeLabel(host, collection));
         host.Click(host.Find<MenuItem>("Library.NodeMenu.Rename", menu));

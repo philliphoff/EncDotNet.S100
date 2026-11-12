@@ -68,7 +68,7 @@ internal sealed class ViewerUiController : IViewerUiController
             // Check passage folds the right dock to its edge tab (#901), and a
             // window under 900 px hides the bottom dock (#712 F5): open, but not showing.
             Showing: available && selected && dockOpen
-                && !(tab.Dock == TabDock.Right && _viewModel.IsRightDockFolded)
+                && !(tab.Dock == TabDock.Right && !_viewModel.IsRightDockPanelVisible)
                 && !(tab.Dock == TabDock.Bottom && _viewModel.IsWindowNarrow));
     }
 
@@ -116,7 +116,8 @@ internal sealed class ViewerUiController : IViewerUiController
     {
         if (tab.Dock == TabDock.Right && _viewModel.IsRightDockFolded)
         {
-            _viewModel.IsRightDockFolded = false;
+            // A Check passage fold unfolds; a narrow fold (D9) shows over the map.
+            _viewModel.ShowFoldedRightDock();
         }
 
         if (IsSelected(tab) && IsDockOpen(tab.Dock))
@@ -125,6 +126,11 @@ internal sealed class ViewerUiController : IViewerUiController
         }
 
         _viewModel.SelectTab(tab.Id);
+
+        // Opening the right dock in a narrow window folds it (D9); a caller
+        // asking to show a panel gets it over the map.
+        if (tab.Dock == TabDock.Right && _viewModel.IsRightDockNarrowFolded)
+            _viewModel.ShowFoldedRightDock();
     }
 
     /// <summary>

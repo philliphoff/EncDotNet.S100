@@ -93,7 +93,7 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
             Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [Entry] = Processor };
             Service = new NavigationalWarningsService(Loader, classifications: store ?? new NavigationalWarningClassificationStore(null), datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null);
             Drawing = new NavigationalWarningDrawingService(Service, new FixedViewTime(Oct(15)), new ViewerSettings { IsReadOnly = true }, Loader, display: Display, time: null, dispatch: action => action());
-            Panel = new NavigationalWarningsViewModel(Service, viewTime: new FixedViewTime(Oct(15)), clock: new FixedClock(Oct(15)), pick: null, pickReport: null, timeFormat: null, viewport: null, loader: null) { Drawing = Drawing };
+            Panel = TestNavigationalWarnings.Panel(Service, viewTime: new FixedViewTime(Oct(15)), clock: new FixedClock(Oct(15)), pick: null, timeFormat: null, viewport: null, loader: null, drawing: Drawing);
         }
 
         public NavigationalWarningEntry Find(int ordinal) => Service.Find(Entry.DisplayName, PartId(ordinal))!;
@@ -211,7 +211,7 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
     public void The_warning_card_shows_and_sets_the_classification()
     {
         var f = new Fixture();
-        var pick = new PickReportViewModel { WarningNavigator = f.Panel };
+        var pick = TestPickReport.Create(navigator: f.Panel);
         var entry = f.Find(2);
         pick.SetPicks([new PickHit
         {
@@ -221,7 +221,7 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
             ProductSpec = "S-124",
             NavigationalWarning = entry.Warning,
         }]);
-        var card = pick.WarningCard!;
+        var card = pick.Warnings.Card!;
         Assert.True(card.CanClassify);
         Assert.True(card.IsOnChart);
         Assert.False(card.IsClassifiedOff);
@@ -241,7 +241,7 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
     [Fact]
     public void A_card_for_an_unlisted_part_offers_no_classification()
     {
-        var pick = new PickReportViewModel { WarningNavigator = new Fixture().Panel };
+        var pick = TestPickReport.Create(navigator: new Fixture().Panel);
         pick.SetPicks([new PickHit
         {
             FeatureType = "NavwarnPart",
@@ -251,8 +251,8 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
             NavigationalWarning = Part(130),
         }]);
 
-        Assert.False(pick.WarningCard!.CanClassify);
-        Assert.False(pick.WarningCard.ClassifyCommand.CanExecute(NavigationalWarningClassification.OffChart));
+        Assert.False(pick.Warnings.Card!.CanClassify);
+        Assert.False(pick.Warnings.Card.ClassifyCommand.CanExecute(NavigationalWarningClassification.OffChart));
     }
 
     [Fact]

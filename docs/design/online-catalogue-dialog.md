@@ -415,8 +415,11 @@ download goes straight to Add to, with What to include done and still reachable
 by Back. A failed read lands on What to include with the error and Try again.
 SECOM sources and the entry points that start at What to include are
 unchanged. An ended forecast's warning also shows on Add to, since its step is
-skipped. The directory remembers the last source and category for the app's
-lifetime (`CatalogueDirectorySession`, not persisted).
+skipped. The directory remembers the last category, and the last source
+selected in each category, for the app's lifetime (`CatalogueDirectorySession`,
+not persisted). Switching category selects that category's remembered source,
+or its first; an empty category selects nothing, so the details and Next never
+act on a source the list doesn't show (follow-up, 2026-11-09).
 
 **Mock (2026-11-07).** The restructure is mocked on the "Add Online Source ·
 restructure" board on the Library & data page of the design canvas

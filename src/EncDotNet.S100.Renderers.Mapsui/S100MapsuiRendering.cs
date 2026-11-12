@@ -29,6 +29,7 @@ public static class S100MapsuiRendering
 
             OverscaleCurtainRenderer.Register();
             IsolineRenderer.Register();
+            SmoothRasterRenderer.Register();
 
             MapsuiChartLayers.Register();
 

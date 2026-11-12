@@ -61,7 +61,7 @@ public sealed class RouteEtaTests : IDisposable
     {
         var time = new ViewTime(Departure);
         var service = new RoutesService(time);
-        var vm = new RoutesPanelViewModel(service, timeFormat: new Utc(), viewport: null, marinerSettings: null, check: null, findings: null, exchange: null, dialogs: null);
+        var vm = TestRoutesPanel.Create(service, timeFormat: new Utc());
         var route = service.Routes.CreateRoute("North", "r");
         route.AppendWaypoint(new GeoPosition(50.0, -1.0));
         route.AppendWaypoint(new GeoPosition(50.1, -1.0));
@@ -137,7 +137,7 @@ public sealed class RouteEtaTests : IDisposable
     }
 
     [Fact]
-    public void Panel_speed_only_shows_etas_and_durations_and_keeps_check_passage_disabled()
+    public void Panel_speed_only_shows_etas_and_durations_and_offers_the_route_checks()
     {
         var (_, route, vm, _) = Panel();
         Assert.All(WaypointEtas(vm), Assert.Null);
@@ -149,7 +149,7 @@ public sealed class RouteEtaTests : IDisposable
         Assert.EndsWith(" · 30 min", legs[0].LegText);
         Assert.EndsWith(" · 15 min", legs[1].LegText);
         Assert.Equal("4 WP · 15.0 NM · 1 h 15 min · arrives 07:15Z from view time", vm.ActiveRouteDetailMeta);
-        Assert.False(vm.CanCheckPassage); // no check service in this panel
+        Assert.True(vm.CanCheckPassage);
         Assert.Equal("Check the route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
     }
 
@@ -230,7 +230,7 @@ public sealed class RouteEtaTests : IDisposable
         Assert.Equal(75, detail.Times.DurationMinutes!.Value, 0);
         Assert.Null(detail.Times.EtasStopAtLeg);
 
-        var call = GetRouteMcpAdapter.TranslateResult(EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<RouteDetail>.Ok(detail));
+        var call = McpAdapterShared.Translate(EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<RouteDetail>.Ok(detail));
         var text = Assert.IsType<ModelContextProtocol.Protocol.TextContentBlock>(call.Content.Single()).Text;
         using var doc = System.Text.Json.JsonDocument.Parse(text);
         Assert.True(doc.RootElement.GetProperty("times").GetProperty("fromViewTime").GetBoolean());

@@ -185,7 +185,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 });
             services.Library.Initialize();
             var operations = new LibraryOperations(services.Library, services.Downloads, new LibraryLoader(opener));
-            var adder = new LibrarySourceAdder(services.Readers, userCatalogues: null, services.ProbeCatalogue, TimeProvider.System);
+            var adder = new LibrarySourceAdder(services.Readers, userCatalogues: null, new EncDotNet.S100.Collections.KnownSources.CatalogueUrlRecognizer(services.ProbeCatalogue), TimeProvider.System);
             var library = new HeadlessLibrary(
                 operations, services.Sync, userCatalogues: null, health: null, TimeProvider.System, services.Readers, services.ProbeCatalogue);
 
@@ -206,7 +206,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 renderer: new StaticCapabilityAccessor<IImageRenderer>(session),
                 catalog: catalog,
                 viewport: new StaticCapabilityAccessor<IViewportController>(session))
-                .Concat(LibraryMcpTools.Create(library, library, services.SecomRegistry, services.SecomTrust))
+                .Concat(LibraryMcpTools.Create(library, library, new EncDotNet.S100.Collections.Secom.SecomServiceDirectory(services.SecomRegistry), services.SecomTrust))
                 .ToList();
 
             var collections = services.Library.Collections.Count(c => !c.IsSession);

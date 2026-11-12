@@ -3,6 +3,7 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.LayerStackView"
              x:DataType="vm:LayerStackViewModel">
 
@@ -12,6 +13,15 @@
         <Style Selector="Expander /template/ :is(Button)">
             <Setter Property="AutomationProperties.Name"
                     Value="{Binding $parent[Expander].(AutomationProperties.Name)}" />
+        </Style>
+        <Style Selector="Button.legendLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
     </UserControl.Styles>
 
@@ -118,49 +128,24 @@
                                                            Opacity="0.6"
                                                            VerticalAlignment="Center"
                                                            FontFamily="{StaticResource MonoFontFamily}" />
-                                                <!-- #1072: the legend of a sub-layer that carries one: a swatch
-                                                     and label per band of a weather fill. #1293: or a drawn glyph
-                                                     (an outlined area, a symbol, a line sample) and label per row. -->
-                                                <ItemsControl Grid.Row="1"
-                                                              Grid.Column="1"
-                                                              Grid.ColumnSpan="2"
-                                                              Margin="0,4,0,2"
-                                                              IsVisible="{Binding HasLegend}"
-                                                              ItemsSource="{Binding Legend}"
-                                                              AutomationProperties.AutomationId="LayerStack.Entry.Legend"
-                                                              AutomationProperties.Name="{Binding LegendName}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate x:DataType="vm:LayerStackLegendItemViewModel">
-                                                            <StackPanel Orientation="Horizontal"
-                                                                        Spacing="6"
-                                                                        Margin="0,1"
-                                                                        AutomationProperties.AutomationId="LayerStack.Entry.Legend.Band"
-                                                                        AutomationProperties.Name="{Binding Label}">
-                                                                <Border Width="14"
-                                                                        Height="10"
-                                                                        CornerRadius="2"
-                                                                        BorderThickness="1"
-                                                                        BorderBrush="{DynamicResource BorderColor}"
-                                                                        Background="{Binding Swatch}"
-                                                                        IsVisible="{Binding IsSwatch}"
-                                                                        VerticalAlignment="Center" />
-                                                                <Image Source="{Binding Glyph}"
-                                                                       Width="{Binding GlyphWidth}"
-                                                                       Height="{Binding GlyphHeight}"
-                                                                       IsVisible="{Binding HasGlyph}"
-                                                                       Stretch="Fill"
-                                                                       VerticalAlignment="Center"
-                                                                       AutomationProperties.AutomationId="LayerStack.Entry.Legend.Glyph"
-                                                                       AutomationProperties.AccessibilityView="Raw" />
-                                                                <TextBlock Text="{Binding Label}"
-                                                                           FontSize="10"
-                                                                           Opacity="0.8"
-                                                                           VerticalAlignment="Center"
-                                                                           TextTrimming="CharacterEllipsis" />
-                                                            </StackPanel>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
+                                                <!-- Legends D8: the rows moved to the Legend tab; a one-line
+                                                     link opens it at this layer's section. -->
+                                                <Button Grid.Row="1"
+                                                        Grid.Column="1"
+                                                        Grid.ColumnSpan="2"
+                                                        Classes="legendLink"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="0,1,0,1"
+                                                        IsVisible="{Binding HasLegend}"
+                                                        Command="{Binding ShowLegendCommand}"
+                                                        AutomationProperties.AutomationId="LayerStack.Entry.Legend"
+                                                        AutomationProperties.Name="{Binding LegendLinkName}"
+                                                        ToolTip.Tip="{Binding LegendLinkName}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <ic:FluentIcon Icon="ColorLine" IconVariant="Regular" FontSize="12" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{x:Static loc:Strings.LayerStack_LegendLink}" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
                                             </Grid>
                                         </DataTemplate>
                                         <!-- PR-D2.1: dynamic-feature-source row. Same chrome

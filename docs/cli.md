@@ -189,6 +189,7 @@ other extension writes PNG, unless you set `--format`.
 | `--format <format>` | from the extension, else `png` | `png`, `jpeg` (or `jpg`), `webp` or `json`. A `--format` that contradicts a recognised output extension is an error. `json` works in the single-dataset form only. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
 | `--palette <palette>` | `day` | `day`, `dusk` or `night`. |
+| `--national-language <code>` | the catalogue's, `eng` | ISO 639-2 language, such as `fra`, to prefer for chart text where the product's portrayal supports it (S-101, S-131). A feature with no name in that language shows its default name. |
 | `--symbol-scale <factor>` | `1.0` | Symbol scale factor. |
 | `--text-scale <factor>` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111, GRIB2, NetCDF, CAP). `s100 info` lists the steps. |
@@ -345,8 +346,8 @@ s100 render warnings.gml out.txt --format json
 - Geometry is summarised as its type, vertex count and one latitude/longitude
   anchor. The output has no timings, so two runs over the same dataset and
   options produce identical files.
-- `--palette`, `--symbol-scale`, `--text-scale`, `--display-mode` and
-  `--time-step` change the instructions. `--width`, `--height`, `--quality` and
+- `--palette`, `--national-language`, `--symbol-scale`, `--text-scale`,
+  `--display-mode` and `--time-step` change the instructions. `--width`, `--height`, `--quality` and
   `--background` are ignored. `--bbox`, `--center` and `--scale` are errors,
   because a display list has no viewport.
 
@@ -398,6 +399,7 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--format <format>` | `png` | `png`, `jpeg` (or `jpg`) or `webp`. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
 | `--palette <palette>` | `day` | `day`, `dusk` or `night`. |
+| `--national-language <code>` | the catalogue's, `eng` | ISO 639-2 language, such as `fra`, to prefer for chart text where the product's portrayal supports it (S-101, S-131). A feature with no name in that language shows its default name. |
 | `--symbol-scale <factor>` | `1.0` | Symbol scale factor. |
 | `--text-scale <factor>` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111). |

@@ -21,21 +21,56 @@ public class PickServiceTests
         MainViewModel viewModel,
         out NotificationService notifications)
     {
-        // The pick service surfaces its picks through the view-model's shared
-        // PickReport; failed reference navigations surface as notifications.
+        // The pick service publishes its picks, which the view-model's shared
+        // PickReport shows; failed reference navigations surface as notifications.
         notifications = Notifications.TestNotifications.Create();
-        return new PickService(loader, viewModel.PickReport, notifications, globalTime: null, timeFormat: null, themeService: null, marinerSettings: null, catalog: null, routeSources: null, waterLevelSettings: null);
+        var service = new PickService(
+            loader,
+            notifications,
+            viewModel.PickReport.Selection,
+            new GlobalTimeService(),
+            new ViewerDatasetCatalog(loader),
+            new EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache(new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()),
+            new NoWaterLevelSettings());
+        Assert.True(LatePicks.TryGetValue(viewModel, out var late));
+        late.Inner = service;
+        return service;
     }
 
+    // The pick report of each view-model, over a pick service made later.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MainViewModel, LatePick> LatePicks = new();
 
-    private sealed class StubThemeService : IThemeService
+    /// <summary>A pick service that forwards to one set after the pick report is made.</summary>
+    private sealed class LatePick : IPickService
     {
-        public bool IsDarkTheme { get; private set; }
-        public event System.EventHandler? ThemeChanged;
-        public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; ThemeChanged?.Invoke(this, System.EventArgs.Empty); return IsDarkTheme; }
-        public ChromeTheme Current => IsDarkTheme ? ChromeTheme.Dark : ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { IsDarkTheme = ChromeThemes.IsDark(theme); ThemeChanged?.Invoke(this, System.EventArgs.Empty); }
+        private IPickService? _inner;
+
+        public IPickService Inner
+        {
+            get => _inner ?? throw new InvalidOperationException("No pick service yet.");
+            set
+            {
+                _inner = value;
+                value.Picked += (_, result) => Picked?.Invoke(this, result);
+            }
+        }
+
+        public event EventHandler<PickResult>? Picked;
+        public Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null) => Inner.HandlePickAsync(worldPosition, resolution, dynamicHits);
+        public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) => Inner.PresentGeographicPick(latitude, longitude, features);
+        public bool NavigateToReference(FeatureReference reference) => Inner.NavigateToReference(reference);
+        public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => Inner.OpenFeature(processor, featureRef, datasetFileName);
+        public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => Inner.OpenFeatureAt(processor, ordinal, datasetFileName);
     }
+
+    private sealed class NoWaterLevelSettings : EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings
+    {
+        public EncDotNet.S100.Viewer.Services.Depth.WaterLevelAdjustmentMode WaterLevelAdjustment => default;
+        public bool WaterLevelApplyUndeclaredDatum => false;
+        public event Action? WaterLevelAdjustmentChanged { add { } remove { } }
+    }
+
+
 
     private sealed class StubLoader : IDatasetLoaderService
     {
@@ -65,28 +100,26 @@ public class PickServiceTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubLoader());
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
-        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsVm = new ViewerSettingsService(settings);
         var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
-        return new MainViewModel(
-            layout: new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
+        var shellLayout = new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
+        var picks = new LatePick();
+        var viewModel = new MainViewModel(
+            layout: shellLayout,
             mapTools: TestMapTools.Create(settingsVm, routeStore),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
+            mapChrome: TestMapChrome.Create(catalogues, datasets),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new StubLoader(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: settingsVm,
-            pickReport: new PickReportViewModel(),
+            palette: new PaletteMenuViewModel(settingsVm),
+            pickReport: TestPickReport.Create(picks),
             timeline: timeline,
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            notifications: Notifications.TestNotifications.Create(),
-            dialogManager: new ShadUI.DialogManager(),
             routes: routeStore);
+        LatePicks.Add(viewModel, picks);
+        return viewModel;
     }
 
     [Fact]

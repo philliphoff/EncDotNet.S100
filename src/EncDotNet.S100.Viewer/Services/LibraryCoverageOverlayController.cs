@@ -5,6 +5,7 @@ using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
+using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -35,7 +36,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <para>
 /// A plain map tap while the overlay is active selects the most detailed
 /// outlined dataset under the tap, and leaves the list alone
-/// (<see cref="LibraryPanelViewModel.SelectTapHits"/>). Only what is drawn can
+/// (<see cref="LibraryTapViewModel.SelectTapHits"/>). Only what is drawn can
 /// be hit: the same candidates the overlay outlines, plus loaded datasets.
 /// Tapping the same spot again steps to the next hit; tapping where nothing
 /// is outlined clears the tap. The panel's "Zoom to" moves the map to a
@@ -48,7 +49,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// newer edition, dashed otherwise. Tapping an area selects its node in the tree.
 /// </para>
 /// </remarks>
-internal sealed class LibraryCoverageOverlayController : IDisposable
+internal sealed class LibraryCoverageOverlayController : IDisposable, ILegendSectionSource
 {
     private const string LayerName = "Library Coverage";
 
@@ -111,9 +112,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _marshal = marshal;
         _layer = new MemoryLayer { Name = LayerName, Style = null, Features = new List<IFeature>() };
 
-        _panel.PropertyChanged += OnPanelChanged;
-        _panel.ZoomRequested += OnZoomRequested;
-        _panel.CenterRequested += OnCenterRequested;
+        _panel.List.PropertyChanged += OnPanelChanged;
+        _panel.Details.ZoomRequested += OnZoomRequested;
+        _panel.Details.CenterRequested += OnCenterRequested;
         _layout.PropertyChanged += OnLayoutChanged;
         _viewport.ViewportChanged += OnViewportChanged;
         _appearance.Changed += OnAppearanceChanged;
@@ -127,12 +128,22 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
     /// <summary>True when the Library tab is showing and its coverage toggle is on.</summary>
     public bool IsActive =>
-        _panel.ShowCoverage
+        _panel.List.ShowCoverage
         && _layout.IsLeftDockOpen
         && string.Equals(_layout.SelectedLeftTabId, LibraryImportCoordinator.LibraryPanelId, StringComparison.Ordinal);
 
     /// <summary>The number of datasets outlined by the last redraw (for tests and diagnostics).</summary>
     public int OutlinedCount { get; private set; }
+
+    /// <summary>
+    /// The Legend tab's Library coverage section (legends design note D8):
+    /// one row per outline style the last redraw drew, while the overlay is
+    /// active; empty otherwise.
+    /// </summary>
+    public IReadOnlyList<LegendSection> Sections { get; private set; } = [];
+
+    /// <summary>Raised when <see cref="Sections"/> changes.</summary>
+    public event EventHandler? Changed;
 
     /// <summary>
     /// Handles a plain map tap: when the overlay is active, selects the most
@@ -152,33 +163,33 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
         // A forecast model's domain (E1): list everything under the point, the
         // smallest domain's model selected. Zoomed out, an S-102 area selects its node.
-        var areaHits = AreaHits(Areas(_panel.Items, scale), tap.Position);
+        var areaHits = AreaHits(Areas(_panel.List.Items, scale), tap.Position);
         if (areaHits.Where(a => a.Area.Model is not null).ToArray() is { Length: > 0 } models)
         {
             _lastTap = null;
-            _panel.ListModelsAt(tap.Position, models.Select(m => (m.SourceId, m.Area.Model!)).ToArray());
+            _panel.Tap.ListModelsAt(tap.Position, models.Select(m => (m.SourceId, m.Area.Model!)).ToArray());
             return true;
         }
 
         if (areaHits.FirstOrDefault() is { Area: { } area } hit)
         {
             _lastTap = null;
-            _panel.ClearTap();
-            _panel.SelectArea(hit.SourceId, area.Folder);
+            _panel.Tap.ClearTap();
+            _panel.Tree.SelectArea(hit.SourceId, area.Folder);
             return true;
         }
 
-        var hits = Hits(_panel.Items, _panel.SelectedItem, tap.Position, scale, tap.Resolution);
+        var hits = Hits(_panel.List.Items, _panel.List.SelectedItem, tap.Position, scale, tap.Resolution);
         if (hits.Count == 0)
         {
             _lastTap = null;
-            _panel.ClearTap();
+            _panel.Tap.ClearTap();
             return false;
         }
 
-        var sameSpot = _panel.HasTap && MapTap.IsSameSpot(_lastTap, tap);
+        var sameSpot = _panel.Tap.HasTap && MapTap.IsSameSpot(_lastTap, tap);
         _lastTap = tap;
-        _panel.SelectTapHits(tap.Position, hits, sameSpot);
+        _panel.Tap.SelectTapHits(tap.Position, hits, sameSpot);
         return true;
     }
 
@@ -312,9 +323,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
     private void OnPanelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(LibraryPanelViewModel.Items)
-            or nameof(LibraryPanelViewModel.SelectedItem)
-            or nameof(LibraryPanelViewModel.ShowCoverage))
+        if (e.PropertyName is nameof(LibraryListViewModel.Items)
+            or nameof(LibraryListViewModel.SelectedItem)
+            or nameof(LibraryListViewModel.ShowCoverage))
         {
             ScheduleRebuild();
         }
@@ -376,6 +387,8 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             return;
 
         var features = new List<IFeature>();
+        var drawn = new HashSet<LibraryPrimaryAvailability>();
+        (byte R, byte G, byte B)? selectedAccent = null;
         OutlinedCount = 0;
 
         if (IsActive)
@@ -383,7 +396,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             var view = ViewBounds(_viewport.Current);
             var scale = CurrentScale();
             var resolution = _viewport.Current?.MercatorResolution ?? 0;
-            var selected = _panel.SelectedItem;
+            var selected = _panel.List.SelectedItem;
             var appearance = _appearance.Current;
             var casing = new MapsuiColor(appearance.ChartBackground.R, appearance.ChartBackground.G, appearance.ChartBackground.B);
 
@@ -391,15 +404,17 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             var opacity = selected is null ? LibraryOutlineStyles.LineOpacity : LibraryOutlineStyles.DimmedLineOpacity;
 
             var mercatorView = view is { } v ? MercatorView(v) : null;
-            foreach (var (_, area, items) in Areas(_panel.Items, scale))
+            foreach (var (_, area, items) in Areas(_panel.List.Items, scale))
             {
                 if (mercatorView is { } mv && !mv.Intersects(area.Extent))
                     continue;
-                AddRings(features, area.Rings, StyleFor(AreaState(items)), casing, opacity);
+                var areaState = AreaState(items);
+                AddRings(features, area.Rings, StyleFor(areaState), casing, opacity);
+                drawn.Add(areaState);
                 OutlinedCount++;
             }
 
-            var candidates = Candidates(_panel.Items, scale)
+            var candidates = Candidates(_panel.List.Items, scale)
                 // Loaded datasets speak for themselves on the chart.
                 .Where(i => !ReferenceEquals(i, selected)
                     && i.Availability != LibraryAvailability.Loaded
@@ -411,6 +426,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             foreach (var item in candidates)
             {
                 AddCoverage(features, item, StyleFor(item.PrimaryAvailability), casing, opacity, resolution);
+                drawn.Add(item.PrimaryAvailability);
                 OutlinedCount++;
             }
 
@@ -421,13 +437,30 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
                     new OutlineStyle(new MapsuiColor(accent.R, accent.G, accent.B), LibraryOutlineStyles.SelectedWidth, null,
                         LibraryOutlineStyles.SelectedFillOpacity, RoundCap: false),
                     casing, 1f, resolution);
+                selectedAccent = accent;
                 OutlinedCount++;
             }
         }
 
         _layer.Features = features;
         _layer.DataHasChanged();
+        UpdateLegend(drawn, selectedAccent);
     }
+
+    private void UpdateLegend(HashSet<LibraryPrimaryAvailability> drawn, (byte R, byte G, byte B)? selectedAccent)
+    {
+        IReadOnlyList<LegendSection> sections =
+            LibraryCoverageLegend.Build(drawn, OutlinedCount, selectedAccent) is { } section ? [section] : [];
+        // Pans redraw often; only tell the legend when what it shows changes.
+        if (sections.Count == Sections.Count && (sections.Count == 0 || SameRows(sections[0], Sections[0])))
+            return;
+
+        Sections = sections;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static bool SameRows(LegendSection a, LegendSection b) =>
+        a.Source == b.Source && a.Rows.Select(r => r.Label).SequenceEqual(b.Rows.Select(r => r.Label));
 
     /// <summary>A dataset's outline, or a marker when it is point-sized on screen.</summary>
     private static void AddCoverage(
@@ -578,9 +611,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             return;
         _disposed = true;
 
-        _panel.PropertyChanged -= OnPanelChanged;
-        _panel.ZoomRequested -= OnZoomRequested;
-        _panel.CenterRequested -= OnCenterRequested;
+        _panel.List.PropertyChanged -= OnPanelChanged;
+        _panel.Details.ZoomRequested -= OnZoomRequested;
+        _panel.Details.CenterRequested -= OnCenterRequested;
         _layout.PropertyChanged -= OnLayoutChanged;
         _viewport.ViewportChanged -= OnViewportChanged;
         _appearance.Changed -= OnAppearanceChanged;

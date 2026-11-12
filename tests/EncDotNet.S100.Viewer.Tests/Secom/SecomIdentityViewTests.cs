@@ -35,7 +35,7 @@ public sealed class SecomIdentityViewTests
         keys.Identities.Import(keys.Identities.Load(keys.IdentityFile("org", "urn:mrn:mcp:org:mcc:soundcharts"), "secret"), "SoundCharts organisation", makeDefault: false);
         var directory = new SecomIdentityDirectory(keys.Identities, keys.Time);
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel([Khra], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            TestCatalogueDirectory.Create([Khra]),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 Secom = (_, _, _, _) => throw new HttpRequestException("403"),
@@ -81,10 +81,9 @@ public sealed class SecomIdentityViewTests
         library.Initialize();
         library.AddCollection("SECOM", [new SecomSource(Guid.NewGuid(), "KHRA S-124", new Uri("https://secom.khra.example/api/secom/"), SecomFilter.All) { Identity = bridge.Id }]);
         await library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Identities = new SecomIdentityDirectory(keys.Identities, keys.Time);
-        panel.Sync();
-        panel.SelectedNode = panel.Nodes.Single().Children.Single();
+        using var panel = TestLibrary.Panel(library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null,
+            identities: new SecomIdentityDirectory(keys.Identities, keys.Time));
+        panel.Tree.SelectedNode = panel.Tree.Nodes.Single().Children.Single();
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
 
         Assert.True(panel.ShowsSecomDetails);

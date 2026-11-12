@@ -56,7 +56,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
     [Fact]
     public void A_weather_run_over_12_hours_old_is_stale_and_offers_the_latest_run()
     {
-        var row = new LibraryItemViewModel(Run00(), Source(), downloader: new Downloads(Run), time: new FakeTimeProvider(Run.AddHours(13)), loadState: null, collectionName: null, download: null, timeFormat: null);
+        var row = new LibraryItemViewModel(Run00(), Source(), new LibraryRowContext(new FakeTimeProvider(Run.AddHours(13)), null, null, new Downloads(Run), retry: null), collectionName: null);
 
         Assert.True(row.IsWeatherRun);
         Assert.True(row.IsForecastRunRow);
@@ -72,7 +72,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
     [Fact]
     public void A_fresh_run_is_not_stale_and_one_not_downloaded_cannot_be_pinned()
     {
-        var row = new LibraryItemViewModel(Run00(), Source(), downloader: new Downloads(null), time: new FakeTimeProvider(Run.AddHours(5)), loadState: null, collectionName: null, download: null, timeFormat: null);
+        var row = new LibraryItemViewModel(Run00(), Source(), new LibraryRowContext(new FakeTimeProvider(Run.AddHours(5)), null, null, new Downloads(null), retry: null), collectionName: null);
 
         Assert.False(row.IsStaleRun);
         Assert.Null(row.StaleRunText);
@@ -83,7 +83,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
     [Fact]
     public void A_pinned_run_is_never_stale_and_can_only_be_unpinned()
     {
-        var row = new LibraryItemViewModel(Run00(pinned: true), Source(), downloader: new Downloads(null), time: new FakeTimeProvider(Run.AddDays(5)), loadState: null, collectionName: null, download: null, timeFormat: null);
+        var row = new LibraryItemViewModel(Run00(pinned: true), Source(), new LibraryRowContext(new FakeTimeProvider(Run.AddDays(5)), null, null, new Downloads(null), retry: null), collectionName: null);
 
         Assert.True(row.IsPinnedRun);
         Assert.False(row.IsStaleRun);
@@ -103,7 +103,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
         Assert.True(entry.HasCredit);
         Assert.Equal(string.Format(Strings.Library_DataCreditFormat, entry.Credit), entry.CreditText);
 
-        var pick = new PickReportViewModel();
+        var pick = TestPickReport.Create();
         pick.SetPicks([new PickHit { FeatureType = "WaveHeight", FeatureRef = "1", ProductSpec = "GRIB2", Credit = entry.Credit }]);
         Assert.True(pick.HasDataCredit);
         Assert.Equal(entry.CreditText, pick.DataCredit);
@@ -114,7 +114,7 @@ public sealed class WeatherLibraryViewModelTests : IDisposable
     [Fact]
     public void The_directory_labels_weather_services_and_shows_their_forecast_chips()
     {
-        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
+        var directory = TestCatalogueDirectory.Create(KnownCatalogueSources.All);
         var aws = directory.Entries.Single(e => e.Source.Id == "noaa-aws-gfswave");
         var nomads = directory.Entries.Single(e => e.Source.Id == "noaa-nomads-gfs");
 

@@ -94,6 +94,46 @@ public static class S102DepthLines
         return result;
     }
 
+    /// <summary>
+    /// Where the sampled grid has depths, for the S-98 rule that hides a
+    /// neighbouring cell's limit of data where this grid's depths carry on
+    /// past it (<c>S98DefaultRules.R_102_102_A_JoinS102Cells</c>).
+    /// </summary>
+    /// <param name="layer">The sampled S-102 coverage.</param>
+    /// <param name="wgs84ToNative">Converts WGS-84 longitude, latitude to the grid's native x, y; <see langword="null"/> for a geographic grid.</param>
+    /// <returns>The data area.</returns>
+    public static ICoverageDataArea DataArea(
+        StyledCoverageLayer layer,
+        Func<double, double, (double X, double Y)>? wgs84ToNative = null)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        return new GridDataArea(layer, wgs84ToNative);
+    }
+
+    private sealed class GridDataArea(
+        StyledCoverageLayer layer,
+        Func<double, double, (double X, double Y)>? wgs84ToNative) : ICoverageDataArea
+    {
+        private readonly GridMetadata _grid = layer.Coverage.Metadata;
+        private readonly float[] _depths = layer.Coverage.GetValues(DepthField);
+        private readonly float _noData = layer.NoDataValue;
+
+        public bool HasData(double mercatorX, double mercatorY)
+        {
+            var (longitude, latitude) = WebMercator.ToLonLat(mercatorX, mercatorY);
+            var (x, y) = wgs84ToNative is null ? (longitude, latitude) : wgs84ToNative(longitude, latitude);
+            double column = Math.Round((x - _grid.OriginLongitude) / _grid.SpacingLongitudinal);
+            double row = Math.Round((y - _grid.OriginLatitude) / _grid.SpacingLatitudinal);
+            if (!(column >= 0 && row >= 0 && column < _grid.NumColumns && row < _grid.NumRows))
+            {
+                return false;
+            }
+
+            int i = ((int)row * _grid.NumColumns) + (int)column;
+            return i < _depths.Length && IsValid(_depths[i], _noData);
+        }
+    }
+
     private static bool IsValid(float depth, float noData) =>
         !float.IsNaN(depth) && depth != noData && depth != S102CoverageSource.FillValue;
 

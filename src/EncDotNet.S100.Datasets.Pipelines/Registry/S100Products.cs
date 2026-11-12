@@ -42,7 +42,7 @@ public static class S100Products
     /// products here and the weather formats in <see cref="WeatherProducts"/>.
     /// </summary>
     public static ProductRegistry CreateDefaultRegistry() =>
-        new ProductRegistry().AddAllS100Products().AddWeatherProducts();
+        new ProductRegistry().AddAllS100Products().AddAmlProduct().AddWeatherProducts();
 
     /// <summary>Registers every built-in product with <paramref name="registry"/>.</summary>
     public static void RegisterAll(ProductRegistry registry)
@@ -108,29 +108,73 @@ public static class S100Products
     };
 
     /// <summary>Legacy S-57 ENC (translated in-memory to S-101).</summary>
+    /// <remarks>
+    /// An AML cell is S-57 encoded too, but it's never translated: one handed
+    /// to this registration (an exchange-set entry listed as S-57, say) is
+    /// opened as <see cref="Aml"/>.
+    /// </remarks>
     public static ProductRegistration S57 { get; } = new()
     {
         Spec = "S-57",
-        CreateFromPath = (s, path) => new S57DatasetProcessor(
-            path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
-            s.SharedInstructionCache),
-        CreateFromSource = (s, r) => new S57DatasetProcessor(
-            r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
-            s.FeatureCatalogueManager, s.SharedInstructionCache),
+        CreateFromPath = (s, path) => IsAmlCell(path)
+            ? new AmlDatasetProcessor(path, AmlPortrayal)
+            : new S57DatasetProcessor(
+                path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
+                s.SharedInstructionCache),
+        CreateFromSource = (s, r) => IsAmlCell(r.Source, r.RelativePath)
+            ? new AmlDatasetProcessor(r.Source, r.RelativePath, AmlPortrayal)
+            : new S57DatasetProcessor(
+                r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
+                s.FeatureCatalogueManager, s.SharedInstructionCache),
         // S-57 shares the ISO 8211 .000 extension with S-101 and S-401 but
         // declares no S-100 PRSP product identifier (its PRSP is a numeric S-57
         // code); it is instead identified by the S-57-only DSPM field in its DDR.
         // That covers inland ENCs too (PRSP 10): they are S-57 cells, so they
-        // keep the S-57 identity. Contributing this rule on the
+        // keep the S-57 identity. AML cells (PRSP 51–57) carry DSPM too but are
+        // claimed by the Aml registration instead. Contributing this rule on the
         // registration lets the registry-aware DetectProductSpec overload honour
         // the registry's product set — a registry without S-57 never claims one.
-        MatchIso8211 = static root => root.HasDataSetParameterField,
+        MatchIso8211 = static root => root.HasDataSetParameterField && !root.DeclaresAmlProductSpecification,
         // An S-57 cell keeps product identity "S-57" but is portrayed through the
         // S-101 catalogue and conventions (S57DatasetProcessor.PortrayalSpec).
         PortrayalSpec = "S-101",
         ReadMetadata = S57Dataset.ReadMetadata,
         OpenData = OpenS57,
         DefaultPlanes = BaseChartPlanes,
+    };
+
+    /// <summary>
+    /// The portrayal AML cells are drawn with: SoundCharts' own
+    /// (<see cref="AmlOverlayPortrayal"/>). A cell none of whose classes has a
+    /// style is "recognised, not drawn". This is the one place a portrayal
+    /// plugs in.
+    /// </summary>
+    public static IAmlPortrayal AmlPortrayal => AmlOverlayPortrayal.Default;
+
+    /// <summary>
+    /// NATO Additional Military Layers (AML): S-57 encoded military overlay
+    /// cells (<c>DSID</c> <c>PRSP</c> 51–57). Not a chart and not an S-100
+    /// product, so it isn't in <see cref="All"/>: hosts add it with
+    /// <see cref="ProductRegistryExtensions.AddAmlProduct"/> (the default
+    /// registry does). Never translated to S-101, never a depth or
+    /// route-check source. A registry without it leaves AML cells
+    /// unrecognised rather than translating them.
+    /// </summary>
+    public static ProductRegistration Aml { get; } = new()
+    {
+        Spec = SpecName.Aml,
+        IsS100 = false,
+        CreateFromPath = static (_, path) => new AmlDatasetProcessor(path, AmlPortrayal),
+        CreateFromSource = static (_, r) => new AmlDatasetProcessor(r.Source, r.RelativePath, AmlPortrayal),
+        // AML shares S-57's encoding, DSPM field included; its PRSP tells it apart.
+        MatchIso8211 = static root => root.DeclaresAmlProductSpecification,
+        // The official AML portrayal is an S-52 .dai file released only to
+        // Presentation Library holders; SoundCharts draws its own.
+        Portrayal = PortrayalBasis.Application("the public AML release"),
+        PickReportNotice = AmlDatasetProcessor.NotAChartNotice,
+        ReadMetadata = static path => new AmlDatasetProcessor(path, AmlPortrayal).Metadata,
+        OpenData = static (stream, _) => AmlDatasetProcessor.ReadLoadedData(stream),
+        DefaultPlanes = Planes((ProductRegistration.AnyLayerKind, S98DisplayPlane.AdditionalMilitaryLayers)),
     };
 
     /// <summary>S-102 Bathymetric Surface.</summary>
@@ -443,6 +487,33 @@ public static class S100Products
     private static LoadedDatasetData OpenS101(Stream stream, Func<string, string?>? externalTextResolver) =>
         new S101DatasetData(S101Dataset.Open(stream), externalTextResolver);
 
+    // Whether the S-57 cell is AML, from its leading records only. A file that
+    // can't be read isn't AML; the S-57 processor reports the failure.
+    private static bool IsAmlCell(string path)
+    {
+        try
+        {
+            return S57DatasetHeader.Read(path)?.Aml is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsAmlCell(IAssetSource source, string relativePath)
+    {
+        try
+        {
+            using var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
+            return S57DatasetHeader.Read(stream, AssetSourceHelpers.GetFileName(relativePath))?.Aml is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static LoadedDatasetData OpenS57(Stream stream, Func<string, string?>? externalTextResolver)
     {
         // Legacy S-57 is a different ISO 8211 profile: read it with the S-57
@@ -452,6 +523,8 @@ public static class S100Products
         // projector has no portrayal-catalogue context, so unlike the processor
         // it does not fall back to S-101 when S-401 is unavailable.
         var s57 = S57Dataset.Open(stream);
+        if (AmlDatasetInfo.FromDocument(s57.Document) is { } aml)
+            return AmlDatasetProcessor.CreateLoadedData(aml, s57.Document);
         var translator = S57ToS101Translator.ForTarget(s57.TranslationTarget);
         // The translation drops the compilation scale, which ranks the cell
         // against overlapping cells, so the payload carries it.

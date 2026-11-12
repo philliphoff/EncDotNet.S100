@@ -151,7 +151,7 @@ public sealed class RouteFindingsTests : IDisposable
         var f = new PassageCheckFixture(waterEnd: PassageCheckFixture.WaterStart.AddHours(2.5),
             post: PassageCheckFixture.SerialPost);
         using var findings = Findings(f, post: PassageCheckFixture.SerialPost);
-        var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
+        var panel = TestRoutesPanel.Create(f.Routes, check: f.Check, findings: findings, timeFormat: new Utc());
         Assert.Equal("Findings 0", panel.Check!.FindingsLabel);
 
         await f.CheckAsync();
@@ -177,7 +177,7 @@ public sealed class RouteFindingsTests : IDisposable
         var f = new PassageCheckFixture();
         var viewport = new RecordingViewport();
         using var findings = Findings(f, viewport);
-        var list = new RouteFindingsViewModel(findings);
+        var list = new RouteFindingsViewModel(findings, TestRoutesPanel.NoWarnings);
         await f.CheckAsync();
 
         var row = list.Groups[0].Items[0];

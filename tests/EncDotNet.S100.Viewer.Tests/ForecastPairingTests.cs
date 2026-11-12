@@ -81,30 +81,30 @@ public sealed class ForecastPairingTests : IDisposable
         }
 
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Sync();
+        var panel = TestLibrary.Panel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        panel.Tree.Sync();
         return panel;
     }
 
     private static LibraryNodeViewModel SourceOf(LibraryPanelViewModel panel, string collection) =>
-        panel.Nodes.Single(n => n.Name == collection).Children.Single();
+        panel.Tree.Nodes.Single(n => n.Name == collection).Children.Single();
 
     [Fact]
     public async Task A_forecast_model_is_one_domain_outline_at_every_scale()
     {
         using var panel = await PanelAsync(withBathymetry: false);
-        panel.SelectedNode = SourceOf(panel, "Currents");
+        panel.Tree.SelectedNode = SourceOf(panel, "Currents");
 
         foreach (var scale in new[] { 50_000d, 5_000_000d })
         {
-            var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.Items, scale));
+            var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.List.Items, scale));
             Assert.Equal("cbofs", domain.Area.Model);
             Assert.Equal(2, domain.Items.Count);
-            Assert.Empty(LibraryCoverageOverlayController.Candidates(panel.Items, scale));
+            Assert.Empty(LibraryCoverageOverlayController.Candidates(panel.List.Items, scale));
         }
 
         // The two adjacent tiles make one shape.
-        Assert.Single(LibraryCoverageOverlayController.Areas(panel.Items, 50_000)[0].Area.Rings);
+        Assert.Single(LibraryCoverageOverlayController.Areas(panel.List.Items, 50_000)[0].Area.Rings);
     }
 
     [Fact]
@@ -114,9 +114,9 @@ public sealed class ForecastPairingTests : IDisposable
         _downloader.Have("111US00_CBOFS_US4VA1DE", Run);
         _time.Advance(TimeSpan.FromHours(50));
         using var panel = await PanelAsync(withBathymetry: false);
-        panel.SelectedNode = SourceOf(panel, "Currents");
+        panel.Tree.SelectedNode = SourceOf(panel, "Currents");
 
-        var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.Items, 50_000));
+        var domain = Assert.Single(LibraryCoverageOverlayController.Areas(panel.List.Items, 50_000));
 
         Assert.Equal(LibraryPrimaryAvailability.Expired, LibraryCoverageOverlayController.AreaState(domain.Items));
     }
@@ -126,26 +126,26 @@ public sealed class ForecastPairingTests : IDisposable
     {
         using var panel = await PanelAsync(withBathymetry: false);
         var source = SourceOf(panel, "Currents");
-        panel.SelectedNode = source;
+        panel.Tree.SelectedNode = source;
 
-        panel.ListModelsAt(new GeoPosition(37.6, -76.6), [(source.Id, "cbofs")]);
+        panel.Tap.ListModelsAt(new GeoPosition(37.6, -76.6), [(source.Id, "cbofs")]);
 
-        Assert.True(panel.HasLocation);
-        Assert.True(panel.SelectedItem!.IsModelHeader);
-        Assert.Equal("cbofs", panel.SelectedItem.Name);
+        Assert.True(panel.Tap.HasLocation);
+        Assert.True(panel.List.SelectedItem!.IsModelHeader);
+        Assert.Equal("cbofs", panel.List.SelectedItem.Name);
     }
 
     [Fact]
     public async Task An_S111_tile_offers_its_S102_twin_in_the_same_grid_cell()
     {
         using var panel = await PanelAsync();
-        panel.SelectedNode = SourceOf(panel, "Currents");
-        panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
+        panel.Tree.SelectedNode = SourceOf(panel, "Currents");
+        panel.List.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
 
-        panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
+        panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
-        var pairing = Assert.IsType<LibraryPairing>(panel.Pairing);
-        Assert.True(panel.HasPairing);
+        var pairing = Assert.IsType<LibraryPairing>(panel.Details.Pairing);
+        Assert.True(panel.Details.HasPairing);
         Assert.Equal("Bathymetry for this tile", pairing.Title);
         Assert.Equal("S-102 102US004VA1DD · same grid cell · Online · " + LibraryItemViewModel.FormatBytes(3_100_000), pairing.Detail);
         Assert.True(pairing.CanGet);
@@ -154,8 +154,8 @@ public sealed class ForecastPairingTests : IDisposable
         Assert.Equal(["102US004VA1DD"], _downloader.Requested);
 
         // A tile whose cell has no S-102 tile listed offers nothing.
-        panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DE");
-        Assert.Null(panel.Pairing);
+        panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DE");
+        Assert.Null(panel.Details.Pairing);
     }
 
     [Fact]
@@ -164,12 +164,12 @@ public sealed class ForecastPairingTests : IDisposable
         _downloader.Have("102US004VA1DD", Run);
         using (var panel = await PanelAsync())
         {
-            panel.SelectedNode = SourceOf(panel, "Currents");
-            panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
-            panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
+            panel.Tree.SelectedNode = SourceOf(panel, "Currents");
+            panel.List.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
+            panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
-            Assert.False(panel.Pairing!.CanGet);
-            Assert.Contains("· Local", panel.Pairing.Detail, StringComparison.Ordinal);
+            Assert.False(panel.Details.Pairing!.CanGet);
+            Assert.Contains("· Local", panel.Details.Pairing.Detail, StringComparison.Ordinal);
         }
     }
 
@@ -177,12 +177,12 @@ public sealed class ForecastPairingTests : IDisposable
     public async Task Without_an_S102_collection_a_tile_offers_no_bathymetry()
     {
         using var panel = await PanelAsync(withBathymetry: false);
-        panel.SelectedNode = SourceOf(panel, "Currents");
-        panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
+        panel.Tree.SelectedNode = SourceOf(panel, "Currents");
+        panel.List.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
 
-        panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
+        panel.List.SelectedItem = panel.List.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
-        Assert.False(panel.HasPairing);
+        Assert.False(panel.Details.HasPairing);
     }
 
     [Fact]
@@ -190,14 +190,14 @@ public sealed class ForecastPairingTests : IDisposable
     {
         using var panel = await PanelAsync();
         var bathymetry = SourceOf(panel, "Bathymetry");
-        panel.SelectedNode = bathymetry;
-        Assert.False(panel.CanAddCurrentsForArea);  // the source, not an area
-        panel.SelectedNode = SourceOf(panel, "Currents");
-        Assert.False(panel.CanAddCurrentsForArea);
+        panel.Tree.SelectedNode = bathymetry;
+        Assert.False(panel.Tree.CanAddCurrentsForArea);  // the source, not an area
+        panel.Tree.SelectedNode = SourceOf(panel, "Currents");
+        Assert.False(panel.Tree.CanAddCurrentsForArea);
 
-        panel.SelectedNode = bathymetry.Children.Single(c => c.Name == "Chesapeake Bay");
-        Assert.True(panel.CanAddCurrentsForArea);
-        panel.AddCurrentsForAreaCommand.Execute(null);
+        panel.Tree.SelectedNode = bathymetry.Children.Single(c => c.Name == "Chesapeake Bay");
+        Assert.True(panel.Tree.CanAddCurrentsForArea);
+        panel.Tree.AddCurrentsForAreaCommand.Execute(null);
 
         Assert.Equal([new GeoBounds(37.5, -76.8, 37.8, -76.5)], _importer.AreasForCurrents);
     }

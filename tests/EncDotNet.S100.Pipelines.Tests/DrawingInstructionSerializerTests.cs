@@ -100,6 +100,7 @@ public class DrawingInstructionSerializerTests
         CoordinateOverride = new GeoPosition(51.0, 1.0),
         FontWeight = TextFontWeight.Bold,
         FontProportion = TextFontProportion.MonoSpaced,
+        FontSlant = TextFontSlant.Italics,
         HaloColor = "S104HALO",
         HaloWidth = 0.96,
         AreaPlacement = AreaPlacementMode.Geographic,
@@ -247,6 +248,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.HaloColor, at.HaloColor);
                 Assert.Equal(e.HaloWidth, at.HaloWidth);
                 Assert.Equal(e.AreaPlacement, at.AreaPlacement);
+                Assert.Equal(e.FontSlant, at.FontSlant);
                 break;
 
             default:

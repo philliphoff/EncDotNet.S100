@@ -12,14 +12,6 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class MainViewModelPickModeTests
 {
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme { get; private set; }
-        public event System.EventHandler? ThemeChanged;
-        public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; ThemeChanged?.Invoke(this, System.EventArgs.Empty); return IsDarkTheme; }
-        public ChromeTheme Current => IsDarkTheme ? ChromeTheme.Dark : ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { IsDarkTheme = ChromeThemes.IsDark(theme); ThemeChanged?.Invoke(this, System.EventArgs.Empty); }
-    }
 
     private sealed class StubDatasetLoaderService : IDatasetLoaderService
     {
@@ -55,27 +47,22 @@ public class MainViewModelPickModeTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
-        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var settingsVm = new ViewerSettingsService(settings);
         var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var shellLayout = new ShellLayoutViewModel(settings, activityTabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
-            layout: new ShellLayoutViewModel(settings, activityTabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
+            layout: shellLayout,
             mapTools: TestMapTools.Create(settingsVm, routeStore),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
+            mapChrome: TestMapChrome.Create(catalogues, datasets),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new StubDatasetLoaderService(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: settingsVm,
-            pickReport: pickReport ?? new PickReportViewModel(),
+            palette: new PaletteMenuViewModel(settingsVm),
+            pickReport: pickReport ?? TestPickReport.Create(),
             timeline: timeline,
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            notifications: Notifications.TestNotifications.Create(),
-            dialogManager: new ShadUI.DialogManager(),
             routes: routeStore);
     }
 
@@ -105,7 +92,7 @@ public class MainViewModelPickModeTests
     {
         // issue #374: dismissing the Pick Report must also drop the pick (and
         // its map highlight) so the report and overlay stay in sync.
-        var pickReport = new PickReportViewModel();
+        var pickReport = TestPickReport.Create();
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
@@ -123,7 +110,7 @@ public class MainViewModelPickModeTests
     {
         // issue #374: after a manual close clears the pick, a fresh pick is a
         // genuine HasPick false→true transition and re-opens the dock.
-        var pickReport = new PickReportViewModel();
+        var pickReport = TestPickReport.Create();
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);

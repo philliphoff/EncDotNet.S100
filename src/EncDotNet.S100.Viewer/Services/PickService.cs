@@ -12,9 +12,10 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <summary>
 /// Default <see cref="IPickService"/> implementation: locates the dataset
 /// entry and processor that own each hit feature via
-/// <see cref="IDatasetLoaderService"/> and pushes the resolved feature list
-/// into <see cref="PickReportViewModel"/>. Failed reference navigations are
-/// surfaced as a transient notification.
+/// <see cref="IDatasetLoaderService"/> and publishes the resolved features as
+/// a <see cref="PickResult"/> (<see cref="Picked"/>), which Object Information
+/// shows. Failed reference navigations are surfaced as a transient
+/// notification.
 /// </summary>
 /// <remarks>
 /// A click is picked through the map session's engine pick
@@ -22,68 +23,59 @@ namespace EncDotNet.S100.Viewer.Services;
 /// spatial index, ranked topmost-first by the S-98 stack, not one Mapsui
 /// feature per drawn op (map rendering slice&#160;8). This service resolves
 /// each pick into a <see cref="PickHit"/>, deduplicates by (processor,
-/// feature ref), and presents the list to the panel.
+/// feature ref), and publishes the list.
 ///
-/// Depends only on small, leaf-level singletons — never on the root
-/// <c>MainViewModel</c> — so the dependency graph stays acyclic.
+/// Depends only on small, leaf-level singletons, never on a view model (#1401),
+/// so the dependency graph stays acyclic.
 /// </remarks>
 internal sealed class PickService : IPickService
 {
     private readonly IDatasetLoaderService _loader;
-    private readonly PickReportViewModel _pickReport;
     private readonly INotificationService _notifications;
-    private readonly GlobalTimeService? _globalTime;
-    private readonly ITimeFormatProvider? _timeFormat;
-    private readonly IThemeService? _themeService;
-    private readonly IMarinerSettingsProvider? _marinerSettings;
+    private readonly ObjectInformationSelection _selection;
+    private readonly GlobalTimeService _globalTime;
     private readonly EncDotNet.S100.Viewer.Services.Depth.LocationDepthProbe _depthProbe = new();
-    private readonly ViewerDatasetCatalog? _catalog;
-    private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeSources;
-    private readonly EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings? _waterLevelSettings;
+    private readonly ViewerDatasetCatalog _catalog;
+    private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache _routeSources;
+    private readonly EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings _waterLevelSettings;
 
+    /// <summary>Creates the pick service.</summary>
+    /// <param name="loader">The loaded datasets, their processors and the engine pick.</param>
+    /// <param name="notifications">Shows the "reference not found" toast.</param>
+    /// <param name="selection">The hit Object Information shows, whose references are followed.</param>
+    /// <param name="globalTime">The Timeline's time, at which coverages are sampled.</param>
+    /// <param name="catalog">The loaded datasets the depth card's water level comes from.</param>
+    /// <param name="routeSources">The passage check's sources, so the depth card and Check passage agree (#1132).</param>
+    /// <param name="waterLevelSettings">Whether water level applies when the datum is not declared.</param>
     public PickService(
         IDatasetLoaderService loader,
-        PickReportViewModel pickReport,
         INotificationService notifications,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat,
-        IThemeService? themeService,
-        IMarinerSettingsProvider? marinerSettings,
-        ViewerDatasetCatalog? catalog,
-        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeSources,
-        EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings? waterLevelSettings)
+        ObjectInformationSelection selection,
+        GlobalTimeService globalTime,
+        ViewerDatasetCatalog catalog,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache routeSources,
+        EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings waterLevelSettings)
     {
         ArgumentNullException.ThrowIfNull(loader);
-        ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(notifications);
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentNullException.ThrowIfNull(globalTime);
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(routeSources);
+        ArgumentNullException.ThrowIfNull(waterLevelSettings);
         _loader = loader;
-        _pickReport = pickReport;
         _notifications = notifications;
+        _selection = selection;
         _globalTime = globalTime;
-        _timeFormat = timeFormat;
-        _themeService = themeService;
-        _marinerSettings = marinerSettings;
         _catalog = catalog;
         _routeSources = routeSources;
         _waterLevelSettings = waterLevelSettings;
-
-        // The pick-report VM raises NavigateRequested when the user
-        // clicks a row in the References list. Failures surface as a
-        // transient notification so the user knows the click registered
-        // but the target is missing.
-        _pickReport.NavigateRequested += (_, reference) =>
-        {
-            if (!NavigateToReference(reference))
-            {
-                _notifications.Create(Strings.Toast_Warning)
-                    .WithSeverity(NotificationSeverity.Warning)
-                    .WithContent(string.Format(
-                        Strings.Status_FeatureRefNotFound,
-                        reference.TargetRef))
-                    .Show();
-            }
-        };
     }
+
+    /// <inheritdoc />
+    public event EventHandler<PickResult>? Picked;
+
+    private void Publish(PickResult result) => Picked?.Invoke(this, result);
 
     public async Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null)
     {
@@ -95,12 +87,7 @@ internal sealed class PickService : IPickService
         {
             // Even without a position a pick may still carry dynamic hits;
             // honour them if present, otherwise clear.
-            if (dynamic.Count > 0)
-            {
-                _pickReport.SetPicks(Array.Empty<PickHit>(), dynamic);
-                return;
-            }
-            _pickReport.Clear();
+            Publish(new PickResult([], dynamic));
             return;
         }
 
@@ -130,19 +117,18 @@ internal sealed class PickService : IPickService
 
             if (coverageHit is not null)
             {
-                var coverageDepth = BuildLocationDepth(new[] { coverageHit }, lat, lon);
-                _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), location, coverageDepth);
+                PickHit[] coverageHits = [coverageHit];
+                Publish(new PickResult(coverageHits, [], location, BuildLocationDepth(coverageHits, lat, lon)));
                 return;
             }
 
             // An empty-map tap, or a hit on a dataset no loaded entry owns.
             // Either way, hide the panel so it doesn't keep showing stale state.
-            _pickReport.Clear();
+            Publish(PickResult.Empty);
             return;
         }
 
-        var vectorDepth = BuildLocationDepth(hits, lat, lon);
-        _pickReport.SetPicks(hits, dynamic, location, vectorDepth);
+        Publish(new PickResult(hits, dynamic, location, BuildLocationDepth(hits, lat, lon)));
     }
 
     /// <summary>The on-screen pick tolerance, in DIP, around the click.</summary>
@@ -153,7 +139,7 @@ internal sealed class PickService : IPickService
     /// path). Each feature is re-queried against its owning dataset's
     /// processor so the panel shows full FC-decoded attributes; entries that
     /// no longer resolve are skipped. The pick highlight follows because it
-    /// observes the same <see cref="PickReportViewModel"/>.
+    /// observes Object Information, which shows the result.
     /// </summary>
     public void PresentGeographicPick(
         double latitude,
@@ -184,12 +170,11 @@ internal sealed class PickService : IPickService
 
         if (hits.Count == 0)
         {
-            _pickReport.Clear();
+            Publish(PickResult.Empty);
             return;
         }
 
-        var geoDepth = BuildLocationDepth(hits, latitude, longitude);
-        _pickReport.SetPicks(hits, Array.Empty<DynamicPickHit>(), new PickLocation(latitude, longitude), geoDepth);
+        Publish(new PickResult(hits, [], new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude)));
     }
 
     private bool TryResolveProcessorByDisplayName(
@@ -280,23 +265,30 @@ internal sealed class PickService : IPickService
 
     /// <summary>
     /// Wraps a processor <see cref="FeatureInfo"/> into a <see cref="PickHit"/>,
-    /// including a viewer-side <see cref="StationTimeSeriesViewModel"/> when
-    /// the underlying info carries a station snapshot.
+    /// including the station snapshot of an S-104 or S-111 station, which
+    /// Object Information charts.
     /// </summary>
     private PickHit BuildHit(FeatureInfo info, DatasetEntry entry, IDatasetProcessor processor) =>
-        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation, entry.Credit);
+        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation, entry.Credit, entry.Id.Value);
 
     // A feature opened by dataset name (the warnings panel, reference
-    // navigation) finds its entry by name for the not-for-navigation flag.
-    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor) =>
-        BuildHit(
+    // navigation) finds its entry by name for the not-for-navigation flag
+    // and the id its Legend row is found by (#1410).
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor)
+    {
+        var named = _loader.EntryLayers.Keys
+            .Where(e => string.Equals(e.DisplayName, datasetFileName, StringComparison.Ordinal))
+            .ToList();
+        return BuildHit(
             info,
             datasetFileName,
             processor,
-            _loader.EntryLayers.Keys.Any(e => e.NotForNavigation
-                && string.Equals(e.DisplayName, datasetFileName, StringComparison.Ordinal)));
+            named.Any(e => e.NotForNavigation),
+            credit: null,
+            datasetId: named.Count == 1 ? named[0].Id.Value : null);
+    }
 
-    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation, string? credit = null)
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation, string? credit, string? datasetId)
     {
         return new PickHit
         {
@@ -310,26 +302,13 @@ internal sealed class PickService : IPickService
             DrawingPriority = info.DrawingPriority,
             Geometry = info.Geometry,
             OwningProcessor = processor,
-            StationSeries = BuildStationSeriesViewModel(info, processor),
+            StationSeries = processor.Spec.Name is "S-104" or "S-111" ? info.StationSeries : null,
             EggCode = info.EggCode,
             NavigationalWarning = info.NavigationalWarning,
             NotForNavigation = notForNavigation,
             Credit = credit,
-        };
-    }
-
-    private StationTimeSeriesViewModel? BuildStationSeriesViewModel(FeatureInfo info, IDatasetProcessor processor)
-    {
-        if (info.StationSeries is not { } snapshot)
-            return null;
-
-        // Per-product viewmodel selection mirrors the pipeline shape: S-104
-        // exposes a single height channel; S-111 exposes speed + direction.
-        return processor.Spec.Name switch
-        {
-            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat, _themeService),
-            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat, _themeService),
-            _ => null,
+            DatasetId = datasetId,
+            Aml = processor is AmlDatasetProcessor aml ? AmlPickProvenance.From(aml, info) : null,
         };
     }
 
@@ -343,10 +322,11 @@ internal sealed class PickService : IPickService
         // re-query it for the target ref. Cross-dataset hops are out of
         // scope for milestone 3 — they slot into the search milestone
         // where a global feature snapshot already exists.
-        var selected = _pickReport.SelectedHit;
+        var selected = _selection.Hit;
         if (selected?.OwningProcessor is not { } processor)
         {
             __cmd.SetStatus(false, "no selected hit owns a processor");
+            ShowReferenceNotFound(reference);
             return false;
         }
 
@@ -357,9 +337,19 @@ internal sealed class PickService : IPickService
         if (!ok)
         {
             __cmd.SetStatus(false, "target ref not found");
+            ShowReferenceNotFound(reference);
         }
         return ok;
     }
+
+    // Says the click registered but the target is missing.
+    private void ShowReferenceNotFound(FeatureReference reference) =>
+        _notifications.Create(Strings.Toast_Warning)
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent(string.Format(
+                Strings.Status_FeatureRefNotFound,
+                reference.TargetRef))
+            .Show();
 
     public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName)
     {
@@ -385,7 +375,7 @@ internal sealed class PickService : IPickService
         if (info is null)
             return false;
 
-        _pickReport.SetPicks(new[] { BuildHit(info, datasetFileName, processor) });
+        Publish(new PickResult([BuildHit(info, datasetFileName, processor)], []));
         return true;
     }
 
@@ -413,7 +403,7 @@ internal sealed class PickService : IPickService
     private bool TryCoveragePick(double lat, double lon, out PickHit hit)
     {
         hit = null!;
-        var time = _globalTime?.CurrentTime;
+        var time = _globalTime.CurrentTime;
 
         using var processors = _loader.AcquireProcessors();
         foreach (var (entry, processor) in processors)
@@ -442,46 +432,36 @@ internal sealed class PickService : IPickService
     }
 
     /// <summary>
-    /// Builds the location depth-assimilation card for a pick when the point is
-    /// classified as water and a base depth resolves. Returns <c>null</c> on
-    /// land, off-coverage, or when no depth source overlaps — in which cases the
-    /// pick report simply omits the card.
+    /// Resolves the depth over time at a pick when the point is classified as
+    /// water and a base depth resolves. Returns <c>null</c> on land,
+    /// off-coverage, or when no depth source overlaps; Object Information then
+    /// shows no depth card.
     /// </summary>
-    private EncDotNet.S100.Viewer.ViewModels.DepthOverTimeViewModel? BuildLocationDepth(
+    private EncDotNet.S100.Viewer.Services.Depth.LocationDepthResult? BuildLocationDepth(
         IReadOnlyList<PickHit> hits,
         double latitude,
         double longitude)
     {
+        // AML never feeds depth answers (#1372, design decision 13): its
+        // features keep S-57 classes, but a CLB depth area must not reach the card.
+        hits = WithoutAml(hits);
         using var processors = _loader.AcquireProcessors();
         // The water level comes from the passage check's source for the same
         // loaded datasets, so the card and Check passage give one answer (#1132).
-        var waterLevel = _catalog is not null && _routeSources is not null
-            ? _routeSources.Get(_catalog.Datasets).WaterLevel
-            : null;
+        var waterLevel = _routeSources.Get(_catalog.Datasets).WaterLevel;
         // The "Apply anyway when datum is not declared" override applies to the
         // card as it does to the chart, so the two agree (#1132 Q2).
         var probe = _depthProbe.Evaluate(
             processors, hits, latitude, longitude, waterLevel,
-            _waterLevelSettings?.WaterLevelApplyUndeclaredDatum ?? false);
-        if (probe.Class != EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water || probe.Depth is not { } result)
-            return null;
-
-        var settings = _marinerSettings?.Current;
-        var depthUnit = settings?.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres;
-        double? safetyDepthMetres = settings?.SafetyDepth.TotalMetres;
-        var label = LatLonFormatter.FormatDecimal(latitude, longitude);
-
-        return new EncDotNet.S100.Viewer.ViewModels.DepthOverTimeViewModel(
-            result,
-            label,
-            latitude,
-            longitude,
-            depthUnit,
-            safetyDepthMetres,
-            _globalTime,
-            _timeFormat,
-            _themeService);
+            _waterLevelSettings.WaterLevelApplyUndeclaredDatum);
+        return probe.Class == EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water ? probe.Depth : null;
     }
+
+    /// <summary>The hits that may feed the Depth card: every hit but those from AML cells.</summary>
+    internal static IReadOnlyList<PickHit> WithoutAml(IReadOnlyList<PickHit> hits) =>
+        hits.Any(h => h.Aml is not null || h.OwningProcessor is AmlDatasetProcessor)
+            ? hits.Where(h => h.Aml is null && h.OwningProcessor is not AmlDatasetProcessor).ToList()
+            : hits;
 
     private static bool Contains<T>(IReadOnlyList<T> list, T item)
     {

@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
@@ -76,10 +75,11 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     public async Task The_row_shows_only_while_checking_and_names_the_leg()
     {
         using var s = WarningsRouteCheck.Create(fixture);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = TestPickReport.Create(navigator: panel, selection: selection);
         Open(pick, Entry(s, 1));
-        var card = pick.WarningCard!;
+        var card = pick.Warnings.Card!;
         Assert.False(card.HasRouteFinding);
         Assert.False(card.OpenRouteFindingCommand.CanExecute(null));
 
@@ -92,13 +92,13 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
 
         // A near warning, and one off the route, which has no row.
         Open(pick, Entry(s, 3));
-        Assert.Equal("Near route · leg 1 → 2", pick.WarningCard!.RouteFindingText);
+        Assert.Equal("Near route · leg 1 → 2", pick.Warnings.Card!.RouteFindingText);
         Open(pick, Entry(s, 4));
-        Assert.False(pick.WarningCard!.HasRouteFinding);
+        Assert.False(pick.Warnings.Card!.HasRouteFinding);
 
         // Check route off: the row goes.
         Open(pick, Entry(s, 1));
-        card = pick.WarningCard!;
+        card = pick.Warnings.Card!;
         s.Routes.IsCheckModeActive = false;
         await s.Findings.WhenIdle();
         Assert.False(card.HasRouteFinding);
@@ -110,15 +110,16 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     {
         using var s = WarningsRouteCheck.Create(fixture);
         SplitInsideTheSurvey(s);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = TestPickReport.Create(navigator: panel, selection: selection);
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
         var opened = 0;
         s.Findings.OpenRequested += (_, _) => opened++;
 
         Open(pick, Entry(s, 1));
-        var card = pick.WarningCard!;
+        var card = pick.Warnings.Card!;
         Assert.Equal("Crosses route on 2 legs", card.RouteFindingText);
         var finding = card.RouteFinding!;
         Assert.Equal((0, 1), (finding.LegIndex, ((WarningDetails)finding.Details!).EndLegIndex));
@@ -136,9 +137,10 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     {
         using var s = WarningsRouteCheck.Create(fixture);
         SplitInsideTheSurvey(s);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
-        var cards = new GetWarningCardsTool(panel, s.Warnings, new InlineInvoker());
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = TestPickReport.Create(navigator: panel, selection: selection);
+        var cards = new GetWarningCardsTool(panel, s.Warnings, pick, new InlineInvoker());
         var list = new ListNavigationalWarningsTool(panel, s.Warnings, new InlineInvoker());
         var ct = TestContext.Current.CancellationToken;
         Open(pick, Entry(s, 1));
@@ -180,15 +182,16 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
-        var check = new PassageCheckViewModel(s.Check, s.Routes, () => DepthUnit.Metres, () => TimeFormat.Utc, s.Findings, addDraft: null);
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = TestPickReport.Create(navigator: panel, selection: selection);
+        var check = TestRoutesPanel.Check(s.Routes, s.Check, s.Findings, panel, TestRoutesPanel.Formatting(new Utc()));
         Open(pick, Entry(s, 1));
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
         Assert.False(host.IsShown("PickReport.WarningCard.RouteFinding"));
 
         s.Routes.IsCheckModeActive = true;
-        WaitFor(host, () => pick.WarningCard!.HasRouteFinding);
+        WaitFor(host, () => pick.Warnings.Card!.HasRouteFinding);
         Assert.True(host.IsShown("PickReport.WarningCard.RouteFinding"));
         var row = host.Find<Button>("PickReport.WarningCard.RouteFinding");
         Assert.Equal("Crosses route · leg 1 → 2", Avalonia.Automation.AutomationProperties.GetName(row));
@@ -201,7 +204,7 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
         Assert.True(check.ShowFindings);
 
         s.Routes.IsCheckModeActive = false;
-        WaitFor(host, () => !pick.WarningCard!.HasRouteFinding);
+        WaitFor(host, () => !pick.Warnings.Card!.HasRouteFinding);
         Assert.False(host.IsShown("PickReport.WarningCard.RouteFinding"));
     }
 
@@ -211,13 +214,14 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
         SplitInsideTheSurvey(s);
-        var pick = new PickReportViewModel();
-        using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
+        var selection = new ObjectInformationSelection();
+        using var panel = TestNavigationalWarnings.Panel(s.Warnings, selection: selection, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System, routeFindings: s.Findings);
+        var pick = TestPickReport.Create(navigator: panel, selection: selection);
         Open(pick, Entry(s, 1));
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
 
         s.Routes.IsCheckModeActive = true;
-        WaitFor(host, () => pick.WarningCard!.HasRouteFinding);
+        WaitFor(host, () => pick.Warnings.Card!.HasRouteFinding);
         var row = host.Find<Button>("PickReport.WarningCard.RouteFinding");
         Assert.Equal("Crosses route on 2 legs", Avalonia.Automation.AutomationProperties.GetName(row));
 

@@ -15,25 +15,25 @@ public sealed class LibrarySourceAdder
 {
     private readonly LibraryCatalogueReaders _readers;
     private readonly Func<IReadOnlyList<KnownCatalogueSource>> _userCatalogues;
-    private readonly Func<Uri, CancellationToken, Task<CatalogueProbe>>? _probe;
+    private readonly CatalogueUrlRecognizer? _urls;
     private readonly TimeProvider _time;
 
     /// <summary>Creates the adder.</summary>
     /// <param name="readers">Reads online catalogues; a catalogue without a reader is refused.</param>
     /// <param name="userCatalogues">The user's own catalogues, found by id after the curated ones; none when null.</param>
-    /// <param name="probe">Recognises a catalogue URL's format, for adding by URL; URLs are refused without.</param>
+    /// <param name="urls">Recognises a catalogue URL's format, for adding by URL (as the viewer's Add by URL does); URLs are refused without.</param>
     /// <param name="time">The clock (catalogue age, forecast end).</param>
     public LibrarySourceAdder(
         LibraryCatalogueReaders readers,
         Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues,
-        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe,
+        CatalogueUrlRecognizer? urls,
         TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(readers);
         ArgumentNullException.ThrowIfNull(time);
         _readers = readers;
         _userCatalogues = userCatalogues ?? (() => []);
-        _probe = probe;
+        _urls = urls;
         _time = time;
     }
 
@@ -132,22 +132,16 @@ public sealed class LibrarySourceAdder
             }
             else
             {
-                if (!Uri.TryCreate(request.Url!.Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+                if (!CatalogueUrlRecognizer.TryParse(request.Url, out var uri))
                     return Fail(new InvalidArgument("url", "expected an http or https URL"));
-                if (_probe is null)
+                if (_urls is null)
                     return Fail(new LibraryChangeRejected("this host cannot read online catalogues"));
-                CatalogueProbe probe;
-                try
-                {
-                    probe = await _probe(uri, ct).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
-                {
-                    return Fail(new LibraryChangeRejected($"the URL could not be read ({ex.Message})"));
-                }
-                if (probe.Format is not { } format)
+                var recognised = await _urls.RecognizeAsync(uri, ct).ConfigureAwait(false);
+                if (recognised.Problem == CatalogueUrlProblem.Unreadable)
+                    return Fail(new LibraryChangeRejected($"the URL could not be read ({recognised.Detail})"));
+                if (recognised.Source is null)
                     return Fail(new LibraryChangeRejected("the URL is not a catalogue or feed the Library can read"));
-                known = KnownCatalogueSources.FromUrl(uri, format, probe.Title);
+                known = recognised.Source;
             }
 
             kind = LibrarySourceKinds.Of(known.Format);

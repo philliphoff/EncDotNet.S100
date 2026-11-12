@@ -35,12 +35,15 @@
     <Compile Include="..\_shared\TestContentKinds.cs" Link="TestSupport\TestContentKinds.cs" />
     <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
     <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
+    <Compile Include="..\_shared\AmlFixtures.cs" Link="TestSupport\AmlFixtures.cs" />
     <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
     <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
     <Compile Include="..\_shared\TropicalCycloneFixtures.cs" Link="TestSupport\TropicalCycloneFixtures.cs" />
+    <Compile Include="..\_shared\SyntheticAmlCell.cs" Link="TestSupport\SyntheticAmlCell.cs" />
+    <Compile Include="..\_shared\CodsusFixtures.cs" Link="TestSupport\CodsusFixtures.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S101AreaSynth.cs" Link="TestSupport\S101AreaSynth.cs" />
   </ItemGroup>
 

@@ -1,0 +1,144 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui.Layers;
+
+namespace EncDotNet.S100.Viewer.Tests;
+
+public class DatasetOpeningOpenRecentTests : IDisposable
+{
+    private readonly string _tempSettingsPath;
+
+    public DatasetOpeningOpenRecentTests()
+    {
+        _tempSettingsPath = Path.Combine(
+            Path.GetTempPath(),
+            $"viewer-tests-{Guid.NewGuid():N}.json");
+    }
+
+    public void Dispose()
+    {
+        try { if (File.Exists(_tempSettingsPath)) File.Delete(_tempSettingsPath); }
+        catch { /* best effort */ }
+    }
+
+
+
+    private sealed class RecordingLoaderService : IDatasetLoaderService
+    {
+        public List<DatasetEntry> Loaded { get; } = new();
+        public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
+            = new Dictionary<DatasetEntry, IDatasetProcessor>();
+        public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
+            = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
+        public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
+        public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
+        public void Initialize(IMapLayerCollection layers, IMapViewportController viewport, ViewerCommandSettings? options) { }
+        public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) { Loaded.Add(entry); return Task.CompletedTask; }
+        public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
+        public Task ReRenderAllAsync() => Task.CompletedTask;
+        public void RemoveEntry(DatasetEntry entry) { }
+        public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+        public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
+    }
+
+    private DatasetOpeningViewModel CreateViewModel(
+        out RecordingLoaderService loader,
+        out StubRecentFilesService recent)
+        => CreateViewModel(out loader, out recent, out _);
+
+    private DatasetOpeningViewModel CreateViewModel(
+        out RecordingLoaderService loader,
+        out StubRecentFilesService recent,
+        out Services.Notifications.NotificationService notifications)
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
+        loader = new RecordingLoaderService();
+        recent = new StubRecentFilesService();
+        notifications = Notifications.TestNotifications.Create();
+        var datasets = new DatasetsViewModel(loader);
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
+        return new DatasetOpeningViewModel(
+            recent,
+            notifications,
+            datasets,
+            new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post));
+    }
+
+    [Fact]
+    public async Task OpenRecent_MissingFile_RemovesFromRecentAndNotifies()
+    {
+        var vm = CreateViewModel(out var loader, out var recent, out var notifications);
+        var ghost = Path.Combine(Path.GetTempPath(), $"does-not-exist-{Guid.NewGuid():N}");
+        recent.Add(ghost);
+
+        await vm.OpenRecentCommand.ExecuteAsync(ghost);
+
+        Assert.DoesNotContain(ghost, recent.Items);
+        Assert.Single(notifications.Active);
+        Assert.Equal(
+            Services.Notifications.NotificationSeverity.Warning,
+            notifications.Active[0].Severity);
+        Assert.Empty(loader.Loaded);
+    }
+
+    [Fact]
+    public async Task OpenRecent_NullOrEmpty_IsNoOp()
+    {
+        var vm = CreateViewModel(out var loader, out _);
+
+        await vm.OpenRecentCommand.ExecuteAsync(null);
+        await vm.OpenRecentCommand.ExecuteAsync(string.Empty);
+
+        Assert.Empty(loader.Loaded);
+    }
+
+    [Fact]
+    public async Task OpenRecent_ExchangeSetFolder_ReplaysThroughTheExchangeSetOpener()
+    {
+        var vm = CreateViewModel(out var loader, out _);
+        var opened = new List<string>();
+        vm.ExchangeSetOpener = path =>
+        {
+            opened.Add(path);
+            return Task.CompletedTask;
+        };
+        var folder = LibraryTestContext.Datasets("ExchangeSets", "Synthetic-S57-Framed");
+
+        await vm.OpenRecentCommand.ExecuteAsync(folder);
+
+        Assert.Equal([folder], opened);
+        Assert.Empty(loader.Loaded);
+    }
+
+    [Theory]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed", true)]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed/CATALOG.031", true)]
+    [InlineData("S101.zip", true)]
+    [InlineData("S57/US5MA1BO/US5MA1BO.000", false)]
+    public void IsExchangeSetPath_recognises_folders_zips_and_catalogues(string relative, bool expected)
+    {
+        var path = LibraryTestContext.Datasets(relative.Split('/'));
+
+        Assert.Equal(expected, DatasetOpeningViewModel.IsExchangeSetPath(path));
+    }
+
+    [Theory]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed/CATALOG.031", "ExchangeSets/Synthetic-S57-Framed")]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed", "ExchangeSets/Synthetic-S57-Framed")]
+    [InlineData("S101.zip", "S101.zip")]
+    public void RecentExchangeSetPath_records_a_catalogue_as_its_folder(string relative, string expected)
+    {
+        var path = LibraryTestContext.Datasets(relative.Split('/'));
+
+        Assert.Equal(
+            LibraryTestContext.Datasets(expected.Split('/')),
+            MainWindow.RecentExchangeSetPath(path + (relative.EndsWith("Framed", StringComparison.Ordinal) ? Path.DirectorySeparatorChar : "")));
+    }
+}

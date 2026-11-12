@@ -20,16 +20,27 @@ public sealed class LibraryEditToolsTests : IDisposable
     private readonly CollectionLibrary _library;
     private readonly RecordingLoader _loader = new();
     private readonly RecordingDownloader _downloader = new();
+    private readonly TestLibrary _workflows;
     private readonly LibraryPanelViewModel _panel;
     private readonly ViewerLibraryEditor _editor;
+
+    private ViewerLibraryController Reader() =>
+        new(_panel.Tree, _workflows.Rows, new EncDotNet.S100.Viewer.Services.GlobalTimeService(), () => [], action => { action(); return Task.CompletedTask; });
 
     public LibraryEditToolsTests()
     {
         _library = _context.CreateService(CollectionIndexer.CreateDefault(feeds: [new RemoteIndexer()]));
         _library.Initialize();
-        _panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        var reader = new ViewerLibraryController(_panel, () => [], action => { action(); return Task.CompletedTask; });
-        _editor = new ViewerLibraryEditor(_panel, _library, reader, new LibrarySourceAdder(Readers, userCatalogues: null, probe: null, time: TimeProvider.System), dispatch: work => work(), activity: new EncDotNet.S100.Collections.Library.LibraryActivityTracker());
+        _workflows = new TestLibrary(_library, _loader, _downloader);
+        _panel = _workflows.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
+        var reader = Reader();
+        _editor = new ViewerLibraryEditor(
+            _library,
+            reader,
+            new LibrarySourceAdder(Readers, userCatalogues: null, urls: null, time: TimeProvider.System),
+            dispatch: work => work(),
+            new ViewerLibraryActions(_workflows.Rows, reader, _workflows.Open, _workflows.Download, _downloader, new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
+            _workflows.Names);
     }
 
     public void Dispose()
@@ -160,7 +171,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     public async Task Load_opens_local_items_by_id()
     {
         await ChartsAsync();
-        Assert.True((await new QueryLibraryItemsTool(new ViewerLibraryController(_panel, () => [], a => { a(); return Task.CompletedTask; }))
+        Assert.True((await new QueryLibraryItemsTool(Reader())
             .InvokeAsync(new QueryLibraryItemsRequest(null, null, null, "51m", null, null, null, null, null, null, null, null), TestContext.Current.CancellationToken))
             .TryGetValue(out var page));
 
@@ -285,7 +296,7 @@ public sealed class LibraryEditToolsTests : IDisposable
         Assert.False(idle.TimedOut);
         Assert.Equal(0, idle.Loading);
         Assert.Equal(2, _loader.Loaded);
-        Assert.True((await new QueryLibraryItemsTool(new ViewerLibraryController(_panel, () => [], a => { a(); return Task.CompletedTask; }))
+        Assert.True((await new QueryLibraryItemsTool(Reader())
             .InvokeAsync(new QueryLibraryItemsRequest(online.ToString(), null, null, null, null, null, null, null, null, null, null, null), TestContext.Current.CancellationToken))
             .TryGetValue(out var page));
         Assert.Equal(2, page!.Items.Count);

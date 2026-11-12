@@ -94,6 +94,15 @@ internal sealed class NativeMenuBuilder
             propertyName: nameof(ShellLayoutViewModel.IsRightDockOpen),
             checkedSelector: () => _viewModel.Layout.IsRightDockOpen);
 
+        var legendItem = BuildToggleItem(
+            Strings.Menu_Legend,
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsLegendTabShown,
+            execute: () => _viewModel.Layout.ToggleLegendCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsLegendTabShown),
+            checkedSelector: () => _viewModel.Layout.IsLegendTabShown,
+            gesture: new KeyGesture(Key.L, KeyModifiers.Meta | KeyModifiers.Shift));
+
         var pickModeItem = BuildToggleItem(
             Strings.Menu_PickMode,
             _viewModel.MapTools,
@@ -138,7 +147,7 @@ internal sealed class NativeMenuBuilder
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem, rangeBearingModeItem, routeEditModeItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, legendItem, pickModeItem, measureModeItem, rangeBearingModeItem, routeEditModeItem },
         };
 
         var viewMenu = new NativeMenuItem(Strings.Menu_View)
@@ -149,7 +158,7 @@ internal sealed class NativeMenuBuilder
         var fileMenu = BuildFileMenu();
 
         var reportFeedbackItem = new NativeMenuItem(Strings.Menu_ReportFeedback);
-        reportFeedbackItem.Click += (_, _) => _viewModel.ShowFeedbackCommand.Execute(null);
+        reportFeedbackItem.Click += (_, _) => _viewModel.AppCommands.ShowFeedbackCommand.Execute(null);
 
         // On macOS the About item lives in the application menu (see
         // App.ConfigureMacApplicationMenu); elsewhere it belongs in Help.
@@ -160,7 +169,7 @@ internal sealed class NativeMenuBuilder
         if (!OperatingSystem.IsMacOS())
         {
             var aboutItem = new NativeMenuItem(Strings.Menu_About);
-            aboutItem.Click += (_, _) => _viewModel.ShowAboutCommand.Execute(null);
+            aboutItem.Click += (_, _) => _viewModel.AppCommands.ShowAboutCommand.Execute(null);
             helpSubMenu.Add(aboutItem);
         }
         var helpMenu = new NativeMenuItem(Strings.Menu_Help)
@@ -288,7 +297,7 @@ internal sealed class NativeMenuBuilder
                 IsEnabled = File.Exists(path) || Directory.Exists(path),
             };
             var captured = path;
-            item.Click += (_, _) => _viewModel.OpenRecentCommand.Execute(captured);
+            item.Click += (_, _) => _viewModel.DatasetOpening.OpenRecentCommand.Execute(captured);
             _openRecentMenu.Items.Add(item);
         }
 
