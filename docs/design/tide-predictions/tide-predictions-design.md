@@ -1,8 +1,8 @@
 # Tide and tidal current predictions: design pass
 
-Status: Proposed (2026-11-11), revised 2026-11-12: recommendations awaiting
-the maintainer's decisions. Revision: the station keys moved from under the
-Layer stack rows to the Legend tab (maintainer's review). Answers the nine questions in the [brief](tide-predictions-brief.md)
+Status: Proposed (2026-11-11), revised 2026-11-12. The maintainer's review
+moved the station keys to the Legend tab and resolved the seven open
+questions (D18–D23). D1–D17 await acceptance. Answers the nine questions in the [brief](tide-predictions-brief.md)
 for the design slice
 [#1448](https://github.com/philliphoff/EncDotNet.S100/issues/1448) of epic
 [#1447](https://github.com/philliphoff/EncDotNet.S100/issues/1447). The viewer
@@ -54,9 +54,9 @@ them. Fonts may differ slightly from the canvas.
 | 2 | Stations on the map | A **Tide stations · predicted** row under *Other chart overlays*, like NDBC, off by default. The S-104 gauge with a dashed frame, height beside it from 1:150,000. Harmonic and subordinate look the same. Thin by 40 px, harmonic first. |
 | 3 | Station pick | The S-104 fixed-station chart, dashed, ±12 h round the view time. Last high or low greyed, then the next four. Datum and station in the header, a "Used for depths" row, the "not a forecast" note at the foot. |
 | 4 | Predicted vs S-104 | Same adjusted state; the words say predicted. Pill: **+ water level 14:20 · predicted**. Every value names its station. Dashed means predicted, as dashed already means lower confidence on a route. ◆ unchanged. |
-| 5 | Reach and the edge | Keep 10 km and one edge. Add a thin seam where S-104 hands over to predictions. Show a station's cell only when it's picked. |
+| 5 | Reach and the edge | Keep 10 km, measured by water, and one edge clipped to charted water. Add a thin seam where S-104 hands over to predictions. Show a station's cell only when it's picked. |
 | 6 | Timeline | One lane with open ends that never sets the axis. With only predictions, *All loaded* and *In view* show the next 48 h. Live stays the default. |
-| 7 | Catalogue and freshness | A NOAA source in the Library with its date and **Refresh**. The setting shows the date; the DEPTHS flyout only when it's over 12 months old. |
+| 7 | Catalogue and freshness | A NOAA source in the Library with its date and **Refresh**. The setting shows the date; the DEPTHS flyout only when NOAA has newer data (12 months offline). |
 | 8 | Tidal currents | S-111's arrow and speed colours rising from a dashed station frame, with the speed. Hidden where S-111 covers. A pick card with slacks and maxima. |
 | 9 | MCP and CLI | `source.kind = "prediction"` with one `station` object and a `caveat`; `predicted` on `get_depth_basis`; `water_level_predicted` finding. |
 
@@ -145,7 +145,8 @@ time-series chart with the curve dashed (Q3a–Q3c).
 - **Subordinate stations** add a **Reference station** block (station as a
   link, distance, high and low time offsets and height factors) and a line
   saying the curve between highs and lows is the reference station's curve
-  fitted to them, so it's less certain than the highs and lows.
+  with the offsets interpolated between them, as NOAA computes it (D20), so
+  it's less certain than the highs and lows.
 - **Datum, MHHW, Used for depths, Station list date** in a short table. On a
   datum other than the chart's, "Used for depths" says "No: station on MLLW,
   depths on LAT", as S-104 is reported today.
@@ -224,9 +225,13 @@ Recommendation: keep 10 km and the one edge; add a seam and an on-demand cell
   Depth card names the station at any point. Drawing every cell edge (the
   chart-wide note's §4 idea) is too busy at 1:250,000; it could appear from
   1:50,000 if wanted.
-- **Reach stays 10 km**, the S-104 station rule, so one rule covers both.
-  Distance by water would be better than straight-line distance across a
-  headland (open question 2).
+- **Reach is 10 km by water** (decided, open question 2). Distance is measured
+  through the loaded chart's water, so a station doesn't reach across a
+  headland into the next basin (Hood Canal vs Admiralty Inlet). With no chart
+  loaded there, it falls back to a straight line. A picked station's cell
+  follows the same rule.
+- **The edge is clipped to charted water** (decided, open question 7), with
+  the same water mask. Where no chart is loaded it stays unclipped, as today.
 - Selecting the edge or the seam shows the basis for that side, as the
   chart-wide note already plans.
 
@@ -271,11 +276,15 @@ a stale notice in the flyout (Q7c).
 - **The setting** shows one line under the switch: "NOAA station list · 3 Mar
   2026 · Manage in Library", or download progress on first use. No separate
   Settings page.
-- **The flyout** says nothing about the list until it's over 12 months old
-  and predictions are in use: "The station list is from 3 Mar 2025, over a
-  year old. Predictions still work; NOAA may have revised some stations
-  since. Refresh". Constants change rarely, so a younger list isn't worth a
-  notice.
+- **The flyout** says nothing about the list until NOAA has published newer
+  data than the cached list holds, and predictions are in use: "NOAA has
+  revised the station list since 3 Mar 2026 (new tidal datums). Predictions
+  still work; refresh to use the new values. Refresh". The check compares the
+  catalogue's datum epoch and revision dates on each refresh or Library
+  check. Offline, with no check possible, it falls back to 12 months
+  (decided, open question 4). NOAA is replacing the 1983–2001 tidal datum
+  epoch with 2002–2020 in one national release; it moves most predictions by
+  about 6–7 cm, so a notice, not an alarm, is the right weight.
 
 ## 8. Tidal currents (T6)
 
@@ -380,7 +389,8 @@ Proposed, for #1453 (tides) and #1454 (currents) to cite once confirmed.
 13. **D13 One edge, a seam, a picked cell.** The adjusted-area edge covers
     S-104 and predictions alike. A thin dotted teal seam marks where S-104
     hands over. A picked station outlines its cell (Voronoi, clipped to
-    10 km). Reach stays 10 km.
+    10 km by water). The edge is clipped to charted water where a chart is
+    loaded.
 14. **D14 Timeline lane.** One **Tide predictions** lane with open ends, the
     curve and H/L ticks of the station nearest the map centre. It never sets
     an axis extent; with only predictions, *All loaded* and *In view* show the
@@ -389,7 +399,8 @@ Proposed, for #1453 (tides) and #1454 (currents) to cite once confirmed.
 15. **D15 Catalogue.** A NOAA **Tide and current predictions** source in the
     Library (directory and auto-added on first use) with date, counts, size
     and **Refresh**. A date line under the switch. A stale notice in the
-    flyout after 12 months.
+    flyout when NOAA has published newer data (a new datum epoch or station
+    revisions) than the cached list; offline, after 12 months.
 16. **D16 Current stations.** A **Current stations · predicted** row, off by
     default, with its key as a section in the Legend tab (as D4). S-111 arrow and speed colours from a dashed frame, speed label,
     slack bar with turn time. Hidden where S-111 covers. Pick card with
@@ -401,27 +412,39 @@ Proposed, for #1453 (tides) and #1454 (currents) to cite once confirmed.
     `water_level_predicted` and `tight_on_predicted` finding codes;
     `get_tide_display` / `set_tide_display`.
 
-## Open questions
+18. **D18 Map labels.** On the map, the dashed frame, the row name and the
+    tooltip mark a height as predicted; the label stays "0.4 m". The word and
+    the station appear in every card and readout (D10).
+19. **D19 Reach by water.** A prediction applies within 10 km of its station
+    measured through the loaded chart's water (S-101 land areas block it);
+    straight-line where no chart covers the gap. S-104 stations follow the
+    same rule, so one rule covers both.
+20. **D20 Subordinate stations: NOAA's method.** Between highs and lows, a
+    subordinate station's water level is the reference station's curve with
+    the time and height offsets interpolated between each high and low, as
+    NOAA computes it. Cards and readouts say "from Seattle 9447130, with
+    offsets".
+21. **D21 Stale when NOAA changes.** See D15: newer NOAA data, not age, makes
+    the list stale; 12 months only when it can't check.
+22. **D22 Rotary currents.** Direction only: the arrow at the predicted
+    direction, and a direction column in the card's maxima. No rotation glyph.
+    Puget Sound's currents are mostly rectilinear (NOAA's 2015–17 survey).
+23. **D23 Edge clipped to water.** The adjusted-area edge and seam are
+    clipped to charted water with D19's mask; unclipped where no chart is
+    loaded. Applies to S-104 as well.
 
-1. **Map heights without the word.** The map label is "0.4 m" beside a dashed
-   frame; the epic says every predicted value is labelled predicted with its
-   station. This note treats the dashed frame, the row name and the tooltip as
-   the label on the map, and puts the word and station in every card and
-   readout. Is that enough, or should the map label carry "pred."?
-2. **Reach by water.** 10 km straight-line can cross a headland into a
-   different basin (Hood Canal vs Admiralty Inlet). Should reach be measured
-   over water, or should T2 give stations a basin?
-3. **Subordinate curves.** NOAA publishes only highs and lows for subordinate
-   stations. Is a curve fitted to the reference station's shape acceptable for
-   the Depth card and route check between the extremes, or should T3 use the
-   reference curve with interpolated offsets and say so?
-4. **Stale threshold.** 12 months is a guess. How often does NOAA revise
-   constants and offsets in practice?
-5. **Current stations' plane.** S-111 arrows draw on their own sub-layer.
-   Should predicted current stations sit in *Dynamic arrows* with them rather
-   than *Other chart overlays*?
-6. **Rotary currents.** How many NOAA Puget Sound current stations are rotary,
-   and does the arrow need more than direction for them?
-7. **Edge over land.** The edge isn't clipped to water today. With
-   predictions it will more often run over land. Clip it to the loaded chart's
-   water, or leave it?
+Current stations stay under *Other chart overlays* beside Tide stations, as
+D16 says, not in *Dynamic arrows*.
+
+## Resolved questions
+
+Decided by the maintainer on 2026-11-12.
+
+1. **Map heights without the word** → the dashed frame is enough (D18).
+2. **Reach by water** → measure through the chart's water (D19).
+3. **Subordinate curves** → NOAA's own method (D20).
+4. **Stale threshold** → stale when NOAA publishes newer data; 12 months
+   offline (D15, D21).
+5. **Current stations' plane** → *Other chart overlays* (D16).
+6. **Rotary currents** → direction only (D22).
+7. **Edge over land** → clip to charted water (D23).
