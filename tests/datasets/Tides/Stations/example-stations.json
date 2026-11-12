@@ -1,0 +1,43 @@
+{
+  "format": "tide-stations",
+  "version": 1,
+  "provider": "Example harbour authority",
+  "stations": [
+    {
+      "id": "example-harbour",
+      "name": "Example Harbour",
+      "latitude": 47.6026,
+      "longitude": -122.3393,
+      "utcOffsetHours": -8,
+      "kind": "harmonic",
+      "phaseReference": "local",
+      "constituents": [
+        { "name": "M2", "amplitude": 1.063, "phase": 138.9 },
+        { "name": "S2", "amplitude": 0.268, "phase": 156.8 },
+        { "name": "K1", "amplitude": 0.834, "phase": 337.4 },
+        { "name": "O1", "amplitude": 0.459, "phase": 311.5 }
+      ],
+      "datums": {
+        "epoch": "1983-2001",
+        "accepted": "2003-04-17",
+        "heights": { "MSL": 4.443, "MLLW": 2.419, "MHHW": 5.882 }
+      }
+    },
+    {
+      "id": "example-cove",
+      "name": "Example Cove",
+      "latitude": 47.2717,
+      "longitude": -122.552,
+      "kind": "subordinate",
+      "reference": "example-harbour",
+      "offsets": {
+        "datum": "MLLW",
+        "highWaterMinutes": 28,
+        "lowWaterMinutes": 23,
+        "highWaterHeight": 1.11,
+        "lowWaterHeight": 1.02,
+        "heightAdjustment": "ratio"
+      }
+    }
+  ]
+}
