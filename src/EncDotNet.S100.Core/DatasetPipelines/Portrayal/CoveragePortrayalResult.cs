@@ -92,12 +92,34 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     public bool ClipToWater { get; init; }
 
     /// <summary>
+    /// Where neighbouring datasets of the same product have data, or
+    /// <see langword="null"/> for none. Set by the S-98 rule that joins
+    /// neighbouring S-102 cells (<c>R-102-102-A</c>): a renderer that fades
+    /// the surface's edge out over a pixel carries the edge colour one pixel
+    /// on where a neighbour has data, so the two fades don't leave a light
+    /// seam between the cells. Elsewhere the edge is left as it is.
+    /// </summary>
+    public IReadOnlyList<ICoverageDataArea>? NeighbourDataAreas { get; init; }
+
+    /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
     /// Used by the S-98 water-area clip rule, which attaches the S-101 land
     /// geometry it discovers to the (processor-produced) S-104 surface sub-layer.
     /// </summary>
     /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
     public GridCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        Copy(landAreaMask, NeighbourDataAreas);
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="NeighbourDataAreas"/>
+    /// replaced. Used by the S-98 rule that joins neighbouring S-102 cells.
+    /// </summary>
+    /// <param name="neighbourDataAreas">Where the neighbouring datasets have data, or null.</param>
+    public GridCoverageSubLayer WithNeighbourDataAreas(IReadOnlyList<ICoverageDataArea>? neighbourDataAreas) =>
+        Copy(LandAreaMask, neighbourDataAreas);
+
+    private GridCoverageSubLayer Copy(
+        IReadOnlyList<FeatureGeometry>? landAreaMask, IReadOnlyList<ICoverageDataArea>? neighbourDataAreas) =>
         new()
         {
             LayerKey = LayerKey,
@@ -108,6 +130,7 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
             Coverage = Coverage,
             Viewport = Viewport,
             LandAreaMask = landAreaMask,
+            NeighbourDataAreas = neighbourDataAreas,
             Opacity = Opacity,
             ClipToWater = ClipToWater,
             Legend = Legend,
@@ -178,6 +201,18 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
     /// </summary>
     /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
     public IsolineCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        Copy(Isolines, landAreaMask);
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="Isolines"/> replaced.
+    /// Used by the S-98 rule that hides an S-102 cell's limit of data where a
+    /// neighbouring cell has depths.
+    /// </summary>
+    /// <param name="isolines">The replacement isolines.</param>
+    public IsolineCoverageSubLayer WithIsolines(IReadOnlyList<Isoline> isolines) =>
+        Copy(isolines, LandAreaMask);
+
+    private IsolineCoverageSubLayer Copy(IReadOnlyList<Isoline> isolines, IReadOnlyList<FeatureGeometry>? landAreaMask) =>
         new()
         {
             LayerKey = LayerKey,
@@ -185,7 +220,7 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
             Plane = Plane,
             WithinPlanePriority = WithinPlanePriority,
             SourceFeatureType = SourceFeatureType,
-            Isolines = Isolines,
+            Isolines = isolines,
             Extent = Extent,
             Ink = Ink,
             LabelHalo = LabelHalo,
@@ -485,6 +520,14 @@ public sealed class CoveragePortrayalResult
     /// arrows inside its own (<see cref="ArrowCoverageSubLayer.YieldsToS111"/>).
     /// </summary>
     public GeographicBounds? CoverageExtent { get; init; }
+
+    /// <summary>
+    /// Where the sampled coverage has values, or <see langword="null"/> when
+    /// the producer does not report it. S-98 rules that join neighbouring
+    /// datasets read it: an S-102 cell's limit-of-data line is hidden where
+    /// another S-102 cell has depths on both sides of it.
+    /// </summary>
+    public ICoverageDataArea? DataArea { get; init; }
 
     /// <summary>
     /// The scale denominator beyond which the whole dataset is hidden as you

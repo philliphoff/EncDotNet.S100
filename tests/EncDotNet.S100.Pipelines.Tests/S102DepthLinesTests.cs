@@ -1,5 +1,6 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Interoperability;
@@ -94,6 +95,205 @@ public sealed class S102DepthLinesTests
         Assert.Equal(maxY + ((maxY - minY) / 2 / 2), extent.MaxY, 6);
     }
 
+    [Theory]
+    [InlineData(21.4, -9, true)]  // nearest node column 1: a depth
+    [InlineData(21.6, -9, false)] // nearest node column 2: no-data
+    [InlineData(19.4, -9, false)] // west of the grid
+    [InlineData(21.0, -7.4, false)] // north of the grid
+    public void Data_area_reads_the_nearest_node(double longitude, double latitude, bool expected)
+    {
+        var area = S102DepthLines.DataArea(Layer(3, 4, (_, c) => c >= 2 ? Fill : 10f));
+        var (x, y) = WebMercator.FromLonLat(longitude, latitude);
+
+        Assert.Equal(expected, area.HasData(x, y));
+    }
+
+    [Fact]
+    public void A_cell_limit_is_hidden_where_the_next_cell_carries_on()
+    {
+        // West cell: nodes 20–25° E, depths in the western four columns, so
+        // its limit runs north–south at 23.5° E. East cell: nodes 24–29° E.
+        var west = Layer(5, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var east = Layer(5, 6, (_, _) => 12f, originLongitude: 24);
+
+        var limit = LimitOf(Join(west, east), "west.h5");
+
+        Assert.Empty(limit.Isolines);
+    }
+
+    [Fact]
+    public void A_cell_limit_stays_where_the_next_cell_begins_further_on()
+    {
+        // The east cell starts at 26° E: a gap of S-101 between the two.
+        var west = Layer(5, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var east = Layer(5, 6, (_, _) => 12f, originLongitude: 26);
+        var alone = S102DepthLines.CoverageLimit(west);
+
+        var limit = LimitOf(Join(west, east), "west.h5");
+
+        Assert.Equal(alone.Select(l => l.MercatorCoordinates), limit.Isolines.Select(l => l.MercatorCoordinates));
+    }
+
+    [Fact]
+    public void A_cell_limit_is_hidden_only_along_the_part_the_next_cell_carries_on()
+    {
+        // The east cell has depths in its southern three rows only (10°S to
+        // 8°S), so the west cell's limit stays north of them.
+        var west = Layer(9, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var east = Layer(9, 6, (r, _) => r <= 2 ? 12f : Fill, originLongitude: 24);
+
+        var limit = LimitOf(Join(west, east), "west.h5");
+
+        var line = Assert.Single(limit.Isolines);
+        var latitudes = Enumerable.Range(0, line.MercatorCoordinates.Length / 2)
+            .Select(i => WebMercator.ToLonLat(line.MercatorCoordinates[2 * i], line.MercatorCoordinates[(2 * i) + 1]).Latitude)
+            .ToList();
+        Assert.InRange(latitudes.Min(), -8.01, -6.99);
+        Assert.Equal(-2, latitudes.Max(), 6);
+    }
+
+    [Fact]
+    public void Cells_that_share_a_coastline_keep_their_limits()
+    {
+        // Both cells end at the same coast, 23.5° E, and overlap west of it.
+        var west = Layer(5, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var other = Layer(5, 6, (_, c) => c >= 2 ? Fill : 11f, originLongitude: 22);
+        var alone = S102DepthLines.CoverageLimit(west);
+
+        var limit = LimitOf(Join(west, other), "west.h5");
+
+        Assert.Equal(alone.Select(l => l.MercatorCoordinates), limit.Isolines.Select(l => l.MercatorCoordinates));
+    }
+
+    [Fact]
+    public void An_inactive_cell_hides_no_limit()
+    {
+        var west = Layer(5, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var east = Layer(5, 6, (_, _) => 12f, originLongitude: 24);
+
+        var limit = LimitOf(Join(west, east, eastActive: false), "west.h5");
+
+        Assert.NotEmpty(limit.Isolines);
+    }
+
+    [Fact]
+    public void Joining_again_with_the_same_cells_returns_the_same_lines()
+    {
+        var west = Layer(9, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var east = Layer(9, 6, (r, _) => r <= 2 ? 12f : Fill, originLongitude: 24);
+        var stack = Stack(west, east);
+        var loaded = Loaded(eastActive: true);
+        var authority = new InteroperabilityAuthority();
+
+        var first = LimitOf(authority.ApplyRules(stack, loaded), "west.h5");
+        var second = LimitOf(authority.ApplyRules(stack, loaded), "west.h5");
+
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void A_cell_surface_is_handed_the_data_area_of_the_next_cell()
+    {
+        var west = Layer(5, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var east = Layer(5, 6, (_, _) => 12f, originLongitude: 24);
+        var stack = Stack(west, east);
+        var eastArea = ((CoveragePortrayalResult)((CoverageStackPayload)stack[^1].Payload).Result).DataArea;
+
+        var surface = SurfaceOf(new InteroperabilityAuthority().ApplyRules(stack, Loaded(eastActive: true)), "west.h5");
+
+        Assert.Same(eastArea, Assert.Single(surface.NeighbourDataAreas!));
+    }
+
+    [Fact]
+    public void Cells_whose_extents_do_not_meet_are_not_joined()
+    {
+        var west = Layer(5, 6, (_, c) => c >= 4 ? Fill : 10f);
+        var far = Layer(5, 6, (_, _) => 12f, originLongitude: 24);
+        SubLayerStackItem[] stack =
+        [
+            .. Items(west, "west.h5", new GeographicBounds(20, -10, 25, -6)),
+            .. Items(far, "east.h5", new GeographicBounds(40, -10, 45, -6)),
+        ];
+
+        var ruled = new InteroperabilityAuthority().ApplyRules(stack, Loaded(eastActive: true));
+
+        Assert.Null(SurfaceOf(ruled, "west.h5").NeighbourDataAreas);
+        Assert.NotEmpty(LimitOf(ruled, "west.h5").Isolines);
+    }
+
+    private static GridCoverageSubLayer SurfaceOf(IReadOnlyList<SubLayerStackItem> ruled, string datasetId) =>
+        ruled
+            .Where(i => i.SourceDatasetId == datasetId)
+            .Select(i => ((CoverageStackPayload)i.Payload).SubLayer)
+            .OfType<GridCoverageSubLayer>()
+            .Single();
+
+    private static IReadOnlyList<SubLayerStackItem> Join(
+        StyledCoverageLayer west, StyledCoverageLayer east, bool eastActive = true) =>
+        new InteroperabilityAuthority()
+            .ApplyRules(Stack(west, east), Loaded(eastActive));
+
+    private static LoadedDatasetInfo[] Loaded(bool eastActive) =>
+    [
+        new("west.h5", "S-102", Active: true),
+        new("east.h5", "S-102", Active: eastActive),
+    ];
+
+    private static SubLayerStackItem[] Stack(
+        StyledCoverageLayer west, StyledCoverageLayer east) =>
+        [.. Items(west, "west.h5"), .. Items(east, "east.h5")];
+
+    /// <summary>A cell's surface and limit sub-layers, as the S-102 processor lays them out.</summary>
+    private static IEnumerable<SubLayerStackItem> Items(
+        StyledCoverageLayer layer, string datasetId, GeographicBounds? extent = null)
+    {
+        var surface = new GridCoverageSubLayer
+        {
+            LayerKey = "s102.surface",
+            LayerName = datasetId,
+            Plane = S98DisplayPlane.Bathymetry,
+            Coverage = layer,
+            Viewport = new Viewport
+            {
+                MinLatitude = -10,
+                MaxLatitude = 0,
+                MinLongitude = 20,
+                MaxLongitude = 30,
+                WidthPixels = 10,
+                HeightPixels = 10,
+                ScaleDenominator = 1_000_000,
+            },
+        };
+        var limit = new IsolineCoverageSubLayer
+        {
+            LayerKey = S102DatasetProcessor.CoverageLimitLayerKey,
+            LayerName = datasetId,
+            Plane = S98DisplayPlane.BaseChartOver,
+            Isolines = S102DepthLines.CoverageLimit(layer),
+            Ink = new RgbaColor(0, 0, 0),
+            LabelHalo = new RgbaColor(255, 255, 255),
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = [surface, limit],
+            Spec = new EncDotNet.S100.Core.SpecRef("S-102", default),
+            SourceDatasetId = datasetId,
+            Info = datasetId,
+            DataArea = S102DepthLines.DataArea(layer),
+            CoverageExtent = extent,
+        };
+        yield return new(new CoverageStackPayload(result, surface), S98DisplayPlane.Bathymetry, 0, datasetId);
+        yield return new(new CoverageStackPayload(result, limit), S98DisplayPlane.BaseChartOver, 0, datasetId);
+    }
+
+    private static IsolineCoverageSubLayer LimitOf(
+        IReadOnlyList<SubLayerStackItem> ruled, string datasetId) =>
+        ruled
+            .Where(i => i.SourceDatasetId == datasetId)
+            .Select(i => ((CoverageStackPayload)i.Payload).SubLayer)
+            .OfType<IsolineCoverageSubLayer>()
+            .Single();
+
     [Fact]
     public async Task Processor_draws_the_safety_contour_and_limit_with_the_s101_line_work()
     {
@@ -134,6 +334,7 @@ public sealed class S102DepthLinesTests
             Assert.NotEmpty(limit.DashPattern);
             Assert.NotEmpty(limit.Isolines);
             Assert.True(limit.LineWidth < safety.LineWidth);
+            Assert.NotNull(result.DataArea);
         }
         finally
         {
@@ -183,7 +384,7 @@ public sealed class S102DepthLinesTests
         }
     }
 
-    private static StyledCoverageLayer Layer(int rows, int columns, Func<int, int, float> depth)
+    private static StyledCoverageLayer Layer(int rows, int columns, Func<int, int, float> depth, double originLongitude = 20)
     {
         var values = new float[rows * columns];
         for (int r = 0; r < rows; r++)
@@ -197,7 +398,7 @@ public sealed class S102DepthLinesTests
             NumRows = rows,
             NumColumns = columns,
             OriginLatitude = -10,
-            OriginLongitude = 20,
+            OriginLongitude = originLongitude,
             SpacingLatitudinal = 1,
             SpacingLongitudinal = 1,
         };

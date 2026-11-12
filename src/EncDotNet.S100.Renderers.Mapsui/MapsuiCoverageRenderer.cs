@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
@@ -63,6 +64,17 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     /// <see langword="null"/> or empty disables clipping.
     /// </summary>
     public IReadOnlyList<FeatureGeometry>? LandAreas { get; set; }
+
+    /// <summary>
+    /// Where neighbouring cells of the same product have data (S-98 rule
+    /// <c>R-102-102-A</c>; <see cref="GridCoverageSubLayer.NeighbourDataAreas"/>).
+    /// The raster is drawn with linear filtering, which fades its edge out over
+    /// a pixel; where a neighbour carries on, two such fades leave a light seam.
+    /// So a transparent pixel next to the edge takes the colour beside it when
+    /// a neighbour has data at its centre, and the fade falls under the
+    /// neighbour. <see langword="null"/> or empty leaves every edge as it is.
+    /// </summary>
+    public IReadOnlyList<ICoverageDataArea>? NeighbourDataAreas { get; set; }
 
     /// <summary>
     /// Creates a coverage renderer that reprojects grids to Web Mercator.
@@ -203,6 +215,14 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
                     pixels.AsSpan(start + y * outCols, width).Fill(packed);
             }
 
+        if (!noDataIsFilled && NeighbourDataAreas is { Count: > 0 } neighbours)
+        {
+            // Two pixels: the neighbour's grid seldom lines up with this one, so
+            // one pixel can leave part of the fade over the gap between them.
+            CarryEdgesUnderNeighbours(pixels, outCols, outRows, layout, neighbours);
+            CarryEdgesUnderNeighbours(pixels, outCols, outRows, layout, neighbours);
+        }
+
         using var bmp = new SKBitmap(new SKImageInfo(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul));
         // Bulk-copy the pixel buffer into the bitmap's native backing store.
         var pixelSpan = MemoryMarshal.AsBytes(pixels.AsSpan());
@@ -239,6 +259,66 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             Style = null,
             Opacity = Opacity,
         };
+    }
+
+    /// <summary>
+    /// Gives each transparent pixel beside the surface's edge the colour of a
+    /// pixel next to it when a neighbouring cell has data at its centre, so
+    /// the edge's linear-filter fade falls under the neighbour's surface
+    /// instead of leaving a light seam between the two.
+    /// </summary>
+    internal static void CarryEdgesUnderNeighbours(
+        uint[] pixels, int outCols, int outRows, LayoutCacheEntry layout, IReadOnlyList<ICoverageDataArea> neighbours)
+    {
+        double cellX = (layout.MercMaxX - layout.MercMinX) / outCols;
+        double cellY = (layout.MercMaxY - layout.MercMinY) / outRows;
+        var carried = new List<(int Index, uint Colour)>();
+        for (int py = 0; py < outRows; py++)
+            for (int px = 0; px < outCols; px++)
+            {
+                int i = py * outCols + px;
+                if (pixels[i] != 0)
+                    continue;
+
+                uint beside = Beside(pixels, outCols, outRows, px, py);
+                if (beside == 0)
+                    continue;
+
+                double x = layout.MercMinX + ((px + 0.5) * cellX);
+                double y = layout.MercMinY + ((outRows - py - 0.5) * cellY);
+                foreach (var area in neighbours)
+                {
+                    if (area.HasData(x, y))
+                    {
+                        carried.Add((i, beside));
+                        break;
+                    }
+                }
+            }
+
+        foreach (var (index, colour) in carried)
+            pixels[index] = colour;
+    }
+
+    /// <summary>The colour of the first drawn pixel among the eight around (<paramref name="px"/>, <paramref name="py"/>), or 0.</summary>
+    private static uint Beside(uint[] pixels, int outCols, int outRows, int px, int py)
+    {
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            int y = py + dy;
+            if (y < 0 || y >= outRows)
+                continue;
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int x = px + dx;
+                if ((dx | dy) == 0 || x < 0 || x >= outCols)
+                    continue;
+                uint colour = pixels[y * outCols + x];
+                if (colour != 0)
+                    return colour;
+            }
+        }
+        return 0;
     }
 
     // Web Mercator with the latitude clamped to the projection limit. A global

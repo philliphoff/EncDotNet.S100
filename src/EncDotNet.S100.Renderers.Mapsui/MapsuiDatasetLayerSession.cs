@@ -3,6 +3,7 @@ using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Engine;
@@ -2107,9 +2108,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         var stackEntries = LayerStackProjector.Project(
             ruled,
             prebuilt,
-            (item, subLayer) => _renderer.BuildCoverageLayer(
-                subLayer,
-                layoutCaches.GetValueOrDefault(item.SourceDatasetId)));
+            (item, subLayer) => RebuildCoverageLayer(subLayer, layoutCaches.GetValueOrDefault(item.SourceDatasetId)));
 
         var activeById = snapshots.ToDictionary(
             snapshot => snapshot.Dataset.Id.Value,
@@ -2135,6 +2134,26 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             projected,
             stackEntries.ToArray(),
             LayerStackProjector.ToLayerList(activeEntries));
+    }
+
+    // Surfaces an S-98 rule joined to their neighbours (R-102-102-A), kept
+    // per ruled sub-layer: the rule hands back the same sub-layer while the
+    // neighbours stay the same, and a large S-102 cell takes far too long to
+    // re-raster on every compose.
+    private readonly ConditionalWeakTable<CoverageSubLayerBase, ILayer> _joinedSurfaces = new();
+
+    private ILayer? RebuildCoverageLayer(CoverageSubLayerBase subLayer, CoverageLayoutCache? layoutCache)
+    {
+        if (subLayer is not GridCoverageSubLayer { NeighbourDataAreas.Count: > 0 })
+            return _renderer.BuildCoverageLayer(subLayer, layoutCache);
+
+        if (_joinedSurfaces.TryGetValue(subLayer, out var cached))
+            return cached;
+
+        var built = _renderer.BuildCoverageLayer(subLayer, layoutCache);
+        if (built is not null)
+            _joinedSurfaces.AddOrUpdate(subLayer, built);
+        return built;
     }
 
     private static IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos(
