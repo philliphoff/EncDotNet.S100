@@ -7,6 +7,11 @@
 > how they combine, §5 proposes a work breakdown and §6 lists open
 > questions.
 >
+> The open questions of the first draft were settled on 2026-11-12. Their
+> answers are in the sections they affect: layer order (D6), live sources
+> and time (D2), secrets (D7), sections and time (P1) and section kinds
+> (P6).
+>
 > Builds on [Dynamic feature sources](dynamic-feature-source.md),
 > [Dynamic source pick](dynamic-source-pick.md),
 > [Wind and wave data](weather-sources.md) (§8, product traits and
@@ -30,17 +35,21 @@ Two kinds of extension are still harder than they need to be:
    property on a core type, with a matching special case in every layer
    between the processor and the XAML.
 
-Customer work makes both more pressing. An ice service that isn't S-411, or a
-customer's own feed, should be able to draw on the map and show an egg code
-in the pick report without changes to the core packages.
+Both extension points need a third thing: a place in the layer order that
+doesn't depend on which product happened to come first. The note settles
+that too (D6).
+
+Customer work makes all of this more pressing. An ice service that isn't
+S-411, or a customer's own feed, should be able to draw on the map and show
+an egg code in the pick report without changes to the core packages.
 
 Out of scope:
 
 - Loading plug-in assemblies at runtime (§2.5).
 - New feed protocols, new symbology or new pick report designs. This note is
   about the seams, not what plugs into them.
-- Time-scrubbable replay of live feeds, beyond noting where it would go
-  (§6).
+- Time-scrubbable replay of live feeds, beyond deciding where it would go
+  (D2).
 
 ## 2. Data sources
 
@@ -86,6 +95,15 @@ path or an `IAssetSource`.
 4. **Live data is second-class everywhere but the Mapsui map.** It doesn't
    appear in headless renders, the Skia renderer, MCP `identify_features` or
    `s100 info`, and it always draws above every chart layer.
+5. **Layer order is chosen case by case.** `S98DisplayPlane` is one fixed
+   list that mixes S-98's two mechanisms (§D6). Plane names describe
+   products (`DynamicArrows` exists for S-111), and each newcomer picks a
+   slot and a priority by hand: weather fills in `OnDemandSurface` though
+   they aren't official, isobars, fronts and observations in
+   `OtherChartOverlays` at priorities 90, 92 and 100, and NATO AML in a new
+   plane at 45. `MarinerOverlay` draws mariner data above all official data,
+   the reverse of S-98 Main §9.2.1. Nothing tells the next product or
+   source where it goes.
 
 ### 2.3 Constraints
 
@@ -144,16 +162,25 @@ A `DynamicSourceProcessor` in `EncDotNet.S100.Datasets.Pipelines` wraps any
 | `IVectorPortrayalSource` | `IDynamicFeaturePortrayal.Portray` for each feature |
 | `ILiveDatasetProcessor` | `IDynamicFeatureSource.Changed`, with `ChangedIds` as `FeatureRefs` |
 
-Once wrapped, a live source gets S-98 plane ordering, headless and Skia
-rendering, MCP and the pick pipeline from the processor side, without its
-own code changing.
+Once wrapped, a live source gets a place in the layer order (D6), headless
+and Skia rendering, MCP and the pick pipeline from the processor side,
+without its own code changing.
 
 The 1 Hz constraint is met by keeping the current Mapsui overlay path as an
 **optimization for interactive maps**, not as the contract. When a source has
 an `IDynamicFeaturePortrayal`, the session may draw it through
 `PortrayedDynamicFeatureRenderer`, which applies incremental updates to a
-`MemoryLayer`, and place that layer in its S-98 plane rather than the overlay
-band. Headless renderers and MCP use the processor.
+`MemoryLayer`, and place that layer at its position in the layer order (D6)
+rather than in the overlay band. Headless renderers and MCP use the
+processor.
+
+**Time.** Live sources stay at "now" in this work, and
+`DynamicFeatureTracker` gains no history yet. The adapter is where history
+goes later: a source that keeps history makes the adapter an
+`ITimeAwareDatasetProcessor`, and the rule is that a live source shows its
+state at the view time when its history covers that time, and its latest
+state otherwise. AIS track trails, NDBC station series and replay of
+recorded AIS or NMEA logs all build on that.
 
 `IDynamicFeatureRenderer` becomes obsolete. AIS and own-ship move to
 `IDynamicFeaturePortrayal`. Own-ship's true-scale hull and AIS's
@@ -186,7 +213,7 @@ public sealed record SourceRegistration
     public required string DisplayName { get; init; }
     public required string Spec { get; init; }               // a format name, e.g. "AIS" (SpecName gains these)
     public bool IsS100 { get; init; }                        // false for every source today
-    public S98DisplayPlane DefaultPlane { get; init; }
+    public InformationCategory Category { get; init; } = InformationCategory.Supplementary;  // D6
     public Type? Options { get; init; }                      // options record, drives a generic settings page
     public SourceActivation Activation { get; init; }        // Always, or BelowViewportSpan(degrees)
     public required Func<SourceCreationContext, IDatasetProcessor> Create { get; init; }
@@ -196,8 +223,7 @@ public sealed record SourceRegistration
 
 `SourceCreationContext` carries the options, an `ILoggerFactory`, a
 `TimeProvider`, an `HttpClient` factory with the hardened TLS handler, and
-the key lookup (environment variable first, then the saved key) that AIS
-does by hand today.
+the secret lookup of D7, which replaces what AIS does by hand today.
 
 Registrations go into a `SourceRegistry` alongside `ProductRegistry`, with a
 DI helper:
@@ -226,6 +252,113 @@ A plug-in is a NuGet package that exposes registrations, and a host adds
 them in its start-up code. `s100` and the MCP server gain the same
 `AddDataSource` call. This keeps everything visible to the trim analyzers.
 
+#### D6. Layer order comes from information category and draw class
+
+S-98 has two mechanisms for ordering, and they do different jobs:
+
+- **Display planes and drawing priority** (S-100 Part 9 §11.6, S-98 Main
+  §7.2.9–7.2.10, `S100_IC_DisplayPlane` in an Interoperability Catalogue)
+  are normative. They order drawing within a product and, through the
+  catalogue, across the S-100 products it names. The Part A §A-6.9.1
+  Level 1 example interleaves S-102 with the ENC so soundings, aids to
+  navigation and obstructions stay above the grid.
+- **The priority of information list** (S-98 Main §9.2.1, from
+  MSC.530(106)/Rev.1) is informative. It ranks what mustn't be obscured,
+  not a drawing order: 1 alerts, 2 official points, curves and surfaces,
+  3 notices, manual input and warnings, 4 cautions, 5 official colour fills,
+  6 official on-demand data, 7 radar and AIS, 8–9 mariner's data. Annex A
+  §4.4 gives the tools: transparency at Level 0, interleaving at Level 1.
+
+`S98DisplayPlane` folds both into one numbered list, which is why every
+newcomer has to pick a slot (§2.2, problem 5). Instead, every layer, whether
+a product's sub-layer or a source, declares two facts, and the order is
+derived from them.
+
+**Information category**, after §9.2.1, plus one category S-98 doesn't
+have:
+
+| Category | §9.2.1 | Default for |
+|---|---|---|
+| `Alert` | 1 | ECDIS overscale, caution and other indications |
+| `OfficialChart` | 2, 5 | S-101, S-401, S-57 |
+| `NoticesAndWarnings` | 3 | S-124, S-412, CAP |
+| `Caution` | 4 | Caution features of official products |
+| `OfficialOverlay` | 2 | S-122, S-125, S-127, S-128, S-131, S-201, S-411 |
+| `OfficialOnDemand` | 6 | S-102, S-104, S-111, S-129 |
+| `Vessel` | 7 | AIS targets, own-ship |
+| `Mariner` | 8, 9 | S-421 routes, route checks, the mariner's own annotations |
+| `Supplementary` | (none) | Data that isn't official: GRIB2, NetCDF, NDBC, NMEA weather, customer feeds |
+
+`OfficialOverlay` separates official products that aren't the ENC from the
+ENC itself, so they never interleave with ENC symbols by drawing priority
+alone. §9.2.1 doesn't make that split; it's a library choice, as
+`OtherChartOverlays` is today.
+
+**Draw class**: `Fill` for area fills and coverage surfaces,
+`LineAndSymbol` for curves, points, arrows, isolines and barbs, and `Text`.
+
+The stack, from bottom to top:
+
+1. `OfficialChart` fills: the opaque base.
+2. Other fills, lower priority first: `Supplementary`, `Mariner`,
+   `OfficialOnDemand`, `OfficialOverlay`, `Caution`, `NoticesAndWarnings`.
+   A fill above the base is translucent unless a catalogue rule has it
+   replace something (S-102 replaces depth areas, Part A §A-6.9.1).
+3. Lines and symbols, lower priority first: `Supplementary`, `Mariner`,
+   `OfficialOnDemand`, `OfficialOverlay`, `Caution`, `NoticesAndWarnings`,
+   `OfficialChart`.
+4. Text, in the same order (S-98 Main §10.8 draws text last).
+5. Vessels: AIS targets, then own-ship.
+6. Alerts.
+
+Within one step, a within-category priority orders peers (it replaces
+`WithinPlanePriority`), then drawing priority, then the Part 9 type order.
+
+Two more rules complete the order:
+
+- **Vessels draw above the chart.** §9.2.1 ranks radar and AIS (7) below
+  official points (2). ECDIS practice draws own-ship and targets on top,
+  because they're sparse, live and safety-critical, and the list is
+  informative. Vessels get their own step above chart text and below
+  alerts.
+- **Interoperability Catalogue rules still win** for S-100 products. They
+  operate on the derived order, as the R-rules do on planes today, so
+  Level 1 interleaving keeps working.
+
+What changes from today:
+
+- S-111 arrows and weather barbs draw below ENC line work and symbols, as
+  §9.2.1 reads. R-111-A's placement above the ENC becomes a catalogue rule
+  if we want to keep it.
+- Mariner data draws below official data instead of above it.
+- S-129 moves from the chart overlays to official on-demand data, which
+  §9.2.1 names explicitly (layer 6, under-keel clearance).
+- NDBC, NMEA weather and other supplementary data draw under official
+  symbols. AIS and own-ship stay above the chart, now in the vessel step
+  rather than the overlay band.
+- `ProductRegistration.DefaultPlanes` becomes a category for each layer
+  kind, and `DynamicSourceMetadata.Plane` becomes a category.
+  `S98DisplayPlane` becomes the derived key, or goes away. The layer stack
+  groups by category.
+- Visual baselines that include S-111, weather symbols or mariner data
+  change.
+
+#### D7. Secret options are stored by reference
+
+An options record marks secret properties with `[Secret]`. The settings
+page masks them and saves only a reference (`sc-secret:…`, as SECOM's
+identities use `sc-ident:…`). The value goes into an `ISecretStore`: the
+Keychain on macOS, Credential Manager on Windows, libsecret on Linux. This
+follows `ISecomKeyStore`, which keeps SECOM private keys out of
+`settings.json` the same way.
+
+The lookup is the environment variable the registration names, then the
+store. Where there's no store (a headless Linux machine or CI runner),
+SoundCharts says it can't save the secret and names the environment
+variable. `s100` and the MCP server use environment variables only. An AIS
+key already in `settings.json` moves to the store the first time SoundCharts
+reads it.
+
 ### 2.5 Alternatives rejected
 
 - **Make every source a file product with a fake path.** It would work
@@ -238,6 +371,12 @@ them in its start-up code. `s100` and the MCP server gain the same
 - **Load plug-in assemblies at runtime.** It defeats the trim analysis, and
   it raises code-trust questions SoundCharts doesn't have answers for. It can
   be revisited if a customer needs to drop a plug-in into an installed app.
+- **A fixed plane list, renamed by role and extended when needed.** It's the
+  smallest change, but each newcomer still picks a slot and a number, and
+  a conflict still means a new plane. It's what we have now.
+- **Interoperability Catalogue only, with built-in defaults.** It's purely
+  S-98, but a catalogue can't name products that aren't S-100, which is
+  where most new data comes from.
 - **Retire `IDynamicFeatureSource` in favour of `ILiveDatasetProcessor`.**
   A processor is a lot to implement for a feed of points.
   `IDynamicFeatureSource` with `DynamicFeatureTracker` stays the way to write
@@ -310,8 +449,20 @@ public sealed record IceEggCodeSection(IceEggCode Egg) : PickSection
   section of their kind, then go away.
 - The navigation and stale notices become sections too, so `PickAttribute`
   goes back to describing attributes.
-- Kinds are dotted strings. Built-in kinds have no prefix; a customer's kinds
-  use their own prefix (`acme.ice-chart`) so they never collide.
+- Each kind is registered (P6).
+
+**Sections are snapshots.** Whatever a section shows that depends on time is
+in the section itself: a station series holds the whole series, a warning
+its validity. SoundCharts hands each presenter the view time and display
+settings, as `StationChartContext` does for station charts today, and the
+presenter moves its own now-marker or status. Neither the pick nor the
+section is re-run when the time changes.
+
+A station series section carries its channels (height, or speed and
+direction), so the presenter no longer chooses a chart by product
+(`hit.ProductSpec switch { "S-104" => …, "S-111" => … }` in
+`PickReportViewModel`). Tide predictions written as S-104 stations, and NDBC
+series later, draw the same way.
 
 #### P2. Contributors produce sections
 
@@ -370,6 +521,9 @@ it has the data, for example a station series read from the HDF5 file.
   rows.
 - **Headless and `s100 info`.** Rows from `ToRows()`.
 
+Hosts find a kind's presenter and serialization through the kind registry
+(P6).
+
 #### P4. Pick actions are contributed too
 
 ```csharp
@@ -390,6 +544,31 @@ Once live sources are processors (§D2), `DynamicPickHit` merges into
 title becomes the feature type name and its properties become rows. The
 default rows built from `Motion` and `VesselGeometry` become a built-in
 `vessel` section.
+
+#### P6. Section kinds are registered
+
+MCP serializes with source-generated metadata, so it can only write types
+it's told about up front. `McpJson` already lists the subtypes of
+`SampledValue` this way. A plug-in's section type would otherwise reach MCP
+as its base type only.
+
+Each kind registers its name, type, serialization metadata and a one-line
+description:
+
+```csharp
+services.AddPickSectionKind(
+    "acme.ice-chart",
+    AcmeJsonContext.Default.AcmeIceChartSection,
+    "Acme ice chart: stage of development and the analyst's note.");
+```
+
+`McpJson` builds the section's type discriminators from the registry, as it
+does for `SampledValue`, and the tool schema lists each kind's description.
+An unknown kind falls back to its rows. SoundCharts uses the same registry
+to find a kind's presenter.
+
+Built-in kinds have no prefix. Other kinds start with their owner's name
+(`acme.ice-chart`), and registering a name twice fails at start-up.
 
 ### 3.4 Alternatives rejected
 
@@ -416,8 +595,10 @@ polygons with SIGRID-3 attributes, updated every few hours.
 2. They add no pick contributor: the global egg contributor (§P2) sees the
    SIGRID-3 attributes and adds the egg code.
 3. The source appears in **Add source**, gets a settings page from its
-   options record, draws in its S-98 plane, shows egg codes in the pick
-   report and in MCP, and renders headless. No core package changes.
+   options record, and its API key is stored by reference (D7). It draws as
+   supplementary data under official chart symbols (D6), shows egg codes in
+   the pick report and in MCP, and renders headless. No core package
+   changes.
 
 **NDBC observations.** Today NDBC is a live source with its own overlay
 wrapper and string pick rows.
@@ -437,47 +618,49 @@ wrapper and string pick rows.
 Each slice ships on its own and leaves the tree working.
 
 1. **Pick sections with the egg code.** Add `PickSection`,
-   `IPickContributor`, the global registry and the SoundCharts lookup. Move
-   the egg code to a global contributor and a section, with the
-   `FeatureInfo.EggCode` shim. Serialize sections in MCP. This proves the
-   pattern on the case with one consumer and a builder that works with any
-   data source.
-2. **Station series and warnings as sections.** Move `StationSeries` and
-   `NavigationalWarning`, then the two notice flags. Remove the shims in the
-   following release.
-3. **`ILiveDatasetProcessor`.** Add the interface and the session's
+   `IPickContributor`, the global registry, the kind registry and the
+   SoundCharts presenter lookup. Move the egg code to a global contributor
+   and a section, with the `FeatureInfo.EggCode` shim. Serialize sections in
+   MCP. This proves the pattern on the case with one consumer and a builder
+   that works with any data source.
+2. **Station series and warnings as sections.** Move `StationSeries`, with
+   its channels in the section, and `NavigationalWarning`, then the two
+   notice flags. Remove the shims in the following release.
+3. **Layer order by category and draw class.** Add the categories and the
+   derived order, give each product registration its categories, move the
+   R-rules onto the derived order, and rebaseline.
+4. **`ILiveDatasetProcessor`.** Add the interface and the session's
    re-render on `Changed`.
-4. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
+5. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
    onto it first, since they already use `IDynamicFeaturePortrayal`.
-5. **AIS and own-ship portrayals.** Move both to `IDynamicFeaturePortrayal`
+6. **AIS and own-ship portrayals.** Move both to `IDynamicFeaturePortrayal`
    and mark `IDynamicFeatureRenderer` obsolete.
-6. **`SourceRegistration` and source dataset entries.** Add the registry and
-   the `DatasetEntry` origin. Move AIS, NDBC, NMEA weather and own-ship
-   registrations onto it, with the shared activation wrapper.
-7. **Add source UI and generic settings pages.**
-8. **Pick actions.** Move "Take helm" to a contributed action, and merge
-   `DynamicPickHit` into `PickHit`.
+7. **`SourceRegistration` and source dataset entries.** Add the registry,
+   categories for sources and the `DatasetEntry` origin. Move AIS, NDBC,
+   NMEA weather and own-ship registrations onto it, with the shared
+   activation wrapper.
+8. **Secret store.** Add `ISecretStore`, `[Secret]` and the AIS key
+   migration.
+9. **Add source UI and generic settings pages.**
+10. **Pick actions.** Move "Take helm" to a contributed action, and merge
+    `DynamicPickHit` into `PickHit`.
 
-Slices 1–2 and 3–7 are independent of each other; slice 8 needs both.
+Slices 1–2, slice 3 and slices 4–9 are independent of each other. Live
+sources take their place in the layer order once slices 3 and 5 are in.
+Slice 10 needs slices 2 and 5.
 
 ## 6. Open questions
 
-- **Sections that follow the clock.** The station series chart follows the
-  global time today, which is why `PickService` keeps the processor alongside
-  the snapshot. Should a section be able to refresh itself (an
-  `ITimeAwarePickSection` with a resample function), or should the host
-  re-run the pick when the time changes? Re-running is simpler; resampling
-  avoids a full re-describe on every clock tick.
-- **Live sources and time.** Once live sources are processors,
-  `ITimeAwareDatasetProcessor` could give them track history and replay.
-  Is that wanted, and should the tracker keep history to support it?
-- **Plane placement of the Mapsui fast path.** Moving AIS out of the overlay
-  band into its S-98 plane changes what draws above it. Is "always on top"
-  a feature users rely on for own-ship?
-- **Kinds for customer sections.** Is a dotted prefix enough, or do we want
-  a registry of kinds with their JSON schemas for MCP?
-- **Options and secrets.** The generic settings page needs to know which
-  options are secrets. AIS keeps its key in `settings.json` today, with an
-  environment variable as the alternative. Marking secrets with an attribute
-  on the options record would let a later change move them to the operating
-  system's credential store without touching each source.
+- **IEC 62288 and the vessel step.** D6 draws AIS and own-ship above chart
+  text, following ECDIS practice rather than a literal reading of S-98 Main
+  §9.2.1. Check IEC 62288's presentation requirements before slice 3 ships.
+- **NATO AML.** By D6's rule, AML is supplementary: below official overlays
+  and cautions. The AML work placed it above the other chart overlays. Is
+  AML `OfficialOverlay`, or should it stay where the rule puts it?
+- **CAP.** NWS marine warnings aren't navigational warnings in the S-124
+  sense. `NoticesAndWarnings` keeps today's placement; `Supplementary` is
+  the stricter reading.
+- **Fills under a replacing fill.** S-102 is opaque where it replaces depth
+  areas, so a mariner's or supplementary fill below it is hidden. Is that
+  acceptable, or should a replacing fill sit below fills of other
+  categories?
