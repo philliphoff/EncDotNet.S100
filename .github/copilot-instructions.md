@@ -60,6 +60,7 @@ src/
   EncDotNet.S100.Datasets.Cap/       # CAP 1.2 marine weather warnings (CAP XML, Atom, NWS GeoJSON) + NWS marine zones
   EncDotNet.S100.Datasets.TropicalCyclones/ # NHC tropical cyclone advisories (GIS shapefile zips) + managed SHP/DBF reader
   EncDotNet.S100.Routes.Rtz/         # RTZ (IEC 61174 Annex S) route plan reader + writer
+  EncDotNet.S100.Tides/              # Harmonic tide prediction (Schureman SP 98 astronomy, NOAA constituents)
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
   EncDotNet.S100.Renderers.Mapsui/   # Mapsui layer renderer with CRS projection (ProjNet/EPSG:3857)
   EncDotNet.S100.Viewer/             # Avalonia cross-platform desktop viewer (macOS, Windows, Linux)
