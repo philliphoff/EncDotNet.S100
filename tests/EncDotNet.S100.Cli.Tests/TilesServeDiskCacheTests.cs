@@ -153,6 +153,10 @@ public sealed class TilesServeDiskCacheTests : IDisposable
 
         // Settings that change pixels change it.
         Assert.NotEqual(fingerprint, FingerprintOf(new TilesServeCommand.Settings { Input = cell, TextScale = 1.5 }));
+        Assert.NotEqual(fingerprint, FingerprintOf(new TilesServeCommand.Settings { Input = cell, NationalLanguage = "fra" }));
+        Assert.Equal(
+            FingerprintOf(new TilesServeCommand.Settings { Input = cell, NationalLanguage = "fra" }),
+            FingerprintOf(new TilesServeCommand.Settings { Input = cell, NationalLanguage = " FRA " }));
 
         // So does the Lua engine, whose portrayal can differ.
         Assert.NotEqual(fingerprint, FingerprintOf(new TilesServeCommand.Settings { Input = cell, LuaEngine = "moonsharp" }));

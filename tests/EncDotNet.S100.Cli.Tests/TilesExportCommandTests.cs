@@ -37,6 +37,7 @@ public sealed class TilesExportCommandTests
             Assert.Equal(13, (int?)json["maxzoom"]);
             Assert.Equal("{z}/{x}/{y}.png", (string?)json["tiles"]![0]);
             Assert.Equal("day", (string?)json["s100"]!["palette"]);
+            Assert.Null(json["s100"]!["nationalLanguage"]);
 
             foreach (var zoom in new[] { "12", "13" })
             {
@@ -262,12 +263,36 @@ public sealed class TilesExportCommandTests
         }
     }
 
+    [Fact]
+    public void National_language_is_recorded_in_the_tile_set_metadata()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+
+        var output = TempPath("language");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["tiles", "export", S57, "-o", output, "--min-zoom", "12", "--max-zoom", "12", "--national-language", "FRA"],
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, exit);
+            var json = JsonNode.Parse(File.ReadAllText(Path.Combine(output, XyzDirectoryTileSink.TileJsonFileName)))!;
+            Assert.Equal("fra", (string?)json["s100"]!["nationalLanguage"]);
+        }
+        finally
+        {
+            if (Directory.Exists(output))
+                Directory.Delete(output, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("--tile-size", "300")]
     [InlineData("--container", "zip")]
     [InlineData("--format", "gif")]
     [InlineData("--metatile", "0")]
     [InlineData("--min-zoom", "25")]
+    [InlineData("--national-language", "french")]
     public void Invalid_options_are_rejected(string option, string value)
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");

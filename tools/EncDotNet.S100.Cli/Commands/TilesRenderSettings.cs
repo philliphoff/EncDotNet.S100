@@ -62,6 +62,10 @@ internal abstract class TilesRenderSettings : CommandSettings
     [DefaultValue("day")]
     public string Palette { get; init; } = "day";
 
+    [CommandOption("--national-language <CODE>")]
+    [Description("The ISO 639-2 language (e.g. fra) to prefer for chart text such as feature names, where the product's portrayal supports it (S-101, S-131). Features without a name in that language use their default name. Default: the catalogue's default (eng).")]
+    public string? NationalLanguage { get; init; }
+
     [CommandOption("--symbol-scale <FACTOR>")]
     [Description("Symbol scale factor (default 1.0).")]
     [DefaultValue(1.0)]
@@ -191,6 +195,8 @@ internal abstract class TilesRenderSettings : CommandSettings
             return ValidationResult.Error("--quality must be between 1 and 100.");
         if (!RenderCommand.TryParsePalette(Palette, out _))
             return ValidationResult.Error($"Unknown palette '{Palette}'. Use day, dusk, or night.");
+        if (!RenderCommand.TryParseNationalLanguage(NationalLanguage, out _))
+            return ValidationResult.Error(RenderCommand.NationalLanguageError(NationalLanguage));
         if (TimeStep < 0)
             return ValidationResult.Error("--time-step must be zero or greater.");
         if (Background is not null && !RenderCommand.TryParseHexColor(Background, out _))

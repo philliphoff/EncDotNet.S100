@@ -291,6 +291,104 @@ public sealed class RenderCommandTests
         }
     }
 
+    // An S-131 anchorage with a default English name and a French chart name.
+    private const string BilingualS131 = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <S131:Dataset xmlns:S131="http://www.iho.int/S131/1.0"
+                      xmlns:S100="http://www.iho.int/s100gml/5.0"
+                      xmlns:gml="http://www.opengis.net/gml/3.2"
+                      gml:id="DS_S131_Language">
+          <S100:DatasetIdentificationInformation>
+            <S100:productIdentifier>S-131</S100:productIdentifier>
+          </S100:DatasetIdentificationInformation>
+          <S131:members>
+            <S131:AnchorageArea gml:id="f1">
+              <S131:geometry>
+                <S100:pointProperty>
+                  <gml:Point gml:id="p1" srsName="EPSG:4326">
+                    <gml:pos>44.65 -63.57</gml:pos>
+                  </gml:Point>
+                </S100:pointProperty>
+              </S131:geometry>
+              <S131:featureName>
+                <S131:name>Inner Anchorage</S131:name>
+                <S131:language>eng</S131:language>
+                <S131:nameUsage>1</S131:nameUsage>
+              </S131:featureName>
+              <S131:featureName>
+                <S131:name>Mouillage Interieur</S131:name>
+                <S131:language>fra</S131:language>
+                <S131:nameUsage>2</S131:nameUsage>
+              </S131:featureName>
+            </S131:AnchorageArea>
+          </S131:members>
+        </S131:Dataset>
+        """;
+
+    [Theory]
+    [InlineData(null, "Inner Anchorage")]
+    [InlineData("fra", "Mouillage Interieur")]
+    [InlineData("FRA", "Mouillage Interieur")]
+    public void Render_national_language_selects_the_feature_name(string? language, string expected)
+    {
+        var dataset = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.gml");
+        var output = Path.ChangeExtension(dataset, ".json");
+        File.WriteAllText(dataset, BilingualS131);
+        try
+        {
+            string[] args = language is null
+                ? ["render", dataset, output]
+                : ["render", dataset, output, "--national-language", language];
+            int exit = CliApp.Build().Run(args, TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, exit);
+            using var doc = JsonDocument.Parse(File.ReadAllText(output));
+            var strings = StringValues(doc.RootElement).ToList();
+            Assert.Contains(strings, s => s.Contains(expected, StringComparison.Ordinal));
+            var other = expected == "Inner Anchorage" ? "Mouillage Interieur" : "Inner Anchorage";
+            Assert.DoesNotContain(strings, s => s.Contains(other, StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(dataset);
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_with_bad_national_language_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(
+            ["render", dataset, output, "--national-language", "fr"], TestContext.Current.CancellationToken);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    private static IEnumerable<string> StringValues(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                yield return element.GetString()!;
+                break;
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                    foreach (var value in StringValues(property.Value))
+                        yield return value;
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                    foreach (var value in StringValues(item))
+                        yield return value;
+                break;
+        }
+    }
+
     [Fact]
     public void Render_display_list_json_is_deterministic()
     {

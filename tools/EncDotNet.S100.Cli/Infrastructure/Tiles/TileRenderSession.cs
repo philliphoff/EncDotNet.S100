@@ -225,11 +225,13 @@ internal sealed class TileRenderSession : IDisposable
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
         RenderCommand.TryParseDisplayMode(_settings.DisplayMode, out var displayModeId);
         var hidden = HiddenCategories(_settings);
+        var nationalLanguage = RenderCommand.ResolveNationalLanguage(_settings.NationalLanguage);
 
         RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport) =>
             RenderContextBuilder.Build(
                 processor, parsedPalette, _settings.SymbolScale, _settings.TextScale, _settings.TimeStep, hidden,
-                displayModeId: displayModeId, viewport: viewport, instant: time);
+                displayModeId: displayModeId, viewport: viewport, instant: time,
+                nationalLanguage: nationalLanguage);
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
@@ -266,7 +268,9 @@ internal sealed class TileRenderSession : IDisposable
         var options = new ChartCompositeOptions
         {
             Background = Background(_settings),
-            Mariner = MarinerSettings.Default,
+            Mariner = nationalLanguage is null
+                ? MarinerSettings.Default
+                : MarinerSettings.Default with { NationalLanguage = nationalLanguage },
             HiddenCategories = hidden,
             Basemap = basemap,
             HonorScaleVisibility = true,
@@ -328,6 +332,8 @@ internal sealed class TileRenderSession : IDisposable
         var hidden = HiddenCategories(_settings);
         if (hidden != DrawingInstructionCategory.None)
             description["hidden"] = hidden.ToString();
+        if (RenderCommand.ResolveNationalLanguage(_settings.NationalLanguage) is { } nationalLanguage)
+            description["nationalLanguage"] = nationalLanguage;
         if (!string.IsNullOrWhiteSpace(_settings.DisplayMode))
             description["displayMode"] = _settings.DisplayMode.Trim().ToLowerInvariant();
         if (time is { } at)
@@ -378,6 +384,9 @@ internal sealed class TileRenderSession : IDisposable
         Line("noUpdates", settings.NoUpdates);
         Line("metatile", settings.Metatile);
         Line("luaEngine", LuaEngineKinds.GetName(LuaEngineOption.Resolve(settings.LuaEngine)));
+        // Only when set, so fingerprints from before the option existed still match.
+        if (RenderCommand.ResolveNationalLanguage(settings.NationalLanguage) is { } nationalLanguage)
+            Line("nationalLanguage", nationalLanguage);
 
         foreach (var file in InputFiles(settings))
         {
