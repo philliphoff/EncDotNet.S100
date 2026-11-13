@@ -266,6 +266,8 @@ public sealed class TilesExportCommandTests
     [InlineData("out.MBTiles", null, "MbTiles")]
     [InlineData("out", null, "Xyz")]
     [InlineData("out", "mbtiles", "MbTiles")]
+    [InlineData("out.GPKG", null, "GeoPackage")]
+    [InlineData("out", "geopackage", "GeoPackage")]
     [InlineData("out.pmtiles", "xyz", "Xyz")]
     public void Container_comes_from_the_option_or_the_extension(string output, string? option, string expected)
     {

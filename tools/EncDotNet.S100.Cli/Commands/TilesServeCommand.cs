@@ -242,6 +242,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
     {
         TileContainer.PmTiles => "PMTiles",
         TileContainer.MbTiles => "MBTiles",
+        TileContainer.GeoPackage => "GeoPackage",
         _ => "XYZ directory",
     };
 }

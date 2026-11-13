@@ -15,6 +15,15 @@ month. For package versions and release assets, see
   the same chart, and a series with other channels shows its rows.
   `FeatureInfo.StationSeries` and `FeatureInfo.NavigationalWarning` are
   obsolete and read the sections.
+- **GeoPackage tiles.** `s100 tiles export -o chart.gpkg` writes the tiles as
+  an OGC GeoPackage 1.4 tile pyramid in Web Mercator, a single file that QGIS,
+  ArcGIS Pro, GDAL and field apps such as QField open offline.
+  `s100 tiles serve` serves a GeoPackage too, including Web Mercator ones that
+  GDAL writes. See [Tiles export](cli.md#tiles-export).
+- **GeoTIFF export.** `s100 tiles export -o chart.tif` writes one
+  Cloud-Optimized GeoTIFF in Web Mercator for tools that take a single
+  georeferenced image: the maximum zoom at full resolution, lower zooms as
+  overviews. See [Tiles export](cli.md#tiles-export).
 - **`s100 tiles serve` is a WMS service.** `tiles serve` now also answers
   OGC WMS 1.3.0 (and 1.1.1) requests at `wms`. GetMap draws any area in
   EPSG:3857, EPSG:4326 or CRS:84 from the served tiles. GetFeatureInfo

@@ -1,8 +1,8 @@
 #### Agent guidance
 
 `tiles serve` serves raster tiles on XYZ URLs, as WMTS and as WMS. Its input is either a built
-tile set — a `{z}/{x}/{y}` directory, a `.pmtiles` archive or a `.mbtiles`
-database — or datasets in the same forms `tiles export` takes (one dataset,
+tile set — a `{z}/{x}/{y}` directory, a `.pmtiles` archive, a `.mbtiles`
+database or a `.gpkg` GeoPackage of Web Mercator tiles — or datasets in the same forms `tiles export` takes (one dataset,
 repeated `--layer`, an exchange set, or a folder of datasets), which are
 rendered as their tiles are requested. A directory counts as a built tile set
 only when it holds a `tiles.json` or numeric `{z}/{x}` folders; any other

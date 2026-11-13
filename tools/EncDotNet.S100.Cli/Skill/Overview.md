@@ -15,7 +15,7 @@ command offers it, and treat paths as local filesystem paths.
 | Predict the tide at a station (series, highs and lows, CSV, JSON or S-104) | `s100 tides predict` |
 | Download or check the offline tide station catalogue | `s100 tides update` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
-| Write XYZ raster tiles (folder, PMTiles or MBTiles) for a web map | `s100 tiles export` |
+| Write XYZ raster tiles (folder, PMTiles, MBTiles or GeoPackage) or one GeoTIFF for a web map or GIS | `s100 tiles export` |
 | Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs or to a GIS as WMTS or WMS | `s100 tiles serve` |
 | Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
 | Convert an S-101 dataset to an S-57 cell or exchange set for testing or S-57-only tools (not a production ENC) | `s100 s101 convert --to s57` |
