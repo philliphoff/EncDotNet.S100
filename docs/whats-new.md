@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **API keys in the secret store.** SoundCharts saves the aisstream.io key
+  in the computer's secret store (Credential Manager, the macOS Keychain or
+  the Linux Secret Service) instead of `settings.json`, which keeps only a
+  reference; a key already in `settings.json` moves there at the next start.
+  Sources mark secret options with `[Secret]`, and
+  `SourceCreationContext.ResolveSecret` reads the environment variable, then
+  the store.
 - **Data sources in the Datasets panel.** SoundCharts lists a live source
   with your datasets: **Add a data source** in the Datasets panel adds it,
   and you show, hide, reorder and remove it like a file. Sources you add are

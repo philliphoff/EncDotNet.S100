@@ -8911,4 +8911,21 @@
     <value>Predicted from NOAA harmonic constants. Wind and river flow change real currents, and in a pass the strongest stream can be well away from the station. Not for navigation.</value>
   </data>
   <!-- Tides T5 end -->
+  <data name="Secrets_Store_Windows" xml:space="preserve">
+    <value>Windows Credential Manager</value>
+  </data>
+  <data name="Secrets_Store_MacOS" xml:space="preserve">
+    <value>the macOS Keychain</value>
+  </data>
+  <data name="Secrets_Store_Linux" xml:space="preserve">
+    <value>the Secret Service (libsecret)</value>
+  </data>
+  <data name="Settings_SecretSavedInStoreFormat" xml:space="preserve">
+    <value>The key is saved in {0}, not in settings.json.</value>
+    <comment>{0} = the secret store's name, e.g. "Windows Credential Manager".</comment>
+  </data>
+  <data name="Settings_SecretNoStoreFormat" xml:space="preserve">
+    <value>This computer has no secret store, so the key is saved in settings.json. To keep it out of the file, use the {0} environment variable instead.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
 </root>

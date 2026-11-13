@@ -19,6 +19,7 @@ internal sealed class SourceDatasetService : IDisposable
     private readonly SourceRegistry _registry;
     private readonly ViewerSettings _settings;
     private readonly IMapViewportNotifier? _notifier;
+    private readonly Secrets.ISecretStore? _secrets;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
     private readonly object _lock = new();
@@ -33,13 +34,15 @@ internal sealed class SourceDatasetService : IDisposable
         SourceRegistry registry,
         ViewerSettings settings,
         IMapViewportNotifier? notifier = null,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        Secrets.ISecretStore? secrets = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(settings);
         _registry = registry;
         _settings = settings;
         _notifier = notifier;
+        _secrets = secrets;
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger<SourceDatasetService>();
     }
@@ -95,6 +98,7 @@ internal sealed class SourceDatasetService : IDisposable
             Options = options,
             LoggerFactory = _loggerFactory,
             CreateHttpClient = CreateHttpClient,
+            ReadSecret = _secrets is { IsAvailable: true } store ? store.Read : null,
         });
 
     /// <summary>

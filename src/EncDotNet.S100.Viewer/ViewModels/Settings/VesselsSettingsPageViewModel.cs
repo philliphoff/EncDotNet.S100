@@ -86,9 +86,14 @@ internal sealed class VesselsSettingsPageViewModel(ViewerSettingsService setting
         {
             var envVar = Settings.AisApiKeyEnvironmentVariable;
             var envVal = Environment.GetEnvironmentVariable(envVar);
-            return string.IsNullOrWhiteSpace(envVal)
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarHint, envVar)
-                : string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarPresent, envVar);
+            if (!string.IsNullOrWhiteSpace(envVal))
+                return string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarPresent, envVar);
+            var envHint = string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarHint, envVar);
+            // Data source design note D7: say where the key is kept.
+            var where = Settings.SecretStoreName is { } store
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Settings_SecretSavedInStoreFormat, store)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Settings_SecretNoStoreFormat, envVar);
+            return where + " " + envHint;
         }
     }
 }

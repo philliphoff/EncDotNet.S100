@@ -1042,10 +1042,11 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
 
     /// <summary>Loads the settings from <paramref name="settings"/> and applies the renderer's knobs.</summary>
     /// <param name="settings">The persisted settings, saved on each change.</param>
-    public ViewerSettingsService(ViewerSettings settings)
+    public ViewerSettingsService(ViewerSettings settings, Secrets.ISecretStore? secrets = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         _settings = settings;
+        _secrets = secrets;
         _accentColor = Color.TryParse(settings.AccentColor, out var c) ? c : Color.Parse("#007ACC");
         _selectedPalette = Enum.TryParse<PaletteType>(settings.ColorProfile, ignoreCase: true, out var p) ? p : PaletteType.Day;
         _selectedChromeTheme = Enum.TryParse<ChromeTheme>(settings.ChromeTheme, ignoreCase: true, out var ct) ? ct : ChromeTheme.Light;
@@ -1200,7 +1201,7 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
 
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
         _aisEnabled = ais.Enabled;
-        _aisApiKey = ais.ApiKey;
+        _aisApiKey = LoadAisApiKey(ais);
         _aisActivationViewportSpanDegrees = ais.ActivationViewportSpanDegrees;
     }
 
@@ -1467,13 +1468,19 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
         }
     }
 
+    /// <summary>The name the AIS key is saved under in the secret store.</summary>
+    internal const string AisApiKeySecretName = "ais.aisstream.apiKey";
+
+    private readonly Secrets.ISecretStore? _secrets;
+
     private string? _aisApiKey;
     /// <summary>
-    /// aisstream.io API key persisted in <c>settings.json</c>. The
-    /// env var named in
-    /// <see cref="AisOverlaySettings.ApiKeyEnvironmentVariable"/>
-    /// takes precedence when set; this field is the convenience
-    /// fallback for users who don't want to manage env vars.
+    /// aisstream.io API key. It's saved in the platform secret store
+    /// (data source design note D7), and <c>settings.json</c> keeps only a
+    /// <c>sc-secret:</c> reference; on a machine with no store it's saved in
+    /// <c>settings.json</c> as before. The env var named in
+    /// <see cref="AisOverlaySettings.ApiKeyEnvironmentVariable"/> takes
+    /// precedence when set.
     /// </summary>
     public string? AisApiKey
     {
@@ -1486,9 +1493,80 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
             if (SetProperty(ref _aisApiKey, normalised))
             {
                 EnsureAisOverlaySettings();
-                _settings.AisOverlay!.ApiKey = normalised;
+                _settings.AisOverlay!.ApiKey = SaveAisApiKey(normalised);
+                _settings.Save();
+                OnPropertyChanged(nameof(AisApiKeyIsInSecretStore));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the AIS key is saved in the platform secret store, rather than
+    /// in <c>settings.json</c>.
+    /// </summary>
+    public bool AisApiKeyIsInSecretStore =>
+        EncDotNet.S100.Datasets.Pipelines.SecretReference.IsReference(_settings.AisOverlay?.ApiKey);
+
+    /// <summary>The platform secret store's name, or <see langword="null"/> when this machine has none.</summary>
+    public string? SecretStoreName => _secrets is { IsAvailable: true } store ? store.DisplayName : null;
+
+    /// <summary>
+    /// Reads the AIS key, moving a key saved in plain text in
+    /// <c>settings.json</c> to the secret store the first time it's read.
+    /// </summary>
+    private string? LoadAisApiKey(AisOverlaySettings ais)
+    {
+        var saved = ais.ApiKey;
+        if (string.IsNullOrWhiteSpace(saved))
+            return null;
+        if (EncDotNet.S100.Datasets.Pipelines.SecretReference.NameOf(saved) is { } name)
+            return _secrets?.Read(name);
+        if (_secrets is not { IsAvailable: true })
+            return saved;
+
+        // D7: a key in settings.json moves to the store.
+        var reference = SaveAisApiKey(saved);
+        if (reference != saved)
+        {
+            ais.ApiKey = reference;
+            try
+            {
                 _settings.Save();
             }
+            catch (IOException)
+            {
+                // Saved next time the settings are.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Saved next time the settings are.
+            }
+        }
+        return saved;
+    }
+
+    /// <summary>
+    /// Saves the AIS key in the secret store and returns the value for
+    /// <c>settings.json</c>: a reference, or the key itself when there's no
+    /// store or the store refuses it.
+    /// </summary>
+    private string? SaveAisApiKey(string? key)
+    {
+        if (_secrets is not { IsAvailable: true } store)
+            return key;
+        try
+        {
+            if (key is null)
+            {
+                store.Delete(AisApiKeySecretName);
+                return null;
+            }
+            store.Write(AisApiKeySecretName, key);
+            return EncDotNet.S100.Datasets.Pipelines.SecretReference.For(AisApiKeySecretName);
+        }
+        catch (Secrets.SecretStoreException)
+        {
+            return key;
         }
     }
 
