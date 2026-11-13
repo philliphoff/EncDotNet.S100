@@ -439,7 +439,7 @@ the old file is left as it was.
 | `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles`, `gpkg` or `geotiff`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
 | `--max-zoom <0-24>` | from the data | Highest zoom level. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. Datasets that can't draw in those tiles aren't portrayed. See [Zoom levels](#zoom-levels). |
 | `--tile-size <pixels>` | `256` | `256`, or `512` for high-DPI tiles of the same grid. |
 | `--format <format>` | `png` | `png`, `jpeg` (or `jpg`) or `webp`. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
@@ -511,6 +511,15 @@ minimum display scale. Without `--max-zoom`, the highest is one level past the
 finest cell's compilation scale. Products without these scales, such as GML
 products and coverages, start at the zoom where their extent fits in about one
 tile and go six levels deeper, up to zoom 18.
+
+With `--bbox`, datasets that can't draw in any of its tiles are closed before
+they're portrayed, and `tiles export` says how many it left out. A dataset is
+kept when its extent reaches the tiles that cover the box at the lowest zoom,
+or the ring of tiles around them, so symbols and text near an edge tile are
+drawn as they would be without `--bbox`. This saves time and memory when the
+box covers a small part of a large folder. The default zoom range then comes
+from the datasets that are kept. For a box that crosses the antimeridian,
+every dataset is kept.
 
 `tiles export` prints the number of tiles before it renders any. Each zoom level has
 four times the tiles of the one before, so a set grows quickly. Above 100,000
