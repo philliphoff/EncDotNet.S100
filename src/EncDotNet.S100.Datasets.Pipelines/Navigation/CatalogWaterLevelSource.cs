@@ -11,8 +11,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// Water level from loaded S-104 datasets: regular grids (dcf2) first, in
 /// <see cref="WaterLevelPreference"/> order, then the nearest station of each
 /// station series (dcf8) within
-/// <see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/>, nearest
-/// first. Grids win over stations as in <c>sample_coverage</c>.
+/// <see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/> by water
+/// (<see cref="WaterReach"/>: the loaded charts' land blocks a station, tide
+/// predictions design D19), nearest first. Grids win over stations as in
+/// <c>sample_coverage</c>.
 /// </summary>
 /// <remarks>
 /// A grid point is found as in <c>sample_coverage</c>: the point must lie
@@ -30,10 +32,12 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
     private readonly List<GridCandidate> _grids = new();
     private readonly List<(string DatasetId, S104StationSeriesDataset Dataset)> _stations = new();
     private readonly double _maxStationDistance;
+    private readonly WaterReach _reach;
 
-    public CatalogWaterLevelSource(IReadOnlyList<LoadedDataset> datasets, ICrsTransformFactory transforms, RouteCheckSourceOptions options)
+    public CatalogWaterLevelSource(IReadOnlyList<LoadedDataset> datasets, ICrsTransformFactory transforms, RouteCheckSourceOptions options, WaterReach reach)
     {
         _maxStationDistance = options.MaxStationDistanceMeters;
+        _reach = reach;
         foreach (var dataset in datasets)
         {
             switch (dataset.Data)
@@ -157,10 +161,13 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
     private const double CandidateBand = 1.02;
     private const double EarthRadiusMeters = 6_371_008.8;
 
-    // The nearest station with values within the reach, by WGS-84 geodesic,
-    // or none. A cheap flat-earth distance ranks the stations first, so only
-    // the few near the nearest one (and none beyond the reach) need the
-    // geodesic: a chart adjustment asks this at every sampled node.
+    // The nearest station with values within the reach, by water (the WGS-84
+    // geodesic where no charted land is in the way), or none. A cheap
+    // flat-earth distance ranks the stations first, so only the few near the
+    // nearest one (and none beyond the reach) need the dearer distance: a
+    // chart adjustment asks this at every sampled node. The distance by water
+    // is never shorter than the straight one, so once a station's flat
+    // distance is past the best found, none further can win.
     private (WaterLevelStation? Station, double Distance) NearestStation(IReadOnlyList<WaterLevelStation> stations, GeoPosition here)
     {
         var cosLat = Math.Cos(here.Latitude * Math.PI / 180);
@@ -178,18 +185,27 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
             return (null, double.PositiveInfinity);
         }
 
-        WaterLevelStation? nearest = null;
-        var best = double.PositiveInfinity;
-        var limit = bestFlat * CandidateBand;
+        var candidates = new List<(WaterLevelStation Station, double Flat)>();
+        var limit = _reach.ByWater ? _maxStationDistance * CandidateBand : bestFlat * CandidateBand;
         foreach (var station in stations)
         {
-            if (station.NumberOfTimes == 0 || FlatDistance(here, station, cosLat) > limit)
+            if (station.NumberOfTimes > 0 && FlatDistance(here, station, cosLat) is var flat && flat <= limit)
             {
-                continue;
+                candidates.Add((station, flat));
+            }
+        }
+
+        candidates.Sort((a, b) => a.Flat.CompareTo(b.Flat));
+        WaterLevelStation? nearest = null;
+        var best = double.PositiveInfinity;
+        foreach (var (station, flat) in candidates)
+        {
+            if (flat > best * CandidateBand)
+            {
+                break;
             }
 
-            var d = PassageGeodesy.GreatCircleDistanceMeters(here, new GeoPosition(station.Latitude, station.Longitude));
-            if (d < best)
+            if (_reach.DistanceMeters(new GeoPosition(station.Latitude, station.Longitude), here) is { } d && d < best)
             {
                 best = d;
                 nearest = station;

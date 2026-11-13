@@ -47,7 +47,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// raised at its own point.
 /// </para>
 /// </remarks>
-internal sealed class CatalogRouteChartSource : IRouteChartSource
+internal sealed partial class CatalogRouteChartSource : IRouteChartSource
 {
     private readonly List<Cell> _cells = new();
 
@@ -291,6 +291,9 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         public override CellRank? Rank => _built.Value.Rank;
 
         public IVectorSpatialIndex Index => _built.Value.Index;
+
+        // The cell's data coverage; empty when it declares none (its bounds serve).
+        public IReadOnlyList<CoverageArea> Coverage => _built.Value.Coverage;
 
         // Adds the soundings inside the corridor ring, one feature per point.
         public void AddSoundings(IReadOnlyList<GeoPosition> corridor, BoundingBox extent, List<RouteChartFeature> result)

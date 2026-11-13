@@ -8429,4 +8429,76 @@
   <data name="Tooltip_LegendClearFilter" xml:space="preserve">
     <value>Clear the filter</value>
   </data>
+  <data name="Settings_UseTidePredictions" xml:space="preserve">
+    <value>Use tide predictions where there's no S-104</value>
+  </data>
+  <data name="Label_UseTidePredictions" xml:space="preserve">
+    <value>Use tide predictions</value>
+  </data>
+  <data name="Settings_UseTidePredictions_Help" xml:space="preserve">
+    <value>Harmonic predictions from the cached tide station list: the astronomical tide only, not a forecast. The Depth card, the route check and chart adjustment use them where no S-104 covers. Wind, pressure and river flow can move the real water level 0.5 m or more.</value>
+  </data>
+  <data name="Pick_Depth_Label_DepthNowPredicted" xml:space="preserve">
+    <value>ADJUSTED DEPTH AT SELECTED TIME (PREDICTED)</value>
+  </data>
+  <data name="Pick_Depth_PredictedSourceFormat" xml:space="preserve">
+    <value>Predicted · {0}</value>
+  </data>
+  <data name="Pick_Depth_PredictedAwayFormat" xml:space="preserve">
+    <value>{0:0.0} km away</value>
+  </data>
+  <data name="Pick_Depth_PredictedHarmonic" xml:space="preserve">
+    <value>harmonic</value>
+  </data>
+  <data name="Pick_Depth_PredictedFromReferenceFormat" xml:space="preserve">
+    <value>from {0}, with offsets</value>
+  </data>
+  <data name="Pick_Depth_PredictedNotAForecast" xml:space="preserve">
+    <value>not a forecast</value>
+  </data>
+  <data name="Pick_Depth_PredictionUncertainty" xml:space="preserve">
+    <value>Prediction: none given; weather can move it 0.5 m or more</value>
+  </data>
+  <data name="Pick_Depth_ChartedUncertaintyPredictedFormat" xml:space="preserve">
+    <value>Charted ± {0}. Prediction: none given; weather can move it 0.5 m or more</value>
+  </data>
+  <data name="Pick_Depth_Refused_DifferentDatumPredicted" xml:space="preserve">
+    <value>Not adjusted: {0} on {1}, prediction on {2}.</value>
+  </data>
+  <data name="Pick_Depth_PredictionNoun" xml:space="preserve">
+    <value>the prediction</value>
+  </data>
+  <data name="Pick_Depth_Series_Predicted" xml:space="preserve">
+    <value>Depth with predicted water level</value>
+  </data>
+  <data name="Clearance_SourcePredictedFormat" xml:space="preserve">
+    <value>Predicted · {0} · {1}</value>
+  </data>
+  <data name="Clearance_PredictedStationFormat" xml:space="preserve">
+    <value>Predicted · {0}</value>
+  </data>
+  <data name="Clearance_Gap_WaterLevelPredicted" xml:space="preserve">
+    <value>Water level predicted</value>
+  </data>
+  <data name="Check_ConfidencePredictedFormat" xml:space="preserve">
+    <value>Water level predicted on {0:0.0} NM: astronomical tide only, not a forecast</value>
+  </data>
+  <data name="Check_WindowCaveatPredicted" xml:space="preserve">
+    <value>water level partly predicted</value>
+  </data>
+  <data name="Findings_WaterLevelPredictedFormat" xml:space="preserve">
+    <value>Water level predicted for {0:0.0} NM</value>
+  </data>
+  <data name="Findings_TightOnPredictedFormat" xml:space="preserve">
+    <value>Tight on predicted water level for {0:0.0} NM</value>
+  </data>
+  <data name="Findings_PredictedStationsFormat" xml:space="preserve">
+    <value>Predicted · {0}</value>
+  </data>
+  <data name="Findings_MoreStationsFormat" xml:space="preserve">
+    <value>+{0}</value>
+  </data>
+  <data name="Findings_NotAForecast" xml:space="preserve">
+    <value>not a forecast</value>
+  </data>
 </root>

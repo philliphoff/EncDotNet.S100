@@ -121,6 +121,7 @@ internal sealed class GetDepthBasisTool
         {
             WaterLevelSourceKind.Grid => "grid",
             WaterLevelSourceKind.Station => "station",
+            WaterLevelSourceKind.Prediction => "prediction",
             _ => null,
         },
         source.Start,

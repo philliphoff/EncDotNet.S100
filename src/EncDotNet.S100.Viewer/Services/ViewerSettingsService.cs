@@ -348,6 +348,22 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
         }
     }
 
+    private bool _useTidePredictions;
+
+    /// <inheritdoc />
+    public bool UseTidePredictions
+    {
+        get => _useTidePredictions;
+        set
+        {
+            if (SetProperty(ref _useTidePredictions, value))
+            {
+                _settings.UseTidePredictions = value;
+                RaiseWaterLevelAdjustmentChanged();
+            }
+        }
+    }
+
     /// <inheritdoc />
     public event Action? WaterLevelAdjustmentChanged;
 
@@ -1062,6 +1078,7 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
             ? waterLevelAdjustment
             : Depth.WaterLevelAdjustmentMode.Off;
         _waterLevelApplyUndeclaredDatum = settings.WaterLevelApplyUndeclaredDatum ?? false;
+        _useTidePredictions = settings.UseTidePredictions ?? false;
         _routeMaxWindKnots = settings.RouteMaxWindKnots is { } wind && double.IsFinite(wind) && wind > 0 ? wind : null;
         _routeMaxWaveHeightMetres = settings.RouteMaxWaveHeightMetres is { } wave && double.IsFinite(wave) && wave > 0 ? wave : null;
         _cycloneCheckAgainst = settings.RouteCycloneCheckAgainstKnots is { } against && Enum.IsDefined((Navigation.TropicalCycloneRadius)against)

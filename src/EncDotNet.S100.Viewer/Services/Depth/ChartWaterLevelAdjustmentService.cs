@@ -14,6 +14,13 @@ internal interface IWaterLevelAdjustmentSettings
     /// <summary>The "Apply anyway when datum is not declared" override.</summary>
     bool WaterLevelApplyUndeclaredDatum { get; }
 
+    /// <summary>
+    /// Whether harmonic tide predictions are used where there's no S-104
+    /// (tide predictions design D1). A source, not an adjustment mode: it
+    /// feeds the Depth card and the route check with adjustment off too.
+    /// </summary>
+    bool UseTidePredictions { get; }
+
     /// <summary>Raised after either setting changes.</summary>
     event Action? WaterLevelAdjustmentChanged;
 }
@@ -35,16 +42,19 @@ internal interface IDepthAdjustmentRequests
     void MarkApplied(IDepthAdjustment? adjustment);
 }
 
-/// <summary>The loaded S-104 water level, as the route check and the pick report read it.</summary>
+/// <summary>
+/// The loaded S-104 water level, and tide predictions where they're on, as
+/// the route check and the pick report read it.
+/// </summary>
 internal interface IWaterLevelCatalog
 {
     /// <summary>The water level of the loaded datasets, or <see langword="null"/> when none is loaded.</summary>
     IWaterLevelSource? WaterLevel { get; }
 
-    /// <summary>Changes whenever the loaded datasets change, so an adjustment built from them can be told apart.</summary>
+    /// <summary>Changes whenever the loaded datasets or the tide-prediction source change, so an adjustment built from them can be told apart.</summary>
     string Key { get; }
 
-    /// <summary>Raised when the loaded datasets change.</summary>
+    /// <summary>Raised when the loaded datasets or the tide-prediction source change.</summary>
     event EventHandler? Changed;
 }
 
@@ -69,6 +79,7 @@ internal sealed class ViewerWaterLevelCatalog : IWaterLevelCatalog, IDisposable
         _catalog = catalog;
         _sources = sources;
         _catalog.Changed += OnCatalogChanged;
+        _sources.Changed += OnSourcesChanged;
     }
 
     /// <inheritdoc />
@@ -81,9 +92,19 @@ internal sealed class ViewerWaterLevelCatalog : IWaterLevelCatalog, IDisposable
     public event EventHandler? Changed;
 
     /// <inheritdoc />
-    public void Dispose() => _catalog.Changed -= OnCatalogChanged;
+    public void Dispose()
+    {
+        _catalog.Changed -= OnCatalogChanged;
+        _sources.Changed -= OnSourcesChanged;
+    }
 
-    private void OnCatalogChanged(object? sender, DatasetCatalogChangedEventArgs e)
+    private void OnCatalogChanged(object? sender, DatasetCatalogChangedEventArgs e) => Bump();
+
+    // Tide predictions turned on or off: the water level changes as if the
+    // loaded datasets had.
+    private void OnSourcesChanged(object? sender, EventArgs e) => Bump();
+
+    private void Bump()
     {
         Interlocked.Increment(ref _generation);
         Changed?.Invoke(this, EventArgs.Empty);

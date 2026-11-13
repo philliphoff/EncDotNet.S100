@@ -21,4 +21,8 @@ internal sealed record WaterLevelRefusal(
     BaseDepthSource DepthSource,
     int? DepthDatumCode,
     string WaterLevelDatasetId,
-    int? WaterLevelDatumCode);
+    int? WaterLevelDatumCode)
+{
+    /// <summary>Whether the refused water level is a harmonic tide prediction rather than S-104.</summary>
+    public bool Predicted { get; init; }
+}

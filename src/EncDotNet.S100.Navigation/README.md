@@ -179,6 +179,18 @@ one of:
 | `BelowSetting` | UKC is less than the required UKC. |
 | `NoData` | There's no charted depth, or no water level that can be applied. |
 
+A source can add harmonic tide predictions after S-104
+(`WaterLevelSources.WithFallback`): a series of kind
+`WaterLevelSourceKind.Prediction`, whose `WaterLevelSourceInfo` carries the
+station, its name, its distance and, for a subordinate station, its reference
+station. S-104 wins wherever it covers a point and time. A predicted sample is
+lower confidence (`WaterLevelPredicted`): it's the astronomical tide only, not
+a forecast. The findings name the stations: `confidence.water_level_predicted`
+(Info) for each stretch on predicted water, and
+`clearance.tight_on_predicted` (Check) where such a stretch is Tight or below
+your setting. A prediction has no time range, so it doesn't set the departure
+window.
+
 The water level counts as missing outside the S-104 extent or time range,
 where a value is NoData, or where its vertical datum differs from the charted
 depth's. A datum mismatch is reported as a gap and the two values are never
@@ -187,7 +199,8 @@ can't be confirmed. In that case the water level is applied and the sample is
 lower confidence.
 
 Confidence is separate from the state. A sample's `Confidence` lists why it's
-lower confidence (`ChartedDepthFromS101`, `DatumUnconfirmed`), and the state
+lower confidence (`ChartedDepthFromS101`, `DatumUnconfirmed`,
+`WaterLevelPredicted`), and the state
 still says whether the clearance meets, is tight or is below. Legs, the
 minimum, the whole result and each departure option combine their samples'
 reasons the same way. A departure that meets your settings with lower
@@ -585,6 +598,17 @@ give the same answer at a point:
 - `WaterLevelSnapshot.Resolve` chooses the series at a point and time: the
   most preferred one that covers the time, skipping one whose datum differs
   from the depth's when another covers too. The clearance check uses it too.
+
+## Reach by water
+
+A station's water level, S-104 or predicted, applies within 10 km of it,
+measured through the loaded charts' water. `IWaterMask` says where the
+charts have water, land or no coverage at a point or across a grid, and
+`WaterReach` gives the distance by water from a station to a point, or
+`null` beyond the reach: land blocks a station from the next basin, and
+uncharted ground counts as water, so with no chart the distance is a
+straight line. `RouteCheckSources.WaterMask` carries the mask, for the
+adjusted-area edge to be clipped to as well.
 
 ## Water level across an area
 

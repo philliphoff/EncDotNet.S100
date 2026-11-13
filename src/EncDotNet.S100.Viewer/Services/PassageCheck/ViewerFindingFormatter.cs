@@ -116,6 +116,11 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string OutsideS102Format => Strings.Findings_OutsideS102Format;
     protected override string DatumUnconfirmed => Strings.Findings_DatumUnconfirmed;
     protected override string DatumUnconfirmedMetaFormat => Strings.Findings_DatumUnconfirmedMetaFormat;
+    protected override string WaterLevelPredictedFormat => Strings.Findings_WaterLevelPredictedFormat;
+    protected override string TightOnPredictedFormat => Strings.Findings_TightOnPredictedFormat;
+    protected override string PredictedStationsFormat => Strings.Findings_PredictedStationsFormat;
+    protected override string MoreStationsFormat => Strings.Findings_MoreStationsFormat;
+    protected override string NotAForecast => Strings.Findings_NotAForecast;
     protected override string WaterLevelEnds => Strings.Findings_WaterLevelEnds;
     protected override string WaterLevelStartsLate => Strings.Findings_WaterLevelStartsLate;
     protected override string NoWaterLevelCoverage => Strings.Findings_NoWaterLevelCoverage;

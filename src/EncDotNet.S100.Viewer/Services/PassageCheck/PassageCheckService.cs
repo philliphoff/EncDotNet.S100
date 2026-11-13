@@ -191,6 +191,7 @@ internal sealed class PassageCheckService : IDisposable
         _routes.Routes.Changed += OnInputsChanged;
         _routes.ViewTime.Changed += OnInputsChanged;
         _catalog.Changed += OnCatalogChanged;
+        _sources.Changed += OnSourcesChanged;
         if (_warnings is not null)
             _warnings.Changed += OnWarningsChanged;
         if (_mariner is not null)
@@ -341,6 +342,7 @@ internal sealed class PassageCheckService : IDisposable
         _routes.Routes.Changed -= OnInputsChanged;
         _routes.ViewTime.Changed -= OnInputsChanged;
         _catalog.Changed -= OnCatalogChanged;
+        _sources.Changed -= OnSourcesChanged;
         if (_warnings is not null)
             _warnings.Changed -= OnWarningsChanged;
         if (_mariner is not null)
@@ -353,6 +355,9 @@ internal sealed class PassageCheckService : IDisposable
     private void OnInputsChanged(object? sender, EventArgs e) => _post(Schedule);
 
     private void OnCatalogChanged(object? sender, DatasetCatalogChangedEventArgs e) => _post(Recompute);
+
+    // Tide predictions turned on or off: the water level changed, as when datasets load.
+    private void OnSourcesChanged(object? sender, EventArgs e) => _post(Recompute);
 
     // The listed warnings changed: the same inputs, checked again at once.
     private void OnWarningsChanged(object? sender, EventArgs e) => _post(() => Schedule(force: true));

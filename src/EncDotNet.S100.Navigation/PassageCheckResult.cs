@@ -64,6 +64,14 @@ public enum ConfidenceReasons
     /// and water level can't be confirmed to share a reference.
     /// </summary>
     DatumUnconfirmed = 2,
+
+    /// <summary>
+    /// The water level is a harmonic prediction
+    /// (<see cref="WaterLevelSourceKind.Prediction"/>): the astronomical tide
+    /// only. Wind, pressure and river flow can move the real water level
+    /// 0.5 m or more.
+    /// </summary>
+    WaterLevelPredicted = 4,
 }
 
 /// <summary>How the clearance compares with the required UKC, ignoring confidence.</summary>
@@ -155,6 +163,9 @@ public enum PassageStretchKind
 
     /// <summary>The charted-depth or water-level datum isn't declared, so agreement can't be confirmed (low confidence).</summary>
     DatumUnconfirmed,
+
+    /// <summary>The water level is a harmonic prediction, not S-104 (low confidence).</summary>
+    WaterLevelPredicted,
 }
 
 /// <summary>A run of consecutive samples that share a gap or a low-confidence reason.</summary>

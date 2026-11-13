@@ -820,6 +820,21 @@ public class RouteFindingFormatter
     /// <summary>The meta of <see cref="RouteFindingCodes.DatumUnconfirmed"/> ({0}: nautical miles).</summary>
     protected virtual string DatumUnconfirmedMetaFormat => "{0:0.0} NM · a depth or water-level datum isn't declared";
 
+    /// <summary>The title of <see cref="RouteFindingCodes.WaterLevelPredicted"/> ({0}: nautical miles).</summary>
+    protected virtual string WaterLevelPredictedFormat => "Water level predicted for {0:0.0} NM";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.TightOnPredicted"/> ({0}: nautical miles).</summary>
+    protected virtual string TightOnPredictedFormat => "Tight on predicted water level for {0:0.0} NM";
+
+    /// <summary>The stations a predicted water level comes from ({0}: the stations, as "Seattle 9447130, Edmonds 9447427").</summary>
+    protected virtual string PredictedStationsFormat => "Predicted · {0}";
+
+    /// <summary>More predicted stations than are named ({0}: how many more).</summary>
+    protected virtual string MoreStationsFormat => "+{0}";
+
+    /// <summary>The caveat on a predicted water level.</summary>
+    protected virtual string NotAForecast => "not a forecast";
+
     /// <summary>The title of <see cref="RouteFindingCodes.WaterLevelEnds"/>.</summary>
     protected virtual string WaterLevelEnds => "Water-level data ends before arrival";
 
@@ -866,6 +881,8 @@ public class RouteFindingFormatter
                 : Format(BelowDistanceFormat, Nm(details?.Length ?? Length.Zero)),
             "confidence.charted_depth_from_s101" => ChartedDepthFromS101,
             "confidence.datum_unconfirmed" => DatumUnconfirmed,
+            "confidence.water_level_predicted" => Format(WaterLevelPredictedFormat, Nm(details?.Length ?? Length.Zero)),
+            "clearance.tight_on_predicted" => Format(TightOnPredictedFormat, Nm(details?.Length ?? Length.Zero)),
             "data.water_level_ends" => WaterLevelEnds,
             "data.water_level_starts_late" => WaterLevelStartsLate,
             "data.no_water_level_coverage" => NoWaterLevelCoverage,
@@ -894,6 +911,14 @@ public class RouteFindingFormatter
             return Join(LegLabel(leg, leg), min);
         }
 
+        if (finding.Code == RouteFindingCodes.TightOnPredicted)
+        {
+            var leg = finding.LegIndex ?? details.FirstLegIndex;
+            var clearance = details.MinimumClearance is { } c ? FormatDepth(c) : NoValue;
+            var min = details.MinimumTime is { } at ? Format(MinAtFormat, clearance, FormatEta(at)) : Format(MinFormat, clearance);
+            return Join(LegLabel(leg, leg), min, PredictedStations(details.WaterLevelSources));
+        }
+
         var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
         var nm = Nm(details.Length);
         var length = Format(StretchLengthFormat, nm);
@@ -901,11 +926,37 @@ public class RouteFindingFormatter
         {
             "confidence.charted_depth_from_s101" => Join(legs, Format(OutsideS102Format, nm)),
             "confidence.datum_unconfirmed" => Join(legs, Format(DatumUnconfirmedMetaFormat, nm)),
+            "confidence.water_level_predicted" => Join(legs, PredictedStations(details.WaterLevelSources), NotAForecast),
             "data.water_level_ends" => Join(legs, Format(StretchFromFormat, FormatEta(details.StartTime)), Format(TideNotAppliedForFormat, nm)),
             "data.water_level_starts_late" => Join(legs, Format(TideNotAppliedForFormat, nm)),
             "data.no_charted_depth" => Join(legs, length, NoDepthSource),
             _ => Join(legs, length, TideNotApplied),
         };
+    }
+
+    /// <summary>
+    /// "Predicted · Seattle 9447130, Edmonds 9447427": the predicted stations
+    /// a finding's water level comes from, the first three by name.
+    /// </summary>
+    /// <param name="sources">The stations.</param>
+    /// <returns>The text, or an empty string without stations.</returns>
+    protected virtual string PredictedStations(IReadOnlyList<WaterLevelSourceInfo> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        const int named = 3;
+        var labels = sources.Select(s => s.StationLabel).OfType<string>().ToList();
+        if (labels.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var text = string.Join(", ", labels.Take(named));
+        if (labels.Count > named)
+        {
+            text = $"{text}, {Format(MoreStationsFormat, labels.Count - named)}";
+        }
+
+        return Format(PredictedStationsFormat, text);
     }
 
     // ---- Weather findings ----

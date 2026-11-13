@@ -453,7 +453,8 @@ internal sealed class PickService : IPickService
         // card as it does to the chart, so the two agree (#1132 Q2).
         var probe = _depthProbe.Evaluate(
             processors, hits, latitude, longitude, waterLevel,
-            _waterLevelSettings.WaterLevelApplyUndeclaredDatum);
+            _waterLevelSettings.WaterLevelApplyUndeclaredDatum,
+            _globalTime.CurrentTime);
         return probe.Class == EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water ? probe.Depth : null;
     }
 
