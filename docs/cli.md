@@ -404,7 +404,11 @@ The container comes from the output path:
   the display settings, prefixed `s100:`.
 
 Set `--container` to choose the container whatever the extension. An existing
-`.pmtiles` or `.mbtiles` file at the output path is replaced.
+`.pmtiles` or `.mbtiles` file at the output path is replaced only once the new
+one is finished: the new file is written beside it, with `.partial` added to
+its name, and then moved into its place. Until then a [`tiles serve`](#tiles-serve)
+reading the old file keeps serving it, and if the export fails or is stopped,
+the old file is left as it was.
 
 ### Tiles export options
 
@@ -518,7 +522,8 @@ map running on this computer can use them as a tile source. It serves either:
 - **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive or a
   `.mbtiles` database that [`tiles export`](#tiles-export) or another tool
   wrote. The tile set is read at each request, so if you export it again while
-  it's served, the next request sees the new tiles. Only PNG, JPEG and WebP
+  it's served, the next request sees the new tiles. A `.pmtiles` or `.mbtiles`
+  file keeps serving its old tiles until the new export is finished. Only PNG, JPEG and WebP
   raster tiles are served, not vector tiles.
 - **Datasets**, rendered when each tile is first asked for. It takes the same
   inputs and display options as `tiles export`: one dataset, repeated
