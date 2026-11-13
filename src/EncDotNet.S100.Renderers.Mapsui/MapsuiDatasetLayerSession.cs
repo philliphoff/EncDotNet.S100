@@ -1684,6 +1684,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                     ?? processor.GetFeatureInfo(hit.FeatureRef);
                 if (info is null)
                     continue;
+                info = PickContributorRegistry.Default.Apply(info, processor);
                 ranked.Add((
                     stackRank,
                     (int)hit.Primitive,
