@@ -39,9 +39,22 @@ internal static class TideStationsServiceCollectionExtensions
             sp.GetService<IMapViewportNotifier>(),
             sp.GetRequiredService<IViewTime>(),
             sp.GetRequiredService<ViewerWaterLevelCatalog>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            () => sp.GetRequiredService<ITimeFormatProvider>().Current,
+            () => sp.GetRequiredService<ViewerDatasetCatalog>().Datasets));
 
         services.AddSingleton<IDynamicFeatureSource>(sp => sp.GetRequiredService<TideStationsOverlay>().Source);
+        // #1454 (D16): current stations, a row of their own just below.
+        services.AddSingleton<IDynamicFeatureSource>(sp => sp.GetRequiredService<TideStationsOverlay>().Currents);
+        services.AddKeyedSingleton<IDynamicFeatureRenderer>(
+            CurrentStationSource.FeatureKind,
+            (sp, _) =>
+            {
+                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
+                return new PortrayedDynamicFeatureRenderer(
+                    CurrentStationPortrayal.Instance,
+                    () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
+            });
 
         services.AddKeyedSingleton<IDynamicFeatureRenderer>(
             TideStationSource.FeatureKind,
@@ -69,10 +82,20 @@ internal static class TideStationsServiceCollectionExtensions
                     UiThread.RunOrPost);
             }));
 
+        services.AddSingleton<IDynamicPickCardFactory>(sp => new CurrentStationCardFactory(
+            sp.GetRequiredService<TideStationListService>(),
+            sp.GetRequiredService<TideStationsOverlay>().Currents,
+            () => new CurrentCardContext(
+                sp.GetRequiredService<StationChartContext>(),
+                sp.GetRequiredService<IViewTime>(),
+                sp.GetRequiredService<TimeProvider>(),
+                UiThread.RunOrPost)));
+
         services.AddSingleton(sp => new TidePredictionTimeService(
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<ViewerSettingsService>(),
-            sp.GetRequiredService<TideStationsOverlay>().Source));
+            sp.GetRequiredService<TideStationsOverlay>().Source,
+            sp.GetRequiredService<TideStationsOverlay>().Currents));
 
         services.AddSingleton(sp => new TideStationListViewModel(sp.GetRequiredService<TideStationListService>()));
         return services;

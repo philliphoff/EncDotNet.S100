@@ -1801,6 +1801,15 @@ public partial class App : Application
             legend.SetDynamicSourceSection(
                 EncDotNet.S100.Viewer.Services.Tides.TideStationSource.SourceId,
                 EncDotNet.S100.Viewer.Services.Tides.TideStationLegendSource.SectionId);
+            // #1454 (D16): the current stations' key.
+            legend.AddSource(new EncDotNet.S100.Viewer.Services.Tides.CurrentStationLegendSource(
+                tideStations,
+                () => legend.Palette,
+                () => timeFormat.Current,
+                () => viewTime.Current.UtcDateTime));
+            legend.SetDynamicSourceSection(
+                EncDotNet.S100.Viewer.Services.Tides.CurrentStationSource.SourceId,
+                EncDotNet.S100.Viewer.Services.Tides.CurrentStationLegendSource.SectionId);
             return legend;
         });
         // Hover to find (#1412, legends D19): a hovered Legend row rings its features.

@@ -28,7 +28,10 @@ internal sealed record TideDisplayDto(
     [property: Description("Whether predictions feed the water level: off, loading, in_use, or no_station_list (on, but there's no list to predict from).")] string PredictionState,
     [property: Description("Predicted tide stations in view at a drawable scale (1:500,000 and larger), before thinning; 0 while the overlay is off.")] int StationsInView,
     [property: Description("Stations drawn: after 40 px thinning and leaving out stations S-104 covers at the view time.")] int StationsDrawn,
-    [property: Description("The cached station list.")] TideStationListDto StationList);
+    [property: Description("The cached station list.")] TideStationListDto StationList,
+    [property: Description("The 'Current stations · predicted' Layer stack row (#1454, D16): on or off. Off by default, kept after a restart. Display only: currents aren't used in route checks.")] bool CurrentStations = false,
+    [property: Description("Current stations in view at 1:500,000 and larger, before thinning; 0 while that overlay is off.")] int CurrentStationsInView = 0,
+    [property: Description("Current stations drawn: after 40 px thinning and leaving out stations S-111 covers at the view time.")] int CurrentStationsDrawn = 0);
 
 /// <summary>Reads and sets the tide prediction display state, as the Layer stack row and the setting do.</summary>
 internal sealed class TideDisplayTools
@@ -76,6 +79,7 @@ internal sealed class TideDisplayTools
         bool? tideStations = null,
         bool? usePredictions = null,
         bool? refreshStationList = null,
+        bool? currentStations = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -84,6 +88,11 @@ internal sealed class TideDisplayTools
             if (tideStations is { } stations)
             {
                 _overlay.SetVisible(stations);
+            }
+
+            if (currentStations is { } currents)
+            {
+                _overlay.SetCurrentsVisible(currents);
             }
 
             if (usePredictions is { } use)
@@ -126,7 +135,10 @@ internal sealed class TideDisplayTools
                 _list.Activity.ToString().ToLowerInvariant(),
                 progress?.CompletedStations,
                 progress?.TotalStations,
-                _list.LastError));
+                _list.LastError),
+            _overlay.AreCurrentsVisible,
+            _overlay.Currents.StationsInView.Count,
+            _overlay.Currents.CurrentFeatures.Count);
     }
 }
 
@@ -141,7 +153,7 @@ internal static class TideDisplayMcpAdapters
         {
             Name = TideDisplayTools.GetName,
             Description =
-                "Returns the tide prediction display state: whether the 'Tide stations · predicted' overlay is on, whether " +
+                "Returns the tide prediction display state: whether the 'Tide stations · predicted' and 'Current stations · predicted' overlays are on, whether " +
                 "'Use tide predictions where there's no S-104' is on and in use, how many stations are in view and drawn, " +
                 "and the cached NOAA station list (date, counts, stale, download progress). Change it with set_tide_display.",
             SerializerOptions = McpAdapterShared.Options,
@@ -155,8 +167,9 @@ internal static class TideDisplayMcpAdapters
             [Description("The 'Tide stations · predicted' overlay on or off; omit to leave it.")] bool? tideStations = null,
             [Description("'Use tide predictions where there's no S-104' on or off; omit to leave it.")] bool? usePredictions = null,
             [Description("True to download NOAA's station list again (about 10 minutes, in the background); watch stationList.activity.")] bool? refreshStationList = null,
+            [Description("The 'Current stations · predicted' overlay on or off; omit to leave it.")] bool? currentStations = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.SetAsync(tideStations, usePredictions, refreshStationList, ct));
+            McpAdapterShared.DispatchAsync(() => inner.SetAsync(tideStations, usePredictions, refreshStationList, currentStations, ct));
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = TideDisplayTools.SetName,

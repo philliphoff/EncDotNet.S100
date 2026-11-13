@@ -22,6 +22,7 @@ internal sealed class TideStationsOverlay : IDisposable
     private readonly IMapViewportNotifier? _notifier;
     private readonly IViewTime _viewTime;
     private readonly IWaterLevelCatalog _waterLevel;
+    private readonly Func<IReadOnlyList<EncDotNet.S100.Datasets.Pipelines.Catalog.LoadedDataset>> _datasets;
     private readonly ITimer _tick;
     private readonly object _gate = new();
     private IS100DynamicSourceRegistry? _registry;
@@ -34,13 +35,20 @@ internal sealed class TideStationsOverlay : IDisposable
     /// <param name="viewTime">The view time.</param>
     /// <param name="waterLevel">The loaded water level, to leave out stations S-104 covers.</param>
     /// <param name="time">The clock of the minute tick.</param>
+    /// <param name="timeFormat">The Local/UTC setting of the current stations' slack labels.</param>
+    /// <param name="datasets">The loaded datasets, to leave out current stations S-111 covers.</param>
     public TideStationsOverlay(
         TideStationListService list,
         IMapViewportNotifier? notifier,
         IViewTime viewTime,
         IWaterLevelCatalog waterLevel,
-        TimeProvider time)
+        TimeProvider time,
+        Func<TimeFormat> timeFormat,
+        Func<IReadOnlyList<EncDotNet.S100.Datasets.Pipelines.Catalog.LoadedDataset>> datasets)
     {
+        ArgumentNullException.ThrowIfNull(timeFormat);
+        ArgumentNullException.ThrowIfNull(datasets);
+        _datasets = datasets;
         ArgumentNullException.ThrowIfNull(list);
         ArgumentNullException.ThrowIfNull(viewTime);
         ArgumentNullException.ThrowIfNull(waterLevel);
@@ -49,16 +57,37 @@ internal sealed class TideStationsOverlay : IDisposable
         _viewTime = viewTime;
         _waterLevel = waterLevel;
         Source = new TideStationSource(list, () => viewTime.Current.UtcDateTime, CoveredByS104);
+        Currents = new CurrentStationSource(list, () => viewTime.Current.UtcDateTime, timeFormat, CoveredByS111);
         _viewTime.Changed += OnRefreshNeeded;
         _waterLevel.Changed += OnRefreshNeeded;
-        _tick = time.CreateTimer(_ => Source.Refresh(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        _tick = time.CreateTimer(_ => RefreshActive(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
     }
 
-    /// <summary>The source.</summary>
+    /// <summary>The tide stations' source.</summary>
     public TideStationSource Source { get; }
+
+    /// <summary>The current stations' source (D16).</summary>
+    public CurrentStationSource Currents { get; }
 
     /// <summary>Whether the overlay is on.</summary>
     public bool IsVisible => _registry?.GetVisible(Source.Id) ?? Source.IsActive;
+
+    /// <summary>Whether the current stations overlay is on.</summary>
+    public bool AreCurrentsVisible => _registry?.GetVisible(Currents.Id) ?? Currents.IsActive;
+
+    /// <summary>Turns the current stations overlay on or off, as its Layer stack row does.</summary>
+    /// <param name="visible">On or off.</param>
+    public void SetCurrentsVisible(bool visible)
+    {
+        if (_registry is { } registry)
+        {
+            registry.SetVisible(Currents.Id, visible);
+        }
+        else
+        {
+            Currents.IsActive = visible;
+        }
+    }
 
     /// <summary>Turns the overlay on or off, as its Layer stack row does.</summary>
     /// <param name="visible">On or off.</param>
@@ -88,6 +117,11 @@ internal sealed class TideStationsOverlay : IDisposable
         {
             registry.SetVisible(Source.Id, false);
         }
+
+        if (!persisted.ContainsKey(Currents.Id))
+        {
+            registry.SetVisible(Currents.Id, false);
+        }
     }
 
     /// <summary>Binds the source to <paramref name="registry"/>'s visibility and to the viewport.</summary>
@@ -106,6 +140,7 @@ internal sealed class TideStationsOverlay : IDisposable
         {
             _notifier.ViewportChanged += OnViewportChanged;
             Source.UpdateView(_notifier.Current);
+            Currents.UpdateView(_notifier.Current);
         }
 
         OnSourcesChanged();
@@ -163,15 +198,41 @@ internal sealed class TideStationsOverlay : IDisposable
         if (_registry is { } registry && !_disposed)
         {
             Source.IsActive = registry.GetVisible(Source.Id);
+            Currents.IsActive = registry.GetVisible(Currents.Id);
         }
     }
 
-    private void OnRefreshNeeded(object? sender, EventArgs e)
+    private void OnRefreshNeeded(object? sender, EventArgs e) => RefreshActive();
+
+    private void RefreshActive()
     {
         if (Source.IsActive)
         {
             Source.Refresh();
         }
+
+        if (Currents.IsActive)
+        {
+            Currents.Refresh();
+        }
+    }
+
+    // S-111 wins where it covers a station at the view time (D16).
+    private bool CoveredByS111(GeoPosition position, DateTime utc)
+    {
+        foreach (var dataset in _datasets())
+        {
+            if (string.Equals(dataset.Spec.Name, "S-111", StringComparison.OrdinalIgnoreCase)
+                && dataset.Bounds is { } b
+                && position.Latitude >= b.SouthLatitude && position.Latitude <= b.NorthLatitude
+                && position.Longitude >= b.WestLongitude && position.Longitude <= b.EastLongitude
+                && (dataset.TimeRange is not { } range || (utc >= range.Start && utc <= range.End)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnViewportChanged(object? sender, MapViewportSnapshot snapshot)
@@ -195,6 +256,7 @@ internal sealed class TideStationsOverlay : IDisposable
                 if (!t.IsCanceled && !_disposed)
                 {
                     Source.UpdateView(snapshot);
+                    Currents.UpdateView(snapshot);
                 }
             },
             CancellationToken.None,
