@@ -46,6 +46,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Tides.Stations\EncDotNet.S100.Tides.Stations.csproj" />
   </ItemGroup>
 
 </Project>

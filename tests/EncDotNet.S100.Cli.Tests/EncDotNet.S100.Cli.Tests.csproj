@@ -54,6 +54,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Tide station catalogues (NOAA's Puget Sound stations, and a hand-written one) for s100 tides (#1452). -->
+    <Content Include="..\datasets\Tides\Stations\*.json" CopyToOutputDirectory="PreserveNewest" Link="TestData\Tides\%(Filename)%(Extension)" />
     <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
     <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->

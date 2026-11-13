@@ -2,25 +2,40 @@ using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Navigation;
 
-/// <summary>The encoding of an S-104 water-level source.</summary>
+/// <summary>The kind of a water-level source: an S-104 encoding, or a harmonic prediction.</summary>
 public enum WaterLevelSourceKind
 {
-    /// <summary>A regular grid (data coding format 2, S-104 Ed 2.0.0 §10.2).</summary>
+    /// <summary>A regular S-104 grid (data coding format 2, S-104 Ed 2.0.0 §10.2).</summary>
     Grid,
 
-    /// <summary>A fixed station time series (data coding format 8).</summary>
+    /// <summary>A fixed S-104 station time series (data coding format 8).</summary>
     Station,
+
+    /// <summary>
+    /// A harmonic tide prediction at a tide station: the astronomical tide
+    /// only, not a forecast. Wind, pressure and river flow aren't in it.
+    /// S-104 is preferred wherever it covers a point and time.
+    /// </summary>
+    Prediction,
 }
 
 /// <summary>Where a water-level series comes from.</summary>
-/// <param name="DatasetId">Identifier of the S-104 dataset.</param>
-/// <param name="Kind">Grid or station.</param>
+/// <param name="DatasetId">
+/// Identifier of the S-104 dataset, or of the station catalogue for a
+/// prediction (<see cref="PredictionDatasetId"/> unless the source names its own).
+/// </param>
+/// <param name="Kind">Grid, station or prediction.</param>
 /// <param name="VerticalDatum">
 /// The dataset's vertical datum as an S-100 register code, or <c>null</c>
-/// when it isn't declared (S-104 Ed 2.0.0 §5.2, Table 5-1).
+/// when it isn't declared (S-104 Ed 2.0.0 §5.2, Table 5-1). For a
+/// prediction, the datum the station is predicted on.
 /// </param>
-/// <param name="StationId">The station identifier, for a station series.</param>
-/// <param name="DistanceMeters">Distance from the sample point to the station, for a station series.</param>
+/// <param name="StationId">The station identifier, for a station series or a prediction.</param>
+/// <param name="DistanceMeters">
+/// Distance from the sample point to the station, for a station series or a
+/// prediction: measured through charted water where a water mask is given
+/// (see <see cref="WaterReach"/>), otherwise in a straight line.
+/// </param>
 /// <param name="GridCell">The grid cell (<c>row,col</c>), for a grid series.</param>
 public sealed record WaterLevelSourceInfo(
     string DatasetId,
@@ -28,7 +43,37 @@ public sealed record WaterLevelSourceInfo(
     int? VerticalDatum,
     string? StationId = null,
     double? DistanceMeters = null,
-    string? GridCell = null);
+    string? GridCell = null)
+{
+    /// <summary>The <see cref="DatasetId"/> of a prediction whose source doesn't name its catalogue.</summary>
+    public const string PredictionDatasetId = "tide-predictions";
+
+    /// <summary>The station's name, such as <c>Seattle</c>, when the source knows it.</summary>
+    public string? StationName { get; init; }
+
+    /// <summary>
+    /// For a prediction at a subordinate station, the reference station it's
+    /// predicted from with time and height offsets; otherwise <c>null</c>.
+    /// </summary>
+    public string? ReferenceStationId { get; init; }
+
+    /// <summary>The reference station's name, when <see cref="ReferenceStationId"/> is set and the name is known.</summary>
+    public string? ReferenceStationName { get; init; }
+
+    /// <summary>
+    /// Whether the value is a harmonic prediction (<see cref="WaterLevelSourceKind.Prediction"/>):
+    /// the astronomical tide only, not a forecast.
+    /// </summary>
+    public bool IsPredicted => Kind == WaterLevelSourceKind.Prediction;
+
+    /// <summary>
+    /// The station as it's named to the mariner: "Seattle 9447130", the id
+    /// alone when the name isn't known, or <c>null</c> for a grid.
+    /// </summary>
+    public string? StationLabel => StationId is null
+        ? null
+        : string.IsNullOrWhiteSpace(StationName) ? StationId : $"{StationName} {StationId}";
+}
 
 /// <summary>A water-level height read from a series.</summary>
 /// <param name="HeightMeters">Height of the water above the vertical datum, in metres.</param>
@@ -105,6 +150,44 @@ public interface IWaterLevelSource
     /// Empty when the source can't describe them.
     /// </summary>
     IReadOnlyList<CoverageArea> Footprint => [];
+}
+
+/// <summary>Combines water-level sources.</summary>
+public static class WaterLevelSources
+{
+    /// <summary>
+    /// A source that returns <paramref name="primary"/>'s series first and
+    /// then <paramref name="fallback"/>'s, so the fallback is used only where
+    /// no primary series covers a point and time (or every one that does is
+    /// on another datum). This is how S-104 is preferred over harmonic
+    /// predictions.
+    /// </summary>
+    /// <param name="primary">The preferred source, such as loaded S-104 datasets.</param>
+    /// <param name="fallback">The source used where the primary doesn't cover, such as tide predictions.</param>
+    /// <returns>The combined source.</returns>
+    public static IWaterLevelSource WithFallback(IWaterLevelSource primary, IWaterLevelSource fallback)
+    {
+        ArgumentNullException.ThrowIfNull(primary);
+        ArgumentNullException.ThrowIfNull(fallback);
+        return new Fallback(primary, fallback);
+    }
+
+    private sealed class Fallback(IWaterLevelSource primary, IWaterLevelSource fallback) : IWaterLevelSource
+    {
+        private readonly Lazy<IReadOnlyList<WaterLevelSourceInfo>> _datasets = new(() => [.. primary.Datasets, .. fallback.Datasets]);
+        private readonly Lazy<IReadOnlyList<CoverageArea>> _footprint = new(() => [.. primary.Footprint, .. fallback.Footprint]);
+
+        public IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position)
+        {
+            var first = primary.Locate(position);
+            var second = fallback.Locate(position);
+            return second.Count == 0 ? first : first.Count == 0 ? second : [.. first, .. second];
+        }
+
+        public IReadOnlyList<WaterLevelSourceInfo> Datasets => _datasets.Value;
+
+        public IReadOnlyList<CoverageArea> Footprint => _footprint.Value;
+    }
 }
 
 /// <summary>

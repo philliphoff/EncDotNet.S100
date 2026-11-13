@@ -106,6 +106,13 @@ A predicted dataset isn't an official product, and says so:
 - Each trend compares the rise over an hour with 0.2 m, as NOAA's S-104 files
   do: steady below it, otherwise increasing or decreasing.
 
+To write any `ITidePredictor`, such as a subordinate station's
+`SubordinateTidePredictor`, use the overload that takes the predictor, the
+station's id and name, its S-100 vertical datum and how the heights are
+derived (`"from reference station 9447130, with offsets"`), and
+`FileName(stationId)` for the file name. `s100 tides predict --format s104`
+writes predictions this way from the station catalogue.
+
 PureHDF's writer needs runtime code generation, so writing works in a trimmed
 application but not under NativeAOT. Reading works under both.
 

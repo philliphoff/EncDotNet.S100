@@ -192,4 +192,67 @@ public class DepthAssimilationServiceTests
     [InlineData(null, null, null)]
     public void Uncertainties_combine_as_independent(double? charted, double? water, double? expected) =>
         Assert.Equal(expected, LocationDepthResult.CombineUncertainty(charted, water) is { } c ? Math.Round(c, 9) : null);
+
+    [Fact]
+    public void A_predicted_curve_is_drawn_round_the_view_time_and_flagged()
+    {
+        var predicted = new PredictedSeries(Mllw, _ => 0.7);
+
+        var result = _service.Assimilate(Bathy(10.0, datum: Mllw), [predicted], viewTimeUtc: T0.AddMinutes(5))!;
+
+        Assert.NotNull(result.Tide);
+        Assert.Equal(T0.AddHours(-12), result.DepthOverTime[0].Time);
+        Assert.Equal(T0.AddHours(12), result.DepthOverTime[^1].Time);
+        Assert.Equal(145, result.DepthOverTime.Count);
+        Assert.All(result.DepthOverTime, p =>
+        {
+            Assert.True(p.Predicted);
+            Assert.Equal(10.7, p.DepthMeters!.Value, 9);
+        });
+        Assert.True(result.WaterLevelAt(T0.AddDays(3))!.Value.Source.IsPredicted);
+    }
+
+    [Fact]
+    public void S104_steps_stay_solid_and_the_prediction_fills_round_them()
+    {
+        var s104 = Series("ds1", Mllw, (T0, 1.0), (T0.AddHours(1), 1.0));
+        var predicted = new PredictedSeries(Mllw, _ => 0.7);
+
+        var result = _service.Assimilate(Bathy(10.0, datum: Mllw), [s104, predicted], viewTimeUtc: T0)!;
+
+        var atS104 = Assert.Single(result.DepthOverTime, p => p.Time == T0.AddMinutes(30));
+        Assert.False(atS104.Predicted);
+        Assert.Equal(11.0, atS104.DepthMeters!.Value, 9);
+        var later = Assert.Single(result.DepthOverTime, p => p.Time == T0.AddHours(3));
+        Assert.True(later.Predicted);
+        Assert.Equal(10.7, later.DepthMeters!.Value, 9);
+    }
+
+    [Fact]
+    public void A_prediction_on_another_datum_is_refused_and_says_so()
+    {
+        var result = _service.Assimilate(Bathy(10.0, datum: Lat), [new PredictedSeries(Mllw, _ => 0.7)], viewTimeUtc: T0)!;
+
+        Assert.Null(result.Tide);
+        Assert.True(result.Refusal!.Predicted);
+        Assert.Equal(DatumAgreement.Different, result.Refusal.Agreement);
+    }
+
+    /// <summary>A harmonic prediction: no start, no end, a height at any time.</summary>
+    private sealed class PredictedSeries(int datum, Func<DateTime, double> heightAt) : IWaterLevelSeries
+    {
+        public WaterLevelSourceInfo Source { get; } = new(WaterLevelSourceInfo.PredictionDatasetId, WaterLevelSourceKind.Prediction, datum, "9447130", 4200)
+        {
+            StationName = "Seattle",
+        };
+
+        public DateTime Start => DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
+
+        public DateTime End => DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
+
+        public WaterLevelReading? ValueAt(DateTime utc) => new WaterLevelReading(heightAt(utc), utc);
+
+        public IReadOnlyList<DateTime> StepsWithin(DateTime start, DateTime end) =>
+            throw new InvalidOperationException("A predicted series has no steps to list over its whole range.");
+    }
 }

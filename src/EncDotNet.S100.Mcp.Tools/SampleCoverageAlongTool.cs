@@ -110,9 +110,23 @@ public sealed class SampleCoverageAlongTool
     /// <param name="catalog">The catalog of loaded datasets to sample from.</param>
     /// <param name="transforms">Reprojects sample points into each coverage's native CRS.</param>
     public SampleCoverageAlongTool(IDatasetCatalog catalog, ICrsTransformFactory transforms)
+        : this(catalog, transforms, null, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Creates a new <see cref="SampleCoverageAlongTool"/> that falls back to tide predictions for S-104.</summary>
+    /// <param name="catalog">The catalog of loaded datasets to sample from.</param>
+    /// <param name="transforms">Reprojects sample points into each coverage's native CRS.</param>
+    /// <param name="predictions">The host's route-check sources, whose tide predictions fill S-104 gaps; <c>null</c> for none.</param>
+    /// <param name="time">The clock, for an S-104 sample with no time.</param>
+    public SampleCoverageAlongTool(
+        IDatasetCatalog catalog,
+        ICrsTransformFactory transforms,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? predictions,
+        TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(catalog);
-        _sampler = new SampleCoverageTool(catalog, transforms);
+        _sampler = new SampleCoverageTool(catalog, transforms, predictions, time);
     }
 
     /// <summary>Executes the tool.</summary>

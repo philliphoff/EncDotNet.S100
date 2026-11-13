@@ -31,7 +31,9 @@ public static class S100McpTools
     /// </param>
     /// <param name="routeCheckSources">
     /// The route-check sources shared with the host's own checks, or
-    /// <c>null</c> for the tool's own cache over ProjNet.
+    /// <c>null</c> for the tool's own cache over ProjNet. Their
+    /// <see cref="RouteCheckSourceCache.TidePredictions"/> also fill S-104 gaps
+    /// in <c>sample_coverage</c> and <c>sample_coverage_along</c>.
     /// </param>
     /// <param name="mapDrawState">
     /// What the host's map draws, so <c>identify_features</c> with no time
@@ -53,14 +55,14 @@ public static class S100McpTools
             new ListDatasetsTool(catalog),
             new DescribeFeatureTool(catalog),
             new DescribeFeatureTypeTool(),
-            new SampleCoverageTool(catalog, transforms),
+            new SampleCoverageTool(catalog, transforms, routeCheckSources, TimeProvider.System),
             new FindAtTool(catalog),
             mapDrawState is null ? new IdentifyFeaturesTool(catalog) : new IdentifyFeaturesTool(catalog, mapDrawState),
             new NearestFeaturesTool(catalog),
             new QueryFeaturesTool(catalog),
             new CountFeaturesTool(catalog),
             new SearchFeaturesTool(catalog),
-            new SampleCoverageAlongTool(catalog, transforms),
+            new SampleCoverageAlongTool(catalog, transforms, routeCheckSources, TimeProvider.System),
             new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
             new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))

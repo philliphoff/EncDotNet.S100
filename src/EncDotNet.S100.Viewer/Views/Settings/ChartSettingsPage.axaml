@@ -193,6 +193,13 @@
                 <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}" TextWrapping="Wrap" />
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding WaterLevelApplyUndeclaredDatum}"  AutomationProperties.AutomationId="Settings.WaterLevelApplyUndeclaredDatum" AutomationProperties.Name="{x:Static loc:Strings.Label_WaterLevelApplyUndeclaredDatum}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}"/>
             </Grid>
+            <!-- Water level sources (#1451, tide predictions design D1): a source,
+                 not an adjustment mode, so it stays on with adjustment off. -->
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_UseTidePredictions_Help}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_UseTidePredictions}" TextWrapping="Wrap" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding UseTidePredictions}" AutomationProperties.AutomationId="Settings.UseTidePredictions" AutomationProperties.Name="{x:Static loc:Strings.Label_UseTidePredictions}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_UseTidePredictions}"/>
+            </Grid>
 
             <!-- Weather on a route (#1093): Check route's wind and wave limits,
                  kept with the mariner settings. -->

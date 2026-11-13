@@ -22,9 +22,22 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// Appendix D, S-164 IncompatibleDatums): the card shows the charted depth and
 /// the reason. Only series on the charted depth's datum are applied.
 /// </para>
+/// <para>
+/// A harmonic tide prediction (<see cref="WaterLevelSourceKind.Prediction"/>)
+/// has no steps and no end, so its part of the curve is drawn every
+/// <see cref="PredictedStep"/> for <see cref="PredictedHalfWindow"/> either
+/// side of the view time (tide predictions design D8). S-104 steps are kept
+/// where S-104 covers, as the water-level rule prefers it.
+/// </para>
 /// </remarks>
 internal sealed class DepthAssimilationService
 {
+    /// <summary>How far either side of the view time a predicted curve is drawn.</summary>
+    public static readonly TimeSpan PredictedHalfWindow = TimeSpan.FromHours(12);
+
+    /// <summary>The step a predicted curve is drawn at.</summary>
+    public static readonly TimeSpan PredictedStep = TimeSpan.FromMinutes(10);
+
     /// <summary>
     /// Assimilates the base depth and the water-level series at a location.
     /// </summary>
@@ -34,8 +47,16 @@ internal sealed class DepthAssimilationService
     /// </param>
     /// <param name="series">The water-level series at the point, most preferred first; may be empty.</param>
     /// <param name="applyUndeclaredDatum">Applies water level where either vertical datum isn't declared (#1132 Q2); otherwise it's refused.</param>
+    /// <param name="viewTimeUtc">
+    /// The Timeline's time, round which a predicted curve is drawn; <c>null</c>
+    /// when there's none, and then the curve has only S-104's steps.
+    /// </param>
     /// <returns>The assimilated result, or <c>null</c> when <paramref name="baseDepth"/> is <c>null</c>.</returns>
-    public LocationDepthResult? Assimilate(BaseDepthResult? baseDepth, IReadOnlyList<IWaterLevelSeries> series, bool applyUndeclaredDatum = false)
+    public LocationDepthResult? Assimilate(
+        BaseDepthResult? baseDepth,
+        IReadOnlyList<IWaterLevelSeries> series,
+        bool applyUndeclaredDatum = false,
+        DateTime? viewTimeUtc = null)
     {
         ArgumentNullException.ThrowIfNull(series);
 
@@ -72,12 +93,17 @@ internal sealed class DepthAssimilationService
                     baseDepth.Source,
                     baseDepth.VerticalDatumCode,
                     preferred.DatasetId,
-                    preferred.VerticalDatum),
+                    preferred.VerticalDatum)
+                {
+                    Predicted = preferred.IsPredicted,
+                },
             };
         }
 
         var times = compatible
+            .Where(s => !s.Source.IsPredicted)
             .SelectMany(s => s.StepsWithin(s.Start, s.End))
+            .Concat(PredictedTimes(compatible, viewTimeUtc))
             .Distinct()
             .Order()
             .ToList();
@@ -92,7 +118,8 @@ internal sealed class DepthAssimilationService
                 curve.Add(new DepthOverTimePoint(
                     time,
                     baseDepth.DepthMeters + sample.HeightMeters,
-                    LocationDepthResult.CombineUncertainty(uncertainty, sample.UncertaintyMeters)));
+                    LocationDepthResult.CombineUncertainty(uncertainty, sample.UncertaintyMeters),
+                    sample.Source.IsPredicted));
             }
             else
             {
@@ -115,6 +142,24 @@ internal sealed class DepthAssimilationService
             curve,
             uncertainty,
             DatumUnconfirmed: VerticalDatumCheck.Compare(baseDepth.VerticalDatumCode, first.VerticalDatum) != DatumAgreement.Same);
+    }
+
+    // Every PredictedStep across the window round the view time, when a
+    // predicted series is among those applied.
+    private static IEnumerable<DateTime> PredictedTimes(IReadOnlyList<IWaterLevelSeries> series, DateTime? viewTimeUtc)
+    {
+        if (viewTimeUtc is not { } view || !series.Any(s => s.Source.IsPredicted))
+        {
+            yield break;
+        }
+
+        view = view.Kind == DateTimeKind.Local ? view.ToUniversalTime() : DateTime.SpecifyKind(view, DateTimeKind.Utc);
+        var ticks = PredictedStep.Ticks;
+        var start = new DateTime((view - PredictedHalfWindow).Ticks / ticks * ticks, DateTimeKind.Utc);
+        for (var t = start; t <= view + PredictedHalfWindow; t += PredictedStep)
+        {
+            yield return t;
+        }
     }
 
     /// <summary>

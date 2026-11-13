@@ -217,9 +217,20 @@ and compares it with the required UKC (0 m when none is set).
   no data, it comes from S-101: the shallowest covering dredged area, then
   depth area (DRVAL1), then a sounding within 250 m.
 - **Water level** comes from S-104 at the ETA, interpolated between time
-  steps: grids first, then the nearest station within 10 km. Outside the
-  S-104 extent or time range there's no water level, and the stretch is a
-  gap.
+  steps: grids first, then the nearest station within 10 km. The 10 km is
+  measured through the loaded charts' water, so land on an S-101 chart
+  blocks a station from the next basin; where no chart covers, it's a
+  straight line.
+- **Tide predictions.** When the host turns them on (`s100 route check
+  --tide-predictions`, or **Use tide predictions where there's no S-104** in
+  SoundCharts), a harmonic prediction at the tide station nearest by water,
+  within 10 km, gives the water level where no S-104 covers the stretch and
+  the ETA. S-104 always wins where it covers. A prediction is the
+  astronomical tide only, not a forecast, so the stretch is lower
+  confidence. A subordinate station is predicted from its reference station
+  with NOAA's offsets.
+- **Gaps.** Outside the S-104 extent or time range, with no prediction in
+  reach, there's no water level, and the stretch is a gap.
 - **Datums.** When the depth and water-level vertical datums differ, the
   water level is reported but not applied, and the stretch is a gap.
 - **Squat** is a fixed allowance. It isn't modelled from speed, and S-111
@@ -238,6 +249,7 @@ The verdict is the first of these that applies: water level ends before
 arrival, below your UKC setting, incomplete data, meets your settings but
 tight, meets your settings. A departure window sweeps departures across the
 S-104 time range and lists the runs of departures that meet your settings.
+Predictions have no time range, so they don't set the window.
 For how samples are spaced and what the result reports, see
 [Under-keel clearance](mcp-server.md#under-keel-clearance).
 
@@ -250,6 +262,7 @@ settings and still be lower confidence. The reasons are:
 |---|---|
 | `charted_depth_from_s101` | The depth is from S-101 because no S-102 covers the stretch. |
 | `datum_unconfirmed` | The depth or water-level datum isn't declared, or isn't an S-100 code, so they can't be confirmed to share a reference. The water level is applied anyway. |
+| `water_level_predicted` | The water level is a harmonic tide prediction, not S-104: the astronomical tide only. Wind, pressure and river flow can move the real water level 0.5 m or more. |
 
 SoundCharts draws a lower-confidence stretch in its state's colour, dashed.
 The verdict follows the clearance; the confidence reasons qualify it and
@@ -263,8 +276,10 @@ findings:
 | Code | Group | When |
 |---|---|---|
 | `clearance.below_setting` | Must review | A stretch where UKC is below the required UKC. |
+| `clearance.tight_on_predicted` | Check | A stretch that's Tight or below your UKC setting on a predicted water level. The tight margin is no wider than weather can move a prediction. |
 | `confidence.charted_depth_from_s101` | Check | A stretch where the charted depth is from S-101 because no S-102 covers it. |
 | `confidence.datum_unconfirmed` | Check | A stretch where a depth or water-level datum isn't declared, so they can't be confirmed to match. |
+| `confidence.water_level_predicted` | Info | A stretch where the water level is a harmonic tide prediction, naming the stations. |
 | `data.water_level_ends` | Check | The water-level data ends before the vessel reaches a stretch, so the water level isn't applied there. |
 | `data.water_level_starts_late` | Check | The water-level data starts after the vessel passes a stretch. |
 | `data.no_water_level_coverage` | Check | A stretch outside every water-level dataset's coverage. |

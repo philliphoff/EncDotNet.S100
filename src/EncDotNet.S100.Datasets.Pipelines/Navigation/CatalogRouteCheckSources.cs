@@ -45,11 +45,13 @@ public static class CatalogRouteCheckSources
 
         var snapshot = datasets.ToList();
         var charts = new CatalogRouteChartSource(snapshot);
+        var reach = new WaterReach(charts, options.MaxStationDistanceMeters);
         return new RouteCheckSources
         {
             Charts = charts,
             Depth = new LazyDepth(() => new CatalogChartedDepthSource(snapshot, transforms, options)),
-            WaterLevel = new LazyWaterLevel(() => new CatalogWaterLevelSource(snapshot, transforms, options)),
+            WaterLevel = new LazyWaterLevel(() => WaterLevel(snapshot, transforms, options, reach)),
+            WaterMask = charts,
             Areas = new CatalogRouteAreaSource(charts, snapshot),
             Warnings = new LazyWarnings(() => new RouteWarningList(
                 RouteWarningSources.FromDatasets(snapshot),
@@ -59,6 +61,45 @@ public static class CatalogRouteCheckSources
                 : null,
             Cyclones = CatalogRouteCyclone.FromDatasets(snapshot),
         };
+    }
+
+    /// <summary>
+    /// The water mask of a set of loaded datasets: where their S-101 cells
+    /// (and S-401, and translated S-57) chart land and water. A station's
+    /// reach is measured through it, and the adjusted-area edge is clipped to it.
+    /// </summary>
+    /// <param name="datasets">The loaded datasets.</param>
+    /// <returns>The mask; every point is <see cref="WaterMaskClass.Uncharted"/> when no chart is loaded.</returns>
+    public static IWaterMask WaterMaskFromDatasets(IEnumerable<LoadedDataset> datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        return new CatalogRouteChartSource(datasets.ToList());
+    }
+
+    // S-104 first, then tide predictions where S-104 doesn't cover a point and time.
+    private static IWaterLevelSource WaterLevel(
+        IReadOnlyList<LoadedDataset> snapshot, ICrsTransformFactory transforms, RouteCheckSourceOptions options, WaterReach reach)
+    {
+        var s104 = new CatalogWaterLevelSource(snapshot, transforms, options, reach);
+        return options.TidePredictions is { } catalogue
+            ? WaterLevelSources.WithFallback(s104, new TidePredictionWaterLevelSource(catalogue, reach, options.TidePredictionOptions, ChartBounds(snapshot)))
+            : s104;
+    }
+
+    // The bounds of the loaded charts and bathymetry: where predicted water
+    // level can be applied to a depth, so the stations the footprint lists.
+    private static List<BoundingBox> ChartBounds(IReadOnlyList<LoadedDataset> snapshot)
+    {
+        var result = new List<BoundingBox>();
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is S101DatasetData or S102CoverageData && dataset.Bounds is { } bounds)
+            {
+                result.Add(bounds);
+            }
+        }
+
+        return result;
     }
 
     private sealed class LazyDepth(Func<IChartedDepthSource> create) : IChartedDepthSource
@@ -116,6 +157,17 @@ public sealed record RouteCheckSourceOptions
     public double MaxStationDistanceMeters { get; init; } = 10_000;
 
     /// <summary>
+    /// Harmonic tide predictions to use for water level where no S-104
+    /// covers a point and time, or <c>null</c> (the default) for none. A
+    /// prediction is the astronomical tide only, not a forecast, and every
+    /// value it gives says so (<see cref="WaterLevelSourceInfo.IsPredicted"/>).
+    /// </summary>
+    public EncDotNet.S100.Tides.Stations.TideStationCatalogue? TidePredictions { get; init; }
+
+    /// <summary>The datum and dataset id of <see cref="TidePredictions"/>, or <c>null</c> for <see cref="TidePredictionOptions.Default"/>.</summary>
+    public TidePredictionOptions? TidePredictionOptions { get; init; }
+
+    /// <summary>
     /// How far an S-101 sounding is used as a depth when no S-101 depth or
     /// dredged area covers a point, in metres. Default 250 m.
     /// </summary>
@@ -125,7 +177,7 @@ public sealed record RouteCheckSourceOptions
 /// <summary>
 /// Keeps one <see cref="RouteCheckSources"/> per catalog snapshot, so every
 /// check in a host shares the cells' indexes and S-102 grids, and rebuilds
-/// them when the loaded datasets change.
+/// them when the loaded datasets change or tide predictions are turned on or off.
 /// </summary>
 /// <remarks>
 /// A snapshot is matched by reference: <see cref="IDatasetCatalog"/> publishes
@@ -135,10 +187,11 @@ public sealed record RouteCheckSourceOptions
 public sealed class RouteCheckSourceCache
 {
     private readonly ICrsTransformFactory _transforms;
-    private readonly RouteCheckSourceOptions? _options;
+    private readonly RouteCheckSourceOptions _options;
     private readonly object _gate = new();
     private IReadOnlyList<LoadedDataset>? _snapshot;
     private RouteCheckSources? _sources;
+    private EncDotNet.S100.Tides.Stations.TideStationCatalogue? _tidePredictions;
 
     /// <summary>Creates the cache.</summary>
     /// <param name="transforms">Reprojects WGS-84 into a projected S-102 or S-104 grid's native CRS.</param>
@@ -147,8 +200,49 @@ public sealed class RouteCheckSourceCache
     {
         ArgumentNullException.ThrowIfNull(transforms);
         _transforms = transforms;
-        _options = options;
+        _options = options ?? RouteCheckSourceOptions.Default;
+        _tidePredictions = _options.TidePredictions;
     }
+
+    /// <summary>
+    /// The tide predictions every check, the chart and the pick report use
+    /// where no S-104 covers, or <c>null</c> for none (see
+    /// <see cref="RouteCheckSourceOptions.TidePredictions"/>). Setting a
+    /// different value rebuilds the sources on the next <see cref="Get"/> and
+    /// raises <see cref="Changed"/>.
+    /// </summary>
+    public EncDotNet.S100.Tides.Stations.TideStationCatalogue? TidePredictions
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _tidePredictions;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(value, _tidePredictions))
+                {
+                    return;
+                }
+
+                _tidePredictions = value;
+                _sources = null;
+            }
+
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Raised when the sources change for a reason other than the loaded
+    /// datasets: <see cref="TidePredictions"/> was set.
+    /// </summary>
+    public event EventHandler? Changed;
 
     /// <summary>The sources for a catalog snapshot, built on the first call for it.</summary>
     /// <param name="datasets">The snapshot, such as <see cref="IDatasetCatalog.Datasets"/>.</param>
@@ -160,7 +254,7 @@ public sealed class RouteCheckSourceCache
         {
             if (!ReferenceEquals(datasets, _snapshot) || _sources is null)
             {
-                _sources = CatalogRouteCheckSources.FromDatasets(datasets, _transforms, _options);
+                _sources = CatalogRouteCheckSources.FromDatasets(datasets, _transforms, _options with { TidePredictions = _tidePredictions });
                 _snapshot = datasets;
             }
 

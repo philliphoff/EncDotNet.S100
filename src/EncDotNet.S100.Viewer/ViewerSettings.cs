@@ -209,6 +209,12 @@ internal sealed partial class ViewerSettings
     public bool? WaterLevelApplyUndeclaredDatum { get; set; }
 
     /// <summary>
+    /// Whether harmonic tide predictions are used for water level where
+    /// there's no S-104 (tide predictions design D1). Null is false.
+    /// </summary>
+    public bool? UseTidePredictions { get; set; }
+
+    /// <summary>
     /// Check route's wind limit in knots for the weather check (#1093), or
     /// null when wind isn't checked (the default).
     /// </summary>

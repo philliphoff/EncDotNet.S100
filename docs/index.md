@@ -80,6 +80,7 @@ flowchart LR
 - [Render S-102 to PNG](scenarios/render-s102-to-png.md)
 - [Inspect S-124 warnings](scenarios/inspect-s124-warnings.md)
 - [Compose S-101 and S-102](scenarios/compose-s101-s102.md)
+- [Find when the tide is above a height](scenarios/tide-above-a-height.md)
 - [Show wind and waves on the chart](weather.md): GRIB2 and NetCDF forecasts,
   CAP warnings, NDBC buoys and own-ship wind, which aren't for navigation.
 

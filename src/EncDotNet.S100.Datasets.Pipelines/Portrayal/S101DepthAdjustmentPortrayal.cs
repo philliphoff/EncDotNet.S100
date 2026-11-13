@@ -317,7 +317,15 @@ internal static class S101DepthAdjustmentPortrayal
     private static bool TryId(DrawingInstruction instruction, out long id) =>
         long.TryParse(instruction.FeatureReference, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out id);
 
-    private static NtsGeometry? Footprint(GeometryFactory factory, IReadOnlyList<CoverageArea> areas)
+    // The union of a footprint, kept while the list lives: every cell of a
+    // re-draw asks with the same adjustment, and a tide-prediction footprint
+    // can hold a disc per station.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<CoverageArea>, NtsGeometry?[]> FootprintUnions = new();
+
+    private static NtsGeometry? Footprint(GeometryFactory factory, IReadOnlyList<CoverageArea> areas) =>
+        FootprintUnions.GetValue(areas, a => [BuildFootprint(factory, a)])[0];
+
+    private static NtsGeometry? BuildFootprint(GeometryFactory factory, IReadOnlyList<CoverageArea> areas)
     {
         var polygons = new List<NtsGeometry>();
         foreach (var area in areas)

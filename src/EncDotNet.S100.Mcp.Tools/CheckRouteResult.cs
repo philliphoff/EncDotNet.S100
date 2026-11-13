@@ -118,15 +118,19 @@ public sealed record CheckRouteResult(
         _ => "no_data",
     };
 
+    /// <summary>The caveat every predicted water level carries (tide predictions design D17).</summary>
+    public const string PredictionCaveat = "Astronomical tide only, not a forecast.";
+
     /// <summary>
     /// The wire codes for lower-confidence reasons, in a fixed order:
-    /// <c>charted_depth_from_s101</c>, then <c>datum_unconfirmed</c>.
+    /// <c>charted_depth_from_s101</c>, <c>datum_unconfirmed</c>, then
+    /// <c>water_level_predicted</c>.
     /// </summary>
     /// <param name="reasons">The reasons.</param>
     /// <returns>The codes; empty at full confidence.</returns>
     public static IReadOnlyList<string> ConfidenceCodes(ConfidenceReasons reasons)
     {
-        var codes = new List<string>(2);
+        var codes = new List<string>(3);
         if (reasons.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
         {
             codes.Add("charted_depth_from_s101");
@@ -135,6 +139,11 @@ public sealed record CheckRouteResult(
         if (reasons.HasFlag(ConfidenceReasons.DatumUnconfirmed))
         {
             codes.Add("datum_unconfirmed");
+        }
+
+        if (reasons.HasFlag(ConfidenceReasons.WaterLevelPredicted))
+        {
+            codes.Add("water_level_predicted");
         }
 
         return codes;
@@ -404,7 +413,8 @@ public sealed record CheckRouteClearance(
         var products = new List<string>();
         if (sources.BathymetryDatasets.Count > 0) products.Add("S-102");
         if (sources.FallbackDatasets.Count > 0) products.Add("S-101");
-        if (sources.WaterLevelSources.Count > 0) products.Add("S-104");
+        if (sources.WaterLevelSources.Any(w => !w.IsPredicted)) products.Add("S-104");
+        if (sources.WaterLevelSources.Any(w => w.IsPredicted)) products.Add("tide predictions (astronomical tide only, not a forecast)");
         return "computed from " + (products.Count == 0 ? "no data" : string.Join(", ", products)) + " for your settings";
     }
 
@@ -504,7 +514,17 @@ public sealed record CheckRouteClearance(
         s.BathymetryDatasets,
         s.FallbackDatasets,
         s.WaterLevelSources.Select(w => new CheckRouteWaterLevelSource(
-            w.DatasetId, w.Kind == WaterLevelSourceKind.Grid ? "grid" : "station", w.StationId)).ToList(),
+            w.DatasetId,
+            w.Kind switch
+            {
+                WaterLevelSourceKind.Grid => "grid",
+                WaterLevelSourceKind.Prediction => "prediction",
+                _ => "station",
+            },
+            w.StationId,
+            w.StationName,
+            w.ReferenceStationId,
+            w.IsPredicted ? CheckRouteResult.PredictionCaveat : null)).ToList(),
         s.DepthDatums.Select(Datum).ToList(),
         s.WaterLevelDatums.Select(Datum).ToList(),
         CheckRouteResult.Round(s.MaxUncertaintyMeters));
@@ -595,16 +615,19 @@ public sealed record CheckRouteStretch(
 public sealed record CheckRouteClearanceSources(
     [property: Description("S-102 datasets that supplied charted depth.")] IReadOnlyList<string> BathymetryDatasets,
     [property: Description("S-101 cells that supplied charted depth where S-102 didn't (low confidence).")] IReadOnlyList<string> FallbackDatasets,
-    [property: Description("S-104 datasets (and stations) that supplied water level.")] IReadOnlyList<CheckRouteWaterLevelSource> WaterLevels,
+    [property: Description("S-104 datasets (and stations), and predicted tide stations, that supplied water level.")] IReadOnlyList<CheckRouteWaterLevelSource> WaterLevels,
     [property: Description("Vertical datums of the charted depths.")] IReadOnlyList<CheckRouteDatum> DepthDatums,
     [property: Description("Vertical datums of the water levels.")] IReadOnlyList<CheckRouteDatum> WaterLevelDatums,
     [property: Description("Largest S-102 depth uncertainty met, metres; null when none.")] double? MaxUncertaintyMeters);
 
-/// <summary>An S-104 source.</summary>
+/// <summary>A water-level source: an S-104 grid or station, or a predicted tide station.</summary>
 public sealed record CheckRouteWaterLevelSource(
-    [property: Description("S-104 dataset id.")] string Dataset,
-    [property: Description("\"grid\" or \"station\".")] string Kind,
-    [property: Description("Station identifier, for a station series.")] string? Station);
+    [property: Description("S-104 dataset id, or the tide station list's id for a prediction.")] string Dataset,
+    [property: Description("\"grid\" or \"station\" (S-104), or \"prediction\" (a harmonic tide prediction).")] string Kind,
+    [property: Description("Station identifier, for a station series or a prediction.")] string? Station,
+    [property: Description("Station name, for a prediction.")] string? StationName = null,
+    [property: Description("For a prediction at a subordinate station, the reference station it's predicted from with offsets.")] string? ReferenceStation = null,
+    [property: Description("For a prediction: \"Astronomical tide only, not a forecast.\"")] string? Caveat = null);
 
 /// <summary>A vertical datum code and its name.</summary>
 public sealed record CheckRouteDatum(

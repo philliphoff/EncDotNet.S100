@@ -243,6 +243,56 @@ SoundCharts only.
 | `follow_warning_link` | Yes | Follows the link `text` (such as `106/26`; `occurrence` picks among repeats, default 1) in the open card, or in the card `datasetId`/`featureId`, as clicking it does: the linked warning is selected in the **Navigational warnings** panel and its card opens. Returns what `get_warning_cards` returns. |
 | `preview_warning_card` | Yes | Previews the part `featureId` of `datasetId` on the map with the pick highlight, as pointing at its card does when a pick hits several warnings; omit `featureId` to end the preview. Returns what `get_warning_cards` returns. |
 
+### Tide tools
+
+Both hosts provide these tools. They read the offline tide station catalogue
+that [`s100 tides update`](cli.md#tides-update) downloads from NOAA CO-OPS,
+and need no network. `s100 mcp serve` takes another catalogue with
+`--tide-catalogue`. SoundCharts reads its own station list,
+`tide-stations.json.gz` beside its settings (or under `--data-dir`), the one
+**Use tide predictions where there's no S-104** reads. Without a catalogue,
+both tools return `tide_catalogue_not_available`, whose `hint` says how to
+get one.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_tide_stations` | No | Lists tide stations within `radiusMeters` (default 50,000) of `latitude` and `longitude`, or in a box (`south`, `west`, `north`, `east`), nearest first, up to `limit` (default 10, at most 500). Each station has its `id`, `name`, `type` (`tide`), `kind` (`harmonic` or `subordinate`), `position`, `distanceMeters`, `datums` (heights above `datumsReference`, MLLW where the station has it), `predictableDatums`, and for a subordinate station `referenceStationId`, `referenceStationName` and `offsets` (`highMinutes`, `lowMinutes`, `heightAdjustment`, and `highFactor` and `lowFactor` or `highOffsetMeters` and `lowOffsetMeters`). `catalogue` gives the `provider`, `date`, `ageDays`, `stale` (over 12 months old) and `stationCount`. `truncated` is `true` when more stations matched than `limit`. |
+| `predict_tide` | No | Predicts the astronomical tide at a `station` (id or name), or at the nearest station within `radiusMeters` (default 10,000) of `latitude` and `longitude` that can be predicted on the datum. `from` and `to` set the window (default: now, rounded down to the step, for 24 hours; at most 366 days). `mode` is `series` (default: heights every `stepMinutes`, default 30, at most 2,000), `extremes` (highs and lows, to the minute) or `both`. `datum` is `MLLW` (default), `MLW`, `MSL`, `MHW`, `MHHW`, `LAT` or `HAT`; subordinate stations are MLLW only. Returns the `station` (with `kind`, `referenceStationId` and `distanceMeters`), `kind: "prediction"`, the `datum` and its S-100 `verticalDatum` code, `series` and `extremes` with UTC times and heights in metres above the datum (positive up), `method` for a subordinate station, `caveat` and `catalogueDate`. |
+
+Errors: `tide_station_not_found` (with up to ten `candidates` when a name
+matches several stations), `no_tide_station_near`, and
+`tide_datum_not_available` (with the datums the station has).
+
+A prediction leaves out wind, pressure and river flow, which can move the
+water 0.5 m or more. Quote `caveat` ("Astronomical tide only, not a
+forecast.") with any value. Predictions aren't S-104 and aren't for
+navigation.
+
+### Predicted water level in sampling
+
+Where the host has tide predictions on (SoundCharts' **Use tide predictions
+where there's no S-104**, or `s100 mcp serve --tide-predictions`),
+`sample_coverage` and `sample_coverage_along` for `S-104` fall back to a
+prediction where no S-104 dataset covers the point and time: the station
+nearest by water within 10 km, as the route check uses. The result's
+`datasetId` is `tide-predictions`, its `value` is a `water_level_station`
+sample (height on the station's chart datum, with a trend from the rise over
+the hour round it), and it adds a `source`:
+
+```json
+"source": {
+  "kind": "prediction",
+  "station": { "id": "9447130", "name": "SEATTLE (Madison St.), Elliott Bay", "type": "tide", "kind": "harmonic", "referenceStationId": null, "distanceMeters": 420 },
+  "verticalDatum": 12,
+  "caveat": "Astronomical tide only, not a forecast.",
+  "catalogueDate": "2026-11-12T00:00:00+00:00"
+}
+```
+
+A value from a loaded dataset has no `source`. A `series` query is predicted
+at each instant; a `range` query every 30 minutes, at most 2,000 heights.
+With predictions off, or no station in reach, the S-104 error stands.
+
 ### Library tools
 
 SoundCharts only.
@@ -563,9 +613,14 @@ How it samples and classifies:
   cell is skipped. Each sample stands for at most `sampleSpacingMeters`
   (default 50) and keeps the shallowest depth in its stretch.
 - **Water level** comes from S-104 at the ETA, interpolated between time
-  steps. Grids are used first, then the nearest station within 10 km. Outside
-  the S-104 extent or time range, or where a value is NoData, the sample is
-  `no_data` ("water level not applied").
+  steps. Grids are used first, then the nearest station within 10 km
+  measured through the loaded charts' water. Where the host has turned tide
+  predictions on, a harmonic prediction at the tide station nearest by water
+  fills in where no S-104 covers; its `waterLevels` entry has `kind:
+  "prediction"`, the station, its name, any reference station and the caveat
+  "Astronomical tide only, not a forecast." Outside the S-104 extent or time
+  range, with no prediction in reach, or where a value is NoData, the sample
+  is `no_data` ("water level not applied").
 - **Datums.** When the S-102 or S-101 and S-104 vertical datums differ, the
   water level is reported but not applied, and the stretch is a
   `datum_mismatch` gap. When a datum isn't declared, or isn't an S-100 code,
@@ -577,7 +632,8 @@ How it samples and classifies:
   - `below_setting`
   - `no_data`
 - **Confidence** is reported separately from the state, as a list of
-  reasons: `charted_depth_from_s101` and `datum_unconfirmed`, or an empty
+  reasons: `charted_depth_from_s101`, `datum_unconfirmed` and
+  `water_level_predicted`, or an empty
   list at full confidence. A sample on S-101 depth that meets the required
   UKC is `meets_settings` with `confidence: ["charted_depth_from_s101"]`.
   SoundCharts draws it in the band's colour, dashed. The result, `minimum`,
@@ -753,6 +809,8 @@ statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
 - "List the datasets loaded in the viewer and their bounding boxes."
 - "What is the depth at 47.6062°N, 122.3321°W in the loaded S-102 dataset?"
 - "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
+- "When is the tide above 2 m at Seattle tomorrow afternoon?" See
+  [Find when the tide is above a height](scenarios/tide-above-a-height.md).
 - "Plan a mid-channel route from the harbour entrance to the marina: create a
   route, then add waypoints that stay clear of the charted safety contour, and
   set each leg's safety contour and cross-track limits."

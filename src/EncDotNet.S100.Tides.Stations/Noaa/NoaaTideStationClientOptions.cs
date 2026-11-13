@@ -37,6 +37,13 @@ public sealed class NoaaTideStationClientOptions
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// Whether <see cref="NoaaTideStationClient.DownloadCatalogueAsync"/>
+    /// also downloads NOAA's tidal current stations: about 900 more
+    /// requests. On by default.
+    /// </summary>
+    public bool IncludeCurrentStations { get; init; } = true;
+
+    /// <summary>
     /// The reference stations whose datums <see cref="NoaaTideStationClient.CheckForUpdatesAsync"/>
     /// reads to see whether NOAA has released a new tidal datum epoch:
     /// long-running stations around the US. Defaults to Seattle (9447130),

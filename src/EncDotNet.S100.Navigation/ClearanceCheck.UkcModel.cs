@@ -446,6 +446,11 @@ public sealed partial class ClearanceCheck
                 confidence |= ConfidenceReasons.DatumUnconfirmed;
             }
 
+            if (status == WaterLevelStatus.Applied && used?.IsPredicted == true)
+            {
+                confidence |= ConfidenceReasons.WaterLevelPredicted;
+            }
+
             if (depth is null || status != WaterLevelStatus.Applied || height is not { } h)
             {
                 return new PointEvaluation(used, status, height, stepTime, agreement, required, null, null, UkcState.NoData, confidence);
@@ -579,6 +584,7 @@ public sealed partial class ClearanceCheck
         [
             s => s.Confidence.HasFlag(ConfidenceReasons.ChartedDepthFromS101) ? PassageStretchKind.ChartedDepthFromS101 : null,
             s => s.Confidence.HasFlag(ConfidenceReasons.DatumUnconfirmed) ? PassageStretchKind.DatumUnconfirmed : null,
+            s => s.Confidence.HasFlag(ConfidenceReasons.WaterLevelPredicted) ? PassageStretchKind.WaterLevelPredicted : null,
         ];
 
         // Runs of one kind separated by less than the merge gap are merged, so a

@@ -474,6 +474,14 @@ internal sealed class PassageCheckViewModel : ViewModelBase
 
         if (result.Confidence.HasFlag(ConfidenceReasons.DatumUnconfirmed))
             lines.Add(Strings.Check_ConfidenceDatumUnconfirmed);
+        if (result.Confidence.HasFlag(ConfidenceReasons.WaterLevelPredicted))
+        {
+            var meters = result.LowConfidence
+                .Where(s => s.Kind == PassageStretchKind.WaterLevelPredicted)
+                .Sum(s => s.LengthMeters);
+            lines.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_ConfidencePredictedFormat, meters / PassageGeodesy.MetersPerNauticalMile));
+        }
+
         return lines.Count == 0 ? null : string.Join(Environment.NewLine, lines);
     }
 

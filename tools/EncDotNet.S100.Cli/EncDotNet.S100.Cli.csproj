@@ -51,7 +51,9 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp\EncDotNet.S100.Mcp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
@@ -60,6 +62,7 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Tides.Stations\EncDotNet.S100.Tides.Stations.csproj" />
   </ItemGroup>
 
 </Project>

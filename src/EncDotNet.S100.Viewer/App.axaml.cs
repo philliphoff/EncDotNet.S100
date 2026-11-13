@@ -582,6 +582,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServiceDirectory>(),
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
                 new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())),
+            new McpTools.Groups.TidesMcpToolGroup(
+                McpTools.Groups.TidesMcpToolGroup.FileSource(sp.GetRequiredService<ViewerDataPaths>()),
+                sp.GetRequiredService<TimeProvider>()),
             // Only with --mcp-test-hooks: set_test_clock and the ui_* tools are for scripted testing.
             new McpTools.Groups.TestHooksMcpToolGroup(
                 settings,
@@ -1727,9 +1730,29 @@ public partial class App : Application
         // Depth basis indicator (#1191) and chart-wide water level adjustment
         // (#1132): one service builds the water level the depth layers add and
         // reports what the drawn chart applies.
-        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.ViewerWaterLevelCatalog(
-            sp.GetRequiredService<ViewerDatasetCatalog>(),
-            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>()));
+        // Tide predictions as a water-level source (#1451, design D1): the switch
+        // hands the cached station list to the shared source cache.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.TidePredictionSourceService(
+            sp.GetRequiredService<ViewerSettingsService>(),
+            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+            sp.GetRequiredService<ViewerDataPaths>().TideStationsFilePath,
+            action =>
+            {
+                if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                    action();
+                else
+                    Avalonia.Threading.Dispatcher.UIThread.Post(action);
+            },
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.Depth.TidePredictionSourceService>>()));
+        services.AddSingleton(sp =>
+        {
+            // The water level reads the source cache, so the prediction switch
+            // must be applied to it before the first read.
+            _ = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.TidePredictionSourceService>();
+            return new EncDotNet.S100.Viewer.Services.Depth.ViewerWaterLevelCatalog(
+                sp.GetRequiredService<ViewerDatasetCatalog>(),
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>());
+        });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService(
             sp.GetRequiredService<ViewerSettingsService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),

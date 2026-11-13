@@ -305,6 +305,14 @@ public sealed class ClearanceDetails : RouteFindingDetails
 
     /// <summary>The state of the stretch: <see cref="UkcState.BelowSetting"/> for a finding below your UKC setting, otherwise <c>null</c>.</summary>
     public UkcState? State { get; init; }
+
+    /// <summary>
+    /// The predicted stations the stretch's water level comes from, nearest
+    /// the start first, for <see cref="RouteFindingCodes.WaterLevelPredicted"/>
+    /// and <see cref="RouteFindingCodes.TightOnPredicted"/>; empty otherwise.
+    /// Each has no <see cref="WaterLevelSourceInfo.DistanceMeters"/>.
+    /// </summary>
+    public IReadOnlyList<WaterLevelSourceInfo> WaterLevelSources { get; init; } = [];
 }
 
 /// <summary>

@@ -15,7 +15,12 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// uncertainties combined as independent, √(σ₁₀₂² + σ₁₀₄²), counting only
 /// the ones given; <c>null</c> when neither is.
 /// </param>
+/// <param name="Predicted">
+/// Whether the water level at this step is a harmonic tide prediction, so
+/// the curve is drawn dashed there (tide predictions design D7).
+/// </param>
 internal readonly record struct DepthOverTimePoint(
     DateTime Time,
     double? DepthMeters,
-    double? UncertaintyMeters = null);
+    double? UncertaintyMeters = null,
+    bool Predicted = false);

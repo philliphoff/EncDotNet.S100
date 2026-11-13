@@ -110,6 +110,16 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "check-settings.json")
             : Path.Combine(DefaultSettingsDirectory, "check-settings.json");
 
+    /// <summary>
+    /// Absolute path of the cached tide station list
+    /// (<c>tide-stations.json.gz</c>, the <c>tide-stations</c> v1 file format),
+    /// read when tide predictions are on. Placed like <see cref="RoutesFilePath"/>.
+    /// </summary>
+    public string TideStationsFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "tide-stations.json.gz")
+            : Path.Combine(DefaultSettingsDirectory, "tide-stations.json.gz");
+
     /// <summary>Directory holding unclean-shutdown crash markers.</summary>
     public string CrashMarkersDirectory =>
         _baseDirectory is { } b

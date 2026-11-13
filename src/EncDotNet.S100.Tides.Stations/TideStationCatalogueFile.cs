@@ -36,13 +36,31 @@ namespace EncDotNet.S100.Tides.Stations;
 ///       "offsets": { "datum": "MLLW", "highWaterMinutes": 28, "lowWaterMinutes": 23,
 ///                    "highWaterHeight": 1.11, "lowWaterHeight": 1.02, "heightAdjustment": "ratio" }
 ///     }
+///   ],
+///   "currentStations": [
+///     {
+///       "id": "SFB1202_17", "name": "Golden Gate Bridge, 0.88 nm NE of", "latitude": 37.82922, "longitude": -122.46202,
+///       "kind": "harmonic", "depth": 6.4, "floodDirection": 52, "ebbDirection": 238,
+///       "majorAxisDirection": 55.9, "majorMean": 0.1363, "minorMean": -0.034,
+///       "constituents": [ { "name": "M2", "majorAmplitude": 1.0412, "majorPhase": 160.8,
+///                           "minorAmplitude": 0.1157, "minorPhase": 256.9 } ]
+///     },
+///     {
+///       "id": "PCT0281_1", "name": "Golden Gate Bridge, 0.8 mile east of", "latitude": 37.82167, "longitude": -122.46167,
+///       "kind": "subordinate", "floodDirection": 70, "ebbDirection": 256, "reference": "SFB1202_17",
+///       "offsets": { "slackBeforeFloodMinutes": 42, "maximumFloodMinutes": 15, "slackBeforeEbbMinutes": 27,
+///                    "maximumEbbMinutes": 43, "maximumFloodRatio": 0.9, "maximumEbbRatio": 1.4 }
+///     }
 ///   ]
 /// }
 /// </code>
 /// <para>
 /// Amplitudes and heights are metres; phases are degrees, referred to
-/// Greenwich unless a station says <c>"phaseReference": "local"</c>, when
-/// they're referred to its <c>utcOffsetHours</c> and converted on reading.
+/// Greenwich unless a tide station says <c>"phaseReference": "local"</c>,
+/// when they're referred to its <c>utcOffsetHours</c> and converted on
+/// reading. Current stations, an optional member a version 1 reader without
+/// it ignores, give velocities in metres per second, Greenwich phases, and
+/// directions in degrees true.
 /// </para>
 /// </remarks>
 public static partial class TideStationCatalogueFile
@@ -60,6 +78,9 @@ public static partial class TideStationCatalogueFile
     private const string Local = "local";
     private const string Greenwich = "greenwich";
     private const string DateFormat = "yyyy-MM-dd";
+
+    /// <summary>The longest time difference a subordinate current station may have: 12 hours.</summary>
+    private const double MaximumOffsetMinutes = 12 * 60;
 
     /// <summary>Reads a catalogue from a stream of JSON (not compressed).</summary>
     /// <param name="stream">The stream.</param>
@@ -192,9 +213,15 @@ public static partial class TideStationCatalogueFile
             stations.Add(FromDto(station));
         }
 
+        var currents = new List<CurrentStationEntry>(dto.CurrentStations?.Count ?? 0);
+        foreach (var station in dto.CurrentStations ?? [])
+        {
+            currents.Add(FromDto(station));
+        }
+
         try
         {
-            return new TideStationCatalogue(stations, dto.Provider, dto.Retrieved);
+            return new TideStationCatalogue(stations, currents, dto.Provider, dto.Retrieved);
         }
         catch (ArgumentException e)
         {
@@ -262,6 +289,79 @@ public static partial class TideStationCatalogueFile
         };
     }
 
+    private static CurrentStationEntry FromDto(CurrentStationDto dto)
+    {
+        if (string.IsNullOrEmpty(dto.Id))
+        {
+            throw new FormatException("A current station has no id.");
+        }
+
+        if (dto.Latitude is not (>= -90 and <= 90) || dto.Longitude is not (>= -180 and <= 180))
+        {
+            throw new FormatException($"Current station '{dto.Id}' has no valid latitude and longitude.");
+        }
+
+        if (dto.FloodDirection is not { } flood || dto.EbbDirection is not { } ebb)
+        {
+            throw new FormatException($"Current station '{dto.Id}' has no floodDirection and ebbDirection.");
+        }
+
+        var kind = dto.Kind switch
+        {
+            Harmonic => TideStationKind.Harmonic,
+            Subordinate => TideStationKind.Subordinate,
+            _ => throw new FormatException($"Current station '{dto.Id}' has kind '{dto.Kind}', not '{Harmonic}' or '{Subordinate}'."),
+        };
+
+        var constituents = new List<CurrentConstituent>(dto.Constituents?.Count ?? 0);
+        foreach (var c in dto.Constituents ?? [])
+        {
+            if (string.IsNullOrEmpty(c.Name) || !HarmonicConstituents.Contains(c.Name))
+            {
+                throw new FormatException($"Current station '{dto.Id}' has an unknown constituent '{c.Name}'.");
+            }
+
+            constituents.Add(new CurrentConstituent(c.Name, c.MajorAmplitude, c.MajorPhase, c.MinorAmplitude, c.MinorPhase));
+        }
+
+        SubordinateCurrentOffsets? offsets = null;
+        if (dto.Offsets is { } o)
+        {
+            double[] minutes = [o.SlackBeforeFloodMinutes, o.MaximumFloodMinutes, o.SlackBeforeEbbMinutes, o.MaximumEbbMinutes];
+            if (minutes.Any(m => !double.IsFinite(m) || Math.Abs(m) > MaximumOffsetMinutes)
+                || !double.IsFinite(o.MaximumFloodRatio) || !double.IsFinite(o.MaximumEbbRatio))
+            {
+                throw new FormatException($"Current station '{dto.Id}' has offsets that aren't finite or exceed {MaximumOffsetMinutes} minutes.");
+            }
+
+            offsets = new SubordinateCurrentOffsets(
+                TimeSpan.FromMinutes(o.SlackBeforeFloodMinutes),
+                TimeSpan.FromMinutes(o.MaximumFloodMinutes),
+                TimeSpan.FromMinutes(o.SlackBeforeEbbMinutes),
+                TimeSpan.FromMinutes(o.MaximumEbbMinutes),
+                o.MaximumFloodRatio,
+                o.MaximumEbbRatio);
+        }
+
+        return new CurrentStationEntry
+        {
+            Id = dto.Id,
+            Name = dto.Name ?? dto.Id,
+            Position = new GeoPosition(dto.Latitude.Value, dto.Longitude.Value),
+            Kind = kind,
+            DepthMeters = dto.Depth,
+            FloodDirectionDegrees = flood,
+            EbbDirectionDegrees = ebb,
+            Constituents = constituents,
+            MajorAxisDirectionDegrees = dto.MajorAxisDirection ?? flood,
+            MajorMeanVelocity = dto.MajorMean ?? 0,
+            MinorMeanVelocity = dto.MinorMean ?? 0,
+            IsRotary = dto.Rotary ?? false,
+            ReferenceStationId = dto.Reference,
+            Offsets = offsets,
+        };
+    }
+
     private static StationDatums FromDto(string id, DatumsDto dto)
     {
         DateOnly? accepted = null;
@@ -305,6 +405,48 @@ public static partial class TideStationCatalogueFile
         Provider = catalogue.Provider,
         Retrieved = catalogue.Retrieved,
         Stations = [.. catalogue.Stations.Select(ToDto)],
+        CurrentStations = catalogue.CurrentStations.Count == 0 ? null : [.. catalogue.CurrentStations.Select(ToDto)],
+    };
+
+    private static CurrentStationDto ToDto(CurrentStationEntry station) => new()
+    {
+        Id = station.Id,
+        Name = station.Name,
+        Latitude = station.Position.Latitude,
+        Longitude = station.Position.Longitude,
+        Kind = station.Kind == TideStationKind.Harmonic ? Harmonic : Subordinate,
+        Depth = station.DepthMeters,
+        FloodDirection = station.FloodDirectionDegrees,
+        EbbDirection = station.EbbDirectionDegrees,
+        MajorAxisDirection = station.Kind == TideStationKind.Harmonic ? station.MajorAxisDirectionDegrees : null,
+        MajorMean = station.Kind == TideStationKind.Harmonic ? station.MajorMeanVelocity : null,
+        MinorMean = station.Kind == TideStationKind.Harmonic ? station.MinorMeanVelocity : null,
+        Rotary = station.IsRotary ? true : null,
+        Constituents = station.Constituents.Count == 0
+            ? null
+            :
+            [
+                .. station.Constituents.Select(c => new CurrentConstituentDto
+                {
+                    Name = c.Name,
+                    MajorAmplitude = c.MajorAmplitudeMetersPerSecond,
+                    MajorPhase = c.MajorPhaseDegrees,
+                    MinorAmplitude = c.MinorAmplitudeMetersPerSecond,
+                    MinorPhase = c.MinorPhaseDegrees,
+                }),
+            ],
+        Reference = station.ReferenceStationId,
+        Offsets = station.Offsets is { } offsets
+            ? new CurrentOffsetsDto
+            {
+                SlackBeforeFloodMinutes = offsets.SlackBeforeFloodTime.TotalMinutes,
+                MaximumFloodMinutes = offsets.MaximumFloodTime.TotalMinutes,
+                SlackBeforeEbbMinutes = offsets.SlackBeforeEbbTime.TotalMinutes,
+                MaximumEbbMinutes = offsets.MaximumEbbTime.TotalMinutes,
+                MaximumFloodRatio = offsets.MaximumFloodRatio,
+                MaximumEbbRatio = offsets.MaximumEbbRatio,
+            }
+            : null,
     };
 
     private static StationDto ToDto(TideStationEntry station) => new()
@@ -352,6 +494,69 @@ public static partial class TideStationCatalogueFile
         public DateTimeOffset? Retrieved { get; set; }
 
         public List<StationDto>? Stations { get; set; }
+
+        public List<CurrentStationDto>? CurrentStations { get; set; }
+    }
+
+    internal sealed class CurrentStationDto
+    {
+        public string? Id { get; set; }
+
+        public string? Name { get; set; }
+
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
+
+        public string? Kind { get; set; }
+
+        public double? Depth { get; set; }
+
+        public double? FloodDirection { get; set; }
+
+        public double? EbbDirection { get; set; }
+
+        public double? MajorAxisDirection { get; set; }
+
+        public double? MajorMean { get; set; }
+
+        public double? MinorMean { get; set; }
+
+        public bool? Rotary { get; set; }
+
+        public List<CurrentConstituentDto>? Constituents { get; set; }
+
+        public string? Reference { get; set; }
+
+        public CurrentOffsetsDto? Offsets { get; set; }
+    }
+
+    internal sealed class CurrentConstituentDto
+    {
+        public string? Name { get; set; }
+
+        public double MajorAmplitude { get; set; }
+
+        public double MajorPhase { get; set; }
+
+        public double MinorAmplitude { get; set; }
+
+        public double MinorPhase { get; set; }
+    }
+
+    internal sealed class CurrentOffsetsDto
+    {
+        public double SlackBeforeFloodMinutes { get; set; }
+
+        public double MaximumFloodMinutes { get; set; }
+
+        public double SlackBeforeEbbMinutes { get; set; }
+
+        public double MaximumEbbMinutes { get; set; }
+
+        public double MaximumFloodRatio { get; set; }
+
+        public double MaximumEbbRatio { get; set; }
     }
 
     internal sealed class StationDto
