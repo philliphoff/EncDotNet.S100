@@ -587,6 +587,12 @@ internal sealed partial class ViewerSettings
         = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The data sources added to the Datasets panel, by
+    /// <c>SourceRegistration.Id</c> (design note D3), added again at start-up.
+    /// </summary>
+    public List<string> SourceDatasets { get; set; } = [];
+
+    /// <summary>
     /// User-configured own-ship vessel dimensions (length, beam,
     /// CCRP / GPS antenna offsets). <see langword="null"/> in legacy
     /// settings files; the consuming
@@ -808,6 +814,11 @@ internal sealed partial class ViewerSettings
                     settings.DynamicSourceVisibility[OwnShipVisibilityKey] = settings.OwnShipVisible;
                 }
 
+                // Slice 7 (data source design D3): NDBC observations moved
+                // from a Layer Stack overlay to a data source in the Datasets
+                // panel. A user who had the overlay on gets the source added.
+                MigrateNdbcOverlay(settings);
+
                 // #883: round 1's identity in use becomes the default.
                 if (settings.SecomIdentityInUse is { } inUse)
                 {
@@ -857,6 +868,22 @@ internal sealed partial class ViewerSettings
     /// migration / mirror logic.
     /// </summary>
     internal const string OwnShipVisibilityKey = "ownship";
+
+    /// <summary>The visibility key of the NDBC overlay before NDBC became a data source.</summary>
+    internal const string LegacyNdbcVisibilityKey = "ndbc";
+
+    /// <summary>
+    /// Moves the NDBC overlay's Layer Stack toggle to the saved data sources:
+    /// on becomes an added <c>ndbc.realtime</c> source, and the toggle is
+    /// dropped either way.
+    /// </summary>
+    internal static void MigrateNdbcOverlay(ViewerSettings settings)
+    {
+        if (!settings.DynamicSourceVisibility.Remove(LegacyNdbcVisibilityKey, out var wasVisible) || !wasVisible)
+            return;
+        if (!settings.SourceDatasets.Contains(EncDotNet.S100.Datasets.Pipelines.S100Sources.NdbcObservationsId, StringComparer.OrdinalIgnoreCase))
+            settings.SourceDatasets.Add(EncDotNet.S100.Datasets.Pipelines.S100Sources.NdbcObservationsId);
+    }
 
     /// <summary>Source-generated metadata for the settings file (issue #764).</summary>
     [JsonSerializable(typeof(ViewerSettings))]

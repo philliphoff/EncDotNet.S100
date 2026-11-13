@@ -279,9 +279,28 @@ As built so far (the library half of slice 7):
 - A processor built from a registration owns its source and HTTP client,
   so disposing it stops the source.
 - The NMEA input spec parser moved to the NMEA library as `NmeaInput.Parse`.
-- `AddDataSource`, the shared activation wrapper and the dataset entry
-  origin (D3) are SoundCharts' half of slice 7, along with moving AIS and
-  own-ship onto registrations.
+
+In SoundCharts (the viewer half of slice 7, so far):
+
+- A `DatasetEntry` is a file or a source (`SourceId`, `SourceOptions`,
+  `DatasetEntry.ForSource`), with the id `source:<registration id>`, so a
+  source is listed at most once. `DatasetLoaderService` builds a source's
+  processor through `SourceDatasetService`, skips the file's spec
+  detection, catalogue check, auto-zoom and recent files, and attaches the
+  processor once it's loaded.
+- `HostedSourceActivator` is the shared wrapper: it starts the processor,
+  passes it the view after 300 ms of quiet, and pauses it while the entry is
+  hidden or the view is wider than the registration's `Activation` allows.
+- **Add a data source** in the Datasets panel lists the sources that need no
+  options or have defaults. Added sources are saved by id in
+  `ViewerSettings.SourceDatasets` and added again at start-up; removing the
+  entry forgets it. Saved options wait for slice 9's settings pages.
+- NDBC observations moved from a Layer Stack overlay to a source entry. The
+  overlay's toggle migrates: on becomes an added `ndbc.realtime`.
+- Still to do: NMEA weather (it needs an input and the own-ship fix
+  forwarded), AIS (its key waits for slice 8's secret store, and pirate
+  mode excludes a target) and own-ship (helm and take-helm), and
+  `AddDataSource` for `s100` and the MCP server.
 
 Behaviour that belongs to SoundCharts and not to the data stays there:
 pirate mode, own-ship helm and "take helm" are add-ons layered over a source,
@@ -757,7 +776,7 @@ Each slice ships on its own and leaves the tree working.
      `IDynamicFeatureRenderer` itself stays until slice 7: the overlay host
      and `PortrayedDynamicFeatureRenderer` still go through it.
 7. **`SourceRegistration` and source dataset entries.** The library half is
-   built (D4 as built). Add the registry,
+   built, and SoundCharts lists NDBC as a source entry (D4 as built). Add the registry,
    categories for sources and the `DatasetEntry` origin. Move AIS, NDBC,
    NMEA weather and own-ship registrations onto it, with the shared
    activation wrapper.

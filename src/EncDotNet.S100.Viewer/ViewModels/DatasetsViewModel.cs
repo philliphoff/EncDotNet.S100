@@ -870,7 +870,8 @@ internal sealed partial class DatasetEntry : ViewModelBase
         ExchangeSets.BoundingBox? geographicBounds = null,
         bool notForNavigation = false,
         int? compilationScale = null,
-        NetTopologySuite.Geometries.Geometry? catalogueCoverage = null)
+        NetTopologySuite.Geometries.Geometry? catalogueCoverage = null,
+        MapDatasetId? id = null)
     {
         FilePath = filePath;
         CompilationScale = compilationScale;
@@ -885,7 +886,7 @@ internal sealed partial class DatasetEntry : ViewModelBase
         GeographicBounds = geographicBounds;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
-        _id = new MapDatasetId(
+        _id = id ?? new MapDatasetId(
             filePath is { Length: > 0 }
                 ? System.IO.Path.GetFileName(filePath)
                 : DisplayName);
@@ -1492,6 +1493,34 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 }
             }
         };
+    }
+
+    /// <summary>The entry for the data source <paramref name="sourceId"/>, if it's in the list.</summary>
+    /// <param name="sourceId">The source's registration id.</param>
+    public DatasetEntry? FindSource(string sourceId)
+    {
+        var id = DatasetEntry.SourceDatasetId(sourceId);
+        return Entries.FirstOrDefault(e => e.Id == id);
+    }
+
+    /// <summary>
+    /// Adds a data source to the top of the list (design note D3), or selects
+    /// it when it's already there.
+    /// </summary>
+    /// <param name="registration">The source.</param>
+    /// <param name="options">Its options; <see langword="null"/> for the registration's defaults.</param>
+    /// <returns>The new entry, to load; <see langword="null"/> when the source was already in the list.</returns>
+    public DatasetEntry? AddSource(SourceRegistration registration, object? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        if (FindSource(registration.Id) is { } existing)
+        {
+            SelectedDataset = existing;
+            return null;
+        }
+        var entry = DatasetEntry.ForSource(registration, options);
+        Entries.Insert(0, entry);
+        return entry;
     }
 
     public DatasetEntry Add(string filePath, string productSpec)

@@ -90,7 +90,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         IRenderActivityMonitor? renderActivityMonitor,
         TimeRefreshProgress? timeProgress,
         CellSceneStore? cellScenes,
-        ILogger<DatasetLoaderService>? logger = null)
+        ILogger<DatasetLoaderService>? logger = null,
+        Sources.SourceDatasetService? sources = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -121,7 +122,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _renderActivityMonitor = renderActivityMonitor;
         _logger = logger ?? (ILogger)NullLogger.Instance;
         _cellScenes = CellScenesEnabled ? cellScenes : null;
+        _sources = sources;
     }
+
+    private readonly Sources.SourceDatasetService? _sources;
 
     /// <summary>
     /// Whether loads draw from and store cell scenes (map rendering slice 11).
@@ -385,11 +389,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // files updates (the relative path inside a ZIP is not
         // meaningful as a recent-file entry).
         var fromExchangeSet = entry.IsFromExchangeSet;
+        // A source entry (design note D3) has no file: its spec is its
+        // registration's, it needs no catalogue, and it has no extent to zoom
+        // to or path to remember.
+        var isSource = entry.IsSource;
 
         // Coordinator policy: resolve the product spec and require its portrayal
         // catalogue, warning the user and abandoning the load if either is missing.
-        var spec = ResolveSpecOrWarn(entry, fromExchangeSet);
-        if (spec is null || !HasRequiredCatalogueOrWarn(spec))
+        var spec = isSource ? entry.ProductSpec : ResolveSpecOrWarn(entry, fromExchangeSet);
+        if (spec is null || (!isSource && !HasRequiredCatalogueOrWarn(spec)))
             return;
 
         // Exchange-set loads open many datasets at once, so their per-dataset
@@ -509,7 +517,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 // user's manual Zoom-to-Extent toolbar action) wins. Without
                 // this, the last-completed dataset would race with the bulk
                 // load and "win" the viewport.
-                if (!fromExchangeSet && !SuppressAutoZoom)
+                if (!fromExchangeSet && !isSource && !SuppressAutoZoom)
                 {
                     _viewport!.ZoomToExtent(result.Extent);
                 }
@@ -605,10 +613,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // Recent files only makes sense for plain file loads. An
             // exchange-set entry's FilePath is a relative path inside
             // a folder/ZIP source and not openable on its own.
-            if (!fromExchangeSet)
+            if (!fromExchangeSet && !isSource)
             {
                 _recentFiles.Add(entry.FilePath);
             }
+
+            // A source starts once it's loaded, and follows the entry's
+            // visibility and the view from then on.
+            if (isSource)
+                _sources?.Attach(entry, processor);
 
             _logger.Log(progressLevel,
                 "Loaded {Spec} dataset {Dataset} in {ElapsedMs:F0} ms (parse {ParseMs:F0} ms, portrayal {PortrayalMs:F0} ms{StoredScene})",
@@ -984,6 +997,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         var source = entry.Source;
         var relativePath = entry.RelativePath;
         var updates = entry.UpdateRelativePaths;
+        var sourceId = entry.SourceId;
+        var sourceOptions = entry.SourceOptions;
+        if (sourceId is not null)
+        {
+            var sources = _sources
+                ?? throw new InvalidOperationException("Data sources aren't available in this host.");
+            return WorkScheduler.Shared.RunAsync(
+                WorkStage.Parse, _ => sources.CreateProcessor(sourceId, sourceOptions), token);
+        }
 
         // On the work scheduler, at the priority of the load that asked for
         // it (a lazy load's tier), else as visible work (map rendering slice 5).
@@ -1446,6 +1468,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _sessionEntries.Remove(entry.Id);
         _subLayersDecided.RemoveWhere(decided => decided.Dataset == entry.Id);
         _library.RemoveSessionCatalogue(entry.DisplayName);
+        if (entry.SourceId is { } sourceId)
+        {
+            // Removing a source from the panel stops it and drops it from the
+            // sources added at start-up.
+            _sources?.Detach(entry.Id);
+            _sources?.Forget(sourceId);
+        }
         entry.IsLoaded = false;
         DatasetRemoved?.Invoke(entry);
     }
@@ -1484,6 +1513,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         foreach (var entry in entries)
         {
             _processorEntries.Remove(entry.Id);
+            if (entry.IsSource)
+                _sources?.Detach(entry.Id);
             entry.IsLoaded = false;
             entry.IsDeferred = true;
         }

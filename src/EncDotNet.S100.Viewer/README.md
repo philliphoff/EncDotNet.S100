@@ -679,7 +679,7 @@ Rows include:
 - Sub-layer rows when a product draws more than one layer, such as S-111
   currents, which draws an arrow layer.
 - A row for each live overlay, such as **Own ship** (under **Dynamic
-  arrows**) or **NDBC buoy observations** (under **Other chart overlays**).
+  arrows**) or **Predicted tide stations**.
 - A colour legend under each weather fill (wave height, wind speed): a swatch
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
   the palette the map is drawn in. An overlay drawn with symbols or styled
@@ -1417,9 +1417,13 @@ holds.
 
 ## Show buoy observations
 
-**NDBC buoy observations** shows the latest observations from NOAA National
-Data Buoy Center buoys and C-MAN stations. Turn it on with its row under
-**Other chart overlays** in the **Layer stack** panel; it's off until you do.
+**NDBC observations** shows the latest observations from NOAA National
+Data Buoy Center buoys and C-MAN stations. It's a data source: add it with
+**Add a data source** (the plug button) in the **Datasets** panel's toolbar,
+and choose **NDBC observations**. It's listed with your datasets, and you
+show, hide, reorder and remove it the same way. SoundCharts adds it again
+the next time it starts, until you remove it. If you had the old **NDBC buoy
+observations** Layer stack row turned on, it's added for you.
 
 - Each station is a ring with a wind barb pointing into the wind (pennants
   50 kn, full barbs 10 kn, half barbs 5 kn) and, for buoys, the significant
@@ -1431,7 +1435,7 @@ Data Buoy Center buoys and C-MAN stations. Turn it on with its row under
   pressure and its tendency, air, water and dew-point temperatures,
   visibility and tide, with the observation time and its age.
 - SoundCharts fetches only the stations in the map view (plus a small
-  margin), only while the row is on and the view is narrower than 25°, and
+  margin), only while the source is shown and the view is narrower than 25°, and
   each station at most every 10 minutes, NDBC's update interval. Stations
   that fail are retried less often, up to every 2 hours.
 

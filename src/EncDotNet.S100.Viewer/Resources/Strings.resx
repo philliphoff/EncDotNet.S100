@@ -459,6 +459,12 @@
   <data name="Tooltip_AddDataset" xml:space="preserve">
     <value>Open a dataset</value>
   </data>
+  <data name="Tooltip_AddDataSource" xml:space="preserve">
+    <value>Add a data source</value>
+  </data>
+  <data name="Label_DataSourceAlreadyAddedFormat" xml:space="preserve">
+    <value>{0} (added)</value>
+  </data>
   <data name="Button_AddFeatureCatalogue" xml:space="preserve">
     <value>Add Feature Catalogue...</value>
   </data>

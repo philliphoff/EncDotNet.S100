@@ -1302,6 +1302,8 @@ public partial class App : Application
             sp.GetRequiredService<AboutDialogViewModel>);
 
         services.AddSingleton<DatasetProcessorOwner>();
+        services.AddSingleton(EncDotNet.S100.Datasets.Pipelines.SourceRegistry.Default);
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>();
         services.AddSingleton<DatasetLoaderService>();
         services.AddSingleton<IDatasetLoaderService>(sp =>
             sp.GetRequiredService<DatasetLoaderService>());
@@ -1440,11 +1442,8 @@ public partial class App : Application
         EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
             .AddAisOverlay(services);
 
-        // #1070: NDBC buoy observations. Registered always and hidden until
-        // the user ticks its Layer Stack row; it fetches nothing while hidden
-        // or zoomed out (see Services.DynamicSources.Ndbc).
-        EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsServiceCollectionExtensions
-            .AddNdbcObservations(services);
+        // #1070: NDBC buoy observations are a data source the user adds to
+        // the Datasets panel (S100Sources.NdbcObservations, design note D3).
 
         // #1453: predicted tide stations. Hidden until the user ticks its
         // Layer Stack row (tide predictions design D4).

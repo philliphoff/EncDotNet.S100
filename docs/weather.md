@@ -491,9 +491,11 @@ WPC issues the forecast fronts about every 12 hours, so they are stale after
 
 ## Show buoy observations
 
-Turn on **NDBC buoy observations** in the Layer stack. It's off when you
-first run SoundCharts. Observations are fetched only while the layer is on
-and the view is less than 25° wide, and are refreshed every 10 minutes. A
+In the **Datasets** panel, choose **Add a data source** (the plug button)
+and then **NDBC observations**. It's listed with your datasets and added
+again each time SoundCharts starts, until you remove it. Observations are
+fetched only while it's shown and the view is less than 25° wide, and are
+refreshed every 10 minutes. A
 station's symbol turns grey when its observation is more than 3 hours old.
 
 ## Show own-ship wind
