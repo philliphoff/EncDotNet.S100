@@ -103,9 +103,53 @@ public sealed class ChartWaterLevelAdjustmentServiceTests
             ExteriorRing = [new(0, west), new(0, east), new(1, east), new(1, west), new(0, west)],
         };
 
-        var rings = AdjustedAreaBoundaryController.BoundaryRings([Square(0, 2), Square(1, 3), Square(10, 11)]);
+        var (edges, seams) = AdjustedAreaBoundaryController.Lines([Square(0, 2), Square(1, 3), Square(10, 11)], [], mask: null);
 
-        Assert.Equal(2, rings.Count);
+        Assert.Equal(2, edges.Count);
+        Assert.Empty(seams);
+    }
+
+    [Fact]
+    public void The_seam_marks_where_S104_hands_over_to_predictions()
+    {
+        CoverageArea Square(double west, double east) => new()
+        {
+            ExteriorRing = [new(0, west), new(0, east), new(1, east), new(1, west), new(0, west)],
+        };
+
+        var s104 = Square(0, 2);
+        var predicted = Square(1, 3);
+        var (edges, seams) = AdjustedAreaBoundaryController.Lines([s104, predicted], [predicted], mask: null);
+
+        Assert.NotEmpty(edges);
+        // S-104's east edge, at 2°E, inside the predicted square.
+        var seam = Assert.Single(seams);
+        var (x, _) = Mapsui.Projections.SphericalMercator.FromLonLat(2, 0.5);
+        Assert.All(seam, c => Assert.Equal(x, c.X, 1e-3));
+    }
+
+    [Fact]
+    public void The_edge_is_clipped_to_charted_water_and_left_alone_where_nothing_is_charted()
+    {
+        CoverageArea Square(double west, double east) => new()
+        {
+            ExteriorRing = [new(0, west), new(0, east), new(1, east), new(1, west), new(0, west)],
+        };
+
+        // Land west of 0.5°E; uncharted elsewhere.
+        var mask = new HalfLand();
+        var (clipped, _) = AdjustedAreaBoundaryController.Lines([Square(0, 1)], [], mask);
+        var (unclipped, _) = AdjustedAreaBoundaryController.Lines([Square(0, 1)], [], mask: null);
+
+        var (landX, _) = Mapsui.Projections.SphericalMercator.FromLonLat(0.45, 0.5);
+        Assert.All(clipped.SelectMany(l => l), c => Assert.True(c.X > landX));
+        Assert.Contains(unclipped.SelectMany(l => l), c => c.X < landX);
+    }
+
+    private sealed class HalfLand : IWaterMask
+    {
+        public WaterMaskClass Classify(GeoPosition position) =>
+            position.Longitude < 0.5 ? WaterMaskClass.Land : WaterMaskClass.Uncharted;
     }
 
     private static (ChartWaterLevelAdjustmentService, Settings, Time, Catalog) Create()

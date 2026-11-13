@@ -8733,5 +8733,74 @@
   <data name="Tides_List_Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="TimelinePanel_PredictionsOnlyTooltip" xml:space="preserve">
+    <value>Only predictions are loaded, and they have no end: showing the next 48 hours.</value>
+  </data>
+  <data name="TimelinePanel_TideLane" xml:space="preserve">
+    <value>Tide predictions</value>
+  </data>
+  <data name="TimelinePanel_TideLaneTooltip" xml:space="preserve">
+    <value>Predicted tide at the station nearest the map centre: the astronomical tide only, with no start or end. It never sets the Timeline's range, and the data steps skip it.</value>
+  </data>
+  <data name="TimelinePanel_TideLaneStationFormat" xml:space="preserve">
+    <value>{0} {1} · {2:0.0} km</value>
+  </data>
+  <data name="TimelinePanel_TideLaneHighFormat" xml:space="preserve">
+    <value>H {0:0.0;−0.0}</value>
+  </data>
+  <data name="TimelinePanel_TideLaneLowFormat" xml:space="preserve">
+    <value>L {0:0.0;−0.0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat" xml:space="preserve">
+    <value>+ water level {0} · predicted</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat_Short" xml:space="preserve">
+    <value>+ predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat_Compact" xml:space="preserve">
+    <value>Predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · predicted · part of view</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedPartialFormat_Short" xml:space="preserve">
+    <value>+ predicted {0} · part</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedFormat" xml:space="preserve">
+    <value>+ water level {0} · partly predicted</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedFormat_Short" xml:space="preserve">
+    <value>Partly predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · partly predicted · part of view</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictedRowFormat" xml:space="preserve">
+    <value>Predicted · {0} NOAA stations · {1}</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictedMoreFormat" xml:space="preserve">
+    <value>{0}, +{1}</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictionsOrder" xml:space="preserve">
+    <value>S-104 first; predictions only where no S-104 covers.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictionsLeaveOut" xml:space="preserve">
+    <value>Predictions leave out wind, pressure and river flow.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OfferHeading" xml:space="preserve">
+    <value>Tide predictions are available here</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OfferBody" xml:space="preserve">
+    <value>No S-104 covers this view, but NOAA tide stations are in reach. Predictions are the astronomical tide only, not a forecast.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_StaleFormat" xml:space="preserve">
+    <value>NOAA has revised the station list since {0}. Predictions still work; refresh to use the new values.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Status_DepthBasisPopup_TidePredictionsLink" xml:space="preserve">
+    <value>Tide predictions settings</value>
+  </data>
   <!-- Tides T5 end -->
 </root>

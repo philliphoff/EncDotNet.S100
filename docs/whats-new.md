@@ -20,6 +20,17 @@ month. For package versions and release assets, see
   `get_tide_display` and `set_tide_display` read and set it, and
   `pick_features` with `select` now shows live overlay features such as a
   station.
+- **Predicted water level on the chart and the Timeline.** The DEPTHS pill
+  says when depths are adjusted by a prediction ("+ water level 14:20 ·
+  predicted", or "partly predicted" beside S-104), its flyout lists the
+  predicted stations, offers **Use tide predictions** where no S-104 meets the
+  view, and says when NOAA has revised the station list. The adjusted-area
+  edge and the new seam where S-104 hands over to predictions are clipped to
+  the loaded charts' water, and a picked station outlines its cell. With
+  predictions on, the Timeline and its time HUD show even with nothing timed
+  loaded: a **Tide predictions** lane follows the station nearest the map
+  centre, and *All loaded* shows the next 48 hours. `get_depth_basis` reports
+  `predicted` and the stations.
 - **Tide predictions from the shell and for agents.** `s100 tides stations`
   lists tide stations near a point, `s100 tides predict` predicts a station's
   heights or highs and lows as a table, CSV, JSON or an S-104 file, and

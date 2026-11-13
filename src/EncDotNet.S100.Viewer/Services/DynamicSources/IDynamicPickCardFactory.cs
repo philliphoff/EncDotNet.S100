@@ -11,6 +11,12 @@ internal interface IDynamicPickCard
 {
     /// <summary>Stops the card following the view time; called when the pick is replaced.</summary>
     void Release();
+
+    /// <summary>
+    /// An area the pick highlight outlines for the feature, such as a tide
+    /// station's cell (tide predictions design D13); null for none.
+    /// </summary>
+    IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>? Outline { get; }
 }
 
 /// <summary>Makes the <see cref="IDynamicPickCard"/> of a picked dynamic feature.</summary>

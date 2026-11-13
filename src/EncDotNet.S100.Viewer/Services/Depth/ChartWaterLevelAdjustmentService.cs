@@ -85,6 +85,12 @@ internal sealed class ViewerWaterLevelCatalog : IWaterLevelCatalog, IDisposable
     /// <inheritdoc />
     public IWaterLevelSource? WaterLevel => _sources.Get(_catalog.Datasets).WaterLevel;
 
+    /// <summary>
+    /// Where the loaded charts have water, land or nothing (tide predictions
+    /// design D19, D23): the adjusted-area edge is clipped to it.
+    /// </summary>
+    public IWaterMask? WaterMask => _sources.Get(_catalog.Datasets).WaterMask;
+
     /// <inheritdoc />
     public string Key => Interlocked.Read(ref _generation).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
@@ -140,6 +146,7 @@ internal sealed class ChartWaterLevelAdjustmentService : IWaterLevelAdjustmentSt
     private WaterLevelDepthAdjustment? _requested;
     private IReadOnlyList<WaterLevelSourceInfo> _requestedSources = [];
     private IReadOnlyList<DataModel.CoverageArea> _requestedFootprint = [];
+    private IReadOnlyList<DataModel.CoverageArea> _requestedPredictedFootprint = [];
     private bool _disposed;
 
     /// <summary>Creates the service and builds the first request.</summary>
@@ -200,7 +207,10 @@ internal sealed class ChartWaterLevelAdjustmentService : IWaterLevelAdjustmentSt
                 _requested?.Field.Basis.Start,
                 _requestedSources,
                 _requestedFootprint,
-                _settings.WaterLevelApplyUndeclaredDatum);
+                _settings.WaterLevelApplyUndeclaredDatum)
+            {
+                PredictedFootprint = _requestedPredictedFootprint,
+            };
         if (state == Current)
             return;
 
@@ -252,11 +262,14 @@ internal sealed class ChartWaterLevelAdjustmentService : IWaterLevelAdjustmentSt
             next = new WaterLevelDepthAdjustment(field, _settings.WaterLevelApplyUndeclaredDatum, _catalog.Key);
             _requestedSources = source.Datasets;
             _requestedFootprint = source.Footprint;
+            // Where predictions adjust, apart from S-104, for the seam (D13).
+            _requestedPredictedFootprint = source is IFallbackWaterLevelSource fallback ? fallback.Fallback.Footprint : [];
         }
         else
         {
             _requestedSources = [];
             _requestedFootprint = [];
+            _requestedPredictedFootprint = [];
         }
 
         if (next is null && _requested is null)
