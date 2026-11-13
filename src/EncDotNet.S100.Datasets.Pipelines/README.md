@@ -62,6 +62,15 @@ more detail.
 - **`ILiveDatasetProcessor`**: a processor whose data changes after it's
   loaded, such as a feed polled on a timer. It raises `Changed` after
   updating, and the map session draws the dataset again.
+- **`DynamicSourceProcessor`**: a processor over an `IDynamicFeatureSource`
+  and its `IDynamicFeaturePortrayal`, such as the NDBC observations
+  (`NdbcStationPortrayal`) or own-ship weather from NMEA
+  (`OwnShipWeatherPortrayal`). It draws the source's features on one
+  sub-layer, on the source's plane and priority; picks describe a feature
+  through the source's `IDynamicFeatureDescriber`, or list its motion and
+  attributes; and the source's changes are raised as `Changed`. Pass the
+  spec it reports as, such as `SpecName.Ndbc` or `SpecName.Nmea`. Disposing
+  the processor unsubscribes from the source and leaves it running.
 - **`DatasetPipelineFactory`**: detects a file's product and creates its
   processor. See [Product detection](#product-detection).
 - **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
