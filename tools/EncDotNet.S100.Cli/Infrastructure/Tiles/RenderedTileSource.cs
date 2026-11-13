@@ -54,6 +54,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <param name="parallel">The most blocks rendered at once.</param>
     /// <param name="cacheBytes">The most encoded tile bytes kept in memory.</param>
     /// <param name="diskCache">Tiles kept on disk across runs, behind the memory cache; <see langword="null"/> for none.</param>
+    /// <param name="featureQuery">Finds the features at a point in the same datasets, for WMS GetFeatureInfo; <see langword="null"/> for none. The source disposes it.</param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -62,7 +63,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         int blockSize,
         int parallel,
         long cacheBytes,
-        DiskTileCache? diskCache = null)
+        DiskTileCache? diskCache = null,
+        DatasetFeatureQuery? featureQuery = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
@@ -74,6 +76,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _renderSlots = new SemaphoreSlim(parallel, parallel);
         _cache = new TileCache(cacheBytes);
         _diskCache = diskCache;
+        FeatureQuery = featureQuery;
         _scenes = new SceneCache(session);
         _scenes.Seed(_defaultPalette, null, scene);
     }
@@ -85,6 +88,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     public IReadOnlyList<string> Palettes => AllPalettes;
 
     public IReadOnlyList<DateTime> Times => _session.Times;
+
+    public DatasetFeatureQuery? FeatureQuery { get; }
 
     /// <summary>The area and zoom range served.</summary>
     public TileLayout Layout => _layout;
@@ -174,6 +179,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     {
         _renderSlots.Dispose();
         _diskCache?.Dispose();
+        FeatureQuery?.Dispose();
         _session.Dispose();
     }
 

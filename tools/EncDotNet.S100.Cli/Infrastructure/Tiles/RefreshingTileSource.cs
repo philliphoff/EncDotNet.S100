@@ -83,6 +83,8 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public IReadOnlyList<DateTime> Times => Current.Times;
 
+    public DatasetFeatureQuery? FeatureQuery => Current.FeatureQuery;
+
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         var generation = Acquire();
