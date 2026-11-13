@@ -73,8 +73,11 @@ catalogue does:
 - `InstructionBuilder` builds point-symbol, text, simple line, complex line
   (`ComplexLine`), solid area and pattern area (`AreaPattern`, such as
   hatching) `DrawingInstruction`s, stamping its viewing group, drawing
-  priority, display plane and scale limits on each. `TextInstructionStyle`
-  describes a label's font, colours, halo and offset.
+  priority, display plane and scale limits on each. `PointAt` and `Path`
+  build a symbol at a given position and a line along given coordinates
+  (S-100 Part 9 augmented geometry), which draw and pick as the feature they
+  name, such as a vessel's course vector. `TextInstructionStyle` describes a
+  label's font, colours, halo and offset.
 - `ComplexLineStyle` describes a line style with symbols repeated along the
   line: a pen (solid or dashed), the symbols placed in turn every
   `SymbolSpacing` millimetres from `SymbolStart`, and the `Side` they go on,
@@ -94,6 +97,14 @@ catalogue does:
   feature id), with the palette and symbols they resolve against. The NDBC
   station-model glyph (`EncDotNet.S100.DynamicSources.Ndbc`) is one; the
   Mapsui renderer is `PortrayedDynamicFeatureRenderer`.
+- `VesselPortrayal` is the vessel symbology, for own-ship
+  (`VesselPortrayal.OwnShip`) and AIS targets (`VesselPortrayal.Ais`,
+  coloured by ship type class): a six-minute course vector with an
+  arrowhead, and either a disc or, while the hull is at least 22 px long on
+  screen, the true-scale outline from `DynamicFeature.VesselGeometry` with a
+  cross at the antenna. The outline and disc switch by scale denominator, so
+  the switch is the same at every latitude, and the outline is drawn as a
+  line, as S-52 draws it.
 - `ApplicationContentScope.For(style, version)` is the style's part of the
   tile disk-cache content scope: the style name and version plus the toolkit
   assembly's version. A code-defined style has no catalogue files to hash, so

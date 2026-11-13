@@ -1,3 +1,7 @@
+// The renderer is obsolete (VesselPortrayal replaces it) but still ships, so
+// its tests stay until it's removed.
+#pragma warning disable CS0618
+
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
