@@ -219,7 +219,7 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
             FeatureRef = entry.FeatureRef,
             DatasetFileName = f.Entry.DisplayName,
             ProductSpec = "S-124",
-            NavigationalWarning = entry.Warning,
+            Sections = [new NavigationalWarningSection(entry.Warning)],
         }]);
         var card = pick.Warnings.Card!;
         Assert.True(card.CanClassify);
@@ -248,7 +248,7 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
             FeatureRef = "elsewhere",
             DatasetFileName = "other.gml",
             ProductSpec = "S-124",
-            NavigationalWarning = Part(130),
+            Sections = [new NavigationalWarningSection(Part(130))],
         }]);
 
         Assert.False(pick.Warnings.Card!.CanClassify);

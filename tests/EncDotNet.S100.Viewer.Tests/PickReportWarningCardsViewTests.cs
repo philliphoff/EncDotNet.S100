@@ -29,13 +29,16 @@ public sealed class PickReportWarningCardsViewTests
         FeatureRef = id,
         DatasetFileName = Dataset.DisplayName,
         ProductSpec = "S-124",
-        NavigationalWarning = new NavigationalWarningInfo
-        {
-            Series = "P",
-            Number = number,
-            WarningType = "Warnings in force",
-            Texts = [new NavigationalWarningText("eng", text)],
-        },
+        Sections =
+        [
+            new NavigationalWarningSection(new NavigationalWarningInfo
+            {
+                Series = "P",
+                Number = number,
+                WarningType = "Warnings in force",
+                Texts = [new NavigationalWarningText("eng", text)],
+            }),
+        ],
     };
 
     private static NavigationalWarningEntry Entry(PickHit hit, bool located) => new(
@@ -108,7 +111,7 @@ public sealed class PickReportWarningCardsViewTests
             FeatureRef = hit.FeatureRef,
             DatasetFileName = hit.DatasetFileName,
             ProductSpec = hit.ProductSpec,
-            NavigationalWarning = hit.NavigationalWarning,
+            Sections = hit.Sections,
             NotForNavigation = true,
         }]);
 

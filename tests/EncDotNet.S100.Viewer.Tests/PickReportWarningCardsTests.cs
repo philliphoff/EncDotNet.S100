@@ -58,7 +58,7 @@ public sealed class PickReportWarningCardsTests
         FeatureRef = id,
         DatasetFileName = Dataset.DisplayName,
         ProductSpec = "S-124",
-        NavigationalWarning = warning,
+        Sections = warning is null ? [] : [new NavigationalWarningSection(warning)],
     };
 
     private static NavigationalWarningEntry Entry(PickHit hit, S100GeometryType geometry) => new(
