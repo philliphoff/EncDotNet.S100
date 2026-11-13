@@ -74,7 +74,7 @@ namespace EncDotNet.S100.DynamicSources.Nmea;
 /// <see cref="Refresh"/>.
 /// </para>
 /// </remarks>
-public sealed class NmeaWeatherSource : IDynamicFeatureSource, IDynamicFeatureDescriber, IAsyncDisposable
+public sealed class NmeaWeatherSource : IStartableDynamicSource, IDynamicFeatureDescriber, IAsyncDisposable
 {
     /// <summary>The <see cref="DynamicFeature.Kind"/> of the feature, and the source's renderer key: <c>weather.observation.ownship</c>.</summary>
     public const string FeatureKind = "weather.observation.ownship";

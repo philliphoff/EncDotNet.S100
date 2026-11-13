@@ -70,7 +70,13 @@ more detail.
   through the source's `IDynamicFeatureDescriber`, or list its motion and
   attributes; and the source's changes are raised as `Changed`. Pass the
   spec it reports as, such as `SpecName.Ndbc` or `SpecName.Nmea`. Disposing
-  the processor unsubscribes from the source and leaves it running.
+  the processor unsubscribes from the source and leaves it running, unless
+  it's created with `ownsSource: true`. It's an `IHostedDatasetProcessor`:
+  `Start`, `IsActive` and `UpdateArea` reach a source that implements
+  `IStartableDynamicSource`, `IPausableDynamicSource` or
+  `IAreaFilteredDynamicSource`.
+- **`SourceRegistration`** and **`SourceRegistry`**: data sources that
+  aren't files. See [Sources that aren't files](#sources-that-arent-files).
 - **`DatasetPipelineFactory`**: detects a file's product and creates its
   processor. See [Product detection](#product-detection).
 - **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
@@ -386,6 +392,34 @@ S-100, with an application portrayal (`NHC tropical cyclone GIS data`).
 whatever the file is called, and `MatchFolder` claims a folder of NHC forecast
 zips for one storm. The wind radii and best track zips aren't claimed on their
 own.
+
+## Sources that aren't files
+
+A live feed or a polled web service is configured rather than detected, so
+it's a `SourceRegistration` rather than a `ProductRegistration`: an id, a
+display name, the spec it reports as, an options record, when a host runs it
+(`SourceActivation`), and a `Create` that builds its processor from a
+`SourceCreationContext` (the saved options, loggers, a clock and an HTTP
+client factory). `SourceRegistry.Default` holds the built-in sources in
+`S100Sources`: `ndbc.realtime` (NDBC observations) and `nmea.weather`
+(own-ship weather, whose `NmeaWeatherSourceSettings.Input` names the NMEA
+input).
+
+```csharp
+await using var processor = (IHostedDatasetProcessor)SourceRegistry.Default.Create(
+    S100Sources.NdbcObservationsId,
+    new SourceCreationContext { CreateHttpClient = () => myHardenedClient });
+
+processor.UpdateArea(new GeographicBounds(-71.5, 40.5, -69.5, 43.0));
+processor.Start();
+// Picks, headless rendering and the map session work as for a file dataset.
+```
+
+The processor owns its source: disposing it stops the source and disposes
+the HTTP client. A host pauses a source outside its activation range
+(`SourceActivation.BelowViewportSpan(degrees).IsActiveFor(viewport)`) by
+setting `IsActive` to `false`. Register your own sources with
+`SourceRegistry.Register` at start-up.
 
 ## Processor lifetime
 

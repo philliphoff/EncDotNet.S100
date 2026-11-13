@@ -34,19 +34,32 @@ namespace EncDotNet.S100.Datasets.Pipelines.DynamicSources;
 /// it has one, and otherwise lists its motion and attributes.
 /// </para>
 /// <para>
-/// The processor doesn't own the source: disposing it unsubscribes from the
-/// source and leaves the source running.
+/// Unless it's created with <c>ownsSource</c>, the processor doesn't own the
+/// source: disposing it unsubscribes from the source and leaves the source
+/// running. A processor built from a <see cref="SourceRegistration"/> owns
+/// its source, and disposing it stops the source.
+/// </para>
+/// <para>
+/// As an <see cref="IHostedDatasetProcessor"/>, the processor passes
+/// <see cref="Start"/>, <see cref="IsActive"/> and <see cref="UpdateArea"/>
+/// on to a source that implements <see cref="IStartableDynamicSource"/>,
+/// <see cref="IPausableDynamicSource"/> or
+/// <see cref="IAreaFilteredDynamicSource"/>, and ignores them otherwise.
 /// </para>
 /// </remarks>
 public sealed class DynamicSourceProcessor :
     IDatasetProcessor,
     IVectorPortrayalSource,
     ILiveDatasetProcessor,
+    IHostedDatasetProcessor,
     IDisposable
 {
     private readonly IDynamicFeatureSource _source;
     private readonly IDynamicFeaturePortrayal _portrayal;
     private readonly IFormatProvider? _formatProvider;
+    private readonly bool _ownsSource;
+    private readonly IReadOnlyList<IDisposable> _ownedResources;
+    private bool _isActive = true;
     private bool _disposed;
 
     /// <summary>Creates a processor over <paramref name="source"/>.</summary>
@@ -57,11 +70,21 @@ public sealed class DynamicSourceProcessor :
     /// source that isn't an S-100 product.
     /// </param>
     /// <param name="formatProvider">The culture the source's describer formats values with; the current culture when <see langword="null"/>.</param>
+    /// <param name="ownsSource">
+    /// Whether disposing the processor disposes the source too, as it does
+    /// for a processor built from a <see cref="SourceRegistration"/>.
+    /// </param>
+    /// <param name="ownedResources">
+    /// Other objects the processor disposes after the source, such as the
+    /// <see cref="HttpClient"/> the source fetches with.
+    /// </param>
     public DynamicSourceProcessor(
         IDynamicFeatureSource source,
         IDynamicFeaturePortrayal portrayal,
         SpecRef spec,
-        IFormatProvider? formatProvider = null)
+        IFormatProvider? formatProvider = null,
+        bool ownsSource = false,
+        IReadOnlyList<IDisposable>? ownedResources = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(portrayal);
@@ -69,6 +92,8 @@ public sealed class DynamicSourceProcessor :
         _source = source;
         _portrayal = portrayal;
         _formatProvider = formatProvider;
+        _ownsSource = ownsSource;
+        _ownedResources = ownedResources ?? [];
         Spec = spec;
         _source.Changed += OnSourceChanged;
     }
@@ -181,13 +206,105 @@ public sealed class DynamicSourceProcessor :
         });
     }
 
-    /// <summary>Stops listening to the source; the source keeps running.</summary>
+    /// <inheritdoc />
+    public void Start()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_source is IStartableDynamicSource startable)
+            startable.Start();
+    }
+
+    /// <inheritdoc />
+    /// <remarks>Defaults to <see langword="true"/>. A source that can't pause keeps working.</remarks>
+    public bool IsActive
+    {
+        get => _source is IPausableDynamicSource pausable ? pausable.IsActive : _isActive;
+        set
+        {
+            _isActive = value;
+            if (_source is IPausableDynamicSource pausable)
+                pausable.IsActive = value;
+        }
+    }
+
+    /// <inheritdoc />
+    public void UpdateArea(GeographicBounds? area)
+    {
+        if (_source is not IAreaFilteredDynamicSource filtered)
+            return;
+        filtered.UpdateArea(area is { } a
+            ? new BoundingBox(
+                southLatitude: a.MinLatitude,
+                westLongitude: a.MinLongitude,
+                northLatitude: a.MaxLatitude,
+                eastLongitude: a.MaxLongitude)
+            : null);
+    }
+
+    /// <summary>
+    /// Stops listening to the source. A source the processor owns is disposed
+    /// in the background; use <see cref="DisposeAsync"/> to wait for it.
+    /// </summary>
     public void Dispose()
     {
-        if (_disposed)
+        if (!Unsubscribe())
             return;
+        if (_ownsSource && _source is IAsyncDisposable asyncDisposable and not IDisposable)
+        {
+            _ = DisposeOwnedInBackgroundAsync(asyncDisposable);
+            return;
+        }
+        DisposeOwnedSync();
+    }
+
+    /// <summary>Stops listening to the source, and disposes it when the processor owns it.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (!Unsubscribe())
+            return;
+        if (_ownsSource)
+        {
+            if (_source is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            else if (_source is IDisposable disposable)
+                disposable.Dispose();
+        }
+        foreach (var resource in _ownedResources)
+            resource.Dispose();
+    }
+
+    private bool Unsubscribe()
+    {
+        if (_disposed)
+            return false;
         _disposed = true;
         _source.Changed -= OnSourceChanged;
+        return true;
+    }
+
+    private void DisposeOwnedSync()
+    {
+        if (_ownsSource && _source is IDisposable disposable)
+            disposable.Dispose();
+        foreach (var resource in _ownedResources)
+            resource.Dispose();
+    }
+
+    private async Task DisposeOwnedInBackgroundAsync(IAsyncDisposable source)
+    {
+        try
+        {
+            await source.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already gone.
+        }
+        finally
+        {
+            foreach (var resource in _ownedResources)
+                resource.Dispose();
+        }
     }
 
     private void OnSourceChanged(object? sender, DynamicFeaturesChanged e) =>

@@ -52,7 +52,12 @@ namespace EncDotNet.S100.DynamicSources.Ndbc;
 /// the loop on a fake clock.
 /// </para>
 /// </remarks>
-public sealed class NdbcObservationSource : IDynamicFeatureSource, IDynamicFeatureDescriber, IAsyncDisposable
+public sealed class NdbcObservationSource :
+    IStartableDynamicSource,
+    IPausableDynamicSource,
+    IAreaFilteredDynamicSource,
+    IDynamicFeatureDescriber,
+    IAsyncDisposable
 {
     /// <summary>The <see cref="DynamicFeature.Kind"/> of a station, and the source's renderer key: <c>weather.observation.ndbc</c>.</summary>
     public const string FeatureKind = "weather.observation.ndbc";

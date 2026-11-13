@@ -39,6 +39,8 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.NetCdf\EncDotNet.S100.Datasets.NetCdf.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.TropicalCyclones\EncDotNet.S100.Datasets.TropicalCyclones.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ndbc\EncDotNet.S100.DynamicSources.Ndbc.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Nmea\EncDotNet.S100.DynamicSources.Nmea.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
