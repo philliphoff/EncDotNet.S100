@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Data sources in the Datasets panel.** SoundCharts lists a live source
+  with your datasets: **Add a data source** in the Datasets panel adds it,
+  and you show, hide, reorder and remove it like a file. Sources you add are
+  added again the next time SoundCharts starts. NDBC observations are the
+  first: they've moved from the Layer stack to the Datasets panel, and if you
+  had them turned on they're added for you. A source runs only while it's
+  shown, and fetches only the area in view.
 - **Sources that aren't files.** A `SourceRegistration` describes a live feed
   or polled service: its id, name, spec, options and when a host runs it,
   and `Create` builds its processor from the saved options, loggers, a clock

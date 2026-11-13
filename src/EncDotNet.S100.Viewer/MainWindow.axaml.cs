@@ -468,9 +468,6 @@ public partial class MainWindow : ShadUI.Window
         {
             _dynamicSourceOverlayHost.SetVisible(kv.Key, kv.Value);
         }
-        // #1070: NDBC observations start hidden until the user turns them on.
-        var ndbcOverlay = App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsOverlay>();
-        ndbcOverlay?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
         // #1453 (tide predictions D4): predicted tide stations start hidden too.
         var tideStations = App.Services.GetService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>();
         tideStations?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
@@ -495,9 +492,6 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
         }
 
-        // #1070: bind the NDBC source to the viewport and its Layer Stack
-        // toggle, then start polling.
-        ndbcOverlay?.Attach(_dynamicSourceOverlayHost);
         tideStations?.Attach(_dynamicSourceOverlayHost);
 
         // #1073: feed the NMEA weather source the own-ship fix and start
@@ -700,6 +694,11 @@ public partial class MainWindow : ShadUI.Window
             Opened += async (_, _) => await FrameOnOwnShipAtStartupAsync();
         }
 
+        // Add back the data sources the user added last time (design note
+        // D3). Automated runs start from their CLI datasets alone.
+        if (!needsAutomation)
+            Opened += (_, _) => RestoreSavedSources();
+
         // Surface a recovery notification when the previous run terminated
         // without a clean shutdown (a native crash, FailFast, kill, …).
         Opened += (_, _) => ReportPreviousUncleanShutdown();
@@ -831,6 +830,21 @@ public partial class MainWindow : ShadUI.Window
     /// before framing, then gives up quietly. No-op when the overlay is
     /// disabled or an explicit CLI viewport was supplied.
     /// </summary>
+    /// <summary>Adds and loads the data sources saved in <see cref="ViewerSettings.SourceDatasets"/>.</summary>
+    private static void RestoreSavedSources()
+    {
+        var sources = App.Services.GetService<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>();
+        var datasets = App.Services.GetService<DatasetsViewModel>();
+        if (sources is null || datasets is null)
+            return;
+        // Added in saved order, each at the top, so the last added is on top as before.
+        foreach (var registration in sources.SavedRegistrations())
+        {
+            if (datasets.AddSource(registration) is { } entry)
+                datasets.RequestLoad(entry);
+        }
+    }
+
     private async Task FrameOnOwnShipAtStartupAsync()
     {
         var source = ResolveOrFallback<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(

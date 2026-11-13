@@ -636,6 +636,16 @@
                                 <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="Datasets.Toolbar.AddSource"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddDataSource}"
+                                    x:Name="ToolbarAddSourceButton"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataSource}">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedLeft" />
+                                </Button.Flyout>
+                                <ic:FluentIcon Icon="PlugConnected" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Classes="Icon"
                                     AutomationProperties.AutomationId="Datasets.Toolbar.ShowAll"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ShowAllDatasets}"
                                     Command="{Binding ShowAllCommand}"

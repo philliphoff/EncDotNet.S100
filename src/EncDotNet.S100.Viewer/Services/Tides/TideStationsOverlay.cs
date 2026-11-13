@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Viewer.Services.Tides;
 /// <summary>
 /// Binds the <see cref="TideStationSource"/> to its Layer stack toggle, the
 /// map viewport, the view time and the loaded S-104 (tide predictions design
-/// D4, D5), as <c>NdbcObservationsOverlay</c> does for NDBC.
+/// D4, D5), as the NDBC overlay did before NDBC became a data source.
 /// </summary>
 /// <remarks>
 /// The overlay starts hidden (D4: off by default, kept after a restart).
