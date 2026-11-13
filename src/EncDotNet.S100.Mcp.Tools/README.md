@@ -161,11 +161,14 @@ file and reloads it when the file changes.
 |---|---|---|
 | `ListTideStationsTool` | `list_tide_stations` | Lists tide stations near a point or in a box, nearest first, with their kind, reference station, offsets and datums, and the catalogue's age. |
 | `PredictTideTool` | `predict_tide` | Predicts the astronomical tide at a station or the nearest station to a point, as a series or highs and lows. `ResolveAsync` finds the station and predictor without predicting. |
+| `ListCurrentStationsTool` | `list_current_stations` | Lists tidal current stations (one per depth bin) near a point or in a box, nearest first, with their kind, depth, flood and ebb directions and a subordinate station's offsets. |
+| `PredictCurrentTool` | `predict_current` | Predicts the astronomical tidal current at a station or the nearest station to a point, as a series of speeds and directions or the slacks and maxima. `ResolveAsync` finds the station and predictor without predicting. |
 
 SoundCharts and `s100 mcp serve` both run them, and the `s100 tides` commands
 call them directly. `SampleCoverageTool` and `SampleCoverageAlongTool`, given
 a `RouteCheckSourceCache` with tide predictions, fill S-104 gaps with a
-prediction and say so in the result's `Source`. To build them as MCP tools, use `TideMcpTools` in
+tide prediction and S-111 gaps with a tidal current prediction, and say so in
+the result's `Source`. To build them as MCP tools, use `TideMcpTools` in
 [`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md#add-host-tools).
 
 ### Viewer-only tools
@@ -207,6 +210,9 @@ is a typed `ToolError` with a stable `Code` and a `Message`.
 | `tide_station_not_found` | No tide station has the id or name, or a name matches several (`candidates`). |
 | `no_tide_station_near` | No tide station that can be predicted on the datum is within the radius. |
 | `tide_datum_not_available` | The station can't be predicted on the datum; `available` lists the datums it can. |
+| `current_station_not_found` | No current station has the id or name, or a name matches several stations (`candidates`). |
+| `no_current_station_near` | No predictable current station is within the radius. |
+| `current_station_not_predictable` | The current station's constituents, or its reference station, are missing. |
 
 ## `IDatasetCatalog`
 

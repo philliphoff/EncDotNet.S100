@@ -141,10 +141,12 @@ tools with a headless renderer.
 Library.
 
 `TideMcpTools.Create` (namespace `EncDotNet.S100.Mcp.Tides`) builds the
-read-only tide tools, `list_tide_stations` and `predict_tide`, over an
+read-only tide and tidal current tools, `list_tide_stations`, `predict_tide`,
+`list_current_stations` and `predict_current`, over an
 `ITideCatalogueSource`, such as a `TideCatalogueFileSource` for the file
 `s100 tides update` writes. SoundCharts and `s100 mcp serve` both serve them.
-[Tide tools](../../docs/mcp-server.md#tide-tools) describes them.
+[Tide tools](../../docs/mcp-server.md#tide-tools) and
+[Tidal current tools](../../docs/mcp-server.md#tidal-current-tools) describe them.
 
 ## Security
 

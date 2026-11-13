@@ -172,8 +172,24 @@ public static class TideToolText
             age,
             catalogue.IsOlderThan(TideStationCatalogue.OfflineStaleAfter, now),
             catalogue.DatumEpoch,
-            catalogue.Stations.Count);
+            catalogue.Stations.Count,
+            catalogue.CurrentStations.Count);
     }
+
+    /// <summary>The caveat every predicted current carries.</summary>
+    public const string CurrentCaveat = "Astronomical tidal current only, not a forecast.";
+
+    /// <summary>A current event's kind as the tools write it, such as <c>slack_before_flood</c> or <c>max_ebb</c>.</summary>
+    public static string EventKind(CurrentEventKind kind) => kind switch
+    {
+        CurrentEventKind.SlackBeforeFlood => "slack_before_flood",
+        CurrentEventKind.MaximumFlood => "max_flood",
+        CurrentEventKind.MinimumFlood => "min_flood",
+        CurrentEventKind.SlackBeforeEbb => "slack_before_ebb",
+        CurrentEventKind.MaximumEbb => "max_ebb",
+        CurrentEventKind.MinimumEbb => "min_ebb",
+        _ => kind.ToString(),
+    };
 
     /// <summary>A station kind as the tools write it: <c>harmonic</c> or <c>subordinate</c>.</summary>
     public static string Kind(TideStationKind kind) => kind == TideStationKind.Harmonic ? "harmonic" : "subordinate";

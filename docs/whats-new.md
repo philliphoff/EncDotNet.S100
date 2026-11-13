@@ -50,6 +50,15 @@ month. For package versions and release assets, see
   the station and carries the caveat. See
   [`tides predict`](cli.md#tides-predict) and
   [Find when the tide is above a height](scenarios/tide-above-a-height.md).
+- **Tidal current predictions from the shell and for agents.**
+  `s100 tides currents stations` lists current stations near a point, and
+  `s100 tides currents predict` predicts a station's speeds and directions or
+  its slacks and maxima as a table, CSV, JSON or an S-111 file. The MCP tools
+  `list_current_stations` and `predict_current` do the same for agents, and
+  with tide predictions on, `sample_coverage` fills S-111 gaps with a
+  predicted current. See
+  [`tides currents predict`](cli.md#tides-currents-predict) and
+  [Find slack water in a pass](scenarios/slack-water-in-a-pass.md).
 - **Tidal current predictions.** `EncDotNet.S100.Tides` predicts tidal
   currents: `CurrentPredictor` for a harmonic current station (major axis,
   or both axes for a rotary current) and `SubordinateCurrentPredictor` for a

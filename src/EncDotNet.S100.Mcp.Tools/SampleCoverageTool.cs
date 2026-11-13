@@ -11,8 +11,9 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// gridded coverage (S-102 / S-104 / S-111) at a geographic point. The
 /// reusable query logic lives in <see cref="SampleCoverageService"/>
 /// (<c>EncDotNet.S100.Datasets.Pipelines.Query</c>); this class surfaces it
-/// as an MCP tool and, for S-104, falls back to tide predictions where no
-/// S-104 covers the point and time.
+/// as an MCP tool and falls back to predictions where no dataset covers the
+/// point and time: tide predictions for S-104, tidal current predictions for
+/// S-111.
 /// </summary>
 public sealed class SampleCoverageTool
 {
@@ -21,6 +22,7 @@ public sealed class SampleCoverageTool
 
     private readonly SampleCoverageService _service;
     private readonly PredictedWaterLevelSampler? _predictions;
+    private readonly PredictedCurrentSampler? _currentPredictions;
 
     /// <summary>Creates a new <see cref="SampleCoverageTool"/> with no tide prediction fallback.</summary>
     /// <param name="catalog">The catalog of loaded datasets to sample from.</param>
@@ -40,9 +42,10 @@ public sealed class SampleCoverageTool
     /// <param name="predictions">
     /// The host's route-check sources, whose
     /// <see cref="RouteCheckSourceCache.TidePredictions"/> are used for S-104
-    /// where no S-104 covers the point and time; <c>null</c> for none.
+    /// (tide stations) and S-111 (current stations) where no dataset covers
+    /// the point and time; <c>null</c> for none.
     /// </param>
-    /// <param name="time">The clock, for an S-104 sample with no time.</param>
+    /// <param name="time">The clock, for a predicted sample with no time.</param>
     public SampleCoverageTool(IDatasetCatalog catalog, ICrsTransformFactory transforms, RouteCheckSourceCache? predictions, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(catalog);
@@ -50,25 +53,30 @@ public sealed class SampleCoverageTool
         ArgumentNullException.ThrowIfNull(time);
         _service = new SampleCoverageService(catalog, transforms);
         _predictions = predictions is null ? null : new PredictedWaterLevelSampler(catalog, predictions, time);
+        _currentPredictions = predictions is null ? null : new PredictedCurrentSampler(catalog, predictions, time);
     }
 
     /// <summary>
     /// Executes the tool: the shared service, then for S-104 a tide
-    /// prediction when no dataset covers the point and time.
+    /// prediction, or for S-111 a tidal current prediction, when no dataset
+    /// covers the point and time.
     /// </summary>
     public async Task<ToolResult<SampleCoverageResult>> InvokeAsync(
         SampleCoverageRequest request,
         CancellationToken cancellationToken = default)
     {
         var result = await _service.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
-        if (_predictions is null
-            || !string.Equals(request.Spec.Name, "S-104", StringComparison.Ordinal)
-            || !result.TryGetError(out var error)
+        if (!result.TryGetError(out var error)
             || error is not (NoDatasetCoversPoint or OutOfBounds or NoDataAtPoint or TimeOutOfRange))
         {
             return result;
         }
 
-        return _predictions.Sample(request) ?? result;
+        return request.Spec.Name switch
+        {
+            "S-104" when _predictions is not null => _predictions.Sample(request) ?? result,
+            "S-111" when _currentPredictions is not null => _currentPredictions.Sample(request) ?? result,
+            _ => result,
+        };
     }
 }

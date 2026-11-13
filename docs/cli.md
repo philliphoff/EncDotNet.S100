@@ -128,7 +128,9 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
 | [`tides stations`](#tides-stations) | Lists tide stations near a point, from the offline station catalogue. |
 | [`tides predict`](#tides-predict) | Predicts the tide at a station, as heights, highs and lows, or an S-104 dataset. |
-| [`tides update`](#tides-update) | Downloads NOAA's tide stations into the offline catalogue, or checks for newer data. |
+| [`tides currents stations`](#tides-currents-stations) | Lists tidal current stations near a point, from the offline station catalogue. |
+| [`tides currents predict`](#tides-currents-predict) | Predicts the tidal current at a station, as speeds and directions, slacks and maxima, or an S-111 dataset. |
+| [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, or checks for newer data. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`health`](#health) | Checks that a `tiles serve` or `feed serve` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
@@ -1022,6 +1024,114 @@ datum must have an S-100 code (all the datums above do). The file is written
 with PureHDF, whose writer doesn't work in a NativeAOT build; the `s100`
 release builds aren't NativeAOT.
 
+## tides currents stations
+
+```text
+s100 tides currents stations --near <lat,lon> [options]
+```
+
+`tides currents stations` lists the tidal current stations within a radius of
+a point, nearest first, from the offline station catalogue. NOAA lists each
+depth bin at a station as its own station, such as `PUG1701_33`, so one place
+can appear several times. Each station has its id, name, kind (**harmonic**,
+or **subordinate** with a reference station), depth below the surface, and
+the directions the flood and ebb set toward, in degrees true. A line under
+the table gives the catalogue's provider and age.
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | required | The point, latitude first, in decimal degrees: `--near 48.406,-122.643`. |
+| `--radius <distance>` | `50` (km) | How far to look: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
+| `--limit <n>` | `10` | The most stations to list, 1 to 500. Each depth bin counts as one. |
+| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_current_stations` MCP result, with a subordinate station's time differences and speed ratios. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file (`.json`, or `.json.gz` for gzip). |
+
+```bash
+s100 tides currents stations --near 48.406,-122.643
+s100 tides currents stations --near 37.82,-122.46 --radius 5nm --format json
+```
+
+A catalogue downloaded before current stations were added lists none: run
+[`tides update`](#tides-update) again.
+
+## tides currents predict
+
+```text
+s100 tides currents predict <station> [options]
+s100 tides currents predict --near <lat,lon> [options]
+```
+
+`tides currents predict` predicts the astronomical tidal current at a current
+station from the offline catalogue. Name the station by id (`PUG1701_33`),
+by NOAA's id without its depth bin (`PUG1701`) or by name (`Deception Pass`);
+the last two take the shallowest bin. Or use `--near` for the nearest station
+within `--radius`. It prints the speed in knots, the direction the current
+sets toward and whether it floods or ebbs at each step, or with `--events`
+the slack waters and the maximum and minimum floods and ebbs.
+
+A prediction is astronomical: wind and river flow change real currents, and
+the strongest stream in a pass can be away from the station. It isn't a
+forecast, isn't S-111, and isn't for navigation. The engine is
+[`EncDotNet.S100.Tides`](../src/EncDotNet.S100.Tides/README.md#predict-tidal-currents).
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | none | Predict at the nearest station to this point instead of a named one. |
+| `--radius <distance>` | `10` (km) | With `--near`, how far away the station may be. |
+| `--from <time>` | now, rounded down to the step | The first time: ISO 8601 or a date. Without an offset, it's in this computer's time zone. |
+| `--to <time>` | 24 hours after `--from` | The last time, like `--from`. At most 366 days after it. |
+| `--step <step>` | `30` (minutes) | The time between values: minutes, or with a unit (`10m`, `1h`, `90s`). |
+| `--events` | off | Lists the slacks and maximum and minimum floods and ebbs instead of values at each step. |
+| `--utc` | off | Reads and prints times in UTC rather than this computer's time zone. |
+| `--format <format>` | `table` | `table`, `csv`, `json` or `s111`. JSON is the `predict_current` MCP result, with times in UTC. |
+| `-o`, `--output <file>` | `111ZZ01<station>.h5` | With `--format s111`, the file to write. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file. |
+
+```bash
+s100 tides currents predict PUG1701_33
+s100 tides currents predict "Deception Pass" --events --from 2026-11-18 --to 2026-11-19
+s100 tides currents predict --near 37.82,-122.46 --step 10m --format csv
+```
+
+```text
+Deception Pass (Narrows) PUG1701_33, harmonic, 5.5 m below the surface, flood
+108°, ebb 277°
+╭─────────────────────────┬─────────────────────┬────────────────┬───────────╮
+│ Time                    │ Event               │ Predicted (kn) │ Direction │
+├─────────────────────────┼─────────────────────┼────────────────┼───────────┤
+│ 2026-11-18 09:44 -08:00 │ Slack, ebb begins   │            0.0 │         — │
+│ 2026-11-18 12:42 -08:00 │ Max ebb             │            5.5 │      277° │
+│ 2026-11-18 17:00 -08:00 │ Slack, flood begins │            0.0 │         — │
+╰─────────────────────────┴─────────────────────┴────────────────┴───────────╯
+Astronomical tidal current only, not a forecast. Wind and river flow change real
+currents, and the strongest stream in a pass can be away from the station. Not
+for navigation.
+Stations: NOAA CO-OPS, retrieved 2026-11-11 (7 days ago).
+```
+
+CSV has a header row (`time,predicted_speed_kn,direction_deg_true,phase`, or
+`time,event,predicted_speed_kn,direction_deg_true` with `--events`) and ISO
+8601 times with their offset. At slack the direction is empty. The station and
+the note go to standard error. A rotary station gives its direction at each
+maximum and minimum as well.
+
+### Write an S-111 dataset
+
+`--format s111` writes the series as an S-111 Edition 2.0.0 dataset with one
+station (data coding format 8), which SoundCharts and the other `s100`
+commands open like any S-111 file:
+
+```bash
+s100 tides currents predict PUG1701_33 --from 2026-11-18 --to 2026-11-25 --step 10m --format s111 -o deception-pass.h5
+```
+
+The dataset says it's a prediction: its producer code is `ZZ01`, which no
+real producer has, its type of current data is astronomical prediction, and
+its method text names the station and says it's not an official product. The
+station's depth is written as `surfaceCurrentDepth`. The step must be a whole
+number of seconds up to 65,535 (18 h 12 min). As for S-104, the file is
+written with PureHDF, which doesn't work in a NativeAOT build.
+
 ## tides update
 
 ```text
@@ -1208,8 +1318,8 @@ lists them all.
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
-| `--tide-catalogue <file>` | the offline cache | The tide station catalogue `list_tide_stations` and `predict_tide` read. See [`tides update`](#tides-update). |
-| `--tide-predictions` | off | Fills S-104 gaps with tide predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest station within 10 km by water where no S-104 covers a point and time. See [Predicted water level in sampling](mcp-server.md#predicted-water-level-in-sampling). |
+| `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
+| `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample_coverage` and `sample_coverage_along` the nearest current station where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 

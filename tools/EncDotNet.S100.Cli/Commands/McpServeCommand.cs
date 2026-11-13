@@ -93,11 +93,11 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         public string? DataDir { get; init; }
 
         [CommandOption("--tide-catalogue <FILE>")]
-        [Description("The tide station catalogue for list_tide_stations and predict_tide: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
+        [Description("The tide and current station catalogue for list_tide_stations, predict_tide, list_current_stations and predict_current: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
         public string? TideCatalogue { get; init; }
 
         [CommandOption("--tide-predictions")]
-        [Description("Fill S-104 gaps with tide predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest station within 10 km by water where no S-104 covers a point and time. Astronomical tide only, not a forecast.")]
+        [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample_coverage and sample_coverage_along the nearest current station where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
         public bool TidePredictions { get; init; }
 
         [CommandOption(LuaEngineOption.Template)]
@@ -228,7 +228,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 ? $"Library data: {root}"
                 : $"Library data: {root} (temporary; pass --data-dir to keep it)");
 
-            // Tide predictions fill S-104 gaps only when asked for, as in SoundCharts (D1).
+            // Tide and current predictions fill S-104 and S-111 gaps only when asked for, as in SoundCharts (D1).
             RouteCheckSourceCache? routeCheckSources = null;
             if (settings.TidePredictions)
             {
@@ -243,6 +243,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 routeCheckSources = new RouteCheckSourceCache(
                     new ProjNetCrsTransformFactory(), new RouteCheckSourceOptions { TidePredictions = stations });
                 Console.Error.WriteLine($"Tide predictions fill S-104 gaps: {stations.Stations.Count} stations from {tidePath}.");
+                if (stations.CurrentStations.Count > 0)
+                    Console.Error.WriteLine($"Current predictions fill S-111 gaps: {stations.CurrentStations.Count} current stations.");
             }
 
             await S100McpStdioHost.RunAsync(catalog, additionalTools, routeCheckSources, cancellationToken);
