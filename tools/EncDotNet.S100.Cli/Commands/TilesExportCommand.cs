@@ -34,11 +34,11 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
     internal sealed class Settings : TilesRenderSettings
     {
         [CommandOption("-o|--output <PATH>")]
-        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, or a .mbtiles file for --container mbtiles. An existing archive file is replaced. Required.")]
+        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, a .mbtiles file for --container mbtiles, or a .gpkg file for --container gpkg. An existing archive file is replaced. Required.")]
         public string? Output { get; init; }
 
         [CommandOption("--container <KIND>")]
-        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) or mbtiles (one MBTiles 1.3 SQLite database, for tile servers). Default: from the output extension (.pmtiles or .mbtiles), otherwise xyz.")]
+        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) mbtiles (one MBTiles 1.3 SQLite database, for tile servers) or gpkg (one OGC GeoPackage 1.4 tile pyramid in Web Mercator, for GIS desktops and field apps). Default: from the output extension (.pmtiles, .mbtiles or .gpkg), otherwise xyz.")]
         public string? Container { get; init; }
 
         [CommandOption("--skip-empty")]
@@ -130,6 +130,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
         {
             TileContainer.PmTiles => new PmTilesTileSink(outputPath),
             TileContainer.MbTiles => new MbTilesTileSink(outputPath),
+            TileContainer.GeoPackage => new GeoPackageTileSink(outputPath),
             _ => new XyzDirectoryTileSink(outputPath, format),
         };
 
@@ -213,6 +214,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
                 {
                     ".pmtiles" => TileContainer.PmTiles,
                     ".mbtiles" => TileContainer.MbTiles,
+                    ".gpkg" => TileContainer.GeoPackage,
                     _ => TileContainer.Xyz,
                 };
                 return true;
@@ -226,6 +228,10 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
                 return true;
             case "mbtiles":
                 resolved = TileContainer.MbTiles;
+                return true;
+            case "gpkg":
+            case "geopackage":
+                resolved = TileContainer.GeoPackage;
                 return true;
             default:
                 resolved = TileContainer.Xyz;

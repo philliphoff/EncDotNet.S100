@@ -15,6 +15,9 @@ internal enum TileContainer
 
     /// <summary>An MBTiles 1.3 SQLite database.</summary>
     MbTiles,
+
+    /// <summary>An OGC GeoPackage 1.4 tile pyramid in Web Mercator.</summary>
+    GeoPackage,
 }
 
 /// <summary>The encoding of each tile image.</summary>

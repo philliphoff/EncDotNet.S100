@@ -8,8 +8,10 @@ or `--from`) is read that way. In a folder, loose S-101 cells get their sibling
 updates unless `--no-updates`; cells in a nested S-100 exchange set don't, and
 datasets that can't be opened or tiled are skipped with a warning.
 `-o|--output` is required. An output ending in `.pmtiles` writes one PMTiles
-v3 archive and `.mbtiles` one MBTiles 1.3 SQLite database (TMS rows, as the
-format requires); any other output is a directory of `{z}/{x}/{y}.<ext>` files
+v3 archive, `.mbtiles` one MBTiles 1.3 SQLite database (TMS rows, as the
+format requires) and `.gpkg` one OGC GeoPackage 1.4 tile pyramid (EPSG:3857
+Web Mercator grid, tile table `chart`, XYZ rows) for GIS desktops and offline
+field apps; any other output is a directory of `{z}/{x}/{y}.<ext>` files
 plus a `tiles.json` TileJSON document. Use `--container` to choose explicitly.
 An existing archive file at the output path is replaced.
 
