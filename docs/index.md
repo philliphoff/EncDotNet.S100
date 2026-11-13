@@ -83,6 +83,8 @@ flowchart LR
 - [Find when the tide is above a height](scenarios/tide-above-a-height.md)
 - [Show wind and waves on the chart](weather.md): GRIB2 and NetCDF forecasts,
   CAP warnings, NDBC buoys and own-ship wind, which aren't for navigation.
+- [Run s100 in Docker](docker.md): serve tiles from a mounted folder, and the
+  MCP tools in a container.
 
 **Rendering and integration**
 

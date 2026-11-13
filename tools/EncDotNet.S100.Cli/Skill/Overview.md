@@ -59,7 +59,7 @@ and no network update check.
 | Code | Meaning |
 |---|---|
 | `0` | Success. |
-| `1` | Unexpected processing or I/O error. |
+| `1` | Unexpected processing or I/O error; for `health`, the server didn't answer `200 OK`. |
 | `2` | Invalid input, unresolved dataset, or undetected product. |
 | `3` | Render output or viewport could not be produced. |
 | `4` | Recognized operation or dataset capability is not supported. |

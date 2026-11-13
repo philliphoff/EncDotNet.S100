@@ -41,6 +41,14 @@ Instead, CI publishes it self-contained for each runtime identifier:
   release.
 - Into a `cli/` folder inside the SoundCharts download. On macOS that's
   `SoundCharts.app/Contents/MacOS/cli/s100`, signed and notarized with the app.
+- As the `ghcr.io/philliphoff/s100` container image for `linux/amd64` and
+  `linux/arm64`. The [Container workflow](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/container.yml)
+  copies the `linux-x64` and `linux-arm64` archives into
+  [`docker/Dockerfile`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/docker/Dockerfile)'s
+  chiseled Ubuntu image, so the image runs the release's own binaries. CI
+  builds and smoke-tests it on every run, releases push the version tags and
+  `latest`, and nightlies push `nightly`. To build it from your working tree,
+  run `docker/build-local.sh`. See [Run s100 in Docker](../../docs/docker.md).
 
 On Linux the project ships SkiaSharp's self-contained `NoDependencies` native
 library (the `UseSkiaSharpLinuxNoDependencies` property), so `render` draws
@@ -55,7 +63,8 @@ also carries SQLite's native library for its runtime (`libe_sqlite3`, about
 `ViewerSqliteDecouplingTests` keeps it that way.
 
 Release builds check the latest GitHub release at most once every 24 hours and
-cache the result in the local application-data folder. See
+cache the result in the local application-data folder, unless
+`S100_NO_UPDATE_CHECK` is set, as the container image does. See
 [Update notices](../../docs/cli.md#update-notices) for what the user sees.
 
 ## Project layout

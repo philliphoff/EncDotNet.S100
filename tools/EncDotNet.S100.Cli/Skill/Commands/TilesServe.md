@@ -17,7 +17,8 @@ TileJSON's `s100.palettes` lists them; `--palette` picks the palette of the
 unprefixed routes. A tile with nothing drawn, or outside the set, answers
 `204 No Content`; a malformed or out-of-range request, an unknown palette or
 the wrong extension answers `404`. Every response sends
-`Access-Control-Allow-Origin: *`.
+`Access-Control-Allow-Origin: *`. `/healthz` answers `200 OK` with `ok`
+outside any token; `s100 health` asks it and exits `0` when it answers.
 
 For time-varying datasets (S-104, S-111), add `?t=<ISO 8601>` to a tile or
 `tiles.json` URL to pick the time step: it snaps to the nearest of the steps

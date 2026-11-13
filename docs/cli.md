@@ -89,6 +89,11 @@ stable build, install the archive from the
 [latest release](https://github.com/philliphoff/EncDotNet.S100/releases/latest)
 in its place.
 
+### Docker
+
+The `ghcr.io/philliphoff/s100` container image runs `s100` on Linux x64 and
+arm64, with no other install. See [Run s100 in Docker](docker.md).
+
 ### The copy inside SoundCharts
 
 SoundCharts ships the same `s100` executable in a `cli/` folder:
@@ -125,6 +130,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`tides predict`](#tides-predict) | Predicts the tide at a station, as heights, highs and lows, or an S-104 dataset. |
 | [`tides update`](#tides-update) | Downloads NOAA's tide stations into the offline catalogue, or checks for newer data. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
+| [`health`](#health) | Checks that a `tiles serve` or `feed serve` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
@@ -151,6 +157,8 @@ Update available: s100 0.25.0 (current 0.24.0): https://github.com/philliphoff/E
 
 Standard output and the exit code don't change, so you can still parse JSON
 output. Network and cache failures are silent. Development builds don't check.
+To turn the check off, set the `S100_NO_UPDATE_CHECK` environment variable to
+`1`, `true` or `yes`. The [container image](docker.md) sets it.
 
 ## render
 
@@ -559,6 +567,8 @@ The server has these routes:
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
+- `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
+  It never has a token. See [`health`](#health).
 
 Every response allows any origin, so a page served from another port can use
 the tiles.
@@ -1067,6 +1077,33 @@ weather formats GRIB2, NetCDF, CAP, CODSUS and TC (tropical cyclone advisories) 
 shown as "SoundCharts, in code", and a line under the table says they aren't
 S-100 products. See [Supported specifications](#supported-specifications).
 
+## health
+
+```text
+s100 health [--host <address>] [--port <port>] [--timeout <seconds>]
+```
+
+`health` asks a running `tiles serve` or `feed serve` for its `/healthz` route
+and exits with `0` when it answers `200 OK`, or `1` when nothing is listening,
+the server answers with an error, or there's no answer in time. It prints what
+it asked and what came back. Use it as a container health check: the
+[container image](docker.md) has no shell or `curl`.
+
+| Option | Default | Description |
+|---|---|---|
+| `--host <address>` | `127.0.0.1` | The server's address. |
+| `--port <port>` | `8200` | The server's port. `tiles serve` listens on 8200 by default and `feed serve` on 8100. |
+| `--timeout <seconds>` | `5` | How long to wait for an answer. |
+
+```bash
+s100 health
+s100 health --port 8100
+```
+
+```text
+Healthy: http://127.0.0.1:8200/healthz
+```
+
 ## s57 convert
 
 ```text
@@ -1202,12 +1239,14 @@ checks it again at most every `--refresh` seconds, so datasets you add or
 change while it runs appear in the feed. Files that can't be read are reported
 at startup and left out.
 
-The server has two routes:
+The server has these routes:
 
 - `feed.json`, the feed, with an `ETag` so readers can revalidate it. It's
   compressed when the client asks.
 - `items/<id>.zip`, one for each dataset, holding its updates and exchange-set
   catalogue.
+- `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
+  It never has a token. See [`health`](#health).
 
 By default only this computer can connect. With `--host 0.0.0.0`, other
 computers can, and `feed serve` adds a random access token to every URL unless
@@ -1301,7 +1340,7 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 | Code | Meaning |
 |---|---|
 | `0` | Success. |
-| `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
+| `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. For `health`, the server didn't answer `200 OK`. |
 | `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. An HDF5 file is detected only from its root `productSpecification` attribute, which S-100 requires; when that's missing, names a product the CLI doesn't read, or the file can't be read as HDF5 (for example an encrypted S-100 dataset outside its exchange set), the message says so. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. For `tides stations` and `tides predict`: there's no station catalogue, no station matches, or the station can't be predicted on the datum. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |

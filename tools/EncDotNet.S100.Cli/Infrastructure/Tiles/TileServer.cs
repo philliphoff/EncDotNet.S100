@@ -18,7 +18,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// Serves an <see cref="ITileSource"/> over HTTP on the standard XYZ URLs
 /// (issue #865): <c>{z}/{x}/{y}.{ext}</c> tiles, a <c>tiles.json</c> TileJSON
 /// document whose tile URL is absolute, and optionally a preview page at the
-/// root. With a token, every route lives under <c>/&lt;token&gt;/</c>.
+/// root. With a token, every route lives under <c>/&lt;token&gt;/</c>, except
+/// the <c>/healthz</c> health check.
 /// </summary>
 /// <remarks>
 /// Every response allows any origin (CORS), so a web map on another local
@@ -75,6 +76,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
+        ServeHost.MapHealth(app);
         if (viewer)
             app.MapGet(prefix + "/", ServeViewerAsync);
 
