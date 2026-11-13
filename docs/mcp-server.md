@@ -10,7 +10,7 @@ Two hosts run the server:
 | Host | Transport | Datasets | Tools |
 |---|---|---|---|
 | SoundCharts | Streamable HTTP on the loopback address | The datasets loaded in the app | All the tools on this page, except where marked |
-| `s100 mcp serve` | Standard input and output | The datasets you name when you start it, plus any `open_dataset` adds | The [query tools](#query-tools) and [session tools](#session-tools) |
+| `s100 mcp serve` | Standard input and output, or Streamable HTTP with `--transport http` | The datasets you name when you start it, plus any `open_dataset` adds | The [query tools](#query-tools) and [session tools](#session-tools); over HTTP, `open_dataset`, the close tools and the Library edit tools only with `--allow-changes` |
 
 To host the tools in your own application, see the
 [EncDotNet.S100.Mcp README](../src/EncDotNet.S100.Mcp/README.md).
@@ -81,6 +81,11 @@ with no app running. Configure your MCP client to start it, for example:
 
 The exact shape of the configuration depends on your client. For the input
 forms and options, see [`mcp serve`](cli.md#mcp-serve).
+
+To run it as a service that clients connect to, possibly from other
+computers, pass `--transport http`. It then listens at
+`http://127.0.0.1:8300/mcp`, with a bearer token on any address other than
+loopback. See [MCP over HTTP](cli.md#mcp-over-http).
 
 ## Connect with mcp-inspector
 
@@ -863,5 +868,9 @@ statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
   [MCP tools](#mcp-tools) lists them. None can write arbitrary files.
 - The `ui_*` tools can do anything a user can do, so they're registered only
   with `--mcp-test-hooks`, which is never saved.
-- `s100 mcp serve` has no network listener. Only the process that starts it can
-  talk to it.
+- `s100 mcp serve` has no network listener by default. Only the process that
+  starts it can talk to it. With `--transport http` it listens on loopback
+  unless you pass `--host`, requires a bearer token on any other address,
+  refuses requests from web pages on other origins, and leaves out the tools
+  that open files by path or change the Library unless you pass
+  `--allow-changes`. See [MCP over HTTP](cli.md#mcp-over-http).

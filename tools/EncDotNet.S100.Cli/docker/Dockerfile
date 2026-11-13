@@ -47,8 +47,8 @@ ENV XDG_DATA_HOME=/state \
 USER 1654
 WORKDIR /data
 
-# tiles serve's default port. feed serve uses 8100.
-EXPOSE 8200
+# The default ports of tiles serve and mcp serve --transport http. feed serve uses 8100.
+EXPOSE 8200 8300
 
 ENTRYPOINT ["/app/s100"]
 CMD ["--help"]
