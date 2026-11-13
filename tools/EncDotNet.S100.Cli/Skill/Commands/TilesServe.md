@@ -1,6 +1,6 @@
 #### Agent guidance
 
-`tiles serve` serves raster tiles on XYZ URLs. Its input is either a built
+`tiles serve` serves raster tiles on XYZ URLs and as WMTS. Its input is either a built
 tile set — a `{z}/{x}/{y}` directory, a `.pmtiles` archive or a `.mbtiles`
 database — or datasets in the same forms `tiles export` takes (one dataset,
 repeated `--layer`, or an exchange set), which are rendered as their tiles are
@@ -19,6 +19,22 @@ unprefixed routes. A tile with nothing drawn, or outside the set, answers
 the wrong extension answers `404`. Every response sends
 `Access-Control-Allow-Origin: *`. `/healthz` answers `200 OK` with `ok`
 outside any token; `s100 health` asks it and exits `0` when it answers.
+
+The same tiles are an OGC WMTS 1.0.0 service: the capabilities document is at
+`wmts/1.0.0/WMTSCapabilities.xml` (also `wmts?SERVICE=WMTS&REQUEST=GetCapabilities`),
+with one layer, `s100`, on the `WebMercatorQuad` tile matrix set (EPSG:3857,
+matrices 0 to the maximum zoom, identifiers are the zoom numbers, limits from
+the minimum zoom). A WMTS tile is the XYZ tile with `TILEMATRIX` = z,
+`TILECOL` = x and `TILEROW` = y. GetTile works as KVP
+(`wmts?SERVICE=WMTS&REQUEST=GetTile&LAYER=s100&STYLE=…&TILEMATRIXSET=WebMercatorQuad&TILEMATRIX=…&TILEROW=…&TILECOL=…`)
+and RESTful (`wmts/1.0.0/s100/{Style}/[{Time}/]WebMercatorQuad/{z}/{y}/{x}.<ext>`).
+Palettes are styles (the `--palette` one is the default); a built tile set has
+the single style `default`. Time-varying datasets add a `Time` dimension (KVP
+`TIME=`, or the extra REST segment) listing the steps, defaulting to
+`--time-step`. Empty tiles answer `204`; bad requests answer an OWS
+`ExceptionReport` with status 400 (501 for unsupported operations). Point QGIS
+(Layer > Add WMS/WMTS Layer), ArcGIS Pro or GDAL (`WMTS:<capabilities URL>`)
+at the capabilities URL that the startup output prints.
 
 For time-varying datasets (S-104, S-111), add `?t=<ISO 8601>` to a tile or
 `tiles.json` URL to pick the time step: it snaps to the nearest of the steps
