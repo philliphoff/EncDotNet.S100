@@ -175,6 +175,16 @@ Once wrapped, a live source gets a place in the layer order (D6), headless
 and Skia rendering, MCP and the pick pipeline from the processor side,
 without its own code changing.
 
+As built, the adapter draws every feature on one sub-layer at the source's
+`DynamicSourceMetadata.Plane` and `WithinPlanePriority`, and without a
+describer a pick lists the feature's motion and attributes. A source's
+snapshot can change between a hit test and the pick that follows, so
+`GetFeatureInfoAt` returns `null` and hosts fall back to the hit's feature
+reference. The adapter doesn't own the source: disposing it unsubscribes and
+leaves the source running. Until slice 7's `SourceRegistration`, the caller
+passes the spec, and `SpecName` gains a format name per source (`NDBC`,
+`NMEA`).
+
 The 1 Hz constraint is met by keeping the current Mapsui overlay path as an
 **optimization for interactive maps**, not as the contract. When a source has
 an `IDynamicFeaturePortrayal`, the session may draw it through
@@ -692,8 +702,11 @@ Each slice ships on its own and leaves the tree working.
    the derived order, and rebaseline.
 4. **`ILiveDatasetProcessor`.** Built. Add the interface and the session's
    re-render on `Changed`.
-5. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
-   onto it first, since they already use `IDynamicFeaturePortrayal`.
+5. **`DynamicSourceProcessor`.** Built. Add the adapter. Move NDBC and NMEA
+   weather onto it first, since they already use `IDynamicFeaturePortrayal`.
+   Both work through it, under the format names `NDBC` and `NMEA`;
+   SoundCharts keeps drawing them as overlays until slice 7 can list a
+   source in the Datasets panel.
 6. **AIS and own-ship portrayals.** Move both to `IDynamicFeaturePortrayal`
    and mark `IDynamicFeatureRenderer` obsolete.
 7. **`SourceRegistration` and source dataset entries.** Add the registry,

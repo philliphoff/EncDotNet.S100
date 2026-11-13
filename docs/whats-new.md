@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Live sources as datasets.** `DynamicSourceProcessor` wraps any
+  `IDynamicFeatureSource` and its `IDynamicFeaturePortrayal` as a dataset
+  processor, so a live source can be picked, described, rendered headless and
+  ordered by S-98 plane like a file, and is drawn again when it changes. The
+  NDBC observations and own-ship weather from NMEA work through it, under the
+  new `SpecName.Ndbc` and `SpecName.Nmea` format names. SoundCharts still
+  draws them as overlays for now.
 - **Datasets that change after loading.** A processor that implements
   `ILiveDatasetProcessor` raises `Changed` when its data changes, such as a
   feed polled on a timer, and the Mapsui map session draws the dataset again:
