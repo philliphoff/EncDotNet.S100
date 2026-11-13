@@ -119,3 +119,45 @@ internal interface ITileSink : IDisposable
     /// <summary>Finishes the container, recording <paramref name="metadata"/>.</summary>
     void Complete(TileSetMetadata metadata);
 }
+
+/// <summary>
+/// Writes a single-file tile set beside its output path and moves it into
+/// place when it is finished, so a server reading the old file keeps reading a
+/// whole tile set, and a failed export leaves the old file as it was.
+/// </summary>
+internal static class TileSetFile
+{
+    /// <summary>The file a tile set is written to before it replaces <paramref name="outputPath"/>.</summary>
+    public static string PartialPath(string outputPath) => outputPath + ".partial";
+
+    /// <summary>Replaces <paramref name="outputPath"/> with the finished partial file.</summary>
+    public static void Publish(string partialPath, string outputPath)
+    {
+        // On Windows a reader that holds the old file open without delete
+        // sharing blocks the move for a moment; elsewhere the rename is atomic.
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(partialPath, outputPath, overwrite: true);
+                return;
+            }
+            catch (IOException) when (attempt < 10)
+            {
+                Thread.Sleep(100);
+            }
+        }
+    }
+
+    /// <summary>Deletes a partial file, if there is one.</summary>
+    public static void DeletePartial(string partialPath)
+    {
+        try
+        {
+            File.Delete(partialPath);
+        }
+        catch (IOException)
+        {
+        }
+    }
+}
