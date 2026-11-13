@@ -2,7 +2,6 @@ using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Interoperability;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Tides;
 using EncDotNet.S100.Tides.Stations;
@@ -264,7 +263,7 @@ internal sealed class TideStationSource : IDynamicFeatureSource, IDynamicFeature
         var catalogue = _list.Catalogue;
         IReadOnlyList<TideStationState> inView = [];
         IReadOnlyList<DynamicFeature> features = [];
-        if (active && catalogue is not null && view is not null && IsDrawable(view))
+        if (active && catalogue is not null && view is not null && StationThinning.IsDrawable(view))
         {
             var time = _viewTime();
             inView = Compute(catalogue, view, time);
@@ -350,52 +349,17 @@ internal sealed class TideStationSource : IDynamicFeatureSource, IDynamicFeature
     public static IReadOnlyList<TideStationState> Thin(IEnumerable<TideStationState> stations, double distance)
     {
         ArgumentNullException.ThrowIfNull(stations);
-        var ordered = stations
-            .OrderBy(s => s.Kind == TideStationKind.Harmonic ? 0 : 1)
-            .ThenBy(s => s.StationId, StringComparer.Ordinal);
-        var kept = new List<(TideStationState State, double X, double Y)>();
-        var squared = distance * distance;
-        foreach (var station in ordered)
-        {
-            var (x, y) = Mercator(station.Position);
-            var clear = true;
-            foreach (var other in kept)
-            {
-                var dx = other.X - x;
-                var dy = other.Y - y;
-                if ((dx * dx) + (dy * dy) < squared)
-                {
-                    clear = false;
-                    break;
-                }
-            }
-
-            if (clear)
-            {
-                kept.Add((station, x, y));
-            }
-        }
-
-        return kept.Select(k => k.State).ToArray();
-    }
-
-    private static bool IsDrawable(MapViewportSnapshot view)
-    {
-        var latitude = (view.MinLatitude + view.MaxLatitude) / 2;
-        return view.MercatorResolution > 0
-            && MapScaleFormatter.ResolutionToScaleDenominator(view.MercatorResolution, latitude) is { } scale
-            && scale <= TideStationPortrayal.StationMaxScaleDenominator;
+        return StationThinning.Thin(
+            stations
+                .OrderBy(s => s.Kind == TideStationKind.Harmonic ? 0 : 1)
+                .ThenBy(s => s.StationId, StringComparer.Ordinal),
+            s => s.Position,
+            distance);
     }
 
     private IReadOnlyList<TideStationState> Compute(TideStationCatalogue catalogue, MapViewportSnapshot view, DateTime time)
     {
-        var padLat = (view.MaxLatitude - view.MinLatitude) * 0.1;
-        var padLon = (view.MaxLongitude - view.MinLongitude) * 0.1;
-        var box = new BoundingBox(
-            southLatitude: Math.Max(-90, view.MinLatitude - padLat),
-            westLongitude: view.MinLongitude - padLon,
-            northLatitude: Math.Min(90, view.MaxLatitude + padLat),
-            eastLongitude: view.MaxLongitude + padLon);
+        var box = StationThinning.Box(view);
         var result = new List<TideStationState>();
         foreach (var match in catalogue.FindWithin(box))
         {
@@ -429,15 +393,6 @@ internal sealed class TideStationSource : IDynamicFeatureSource, IDynamicFeature
         Attributes = new Dictionary<string, object?>(StringComparer.Ordinal) { [StateAttribute] = state },
         LastUpdated = new DateTimeOffset(DateTime.SpecifyKind(state.Time, DateTimeKind.Utc)),
     };
-
-    private static (double X, double Y) Mercator(GeoPosition position)
-    {
-        const double radius = 6378137.0;
-        var x = radius * position.Longitude * Math.PI / 180;
-        var lat = Math.Clamp(position.Latitude, -85.05112878, 85.05112878) * Math.PI / 180;
-        var y = radius * Math.Log(Math.Tan((Math.PI / 4) + (lat / 2)));
-        return (x, y);
-    }
 
     private async Task LoadThenRefreshAsync()
     {

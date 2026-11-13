@@ -20,6 +20,15 @@ month. For package versions and release assets, see
   `get_tide_display` and `set_tide_display` read and set it, and
   `pick_features` with `select` now shows live overlay features such as a
   station.
+- **Current stations in SoundCharts.** A **Current stations · predicted**
+  row draws NOAA's tidal current stations from 1:500,000: S-111's arrow in
+  its speed band's colour rising from a dashed station frame, with the speed,
+  or a slack bar and the turn time. Stations are hidden where S-111 covers
+  them, and the Legend tab has their speed bands. A station's card has the
+  current now, the speed 12 hours each side of the view time, the slacks and
+  maxima, the flood and ebb directions and the depth; currents are for
+  display only, not route checks. `set_tide_display` turns them on with
+  `currentStations`.
 - **Predicted water level on the chart and the Timeline.** The DEPTHS pill
   says when depths are adjusted by a prediction ("+ water level 14:20 ·
   predicted", or "partly predicted" beside S-104), its flyout lists the
