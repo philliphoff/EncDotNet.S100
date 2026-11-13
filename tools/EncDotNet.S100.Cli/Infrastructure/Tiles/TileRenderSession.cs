@@ -47,7 +47,7 @@ internal sealed class TileRenderSession : IDisposable
 
     private readonly TilesRenderSettings _settings;
     private readonly IDisposable _catalogueManager;
-    private readonly ExchangeSetLayerResolution? _resolution;
+    private readonly IDisposable? _resolution;
     private readonly List<IDatasetProcessor> _processors;
 
     // Portrayal is serialised: the processors are shared by every palette's
@@ -61,7 +61,7 @@ internal sealed class TileRenderSession : IDisposable
     private TileRenderSession(
         TilesRenderSettings settings,
         IDisposable catalogueManager,
-        ExchangeSetLayerResolution? resolution,
+        IDisposable? resolution,
         List<IDatasetProcessor> processors,
         IReadOnlyList<string> specs)
     {
@@ -96,29 +96,43 @@ internal sealed class TileRenderSession : IDisposable
     {
         session = null;
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build(LuaEngineOption.Resolve(settings.LuaEngine));
-        ExchangeSetLayerResolution? resolution = null;
+        IDisposable? resolution = null;
         var processors = new List<IDatasetProcessor>();
+        var specsOpened = new List<string>();
         bool opened = false;
         try
         {
-            IReadOnlyList<(string Path, string Spec)> inputs;
+            IReadOnlyList<(string Path, string Spec, bool ApplyUpdates)> inputs;
             bool applyUpdates = !settings.NoUpdates;
-            if (settings.IsExchangeSet)
+            string? folder = settings.FolderSource;
+            if (folder is not null)
+            {
+                // A folder of datasets, as s100 mcp serve reads one: loose cells keep
+                // their sibling S-101 updates; cells in an S-100 exchange set don't.
+                var warnings = new List<string>();
+                var resolved = DatasetInputResolver.Resolve(folder, [], null, settings.Only, warnings, out resolution);
+                foreach (var warning in warnings)
+                    Console.Error.WriteLine(warning);
+                inputs = resolved
+                    .Select(i => (i.Path, i.Spec, applyUpdates && !IsInsideExchangeSet(i.Path, folder)))
+                    .ToList();
+            }
+            else if (settings.IsExchangeSet)
             {
                 IReadOnlySet<string>? only = null;
                 if (settings.Only is not null && RenderCommand.TryParseOnlySpecs(settings.Only, out var specs))
                     only = specs;
 
-                resolution = ExchangeSetLayerResolution.Resolve(settings.ExchangeSetSource!, only);
-                foreach (var warning in resolution.Warnings)
+                var exchangeSet = ExchangeSetLayerResolution.Resolve(settings.ExchangeSetSource!, only);
+                resolution = exchangeSet;
+                foreach (var warning in exchangeSet.Warnings)
                     Console.Error.WriteLine(warning);
-                inputs = resolution.Layers.Select(l => (l.Path, l.Spec)).ToList();
-                applyUpdates = false;
+                inputs = exchangeSet.Layers.Select(l => (l.Path, l.Spec, false)).ToList();
             }
             else
             {
                 var paths = settings.IsComposite ? settings.Layers : [settings.Input!];
-                var resolved = new List<(string, string)>();
+                var resolved = new List<(string, string, bool)>();
                 foreach (var path in paths)
                 {
                     var spec = DatasetPipelineFactory.DetectProductSpec(path);
@@ -128,7 +142,7 @@ internal sealed class TileRenderSession : IDisposable
                         return 2;
                     }
 
-                    resolved.Add((path, spec));
+                    resolved.Add((path, spec, applyUpdates));
                 }
 
                 inputs = resolved;
@@ -136,7 +150,7 @@ internal sealed class TileRenderSession : IDisposable
 
             if (inputs.Count == 0)
             {
-                AnsiConsole.MarkupLineInterpolated($"[red]No renderable datasets were found in:[/] {settings.ExchangeSetSource}");
+                AnsiConsole.MarkupLineInterpolated($"[red]No renderable datasets were found in:[/] {folder ?? settings.ExchangeSetSource}");
                 return 2;
             }
 
@@ -147,20 +161,46 @@ internal sealed class TileRenderSession : IDisposable
                 return 2;
             }
 
-            foreach (var (path, spec) in inputs)
+            foreach (var (path, spec, applyInputUpdates) in inputs)
             {
-                var processor = DatasetProcessorLoader.Create(factory, spec, path, noUpdates: !applyUpdates);
-                processors.Add(processor);
+                IDatasetProcessor processor;
+                try
+                {
+                    processor = DatasetProcessorLoader.Create(factory, spec, path, noUpdates: !applyInputUpdates);
+                }
+                catch (Exception e) when (folder is not null && e is not OperationCanceledException)
+                {
+                    // In a folder, one unreadable dataset doesn't stop the rest.
+                    Console.Error.WriteLine($"Skipped {spec} dataset that could not be opened: {path} ({e.Message})");
+                    continue;
+                }
+
                 if (processor.VersionAssessment?.IsWarning == true)
                     Console.Error.WriteLine(processor.VersionAssessment.BuildMessage());
                 if (processor is not (IVectorPortrayalSource or ICoveragePortrayalSource))
                 {
+                    (processor as IDisposable)?.Dispose();
+                    if (folder is not null)
+                    {
+                        Console.Error.WriteLine($"Skipped {spec} dataset, which can't be tiled: {path}");
+                        continue;
+                    }
+
                     AnsiConsole.MarkupLineInterpolated($"[red]Tiling is not supported for {spec}:[/] {path}");
                     return 3;
                 }
+
+                processors.Add(processor);
+                specsOpened.Add(spec);
             }
 
-            session = new TileRenderSession(settings, catalogueManager, resolution, processors, inputs.Select(i => i.Spec).ToList());
+            if (processors.Count == 0)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]No datasets that can be tiled were found in:[/] {folder ?? settings.ExchangeSetSource}");
+                return 2;
+            }
+
+            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened);
             opened = true;
             return 0;
         }
@@ -348,7 +388,8 @@ internal sealed class TileRenderSession : IDisposable
     /// <summary>
     /// A fingerprint of everything that decides what the tiles look like: the
     /// <c>s100</c> version, every input file's path, size and write time
-    /// (including sibling update files and the whole of an exchange set), and
+    /// (including sibling update files, and the whole of an exchange set or
+    /// folder, so adding or removing a file changes it), and
     /// the options that change pixels. A persisted tile cache is kept per
     /// fingerprint, so tiles are only reused for the same data and settings.
     /// The palette is not included; it is part of each tile's key.
@@ -405,6 +446,9 @@ internal sealed class TileRenderSession : IDisposable
     /// </summary>
     private static IEnumerable<string> InputFiles(TilesRenderSettings settings)
     {
+        if (settings.FolderSource is { } folder)
+            return FolderFiles(Path.GetFullPath(folder), settings.FingerprintExcludedFolder);
+
         if (settings.IsExchangeSet)
         {
             var source = Path.GetFullPath(settings.ExchangeSetSource!);
@@ -429,6 +473,58 @@ internal sealed class TileRenderSession : IDisposable
         }
 
         return files;
+    }
+
+    /// <summary>
+    /// Every file in a folder of datasets, recursively and in a stable order,
+    /// so a file added to it or removed from it changes the fingerprint.
+    /// Hidden files and folders are skipped, as the folder's datasets are found,
+    /// and so is <paramref name="excluded"/> (a tile cache kept inside it).
+    /// </summary>
+    private static List<string> FolderFiles(string root, string? excluded)
+    {
+        var excludedFull = excluded is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(excluded));
+        var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };
+        var files = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            if (excludedFull is not null && string.Equals(directory, excludedFull, StringComparison.Ordinal))
+                continue;
+            try
+            {
+                files.AddRange(Directory.EnumerateFiles(directory, "*", options));
+                foreach (var child in Directory.EnumerateDirectories(directory, "*", options))
+                    pending.Push(child);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A folder removed while it was read: the next check sees the change.
+            }
+        }
+
+        files.Sort(StringComparer.Ordinal);
+        return files;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> lies in an S-100 exchange set nested in
+    /// <paramref name="root"/> (a folder between them holding a <c>CATALOG.XML</c>).
+    /// </summary>
+    private static bool IsInsideExchangeSet(string path, string root)
+    {
+        var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        for (var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+             directory is not null && directory.Length > rootFull.Length;
+             directory = Path.GetDirectoryName(directory))
+        {
+            if (ExchangeSetInput.LooksLikeExchangeSet(directory))
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()

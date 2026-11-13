@@ -108,13 +108,14 @@ internal static class TileSource
 
     /// <summary>
     /// Whether <paramref name="path"/> looks like a built tile set rather than a
-    /// dataset or an exchange set: a directory that isn't an exchange set, or a
-    /// PMTiles or SQLite (MBTiles) file.
+    /// dataset, a folder of datasets or an exchange set: an XYZ directory (one
+    /// holding a <c>tiles.json</c>, or <c>{z}/{x}</c> folders with numeric names),
+    /// or a PMTiles or SQLite (MBTiles) file.
     /// </summary>
     public static bool IsTileSet(string path)
     {
         if (Directory.Exists(path))
-            return !ExchangeSetInput.LooksLikeExchangeSet(path);
+            return LooksLikeXyzDirectory(path);
         if (!File.Exists(path))
             return false;
 
@@ -132,6 +133,29 @@ internal static class TileSource
 
         return (read >= 7 && Encoding.ASCII.GetString(signature, 0, 7) == "PMTiles")
             || (read == 16 && Encoding.ASCII.GetString(signature) == "SQLite format 3\0");
+    }
+
+    /// <summary>
+    /// Whether <paramref name="directory"/> holds a <c>tiles.json</c>, or a zoom
+    /// folder (named 0–26) that itself holds a numerically named column folder.
+    /// </summary>
+    private static bool LooksLikeXyzDirectory(string directory)
+    {
+        try
+        {
+            if (File.Exists(System.IO.Path.Combine(directory, XyzDirectoryTileSink.TileJsonFileName)))
+                return true;
+
+            return Directory.EnumerateDirectories(directory)
+                .Where(z => int.TryParse(System.IO.Path.GetFileName(z), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var zoom)
+                    && zoom <= 26)
+                .Any(z => Directory.EnumerateDirectories(z)
+                    .Any(x => int.TryParse(System.IO.Path.GetFileName(x), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The tile format named by a TileJSON or MBTiles <c>format</c> value.</summary>

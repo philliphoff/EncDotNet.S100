@@ -48,17 +48,20 @@ Then open `http://localhost:8200/` for the preview map, or use
   across restarts. Use `--no-token` only on a network you trust, or behind a
   proxy that checks access.
 
-`tiles serve` renders an S-100 exchange set (a folder holding `CATALOG.XML`, or
-a `.zip`), datasets given with `--layer`, or serves a built tile set. It reads
-any other folder as a built tile set, so give S-57 cells and loose datasets
-with `--layer`:
+`tiles serve` renders every dataset in the folder you give it, searching its
+subfolders: S-57 cells (an `ENC_ROOT` with its `CATALOG.031` included), S-100
+exchange sets and loose datasets. A folder that holds a `tiles.json` or
+numbered `{z}/{x}` subfolders is served as a built tile set instead. To serve
+only some of the datasets, name them with `--layer`, or restrict the folder to
+some product specifications with `--only`:
 
 ```bash
-docker run --rm -p 8200:8200 -v path/to/charts:/data:ro ghcr.io/philliphoff/s100 tiles serve --layer ENC_ROOT/US5MA1BO/US5MA1BO.000 --layer bathy.h5 --host 0.0.0.0 --no-token
+docker run --rm -p 8200:8200 -v path/to/charts:/data:ro ghcr.io/philliphoff/s100 tiles serve /data --only S57,S102 --host 0.0.0.0 --no-token
 ```
 
 `tiles serve` checks the datasets for changes every 10 seconds, so you can copy
-a new edition into the mounted folder while it runs.
+a new edition, or a new cell, into the mounted folder while it runs, or remove
+one.
 
 ## Keep tiles and data between runs
 

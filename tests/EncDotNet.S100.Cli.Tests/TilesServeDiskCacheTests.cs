@@ -272,7 +272,11 @@ public sealed class TilesServeDiskCacheTests : IDisposable
     [Fact]
     public void A_built_tile_set_takes_no_disk_cache()
     {
-        var result = new TilesServeCommand.Settings { Input = _root, CacheDirectory = CacheRoot }.Validate();
+        var tileSet = Path.Combine(_root, "tiles");
+        Directory.CreateDirectory(tileSet);
+        File.WriteAllText(Path.Combine(tileSet, XyzDirectoryTileSink.TileJsonFileName), """{"format":"png"}""");
+
+        var result = new TilesServeCommand.Settings { Input = tileSet, CacheDirectory = CacheRoot }.Validate();
 
         Assert.False(result.Successful);
         Assert.Contains("--cache-dir applies only when rendering datasets", result.Message);

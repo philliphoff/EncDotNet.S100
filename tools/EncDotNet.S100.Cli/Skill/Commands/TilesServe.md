@@ -3,10 +3,13 @@
 `tiles serve` serves raster tiles on XYZ URLs and as WMTS. Its input is either a built
 tile set — a `{z}/{x}/{y}` directory, a `.pmtiles` archive or a `.mbtiles`
 database — or datasets in the same forms `tiles export` takes (one dataset,
-repeated `--layer`, or an exchange set), which are rendered as their tiles are
-requested. A directory that is not an exchange set is treated as a tile set;
-pass a folder of datasets with `--layer`. Only PNG, JPEG and WebP raster tiles
-are served; a vector (MVT) tile set exits with code `2`.
+repeated `--layer`, an exchange set, or a folder of datasets), which are
+rendered as their tiles are requested. A directory counts as a built tile set
+only when it holds a `tiles.json` or numeric `{z}/{x}` folders; any other
+directory that isn't an S-100 exchange set is searched recursively for
+datasets, as `mcp serve` searches it (S-57 `ENC_ROOT` folders with a
+`CATALOG.031` included). Only PNG, JPEG and WebP raster tiles are served; a
+vector (MVT) tile set exits with code `2`.
 
 Routes, under `/<token>/` when a token is in use: `{z}/{x}/{y}.<ext>` for
 tiles (XYZ rows, numbered from the north, also for MBTiles), `tiles.json` for
@@ -50,7 +53,8 @@ Rendering uses the `tiles export` display, zoom and area options, renders
 of tiles in memory, and runs at most `--parallel` renders at once. The first
 request for a block, and for each palette, is slow; later ones are cached.
 When rendering datasets, their files (paths, sizes, write times, update
-files, the whole of an exchange set) are re-checked every `--refresh` seconds
+files, every file of an exchange set or folder, so a cell copied into or
+removed from a served folder counts) are re-checked every `--refresh` seconds
 (default 10; `0` disables). A change that has held for two consecutive checks
 reopens and re-portrays the datasets in the background; requests switch over
 when that's done, with an empty memory cache and a new disk-cache fingerprint,
