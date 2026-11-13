@@ -14,7 +14,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// output; identical tiles are stored once. <see cref="Complete"/> then writes
 /// the archive with the tile contents in tile-ID order (a clustered archive),
 /// gzip-compressed directories and metadata, and leaf directories when the root
-/// directory would not fit in the first 16 KiB.
+/// directory would not fit in the first 16 KiB. The archive is written beside
+/// the output and moved over it when finished, so a server reading an existing
+/// archive at the output path keeps serving it until the new one is complete.
 /// </remarks>
 internal sealed class PmTilesTileSink : ITileSink
 {
@@ -23,6 +25,7 @@ internal sealed class PmTilesTileSink : ITileSink
 
     private readonly string _outputPath;
     private readonly string _spoolPath;
+    private readonly string _partialPath;
     private readonly FileStream _spool;
     private readonly Lock _gate = new();
     private readonly Dictionary<string, (long Offset, int Length)> _contents = new(StringComparer.Ordinal);
@@ -33,6 +36,7 @@ internal sealed class PmTilesTileSink : ITileSink
     {
         _outputPath = Path.GetFullPath(outputPath);
         _spoolPath = _outputPath + ".spool";
+        _partialPath = TileSetFile.PartialPath(_outputPath);
         _spool = new FileStream(_spoolPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 1 << 16);
     }
 
@@ -130,7 +134,7 @@ internal sealed class PmTilesTileSink : ITileSink
             WriteE7(header, 119, metadata.Center.Longitude);
             WriteE7(header, 123, metadata.Center.Latitude);
 
-            using (var output = new FileStream(_outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
+            using (var output = new FileStream(_partialPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
             {
                 output.Write(header);
                 output.Write(root);
@@ -152,6 +156,7 @@ internal sealed class PmTilesTileSink : ITileSink
                 }
             }
 
+            TileSetFile.Publish(_partialPath, _outputPath);
             _completed = true;
         }
     }
@@ -167,17 +172,10 @@ internal sealed class PmTilesTileSink : ITileSink
         {
         }
 
+        // An unfinished archive is unreadable; any archive already at the
+        // output path is left as it was.
         if (!_completed)
-        {
-            // An unfinished archive is unreadable; do not leave a stale one behind.
-            try
-            {
-                File.Delete(_outputPath);
-            }
-            catch (IOException)
-            {
-            }
-        }
+            TileSetFile.DeletePartial(_partialPath);
     }
 
     /// <summary>

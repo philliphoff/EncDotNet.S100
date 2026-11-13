@@ -172,19 +172,32 @@ public sealed class TilesExportCommandTests
     }
 
     [Fact]
-    public void Mbtiles_replaces_an_existing_file_and_removes_an_unfinished_one()
+    public void Mbtiles_keeps_the_existing_file_until_finished_and_removes_an_unfinished_one()
     {
         var path = TempPath("replace") + ".mbtiles";
         try
         {
-            File.WriteAllText(path, "not a database");
+            File.WriteAllText(path, "old tile set");
             using (var sink = new MbTilesTileSink(path))
             {
                 sink.Write(1, 0, 0, [1, 2, 3]);
+
+                // Still being written: the old file is untouched.
+                Assert.Equal("old tile set", File.ReadAllText(path));
             }
 
-            // Disposed without Complete: nothing is left behind.
-            Assert.False(File.Exists(path));
+            // Disposed without Complete: the old file stays, and nothing else is left.
+            Assert.Equal("old tile set", File.ReadAllText(path));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
+
+            using (var sink = new MbTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+                sink.Complete(Metadata());
+            }
+
+            Assert.Equal([1, 2, 3], new MbTilesTileSource(path).Read(1, 0, 0));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
         }
         finally
         {
@@ -192,6 +205,51 @@ public sealed class TilesExportCommandTests
                 File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Pmtiles_keeps_the_existing_file_until_finished_and_removes_an_unfinished_one()
+    {
+        var path = TempPath("replace") + ".pmtiles";
+        try
+        {
+            File.WriteAllText(path, "old tile set");
+            using (var sink = new PmTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+                Assert.Equal("old tile set", File.ReadAllText(path));
+            }
+
+            Assert.Equal("old tile set", File.ReadAllText(path));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
+            Assert.False(File.Exists(path + ".spool"));
+
+            using (var sink = new PmTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+                sink.Complete(Metadata());
+            }
+
+            Assert.Equal([1, 2, 3], new PmTilesTileSource(path).Read(1, 0, 0));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static TileSetMetadata Metadata() => new()
+    {
+        Name = "test",
+        Description = "test",
+        Format = TileImageFormat.Png,
+        MinZoom = 1,
+        MaxZoom = 1,
+        Bounds = (-180, -85, 180, 85),
+        TilePixelSize = 256,
+        Settings = new Dictionary<string, string>(),
+    };
 
     [Fact]
     public void Cli_closure_reaches_SQLite()
