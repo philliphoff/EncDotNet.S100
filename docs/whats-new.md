@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Vessel symbology as a portrayal.** Own-ship and AIS targets are drawn by
+  `VesselPortrayal`, a code-defined portrayal of S-100 Part 9 drawing
+  instructions, so they render headless and in any backend, not only on the
+  Mapsui map. The symbology is the same: course vector and arrowhead, and a
+  disc or the true-scale outline with the antenna cross. The outline is now a
+  line without the translucent fill, as S-52 draws it, and it switches with
+  the disc at the same scale at every latitude. `InstructionBuilder` gains
+  `PointAt` and `Path` for augmented geometry. `OwnShipRenderer` and
+  `AisVesselRenderer` are obsolete.
 - **Live sources as datasets.** `DynamicSourceProcessor` wraps any
   `IDynamicFeatureSource` and its `IDynamicFeaturePortrayal` as a dataset
   processor, so a live source can be picked, described, rendered headless and

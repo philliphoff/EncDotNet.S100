@@ -85,6 +85,77 @@ public sealed record InstructionBuilder
         };
     }
 
+    /// <summary>
+    /// Builds a point symbol instruction drawn at <paramref name="position"/>
+    /// rather than at the feature's own geometry (S-100 Part 9 §11.5
+    /// <c>AugmentedPoint</c> in <c>GeographicCRS</c>), such as an arrowhead
+    /// at the end of a vessel's course vector. Picking still resolves to
+    /// <paramref name="featureReference"/>.
+    /// </summary>
+    /// <param name="featureReference">The feature the symbol belongs to.</param>
+    /// <param name="symbolReference">The symbol name.</param>
+    /// <param name="position">Where the symbol is drawn.</param>
+    /// <param name="rotation">Clockwise rotation in degrees, or <see langword="null"/> for upright.</param>
+    /// <param name="rotationCrs">The frame <paramref name="rotation"/> is measured in.</param>
+    public PointInstruction PointAt(
+        string featureReference,
+        string symbolReference,
+        EncDotNet.S100.DataModel.GeoPosition position,
+        double? rotation = null,
+        SymbolRotationCrs rotationCrs = SymbolRotationCrs.Portrayal)
+    {
+        var point = Point(featureReference, symbolReference, rotation, rotationCrs);
+        return new PointInstruction
+        {
+            FeatureReference = point.FeatureReference,
+            SymbolReference = point.SymbolReference,
+            Rotation = point.Rotation,
+            RotationCrs = point.RotationCrs,
+            SymbolScale = point.SymbolScale,
+            Plane = point.Plane,
+            ViewingGroup = point.ViewingGroup,
+            DrawingPriority = point.DrawingPriority,
+            ScaleMinimum = point.ScaleMinimum,
+            ScaleMaximum = point.ScaleMaximum,
+            CoordinateOverride = position,
+        };
+    }
+
+    /// <summary>
+    /// Builds a simple line drawn along <paramref name="coordinates"/> rather
+    /// than the feature's own geometry (S-100 Part 9 §11.5
+    /// <c>AugmentedPath</c>), such as a vessel's course vector or true-scale
+    /// outline. Close the outline by repeating its first position. Picking
+    /// still resolves to <paramref name="featureReference"/>.
+    /// </summary>
+    /// <param name="featureReference">The feature the line belongs to.</param>
+    /// <param name="coordinates">The line's positions, at least two.</param>
+    /// <param name="colorToken">The palette token of the line colour.</param>
+    /// <param name="width">The line width in millimetres.</param>
+    public LineInstruction Path(
+        string featureReference,
+        IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> coordinates,
+        string colorToken,
+        double width)
+    {
+        ArgumentNullException.ThrowIfNull(coordinates);
+        ArgumentOutOfRangeException.ThrowIfLessThan(coordinates.Count, 2);
+        var line = Line(featureReference, colorToken, width);
+        return new LineInstruction
+        {
+            FeatureReference = line.FeatureReference,
+            LineStyleReference = line.LineStyleReference,
+            LineColor = line.LineColor,
+            LineWidth = line.LineWidth,
+            Plane = line.Plane,
+            ViewingGroup = line.ViewingGroup,
+            DrawingPriority = line.DrawingPriority,
+            ScaleMinimum = line.ScaleMinimum,
+            ScaleMaximum = line.ScaleMaximum,
+            CoordinatesOverride = coordinates,
+        };
+    }
+
     /// <summary>Builds a text instruction.</summary>
     /// <param name="featureReference">The feature the text is anchored at.</param>
     /// <param name="text">The text.</param>
