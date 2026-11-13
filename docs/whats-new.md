@@ -11,6 +11,10 @@ month. For package versions and release assets, see
   ArcGIS Pro, GDAL and field apps such as QField open offline.
   `s100 tiles serve` serves a GeoPackage too, including Web Mercator ones that
   GDAL writes. See [Tiles export](cli.md#tiles-export).
+- **GeoTIFF export.** `s100 tiles export -o chart.tif` writes one
+  Cloud-Optimized GeoTIFF in Web Mercator for tools that take a single
+  georeferenced image: the maximum zoom at full resolution, lower zooms as
+  overviews. See [Tiles export](cli.md#tiles-export).
 - **`s100 tiles serve` is a WMS service.** `tiles serve` now also answers
   OGC WMS 1.3.0 (and 1.1.1) requests at `wms`. GetMap draws any area in
   EPSG:3857, EPSG:4326 or CRS:84 from the served tiles. GetFeatureInfo

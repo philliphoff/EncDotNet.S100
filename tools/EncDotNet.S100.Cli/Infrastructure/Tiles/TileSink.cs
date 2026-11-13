@@ -18,6 +18,9 @@ internal enum TileContainer
 
     /// <summary>An OGC GeoPackage 1.4 tile pyramid in Web Mercator.</summary>
     GeoPackage,
+
+    /// <summary>One Cloud-Optimized GeoTIFF in Web Mercator, lower zooms as overviews.</summary>
+    GeoTiff,
 }
 
 /// <summary>The encoding of each tile image.</summary>

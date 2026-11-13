@@ -34,11 +34,11 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
     internal sealed class Settings : TilesRenderSettings
     {
         [CommandOption("-o|--output <PATH>")]
-        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, a .mbtiles file for --container mbtiles, or a .gpkg file for --container gpkg. An existing archive file is replaced. Required.")]
+        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, a .mbtiles file for --container mbtiles, a .gpkg file for --container gpkg, or a .tif file for --container geotiff. An existing archive file is replaced. Required.")]
         public string? Output { get; init; }
 
         [CommandOption("--container <KIND>")]
-        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) mbtiles (one MBTiles 1.3 SQLite database, for tile servers) or gpkg (one OGC GeoPackage 1.4 tile pyramid in Web Mercator, for GIS desktops and field apps). Default: from the output extension (.pmtiles, .mbtiles or .gpkg), otherwise xyz.")]
+        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) mbtiles (one MBTiles 1.3 SQLite database, for tile servers) gpkg (one OGC GeoPackage 1.4 tile pyramid in Web Mercator, for GIS desktops and field apps) or geotiff (one Cloud-Optimized GeoTIFF in Web Mercator: the maximum zoom at full resolution, lower zooms as overviews). Default: from the output extension (.pmtiles, .mbtiles, .gpkg, .tif or .tiff), otherwise xyz.")]
         public string? Container { get; init; }
 
         [CommandOption("--skip-empty")]
@@ -60,7 +60,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
             if (string.IsNullOrWhiteSpace(Output))
                 return ValidationResult.Error("An output path is required (-o|--output).");
             if (!TryResolveContainer(Container, Output, out _))
-                return ValidationResult.Error($"Unknown --container '{Container}'. Use xyz, pmtiles or mbtiles.");
+                return ValidationResult.Error($"Unknown --container '{Container}'. Use xyz, pmtiles, mbtiles, gpkg or geotiff.");
             var parent = Path.GetDirectoryName(Path.GetFullPath(Output));
             if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
                 return ValidationResult.Error($"Output directory does not exist: {parent}");
@@ -103,6 +103,23 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
 
         var (area, minZoom, maxZoom) = (layout.Area, layout.MinZoom, layout.MaxZoom);
 
+        // A GeoTIFF is one image at the maximum zoom; lower zooms are its overviews,
+        // down to a tile or two across, so zooms below that aren't rendered.
+        GeoTiffGrid? geoTiff = null;
+        if (container == TileContainer.GeoTiff)
+        {
+            geoTiff = GeoTiffGrid.For(area, minZoom, maxZoom);
+            if (geoTiff is null)
+            {
+                AnsiConsole.MarkupLine("[red]A GeoTIFF can't cross the antimeridian; pass --bbox to tile one side of it.[/]");
+                return 2;
+            }
+
+            minZoom = geoTiff.MinZoom;
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]GeoTIFF: {(long)geoTiff.Columns * settings.TileSize:N0} × {(long)geoTiff.Rows * settings.TileSize:N0} px at zoom {maxZoom}, {geoTiff.Levels} overview(s).[/]");
+        }
+
         // Plan every zoom level first, so the size is known before any work.
         var plans = new List<(int Zoom, IReadOnlyList<TileBlock> Blocks)>();
         long totalTiles = 0;
@@ -131,6 +148,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
             TileContainer.PmTiles => new PmTilesTileSink(outputPath),
             TileContainer.MbTiles => new MbTilesTileSink(outputPath),
             TileContainer.GeoPackage => new GeoPackageTileSink(outputPath),
+            TileContainer.GeoTiff => new GeoTiffTileSink(outputPath, geoTiff!, format),
             _ => new XyzDirectoryTileSink(outputPath, format),
         };
 
@@ -215,6 +233,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
                     ".pmtiles" => TileContainer.PmTiles,
                     ".mbtiles" => TileContainer.MbTiles,
                     ".gpkg" => TileContainer.GeoPackage,
+                    ".tif" or ".tiff" => TileContainer.GeoTiff,
                     _ => TileContainer.Xyz,
                 };
                 return true;
@@ -232,6 +251,12 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
             case "gpkg":
             case "geopackage":
                 resolved = TileContainer.GeoPackage;
+                return true;
+            case "geotiff":
+            case "tiff":
+            case "tif":
+            case "cog":
+                resolved = TileContainer.GeoTiff;
                 return true;
             default:
                 resolved = TileContainer.Xyz;
