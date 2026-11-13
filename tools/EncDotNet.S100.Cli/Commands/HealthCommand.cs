@@ -9,7 +9,7 @@ using Spectre.Console.Cli;
 namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
-/// <c>s100 health</c> asks a running <c>tiles serve</c> or <c>feed serve</c>
+/// <c>s100 health</c> asks a running <c>tiles serve</c>, <c>feed serve</c> or <c>mcp serve --transport http</c>
 /// for its <c>/healthz</c> health check and exits 0 when it answers. It exists
 /// for container health checks (issue #1464): the s100 image has no shell or
 /// curl, so Docker and Compose run this instead.
@@ -23,7 +23,7 @@ internal sealed class HealthCommand : AsyncCommand<HealthCommand.Settings>
         public string Host { get; init; } = "127.0.0.1";
 
         [CommandOption("--port <PORT>")]
-        [Description("The server's port (default 8200, the tiles serve default; feed serve uses 8100).")]
+        [Description("The server's port (default 8200, the tiles serve default; feed serve uses 8100 and mcp serve --transport http 8300).")]
         public int Port { get; init; } = 8200;
 
         [CommandOption("--timeout <SECONDS>")]
