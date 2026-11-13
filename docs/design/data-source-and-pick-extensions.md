@@ -1,6 +1,7 @@
 # Data source and pick extensions — Design Note
 
-> Status: **Design / Research**. No production code yet. This note proposes
+> Status: **In progress**. Slice 1 of §5 (pick sections with the egg code)
+> is built in #1474; P1, P2, P3 and P6 describe it as built. This note proposes
 > two extension points that fit together but can ship separately: a single
 > way to add data that doesn't come from a file (§2), and a way for any
 > product or source to add its own content to the pick report (§3). §4 shows
@@ -434,10 +435,11 @@ The special cases are added at three different points:
    template. A customer-specific panel would need the same, in packages the
    customer doesn't own.
 2. **Contributions are tied to a product, not to the data.**
-   `IceEggCodeBuilder.Build` takes plain SIGRID-3 strings (`iceact`,
-   `iceapc`, `icesod`, `iceflz`), so nothing about it is specific to S-411.
-   A SIGRID-3 shapefile, a customer's ice service or a NetCDF ice product
-   could produce the same egg, but the only hook is on the GML base class.
+   `IceEggCodeBuilder.Build` takes plain strings for the WMO egg code
+   attributes (S-411's `iceact`, `iceapc`, `icesod`, `iceflz`), so nothing
+   about it is specific to S-411 GML. A customer's ice service, a SIGRID-3
+   shapefile mapped to those codes or a NetCDF ice product could produce the
+   same egg, but the only hook is on the GML base class.
    Station series has the same shape: S-104 and S-111 today, NDBC buoys
    tomorrow.
 3. **MCP and headless output see only rows.** `identify_features` and
@@ -498,14 +500,21 @@ public interface IPickContributor
 
 public sealed record PickContext
 {
-    public required IDatasetProcessor Processor { get; init; }
     public required SpecRef Spec { get; init; }
     public required string FeatureRef { get; init; }
     public required string FeatureType { get; init; }
     public required IReadOnlyList<PickAttribute> Attributes { get; init; }
-    public IFormatProvider? FormatProvider { get; init; }
+    public IDatasetProcessor? Processor { get; init; }                         // null for a catalogue feature (MCP)
+    public Func<string, string, string?>? ResolveListedValueDefinition { get; init; }
+    public string? RawValue(string code);                                      // a top-level attribute's raw value
 }
 ```
+
+`Processor` is optional because MCP describes features from its catalogue
+snapshot, with no processor loaded. `ResolveListedValueDefinition` looks an
+enumerated value up in the feature's catalogue; the shared step fills it from
+a processor that implements `IListedValueDefinitions`, as the GML
+processors do.
 
 A contributor is registered in one of three places:
 
@@ -513,36 +522,53 @@ A contributor is registered in one of three places:
 |---|---|---|
 | `ProductRegistration.PickContributors` | Every feature of that product | S-124 → warning card |
 | `SourceRegistration.PickContributors` (§D4) | Every feature of that source | AIS → vessel summary |
-| `PickContributorRegistry`, globally | Any feature the contributor accepts, from any product or source | SIGRID-3 attributes present → egg code |
+| `PickContributorRegistry`, globally | Any feature the contributor accepts, from any product or source | Egg code attributes present → egg code |
 
 The global registration is what makes contributions independent of where
-the data comes from. The egg contributor checks for SIGRID-3 attributes and
-calls `IceEggCodeBuilder`. It then works for S-411, a SIGRID-3 shapefile, or
-a customer feed that carries the same codes, and `BuildEggCode` on
-`GmlDatasetProcessorBase` goes away.
+the data comes from. `IceEggCodeContributor` reads the S-411 codes
+(`iceact` or `totalConcentration`, `iceapc`, `icesod`, `iceflz`,
+`snowDepth`) and calls `IceEggCodeBuilder`. It gives an egg code to an S-411
+sea-ice or lake-ice feature, or to any feature that carries a total or
+partial concentration, so it works for S-411 and for a customer feed or a
+converted SIGRID-3 shapefile that uses the same codes. S-411 ice leads and
+fractures, which carry a stage of development alone, get none.
+`BuildEggCode` on `GmlDatasetProcessorBase` is gone.
+
+The contributor registry and the egg contributor live in
+`EncDotNet.S100.Core`, not `Datasets.Pipelines`, because the Mapsui map
+session references only Core and has to run them. `IceEggCodeBuilder` moved
+with them, and `Datasets.Pipelines` type-forwards it.
 
 Contributors run when a feature is described, not when hits are found. Hit
 testing and S-98 15.1 ordering don't change. When two contributors produce
 the same kind for one feature, the most specific wins: source or product
 registration first, then global, then registration order.
 
-SoundCharts' `PickService` and MCP's `IdentifyFeaturesService` each build
-`FeatureInfo` their own way today. Both call one shared step after
-`GetFeatureInfo` that runs the contributors, so a contribution shows up in
-both. A processor can still put sections in `FeatureInfo` itself when only
-it has the data, for example a station series read from the HDF5 file.
+The shared step is `PickContributorRegistry.Apply(info, processor)`, run on
+a processor's `FeatureInfo` by SoundCharts' `PickService`, the map
+session's `PickAsync` and `S100FeatureCatalogue.GetFeature`. MCP's
+`identify_features`, `pick_features` and `describe_feature` read features
+from the catalogue rather than a processor, so they call
+`PickContributorRegistry.Contribute` with a context built from the feature's
+attributes. A contribution therefore shows up in all of them; a caller that
+uses `GetFeatureInfo` directly calls `Apply` itself. A processor can still
+put sections in `FeatureInfo` itself when only it has the data, for example
+a station series read from the HDF5 file.
 
 #### P3. Each host presents sections by kind
 
-- **SoundCharts.** A lookup from kind to a view model factory and a
-  `DataTemplate`, registered in DI. `PickHit` holds sections instead of one
-  property per kind. An unknown kind shows its `ToRows()`, so a plug-in that
-  only adds data still shows something, and one that also ships a template
-  shows its own panel.
-- **MCP.** Sections serialize as typed JSON with their kind, in
-  `identify_features` and `describe_feature`. Each built-in section has a
-  JSON shape described in the tool schema. An unknown kind serializes its
-  rows.
+- **SoundCharts.** `PickSectionPresenters` maps a kind to a factory that
+  builds its view model, and `PickReportView` shows each view model through
+  the data template for its type. `PickHit` holds sections instead of one
+  property per kind. An unknown kind shows a `PickSectionRowsViewModel`: its
+  heading and `ToRows()`, so a plug-in that only adds data still shows
+  something, and one that also ships a template shows its own panel. The
+  presenters are a static default registry, like the other registries; a
+  plug-in registers at start-up.
+- **MCP.** `identify_features`, `pick_features` and `describe_feature`
+  report a feature's `sections`. Each has its `kind`, the kind's
+  `description`, its `rows`, and its typed `data` as JSON. An unknown kind
+  has rows only.
 - **Headless and `s100 info`.** Rows from `ToRows()`.
 
 Hosts find a kind's presenter and serialization through the kind registry
@@ -572,24 +598,26 @@ default rows built from `Motion` and `VesselGeometry` become a built-in
 #### P6. Section kinds are registered
 
 MCP serializes with source-generated metadata, so it can only write types
-it's told about up front. `McpJson` already lists the subtypes of
-`SampledValue` this way. A plug-in's section type would otherwise reach MCP
-as its base type only.
+it's told about up front. A plug-in's section type would otherwise reach MCP
+as its rows only.
 
-Each kind registers its name, type, serialization metadata and a one-line
-description:
+Each kind registers its name, its source-generated JSON metadata (which also
+names the section type) and a one-line description, in
+`PickSectionKindRegistry` in Core:
 
 ```csharp
-services.AddPickSectionKind(
+PickSectionKindRegistry.Default.Register(new PickSectionKind(
     "acme.ice-chart",
     AcmeJsonContext.Default.AcmeIceChartSection,
-    "Acme ice chart: stage of development and the analyst's note.");
+    "Acme ice chart: stage of development and the analyst's note."));
 ```
 
-`McpJson` builds the section's type discriminators from the registry, as it
-does for `SampledValue`, and the tool schema lists each kind's description.
-An unknown kind falls back to its rows. SoundCharts uses the same registry
-to find a kind's presenter.
+MCP writes a section as its kind, description and rows, plus its `data`,
+which `PickSectionKind.Serialize` produces from the kind's own metadata.
+`McpJson` doesn't change for a new kind: there's no polymorphic
+discriminator list to extend, as there is for `SampledValue`, and a plug-in
+brings its own metadata. SoundCharts' fallback heading uses the kind's
+description.
 
 Built-in kinds have no prefix. Other kinds start with their owner's name
 (`acme.ice-chart`), and registering a name twice fails at start-up.
@@ -611,13 +639,14 @@ Built-in kinds have no prefix. Other kinds start with their owner's name
 Two worked examples show the extension points combining.
 
 **A customer ice service.** The customer has an HTTP API that returns ice
-polygons with SIGRID-3 attributes, updated every few hours.
+polygons with egg code attributes under the S-411 codes, updated every few
+hours.
 
 1. Their package defines a `SourceRegistration` whose `Create` returns a
    processor that fetches polygons into memory, portrays them with the
    code-defined toolkit, and raises `Changed` after each refresh (§D1, §D4).
 2. They add no pick contributor: the global egg contributor (§P2) sees the
-   SIGRID-3 attributes and adds the egg code.
+   concentration attributes and adds the egg code.
 3. The source appears in **Add source**, gets a settings page from its
    options record, and its API key is stored by reference (D7). It draws as
    supplementary data under official chart symbols (D6), shows egg codes in
@@ -641,7 +670,7 @@ wrapper and string pick rows.
 
 Each slice ships on its own and leaves the tree working.
 
-1. **Pick sections with the egg code.** Add `PickSection`,
+1. **Pick sections with the egg code.** Built in #1474. Add `PickSection`,
    `IPickContributor`, the global registry, the kind registry and the
    SoundCharts presenter lookup. Move the egg code to a global contributor
    and a section, with the `FeatureInfo.EggCode` shim. Serialize sections in
