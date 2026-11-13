@@ -45,6 +45,7 @@ internal sealed class LegendService : IDisposable
     private readonly HashSet<DatasetEntry> _subscribed = [];
     private readonly Dictionary<string, bool> _expanded = new(StringComparer.Ordinal);
     private readonly List<ILegendSectionSource> _sources = [];
+    private readonly Dictionary<string, string> _dynamicSourceSections = new(StringComparer.Ordinal);
     private GeoBounds? _view;
     private bool _isTabShown;
     private bool _pending;
@@ -155,6 +156,24 @@ internal sealed class LegendService : IDisposable
         source.Changed += OnSourceChanged;
         Invalidate();
     }
+
+    /// <summary>
+    /// Names the Legend section a dynamic source's Layer stack row links to
+    /// (legends D8), such as the predicted tide stations' section.
+    /// </summary>
+    /// <param name="sourceId">The dynamic source's id.</param>
+    /// <param name="sectionId">The section its legend source lists while it's on.</param>
+    public void SetDynamicSourceSection(string sourceId, string sectionId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(sourceId);
+        ArgumentException.ThrowIfNullOrEmpty(sectionId);
+        _dynamicSourceSections[sourceId] = sectionId;
+    }
+
+    /// <summary>The Legend section of a dynamic source's row, or null when it has none.</summary>
+    /// <param name="sourceId">The dynamic source's id.</param>
+    internal string? SectionIdOfDynamicSource(string sourceId) =>
+        _dynamicSourceSections.TryGetValue(sourceId, out var id) ? id : null;
 
     /// <summary>Removes a source added with <see cref="AddSource"/>.</summary>
     /// <param name="source">The source.</param>

@@ -6,6 +6,20 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tide stations in SoundCharts.** A **Tide stations · predicted** row
+  under *Other chart overlays* draws NOAA's tide stations from 1:500,000 as
+  S-104 gauges with a dashed frame: rising, falling or turning at the view
+  time, with the height from 1:150,000 and the name from 1:50,000. Stations
+  are thinned to 40 px and hidden where S-104 covers them. Their key is a
+  section in the Legend tab. A station's Object Information card has the
+  predicted height now, the curve 12 hours each side of the view time, the
+  last high or low and the next four, the reference station and offsets of a
+  subordinate station, whether depths use it, and the "not a forecast" note.
+  The station list's date and **Refresh** sit under the tide predictions
+  setting, and it's downloaded from NOAA on first use. The MCP tools
+  `get_tide_display` and `set_tide_display` read and set it, and
+  `pick_features` with `select` now shows live overlay features such as a
+  station.
 - **Tide predictions from the shell and for agents.** `s100 tides stations`
   lists tide stations near a point, `s100 tides predict` predicts a station's
   heights or highs and lows as a table, CSV, JSON or an S-104 file, and

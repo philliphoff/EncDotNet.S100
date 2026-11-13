@@ -172,7 +172,7 @@ public sealed class PickReportSingleNoticeTests : IDisposable
                 },
             ],
         };
-        var service = new DynamicSourcePickService(new SingleSourceRegistry(source));
+        var service = new DynamicSourcePickService(new SingleSourceRegistry(source), []);
         var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(longitude, latitude);
         return Assert.Single(service.Pick(new MPoint(x, y), resolution: 10.0));
     }

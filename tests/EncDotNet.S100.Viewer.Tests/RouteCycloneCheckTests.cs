@@ -175,7 +175,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
         var vm = new ViewerSettingsService(settings);
-        var page = new ChartSettingsPageViewModel(vm);
+        var page = new ChartSettingsPageViewModel(vm, new TideStationListViewModel(TideTestLists.Missing()));
         var raised = 0;
         vm.RouteWeatherLimitsChanged += () => raised++;
 
@@ -215,7 +215,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
     public void The_settings_page_has_the_three_cyclone_rows()
     {
         var vm = new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsFile });
-        var page = new ChartSettingsPageViewModel(vm);
+        var page = new ChartSettingsPageViewModel(vm, new TideStationListViewModel(TideTestLists.Missing()));
         using var host = ViewHost.Show(new ChartSettingsPage { DataContext = page }, width: 500, height: 2800);
 
         var against = host.Find<ComboBox>("Settings.CycloneCheckAgainst");

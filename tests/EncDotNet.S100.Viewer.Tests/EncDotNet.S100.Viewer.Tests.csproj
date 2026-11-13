@@ -65,6 +65,8 @@
     <Content Include="..\datasets\S421\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S421\%(Filename)%(Extension)" />
     <!-- WPC coded surface bulletins (issues #1295, #1300); see tests/datasets/CODSUS/README.md. -->
     <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
+    <!-- NOAA Puget Sound tide stations (#1453); see tests/datasets/Tides/Stations. -->
+    <Content Include="..\datasets\Tides\Stations\puget-sound.json" CopyToOutputDirectory="PreserveNewest" Link="TestData\Tides\%(Filename)%(Extension)" />
     <Content Include="..\datasets\RTZ\*.rtz" CopyToOutputDirectory="PreserveNewest" Link="TestData\RTZ\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S124\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S131\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S131\%(Filename)%(Extension)" />

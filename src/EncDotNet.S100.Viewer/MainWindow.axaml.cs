@@ -471,6 +471,9 @@ public partial class MainWindow : ShadUI.Window
         // #1070: NDBC observations start hidden until the user turns them on.
         var ndbcOverlay = App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsOverlay>();
         ndbcOverlay?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
+        // #1453 (tide predictions D4): predicted tide stations start hidden too.
+        var tideStations = App.Services.GetService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>();
+        tideStations?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
         _dynamicSourceOverlayHost.SourcesChanged += () =>
         {
             foreach (var info in _dynamicSourceOverlayHost.Sources)
@@ -495,6 +498,7 @@ public partial class MainWindow : ShadUI.Window
         // #1070: bind the NDBC source to the viewport and its Layer Stack
         // toggle, then start polling.
         ndbcOverlay?.Attach(_dynamicSourceOverlayHost);
+        tideStations?.Attach(_dynamicSourceOverlayHost);
 
         // #1073: feed the NMEA weather source the own-ship fix and start
         // reading its input (only present when an input is configured).

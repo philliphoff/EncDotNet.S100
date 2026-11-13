@@ -17,9 +17,12 @@ internal sealed class ChartSettingsPageViewModel : SettingsPageViewModel
 {
     /// <summary>Creates the page.</summary>
     /// <param name="settings">The settings it shows and edits.</param>
-    public ChartSettingsPageViewModel(ViewerSettingsService settings)
+    /// <param name="tideStationList">The station list line under the tide predictions switch.</param>
+    public ChartSettingsPageViewModel(ViewerSettingsService settings, TideStationListViewModel tideStationList)
         : base(settings)
     {
+        ArgumentNullException.ThrowIfNull(tideStationList);
+        TideStationList = tideStationList;
         AvailableWaterLevelAdjustments =
         [
             new(Services.Depth.WaterLevelAdjustmentMode.Off, Strings.Settings_WaterLevelAdjustment_Off),
@@ -157,6 +160,9 @@ internal sealed class ChartSettingsPageViewModel : SettingsPageViewModel
         get => Settings.UseTidePredictions;
         set => Settings.UseTidePredictions = value;
     }
+
+    /// <summary>The station list's date and refresh, under the tide predictions switch (D15).</summary>
+    public TideStationListViewModel TideStationList { get; }
 
     /// <inheritdoc cref="ViewerSettingsService.CycloneCheckAgainstKnots" />
     public int CycloneCheckAgainstKnots
