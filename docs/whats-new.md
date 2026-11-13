@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Station series and warnings are pick sections.** An S-104 or S-111
+  station's time series is now a `StationSeriesSection`, and an S-124
+  warning part's message a `NavigationalWarningSection`, both in
+  `FeatureInfo.Sections`. SoundCharts chooses a station's chart from the
+  series' channels rather than the product name, so a station from another
+  source with a water level height, or a current speed and direction, gets
+  the same chart, and a series with other channels shows its rows.
+  `FeatureInfo.StationSeries` and `FeatureInfo.NavigationalWarning` are
+  obsolete and read the sections.
 - **Pick sections.** Object Information content that isn't attribute rows
   now comes through one extension point. `FeatureInfo.Sections` holds a
   feature's sections; `IPickContributor`s registered in

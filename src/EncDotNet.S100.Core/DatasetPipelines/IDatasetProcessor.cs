@@ -324,19 +324,19 @@ public sealed class FeatureInfo
         = System.Array.Empty<FeatureReference>();
 
     /// <summary>
-    /// Full time-series snapshot for the feature when it represents a
-    /// fixed-station observation (S-104 / S-111 data-coding-format-8
-    /// stations). <c>null</c> for every other feature shape — including
-    /// gridded coverage samples synthesised by
-    /// <see cref="IDatasetProcessor.GetCoverageInfo"/>. Viewers use this
-    /// to render the pick panel's time-series chart without re-querying
-    /// the processor as the global clock moves.
+    /// The full time series of a fixed-station observation (S-104 / S-111
+    /// data-coding-format-8 stations): the first
+    /// <see cref="StationSeriesSection"/> in <see cref="Sections"/>, or
+    /// <c>null</c>.
     /// </summary>
-    public StationTimeSeriesSnapshot? StationSeries { get; init; }
+    [Obsolete("Read the StationSeriesSection in Sections instead. This property will be removed in a later release.")]
+    public StationTimeSeriesSnapshot? StationSeries => Sections.OfType<StationSeriesSection>().FirstOrDefault()?.Series;
 
     /// <summary>
     /// The feature's pick report content that isn't attribute rows, such as an
-    /// ice egg code (<see cref="IceEggCodeSection"/>), at most one per
+    /// ice egg code (<see cref="IceEggCodeSection"/>), a station's time series
+    /// (<see cref="StationSeriesSection"/>) or a navigational warning
+    /// (<see cref="NavigationalWarningSection"/>), at most one per
     /// <see cref="PickSection.Kind"/>. Empty for most features.
     /// </summary>
     /// <remarks>
@@ -371,19 +371,18 @@ public sealed class FeatureInfo
             DrawingPriority = DrawingPriority,
             Geometry = Geometry,
             References = References,
-            StationSeries = StationSeries,
             Sections = sections,
-            NavigationalWarning = NavigationalWarning,
         };
     }
 
     /// <summary>
     /// The warning message when the feature is part of a navigational warning
-    /// (an S-124 <c>NavwarnPart</c>): its identification, type, validity and
-    /// full text in every language; <c>null</c> for every other feature.
-    /// Object-information UIs show it as one card in place of attribute rows.
+    /// (an S-124 <c>NavwarnPart</c>): the first
+    /// <see cref="NavigationalWarningSection"/> in <see cref="Sections"/>, or
+    /// <c>null</c>.
     /// </summary>
-    public NavigationalWarningInfo? NavigationalWarning { get; init; }
+    [Obsolete("Read the NavigationalWarningSection in Sections instead. This property will be removed in a later release.")]
+    public NavigationalWarningInfo? NavigationalWarning => Sections.OfType<NavigationalWarningSection>().FirstOrDefault()?.Warning;
 }
 
 /// <summary>

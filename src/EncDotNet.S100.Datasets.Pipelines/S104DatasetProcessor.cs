@@ -719,7 +719,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = StationFeatureRefPrefix + station.Identifier,
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level (Station)",
-            StationSeries = BuildStationSeriesSnapshot(station),
+            Sections = [new StationSeriesSection(BuildStationSeriesSnapshot(station))],
             Attributes = new List<PickAttribute>
             {
                 new()
