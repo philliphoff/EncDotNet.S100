@@ -26,6 +26,13 @@ internal enum DepthBasisReason
 
     /// <summary>Adjustment is on but unavailable in the view: see <see cref="DepthBasis.WaterLevelStatus"/>.</summary>
     WaterLevel,
+
+    /// <summary>
+    /// Adjustment is on and water level is available, but every depth source
+    /// in view is a product the chart draws as charted (translated S-57
+    /// cells): see <see cref="DepthBasis.NotAdjustedSources"/>.
+    /// </summary>
+    ProductNotAdjusted,
 }
 
 /// <summary>A dataset that supplies depths or water level in the view.</summary>
@@ -73,7 +80,7 @@ internal sealed record DepthBasisSource(
 /// <param name="Datum">Whether the depth sources and water-level sources in view share a datum, when both are present.</param>
 /// <param name="DepthSources">The depth-bearing datasets in the view.</param>
 /// <param name="WaterLevelSources">The active S-104 datasets that meet the view.</param>
-/// <param name="NotAdjusted">The depth sources in view refused for their datum (#1132).</param>
+/// <param name="NotAdjusted">The depth sources in view refused for their datum (#1132) or their product.</param>
 internal sealed record DepthBasis(
     DepthBasisKind Kind,
     DepthBasisReason Reason,

@@ -249,4 +249,28 @@ public sealed class DepthBasisTextTests
             "Not adjusted: 102US004FL2AI252277 on Mean Lower Low Water, water level on Mean Lower Low Water.",
             DepthBasisText.WaterLevelLines(mismatch, waterLevelLoaded: true, TimeFormat.Utc));
     }
+
+    [Fact]
+    public void Product_not_adjusted_names_the_product_not_the_datum()
+    {
+        var basis = new DepthBasis(
+            DepthBasisKind.Charted,
+            DepthBasisReason.ProductNotAdjusted,
+            null,
+            new DateTimeOffset(2026, 11, 13, 8, 0, 0, TimeSpan.Zero),
+            null,
+            true,
+            DatumAgreement.Same,
+            [new DepthBasisSource("US5WA22M.000", "S-57", 12)],
+            [new DepthBasisSource("tide-predictions", "prediction", 12)],
+            [new DepthBasisSource("US5WA22M.000", "S-57", 12)]);
+
+        var forms = DepthBasisText.Pill(basis, TimeFormat.Utc);
+        Assert.Equal("Charted · S-57 not adjusted", forms.Full);
+        Assert.Equal("Charted", forms.Compact);
+        Assert.Equal(DepthBasisTone.Info, forms.Tone);
+        Assert.Contains(
+            "Not adjusted: US5WA22M.000 (S-57 depths are drawn as charted).",
+            DepthBasisText.WaterLevelLines(basis, waterLevelLoaded: true, TimeFormat.Utc));
+    }
 }

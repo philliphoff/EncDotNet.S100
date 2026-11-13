@@ -709,10 +709,24 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   three ice types inside the oval (partial concentration `iceapc`, stage of
   development `icesod`, form of ice `iceflz`), the thinner fourth and fifth
   ice classes outside the oval (Cd/Ce, Sd/Se, Fd/Fe), and snow depth as a
-  caption. `S411DatasetProcessor` returns it in `FeatureInfo.EggCode` and adds
-  each value's feature catalogue definition (through
-  `FeatureCatalogueDecoder.ResolveListedValueDefinition`), so a pick report
-  can show the meaning on hover.
+  caption.
+- `PickSection`, `IPickContributor` and `PickContributorRegistry`: pick
+  report content that isn't attribute rows, such as the ice egg code.
+  `FeatureInfo.Sections` holds a feature's sections, at most one per kind.
+  A host runs `PickContributorRegistry.Default.Apply` on a processor's
+  `FeatureInfo`, which adds the sections each registered contributor
+  produces; SoundCharts' pick report, the map session's `PickAsync` and
+  `S100FeatureCatalogue.GetFeature` all do, and MCP's `identify_features` and
+  `describe_feature` run the same contributors. `IceEggCodeContributor` adds
+  an `IceEggCodeSection` to an S-411 sea-ice or lake-ice feature, or to any
+  feature from another product or source that carries a total or partial
+  concentration under the S-411 codes. Each value carries its feature
+  catalogue definition when the processor implements
+  `IListedValueDefinitions` (the GML processors do), so a pick report can
+  show the meaning on hover. `FeatureInfo.EggCode` still reads the section,
+  but is obsolete. `PickSectionKindRegistry` registers each kind with a
+  description and source-generated JSON metadata, which MCP serializes it
+  with; a section of an unregistered kind reaches MCP as its rows.
 - `ExternalTextFileResolver`: reads the text of external files named by S-100
   `fileReference` attributes (S-101 feature catalogue; S-57 `TXTDSC` and
   `NTXTDS`, for example on Caution Area and Tidal Stream Panel Data) from the

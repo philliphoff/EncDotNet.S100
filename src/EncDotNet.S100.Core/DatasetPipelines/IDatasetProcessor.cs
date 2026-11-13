@@ -335,13 +335,47 @@ public sealed class FeatureInfo
     public StationTimeSeriesSnapshot? StationSeries { get; init; }
 
     /// <summary>
-    /// WMO / SIGRID-3 ice "egg code" projection for the feature when it is an
-    /// S-411 sea-ice / lake-ice feature carrying concentration, stage of
-    /// development, and form-of-ice attributes; <c>null</c> for every other
-    /// feature shape. Object-information UIs use it to render the egg diagram
-    /// in the pick report (S-411 Edition 1.2.1 Annex A).
+    /// The feature's pick report content that isn't attribute rows, such as an
+    /// ice egg code (<see cref="IceEggCodeSection"/>), at most one per
+    /// <see cref="PickSection.Kind"/>. Empty for most features.
     /// </summary>
-    public IceEggCode? EggCode { get; init; }
+    /// <remarks>
+    /// A processor may set sections itself when only it has the data;
+    /// <see cref="IPickContributor"/>s add the rest when the feature is
+    /// described.
+    /// </remarks>
+    public IReadOnlyList<PickSection> Sections { get; init; } = [];
+
+    /// <summary>
+    /// The WMO / SIGRID-3 ice egg code of a sea-ice or lake-ice feature: the
+    /// first <see cref="IceEggCodeSection"/> in <see cref="Sections"/>, or
+    /// <c>null</c>.
+    /// </summary>
+    [Obsolete("Read the IceEggCodeSection in Sections instead. This property will be removed in a later release.")]
+    public IceEggCode? EggCode => Sections.OfType<IceEggCodeSection>().FirstOrDefault()?.Egg;
+
+    /// <summary>
+    /// A copy of this feature info with <paramref name="sections"/> as its
+    /// <see cref="Sections"/>.
+    /// </summary>
+    /// <param name="sections">The sections.</param>
+    public FeatureInfo WithSections(IReadOnlyList<PickSection> sections)
+    {
+        ArgumentNullException.ThrowIfNull(sections);
+        return new FeatureInfo
+        {
+            FeatureRef = FeatureRef,
+            FeatureType = FeatureType,
+            FeatureTypeName = FeatureTypeName,
+            Attributes = Attributes,
+            DrawingPriority = DrawingPriority,
+            Geometry = Geometry,
+            References = References,
+            StationSeries = StationSeries,
+            Sections = sections,
+            NavigationalWarning = NavigationalWarning,
+        };
+    }
 
     /// <summary>
     /// The warning message when the feature is part of a navigational warning

@@ -40,6 +40,8 @@ internal sealed class CurrentStationPortrayal : IDynamicFeaturePortrayal
     private static readonly InstructionBuilder Names = Arrows with { ScaleMinimum = TideStationPortrayal.NameMaxScaleDenominator, DrawingPriority = 2 };
     private static readonly Func<string, string?> Provider = ResolveSymbol;
 
+    // Left of the station: tide stations label to the right, so a current
+    // station beside a tide gauge (Tacoma Narrows Bridge) doesn't print over it.
     private static readonly TextInstructionStyle LabelStyle = new()
     {
         FontSize = 10,
@@ -47,9 +49,9 @@ internal sealed class CurrentStationPortrayal : IDynamicFeaturePortrayal
         FontWeight = TextFontWeight.Bold,
         HaloColor = WeatherPalette.IsobarHaloToken,
         HaloWidth = 0.3,
-        HorizontalAlignment = TextHorizontalAlignment.Start,
+        HorizontalAlignment = TextHorizontalAlignment.End,
         VerticalAlignment = TextVerticalAlignment.Center,
-        OffsetX = 2.6,
+        OffsetX = -2.6,
     };
 
     private static readonly TextInstructionStyle NameStyle = LabelStyle with

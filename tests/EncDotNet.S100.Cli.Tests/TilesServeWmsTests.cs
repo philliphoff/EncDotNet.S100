@@ -272,6 +272,33 @@ public sealed class TilesServeWmsTests
     }
 
     [Fact]
+    public async Task GetFeatureInfo_finds_features_in_a_folder_of_datasets()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+        var folder = Directory.CreateTempSubdirectory("s100-wms-folder-");
+        try
+        {
+            var nested = Directory.CreateDirectory(Path.Combine(folder.FullName, "ENC", "US5MA1BO"));
+            File.Copy(S57, Path.Combine(nested.FullName, "US5MA1BO.000"));
+            var settings = new TilesServeCommand.Settings { Input = folder.FullName, MinZoom = 13, MaxZoom = 13 };
+            Assert.True(settings.Validate().Successful);
+            Assert.True(settings.IsFolder);
+            Assert.Equal(0, TilesServeCommand.OpenRendered(settings, out var rendered));
+            using var source = rendered!;
+            var (west, south, east, north) = source.Layout.Bounds;
+
+            var result = await source.FeatureQuery!.QueryAsync(
+                (south + north) / 2, (west + east) / 2, 50, 10, time: null, TestContext.Current.CancellationToken);
+
+            Assert.NotEmpty(result.Features);
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Described_attributes_show_as_name_and_value_rows()
     {
         using var described = JsonDocument.Parse("""

@@ -96,6 +96,8 @@
           href: design/ais-source.md
         - name: Dynamic source pick
           href: design/dynamic-source-pick.md
+        - name: Data source and pick extensions
+          href: design/data-source-and-pick-extensions.md
         - name: AIS zoom-gated subscription
           href: design/ais-zoom-gated-subscription.md
         - name: S-98 interoperability

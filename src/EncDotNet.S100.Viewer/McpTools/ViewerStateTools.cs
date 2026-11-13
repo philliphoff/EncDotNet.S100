@@ -79,7 +79,24 @@ internal sealed record TimelineStateDto(
     [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes,
     [property: Description("True while the lanes also show what the Library knows but has not loaded: online (dashed) and on disk (outlined); set_timeline_view showOnline changes it.")] bool ShowOnline,
     [property: Description("The passage and departure-window lanes, shown above the product groups while Check route is on and the passage has ETAs; null otherwise.")] TimelinePassageDto? Passage,
-    [property: Description("True while Follow passage pins the view time to the ETA at the Clearance cursor (set_follow_passage changes it).")] bool FollowPassage);
+    [property: Description("True while Follow passage pins the view time to the ETA at the Clearance cursor (set_follow_passage changes it).")] bool FollowPassage,
+    [property: Description("The Tide predictions lane: the station nearest the map centre and its highs and lows on the axis; null when the lane doesn't show (predictions off, or no station near).")] TimelineTidePredictionsDto? TidePredictions);
+
+/// <summary>The Timeline's Tide predictions lane (#1453).</summary>
+[Description("The Timeline's Tide predictions lane.")]
+internal sealed record TimelineTidePredictionsDto(
+    [property: Description("The station the lane follows: the one nearest the map centre.")] string StationId,
+    [property: Description("The lane's station text as displayed, e.g. 'Seattle 9447130 · 4.2 km from centre'.")] string Station,
+    [property: Description("The highs and lows on the lane, in time order.")] IReadOnlyList<TimelineTideExtremeDto> Extremes);
+
+/// <summary>A high or low on the Tide predictions lane.</summary>
+[Description("A high or low on the Tide predictions lane.")]
+internal sealed record TimelineTideExtremeDto(
+    [property: Description("'high' or 'low'.")] string Kind,
+    [property: Description("When, UTC.")] DateTime Time,
+    [property: Description("The height above the station's datum (MLLW where NOAA has it), metres.")] double HeightMeters,
+    [property: Description("The label as displayed, e.g. 'H 3.4'.")] string Label,
+    [property: Description("Where on the axis, 0 (left) to 1 (right).")] double Position);
 
 /// <summary>The Timeline's passage lanes (#904).</summary>
 [Description("The Timeline's passage lane (departure to arrival, with a tick at the minimum UKC) and departure-window lane.")]
@@ -282,7 +299,14 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
                 passage.Windows,
                 [.. passage.Segments.Select(ClearanceTools.Segment)])
             : null,
-        state.FollowPassage);
+        state.FollowPassage,
+        state.TidePredictions is { } tides
+            ? new TimelineTidePredictionsDto(
+                tides.StationId,
+                tides.Station,
+                [.. tides.Extremes.Select(e => new TimelineTideExtremeDto(
+                    e.IsHigh ? "high" : "low", e.Time, Math.Round(e.HeightMeters, 3), e.Label, Math.Round(e.Position, 4)))])
+            : null);
 
     private static string WindowState(LibraryTimedState state) => state switch
     {

@@ -285,7 +285,9 @@ public sealed partial class NoaaTideStationClient
     /// whose datums NOAA has accepted again. When the catalogue has current
     /// stations, it reads the current station list too (one more request)
     /// and finds current stations added, removed, moved or with changed
-    /// directions or offsets. A change to one station's constituents alone
+    /// directions or offsets. A harmonic bin NOAA lists without constants
+    /// isn't counted as added while the catalogue has another bin of that
+    /// station, since the download can't keep it. A change to one station's constituents alone
     /// isn't seen: NOAA revises those with its datums.
     /// </remarks>
     /// <param name="catalogue">The catalogue to check, as downloaded by <see cref="DownloadCatalogueAsync"/>.</param>
@@ -320,12 +322,24 @@ public sealed partial class NoaaTideStationClient
         {
             var currentListing = await GetCurrentListingAsync(cancellationToken).ConfigureAwait(false);
             var listedCurrents = new HashSet<string>(StringComparer.Ordinal);
+            var cachedNoaaIds = new HashSet<string>(
+                catalogue.CurrentStations.Select(s => NoaaIdOf(s.Id)), StringComparer.Ordinal);
             foreach (var station in currentListing)
             {
                 listedCurrents.Add(station.Id);
                 if (catalogue.FindCurrentStation(station.Id) is not { } cached)
                 {
-                    added.Add(station.Id);
+                    // NOAA lists some bins it has no constants for, and the
+                    // download leaves them out: a missing bin of a station
+                    // the catalogue has isn't new data, or the list would
+                    // never stop being stale. A new station, or a
+                    // subordinate bin the download would keep, is.
+                    if (station.Kind == TideStationKind.Subordinate
+                        ? station.Entry is not null
+                        : !cachedNoaaIds.Contains(station.NoaaId))
+                    {
+                        added.Add(station.Id);
+                    }
                 }
                 else if (HasChanged(cached, station))
                 {
@@ -365,6 +379,13 @@ public sealed partial class NoaaTideStationClient
             ChangedStationIds = changed,
             RevisedDatumStationIds = revised,
         };
+    }
+
+    // "PUG1701_33" → "PUG1701": the catalogue id is NOAA's station and bin.
+    private static string NoaaIdOf(string catalogueId)
+    {
+        var bin = catalogueId.LastIndexOf('_');
+        return bin > 0 ? catalogueId[..bin] : catalogueId;
     }
 
     private static bool HasChanged(CurrentStationEntry cached, CurrentListing listed) =>

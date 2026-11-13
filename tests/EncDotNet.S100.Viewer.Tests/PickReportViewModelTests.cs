@@ -331,7 +331,7 @@ public class PickReportViewModelTests
                 FeatureType = "SeaIce",
                 FeatureRef = "seaice.0007",
                 ProductSpec = "S-411",
-                EggCode = egg,
+                Sections = [new IceEggCodeSection(egg!)],
             },
         });
 
@@ -355,6 +355,36 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void SetPicks_SectionWithoutPresenter_ShowsItsRows()
+    {
+        var vm = TestPickReport.Create();
+
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "IceChart",
+                FeatureRef = "chart.1",
+                Sections = [new TestSection()],
+            },
+        });
+
+        Assert.True(vm.HasSections);
+        Assert.False(vm.HasEggCode);
+        var rows = Assert.IsType<PickSectionRowsViewModel>(Assert.Single(vm.SelectedSections));
+        Assert.Equal("test.unregistered", rows.Heading);
+        Assert.Equal("Analyst note", Assert.Single(rows.Rows).DisplayName);
+    }
+
+    private sealed record TestSection : PickSection
+    {
+        public override string Kind => "test.unregistered";
+
+        public override IReadOnlyList<PickAttribute> ToRows() =>
+            [new PickAttribute { Code = "note", Name = "Analyst note", RawValue = "Brash ice near the entrance." }];
+    }
+
+    [Fact]
     public void Clear_ResetsEggCode()
     {
         var vm = TestPickReport.Create();
@@ -365,7 +395,7 @@ public class PickReportViewModelTests
                 FeatureType = "SeaIce",
                 FeatureRef = "seaice.0007",
                 ProductSpec = "S-411",
-                EggCode = IceEggCodeBuilder.Build("70", "[30, 30]", "[91, 87]", "[5, 4]"),
+                Sections = [new IceEggCodeSection(IceEggCodeBuilder.Build("70", "[30, 30]", "[91, 87]", "[5, 4]")!)],
             },
         });
 

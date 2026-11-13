@@ -79,13 +79,18 @@ internal sealed class DatasetFeatureQuery : IDisposable
     private static Opened Open(TilesRenderSettings settings)
     {
         var warnings = new List<string>();
-        var inputs = DatasetInputResolver.Resolve(
-            settings.IsComposite || settings.IsExplicitExchangeSet ? null : settings.Input,
-            settings.Layers,
-            settings.IsExplicitExchangeSet ? settings.ExchangeSet : null,
-            settings.Only,
-            warnings,
-            out var resolution);
+        // Resolve the same datasets the tiles are drawn from: a folder (or an
+        // S-57 exchange set's root) is searched recursively, as the renderer does.
+        var folder = settings.FolderSource;
+        var inputs = folder is not null
+            ? DatasetInputResolver.Resolve(folder, [], null, settings.Only, warnings, out var resolution)
+            : DatasetInputResolver.Resolve(
+                settings.IsComposite || settings.IsExplicitExchangeSet ? null : settings.Input,
+                settings.Layers,
+                settings.IsExplicitExchangeSet ? settings.ExchangeSet : null,
+                settings.Only,
+                warnings,
+                out resolution);
         if (inputs.Count == 0)
             return new Opened(null, resolution, warnings);
 

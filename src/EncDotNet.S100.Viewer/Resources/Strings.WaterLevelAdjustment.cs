@@ -18,6 +18,7 @@ internal static partial class Strings
     public static string Status_DepthBasis_NoWaterLevelAtFormat => Get(nameof(Status_DepthBasis_NoWaterLevelAtFormat));
     public static string Status_DepthBasis_NoWaterLevelAt_Short => Get(nameof(Status_DepthBasis_NoWaterLevelAt_Short));
     public static string Status_DepthBasis_DatumMismatch => Get(nameof(Status_DepthBasis_DatumMismatch));
+    public static string Status_DepthBasis_ProductNotAdjustedFormat => Get(nameof(Status_DepthBasis_ProductNotAdjustedFormat));
     public static string Status_DepthBasisPopup_AdjustedBasisFormat => Get(nameof(Status_DepthBasisPopup_AdjustedBasisFormat));
     public static string Status_DepthBasisPopup_AdjustedDatumSame => Get(nameof(Status_DepthBasisPopup_AdjustedDatumSame));
     public static string Status_DepthBasisPopup_AdjustedDatumUnconfirmed => Get(nameof(Status_DepthBasisPopup_AdjustedDatumUnconfirmed));

@@ -82,7 +82,9 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 
         TimeAxis = new Axis
         {
-            Name = Strings.Pick_Chart_Axis_Time,
+            Name = TimeAxisName(_timeFormat.Current),
+            // The labels' size: LiveCharts' larger default name dwarfs the card.
+            NameTextSize = 13,
             Labeler = FormatTimeAxisLabel,
             LabelsRotation = 0,
             UnitWidth = TimeSpan.FromMinutes(1).Ticks,
@@ -254,7 +256,12 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         // Force LiveCharts2 to re-evaluate the axis labels — the labeler
         // closes over _timeFormat.Current so simply notifying is enough.
         TimeAxis.Labeler = FormatTimeAxisLabel;
+        TimeAxis.Name = TimeAxisName(format);
     }
+
+    // The labels follow the Local/UTC setting, so the name does too.
+    private static string TimeAxisName(TimeFormat format) =>
+        format == TimeFormat.Utc ? Strings.Pick_Chart_Axis_Time : Strings.Pick_Chart_Axis_TimeLocal;
 
     /// <summary>
     /// Formats a chart point's underlying <see cref="DateTime"/> (always

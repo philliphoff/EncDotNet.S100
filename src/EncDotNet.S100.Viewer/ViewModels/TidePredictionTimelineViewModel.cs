@@ -12,7 +12,9 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <param name="Position">Where on the lane, 0–1.</param>
 /// <param name="IsHigh">High or low.</param>
 /// <param name="Label">"H 3.4" or "L −0.2".</param>
-internal sealed record TideLaneMark(double Position, bool IsHigh, string Label);
+/// <param name="Time">When (UTC).</param>
+/// <param name="HeightMeters">The height above the station's datum, in metres.</param>
+internal sealed record TideLaneMark(double Position, bool IsHigh, string Label, DateTime Time, double HeightMeters);
 
 /// <summary>
 /// The Timeline's <b>Tide predictions</b> lane (tide predictions design Q6,
@@ -135,7 +137,9 @@ internal sealed class TidePredictionTimelineViewModel : ViewModelBase
                 string.Format(
                     CultureInfo.CurrentCulture,
                     e.Kind == TideExtremeKind.High ? Strings.TimelinePanel_TideLaneHighFormat : Strings.TimelinePanel_TideLaneLowFormat,
-                    e.HeightMeters)))
+                    e.HeightMeters),
+                e.Time,
+                e.HeightMeters))
             .ToArray();
         Set(true, text, curve, marks);
     }

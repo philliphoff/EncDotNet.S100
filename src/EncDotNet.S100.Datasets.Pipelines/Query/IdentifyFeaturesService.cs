@@ -58,6 +58,7 @@ public sealed record IdentifyFeaturesRequest(
 /// <param name="FeatureTypeName">The feature type's catalogue name ("Obstruction"); <c>null</c> where the product doesn't report it.</param>
 /// <param name="Attributes">The feature's attributes as Object Information shows them; <c>null</c> where the product doesn't report them.</param>
 /// <param name="Aml">Where an AML feature comes from and whether it's drawn; <c>null</c> for every other product.</param>
+/// <param name="Sections">Pick report content that isn't attribute rows, such as an ice egg code; <c>null</c> when the feature has none.</param>
 public sealed record IdentifyMatch(
     [property: Description("Dataset the feature belongs to.")] DatasetId DatasetId,
     [property: Description("Spec the dataset declares.")] SpecRef Spec,
@@ -71,7 +72,8 @@ public sealed record IdentifyMatch(
     [property: Description("Highest drawing priority of the feature's drawing instructions in the dataset's portrayal; null when it isn't drawn or the dataset wasn't portrayed.")] int? DrawingPriority = null,
     [property: Description("Feature type name from the product's catalogue (\"Obstruction\" for an AML OBSTRN). Reported for NATO Additional Military Layers (AML) features; null otherwise.")] string? FeatureTypeName = null,
     [property: Description("The feature's attributes as the viewer's Object Information shows them: catalogue names, decoded values, and on a standard S-57 class the AML-only attributes last with mark \"AML\". Reported for AML features; null otherwise.")] IReadOnlyList<IdentifyAttribute>? Attributes = null,
-    [property: Description("Provenance of a NATO Additional Military Layers (AML) feature (product tag, cell, protective marking) and whether it's drawn; null for every other product.")] IdentifyAmlFeature? Aml = null);
+    [property: Description("Provenance of a NATO Additional Military Layers (AML) feature (product tag, cell, protective marking) and whether it's drawn; null for every other product.")] IdentifyAmlFeature? Aml = null,
+    [property: Description("Object Information content that isn't attribute rows, such as the WMO ice egg code of a sea-ice feature; null when the feature has none.")] IReadOnlyList<PickSectionResult>? Sections = null);
 
 /// <summary>One attribute of an <see cref="IdentifyMatch"/>, as Object Information shows it.</summary>
 /// <param name="Code">The attribute acronym as encoded (<c>CATOBS</c>, <c>sonsig</c>).</param>
@@ -336,7 +338,8 @@ public sealed class IdentifyFeaturesService
                 h.DrawingPriority,
                 amlInfo?.Info.FeatureTypeName,
                 amlInfo?.Info.Attributes.Select(IdentifyAttribute.From).ToList(),
-                amlInfo?.Provenance));
+                amlInfo?.Provenance,
+                h.Feature is { } feature ? PickSectionResult.For(h.Spec, feature, amlInfo?.Info.Attributes) : null));
         }
 
         return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Ok(

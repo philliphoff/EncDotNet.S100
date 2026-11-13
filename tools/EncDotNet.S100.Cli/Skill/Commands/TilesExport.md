@@ -1,7 +1,12 @@
 #### Agent guidance
 
 `tiles export` takes the same input forms as `render`: one dataset, repeated
-`--layer`, or an exchange set (positional, `--from` or `--exchange-set`).
+`--layer`, or an exchange set (positional, `--from` or `--exchange-set`). It
+also takes a plain folder of datasets, searched recursively as `mcp serve`
+searches one; an S-57 exchange set (`ENC_ROOT` with `CATALOG.031`, positional
+or `--from`) is read that way. In a folder, loose S-101 cells get their sibling
+updates unless `--no-updates`; cells in a nested S-100 exchange set don't, and
+datasets that can't be opened or tiled are skipped with a warning.
 `-o|--output` is required. An output ending in `.pmtiles` writes one PMTiles
 v3 archive and `.mbtiles` one MBTiles 1.3 SQLite database (TMS rows, as the
 format requires); any other output is a directory of `{z}/{x}/{y}.<ext>` files

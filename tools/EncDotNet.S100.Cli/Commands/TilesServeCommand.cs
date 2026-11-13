@@ -69,6 +69,9 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [DefaultValue(10)]
         public int RefreshSeconds { get; init; } = 10;
 
+        /// <inheritdoc/>
+        public override string? FingerprintExcludedFolder => CacheDirectory;
+
         /// <summary>Whether the input is a built tile set rather than datasets.</summary>
         public bool ServesTileSet =>
             !IsComposite && !IsExplicitExchangeSet && !string.IsNullOrWhiteSpace(Input) && TileSource.IsTileSet(Input);

@@ -90,6 +90,20 @@ public class StationTimeSeriesTimeFormatTests
     }
 
     [Fact]
+    public void AxisName_FollowsTheTimeFormat()
+    {
+        var snap = Synthetic();
+        var tf = new StubTimeFormat(TimeFormat.Local);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(null, tf, null));
+
+        Assert.Equal("Time (local)", vm.TimeAxis.Name);
+
+        tf.Set(TimeFormat.Utc);
+
+        Assert.Equal("Time (UTC)", vm.TimeAxis.Name);
+    }
+
+    [Fact]
     public void Tooltip_UtcMode_FormatsAsUtcWithSuffix()
     {
         var snap = Synthetic();

@@ -266,7 +266,7 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsInfoTone));
         OnPropertyChanged(nameof(IsAdjustedTone));
         OnPropertyChanged(nameof(IsCautionTone));
-        WhereAppliedLines = DepthBasisText.WhereAppliedLines(basis.Kind == DepthBasisKind.Adjusted || basis.Reason == DepthBasisReason.WaterLevel);
+        WhereAppliedLines = DepthBasisText.WhereAppliedLines(basis.Kind == DepthBasisKind.Adjusted || basis.Reason is DepthBasisReason.WaterLevel or DepthBasisReason.ProductNotAdjusted);
         _plainAccessibleName = DepthBasisText.AccessibleName(basis, format);
         RaiseRelief();
         RaiseTidePredictions();

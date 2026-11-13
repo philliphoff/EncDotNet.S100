@@ -199,7 +199,26 @@ internal static class DepthBasisEvaluator
         }
 
         if (adjusted.Count == 0)
+        {
+            // Only charted products in view (translated S-57): the datums
+            // aren't the reason, so don't say "datum mismatch".
+            if (refused.All(r => !AdjustableSpecs.Contains(r.Spec)))
+            {
+                return With(new DepthBasis(
+                    DepthBasisKind.Charted,
+                    DepthBasisReason.ProductNotAdjusted,
+                    null,
+                    inputs.ViewTime,
+                    applied,
+                    true,
+                    Agreement(depthSources, current),
+                    depthSources,
+                    waterLevelSources,
+                    refused));
+            }
+
             return Charted(WaterLevelStatus.DatumMismatch, Agreement(depthSources, current), refused);
+        }
 
         var coversView = refused.Count == 0
             && inputs.View is { } view
