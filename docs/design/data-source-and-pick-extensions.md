@@ -10,7 +10,8 @@
 > The open questions of the first draft were settled on 2026-11-12. Their
 > answers are in the sections they affect: layer order (D6), live sources
 > and time (D2), secrets (D7), sections and time (P1) and section kinds
-> (P6).
+> (P6). A second round on 2026-11-13 settled the AML and CAP categories,
+> fills under S-102 and a dataset's own category (all in D6).
 >
 > Builds on [Dynamic feature sources](dynamic-feature-source.md),
 > [Dynamic source pick](dynamic-source-pick.md),
@@ -275,35 +276,50 @@ a product's sub-layer or a source, declares two facts, and the order is
 derived from them.
 
 **Information category**, after §9.2.1, plus one category S-98 doesn't
-have:
+have. A layer takes the category of what it shows, whoever produced it.
+`Supplementary` is only for information §9.2.1 has no place for. Whether
+data is official or S-100 is shown separately, as it is today (`IsS100` and
+the "Not an S-100 product" badge).
 
 | Category | §9.2.1 | Default for |
 |---|---|---|
 | `Alert` | 1 | ECDIS overscale, caution and other indications |
 | `OfficialChart` | 2, 5 | S-101, S-401, S-57 |
-| `NoticesAndWarnings` | 3 | S-124, S-412, CAP |
+| `NoticesAndWarnings` | 3 | S-124, S-412, CAP (marine weather warnings, like S-412) |
 | `Caution` | 4 | Caution features of official products |
-| `OfficialOverlay` | 2 | S-122, S-125, S-127, S-128, S-131, S-201, S-411 |
+| `OfficialOverlay` | 2 | S-122, S-125, S-127, S-128, S-131, S-201, S-411, NATO AML |
 | `OfficialOnDemand` | 6 | S-102, S-104, S-111, S-129 |
 | `Vessel` | 7 | AIS targets, own-ship |
 | `Mariner` | 8, 9 | S-421 routes, route checks, the mariner's own annotations |
-| `Supplementary` | (none) | Data that isn't official: GRIB2, NetCDF, NDBC, NMEA weather, customer feeds |
+| `Supplementary` | (none) | Weather models (GRIB2, NetCDF), weather analyses and tropical cyclone tracks, NDBC, NMEA weather, generated predictions, customer feeds |
 
 `OfficialOverlay` separates official products that aren't the ENC from the
 ENC itself, so they never interleave with ENC symbols by drawing priority
 alone. §9.2.1 doesn't make that split; it's a library choice, as
-`OtherChartOverlays` is today.
+`OtherChartOverlays` is today. NATO AML is official data from a hydrographic
+office, though not for civil navigation, so it's an official overlay, with a
+within-category priority above the other official overlays.
+
+The registration gives the default category for each layer kind, and a
+dataset can declare its own. Tide predictions that SoundCharts computes and
+writes as S-104 stations are `Supplementary`, not `OfficialOnDemand`, so
+official S-104 draws above them, as "S-104 always wins" in the tide
+predictions brief requires. The pick report and MCP can then tell predicted
+data from official data by category.
 
 **Draw class**: `Fill` for area fills and coverage surfaces,
 `LineAndSymbol` for curves, points, arrows, isolines and barbs, and `Text`.
 
 The stack, from bottom to top:
 
-1. `OfficialChart` fills: the opaque base.
+1. The base: `OfficialChart` fills, then fills that replace chart content.
+   S-102 replaces the ENC depth areas (Part A §A-6.9.1), so it's base-chart
+   content, not an overlay. A replacing fill is named by a catalogue rule or
+   by its registration.
 2. Other fills, lower priority first: `Supplementary`, `Mariner`,
    `OfficialOnDemand`, `OfficialOverlay`, `Caution`, `NoticesAndWarnings`.
-   A fill above the base is translucent unless a catalogue rule has it
-   replace something (S-102 replaces depth areas, Part A §A-6.9.1).
+   Every fill above the base is translucent (Annex A §4.4.1), so none of
+   them hides what's beneath.
 3. Lines and symbols, lower priority first: `Supplementary`, `Mariner`,
    `OfficialOnDemand`, `OfficialOverlay`, `Caution`, `NoticesAndWarnings`,
    `OfficialChart`.
@@ -331,16 +347,24 @@ What changes from today:
   §9.2.1 reads. R-111-A's placement above the ENC becomes a catalogue rule
   if we want to keep it.
 - Mariner data draws below official data instead of above it.
+- Weather fills still draw above S-102, as they do today, because S-102 is
+  in the base.
+- AML fills still draw above the chart, S-102 and weather, and below
+  cautions and warnings, as the AML design pass chose. AML lines and
+  symbols now draw under ENC line work instead of over it, so the ENC
+  safety contour stays dominant over AML contours without depending on its
+  halo.
 - S-129 moves from the chart overlays to official on-demand data, which
   §9.2.1 names explicitly (layer 6, under-keel clearance).
 - NDBC, NMEA weather and other supplementary data draw under official
   symbols. AIS and own-ship stay above the chart, now in the vessel step
   rather than the overlay band.
 - `ProductRegistration.DefaultPlanes` becomes a category for each layer
-  kind, and `DynamicSourceMetadata.Plane` becomes a category.
+  kind, `DynamicSourceMetadata.Plane` becomes a category, and a dataset can
+  override its registration's category.
   `S98DisplayPlane` becomes the derived key, or goes away. The layer stack
   groups by category.
-- Visual baselines that include S-111, weather symbols or mariner data
+- Visual baselines that include S-111, weather symbols, AML or mariner data
   change.
 
 #### D7. Secret options are stored by reference
@@ -627,8 +651,9 @@ Each slice ships on its own and leaves the tree working.
    its channels in the section, and `NavigationalWarning`, then the two
    notice flags. Remove the shims in the following release.
 3. **Layer order by category and draw class.** Add the categories and the
-   derived order, give each product registration its categories, move the
-   R-rules onto the derived order, and rebaseline.
+   derived order, give each product registration its categories, let a
+   dataset override its category (tide predictions), move the R-rules onto
+   the derived order, and rebaseline.
 4. **`ILiveDatasetProcessor`.** Add the interface and the session's
    re-render on `Changed`.
 5. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
@@ -653,14 +678,10 @@ Slice 10 needs slices 2 and 5.
 
 - **IEC 62288 and the vessel step.** D6 draws AIS and own-ship above chart
   text, following ECDIS practice rather than a literal reading of S-98 Main
-  §9.2.1. Check IEC 62288's presentation requirements before slice 3 ships.
-- **NATO AML.** By D6's rule, AML is supplementary: below official overlays
-  and cautions. The AML work placed it above the other chart overlays. Is
-  AML `OfficialOverlay`, or should it stay where the rule puts it?
-- **CAP.** NWS marine warnings aren't navigational warnings in the S-124
-  sense. `NoticesAndWarnings` keeps today's placement; `Supplementary` is
-  the stricter reading.
-- **Fills under a replacing fill.** S-102 is opaque where it replaces depth
-  areas, so a mariner's or supplementary fill below it is hidden. Is that
-  acceptable, or should a replacing fill sit below fills of other
-  categories?
+  §9.2.1. IEC 62288 §5 and the IMO symbol guidance (SN.1/Circ.243/Rev.2)
+  hold the presentation rules for own-ship and targets. Check them before
+  slice 3 ships.
+
+The other questions of the second draft were settled on 2026-11-13: NATO
+AML and CAP categories, fills under S-102 (the base step), and a dataset's
+own category, all in D6.
