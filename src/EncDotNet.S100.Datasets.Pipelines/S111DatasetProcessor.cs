@@ -785,7 +785,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = StationFeatureRefPrefix + station.Identifier,
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current (Station)",
-            StationSeries = BuildStationSeriesSnapshot(station),
+            Sections = [new StationSeriesSection(BuildStationSeriesSnapshot(station))],
             Attributes = new List<PickAttribute>
             {
                 new()

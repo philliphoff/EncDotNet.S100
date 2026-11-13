@@ -233,14 +233,16 @@ localized strings, so you can drive your own UI:
 
 - `DatasetRenderStarted` and `DatasetRenderCompleted`
   (`MapSessionDatasetRenderEventArgs`) bracket each dataset render. `Kind`
-  (`MapSessionRenderKind`: `Render`, `TimeRefresh` or `PresentationRefresh`)
+  (`MapSessionRenderKind`: `Render`, `TimeRefresh`, `PresentationRefresh` or
+  `LiveRefresh`)
   says what triggered it. `Started` fires once the session holds the
   processor; `Completed` fires only when the render installs layers. A render
   that throws, is cancelled, or is superseded or removed after it starts raises
   `Started` without `Completed`.
 - `DatasetRenderFailed` (`MapSessionDatasetRenderFailedEventArgs`) reports a
   failure the session caught during a refresh of several datasets, so the
-  others keep rendering. A single dataset render (`RenderAsync`) throws to the
+  others keep rendering, or during a live refresh (see
+  [Manage the dataset band](#manage-the-dataset-band)). A single dataset render (`RenderAsync`) throws to the
   caller that awaits it instead, so it raises no failed event.
 - `LayersChanged`, `TimeRangeChanged` and `CurrentTimeChanged`
   (`MapSessionCurrentTimeEventArgs`) report changes to the dataset layers, the
@@ -578,6 +580,14 @@ layerSession.SetMarinerSettings(presentation.Mariner);
   immediately. `RefreshTimeAsync` waits 100 ms for further changes and cancels
   the previous time refresh. `RefreshAsync` re-renders everything for a new
   presentation; the latest request wins.
+- When a dataset's processor implements `ILiveDatasetProcessor`, `SetDataset`
+  subscribes to its `Changed` event, and `RemoveDataset` and `Dispose`
+  unsubscribe. A change waits 250 ms for further changes, then re-applies the
+  dataset, so new available times reach the timeline, and renders it again
+  with the presentation it was last rendered with (`LiveRefresh`). A dataset
+  that hasn't been rendered yet isn't drawn by a change. `Changed` may come
+  from any thread; the refresh runs on the synchronization context
+  `SetDataset` was called on.
 - `RenderAsync` calls for different datasets run in parallel; two renders of
   the same dataset run one after the other. `RefreshAsync`, `RefreshTimeAsync`
   and `RefreshRevealedAsync` wait for running renders, and renders requested

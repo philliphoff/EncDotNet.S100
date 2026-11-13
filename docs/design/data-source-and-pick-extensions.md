@@ -1,7 +1,8 @@
 # Data source and pick extensions — Design Note
 
 > Status: **In progress**. Slice 1 of §5 (pick sections with the egg code)
-> is built in #1474; P1, P2, P3 and P6 describe it as built. This note proposes
+> is built in #1474, and slice 2's station series and warnings are built;
+> P1, P2, P3 and P6 describe them as built. This note proposes
 > two extension points that fit together but can ship separately: a single
 > way to add data that doesn't come from a file (§2), and a way for any
 > product or source to add its own content to the pick report (§3). §4 shows
@@ -136,17 +137,24 @@ public interface ILiveDatasetProcessor
     event EventHandler<DatasetChangedEventArgs>? Changed;
 }
 
-public sealed record DatasetChangedEventArgs
+public sealed class DatasetChangedEventArgs : EventArgs
 {
-    public static DatasetChangedEventArgs All { get; } = new();
+    public static new DatasetChangedEventArgs Empty { get; } = new();
     public IReadOnlyList<string>? FeatureRefs { get; init; }  // null: everything may have changed
-    public BoundingBox? Extent { get; init; }                 // null: anywhere
+    public GeographicBounds? Extent { get; init; }            // null: anywhere
 }
 ```
 
-The map session treats `Changed` like a viewport or time-step change: it
-re-requests the portrayal of the affected dataset, coalescing events that
-arrive while a render is in flight. Picks and MCP already re-query the
+The map session treats `Changed` like a viewport or time-step change.
+`MapsuiDatasetLayerSession.SetDataset` subscribes when the processor
+implements the interface, and `RemoveDataset` and `Dispose` unsubscribe. A
+change waits 250 ms for further changes, then re-applies the dataset, so new
+available times reach the timeline, and renders it again with the
+presentation it was last rendered with, superseding a render in flight. The
+refresh runs on the synchronization context `SetDataset` was called on, and
+reports failures through `DatasetRenderFailed` as
+`MapSessionRenderKind.LiveRefresh`. Both event properties are hints: the
+session redraws the whole dataset today. Picks and MCP already re-query the
 processor, so they see new data with no further change.
 
 This alone is enough for polled feeds: an NDBC, CAP or ERDDAP processor
@@ -167,6 +175,16 @@ A `DynamicSourceProcessor` in `EncDotNet.S100.Datasets.Pipelines` wraps any
 Once wrapped, a live source gets a place in the layer order (D6), headless
 and Skia rendering, MCP and the pick pipeline from the processor side,
 without its own code changing.
+
+As built, the adapter draws every feature on one sub-layer at the source's
+`DynamicSourceMetadata.Plane` and `WithinPlanePriority`, and without a
+describer a pick lists the feature's motion and attributes. A source's
+snapshot can change between a hit test and the pick that follows, so
+`GetFeatureInfoAt` returns `null` and hosts fall back to the hit's feature
+reference. The adapter doesn't own the source: disposing it unsubscribes and
+leaves the source running. Until slice 7's `SourceRegistration`, the caller
+passes the spec, and `SpecName` gains a format name per source (`NDBC`,
+`NMEA`).
 
 The 1 Hz constraint is met by keeping the current Mapsui overlay path as an
 **optimization for interactive maps**, not as the contract. When a source has
@@ -565,6 +583,14 @@ a station series read from the HDF5 file.
   something, and one that also ships a template shows its own panel. The
   presenters are a static default registry, like the other registries; a
   plug-in registers at start-up.
+
+  Two kinds keep panels of their own, because their layout isn't a block in
+  the list. The station chart sits above the attributes and is chosen by
+  the series' channels (a water level height, or a current's speed and
+  direction), not by product; a series with other channels falls back to its
+  rows in the list. The warning cards gather the warning sections of every
+  hit at the point, so a `nav-warning` section never appears in a single
+  hit's list.
 - **MCP.** `identify_features`, `pick_features` and `describe_feature`
   report a feature's `sections`. Each has its `kind`, the kind's
   `description`, its `rows`, and its typed `data` as JSON. An unknown kind
@@ -676,17 +702,24 @@ Each slice ships on its own and leaves the tree working.
    and a section, with the `FeatureInfo.EggCode` shim. Serialize sections in
    MCP. This proves the pattern on the case with one consumer and a builder
    that works with any data source.
-2. **Station series and warnings as sections.** Move `StationSeries`, with
-   its channels in the section, and `NavigationalWarning`, then the two
-   notice flags. Remove the shims in the following release.
+2. **Station series and warnings as sections.** Built, except the notice
+   flags. Move `StationSeries`, with its channels in the section, and
+   `NavigationalWarning`. Remove the shims in the following release.
+   - **The two notice flags** (`IsNavigationNotice`, `IsStaleNotice`) are
+     left for a follow-up: MCP and the CLI show them as attribute rows
+     today, so moving them changes those outputs and needs its own
+     decision on how they read there.
 3. **Layer order by category and draw class.** Add the categories and the
    derived order, give each product registration its categories, let a
    dataset override its category (tide predictions), move the R-rules onto
    the derived order, and rebaseline.
-4. **`ILiveDatasetProcessor`.** Add the interface and the session's
+4. **`ILiveDatasetProcessor`.** Built. Add the interface and the session's
    re-render on `Changed`.
-5. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
-   onto it first, since they already use `IDynamicFeaturePortrayal`.
+5. **`DynamicSourceProcessor`.** Built. Add the adapter. Move NDBC and NMEA
+   weather onto it first, since they already use `IDynamicFeaturePortrayal`.
+   Both work through it, under the format names `NDBC` and `NMEA`;
+   SoundCharts keeps drawing them as overlays until slice 7 can list a
+   source in the Datasets panel.
 6. **AIS and own-ship portrayals.** Built, except the interface's
    obsolescence. Move both to `IDynamicFeaturePortrayal` and mark
    `IDynamicFeatureRenderer` obsolete.

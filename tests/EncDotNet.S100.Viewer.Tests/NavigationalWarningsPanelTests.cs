@@ -292,7 +292,7 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
             FeatureRef = row.Entry.FeatureRef,
             DatasetFileName = row.Entry.DatasetId,
             ProductSpec = "S-124",
-            NavigationalWarning = row.Entry.Warning,
+            Sections = [new NavigationalWarningSection(row.Entry.Warning)],
         });
 
         Assert.Same(row, f.Panel.SelectedItem);

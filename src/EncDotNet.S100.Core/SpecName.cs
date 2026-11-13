@@ -51,10 +51,24 @@ public static partial class SpecName
     public const string Aml = "AML";
 
     /// <summary>
+    /// NOAA National Data Buoy Center observations, canonical name
+    /// <c>"NDBC"</c>: a live source of buoy and coastal station reports rather
+    /// than a file, drawn through <c>DynamicSourceProcessor</c>.
+    /// </summary>
+    public const string Ndbc = "NDBC";
+
+    /// <summary>
+    /// Own-ship instruments read from NMEA 0183, canonical name <c>"NMEA"</c>:
+    /// a live source such as own-ship weather, drawn through
+    /// <c>DynamicSourceProcessor</c>.
+    /// </summary>
+    public const string Nmea = "NMEA";
+
+    /// <summary>
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml, Ndbc, Nmea];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the

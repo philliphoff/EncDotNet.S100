@@ -15,6 +15,29 @@ month. For package versions and release assets, see
   the disc at the same scale at every latitude. `InstructionBuilder` gains
   `PointAt` and `Path` for augmented geometry. `OwnShipRenderer` and
   `AisVesselRenderer` are obsolete.
+- **Live sources as datasets.** `DynamicSourceProcessor` wraps any
+  `IDynamicFeatureSource` and its `IDynamicFeaturePortrayal` as a dataset
+  processor, so a live source can be picked, described, rendered headless and
+  ordered by S-98 plane like a file, and is drawn again when it changes. The
+  NDBC observations and own-ship weather from NMEA work through it, under the
+  new `SpecName.Ndbc` and `SpecName.Nmea` format names. SoundCharts still
+  draws them as overlays for now.
+- **Datasets that change after loading.** A processor that implements
+  `ILiveDatasetProcessor` raises `Changed` when its data changes, such as a
+  feed polled on a timer, and the Mapsui map session draws the dataset again:
+  it waits 250 ms for more changes, picks up new available times for the
+  timeline, and renders with the presentation the dataset was last drawn
+  with. Failures are reported through `DatasetRenderFailed` with the new
+  `MapSessionRenderKind.LiveRefresh`.
+- **Station series and warnings are pick sections.** An S-104 or S-111
+  station's time series is now a `StationSeriesSection`, and an S-124
+  warning part's message a `NavigationalWarningSection`, both in
+  `FeatureInfo.Sections`. SoundCharts chooses a station's chart from the
+  series' channels rather than the product name, so a station from another
+  source with a water level height, or a current speed and direction, gets
+  the same chart, and a series with other channels shows its rows.
+  `FeatureInfo.StationSeries` and `FeatureInfo.NavigationalWarning` are
+  obsolete and read the sections.
 - **GeoPackage tiles.** `s100 tiles export -o chart.gpkg` writes the tiles as
   an OGC GeoPackage 1.4 tile pyramid in Web Mercator, a single file that QGIS,
   ArcGIS Pro, GDAL and field apps such as QField open offline.

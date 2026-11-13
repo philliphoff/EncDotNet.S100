@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Pipeline-level tests for PR-J station time-series snapshot plumbing.
 /// Verifies that S-104 and S-111 dcf=8 processors populate
-/// <see cref="FeatureInfo.StationSeries"/> with the full time-step series
+/// a <see cref="StationSeriesSection"/> with the full time-step series
 /// when asked for a <c>"station:&lt;id&gt;"</c> feature ref.
 /// </summary>
 public class StationTimeSeriesSnapshotTests
@@ -79,8 +79,7 @@ public class StationTimeSeriesSnapshotTests
             var info = p.GetFeatureInfo("station:ST01");
 
             Assert.NotNull(info);
-            Assert.NotNull(info!.StationSeries);
-            var snap = info.StationSeries!;
+            var snap = Assert.IsType<StationSeriesSection>(Assert.Single(info!.Sections)).Series;
             Assert.Equal("ST01", snap.StationId);
             Assert.Equal(3, snap.Times.Count);
             var heights = Assert.Single(snap.Channels);
@@ -101,8 +100,7 @@ public class StationTimeSeriesSnapshotTests
             var info = p.GetFeatureInfo("station:S1");
 
             Assert.NotNull(info);
-            Assert.NotNull(info!.StationSeries);
-            var snap = info.StationSeries!;
+            var snap = Assert.IsType<StationSeriesSection>(Assert.Single(info!.Sections)).Series;
             Assert.Equal("S1", snap.StationId);
             Assert.Equal(3, snap.Times.Count);
             Assert.Equal(2, snap.Channels.Count);

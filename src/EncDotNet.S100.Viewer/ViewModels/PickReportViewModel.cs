@@ -915,7 +915,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             References.Add(reference);
         OnPropertyChanged(nameof(HasReferences));
 
-        _sections = [.. hit.Sections.Select(PickSectionPresenters.Default.Present)];
+        _sections = [.. hit.Sections.Where(s => !ShownByOwnPanel(s)).Select(PickSectionPresenters.Default.Present)];
 
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
@@ -927,24 +927,38 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         RaiseIdentityChanged();
     }
 
+    // The station chart and the warning cards show these sections in panels of
+    // their own; a station series with no chart falls back to the sections list.
+    private bool ShownByOwnPanel(PickSection section) => section switch
+    {
+        StationSeriesSection => _stationChart is not null,
+        NavigationalWarningSection => true,
+        _ => false,
+    };
+
     // A station hit's chart, made when it is first selected and kept until the
-    // next pick: S-104 charts the water level, S-111 speed and direction.
+    // next pick. The series' channels choose it, whatever product it comes
+    // from: a water level height is charted as S-104's, a surface current's
+    // speed and direction as S-111's.
     private StationTimeSeriesViewModel? StationChartFor(PickHit hit)
     {
         if (hit.StationSeries is not { } snapshot)
             return null;
         if (_stationCharts.TryGetValue(hit, out var chart))
             return chart;
-        chart = hit.ProductSpec switch
-        {
-            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _charts),
-            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _charts),
-            _ => null,
-        };
+        chart = HasChannel(snapshot, S104StationTimeSeriesViewModel.HeightChannel)
+            ? new S104StationTimeSeriesViewModel(snapshot, _charts)
+            : HasChannel(snapshot, S111StationTimeSeriesViewModel.SpeedChannel)
+                && HasChannel(snapshot, S111StationTimeSeriesViewModel.DirectionChannel)
+                ? new S111StationTimeSeriesViewModel(snapshot, _charts)
+                : null;
         if (chart is not null)
             _stationCharts[hit] = chart;
         return chart;
     }
+
+    private static bool HasChannel(StationTimeSeriesSnapshot snapshot, string key) =>
+        snapshot.Channels.Any(c => string.Equals(c.Key, key, StringComparison.Ordinal));
 
     /// <summary>
     /// Raises change notifications for the identity-block properties derived

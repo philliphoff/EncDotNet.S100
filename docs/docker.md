@@ -121,6 +121,40 @@ docker compose up -d
 first start portrays every dataset before it serves, so `start_period` allows
 for a large exchange set.
 
+## Limit memory
+
+To cap a container's memory, pass `--memory` to `docker run`, or set
+`mem_limit` in Compose. The image runs .NET's workstation garbage collector,
+which keeps the .NET heap within 75% of the container's limit and leaves the
+rest for the drawing library's own memory. It needs no settings of its own.
+
+Most of the memory `tiles serve` uses holds the portrayed datasets, so it
+grows with the number of datasets it renders. Serving the 186 Massachusetts
+cells in [Serve prebuilt tiles](#serve-prebuilt-tiles), for Boston Harbor:
+
+| Memory limit | Healthy after | Peak memory |
+|---|---|---|
+| 4 GB | 21 s | 1.7 GB |
+| 2 GB | 23 s | 1.5 GB |
+| 1 GB | never | |
+
+Below what the datasets need, `tiles serve` doesn't stop with an error: it
+spends its time reclaiming memory and never answers. A health check with a
+`start_period`, as in [Run with Docker Compose](#run-with-docker-compose),
+shows this as `unhealthy`. To serve with less memory:
+
+- **Pass `--bbox`.** Datasets that can't draw in its tiles aren't portrayed.
+  Without it, the same server portrays all 186 cells and needs 3 GB.
+- **Pass `--only`** to serve only some product specifications from a folder.
+- **Lower `--cache-mb`**, the memory kept for rendered tiles (256 MB by
+  default). Keep tiles on disk with `--cache-dir /cache` instead.
+- **Serve prebuilt tiles.** The server then needs only tens of megabytes,
+  whatever the charts. See [Serve prebuilt tiles](#serve-prebuilt-tiles).
+
+`tiles export` portrays the same datasets, so it needs a similar limit, but
+only while it runs: the Boston Harbor export takes 23 s under 2 GB. It can run
+on another computer.
+
 ## Serve prebuilt tiles
 
 `tiles serve` over datasets portrays every dataset when it starts and renders
@@ -189,15 +223,16 @@ A tile set holds one palette. To serve day and night tiles, export each to its
 own archive with `--palette`, and run a `tiles serve` for each.
 
 As a rough guide, here are 186 NOAA ENC cells around Massachusetts, cut to
-Boston Harbor (`--bbox -71.12,42.28,-70.88,42.42`, zoom 10 to 16), with the
-container limited to 4 CPUs and 4 GB of memory on an arm64 Mac:
+Boston Harbor (`--bbox -71.12,42.28,-70.88,42.42`, zoom 11 to 16), with the
+container limited to 4 CPUs and 4 GB of memory on an arm64 Mac. `--bbox`
+leaves out 123 of the cells, which can't draw in its tiles:
 
 | | Prebuilt | Rendered on demand |
 |---|---|---|
-| Export | 39 s, once: 1,992 tiles, 23 MB | none |
-| Healthy after starting | 1 s | 39 s |
-| First request for each of 311 tiles | median 2 ms, slowest 13 ms | median 2 ms, slowest 269 ms |
-| Memory while serving | 37 MB | 2.5 GB |
+| Export | 22 s, once: 1,992 tiles, 23 MB | none |
+| Healthy after starting | 1 s | 21 s |
+| First request for each of 311 tiles | median 2 ms, slowest 13 ms | median 2 ms, slowest 111 ms |
+| Memory while serving | 37 MB | 1.7 GB |
 
 A Raspberry Pi's cores are slower than a Mac's, so expect the export and the
 on-demand start to take longer there. Rendering on demand needs memory for
@@ -214,7 +249,7 @@ about what's served.
 The image has no shell or `curl`, so a health check runs
 [`s100 health`](cli.md#health) in the container. It asks the server on port
 8200 and exits with 0 when the server answers. Pass `--port 8100` for
-`feed serve`. Kubernetes and load balancers can ask `/healthz` directly.
+`feed serve`, and `--port 8300` for `mcp serve --transport http`. Kubernetes and load balancers can ask `/healthz` directly.
 
 ## Give an agent the MCP tools
 
@@ -243,6 +278,56 @@ MCP client that starts servers as commands can start it in a container. Pass
 folders you mount. `--data-dir /state/library` keeps the Library's collections
 and downloads in the `s100-state` volume; without it they're removed when the
 server stops.
+
+### Serve MCP over HTTP
+
+To run the MCP server as a long-running service that agents connect to, serve
+it over HTTP with `--transport http`. It listens on port 8300 at `/mcp`:
+
+```yaml
+services:
+  mcp:
+    image: ghcr.io/philliphoff/s100
+    command: mcp serve . --transport http --host 0.0.0.0 --token ${S100_MCP_TOKEN:?set S100_MCP_TOKEN} --data-dir /state/library
+    ports:
+      - "8300:8300"
+    volumes:
+      - ./charts:/data:ro
+      - s100-state:/state
+    healthcheck:
+      test: ["CMD", "/app/s100", "health", "--port", "8300"]
+      interval: 30s
+      timeout: 10s
+      start_period: 2m
+      start_interval: 2s
+    restart: unless-stopped
+
+volumes:
+  s100-state:
+```
+
+```bash
+S100_MCP_TOKEN=$(openssl rand -hex 16) docker compose up -d
+```
+
+Agents connect to `http://<host>:8300/mcp` and send the token in an
+`Authorization: Bearer <token>` header. For example, with Claude Code:
+
+```bash
+claude mcp add --transport http s100 http://localhost:8300/mcp --header "Authorization: Bearer $S100_MCP_TOKEN"
+```
+
+Without `--token`, `mcp serve` generates a new token each time it starts and
+prints it in the container's log (`docker compose logs mcp`).
+
+Over HTTP, the server leaves out the tools that open datasets by path and
+change the Library, so a client can't make it read other files in the
+container or fetch other URLs. The datasets in `/data` and any `--collection`
+sources are all it serves. Pass `--allow-changes` to serve those tools too.
+See [MCP over HTTP](cli.md#mcp-over-http).
+
+Use HTTP only on a network you trust, or behind a proxy that adds HTTPS: the
+server itself speaks plain HTTP, so the token travels unencrypted.
 
 ## Predict tides
 

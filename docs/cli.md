@@ -439,7 +439,7 @@ the old file is left as it was.
 | `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles`, `gpkg` or `geotiff`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
 | `--max-zoom <0-24>` | from the data | Highest zoom level. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. Datasets that can't draw in those tiles aren't portrayed. See [Zoom levels](#zoom-levels). |
 | `--tile-size <pixels>` | `256` | `256`, or `512` for high-DPI tiles of the same grid. |
 | `--format <format>` | `png` | `png`, `jpeg` (or `jpg`) or `webp`. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
@@ -511,6 +511,15 @@ minimum display scale. Without `--max-zoom`, the highest is one level past the
 finest cell's compilation scale. Products without these scales, such as GML
 products and coverages, start at the zoom where their extent fits in about one
 tile and go six levels deeper, up to zoom 18.
+
+With `--bbox`, datasets that can't draw in any of its tiles are closed before
+they're portrayed, and `tiles export` says how many it left out. A dataset is
+kept when its extent reaches the tiles that cover the box at the lowest zoom,
+or the ring of tiles around them, so symbols and text near an edge tile are
+drawn as they would be without `--bbox`. This saves time and memory when the
+box covers a small part of a large folder. The default zoom range then comes
+from the datasets that are kept. For a box that crosses the antimeridian,
+every dataset is kept.
 
 `tiles export` prints the number of tiles before it renders any. Each zoom level has
 four times the tiles of the one before, so a set grows quickly. Above 100,000
@@ -1326,7 +1335,7 @@ S-100 products. See [Supported specifications](#supported-specifications).
 s100 health [--host <address>] [--port <port>] [--timeout <seconds>]
 ```
 
-`health` asks a running `tiles serve` or `feed serve` for its `/healthz` route
+`health` asks a running `tiles serve`, `feed serve` or `mcp serve --transport http` for its `/healthz` route
 and exits with `0` when it answers `200 OK`, or `1` when nothing is listening,
 the server answers with an error, or there's no answer in time. It prints what
 it asked and what came back. Use it as a container health check: the
@@ -1335,7 +1344,7 @@ it asked and what came back. Use it as a container health check: the
 | Option | Default | Description |
 |---|---|---|
 | `--host <address>` | `127.0.0.1` | The server's address. |
-| `--port <port>` | `8200` | The server's port. `tiles serve` listens on 8200 by default and `feed serve` on 8100. |
+| `--port <port>` | `8200` | The server's port. `tiles serve` listens on 8200 by default, `feed serve` on 8100 and `mcp serve --transport http` on 8300. |
 | `--timeout <seconds>` | `5` | How long to wait for an answer. |
 
 ```bash
@@ -1429,7 +1438,9 @@ s100 mcp serve --layer <dataset> [--layer <dataset> ...] [options]
 
 `mcp serve` runs an [MCP server](mcp-server.md) over standard input and
 output, so an AI agent that starts the process can query and render datasets
-without SoundCharts. It takes the same input forms as `render`. Datasets that
+without SoundCharts. With `--transport http`, it serves the same tools over
+HTTP instead, so agents on other computers, or in other containers, can
+connect to it. See [MCP over HTTP](#mcp-over-http). It takes the same input forms as `render`. Datasets that
 fail to load are skipped with a warning.
 
 To use it, configure your MCP client to run the command `s100` with the
@@ -1453,6 +1464,12 @@ lists them all.
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
 | `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample_coverage` and `sample_coverage_along` the nearest current station where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
+| `--transport <transport>` | `stdio` | `stdio`, or `http` to serve over HTTP. |
+| `--host <address>` | `127.0.0.1` | HTTP only. The address to listen on. `0.0.0.0` accepts other computers. |
+| `--port <port>` | `8300` | HTTP only. The port. `0` picks a free one. |
+| `--token <token>` | generated for a non-loopback host | HTTP only. The bearer token clients must send. Letters, digits, `-` and `_`. |
+| `--no-token` | off | HTTP only. Serves without a token, even on a non-loopback address. |
+| `--allow-changes` | off | HTTP only. Also serves the tools that open datasets by path and change the Library. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
@@ -1465,6 +1482,51 @@ s100 mcp serve --from exchange-set.zip --only S101,S102
 Standard output carries the MCP protocol. Startup messages, load warnings and
 errors go to standard error. The server runs until the client closes standard
 input, or until you interrupt it.
+
+### MCP over HTTP
+
+```bash
+s100 mcp serve charts/ --transport http
+s100 mcp serve charts/ --transport http --host 0.0.0.0 --token my-token
+```
+
+With `--transport http`, `mcp serve` serves the MCP
+[Streamable HTTP](https://modelcontextprotocol.io/specification/latest/basic/transports#streamable-http)
+transport at `http://<host>:<port>/mcp`, and prints that URL for each network
+address. It runs until you interrupt it or it's sent SIGTERM. Several clients
+can connect at once, and they share one session: one client's `set_palette`
+changes what `render_to_image` draws for the others.
+
+By default only this computer can connect. With `--host 0.0.0.0`, other
+computers can, and `mcp serve` generates a random token unless you pass
+`--token` or `--no-token`. It prints a token it generates at startup, but not
+one you pass. Clients send the token in a header:
+
+```text
+Authorization: Bearer <token>
+```
+
+A request without the token is answered `401 Unauthorized`. Pass `--token` to
+keep the same token across restarts. A request whose `Origin` header names
+another host is answered `403 Forbidden`, so a web page open in a browser
+can't use a server on your computer.
+
+Over HTTP, `mcp serve` leaves out the tools that reach beyond the datasets
+you served, because a client could use them to read any file the server can
+read or make it fetch any URL:
+
+- `open_dataset`, `close_dataset` and `close_all_datasets`.
+- The Library tools that change it: `add_library_source`,
+  `refresh_library_source`, `remove_library_source`,
+  `set_library_source_options`, `library_action`, `await_library_idle` and
+  `set_secom_identity`.
+
+The query, session, Library listing and tide tools are served. Pass
+`--allow-changes` to serve every tool, as over standard input and output.
+Sources you add with `--collection` are in the Library either way.
+
+`/healthz` answers `200 OK` without a token, so `s100 health --port 8300`
+checks the server. See [`health`](#health).
 
 ## feed serve
 

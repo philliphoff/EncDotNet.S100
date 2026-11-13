@@ -141,11 +141,31 @@ jobs:
           curl -fsS http://127.0.0.1:8201/tiles.json | python3 -c 'import json, sys; t = json.load(sys.stdin); assert t["tiles"] and t["maxzoom"] == 12'
           docker stop smoke-prebuilt
 
+      - name: Smoke-test MCP over HTTP
+        # mcp serve --transport http answers its health check, refuses a
+        # request without the bearer token, and accepts one with it.
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke-mcp -p 8300:8300 -v "$PWD/smoke:/data:ro" \
+            s100:smoke mcp serve . --transport http --host 0.0.0.0 --token smoke-token
+          for _ in $(seq 1 60); do
+            if docker exec smoke-mcp /app/s100 health --port 8300; then break; fi
+            sleep 2
+          done
+          docker exec smoke-mcp /app/s100 health --port 8300
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}'
+          headers=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream")
+          test "$(curl -s -o /dev/null -w '%{http_code}' "${headers[@]}" -d "$init" http://127.0.0.1:8300/mcp)" = "401"
+          curl -fsS "${headers[@]}" -H "Authorization: Bearer smoke-token" -d "$init" http://127.0.0.1:8300/mcp | grep -q '"serverInfo"'
+          docker stop smoke-mcp
+          test "$(docker inspect smoke-mcp --format '{{.State.ExitCode}}')" = "0"
+
       - name: Show the server output
         if: failure()
         run: |
           docker logs smoke || true
           docker logs smoke-prebuilt || true
+          docker logs smoke-mcp || true
 
       - name: Log in to the GitHub Container Registry
         if: env.PUSH == 'true'

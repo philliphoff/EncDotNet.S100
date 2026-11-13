@@ -59,6 +59,18 @@ more detail.
 
 - **`IDatasetProcessor`**: a parsed dataset with rendering, picking, feature
   listing, metadata and validation.
+- **`ILiveDatasetProcessor`**: a processor whose data changes after it's
+  loaded, such as a feed polled on a timer. It raises `Changed` after
+  updating, and the map session draws the dataset again.
+- **`DynamicSourceProcessor`**: a processor over an `IDynamicFeatureSource`
+  and its `IDynamicFeaturePortrayal`, such as the NDBC observations
+  (`NdbcStationPortrayal`) or own-ship weather from NMEA
+  (`OwnShipWeatherPortrayal`). It draws the source's features on one
+  sub-layer, on the source's plane and priority; picks describe a feature
+  through the source's `IDynamicFeatureDescriber`, or list its motion and
+  attributes; and the source's changes are raised as `Changed`. Pass the
+  spec it reports as, such as `SpecName.Ndbc` or `SpecName.Nmea`. Disposing
+  the processor unsubscribes from the source and leaves it running.
 - **`DatasetPipelineFactory`**: detects a file's product and creates its
   processor. See [Product detection](#product-detection).
 - **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
@@ -75,10 +87,10 @@ more detail.
 - The pick services in the `.Query` namespace and the dataset catalog in
   `.Catalog`. See [Pick services and dataset catalog](#pick-services-and-dataset-catalog).
 
-Some of these types, including `IDatasetProcessor`, `DatasetProcessorOwner`,
-`MapPresentationState`, `MapDataset` and the S-98 engine, are compiled into
-`EncDotNet.S100.Core` but use the `EncDotNet.S100.Datasets.Pipelines`
-namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
+Some of these types, including `IDatasetProcessor`, `ILiveDatasetProcessor`,
+`DatasetProcessorOwner`, `MapPresentationState`, `MapDataset` and the S-98
+engine, are compiled into `EncDotNet.S100.Core` but use the
+`EncDotNet.S100.Datasets.Pipelines` namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 
 ## Processors
 
@@ -723,8 +735,13 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   concentration under the S-411 codes. Each value carries its feature
   catalogue definition when the processor implements
   `IListedValueDefinitions` (the GML processors do), so a pick report can
-  show the meaning on hover. `FeatureInfo.EggCode` still reads the section,
-  but is obsolete. `PickSectionKindRegistry` registers each kind with a
+  show the meaning on hover. A processor can also add sections itself:
+  `S104DatasetProcessor` and `S111DatasetProcessor` give a station feature a
+  `StationSeriesSection` with its whole time series, which hosts chart from
+  its channels, and `S124DatasetProcessor` gives a warning part a
+  `NavigationalWarningSection`. `FeatureInfo.EggCode`,
+  `FeatureInfo.StationSeries` and `FeatureInfo.NavigationalWarning` still
+  read their sections, but are obsolete. `PickSectionKindRegistry` registers each kind with a
   description and source-generated JSON metadata, which MCP serializes it
   with; a section of an unregistered kind reaches MCP as its rows.
 - `ExternalTextFileResolver`: reads the text of external files named by S-100
@@ -743,7 +760,7 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   into their own section.
 - `GmlDatasetProcessorBase`: the base class for the GML processors (S-122,
   S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421).
-  `S124DatasetProcessor` fills `FeatureInfo.NavigationalWarning` for a
+  `S124DatasetProcessor` adds a `NavigationalWarningSection` to a
   `NavwarnPart`: a `NavigationalWarningInfo` with the series and number, type,
   validity, area, issuer and the message text in each language, read through
   the warning's preamble. `NavigationalWarningInfo.StatusAt` tells whether the

@@ -190,7 +190,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
             FeatureRef = cancelled.FeatureRef,
             DatasetFileName = f.Entry.DisplayName,
             ProductSpec = "S-124",
-            NavigationalWarning = cancelled.Warning,
+            Sections = [new NavigationalWarningSection(cancelled.Warning)],
         }]);
 
         Assert.NotNull(pick.Warnings.Card);
@@ -324,7 +324,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
     public void The_switch_off_hides_a_warnings_pick_highlight_only()
     {
         var f = new Fixture();
-        var warning = new PickHit { FeatureType = "NavwarnPart", FeatureRef = PartId(0), DatasetFileName = f.Entry.DisplayName, ProductSpec = "S-124", NavigationalWarning = f.Find(0).Warning };
+        var warning = new PickHit { FeatureType = "NavwarnPart", FeatureRef = PartId(0), DatasetFileName = f.Entry.DisplayName, ProductSpec = "S-124", Sections = [new NavigationalWarningSection(f.Find(0).Warning)] };
         var area = new PickHit { FeatureType = "NavwarnAreaAffected", FeatureRef = "area.0", DatasetFileName = f.Entry.DisplayName, ProductSpec = "S-124" };
         var chart = new PickHit { FeatureType = "Wreck", FeatureRef = "W1", DatasetFileName = "101GB0001.000", ProductSpec = "S-101" };
 

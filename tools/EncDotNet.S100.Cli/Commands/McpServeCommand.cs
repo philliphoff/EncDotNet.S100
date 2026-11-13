@@ -22,8 +22,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 mcp serve</c> hosts the S-100 MCP tool set over the <b>stdio</b>
 /// transport, so an agent that spawns this process can query features, sample
 /// coverages, drive a stateful session (palette, time step, headless render)
-/// and work with a dataset-collection Library without a GUI viewer or an
-/// out-of-band HTTP endpoint.
+/// and work with a dataset-collection Library without a GUI viewer. With
+/// <c>--transport http</c> it serves the same tools over Streamable HTTP
+/// instead (<see cref="McpHttpServer"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -55,13 +56,25 @@ namespace EncDotNet.S100.Cli.Commands;
 /// an in-process headless Skia session.
 /// </para>
 /// <para>
-/// Standard output carries the MCP protocol, so every human-readable message
+/// Over HTTP (#1464), the listening rules are <c>tiles serve</c>'s
+/// (<see cref="ServeHost"/>): localhost by default, and a bearer token
+/// generated for any other address. Several clients can connect, so by
+/// default the tools that reach beyond the served datasets are left out:
+/// <c>open_dataset</c> and the close tools (which open any path the server can
+/// read) and the Library edit tools (which add sources, fetch catalogue URLs
+/// and download). <c>--allow-changes</c> adds them.
+/// </para>
+/// <para>
+/// Over stdio, standard output carries the MCP protocol, so every human-readable message
 /// (startup banner, load warnings, errors) is written to standard error.
 /// The server runs until the client disconnects (stdin EOF) or Ctrl-C.
 /// </para>
 /// </remarks>
 internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
 {
+    /// <summary>The default port of <c>--transport http</c>.</summary>
+    public const int DefaultHttpPort = 8300;
+
     internal sealed class Settings : CommandSettings
     {
         [CommandArgument(0, "[input]")]
@@ -100,6 +113,31 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample_coverage and sample_coverage_along the nearest current station where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
         public bool TidePredictions { get; init; }
 
+        [CommandOption("--transport <TRANSPORT>")]
+        [Description("How clients connect: stdio (the client starts s100 and talks over its standard input and output) or http (clients connect to a Streamable HTTP endpoint at /mcp).")]
+        [DefaultValue("stdio")]
+        public string Transport { get; init; } = "stdio";
+
+        [CommandOption("--host <ADDRESS>")]
+        [Description("HTTP only: the address to listen on (default 127.0.0.1). Use 0.0.0.0 to serve other machines.")]
+        public string? Host { get; init; }
+
+        [CommandOption("--port <PORT>")]
+        [Description("HTTP only: the port to listen on (default 8300; 0 picks a free port).")]
+        public int? Port { get; init; }
+
+        [CommandOption("--token <TOKEN>")]
+        [Description("HTTP only: the bearer token clients must send in an 'Authorization: Bearer <token>' header. Generated automatically when --host is not a loopback address.")]
+        public string? Token { get; init; }
+
+        [CommandOption("--no-token")]
+        [Description("HTTP only: serve without a token even on a non-loopback address.")]
+        public bool NoToken { get; init; }
+
+        [CommandOption("--allow-changes")]
+        [Description("HTTP only: also serve the tools that open and close datasets by path and change the Library (add, refresh and remove sources, download and open items, set a SECOM identity). Over stdio they're always served.")]
+        public bool AllowChanges { get; init; }
+
         [CommandOption(LuaEngineOption.Template)]
         [Description(LuaEngineOption.Description)]
         [DefaultValue(LuaEngineOption.Default)]
@@ -108,6 +146,15 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [CommandOption("--debug")]
         [Description("Show full stack traces on error.")]
         public bool Debug { get; init; }
+
+        /// <summary>True for <c>--transport http</c>.</summary>
+        public bool IsHttp => string.Equals(Transport, "http", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The HTTP listening address, <c>127.0.0.1</c> unless given.</summary>
+        public string HttpHost => Host ?? "127.0.0.1";
+
+        /// <summary>The HTTP port, <see cref="DefaultHttpPort"/> unless given.</summary>
+        public int HttpPort => Port ?? DefaultHttpPort;
 
         public override ValidationResult Validate()
         {
@@ -127,7 +174,17 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
                 return luaEngineError;
 
-            return ValidationResult.Success();
+            if (!IsHttp && !string.Equals(Transport, "stdio", StringComparison.OrdinalIgnoreCase))
+                return ValidationResult.Error("--transport must be stdio or http.");
+
+            if (!IsHttp)
+            {
+                if (Host is not null || Port is not null || Token is not null || NoToken || AllowChanges)
+                    return ValidationResult.Error("--host, --port, --token, --no-token and --allow-changes apply only with --transport http.");
+                return ValidationResult.Success();
+            }
+
+            return ServeHost.Validate(HttpHost, HttpPort, Token, NoToken);
         }
     }
 
@@ -209,21 +266,32 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // catalog / presentation / time / render tools, backed by an
             // in-process headless session over the catalog above, and the
             // Library tools.
+            //
+            // Over HTTP without --allow-changes, the tools that open any path the
+            // server can read, or that change the Library (and so fetch URLs and
+            // download), are left out.
+            var allowChanges = !settings.IsHttp || settings.AllowChanges;
             using var session = new HeadlessS100Session(catalog);
             var additionalTools = S100MutableTools.Create(
                 presentation: new StaticCapabilityAccessor<IPresentationController>(session),
                 time: new StaticCapabilityAccessor<ITimeController>(session),
                 renderer: new StaticCapabilityAccessor<IImageRenderer>(session),
-                catalog: catalog,
+                catalog: allowChanges ? catalog : null,
                 viewport: new StaticCapabilityAccessor<IViewportController>(session))
-                .Concat(LibraryMcpTools.Create(library, library, new EncDotNet.S100.Collections.Secom.SecomServiceDirectory(services.SecomRegistry), services.SecomTrust))
+                .Concat(LibraryMcpTools.Create(
+                    library,
+                    allowChanges ? library : null,
+                    new EncDotNet.S100.Collections.Secom.SecomServiceDirectory(services.SecomRegistry),
+                    services.SecomTrust))
                 // Tide predictions (#1452), from the offline station catalogue.
                 .Concat(TideMcpTools.Create(TideCli.Source(TideCli.CataloguePath(settings.TideCatalogue)), TimeProvider.System))
                 .ToList();
 
             var collections = services.Library.Collections.Count(c => !c.IsSession);
+            var mode = settings.IsHttp ? "over HTTP" : "over stdio";
+            var changes = allowChanges ? "changes allowed" : "no dataset or Library changes; --allow-changes allows them";
             Console.Error.WriteLine(
-                $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) and a Library of {collections} collection(s) over stdio (mutable). Ctrl-C to stop.");
+                $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) and a Library of {collections} collection(s) {mode} ({changes}). Ctrl-C to stop.");
             Console.Error.WriteLine(temporaryDataDir is null
                 ? $"Library data: {root}"
                 : $"Library data: {root} (temporary; pass --data-dir to keep it)");
@@ -247,6 +315,9 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                     Console.Error.WriteLine($"Current predictions fill S-111 gaps: {stations.CurrentStations.Count} current stations.");
             }
 
+            if (settings.IsHttp)
+                return await ServeHttpAsync(settings, catalog, additionalTools, routeCheckSources, cancellationToken).ConfigureAwait(false);
+
             await S100McpStdioHost.RunAsync(catalog, additionalTools, routeCheckSources, cancellationToken);
             return 0;
         }
@@ -266,6 +337,34 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             if (temporaryDataDir is not null)
                 TryDelete(temporaryDataDir);
         }
+    }
+
+    /// <summary>Serves the tools over Streamable HTTP until Ctrl-C or SIGTERM.</summary>
+    private static async Task<int> ServeHttpAsync(
+        Settings settings,
+        HeadlessMutableCatalog catalog,
+        IReadOnlyList<ModelContextProtocol.Server.McpServerTool> additionalTools,
+        RouteCheckSourceCache? routeCheckSources,
+        CancellationToken cancellationToken)
+    {
+        var address = System.Net.IPAddress.Parse(settings.HttpHost);
+        var token = ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
+        var tools = S100McpTools.Create(catalog, routeCheckSources: routeCheckSources).Concat(additionalTools).ToList();
+
+        await using var server = await McpHttpServer.StartAsync(tools, address, settings.HttpPort, token, cancellationToken).ConfigureAwait(false);
+        var shownAddresses = ServeHost.DisplayAddresses(address);
+        foreach (var shown in shownAddresses)
+            Console.Error.WriteLine($"MCP endpoint: {McpHttpServer.EndpointUri(shown, server.Port)}");
+        // A token given with --token isn't echoed, so it stays out of logs.
+        Console.Error.WriteLine(token is null
+            ? "No token: any client that can reach the endpoint can use it."
+            : settings.Token is null
+                ? $"Bearer token: {token} (send 'Authorization: Bearer {token}')"
+                : "Clients must send the --token value as 'Authorization: Bearer <token>'.");
+        Console.Error.WriteLine($"Health check: {new Uri(ServeHost.BaseUri(shownAddresses[0], server.Port, null), ServeHost.HealthPath.TrimStart('/'))}");
+
+        await server.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
+        return 0;
     }
 
     /// <summary>
