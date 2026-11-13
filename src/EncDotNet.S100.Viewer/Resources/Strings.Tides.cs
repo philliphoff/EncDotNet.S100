@@ -81,4 +81,27 @@ internal static partial class Strings
     public static string Tides_List_Download => Get(nameof(Tides_List_Download));
     public static string Tides_List_Refresh => Get(nameof(Tides_List_Refresh));
     public static string Tides_List_Cancel => Get(nameof(Tides_List_Cancel));
+    public static string TimelinePanel_PredictionsOnlyTooltip => Get(nameof(TimelinePanel_PredictionsOnlyTooltip));
+    public static string TimelinePanel_TideLane => Get(nameof(TimelinePanel_TideLane));
+    public static string TimelinePanel_TideLaneTooltip => Get(nameof(TimelinePanel_TideLaneTooltip));
+    public static string TimelinePanel_TideLaneStationFormat => Get(nameof(TimelinePanel_TideLaneStationFormat));
+    public static string TimelinePanel_TideLaneHighFormat => Get(nameof(TimelinePanel_TideLaneHighFormat));
+    public static string TimelinePanel_TideLaneLowFormat => Get(nameof(TimelinePanel_TideLaneLowFormat));
+    public static string Status_DepthBasis_PredictedFormat => Get(nameof(Status_DepthBasis_PredictedFormat));
+    public static string Status_DepthBasis_PredictedFormat_Short => Get(nameof(Status_DepthBasis_PredictedFormat_Short));
+    public static string Status_DepthBasis_PredictedFormat_Compact => Get(nameof(Status_DepthBasis_PredictedFormat_Compact));
+    public static string Status_DepthBasis_PredictedPartialFormat => Get(nameof(Status_DepthBasis_PredictedPartialFormat));
+    public static string Status_DepthBasis_PredictedPartialFormat_Short => Get(nameof(Status_DepthBasis_PredictedPartialFormat_Short));
+    public static string Status_DepthBasis_PartlyPredictedFormat => Get(nameof(Status_DepthBasis_PartlyPredictedFormat));
+    public static string Status_DepthBasis_PartlyPredictedFormat_Short => Get(nameof(Status_DepthBasis_PartlyPredictedFormat_Short));
+    public static string Status_DepthBasis_PartlyPredictedPartialFormat => Get(nameof(Status_DepthBasis_PartlyPredictedPartialFormat));
+    public static string Status_DepthBasisPopup_PredictedRowFormat => Get(nameof(Status_DepthBasisPopup_PredictedRowFormat));
+    public static string Status_DepthBasisPopup_PredictedMoreFormat => Get(nameof(Status_DepthBasisPopup_PredictedMoreFormat));
+    public static string Status_DepthBasisPopup_PredictionsOrder => Get(nameof(Status_DepthBasisPopup_PredictionsOrder));
+    public static string Status_DepthBasisPopup_PredictionsLeaveOut => Get(nameof(Status_DepthBasisPopup_PredictionsLeaveOut));
+    public static string Status_DepthBasisPopup_OfferHeading => Get(nameof(Status_DepthBasisPopup_OfferHeading));
+    public static string Status_DepthBasisPopup_OfferBody => Get(nameof(Status_DepthBasisPopup_OfferBody));
+    public static string Status_DepthBasisPopup_StaleFormat => Get(nameof(Status_DepthBasisPopup_StaleFormat));
+    public static string Status_DepthBasisPopup_Refresh => Get(nameof(Status_DepthBasisPopup_Refresh));
+    public static string Status_DepthBasisPopup_TidePredictionsLink => Get(nameof(Status_DepthBasisPopup_TidePredictionsLink));
 }

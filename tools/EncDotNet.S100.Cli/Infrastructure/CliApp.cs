@@ -118,6 +118,11 @@ internal static class CliApp
                 .WithExample("identify", "--layer", "enc.000", "--layer", "bathy.h5", "--lat", "50.1", "--lon", "-1.3")
                 .WithExample("identify", "--from", "exchange-set.zip", "--lat", "50.1", "--lon", "-1.3", "--format", "json");
 
+            config.AddCommand<HealthCommand>("health")
+                .WithDescription("Ask a running tiles serve or feed serve on this machine for its /healthz health check; exits 0 when it answers, for container health checks.")
+                .WithExample("health")
+                .WithExample("health", "--port", "8100");
+
             config.AddCommand<ListSpecsCommand>("list-specs")
                 .WithDescription("List supported product specifications and headless-render capability.")
                 .WithExample("list-specs");

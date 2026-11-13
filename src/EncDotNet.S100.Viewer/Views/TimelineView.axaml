@@ -459,11 +459,11 @@
                         <Button x:Name="PresetMenuButton"
                                 AutomationProperties.AutomationId="Timeline.Preset"
                                 AutomationProperties.Name="{x:Static loc:Strings.Label_TimeWindow}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreset}"
+                                AutomationProperties.HelpText="{Binding PresetTooltip}"
                                 Classes="Outline"
                                 Height="28" MinHeight="0" Padding="8,0" Margin="6,0,0,0"
                                 FontSize="12"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreset}">
+                                ToolTip.Tip="{Binding PresetTooltip}">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <Panel VerticalAlignment="Center">
                                     <ItemsControl Classes="Sizer" ItemsSource="{Binding PresetLabelCandidates}">
@@ -705,6 +705,38 @@
                                                                         Nudged="OnWindowLaneNudged" />
                                         </Grid>
                                     </StackPanel>
+                                </Panel>
+                                <!-- D14 (#1453): one Tide predictions lane with open ends; it
+                                     never sets the axis. -->
+                                <Panel IsVisible="{Binding TidePredictions.HasLane, FallbackValue=False}">
+                                <Grid ColumnDefinitions="248,*"
+                                      Height="34"
+                                      DataContext="{Binding TidePredictions}"
+                                      x:DataType="vm:TidePredictionTimelineViewModel"
+                                      Background="Transparent"
+                                      AutomationProperties.AutomationId="Timeline.TideLane"
+                                      ToolTip.Tip="{Binding Tooltip}">
+                                    <DockPanel Grid.Column="0" Margin="14,0,8,0">
+                                        <Border DockPanel.Dock="Left" Width="3" Margin="0,5,8,5" CornerRadius="1"
+                                                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" />
+                                        <StackPanel VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Text="{x:Static loc:Strings.TimelinePanel_TideLane}" FontSize="12" FontWeight="SemiBold" />
+                                            <TextBlock AutomationProperties.AutomationId="Timeline.TideLane.Station"
+                                                       Text="{Binding StationText}"
+                                                       FontFamily="{StaticResource MonoFontFamily}"
+                                                       FontSize="10.5"
+                                                       Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <views:TidePredictionLaneControl Grid.Column="1"
+                                                                     Margin="2,0,2,0"
+                                                                     VerticalAlignment="Center"
+                                                                     Curve="{Binding Curve}"
+                                                                     Marks="{Binding Marks}"
+                                                                     Accent="{DynamicResource AccentBrush}"
+                                                                     TextBrush="{DynamicResource ForegroundColor}" />
+                                </Grid>
                                 </Panel>
                                 <ItemsControl ItemsSource="{Binding LaneGroups}">
                                     <ItemsControl.ItemTemplate>

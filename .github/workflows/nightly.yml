@@ -1,7 +1,8 @@
 name: Nightly
 
 # Publishes unsupported nightly builds of SoundCharts and the s100 CLI from
-# main to a rolling `nightly` prerelease (#1020). Nightlies are not releases:
+# main to a rolling `nightly` prerelease (#1020), and the CLI's container image
+# as ghcr.io/<owner>/s100:nightly (#1464). Nightlies are not releases:
 # no NuGet packages, no What's New entry and no update notices (every update
 # check reads releases/latest, which never returns a prerelease).
 #
@@ -98,6 +99,17 @@ jobs:
       asset-label: nightly
       ref: ${{ needs.plan.outputs.sha }}
     secrets: inherit
+
+  container:
+    needs: [plan, publish]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container.yml
+    with:
+      version: ${{ needs.plan.outputs.version }}
+      tags: nightly
+      ref: ${{ needs.plan.outputs.sha }}
 
   release:
     needs: [plan, publish]

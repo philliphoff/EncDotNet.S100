@@ -28,6 +28,7 @@ internal sealed class DepthBasisService : IDisposable
     private readonly ITimelineMapScope? _scope;
     private readonly Action<Action> _post;
     private readonly Func<Func<int?>, Task<int?>> _readDatum;
+    private readonly Tides.ITidePredictionsInView _predictions;
     private readonly ConditionalWeakTable<IChartDepthCell, DatumSlot> _cellDatums = new();
     private bool _pending;
     private bool _disposed;
@@ -40,6 +41,7 @@ internal sealed class DepthBasisService : IDisposable
     /// <param name="scope">Raises when a dataset's footprint changes; optional.</param>
     /// <param name="post">Schedules the coalesced recompute (the app passes <see cref="UiThread.PostBackground"/>).</param>
     /// <param name="readDatum">Runs a chart cell's datum read (the app passes <see cref="Task.Run{TResult}(Func{TResult})"/>).</param>
+    /// <param name="predictions">Tide predictions in the view (tide predictions design D2, D9, D15).</param>
     public DepthBasisService(
         IDatasetLoaderService loader,
         IMapViewportNotifier? viewport,
@@ -47,8 +49,10 @@ internal sealed class DepthBasisService : IDisposable
         IWaterLevelAdjustmentState adjustment,
         ITimelineMapScope? scope,
         Action<Action> post,
-        Func<Func<int?>, Task<int?>> readDatum)
+        Func<Func<int?>, Task<int?>> readDatum,
+        Tides.ITidePredictionsInView predictions)
     {
+        ArgumentNullException.ThrowIfNull(predictions);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(viewTime);
         ArgumentNullException.ThrowIfNull(adjustment);
@@ -61,6 +65,8 @@ internal sealed class DepthBasisService : IDisposable
         _scope = scope;
         _post = post;
         _readDatum = readDatum;
+        _predictions = predictions;
+        _predictions.Changed += OnInputChanged;
 
         _loader.DatasetLoaded += OnDatasetChanged;
         _loader.DatasetRemoved += OnDatasetChanged;
@@ -115,11 +121,13 @@ internal sealed class DepthBasisService : IDisposable
             }
         }
 
+        var view = TimelineMapScope.ViewOf(_viewport?.Current);
         Current = DepthBasisEvaluator.Evaluate(new DepthBasisInputs(
             datasets,
-            TimelineMapScope.ViewOf(_viewport?.Current),
+            view,
             _viewTime.Current,
-            _adjustment));
+            _adjustment,
+            _predictions.For(view)));
         WaterLevelLoaded = waterLevelLoaded;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -136,6 +144,7 @@ internal sealed class DepthBasisService : IDisposable
         _loader.LayerStackChanged -= Invalidate;
         _viewTime.Changed -= OnInputChanged;
         _adjustment.Changed -= OnInputChanged;
+        _predictions.Changed -= OnInputChanged;
         if (_scope is not null)
             _scope.Changed -= Invalidate;
     }

@@ -585,7 +585,9 @@ public partial class MainWindow : ShadUI.Window
         // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
         _adjustedAreaBoundary = new EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController(
             _mapHost,
-            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>());
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(),
+            // D23: clipped to the loaded charts' water.
+            () => App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ViewerWaterLevelCatalog>().WaterMask);
 
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).
@@ -1868,6 +1870,15 @@ public partial class MainWindow : ShadUI.Window
                 () => display.SetLayerVisible(S102Relief.LayerKey, false));
             display.Changed += () => Dispatcher.UIThread.Post(PushRelief);
             PushRelief();
+        }
+
+        // Tide predictions (#1453, D2, D15): the flyout's offer and stale notice.
+        if (App.Services.GetService<ViewerSettingsService>() is { } viewerSettings
+            && App.Services.GetService<EncDotNet.S100.Viewer.Services.Tides.TideStationListService>() is { } tideList)
+        {
+            _viewModel.StatusBar.DepthBasis.SetTidePredictions(
+                () => viewerSettings.UseTidePredictions = true,
+                () => _ = tideList.DownloadAsync());
         }
 
         if (timeFormat is not null)

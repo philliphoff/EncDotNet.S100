@@ -10,10 +10,13 @@ using var httpClient = new HttpClient
 {
     Timeout = TimeSpan.FromSeconds(3),
 };
-var updateChecker = new CliUpdateChecker(
-    version,
-    new GitHubReleaseClient(httpClient),
-    new JsonCliUpdateCache(JsonCliUpdateCache.DefaultPath),
-    TimeProvider.System);
+ICliUpdateChecker updateChecker = DisabledCliUpdateChecker.IsDisabledBy(
+        Environment.GetEnvironmentVariable(DisabledCliUpdateChecker.EnvironmentVariable))
+    ? DisabledCliUpdateChecker.Instance
+    : new CliUpdateChecker(
+        version,
+        new GitHubReleaseClient(httpClient),
+        new JsonCliUpdateCache(JsonCliUpdateCache.DefaultPath),
+        TimeProvider.System);
 
 return await CliRunner.RunAsync(args, version, updateChecker, Console.Error);

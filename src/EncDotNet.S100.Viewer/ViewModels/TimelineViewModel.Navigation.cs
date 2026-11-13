@@ -105,7 +105,7 @@ internal sealed partial class TimelineViewModel
     {
         get
         {
-            if (_axis is null && !_rebuilding && _service.IsActive)
+            if (_axis is null && !_rebuilding && _service.HasViewTime)
                 RebuildAxis();
             return _axis;
         }
@@ -119,10 +119,17 @@ internal sealed partial class TimelineViewModel
     {
         get
         {
-            if (AxisRange is not { } range)
-                return null;
-            var (min, max) = range;
             var now = Now;
+            if (AxisRange is not { } range)
+            {
+                // Only open-ended predictions: they never set the axis, so show
+                // the next 48 hours (tide predictions design D14).
+                if (!IsPredictionsOnly)
+                    return null;
+                range = (now, now.AddHours(PredictionsOnlyHours));
+            }
+
+            var (min, max) = range;
             var start = min < now ? min : now;
             var end = max > now ? max : now;
             if (_service.CurrentTime is { } current)
@@ -171,12 +178,14 @@ internal sealed partial class TimelineViewModel
         var focus = new List<DateTime>(2) { Now };
         if (_service.CurrentTime is { } current)
             focus.Add(current);
-        _axis = new TimelineAxisMap(start, end, AxisCoverage, focus);
+        // Predictions have no gaps: with only them, nothing is collapsed (D14).
+        IReadOnlyList<CoverageSegment> coverage = IsPredictionsOnly ? [new CoverageSegment(start, end)] : AxisCoverage;
+        _axis = new TimelineAxisMap(start, end, coverage, focus);
 
         // The overview spans everything loaded, whatever the filter (handoff C5).
         var overviewStart = Earliest(start, full.Start, _service.MinTime ?? full.Start);
         var overviewEnd = Latest(end, full.End, _service.MaxTime ?? full.End);
-        _overview = new TimelineAxisMap(overviewStart, overviewEnd, _service.CoverageSegments);
+        _overview = new TimelineAxisMap(overviewStart, overviewEnd, IsPredictionsOnly ? coverage : _service.CoverageSegments);
 
         var culture = CultureInfo.CurrentCulture;
         _gaps = [.. _axis.Gaps.Select(g => new NormalizedGap(
@@ -212,6 +221,9 @@ internal sealed partial class TimelineViewModel
         OnPropertyChanged(nameof(OverviewWindowWidth));
         OnPropertyChanged(nameof(IsZoomed));
         OnPropertyChanged(nameof(PresetLabel));
+        OnPropertyChanged(nameof(PresetTooltip));
+        OnPropertyChanged(nameof(IsPredictionsOnly));
+        TidePredictions?.Refresh();
         OnPropertyChanged(nameof(StepLabel));
         OnPropertyChanged(nameof(NextStepTooltip));
         OnPropertyChanged(nameof(PreviousStepTooltip));
@@ -374,10 +386,17 @@ internal sealed partial class TimelineViewModel
     /// <summary>Where one step of <paramref name="kind"/> in <paramref name="direction"/> lands, or null.</summary>
     internal DateTime? StepTarget(TimelineStepKind kind, int direction)
     {
-        if (!IsActive || _service.CurrentTime is not { } current || _service.MinTime is not { } min || _service.MaxTime is not { } max)
+        if (!IsActive || _service.CurrentTime is not { } current)
             return null;
         var now = Now;
-        var limits = (min < now ? min : now, max > now ? max : now);
+        (DateTime, DateTime) limits;
+        if (_service.MinTime is { } min && _service.MaxTime is { } max)
+            limits = (min < now ? min : now, max > now ? max : now);
+        else if (IsPredictionsOnly && Axis is { } axis)
+            // Predictions have no samples or end: step by time across the axis (D14).
+            limits = (axis.Start < current ? axis.Start : current, axis.End > current ? axis.End : current);
+        else
+            return null;
         return TimelineStepper.Step(kind, current, direction, _service.TimedDatasets, _service.CoverageSegments, Driver, limits, Zone);
     }
 
@@ -438,6 +457,20 @@ internal sealed partial class TimelineViewModel
         _ => Strings.TimelinePanel_PresetCustom,
     };
 
+    /// <summary>How far ahead All loaded and In view look with only predictions loaded (D14).</summary>
+    internal const int PredictionsOnlyHours = 48;
+
+    /// <summary>
+    /// Whether the view time comes only from open-ended predictions: nothing
+    /// timed is loaded, so All loaded and In view show the next 48 hours (D14).
+    /// </summary>
+    public bool IsPredictionsOnly => _service.HasOpenEndedTime && !_service.IsActive;
+
+    /// <summary>The preset menu's tooltip: why the window is 48 hours when only predictions are loaded (D14).</summary>
+    public string PresetTooltip => IsPredictionsOnly && _preset is TimelinePreset.AllLoaded or TimelinePreset.InView
+        ? Strings.TimelinePanel_PredictionsOnlyTooltip
+        : Strings.Tooltip_TimelinePreset;
+
     /// <summary>The overview strip's data, over everything loaded and now.</summary>
     public IReadOnlyList<NormalizedCoverageBand> OverviewBands => Axis is null ? [] : _overview?.CoverageBands ?? [];
 
@@ -457,7 +490,8 @@ internal sealed partial class TimelineViewModel
             TimelinePreset.Today => Today(now),
             TimelinePreset.Next48Hours => (now, now.AddHours(48)),
             TimelinePreset.ThisRun => ThisRun(),
-            TimelinePreset.InView => InViewWindow(),
+            // With only predictions, In view shows the next 48 hours, as All loaded does (D14).
+            TimelinePreset.InView => IsPredictionsOnly ? (now, now.AddHours(PredictionsOnlyHours)) : InViewWindow(),
             _ => null,
         };
         if (preset is TimelinePreset.ThisRun or TimelinePreset.InView && window is null)

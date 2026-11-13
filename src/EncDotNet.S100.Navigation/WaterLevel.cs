@@ -152,6 +152,21 @@ public interface IWaterLevelSource
     IReadOnlyList<CoverageArea> Footprint => [];
 }
 
+/// <summary>
+/// A water-level source that prefers one source and falls back on another
+/// (<see cref="WaterLevelSources.WithFallback"/>), with its parts, so a host
+/// can tell their footprints apart: where S-104 adjusts and where a
+/// prediction does.
+/// </summary>
+public interface IFallbackWaterLevelSource : IWaterLevelSource
+{
+    /// <summary>The preferred source, such as loaded S-104 datasets.</summary>
+    IWaterLevelSource Primary { get; }
+
+    /// <summary>The source used where the primary doesn't cover, such as tide predictions.</summary>
+    IWaterLevelSource Fallback { get; }
+}
+
 /// <summary>Combines water-level sources.</summary>
 public static class WaterLevelSources
 {
@@ -164,7 +179,7 @@ public static class WaterLevelSources
     /// </summary>
     /// <param name="primary">The preferred source, such as loaded S-104 datasets.</param>
     /// <param name="fallback">The source used where the primary doesn't cover, such as tide predictions.</param>
-    /// <returns>The combined source.</returns>
+    /// <returns>The combined source, an <see cref="IFallbackWaterLevelSource"/>.</returns>
     public static IWaterLevelSource WithFallback(IWaterLevelSource primary, IWaterLevelSource fallback)
     {
         ArgumentNullException.ThrowIfNull(primary);
@@ -172,8 +187,12 @@ public static class WaterLevelSources
         return new Fallback(primary, fallback);
     }
 
-    private sealed class Fallback(IWaterLevelSource primary, IWaterLevelSource fallback) : IWaterLevelSource
+    private sealed class Fallback(IWaterLevelSource primary, IWaterLevelSource fallback) : IFallbackWaterLevelSource
     {
+        public IWaterLevelSource Primary => primary;
+
+        IWaterLevelSource IFallbackWaterLevelSource.Fallback => fallback;
+
         private readonly Lazy<IReadOnlyList<WaterLevelSourceInfo>> _datasets = new(() => [.. primary.Datasets, .. fallback.Datasets]);
         private readonly Lazy<IReadOnlyList<CoverageArea>> _footprint = new(() => [.. primary.Footprint, .. fallback.Footprint]);
 

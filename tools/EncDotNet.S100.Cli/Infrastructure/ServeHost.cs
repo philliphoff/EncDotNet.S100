@@ -3,6 +3,9 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Spectre.Console;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
@@ -10,10 +13,30 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// <summary>
 /// The listening rules the HTTP-serving commands (<c>feed serve</c>,
 /// <c>tiles serve</c>) share: localhost by default, and an access token in
-/// every URL when serving beyond this machine.
+/// every URL when serving beyond this machine, and a health check outside it.
 /// </summary>
 internal static class ServeHost
 {
+    /// <summary>The health check's path, <c>/healthz</c>, which is outside any token.</summary>
+    public const string HealthPath = "/healthz";
+
+    /// <summary>
+    /// Maps <see cref="HealthPath"/>, which answers <c>200 OK</c> with the text
+    /// <c>ok</c> while the server runs. It sits outside the token prefix so a
+    /// container or load balancer health check needs no token, and it says
+    /// nothing about what's served.
+    /// </summary>
+    public static void MapHealth(IEndpointRouteBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        endpoints.MapGet(HealthPath, static context =>
+        {
+            context.Response.ContentType = "text/plain";
+            context.Response.Headers.CacheControl = "no-store";
+            return context.Response.WriteAsync("ok");
+        });
+    }
+
     /// <summary>Checks <c>--host</c>, <c>--port</c>, <c>--token</c> and <c>--no-token</c>.</summary>
     public static ValidationResult Validate(string host, int port, string? token, bool noToken)
     {

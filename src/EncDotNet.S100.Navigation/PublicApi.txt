@@ -242,6 +242,11 @@ namespace EncDotNet.S100.Navigation
         EncDotNet.S100.Navigation.ChartedDepth? Sample(EncDotNet.S100.DataModel.GeoPosition position);
         EncDotNet.S100.Navigation.ChartedDepth? SampleBathymetry(EncDotNet.S100.DataModel.GeoPosition position);
     }
+    public interface IFallbackWaterLevelSource : EncDotNet.S100.Navigation.IWaterLevelSource
+    {
+        EncDotNet.S100.Navigation.IWaterLevelSource Fallback { get; }
+        EncDotNet.S100.Navigation.IWaterLevelSource Primary { get; }
+    }
     public interface IRouteAreaSource
     {
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteArea> AreasNear(EncDotNet.S100.Pipelines.BoundingBox extent);

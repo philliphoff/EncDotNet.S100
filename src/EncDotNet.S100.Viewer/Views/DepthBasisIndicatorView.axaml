@@ -152,6 +152,32 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <!-- Tide predictions design D2: the offer where it helps. -->
+                        <StackPanel IsVisible="{Binding OffersTidePredictions}"
+                                    Spacing="4" Margin="0,6,0,0"
+                                    AutomationProperties.AutomationId="DepthBasis.TideOffer">
+                            <TextBlock Classes="flyoutLine" FontWeight="SemiBold"
+                                       Text="{x:Static loc:Strings.Status_DepthBasisPopup_OfferHeading}" />
+                            <TextBlock Classes="flyoutLine" TextWrapping="Wrap"
+                                       Text="{x:Static loc:Strings.Status_DepthBasisPopup_OfferBody}" />
+                            <Button HorizontalAlignment="Left"
+                                    Content="{x:Static loc:Strings.Tides_UsePredictions}"
+                                    Command="{Binding UseTidePredictionsCommand}"
+                                    AutomationProperties.AutomationId="DepthBasis.TideOffer.Use" />
+                        </StackPanel>
+
+                        <!-- D15: only when NOAA has newer data than the cached list. -->
+                        <StackPanel IsVisible="{Binding IsStationListStale}"
+                                    Spacing="4" Margin="0,6,0,0"
+                                    AutomationProperties.AutomationId="DepthBasis.TideStale">
+                            <TextBlock Classes="flyoutLine" TextWrapping="Wrap"
+                                       Text="{Binding StationListStaleText}" />
+                            <Button HorizontalAlignment="Left"
+                                    Content="{x:Static loc:Strings.Status_DepthBasisPopup_Refresh}"
+                                    Command="{Binding RefreshStationListCommand}"
+                                    AutomationProperties.AutomationId="DepthBasis.TideStale.Refresh" />
+                        </StackPanel>
+
                         <TextBlock Classes="flyoutHeader" Margin="0,6,0,0"
                                    Text="{x:Static loc:Strings.Status_DepthBasisPopup_WhereHeader}" />
                         <ItemsControl ItemsSource="{Binding WhereAppliedLines}">

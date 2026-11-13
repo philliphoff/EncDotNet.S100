@@ -20,7 +20,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// document whose tile URL is absolute, an OGC WMTS 1.0.0 service under
 /// <c>wmts</c> (<see cref="WmtsService"/>), an OGC WMS 1.3.0 service at
 /// <c>wms</c> (<see cref="WmsService"/>), and optionally a preview page at
-/// the root. With a token, every route lives under <c>/&lt;token&gt;/</c>.
+/// the root. With a token, every route lives under <c>/&lt;token&gt;/</c>,
+/// except the <c>/healthz</c> health check.
 /// </summary>
 /// <remarks>
 /// Every response allows any origin (CORS), so a web map on another local
@@ -77,6 +78,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
+        ServeHost.MapHealth(app);
         if (viewer)
             app.MapGet(prefix + "/", ServeViewerAsync);
 

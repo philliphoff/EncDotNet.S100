@@ -34,6 +34,8 @@
       href: scenarios/tide-above-a-height.md
     - name: Show wind and waves on the chart
       href: weather.md
+    - name: Run s100 in Docker
+      href: docker.md
 - name: Rendering and integration
   items:
     - name: Add S-100 data to a Mapsui app

@@ -1816,7 +1816,10 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(),
             sp.GetRequiredService<ITimelineMapScope>(),
             UiThread.PostBackground,
-            Task.Run));
+            Task.Run,
+            new EncDotNet.S100.Viewer.Services.Tides.TidePredictionsInViewSource(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationListService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.TidePredictionSourceService>())));
         // The S-98 position legend (#1407, legends D17): the Legend tab's first row.
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Legends.PositionLegendService(
             sp.GetRequiredService<IDatasetLoaderService>(),
@@ -1842,6 +1845,14 @@ public partial class App : Application
             timeline.AttachPassage(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>());
+            // Tide predictions lane (#1453, D14), and the view time while
+            // predictions are on with nothing timed loaded.
+            var tideStations = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>().Source;
+            timeline.AttachTidePredictions(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationListService>(),
+                tideStations,
+                sp.GetService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>());
+            _ = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TidePredictionTimeService>();
             return timeline;
         });
         services.AddSingleton<DisplayToolbarViewModel>();

@@ -185,11 +185,16 @@ internal sealed class TideStationSource : IDynamicFeatureSource, IDynamicFeature
             {
                 Refresh();
             }
+
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
     /// <inheritdoc />
     public event EventHandler<DynamicFeaturesChanged>? Changed;
+
+    /// <summary>Raised when <see cref="IsActive"/> changes.</summary>
+    public event EventHandler? ActiveChanged;
 
     /// <summary>Raised after the features were recomputed, on the thread that recomputed them.</summary>
     public event EventHandler? Refreshed;
