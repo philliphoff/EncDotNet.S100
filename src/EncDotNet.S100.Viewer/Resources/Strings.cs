@@ -395,6 +395,7 @@ internal static partial class Strings
     public static string Pick_Chart_Title_SurfaceCurrentSpeed => Get(nameof(Pick_Chart_Title_SurfaceCurrentSpeed));
     public static string Pick_Chart_Title_SurfaceCurrentDirection => Get(nameof(Pick_Chart_Title_SurfaceCurrentDirection));
     public static string Pick_Chart_Axis_Time => Get(nameof(Pick_Chart_Axis_Time));
+    public static string Pick_Chart_Axis_TimeLocal => Get(nameof(Pick_Chart_Axis_TimeLocal));
     public static string Pick_Chart_Axis_HeightMetres => Get(nameof(Pick_Chart_Axis_HeightMetres));
     public static string Pick_Chart_Axis_SpeedKnots => Get(nameof(Pick_Chart_Axis_SpeedKnots));
     public static string Pick_Chart_Axis_DirectionDegrees => Get(nameof(Pick_Chart_Axis_DirectionDegrees));

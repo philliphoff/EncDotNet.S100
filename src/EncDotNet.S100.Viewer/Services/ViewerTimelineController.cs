@@ -176,6 +176,9 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Lanes = Lanes(),
             Passage = Passage(),
             FollowPassage = _timeline.Passage?.IsFollowing == true,
+            TidePredictions = _timeline.TidePredictions is { HasLane: true, StationId: { } stationId } tides
+                ? new TimelineTidePredictionsState(stationId, tides.StationText, tides.Marks)
+                : null,
             Offset = _timeline.OffsetText,
             Message = _timeline.HasStatusMessage ? _timeline.StatusMessage : null,
             MessageAction = _timeline.HasStatusAction ? _timeline.StatusActionText : null,

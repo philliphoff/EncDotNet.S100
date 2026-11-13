@@ -26,7 +26,7 @@ internal sealed record DepthBasisSourceDto(
 [Description("What the depths and safety contour drawn on the chart are relative to: the status bar's DEPTHS indicator.")]
 internal sealed record DepthBasisDto(
     [property: Description("'none' (no depth-bearing dataset loaded and active: the indicator is hidden), 'charted' (charted depths, relative to each dataset's vertical datum) or 'adjusted' (charted depth + S-104 water level).")] string Kind,
-    [property: Description("Why the chart shows charted depths when water level exists: 'not_applied' (S-104 meets the view, chart adjustment is off) or 'water_level' (adjustment is on but unavailable: see waterLevelStatus); null otherwise.")] string? Reason,
+    [property: Description("Why the chart shows charted depths when water level exists: 'not_applied' (S-104 meets the view, chart adjustment is off) 'water_level' (adjustment is on but unavailable: see waterLevelStatus) or 'product_not_adjusted' (adjustment is on, but every depth source in view is drawn as charted, such as translated S-57 cells); null otherwise.")] string? Reason,
     [property: Description("Set when reason is water_level or kind is adjusted: applied, no_coverage, before_start, after_end, no_data or datum_mismatch, as check_route reports them.")] string? WaterLevelStatus,
     [property: Description("The Timeline's view time the basis was evaluated at (UTC).")] DateTimeOffset? ViewTime,
     [property: Description("The S-104 time step the adjusted chart uses; null unless adjusted.")] DateTime? WaterLevelStepTime,
@@ -79,6 +79,7 @@ internal sealed class GetDepthBasisTool
             {
                 DepthBasisReason.NotApplied => "not_applied",
                 DepthBasisReason.WaterLevel => "water_level",
+                DepthBasisReason.ProductNotAdjusted => "product_not_adjusted",
                 _ => null,
             },
             basis.WaterLevelStatus is { } status ? Status(status) : null,

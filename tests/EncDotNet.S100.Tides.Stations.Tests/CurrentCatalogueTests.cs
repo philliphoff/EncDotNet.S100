@@ -201,6 +201,29 @@ public sealed class CurrentCatalogueTests
     }
 
     [Fact]
+    public async Task CheckForUpdates_ABinNoaaHasNoConstantsFor_IsNotNewData()
+    {
+        // NOAA lists bins 33, 24 and 18 at PUG1701 but its harcon.json has
+        // bin 33 only, so the download keeps PUG1701_33 alone. A fresh
+        // catalogue must not then read as stale.
+        var handler = new FixtureHandler
+        {
+            CurrentStationList = Fixtures.CurrentStationList([.. Fixtures.CurrentStations, "PUG1701_24", "PUG1701_18"]),
+        };
+        var client = Fixtures.Client(handler, Fixtures.CurrentOptions());
+        var catalogue = await client.DownloadCatalogueAsync(cancellationToken: Token);
+        Assert.Null(catalogue.FindCurrentStation("PUG1701_24"));
+
+        var check = await client.CheckForUpdatesAsync(catalogue, Token);
+        Assert.False(check.HasNewerData);
+
+        // A station the catalogue has no bin of is new.
+        handler.CurrentStationList = Fixtures.CurrentStationList([.. Fixtures.CurrentStations, "ACT1616_1"]);
+        var added = await client.CheckForUpdatesAsync(catalogue, Token);
+        Assert.Equal(["ACT1616_1"], added.AddedStationIds);
+    }
+
+    [Fact]
     public void Constructor_RejectsARepeatedCurrentStationId()
     {
         var station = Fixtures.CurrentCatalogue().FindCurrentStation("PUG1701_33")!;

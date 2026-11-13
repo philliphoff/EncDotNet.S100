@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals.Application;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.Services.Tides;
 
@@ -83,7 +84,8 @@ internal sealed class TideStationPortrayal : IDynamicFeaturePortrayal
             Markers.Point(feature.Id, SymbolFor(state.Trend)),
             Heights.Text(
                 feature.Id,
-                string.Create(CultureInfo.InvariantCulture, $"{state.HeightMeters:0.0} m"),
+                // The user's culture, as the current labels and the card use.
+                string.Format(CultureInfo.CurrentCulture, Strings.Tides_MetresFormat, state.HeightMeters),
                 S104CoverageStyle.StationLabelStyle),
         };
         if (!string.IsNullOrWhiteSpace(state.Name))

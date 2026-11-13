@@ -98,6 +98,7 @@ Times use the user's **Local**/**UTC** setting through
 | **Adjusted** *(#1132)* | Adjustment is on and applies somewhere in the view | **DEPTHS** **+ water level 14:20** | Distinct accent, always on |
 | **Adjusted, part of view** *(#1132)* | As above, but the adjusted area doesn't cover all charted depths in view | **DEPTHS** **+ water level 14:20 · part of view** | As Adjusted |
 | **Charted, adjustment unavailable** *(#1132)* | Adjustment is on but can't apply in view: outside S-104 time range, NoData, or datums incompatible | **DEPTHS** **Charted · no water level at 14:20** / **Charted · datum mismatch** | Caution accent |
+| **Charted, product not adjusted** | Adjustment is on and water level is available, but every depth source in view is a translated S-57 cell, which is always drawn as charted | **DEPTHS** **Charted · S-57 not adjusted** | Informational accent |
 
 The second row is the case the trial describes and the reason the issue
 exists: S-104 is on screen, the Timeline is moving, and the chart isn't
@@ -116,6 +117,7 @@ pattern:
 | `Status_DepthBasis_AdjustedPartialFormat` | `+ water level {0} · part of view` |
 | `Status_DepthBasis_NoWaterLevelAtFormat` | `Charted · no water level at {0}` |
 | `Status_DepthBasis_DatumMismatch` | `Charted · datum mismatch` |
+| `Status_DepthBasis_ProductNotAdjustedFormat` | `Charted · {0} not adjusted` |
 | `Label_DepthBasis` | `Depth basis` (automation name) |
 | `Tooltip_DepthBasis` | `What the depths and safety contour on the chart are relative to. Click for the sources, the vertical datum and where water level is applied.` |
 
@@ -144,6 +146,7 @@ longest one that fits:
 | Adjusted, part of view *(#1132)* | **+ water level 14:20 · part of view** | **Part adjusted 14:20** | same as Short |
 | No water level *(#1132)* | **Charted · no water level at 23:40** | **Charted · no water level** | **Charted** + caution icon |
 | Datum mismatch *(#1132)* | **Charted · datum mismatch** | same | **Charted** + caution icon |
+| Product not adjusted | **Charted · S-57 not adjusted** | same | **Charted** + info icon |
 
 Rules:
 

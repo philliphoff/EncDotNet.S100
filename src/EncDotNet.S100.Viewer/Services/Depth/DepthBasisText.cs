@@ -76,6 +76,7 @@ internal static class DepthBasisText
                 DepthBasisTone.Info,
                 true),
             (DepthBasisKind.Charted, DepthBasisReason.WaterLevel) => Unavailable(basis, format),
+            (DepthBasisKind.Charted, DepthBasisReason.ProductNotAdjusted) => ProductNotAdjusted(basis),
             (DepthBasisKind.Adjusted, _) => Adjusted(basis, format),
             _ => throw new NotSupportedException($"The depth basis {basis.Kind}/{basis.Reason} has no text."),
         };
@@ -128,6 +129,21 @@ internal static class DepthBasisText
                 DepthBasisTone.Adjusted,
                 false),
         };
+    }
+
+    // Translated S-57 cells are drawn as charted (#1132), whatever the datum.
+    private static DepthBasisForms ProductNotAdjusted(DepthBasis basis)
+    {
+        var specs = string.Join(", ", basis.NotAdjustedSources
+            .Select(s => s.Spec)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase));
+        return new(
+            string.Format(CultureInfo.CurrentCulture, Strings.Status_DepthBasis_ProductNotAdjustedFormat, specs),
+            string.Format(CultureInfo.CurrentCulture, Strings.Status_DepthBasis_ProductNotAdjustedFormat, specs),
+            Strings.Status_DepthBasis_Charted,
+            DepthBasisTone.Info,
+            true);
     }
 
     private static DepthBasisForms Unavailable(DepthBasis basis, TimeFormat format) =>
