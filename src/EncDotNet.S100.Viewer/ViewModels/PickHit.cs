@@ -35,11 +35,11 @@ internal sealed class PickHit
     public StationTimeSeriesSnapshot? StationSeries { get; init; }
 
     /// <summary>
-    /// WMO / SIGRID-3 ice egg-code projection for the hit when it is an S-411
-    /// sea-ice / lake-ice feature; <c>null</c> for every other feature shape.
-    /// When set, the pick panel renders an egg-code diagram section.
+    /// The hit's pick report content that isn't attribute rows, such as an
+    /// ice egg code (<see cref="IceEggCodeSection"/>). The pick panel shows each
+    /// section through its kind's presenter (<see cref="PickSectionPresenters"/>).
     /// </summary>
-    public IceEggCode? EggCode { get; init; }
+    public IReadOnlyList<PickSection> Sections { get; init; } = [];
 
     /// <summary>
     /// The warning message when the hit is part of a navigational warning

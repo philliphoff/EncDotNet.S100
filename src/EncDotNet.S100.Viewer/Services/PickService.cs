@@ -174,7 +174,7 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
-            hits.Add(BuildHit(info, entry, processor));
+            hits.Add(BuildHit(PickContributorRegistry.Default.Apply(info, processor), entry, processor));
         }
 
         if (hits.Count == 0 && dynamicHits.Count == 0)
@@ -312,7 +312,7 @@ internal sealed class PickService : IPickService
             Geometry = info.Geometry,
             OwningProcessor = processor,
             StationSeries = processor.Spec.Name is "S-104" or "S-111" ? info.StationSeries : null,
-            EggCode = info.EggCode,
+            Sections = info.Sections,
             NavigationalWarning = info.NavigationalWarning,
             NotForNavigation = notForNavigation,
             Credit = credit,
@@ -383,6 +383,7 @@ internal sealed class PickService : IPickService
     {
         if (info is null)
             return false;
+        info = PickContributorRegistry.Default.Apply(info, processor);
 
         Publish(new PickResult([BuildHit(info, datasetFileName, processor)], []));
         return true;

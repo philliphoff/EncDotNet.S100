@@ -76,7 +76,9 @@ public sealed class S100FeatureCatalogue : IDisposable
     {
         ArgumentNullException.ThrowIfNull(dataset);
         ArgumentException.ThrowIfNullOrEmpty(featureRef);
-        return Read(dataset, processor => processor.GetFeatureInfo(featureRef));
+        return Read(dataset, processor => processor.GetFeatureInfo(featureRef) is { } info
+            ? PickContributorRegistry.Default.Apply(info, processor)
+            : null);
     }
 
     private TResult Read<TResult>(S100Dataset dataset, Func<IDatasetProcessor, TResult> read)

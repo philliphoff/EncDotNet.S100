@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Pick sections.** Object Information content that isn't attribute rows
+  now comes through one extension point. `FeatureInfo.Sections` holds a
+  feature's sections; `IPickContributor`s registered in
+  `PickContributorRegistry` add them for any product or source, and each kind
+  is registered in `PickSectionKindRegistry` so MCP can serialize it. The ice
+  egg code is the first: `IceEggCodeContributor` gives an egg code to an S-411
+  sea-ice or lake-ice feature, or to a feature from any other source that
+  carries S-411 concentration codes. `identify_features`, `pick_features` and
+  `describe_feature` now report a feature's `sections`, so agents get the egg
+  code too. `FeatureInfo.EggCode` is obsolete, and
+  `GmlDatasetProcessorBase.BuildEggCode` is gone.
 - **Tide stations in SoundCharts.** A **Tide stations · predicted** row
   under *Other chart overlays* draws NOAA's tide stations from 1:500,000 as
   S-104 gauges with a dashed frame: rising, falling or turning at the view

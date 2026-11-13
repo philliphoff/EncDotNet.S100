@@ -36,7 +36,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private string? _productSpec;
     private bool _hasPick;
     private PickHit? _selectedHit;
-    private EggCodeViewModel? _eggCode;
+    private IReadOnlyList<object> _sections = [];
     private PickLocation? _location;
     private DepthOverTimeViewModel? _locationDepth;
     private string _chartBasisLine = string.Empty;
@@ -852,7 +852,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         Attributes.Clear();
         ClearTextCards();
         References.Clear();
-        _eggCode = null;
+        _sections = [];
         _stationChart = null;
         Location = null;
         LocationDepthSeries = null;
@@ -863,6 +863,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
         OnPropertyChanged(nameof(ShowInlineAttributes));
+        OnPropertyChanged(nameof(SelectedSections));
+        OnPropertyChanged(nameof(HasSections));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
         OnPropertyChanged(nameof(HasMultipleHits));
@@ -885,13 +887,15 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             Attributes.Clear();
             ClearTextCards();
             References.Clear();
-            _eggCode = null;
+            _sections = [];
             OnPropertyChanged(nameof(HasAttributes));
             OnPropertyChanged(nameof(HasTextCards));
             OnPropertyChanged(nameof(HasReferences));
             OnPropertyChanged(nameof(SelectedStationSeries));
             OnPropertyChanged(nameof(HasStationSeries));
             OnPropertyChanged(nameof(ShowInlineAttributes));
+            OnPropertyChanged(nameof(SelectedSections));
+            OnPropertyChanged(nameof(HasSections));
             OnPropertyChanged(nameof(SelectedEggCode));
             OnPropertyChanged(nameof(HasEggCode));
             RaiseIdentityChanged();
@@ -911,11 +915,13 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             References.Add(reference);
         OnPropertyChanged(nameof(HasReferences));
 
-        _eggCode = hit.EggCode is { } egg ? new EggCodeViewModel(egg) : null;
+        _sections = [.. hit.Sections.Select(PickSectionPresenters.Default.Present)];
 
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
         OnPropertyChanged(nameof(ShowInlineAttributes));
+        OnPropertyChanged(nameof(SelectedSections));
+        OnPropertyChanged(nameof(HasSections));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
         RaiseIdentityChanged();
@@ -981,15 +987,25 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasStationSeries => _stationChart is not null;
 
     /// <summary>
-    /// WMO / SIGRID-3 ice egg-code view model attached to
-    /// <see cref="SelectedHit"/>, or <c>null</c> when the selected hit is not
-    /// an S-411 sea-ice / lake-ice feature. Bound by the pick panel's
-    /// egg-code section.
+    /// The view models of <see cref="SelectedHit"/>'s pick sections, one per
+    /// <see cref="PickSection"/>, built by <see cref="PickSectionPresenters"/>:
+    /// an <see cref="EggCodeViewModel"/> for an ice egg code, a
+    /// <see cref="PickSectionRowsViewModel"/> for a kind with no presenter.
+    /// Bound by the pick panel's sections list.
     /// </summary>
-    public EggCodeViewModel? SelectedEggCode => _eggCode;
+    public IReadOnlyList<object> SelectedSections => _sections;
+
+    /// <summary>True when <see cref="SelectedSections"/> isn't empty.</summary>
+    public bool HasSections => _sections.Count > 0;
+
+    /// <summary>
+    /// The ice egg code among <see cref="SelectedSections"/>, or <c>null</c>
+    /// when the selected hit has none.
+    /// </summary>
+    public EggCodeViewModel? SelectedEggCode => _sections.OfType<EggCodeViewModel>().FirstOrDefault();
 
     /// <summary>True when <see cref="SelectedEggCode"/> is non-null.</summary>
-    public bool HasEggCode => _eggCode is not null;
+    public bool HasEggCode => SelectedEggCode is not null;
 
     private void DisposeHitResources()
     {

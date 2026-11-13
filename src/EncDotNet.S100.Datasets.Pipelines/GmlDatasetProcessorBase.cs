@@ -31,7 +31,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor, ILoadedDatasetProjection
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor, ILoadedDatasetProjection, IListedValueDefinitions
     where TFeature : IS100Feature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
@@ -202,14 +202,6 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected virtual IReadOnlyList<FeatureReference> BuildFeatureReferences(TFeature feature) => [];
 
     /// <summary>
-    /// Builds the WMO / SIGRID-3 ice "egg code" projection for a feature, when
-    /// the product supports it. Returns <c>null</c> by default; S-411 overrides
-    /// this to project sea-ice / lake-ice concentration, stage, and form
-    /// attributes into an <see cref="IceEggCode"/> for the pick report.
-    /// </summary>
-    protected virtual IceEggCode? BuildEggCode(TFeature feature) => null;
-
-    /// <summary>
     /// Builds the navigational warning message for a feature, when the
     /// product carries warnings. Returns <c>null</c> by default; S-124
     /// overrides this for <c>NavwarnPart</c> features.
@@ -355,6 +347,10 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
     /// <summary>The feature catalogue decoder, if available.</summary>
     protected FeatureCatalogueDecoder? Decoder => _decoder;
+
+    /// <inheritdoc />
+    public string? ResolveListedValueDefinition(string attributeCode, string rawValue) =>
+        _decoder?.ResolveListedValueDefinition(attributeCode, rawValue);
 
     /// <summary>The dataset file name.</summary>
     protected string FileName => _fileName;
@@ -651,7 +647,6 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
             References = references,
-            EggCode = BuildEggCode(feature),
             NavigationalWarning = BuildNavigationalWarning(feature),
         };
     }

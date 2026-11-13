@@ -258,7 +258,8 @@ var picks = await session.Query.PickAsync(
 ```
 
 It hit-tests each dataset that's currently shown (active, visible, and in time),
-resolves each hit to a full `FeatureInfo`, and samples coverage datasets that
+resolves each hit to a full `FeatureInfo` with its pick sections (such as an
+S-411 egg code), and samples coverage datasets that
 have no vector hit at the session's current time. Results are ordered topmost
 first by the S-98 paint order, then within a dataset by geometry (point, then
 curve, then area) and distance.
