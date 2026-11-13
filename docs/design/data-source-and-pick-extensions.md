@@ -261,6 +261,28 @@ SoundCharts builds from the registry:
 - viewport gating from `Activation`, replacing `DeferredAisFeatureSource` and
   the gating half of `NdbcObservationsOverlay` with one shared wrapper.
 
+As built so far (the library half of slice 7):
+
+- `SourceRegistration`, `SourceRegistry`, `SourceActivation` and
+  `SourceCreationContext` are in `Datasets.Pipelines`, and
+  `SourceRegistry.Default` holds the built-in `S100Sources`:
+  `ndbc.realtime` and `nmea.weather`. The options type is `OptionsType`,
+  with `DefaultOptions` for a new entry. `Category` waits for slice 3, and
+  the secret lookup for slice 8.
+- A host runs a source's processor through `IHostedDatasetProcessor`
+  (Core): `Start`, `IsActive` (pause outside the activation range or while
+  hidden, keeping the features) and `UpdateArea` (the area in view).
+  `DynamicSourceProcessor` implements it by passing each call to a source
+  that implements `IStartableDynamicSource`, `IPausableDynamicSource` or
+  `IAreaFilteredDynamicSource`; NDBC implements all three and NMEA weather
+  the first.
+- A processor built from a registration owns its source and HTTP client,
+  so disposing it stops the source.
+- The NMEA input spec parser moved to the NMEA library as `NmeaInput.Parse`.
+- `AddDataSource`, the shared activation wrapper and the dataset entry
+  origin (D3) are SoundCharts' half of slice 7, along with moving AIS and
+  own-ship onto registrations.
+
 Behaviour that belongs to SoundCharts and not to the data stays there:
 pirate mode, own-ship helm and "take helm" are add-ons layered over a source,
 not part of `SourceRegistration`. The "take helm" action becomes a pick
@@ -734,7 +756,8 @@ Each slice ships on its own and leaves the tree working.
    - `OwnShipRenderer` and `AisVesselRenderer` are obsolete.
      `IDynamicFeatureRenderer` itself stays until slice 7: the overlay host
      and `PortrayedDynamicFeatureRenderer` still go through it.
-7. **`SourceRegistration` and source dataset entries.** Add the registry,
+7. **`SourceRegistration` and source dataset entries.** The library half is
+   built (D4 as built). Add the registry,
    categories for sources and the `DatasetEntry` origin. Move AIS, NDBC,
    NMEA weather and own-ship registrations onto it, with the shared
    activation wrapper.

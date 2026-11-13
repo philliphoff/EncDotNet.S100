@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Sources that aren't files.** A `SourceRegistration` describes a live feed
+  or polled service: its id, name, spec, options and when a host runs it,
+  and `Create` builds its processor from the saved options, loggers, a clock
+  and an HTTP client factory. `SourceRegistry.Default` holds the NDBC
+  observations (`ndbc.realtime`) and own-ship weather from NMEA
+  (`nmea.weather`). A host starts, pauses and points the processor at the
+  area in view through `IHostedDatasetProcessor`, and disposing it stops the
+  source. `NmeaInput.Parse` turns an input spec such as `udp:10110` or
+  `tcp://host:10110` into an NMEA input.
 - **Vessel symbology as a portrayal.** Own-ship and AIS targets are drawn by
   `VesselPortrayal`, a code-defined portrayal of S-100 Part 9 drawing
   instructions, so they render headless and in any backend, not only on the

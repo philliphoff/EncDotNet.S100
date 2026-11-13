@@ -1,4 +1,3 @@
-using System.Net;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources.Nmea;
 using EncDotNet.S100.Nmea;
@@ -34,7 +33,7 @@ internal sealed class NmeaWeatherOverlay : IAsyncDisposable
     public const string InputEnvironmentVariable = "SOUNDCHARTS_NMEA_INPUT";
 
     /// <summary>The pause between replayed lines: 100 ms, about an instrument bus's rate.</summary>
-    public static readonly TimeSpan ReplayLineInterval = TimeSpan.FromMilliseconds(100);
+    public static readonly TimeSpan ReplayLineInterval = NmeaInput.ReplayLineInterval;
 
     private readonly IOwnShipPositionProvider? _ownShip;
     private readonly Func<bool> _followOwnShip;
@@ -89,47 +88,7 @@ internal sealed class NmeaWeatherOverlay : IAsyncDisposable
     /// </summary>
     /// <param name="spec">The spec.</param>
     /// <returns>The input, or <see langword="null"/> when the spec is empty or not understood.</returns>
-    public static INmeaLineSource? ParseInput(string? spec)
-    {
-        if (string.IsNullOrWhiteSpace(spec))
-            return null;
-        spec = spec.Trim();
-
-        if (spec.Equals("udp", StringComparison.OrdinalIgnoreCase))
-            return new NmeaUdpLineSource();
-
-        if (spec.StartsWith("udp:", StringComparison.OrdinalIgnoreCase) && !spec.StartsWith("udp://", StringComparison.OrdinalIgnoreCase))
-            return int.TryParse(spec.AsSpan(4), out int udpPort) && udpPort is > 0 and <= IPEndPoint.MaxPort
-                ? new NmeaUdpLineSource(udpPort)
-                : null;
-
-        if (Uri.TryCreate(spec, UriKind.Absolute, out var uri))
-        {
-            switch (uri.Scheme)
-            {
-                case "udp":
-                    return new NmeaUdpLineSource(
-                        uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port,
-                        IPAddress.TryParse(uri.Host, out var address) ? address : null);
-                case "tcp":
-                    return string.IsNullOrEmpty(uri.Host)
-                        ? null
-                        : new NmeaTcpLineSource(uri.Host, TimeProvider.System, uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port);
-                case "file":
-                    return Replay(uri.LocalPath);
-                default:
-                    // A Windows path such as C:\logs\nmea.txt parses as scheme "c".
-                    if (uri.Scheme.Length > 1)
-                        return null;
-                    break;
-            }
-        }
-
-        return Replay(spec);
-    }
-
-    private static NmeaReplayFile Replay(string path) =>
-        new(Path.GetFullPath(path), new NmeaReplayOptions { LineInterval = ReplayLineInterval, Loop = true });
+    public static INmeaLineSource? ParseInput(string? spec) => NmeaInput.Parse(spec);
 
     internal static OwnShipReference ToReference(OwnShipPosition fix) => new(
         new GeoPosition(fix.Latitude, fix.Longitude),
