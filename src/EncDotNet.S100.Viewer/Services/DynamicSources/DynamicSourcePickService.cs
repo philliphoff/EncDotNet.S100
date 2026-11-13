@@ -16,11 +16,17 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 internal sealed class DynamicSourcePickService : IDynamicSourcePickService
 {
     private readonly IS100DynamicSourceRegistry _registry;
+    private readonly IReadOnlyList<IDynamicPickCardFactory> _cards;
 
-    public DynamicSourcePickService(IS100DynamicSourceRegistry registry)
+    /// <summary>Creates the service.</summary>
+    /// <param name="registry">The dynamic sources to hit-test.</param>
+    /// <param name="cards">Makes the rich cards of features that have one, such as predicted tide stations.</param>
+    public DynamicSourcePickService(IS100DynamicSourceRegistry registry, IEnumerable<IDynamicPickCardFactory> cards)
     {
         ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(cards);
         _registry = registry;
+        _cards = [.. cards];
     }
 
     /// <inheritdoc />
@@ -34,9 +40,19 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
         var hits = new List<DynamicPickHit>(raw.Count);
         foreach (var hit in raw)
         {
-            hits.Add(Project(hit));
+            hits.Add(Project(hit) with { Card = CardFor(hit) });
         }
         return hits;
+    }
+
+    private IDynamicPickCard? CardFor(DynamicSourceHit hit)
+    {
+        foreach (var factory in _cards)
+        {
+            if (factory.CreateCard(hit) is { } card)
+                return card;
+        }
+        return null;
     }
 
     private static DynamicPickHit Project(DynamicSourceHit hit)

@@ -23,7 +23,7 @@ internal static class TestSettings
         yield return new AdvancedSettingsPageViewModel(settings, Reset(settings: null).Workflow, new ShadUI.DialogManager());
         yield return new GeneralSettingsPageViewModel(settings);
         yield return new AppearanceSettingsPageViewModel(settings);
-        yield return new ChartSettingsPageViewModel(settings);
+        yield return new ChartSettingsPageViewModel(settings, new TideStationListViewModel(TideTestLists.Missing()));
         yield return new VesselsSettingsPageViewModel(settings);
         yield return new IntegrationsSettingsPageViewModel(settings);
         if (keys is not null)

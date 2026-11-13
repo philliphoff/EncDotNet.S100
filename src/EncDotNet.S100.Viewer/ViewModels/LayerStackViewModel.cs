@@ -87,6 +87,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
 
     private readonly Func<string, string?>? _inactiveReason;
     private readonly Action<string>? _showLegend;
+    private readonly Func<string, string?>? _dynamicLegend;
 
     public LayerStackViewModel(
         IDatasetLoaderService loader,
@@ -109,7 +110,10 @@ internal sealed class LayerStackViewModel : ViewModelBase
         _dynamicSources = dynamicSources;
         _timeFormat = timeFormat;
         if (legend is not null)
+        {
             _showLegend = id => legend.Show(id);
+            _dynamicLegend = legend.SectionIdOfDynamicSource;
+        }
         _ = _timeFormat; // reserved for PR-L4 per-entry timestamp display
         _loader.LayerStackChanged += OnLayerStackChanged;
         if (_dynamicSources is not null)
@@ -186,7 +190,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
 
             // Dynamic rows: placed below the dataset rows in the panel.
             var dynamicChildren = dynamicForPlane
-                .Select(info => (ViewModelBase)new LayerStackDynamicEntryViewModel(_dynamicSources!, info));
+                .Select(info => (ViewModelBase)new LayerStackDynamicEntryViewModel(_dynamicSources!, info, _dynamicLegend?.Invoke(info.Id), _showLegend));
 
             var children = datasetChildren.Concat(dynamicChildren).ToList();
 
@@ -292,12 +296,21 @@ internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
             if (_registry.GetVisible(SourceId) == value) return;
             _registry.SetVisible(SourceId, value);
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasLegend));
+            ShowLegendCommand.NotifyCanExecuteChanged();
         }
     }
 
+    /// <summary>Creates the row of one dynamic source.</summary>
+    /// <param name="registry">Reads and sets the source's visibility.</param>
+    /// <param name="info">The source.</param>
+    /// <param name="legendSectionId">The Legend section the row links to while on; null for none.</param>
+    /// <param name="showLegend">Opens the Legend tab at a section id; null where there is no Legend tab.</param>
     public LayerStackDynamicEntryViewModel(
         IS100DynamicSourceRegistry registry,
-        DynamicSourceRegistrationInfo info)
+        DynamicSourceRegistrationInfo info,
+        string? legendSectionId,
+        Action<string>? showLegend)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(info);
@@ -305,7 +318,30 @@ internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
         SourceId = info.Id;
         DisplayName = info.DisplayName;
         Description = info.Description;
+        LegendSectionId = legendSectionId;
+        _showLegend = showLegend;
+        ShowLegendCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
+            () => _showLegend!(LegendSectionId!),
+            () => HasLegend);
     }
+
+    private readonly Action<string>? _showLegend;
+
+    /// <summary>The Legend section the row's <b>Legend</b> link opens (legends D8), or null.</summary>
+    public string? LegendSectionId { get; }
+
+    /// <summary>Whether the row shows the <b>Legend</b> link: it has a section and is on.</summary>
+    public bool HasLegend => LegendSectionId is not null && _showLegend is not null && IsActive;
+
+    /// <summary>The link's accessible name, "Show the legend of Tide stations · predicted".</summary>
+    public string LegendLinkName => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, Strings.LayerStack_LegendLinkNameFormat, DisplayName);
+
+    /// <summary>The link's automation id, <c>LayerStack.DynamicEntry.{SourceId}.Legend</c>.</summary>
+    public string LegendAutomationId => $"LayerStack.DynamicEntry.{SourceId}.Legend";
+
+    /// <summary>Opens the Legend tab at this source's section.</summary>
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ShowLegendCommand { get; }
 }
 
 /// <summary>

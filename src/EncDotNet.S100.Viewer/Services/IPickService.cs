@@ -56,6 +56,23 @@ internal interface IPickService
         IReadOnlyList<GeographicPickFeature> features);
 
     /// <summary>
+    /// As <see cref="PresentGeographicPick(double, double, IReadOnlyList{GeographicPickFeature})"/>,
+    /// with the dynamic-source features at the point too (a predicted tide
+    /// station, an AIS target), as a click shows them. Must be called on the
+    /// UI thread.
+    /// </summary>
+    /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
+    /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
+    /// <param name="features">Resolved features under the pick, most-specific first.</param>
+    /// <param name="dynamicHits">The dynamic-source features at the point.</param>
+    void PresentGeographicPick(
+        double latitude,
+        double longitude,
+        IReadOnlyList<GeographicPickFeature> features,
+        IReadOnlyList<ViewModels.DynamicPickHit> dynamicHits) =>
+        PresentGeographicPick(latitude, longitude, features);
+
+    /// <summary>
     /// Resolves an xlink-style reference from the currently selected hit
     /// to its target feature within the same dataset and re-opens the
     /// Object Info panel on it. Returns <c>true</c> when navigation

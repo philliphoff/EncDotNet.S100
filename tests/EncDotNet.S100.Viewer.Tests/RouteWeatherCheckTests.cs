@@ -220,7 +220,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
         var vm = new ViewerSettingsService(settings);
-        var page = new ChartSettingsPageViewModel(vm);
+        var page = new ChartSettingsPageViewModel(vm, new TideStationListViewModel(TideTestLists.Missing()));
         var raised = 0;
         vm.RouteWeatherLimitsChanged += () => raised++;
 
@@ -258,7 +258,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
     public void The_settings_page_has_the_two_limit_boxes()
     {
         var vm = new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsFile, RouteMaxWindKnots = 28 });
-        using var host = ViewHost.Show(new ChartSettingsPage { DataContext = new ChartSettingsPageViewModel(vm) }, width: 500, height: 2400);
+        using var host = ViewHost.Show(new ChartSettingsPage { DataContext = new ChartSettingsPageViewModel(vm, new TideStationListViewModel(TideTestLists.Missing())) }, width: 500, height: 2400);
 
         var wind = host.Find<TextBox>("Settings.RouteMaxWind");
         var wave = host.Find<TextBox>("Settings.RouteMaxWave");

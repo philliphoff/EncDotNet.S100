@@ -38,6 +38,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(CheckStateDto))]
 [JsonSerializable(typeof(RouteFindingsDto))]
 [JsonSerializable(typeof(WeatherDisplayDto))]
+[JsonSerializable(typeof(TideDisplayDto))]
 [JsonSerializable(typeof(RouteWeatherSettingsDto))]
 [JsonSerializable(typeof(MeasureDto))]
 [JsonSerializable(typeof(ClearanceStateDto))]

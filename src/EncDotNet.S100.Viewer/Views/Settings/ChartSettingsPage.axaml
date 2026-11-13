@@ -200,6 +200,31 @@
                 <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_UseTidePredictions}" TextWrapping="Wrap" />
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding UseTidePredictions}" AutomationProperties.AutomationId="Settings.UseTidePredictions" AutomationProperties.Name="{x:Static loc:Strings.Label_UseTidePredictions}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_UseTidePredictions}"/>
             </Grid>
+            <!-- The station list's date and refresh (tide predictions D15, Q7b). -->
+            <StackPanel Spacing="4" Margin="0,-4,0,0" DataContext="{Binding TideStationList}" x:DataType="vm:TideStationListViewModel">
+                <TextBlock Text="{Binding Text}"
+                           FontSize="11"
+                           Opacity="0.7"
+                           TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="Settings.TideStationList.Text" />
+                <TextBlock Text="{Binding Note}"
+                           IsVisible="{Binding HasNote}"
+                           FontSize="11"
+                           Foreground="{DynamicResource WarningColor}"
+                           TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="Settings.TideStationList.Note" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="{Binding DownloadLabel}"
+                            Command="{Binding DownloadCommand}"
+                            FontSize="12"
+                            AutomationProperties.AutomationId="Settings.TideStationList.Download" />
+                    <Button Content="{x:Static loc:Strings.Tides_List_Cancel}"
+                            Command="{Binding CancelCommand}"
+                            IsVisible="{Binding IsDownloading}"
+                            FontSize="12"
+                            AutomationProperties.AutomationId="Settings.TideStationList.Cancel" />
+                </StackPanel>
+            </StackPanel>
 
             <!-- Weather on a route (#1093): Check route's wind and wave limits,
                  kept with the mariner settings. -->

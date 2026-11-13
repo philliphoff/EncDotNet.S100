@@ -63,6 +63,16 @@ internal sealed record DynamicPickHit
     /// </summary>
     public bool IsAisTarget =>
         PickReportViewModel.TryGetAisMmsi(this, out _);
+
+    /// <summary>
+    /// The feature's rich card, shown in place of <see cref="Attributes"/>,
+    /// such as a predicted tide station's (tide predictions design D8); null
+    /// for the generic list.
+    /// </summary>
+    public Services.DynamicSources.IDynamicPickCard? Card { get; init; }
+
+    /// <summary>Whether the hit shows the generic list of values: it has no <see cref="Card"/>.</summary>
+    public bool ShowsAttributes => Card is null;
 }
 
 /// <summary>

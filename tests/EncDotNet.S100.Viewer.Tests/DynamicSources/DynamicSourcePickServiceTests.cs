@@ -48,7 +48,7 @@ public class DynamicSourcePickServiceTests
     [Fact]
     public void Pick_ReturnsEmpty_WhenNoSourcesVisible()
     {
-        var sut = new DynamicSourcePickService(new FakeRegistry());
+        var sut = new DynamicSourcePickService(new FakeRegistry(), []);
 
         var hits = sut.Pick(ToMercator(Lat, Lon), resolution: 10.0);
 
@@ -89,7 +89,7 @@ public class DynamicSourcePickServiceTests
         });
         registry.Visible.Add(source);
 
-        var sut = new DynamicSourcePickService(registry);
+        var sut = new DynamicSourcePickService(registry, []);
         var hits = sut.Pick(ToMercator(Lat, Lon), resolution: 10.0);
 
         var hit = Assert.Single(hits);
@@ -130,7 +130,7 @@ public class DynamicSourcePickServiceTests
         });
         registry.Visible.Add(source);
 
-        var sut = new DynamicSourcePickService(registry);
+        var sut = new DynamicSourcePickService(registry, []);
         var hits = sut.Pick(ToMercator(Lat, Lon), resolution: 10.0);
 
         Assert.Equal("ownship", Assert.Single(hits).DisplayLabel);
@@ -170,7 +170,7 @@ public class DynamicSourcePickServiceTests
                 },
             ],
         });
-        var sut = new DynamicSourcePickService(registry);
+        var sut = new DynamicSourcePickService(registry, []);
 
         var hit = Assert.Single(sut.Pick(ToMercator(Lat, Lon), resolution: 10.0));
 

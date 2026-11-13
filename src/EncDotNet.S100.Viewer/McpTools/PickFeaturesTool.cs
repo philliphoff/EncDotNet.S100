@@ -40,7 +40,15 @@ internal sealed record PickFeaturesResult(
     [property: Description("Ranked matches: drawn features by drawing priority, highest first, where the dataset was portrayed (S-98 15.1); then most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] IReadOnlyList<IdentifyMatch> Features,
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated,
-    [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false);
+    [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false,
+    [property: Description("With select=true, the live overlay features at the point that Object information shows too, such as a predicted tide station or an AIS target; empty otherwise.")] IReadOnlyList<PickDynamicFeature>? DynamicFeatures = null);
+
+/// <summary>A live overlay feature a <c>pick_features</c> select showed.</summary>
+[Description("A live overlay feature at the pick: its overlay and its label.")]
+internal sealed record PickDynamicFeature(
+    [property: Description("The overlay's id, such as 'tide-stations' or 'ndbc'.")] string SourceId,
+    [property: Description("The feature's id in the overlay, such as 'tide:9447130'.")] string FeatureId,
+    [property: Description("The feature's label, such as the station name.")] string Label);
 
 /// <summary>
 /// Resolves the vector features under a screen pixel (or a geographic
@@ -168,7 +176,8 @@ internal sealed class PickFeaturesTool
         }
 
         var selected = false;
-        if (request.Select && _presenter is not null && value.Features.Count > 0)
+        IReadOnlyList<PickDynamicFeature> dynamicFeatures = [];
+        if (request.Select && _presenter is not null)
         {
             var refs = new GeographicPickFeature[value.Features.Count];
             for (var i = 0; i < value.Features.Count; i++)
@@ -177,8 +186,9 @@ internal sealed class PickFeaturesTool
                 refs[i] = new GeographicPickFeature(match.DatasetId.Value, match.FeatureId);
             }
 
-            _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
-            selected = true;
+            var dynamicHits = _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
+            dynamicFeatures = [.. dynamicHits.Select(h => new PickDynamicFeature(h.SourceId, h.FeatureId, h.DisplayLabel))];
+            selected = refs.Length > 0 || dynamicHits.Count > 0;
         }
 
         return ToolResult<PickFeaturesResult>.Ok(new PickFeaturesResult(
@@ -188,7 +198,8 @@ internal sealed class PickFeaturesTool
             value.Features,
             value.TotalMatched,
             value.Truncated,
-            selected));
+            selected,
+            dynamicFeatures));
     }
 
     private static ToolError? ResolvePixel(PickFeaturesRequest request)

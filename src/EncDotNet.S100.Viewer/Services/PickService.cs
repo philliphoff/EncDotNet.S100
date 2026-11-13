@@ -144,9 +144,18 @@ internal sealed class PickService : IPickService
     public void PresentGeographicPick(
         double latitude,
         double longitude,
-        IReadOnlyList<GeographicPickFeature> features)
+        IReadOnlyList<GeographicPickFeature> features) =>
+        PresentGeographicPick(latitude, longitude, features, []);
+
+    /// <inheritdoc />
+    public void PresentGeographicPick(
+        double latitude,
+        double longitude,
+        IReadOnlyList<GeographicPickFeature> features,
+        IReadOnlyList<DynamicPickHit> dynamicHits)
     {
         ArgumentNullException.ThrowIfNull(features);
+        ArgumentNullException.ThrowIfNull(dynamicHits);
 
         using var __cmd = ViewerObservability.BeginCommand("pick.geographic");
 
@@ -168,13 +177,13 @@ internal sealed class PickService : IPickService
             hits.Add(BuildHit(info, entry, processor));
         }
 
-        if (hits.Count == 0)
+        if (hits.Count == 0 && dynamicHits.Count == 0)
         {
             Publish(PickResult.Empty);
             return;
         }
 
-        Publish(new PickResult(hits, [], new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude)));
+        Publish(new PickResult(hits, dynamicHits, new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude)));
     }
 
     private bool TryResolveProcessorByDisplayName(
