@@ -368,13 +368,23 @@ s100 render warnings.gml out.txt --format json
 s100 tiles export <dataset> -o <output> [options]
 s100 tiles export --layer <dataset> [--layer <dataset> ...] -o <output> [options]
 s100 tiles export <exchange-set> -o <output> [options]
+s100 tiles export <folder> -o <output> [options]
 ```
 
 `tiles export` renders datasets as raster tiles on the XYZ Web Mercator grid
 that MapLibre, Leaflet and OpenLayers use. The tiles carry the S-100 portrayal
 itself (symbols, scale minimums and palettes), so a web map shows the chart
 without styling it. It takes the same three input forms as
-[`render`](#render), and `-o` is required.
+[`render`](#render), and `-o` is required. It also takes a folder of datasets:
+
+- **Folder.** Pass any other folder, and every dataset in it and its
+  subfolders is tiled, as [`mcp serve`](#mcp-serve) finds them. An S-100
+  exchange set inside it is read through its `CATALOG.XML`. An S-57 exchange
+  set (an `ENC_ROOT` folder holding a `CATALOG.031`) is read as a folder of
+  cells, whether you pass it, its `CATALOG.031`, or a folder above it, or name
+  it with `--from`. Loose S-101 cells get their update files, as a single cell
+  does, but cells in an S-100 exchange set don't. A dataset that can't be
+  opened or tiled is skipped with a warning.
 
 The container comes from the output path:
 
@@ -400,7 +410,7 @@ Set `--container` to choose the container whatever the extension. An existing
 |---|---|---|
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
 | `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
-| `--only <specs>` | all | Exchange-set form only. Tiles only these product specifications, comma-separated. |
+| `--only <specs>` | all | Exchange-set and folder forms only. Tiles only these product specifications, comma-separated. |
 | `-o`, `--output <path>` | required | A folder, a `.pmtiles` file or a `.mbtiles` file. Its parent folder must exist. |
 | `--container <kind>` | from the output | `xyz` (a folder), `pmtiles` or `mbtiles`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
@@ -423,7 +433,7 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--metatile <tiles>` | `4` | Renders blocks of this many tiles square at once, then cuts them apart. |
 | `--parallel <workers>` | processor count | Number of blocks rendered at once. |
 | `-y`, `--yes` | off | Writes a tile set of more than 100,000 tiles without asking. |
-| `--no-updates` | off | Tiles an S-101 base cell, given on its own or with `--layer`, without its update files. |
+| `--no-updates` | off | Tiles an S-101 base cell, given on its own, with `--layer` or loose in a folder, without its update files. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
@@ -497,6 +507,7 @@ s100 tiles serve <tile-set> [options]
 s100 tiles serve <dataset> [options]
 s100 tiles serve --layer <dataset> [--layer <dataset> ...] [options]
 s100 tiles serve <exchange-set> [options]
+s100 tiles serve <folder> [options]
 ```
 
 `tiles serve` serves raster tiles over HTTP on the standard XYZ URLs, so a web
@@ -509,11 +520,13 @@ map running on this computer can use them as a tile source. It serves either:
   raster tiles are served, not vector tiles.
 - **Datasets**, rendered when each tile is first asked for. It takes the same
   inputs and display options as `tiles export`: one dataset, repeated
-  `--layer`, or an exchange set. Nothing has to be built in advance, and the
-  tiles are the same as an export of the same datasets would hold.
+  `--layer`, an exchange set, or a folder of datasets. Nothing has to be built
+  in advance, and the tiles are the same as an export of the same datasets
+  would hold.
 
-A folder that isn't an exchange set is read as a tile set, so serve a folder of
-datasets with `--layer` instead.
+A folder is served as a built tile set only when it looks like one: it holds a
+`tiles.json`, or numbered `{z}/{x}` subfolders. Any other folder is searched for
+datasets, as `tiles export` searches it.
 
 When it renders datasets, `tiles serve` renders the block of `--metatile` ×
 `--metatile` tiles around a requested tile and keeps every tile of the block in
@@ -522,7 +535,8 @@ memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
 
 While it serves datasets, `tiles serve` checks their files every `--refresh`
 seconds (default 10) and reopens them when they change: when you copy in a new
-edition, add S-101 update files, or add datasets to a served exchange set. It
+edition, add S-101 update files, or add or remove datasets in a served
+exchange set or folder. It
 waits until a change has held for two checks in a row, so a file still being
 copied isn't read half-written. The new data is opened and portrayed while the
 old keeps serving, then tiles are rendered from it with an empty cache. If it
@@ -534,7 +548,7 @@ With `--cache-dir`, rendered tiles are also kept in that folder (in its
 `served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
 the data and settings: each input file's path, size and write time (S-101
-update files and the whole of an exchange set included), the display and
+update files and the whole of an exchange set or folder included), the display and
 format options, and the `s100` version. Change any of them and new tiles are
 rendered, so a kept tile is never stale. The folder holds up to
 `--cache-dir-mb`, least recently used tiles going first, including those of
