@@ -121,6 +121,40 @@ docker compose up -d
 first start portrays every dataset before it serves, so `start_period` allows
 for a large exchange set.
 
+## Limit memory
+
+To cap a container's memory, pass `--memory` to `docker run`, or set
+`mem_limit` in Compose. The image runs .NET's workstation garbage collector,
+which keeps the .NET heap within 75% of the container's limit and leaves the
+rest for the drawing library's own memory. It needs no settings of its own.
+
+Most of the memory `tiles serve` uses holds the portrayed datasets, so it
+grows with the number of datasets it renders. Serving the 186 Massachusetts
+cells in [Serve prebuilt tiles](#serve-prebuilt-tiles), for Boston Harbor:
+
+| Memory limit | Healthy after | Peak memory |
+|---|---|---|
+| 4 GB | 21 s | 1.7 GB |
+| 2 GB | 23 s | 1.5 GB |
+| 1 GB | never | |
+
+Below what the datasets need, `tiles serve` doesn't stop with an error: it
+spends its time reclaiming memory and never answers. A health check with a
+`start_period`, as in [Run with Docker Compose](#run-with-docker-compose),
+shows this as `unhealthy`. To serve with less memory:
+
+- **Pass `--bbox`.** Datasets that can't draw in its tiles aren't portrayed.
+  Without it, the same server portrays all 186 cells and needs 3 GB.
+- **Pass `--only`** to serve only some product specifications from a folder.
+- **Lower `--cache-mb`**, the memory kept for rendered tiles (256 MB by
+  default). Keep tiles on disk with `--cache-dir /cache` instead.
+- **Serve prebuilt tiles.** The server then needs only tens of megabytes,
+  whatever the charts. See [Serve prebuilt tiles](#serve-prebuilt-tiles).
+
+`tiles export` portrays the same datasets, so it needs a similar limit, but
+only while it runs: the Boston Harbor export takes 23 s under 2 GB. It can run
+on another computer.
+
 ## Serve prebuilt tiles
 
 `tiles serve` over datasets portrays every dataset when it starts and renders
@@ -189,15 +223,16 @@ A tile set holds one palette. To serve day and night tiles, export each to its
 own archive with `--palette`, and run a `tiles serve` for each.
 
 As a rough guide, here are 186 NOAA ENC cells around Massachusetts, cut to
-Boston Harbor (`--bbox -71.12,42.28,-70.88,42.42`, zoom 10 to 16), with the
-container limited to 4 CPUs and 4 GB of memory on an arm64 Mac:
+Boston Harbor (`--bbox -71.12,42.28,-70.88,42.42`, zoom 11 to 16), with the
+container limited to 4 CPUs and 4 GB of memory on an arm64 Mac. `--bbox`
+leaves out 123 of the cells, which can't draw in its tiles:
 
 | | Prebuilt | Rendered on demand |
 |---|---|---|
-| Export | 39 s, once: 1,992 tiles, 23 MB | none |
-| Healthy after starting | 1 s | 39 s |
-| First request for each of 311 tiles | median 2 ms, slowest 13 ms | median 2 ms, slowest 269 ms |
-| Memory while serving | 37 MB | 2.5 GB |
+| Export | 22 s, once: 1,992 tiles, 23 MB | none |
+| Healthy after starting | 1 s | 21 s |
+| First request for each of 311 tiles | median 2 ms, slowest 13 ms | median 2 ms, slowest 111 ms |
+| Memory while serving | 37 MB | 1.7 GB |
 
 A Raspberry Pi's cores are slower than a Mac's, so expect the export and the
 on-demand start to take longer there. Rendering on demand needs memory for
