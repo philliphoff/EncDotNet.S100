@@ -47,7 +47,7 @@ internal sealed class TimelineViewTime : IViewTime
     }
 
     /// <inheritdoc />
-    public DateTimeOffset Current => _time is { IsActive: true, CurrentTime: { } t }
+    public DateTimeOffset Current => _time is { HasViewTime: true, CurrentTime: { } t }
         ? new DateTimeOffset(t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : DateTime.SpecifyKind(t, DateTimeKind.Utc))
         : _clock.GetUtcNow();
 

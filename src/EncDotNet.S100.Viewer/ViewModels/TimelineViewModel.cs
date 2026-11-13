@@ -186,8 +186,11 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// <summary>True when the step controls are shown: whenever the timeline is active.</summary>
     public bool AreStepButtonsVisible => IsActive;
 
-    /// <summary>True when the timeline panel should be visible.</summary>
-    public bool IsActive => _service.IsActive;
+    /// <summary>
+    /// True when the timeline panel should be visible: a timed dataset is
+    /// loaded, or open-ended predictions give the view time a meaning (D14).
+    /// </summary>
+    public bool IsActive => _service.HasViewTime;
 
     /// <summary>
     /// Data-coverage ranges expressed as fractions of the slider extent

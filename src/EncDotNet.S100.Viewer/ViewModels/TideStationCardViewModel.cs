@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Navigation;
@@ -150,6 +151,15 @@ internal sealed class TideStationCardViewModel : StationTimeSeriesViewModel, Ser
 
     /// <summary>The station's name.</summary>
     public string Title => _station.Name;
+
+    /// <inheritdoc />
+    /// <remarks>The station's cell, outlined while it's picked (D13).</remarks>
+    public IReadOnlyList<GeoPosition>? Outline => _outline ??= TideStationCell.Outline(
+        _catalogue,
+        _station,
+        id => _catalogue.TryCreatePrediction(id, VerticalDatum.MeanLowerLowWater) is not null);
+
+    private IReadOnlyList<GeoPosition>? _outline;
 
     /// <summary>The station id.</summary>
     public string NoaaId => _station.Id;

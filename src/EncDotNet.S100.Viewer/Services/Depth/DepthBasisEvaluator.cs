@@ -35,7 +35,25 @@ internal sealed record DepthBasisInputs(
     IReadOnlyList<DepthBasisDataset> Datasets,
     GeoBounds? View,
     DateTimeOffset ViewTime,
-    IWaterLevelAdjustmentState Adjustment);
+    IWaterLevelAdjustmentState Adjustment,
+    TidePredictionsInView Predictions);
+
+/// <summary>Tide predictions as the DEPTHS indicator sees them (tide predictions design D2, D9, D15).</summary>
+/// <param name="InUse">Whether predictions are a water-level source now.</param>
+/// <param name="Stations">The stations in reach of the view, as "Seattle 9447130", nearest the centre first.</param>
+/// <param name="VerticalDatumCode">The datum predictions are on (MLLW).</param>
+/// <param name="Stale">Whether NOAA has newer data than the list.</param>
+/// <param name="ListDate">The list's date.</param>
+internal sealed record TidePredictionsInView(
+    bool InUse,
+    IReadOnlyList<string> Stations,
+    int? VerticalDatumCode,
+    bool Stale,
+    DateTimeOffset? ListDate)
+{
+    /// <summary>No station list, or no stations near the view.</summary>
+    public static TidePredictionsInView None { get; } = new(false, [], null, false, null);
+}
 
 /// <summary>
 /// Decides what the depths on the chart are relative to (#1191): every rule
@@ -49,6 +67,9 @@ internal static class DepthBasisEvaluator
 
     /// <summary>The water-level product.</summary>
     internal const string WaterLevelSpec = "S-104";
+
+    /// <summary>The spec of the predicted water-level row (MCP <c>spec: "prediction"</c>, D17).</summary>
+    internal const string PredictionSpec = "prediction";
 
     /// <summary>The depth products chart-wide adjustment applies to (#1132).</summary>
     internal static readonly IReadOnlySet<string> AdjustableSpecs =
@@ -88,13 +109,34 @@ internal static class DepthBasisEvaluator
             .Select(d => new DepthBasisSource(d.DisplayName, d.Spec, d.VerticalDatumCode, d.Start, d.End, d.WaterLevelKind, d.Run))
             .ToList();
 
+        // Predictions apply only where no S-104 covers (D1): one row for the
+        // stations in reach of the view.
+        var predictions = inputs.Predictions;
+        var s104InView = waterLevelSources.Count > 0;
+        var offers = !predictions.InUse && !s104InView && predictions.Stations.Count > 0;
+        if (predictions.InUse && predictions.Stations.Count > 0)
+        {
+            waterLevelSources.Add(new DepthBasisSource(
+                WaterLevelSourceInfo.PredictionDatasetId,
+                PredictionSpec,
+                predictions.VerticalDatumCode,
+                Kind: WaterLevelSourceKind.Prediction));
+        }
+
         var datum = Agreement(depthSources, waterLevelSources);
         var adjustment = inputs.Adjustment.IsEnabled ? inputs.Adjustment.Current : null;
+        DepthBasis With(DepthBasis basis) => basis with
+        {
+            PredictedStations = predictions.InUse ? predictions.Stations : [],
+            OffersPredictions = offers,
+            PredictionsStale = predictions.InUse && predictions.Stale,
+            StationListDate = predictions.ListDate,
+        };
 
         if (adjustment is not { AppliedTime: { } applied })
         {
             // Off, or on with nothing drawn yet: the chart is charted.
-            return new DepthBasis(
+            return With(new DepthBasis(
                 DepthBasisKind.Charted,
                 waterLevelSources.Count > 0 ? DepthBasisReason.NotApplied : DepthBasisReason.None,
                 null,
@@ -103,10 +145,10 @@ internal static class DepthBasisEvaluator
                 true,
                 datum,
                 depthSources,
-                waterLevelSources);
+                waterLevelSources));
         }
 
-        DepthBasis Charted(WaterLevelStatus status, DatumAgreement? agreement, IReadOnlyList<DepthBasisSource>? notAdjusted = null) => new(
+        DepthBasis Charted(WaterLevelStatus status, DatumAgreement? agreement, IReadOnlyList<DepthBasisSource>? notAdjusted = null) => With(new(
             DepthBasisKind.Charted,
             DepthBasisReason.WaterLevel,
             status,
@@ -116,7 +158,7 @@ internal static class DepthBasisEvaluator
             agreement,
             depthSources,
             waterLevelSources,
-            notAdjusted);
+            notAdjusted));
 
         if (waterLevelSources.Count == 0 || !adjustment.FootprintBounds.Any(f => MeetsView(f, inputs.View)))
             return Charted(WaterLevelStatus.NoCoverage, datum);
@@ -162,7 +204,9 @@ internal static class DepthBasisEvaluator
         var coversView = refused.Count == 0
             && inputs.View is { } view
             && adjustment.FootprintBounds.Any(f => Contains(f, view));
-        return new DepthBasis(
+        var predictedCurrent = current.Any(w => w.Kind == WaterLevelSourceKind.Prediction);
+        var s104Current = current.Any(w => w.Kind != WaterLevelSourceKind.Prediction);
+        return With(new DepthBasis(
             DepthBasisKind.Adjusted,
             DepthBasisReason.None,
             WaterLevelStatus.Applied,
@@ -172,7 +216,10 @@ internal static class DepthBasisEvaluator
             unconfirmed ? DatumAgreement.Unknown : DatumAgreement.Same,
             depthSources,
             waterLevelSources,
-            refused);
+            refused)
+        {
+            Predicted = !predictedCurrent ? PredictedShare.None : s104Current ? PredictedShare.Part : PredictedShare.All,
+        });
     }
 
     private static bool Covers(DepthBasisSource waterLevel, DateTime time) =>

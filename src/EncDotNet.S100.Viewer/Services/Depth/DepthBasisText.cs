@@ -86,19 +86,48 @@ internal static class DepthBasisText
         var time = Clock(basis, format);
         var c = CultureInfo.CurrentCulture;
         var unconfirmed = basis.Datum == DatumAgreement.Unknown ? Strings.Status_DepthBasis_DatumUnconfirmedSuffix : string.Empty;
-        return basis.CoversWholeView
-            ? new(
-                string.Format(c, Strings.Status_DepthBasis_AdjustedFormat, time) + unconfirmed,
-                string.Format(c, Strings.Status_DepthBasis_AdjustedFormat, time),
-                string.Format(c, Strings.Status_DepthBasis_AdjustedFormat_Compact, time),
+        string F(string pattern) => string.Format(c, pattern, time);
+
+        // Predicted water level keeps the adjusted state; the words say so (D9).
+        return (basis.Predicted, basis.CoversWholeView) switch
+        {
+            (PredictedShare.All, true) => new(
+                F(Strings.Status_DepthBasis_PredictedFormat) + unconfirmed,
+                F(Strings.Status_DepthBasis_PredictedFormat_Short),
+                F(Strings.Status_DepthBasis_PredictedFormat_Compact),
                 DepthBasisTone.Adjusted,
-                false)
-            : new(
-                string.Format(c, Strings.Status_DepthBasis_AdjustedPartialFormat, time) + unconfirmed,
-                string.Format(c, Strings.Status_DepthBasis_AdjustedPartialFormat_Short, time),
-                string.Format(c, Strings.Status_DepthBasis_AdjustedPartialFormat_Short, time),
+                false),
+            (PredictedShare.All, false) => new(
+                F(Strings.Status_DepthBasis_PredictedPartialFormat) + unconfirmed,
+                F(Strings.Status_DepthBasis_PredictedPartialFormat_Short),
+                F(Strings.Status_DepthBasis_PredictedFormat_Compact),
                 DepthBasisTone.Adjusted,
-                false);
+                false),
+            (PredictedShare.Part, true) => new(
+                F(Strings.Status_DepthBasis_PartlyPredictedFormat) + unconfirmed,
+                F(Strings.Status_DepthBasis_PartlyPredictedFormat_Short),
+                F(Strings.Status_DepthBasis_PartlyPredictedFormat_Short),
+                DepthBasisTone.Adjusted,
+                false),
+            (PredictedShare.Part, false) => new(
+                F(Strings.Status_DepthBasis_PartlyPredictedPartialFormat) + unconfirmed,
+                F(Strings.Status_DepthBasis_PartlyPredictedFormat_Short),
+                F(Strings.Status_DepthBasis_PartlyPredictedFormat_Short),
+                DepthBasisTone.Adjusted,
+                false),
+            (_, true) => new(
+                F(Strings.Status_DepthBasis_AdjustedFormat) + unconfirmed,
+                F(Strings.Status_DepthBasis_AdjustedFormat),
+                F(Strings.Status_DepthBasis_AdjustedFormat_Compact),
+                DepthBasisTone.Adjusted,
+                false),
+            (_, false) => new(
+                F(Strings.Status_DepthBasis_AdjustedPartialFormat) + unconfirmed,
+                F(Strings.Status_DepthBasis_AdjustedPartialFormat_Short),
+                F(Strings.Status_DepthBasis_AdjustedPartialFormat_Short),
+                DepthBasisTone.Adjusted,
+                false),
+        };
     }
 
     private static DepthBasisForms Unavailable(DepthBasis basis, TimeFormat format) =>
@@ -258,6 +287,12 @@ internal static class DepthBasisText
         var lines = new List<string>();
         foreach (var source in basis.WaterLevelSources)
         {
+            if (source.Kind == WaterLevelSourceKind.Prediction)
+            {
+                lines.Add(PredictedRow(basis.PredictedStations));
+                continue;
+            }
+
             var parts = new List<string>();
             if (source.Kind is { } kind)
             {
@@ -284,6 +319,13 @@ internal static class DepthBasisText
 
         if (basis.Kind == DepthBasisKind.Charted && basis.Reason == DepthBasisReason.NotApplied)
             lines.Add(Strings.Status_DepthBasisPopup_NotApplied);
+
+        if (basis.WaterLevelSources.Any(w => w.Kind == WaterLevelSourceKind.Prediction))
+        {
+            // D4e: the order of sources, and what predictions leave out.
+            lines.Add(Strings.Status_DepthBasisPopup_PredictionsOrder);
+            lines.Add(Strings.Status_DepthBasisPopup_PredictionsLeaveOut);
+        }
 
         lines.AddRange(AdjustmentLines(basis, format));
         return lines;
@@ -320,6 +362,23 @@ internal static class DepthBasisText
                 ? string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedFormat, refused.DatasetId, DatumLabel(refused.VerticalDatumCode), waterDatums)
                 : string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedProductFormat, refused.DatasetId, refused.Spec);
         }
+    }
+
+    /// <summary>
+    /// The flyout's predicted row (D4e): "Predicted · 5 NOAA stations ·
+    /// Seattle 9447130, Edmonds 9447427, +3".
+    /// </summary>
+    /// <param name="stations">The stations in reach of the view, nearest first.</param>
+    /// <returns>The row.</returns>
+    public static string PredictedRow(IReadOnlyList<string> stations)
+    {
+        ArgumentNullException.ThrowIfNull(stations);
+        var c = CultureInfo.CurrentCulture;
+        var named = string.Join(", ", stations.Take(2));
+        var names = stations.Count > 2
+            ? string.Format(c, Strings.Status_DepthBasisPopup_PredictedMoreFormat, named, stations.Count - 2)
+            : named;
+        return string.Format(c, Strings.Status_DepthBasisPopup_PredictedRowFormat, stations.Count, names);
     }
 
     /// <summary>Where the viewer applies water level.</summary>
