@@ -137,17 +137,24 @@ public interface ILiveDatasetProcessor
     event EventHandler<DatasetChangedEventArgs>? Changed;
 }
 
-public sealed record DatasetChangedEventArgs
+public sealed class DatasetChangedEventArgs : EventArgs
 {
-    public static DatasetChangedEventArgs All { get; } = new();
+    public static new DatasetChangedEventArgs Empty { get; } = new();
     public IReadOnlyList<string>? FeatureRefs { get; init; }  // null: everything may have changed
-    public BoundingBox? Extent { get; init; }                 // null: anywhere
+    public GeographicBounds? Extent { get; init; }            // null: anywhere
 }
 ```
 
-The map session treats `Changed` like a viewport or time-step change: it
-re-requests the portrayal of the affected dataset, coalescing events that
-arrive while a render is in flight. Picks and MCP already re-query the
+The map session treats `Changed` like a viewport or time-step change.
+`MapsuiDatasetLayerSession.SetDataset` subscribes when the processor
+implements the interface, and `RemoveDataset` and `Dispose` unsubscribe. A
+change waits 250 ms for further changes, then re-applies the dataset, so new
+available times reach the timeline, and renders it again with the
+presentation it was last rendered with, superseding a render in flight. The
+refresh runs on the synchronization context `SetDataset` was called on, and
+reports failures through `DatasetRenderFailed` as
+`MapSessionRenderKind.LiveRefresh`. Both event properties are hints: the
+session redraws the whole dataset today. Picks and MCP already re-query the
 processor, so they see new data with no further change.
 
 This alone is enough for polled feeds: an NDBC, CAP or ERDDAP processor
@@ -696,7 +703,7 @@ Each slice ships on its own and leaves the tree working.
    derived order, give each product registration its categories, let a
    dataset override its category (tide predictions), move the R-rules onto
    the derived order, and rebaseline.
-4. **`ILiveDatasetProcessor`.** Add the interface and the session's
+4. **`ILiveDatasetProcessor`.** Built. Add the interface and the session's
    re-render on `Changed`.
 5. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
    onto it first, since they already use `IDynamicFeaturePortrayal`.

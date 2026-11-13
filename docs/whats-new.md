@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Datasets that change after loading.** A processor that implements
+  `ILiveDatasetProcessor` raises `Changed` when its data changes, such as a
+  feed polled on a timer, and the Mapsui map session draws the dataset again:
+  it waits 250 ms for more changes, picks up new available times for the
+  timeline, and renders with the presentation the dataset was last drawn
+  with. Failures are reported through `DatasetRenderFailed` with the new
+  `MapSessionRenderKind.LiveRefresh`.
 - **Station series and warnings are pick sections.** An S-104 or S-111
   station's time series is now a `StationSeriesSection`, and an S-124
   warning part's message a `NavigationalWarningSection`, both in

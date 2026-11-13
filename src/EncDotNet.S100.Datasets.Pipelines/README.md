@@ -59,6 +59,9 @@ more detail.
 
 - **`IDatasetProcessor`**: a parsed dataset with rendering, picking, feature
   listing, metadata and validation.
+- **`ILiveDatasetProcessor`**: a processor whose data changes after it's
+  loaded, such as a feed polled on a timer. It raises `Changed` after
+  updating, and the map session draws the dataset again.
 - **`DatasetPipelineFactory`**: detects a file's product and creates its
   processor. See [Product detection](#product-detection).
 - **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
@@ -75,10 +78,10 @@ more detail.
 - The pick services in the `.Query` namespace and the dataset catalog in
   `.Catalog`. See [Pick services and dataset catalog](#pick-services-and-dataset-catalog).
 
-Some of these types, including `IDatasetProcessor`, `DatasetProcessorOwner`,
-`MapPresentationState`, `MapDataset` and the S-98 engine, are compiled into
-`EncDotNet.S100.Core` but use the `EncDotNet.S100.Datasets.Pipelines`
-namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
+Some of these types, including `IDatasetProcessor`, `ILiveDatasetProcessor`,
+`DatasetProcessorOwner`, `MapPresentationState`, `MapDataset` and the S-98
+engine, are compiled into `EncDotNet.S100.Core` but use the
+`EncDotNet.S100.Datasets.Pipelines` namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 
 ## Processors
 
