@@ -214,7 +214,7 @@ about what's served.
 The image has no shell or `curl`, so a health check runs
 [`s100 health`](cli.md#health) in the container. It asks the server on port
 8200 and exits with 0 when the server answers. Pass `--port 8100` for
-`feed serve`. Kubernetes and load balancers can ask `/healthz` directly.
+`feed serve`, and `--port 8300` for `mcp serve --transport http`. Kubernetes and load balancers can ask `/healthz` directly.
 
 ## Give an agent the MCP tools
 
@@ -243,6 +243,56 @@ MCP client that starts servers as commands can start it in a container. Pass
 folders you mount. `--data-dir /state/library` keeps the Library's collections
 and downloads in the `s100-state` volume; without it they're removed when the
 server stops.
+
+### Serve MCP over HTTP
+
+To run the MCP server as a long-running service that agents connect to, serve
+it over HTTP with `--transport http`. It listens on port 8300 at `/mcp`:
+
+```yaml
+services:
+  mcp:
+    image: ghcr.io/philliphoff/s100
+    command: mcp serve . --transport http --host 0.0.0.0 --token ${S100_MCP_TOKEN:?set S100_MCP_TOKEN} --data-dir /state/library
+    ports:
+      - "8300:8300"
+    volumes:
+      - ./charts:/data:ro
+      - s100-state:/state
+    healthcheck:
+      test: ["CMD", "/app/s100", "health", "--port", "8300"]
+      interval: 30s
+      timeout: 10s
+      start_period: 2m
+      start_interval: 2s
+    restart: unless-stopped
+
+volumes:
+  s100-state:
+```
+
+```bash
+S100_MCP_TOKEN=$(openssl rand -hex 16) docker compose up -d
+```
+
+Agents connect to `http://<host>:8300/mcp` and send the token in an
+`Authorization: Bearer <token>` header. For example, with Claude Code:
+
+```bash
+claude mcp add --transport http s100 http://localhost:8300/mcp --header "Authorization: Bearer $S100_MCP_TOKEN"
+```
+
+Without `--token`, `mcp serve` generates a new token each time it starts and
+prints it in the container's log (`docker compose logs mcp`).
+
+Over HTTP, the server leaves out the tools that open datasets by path and
+change the Library, so a client can't make it read other files in the
+container or fetch other URLs. The datasets in `/data` and any `--collection`
+sources are all it serves. Pass `--allow-changes` to serve those tools too.
+See [MCP over HTTP](cli.md#mcp-over-http).
+
+Use HTTP only on a network you trust, or behind a proxy that adds HTTPS: the
+server itself speaks plain HTTP, so the token travels unencrypted.
 
 ## Predict tides
 

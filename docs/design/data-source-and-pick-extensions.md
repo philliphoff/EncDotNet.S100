@@ -1,7 +1,8 @@
 # Data source and pick extensions — Design Note
 
 > Status: **In progress**. Slice 1 of §5 (pick sections with the egg code)
-> is built in #1474; P1, P2, P3 and P6 describe it as built. This note proposes
+> is built in #1474, and slice 2's station series and warnings are built;
+> P1, P2, P3 and P6 describe them as built. This note proposes
 > two extension points that fit together but can ship separately: a single
 > way to add data that doesn't come from a file (§2), and a way for any
 > product or source to add its own content to the pick report (§3). §4 shows
@@ -572,6 +573,14 @@ a station series read from the HDF5 file.
   something, and one that also ships a template shows its own panel. The
   presenters are a static default registry, like the other registries; a
   plug-in registers at start-up.
+
+  Two kinds keep panels of their own, because their layout isn't a block in
+  the list. The station chart sits above the attributes and is chosen by
+  the series' channels (a water level height, or a current's speed and
+  direction), not by product; a series with other channels falls back to its
+  rows in the list. The warning cards gather the warning sections of every
+  hit at the point, so a `nav-warning` section never appears in a single
+  hit's list.
 - **MCP.** `identify_features`, `pick_features` and `describe_feature`
   report a feature's `sections`. Each has its `kind`, the kind's
   `description`, its `rows`, and its typed `data` as JSON. An unknown kind
@@ -683,9 +692,13 @@ Each slice ships on its own and leaves the tree working.
    and a section, with the `FeatureInfo.EggCode` shim. Serialize sections in
    MCP. This proves the pattern on the case with one consumer and a builder
    that works with any data source.
-2. **Station series and warnings as sections.** Move `StationSeries`, with
-   its channels in the section, and `NavigationalWarning`, then the two
-   notice flags. Remove the shims in the following release.
+2. **Station series and warnings as sections.** Built, except the notice
+   flags. Move `StationSeries`, with its channels in the section, and
+   `NavigationalWarning`. Remove the shims in the following release.
+   - **The two notice flags** (`IsNavigationNotice`, `IsStaleNotice`) are
+     left for a follow-up: MCP and the CLI show them as attribute rows
+     today, so moving them changes those outputs and needs its own
+     decision on how they read there.
 3. **Layer order by category and draw class.** Add the categories and the
    derived order, give each product registration its categories, let a
    dataset override its category (tide predictions), move the R-rules onto

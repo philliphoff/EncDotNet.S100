@@ -28,25 +28,32 @@ internal sealed class PickHit
 
     /// <summary>
     /// The station's time series when this hit is a fixed-station observation
-    /// (S-104 / S-111 dcf=8); <c>null</c> for every other feature shape.
-    /// Object Information charts it above the attribute list (#1401: the pick
-    /// report builds the chart).
+    /// (its <see cref="StationSeriesSection"/>); <c>null</c> for every other
+    /// feature shape. Object Information charts it above the attribute list
+    /// (#1401: the pick report builds the chart).
     /// </summary>
-    public StationTimeSeriesSnapshot? StationSeries { get; init; }
+    public StationTimeSeriesSnapshot? StationSeries =>
+        Sections.OfType<StationSeriesSection>().FirstOrDefault()?.Series;
 
     /// <summary>
-    /// The hit's pick report content that isn't attribute rows, such as an
-    /// ice egg code (<see cref="IceEggCodeSection"/>). The pick panel shows each
-    /// section through its kind's presenter (<see cref="PickSectionPresenters"/>).
+    /// The hit's pick report content that isn't attribute rows: an ice egg code
+    /// (<see cref="IceEggCodeSection"/>), a station's time series
+    /// (<see cref="StationSeriesSection"/>), a navigational warning
+    /// (<see cref="NavigationalWarningSection"/>) or a plug-in's own kind. The
+    /// station chart and the warning cards show their kinds; the pick panel
+    /// shows every other section through its kind's presenter
+    /// (<see cref="PickSectionPresenters"/>).
     /// </summary>
     public IReadOnlyList<PickSection> Sections { get; init; } = [];
 
     /// <summary>
     /// The warning message when the hit is part of a navigational warning
-    /// (S-124 <c>NavwarnPart</c>); <c>null</c> for every other feature. When
-    /// set, the pick panel shows a Warning card above the attributes (#932).
+    /// (its <see cref="NavigationalWarningSection"/>); <c>null</c> for every
+    /// other feature. When set, the pick panel shows a Warning card above the
+    /// attributes (#932).
     /// </summary>
-    public NavigationalWarningInfo? NavigationalWarning { get; init; }
+    public NavigationalWarningInfo? NavigationalWarning =>
+        Sections.OfType<NavigationalWarningSection>().FirstOrDefault()?.Warning;
 
     /// <summary>
     /// Whether the source dataset's exchange-set discovery metadata marks it

@@ -56,6 +56,7 @@ public sealed class TilesServeCommandTests : IDisposable
         {
             TileContainer.PmTiles => "set.pmtiles",
             TileContainer.MbTiles => "set.mbtiles",
+            TileContainer.GeoPackage => "set.gpkg",
             _ => "set",
         });
 
@@ -63,6 +64,7 @@ public sealed class TilesServeCommandTests : IDisposable
         {
             TileContainer.PmTiles => new PmTilesTileSink(path),
             TileContainer.MbTiles => new MbTilesTileSink(path),
+            TileContainer.GeoPackage => new GeoPackageTileSink(path),
             _ => new XyzDirectoryTileSink(path, TileImageFormat.Png),
         };
         foreach (var (zoom, x, y) in Tiles)
@@ -75,6 +77,7 @@ public sealed class TilesServeCommandTests : IDisposable
     [InlineData("Xyz")]
     [InlineData("PmTiles")]
     [InlineData("MbTiles")]
+    [InlineData("GeoPackage")]
     public void Each_container_reads_back_its_tiles_and_metadata(string kind)
     {
         var container = Enum.Parse<TileContainer>(kind);
@@ -230,6 +233,7 @@ public sealed class TilesServeCommandTests : IDisposable
     [InlineData("Xyz")]
     [InlineData("PmTiles")]
     [InlineData("MbTiles")]
+    [InlineData("GeoPackage")]
     public async Task A_tile_set_exported_again_while_served_is_picked_up(string kind)
     {
         var container = Enum.Parse<TileContainer>(kind);
