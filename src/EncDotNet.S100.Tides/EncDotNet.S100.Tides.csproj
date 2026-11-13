@@ -3,7 +3,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>Predicts the astronomical tide at a station from its harmonic constituents: the height at a time, a series at a fixed step, and the high and low waters in a period. Implements the 37 NOAA constituents with equilibrium arguments and node factors from Schureman (US Coast and Geodetic Survey Special Publication 98). Pure managed code with no dependencies.</Description>
+    <Description>Predicts the astronomical tide at a station from its harmonic constituents: the height at a time, a series at a fixed step, and the high and low waters in a period; and tidal currents: the current at a time, slack waters and maximum floods and ebbs. Implements the 37 NOAA constituents with equilibrium arguments and node factors from Schureman (US Coast and Geodetic Survey Special Publication 98). Pure managed code with no dependencies.</Description>
   </PropertyGroup>
 
   <ItemGroup>

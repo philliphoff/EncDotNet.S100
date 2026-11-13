@@ -134,6 +134,47 @@ It returns `null` when the station isn't in the catalogue or can't be
 predicted on that datum. `TideDatumNames` maps NOAA's datum names to S-100
 `VerticalDatum` codes (MLLW is 12, LAT is 23).
 
+## Tidal current stations
+
+The catalogue also holds NOAA's tidal current prediction stations. A current
+is measured at a depth, so a station is NOAA's identifier and depth bin,
+`PUG1701_33`, as NOAA writes it. `DownloadCatalogueAsync` reads them unless
+`NoaaTideStationClientOptions.IncludeCurrentStations` is off: the current
+station list (one request) and each harmonic current station's constituents
+(about 900 more requests). Weak and variable stations (NOAA type `W`) have
+no predictions and are left out.
+
+```csharp
+var near = catalogue.FindNearestCurrentStations(new GeoPosition(48.41, -122.64), maxCount: 3);
+var prediction = catalogue.TryCreateCurrentPrediction("PUG1701_33");
+if (prediction is not null)
+{
+    var current = prediction.Predictor.CurrentAt(DateTime.UtcNow);
+    var events = prediction.Predictor.FindEvents(DateTime.UtcNow, DateTime.UtcNow.AddDays(1));
+    // "Deception Pass (Narrows), 5.49 m deep: 2.1 kn toward 108°"
+    Console.WriteLine($"{prediction.Source.StationName}, {prediction.Source.DepthMeters} m deep: {current.SpeedKnots:F1} kn toward {current.DirectionDegrees:F0}°");
+}
+```
+
+- A **harmonic** current station has its major- and minor-axis
+  constituents for its bin, the mean currents, the major axis and NOAA's
+  flood and ebb directions. Where NOAA gives no directions, the major axis
+  stands in. A station whose M2 current ellipse is at least half as wide as
+  long (`NoaaTideStationClient.RotaryEllipseRatio`) is marked rotary and
+  predicted from both axes; NOAA's own predictions give only the major axis.
+- A **subordinate** current station has its reference station and bin, its
+  time differences for slack before flood, maximum flood, slack before ebb
+  and maximum ebb, and its flood and ebb speed ratios, and is predicted by
+  NOAA's method (see the
+  [Tides README](../EncDotNet.S100.Tides/README.md#predict-tidal-currents)).
+
+`FindCurrentStationsWithin` and `FindCurrentStation` work as for tide
+stations, and `CurrentPredictionSource` says where a prediction comes from:
+kind, depth, rotary or not, and for a subordinate station "from Golden Gate
+Bridge, 0.88 nm NE of SFB1202_17, with offsets". `CheckForUpdatesAsync`
+checks the current station list too when the catalogue has current
+stations.
+
 ## Bring your own stations
 
 The cache file format is also the way to add stations from another source.

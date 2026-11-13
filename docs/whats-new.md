@@ -6,6 +6,21 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tidal current predictions.** `EncDotNet.S100.Tides` predicts tidal
+  currents: `CurrentPredictor` for a harmonic current station (major axis,
+  or both axes for a rotary current) and `SubordinateCurrentPredictor` for a
+  subordinate one by NOAA's method. Each gives the current at a time, a
+  velocity series, and slack waters and maximum floods and ebbs, matching
+  NOAA's own 2026 predictions to a minute and a few mm/s. The
+  `EncDotNet.S100.Tides.Stations` catalogue now holds NOAA's current
+  stations too, per depth bin, with subordinate stations' differences and
+  ratios. See the [Tides README](../src/EncDotNet.S100.Tides/README.md#predict-tidal-currents).
+- **Current predictions as S-111.** `EncDotNet.S100.Datasets.S111` writes
+  station series as S-111 Edition 2.0.0 files (data coding format 8), and
+  `S111CurrentPredictions` turns a station's current predictions into one,
+  marked as a non-authoritative astronomical prediction (producer `ZZ01`).
+  See the [S-111 README](../src/EncDotNet.S100.Datasets.S111/README.md#write-a-station-series).
+
 - **Tide predictions as S-104.** `EncDotNet.S100.Datasets.S104` writes
   station series as S-104 Edition 2.0.0 files (data coding format 8), and
   `S104TidePredictions` turns a station's harmonic predictions into one, on

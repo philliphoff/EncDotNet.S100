@@ -75,6 +75,12 @@ public sealed class S111StationSeriesDataset
     /// </summary>
     public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
 
+    /// <summary>
+    /// The <c>methodCurrentsProduct</c> attribute of the <c>/SurfaceCurrent</c>
+    /// group: how the currents were produced, or <c>null</c> when absent.
+    /// </summary>
+    public string? MethodCurrentsProduct { get; init; }
+
     /// <summary>Time-series stations contained in the dataset.</summary>
     public required IReadOnlyList<SurfaceCurrentStation> Stations { get; init; }
 

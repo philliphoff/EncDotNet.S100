@@ -31,4 +31,10 @@
     <Content Include="..\portrayals\S111\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\PortrayalCatalogue\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- NOAA current station fixtures (T6, #1454) for the S-111 prediction writer (#1455). -->
+    <Compile Include="..\EncDotNet.S100.Tides.Tests\NoaaCurrentFixture.cs" Link="TestSupport\NoaaCurrentFixture.cs" />
+    <Content Include="..\datasets\Tides\NOAA\Currents\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="TestData\Tides\NOAA\Currents" />
+  </ItemGroup>
+
 </Project>

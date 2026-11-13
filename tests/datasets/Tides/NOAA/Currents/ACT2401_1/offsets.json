@@ -1,0 +1,14 @@
+{
+  "id": "ACT2401",
+  "refStationId": "LIS1001",
+  "refStationBin": 13,
+  "meanFloodDir": 346.0,
+  "meanEbbDir": 162.0,
+  "mfcTimeAdjMin": -74,
+  "sbeTimeAdjMin": -38,
+  "mecTimeAdjMin": -125,
+  "sbfTimeAdjMin": -82,
+  "mfcAmpAdj": 0.8,
+  "mecAmpAdj": 0.7,
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/ACT2401_1/currentpredictionoffsets.json"
+}

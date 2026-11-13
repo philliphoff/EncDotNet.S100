@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Tides\EncDotNet.S100.Tides.csproj" />
   </ItemGroup>
 
 </Project>
