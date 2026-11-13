@@ -69,6 +69,11 @@ internal static class TideStationsServiceCollectionExtensions
                     UiThread.RunOrPost);
             }));
 
+        services.AddSingleton(sp => new TidePredictionTimeService(
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<ViewerSettingsService>(),
+            sp.GetRequiredService<TideStationsOverlay>().Source));
+
         services.AddSingleton(sp => new TideStationListViewModel(sp.GetRequiredService<TideStationListService>()));
         return services;
     }

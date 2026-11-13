@@ -165,6 +165,51 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
     public DepthBasisIndicatorViewModel()
     {
         TurnOffReliefCommand = new RelayCommand(() => _turnOffRelief?.Invoke());
+        UseTidePredictionsCommand = new RelayCommand(() => _useTidePredictions?.Invoke());
+        RefreshStationListCommand = new RelayCommand(() => _refreshStationList?.Invoke());
+    }
+
+    private Action? _useTidePredictions;
+    private Action? _refreshStationList;
+
+    /// <summary>
+    /// Whether the flyout offers <b>Use tide predictions</b> (tide predictions
+    /// design D2): they're off, no S-104 meets the view and a station is in reach.
+    /// </summary>
+    public bool OffersTidePredictions => _basis.OffersPredictions && _useTidePredictions is not null;
+
+    /// <summary>Whether the flyout shows the stale station list notice (D15).</summary>
+    public bool IsStationListStale => _basis.PredictionsStale && _refreshStationList is not null;
+
+    /// <summary>"NOAA has revised the station list since 3 Mar 2026. …".</summary>
+    public string StationListStaleText => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture,
+        Resources.Strings.Status_DepthBasisPopup_StaleFormat,
+        _basis.StationListDate is { } date ? TimeFormatting.FormatDateOnly(DateOnly.FromDateTime(date.UtcDateTime)) : string.Empty);
+
+    /// <summary>Turns tide predictions on, from the flyout's offer.</summary>
+    public ICommand UseTidePredictionsCommand { get; }
+
+    /// <summary>Downloads the station list again, from the stale notice.</summary>
+    public ICommand RefreshStationListCommand { get; }
+
+    /// <summary>Sets what the flyout's tide prediction offer and stale notice do.</summary>
+    /// <param name="useTidePredictions">Turns the source switch on.</param>
+    /// <param name="refreshStationList">Downloads NOAA's station list again.</param>
+    public void SetTidePredictions(Action useTidePredictions, Action refreshStationList)
+    {
+        ArgumentNullException.ThrowIfNull(useTidePredictions);
+        ArgumentNullException.ThrowIfNull(refreshStationList);
+        _useTidePredictions = useTidePredictions;
+        _refreshStationList = refreshStationList;
+        RaiseTidePredictions();
+    }
+
+    private void RaiseTidePredictions()
+    {
+        OnPropertyChanged(nameof(OffersTidePredictions));
+        OnPropertyChanged(nameof(IsStationListStale));
+        OnPropertyChanged(nameof(StationListStaleText));
     }
 
     /// <summary>
@@ -224,6 +269,7 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
         WhereAppliedLines = DepthBasisText.WhereAppliedLines(basis.Kind == DepthBasisKind.Adjusted || basis.Reason == DepthBasisReason.WaterLevel);
         _plainAccessibleName = DepthBasisText.AccessibleName(basis, format);
         RaiseRelief();
+        RaiseTidePredictions();
 
         if (basis.Kind == DepthBasisKind.None)
         {

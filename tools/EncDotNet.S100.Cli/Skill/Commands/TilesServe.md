@@ -17,7 +17,8 @@ TileJSON's `s100.palettes` lists them; `--palette` picks the palette of the
 unprefixed routes. A tile with nothing drawn, or outside the set, answers
 `204 No Content`; a malformed or out-of-range request, an unknown palette or
 the wrong extension answers `404`. Every response sends
-`Access-Control-Allow-Origin: *`.
+`Access-Control-Allow-Origin: *`. `/healthz` answers `200 OK` with `ok`
+outside any token; `s100 health` asks it and exits `0` when it answers.
 
 The same tiles are an OGC WMTS 1.0.0 service: the capabilities document is at
 `wmts/1.0.0/WMTSCapabilities.xml` (also `wmts?SERVICE=WMTS&REQUEST=GetCapabilities`),

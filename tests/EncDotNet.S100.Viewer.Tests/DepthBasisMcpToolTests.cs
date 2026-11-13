@@ -46,7 +46,8 @@ public sealed class DepthBasisMcpToolTests
         ],
         InView,
         ViewTime,
-        NoWaterLevelAdjustment.Instance));
+        NoWaterLevelAdjustment.Instance,
+        TidePredictionsInView.None));
 
     [Fact]
     public void The_dto_reports_the_evaluator_state_in_snake_case_codes()
@@ -90,7 +91,7 @@ public sealed class DepthBasisMcpToolTests
     public async Task The_tool_recomputes_and_returns_the_current_basis()
     {
         var loader = new FakeDatasetLoaderService();
-        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run);
+        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run, predictions: FixedTidePredictions.None);
         var tool = new GetDepthBasisTool(service, new InlineInvoker());
 
         var dto = Value(await tool.InvokeAsync(TestContext.Current.CancellationToken));
@@ -120,7 +121,7 @@ public sealed class DepthBasisMcpToolTests
     {
         var f = new PassageCheckFixture();
         var loader = new FakeDatasetLoaderService();
-        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run);
+        using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run, predictions: FixedTidePredictions.None);
 
         var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null) { DepthBasis = service }
             .InvokeAsync(false, TestContext.Current.CancellationToken));

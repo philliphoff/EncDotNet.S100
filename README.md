@@ -212,8 +212,9 @@ Each [release](https://github.com/philliphoff/EncDotNet.S100/releases)
 attaches a self-contained, per-platform archive that bundles the .NET
 runtime and native libraries, so **no .NET installation is required** —
 download, extract, and run. The same executable also ships inside the
-viewer application bundle. See [docs/cli.md](docs/cli.md) for the full
-command and option reference.
+viewer application bundle, and as the `ghcr.io/philliphoff/s100` container
+image ([Run s100 in Docker](docs/docker.md)). See [docs/cli.md](docs/cli.md)
+for the full command and option reference.
 
 ## Libraries
 

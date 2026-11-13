@@ -36,7 +36,7 @@ public sealed class DepthBasisEvaluatorTests
             kind);
 
     private static DepthBasis Evaluate(IWaterLevelAdjustmentState? adjustment, params DepthBasisDataset[] datasets) =>
-        DepthBasisEvaluator.Evaluate(new DepthBasisInputs(datasets, View, ViewTime, adjustment ?? NoWaterLevelAdjustment.Instance));
+        DepthBasisEvaluator.Evaluate(new DepthBasisInputs(datasets, View, ViewTime, adjustment ?? NoWaterLevelAdjustment.Instance, TidePredictionsInView.None));
 
     private static DepthBasis Evaluate(params DepthBasisDataset[] datasets) => Evaluate(null, datasets);
 
