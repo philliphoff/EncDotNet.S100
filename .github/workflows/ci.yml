@@ -289,6 +289,16 @@ jobs:
       version: ${{ needs.build.outputs.version }}
     secrets: inherit
 
+  container:
+    needs: [build, publish]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
   publish-nuget:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build

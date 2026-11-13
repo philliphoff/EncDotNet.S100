@@ -1,0 +1,151 @@
+name: Container
+
+# Builds the s100 CLI container image (issue #1464) from the linux-x64 and
+# linux-arm64 CLI archives that Publish uploaded earlier in the calling run, so
+# the image ships the same binaries as the release archives. Every run builds
+# both architectures and smoke-tests the amd64 image; only runs given tags push
+# to the GitHub Container Registry (ghcr.io/<owner>/s100).
+#
+# Called by CI (pushes and PRs build and test; v* tags also push X.Y.Z, X.Y
+# and `latest`) and by Nightly (which pushes `nightly`).
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version stamped into the CLI, e.g. 0.25.1 or 0.25.2-nightly.20261021.
+        required: true
+        type: string
+      release:
+        description: Push a stable release's tags, from the version X.Y.Z - X.Y.Z, X.Y and latest.
+        required: false
+        type: boolean
+        default: false
+      tags:
+        description: Other space-separated image tags to push, e.g. "nightly". With neither tags nor release, the image is built and tested but not pushed.
+        required: false
+        type: string
+        default: ''
+      ref:
+        description: Commit to take the Dockerfile from. Empty uses the commit that triggered the calling run.
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUSH: ${{ inputs.release || inputs.tags != '' }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Download the Linux CLI archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: s100-cli-linux-*
+          path: archives
+
+      - name: Lay out the build context
+        # One extracted archive per Docker architecture name, as the Dockerfile expects.
+        run: |
+          mkdir -p context/linux-amd64 context/linux-arm64
+          tar -xzf archives/s100-cli-linux-x64/*.tar.gz -C context/linux-amd64
+          tar -xzf archives/s100-cli-linux-arm64/*.tar.gz -C context/linux-arm64
+          test -x context/linux-amd64/s100
+          test -x context/linux-arm64/s100
+
+      - name: Image name and tags
+        id: meta
+        env:
+          OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ inputs.version }}
+          RELEASE: ${{ inputs.release }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          if [ "$RELEASE" = "true" ]; then
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::A release image needs a stable X.Y.Z version, not '$VERSION'."
+              exit 1
+            fi
+            TAGS="$VERSION ${VERSION%.*} latest $TAGS"
+          fi
+          # Registry paths must be lower case.
+          image="ghcr.io/${OWNER,,}/s100"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            for tag in $TAGS; do echo "$image:$tag"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the amd64 image for the smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: context
+          file: tools/EncDotNet.S100.Cli/docker/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ inputs.version }}
+            REVISION=${{ inputs.ref || github.sha }}
+          tags: s100:smoke
+          load: true
+
+      - name: Smoke test
+        # The image runs the CLI as a non-root user with no shell, serves tiles
+        # from a read-only mount, answers its health check, and stops on SIGTERM.
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(docker run --rm s100:smoke --version | cut -d+ -f1)" = "$VERSION"
+          test "$(docker image inspect s100:smoke --format '{{.Config.User}}')" = "1654"
+
+          mkdir -p smoke
+          cp tests/datasets/S57/US5MA1BO/US5MA1BO.000 smoke/
+          docker run -d --name smoke -p 8200:8200 -v "$PWD/smoke:/data:ro" \
+            s100:smoke tiles serve US5MA1BO.000 --host 0.0.0.0 --no-token
+          for _ in $(seq 1 60); do
+            if docker exec smoke /app/s100 health; then break; fi
+            sleep 2
+          done
+          docker exec smoke /app/s100 health
+          curl -fsS http://127.0.0.1:8200/tiles.json | python3 -c 'import json, sys; assert json.load(sys.stdin)["tiles"]'
+          docker stop smoke
+          test "$(docker inspect smoke --format '{{.State.ExitCode}}')" = "0"
+
+      - name: Show the server output
+        if: failure()
+        run: docker logs smoke || true
+
+      - name: Log in to the GitHub Container Registry
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build both architectures (and push)
+        # Nothing in the final stage runs at build time, so arm64 builds here
+        # without emulation.
+        uses: docker/build-push-action@v7
+        with:
+          context: context
+          file: tools/EncDotNet.S100.Cli/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ inputs.version }}
+            REVISION=${{ inputs.ref || github.sha }}
+          tags: ${{ steps.meta.outputs.tags || 's100:build' }}
+          push: ${{ env.PUSH == 'true' }}

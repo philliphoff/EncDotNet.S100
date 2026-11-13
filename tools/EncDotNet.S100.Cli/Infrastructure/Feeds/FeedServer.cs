@@ -18,8 +18,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Feeds;
 /// Serves a <see cref="FeedPublisher"/>'s feed over HTTP (issue #680):
 /// <c>feed.json</c> (with its ETag, so readers revalidate cheaply) and
 /// <c>items/&lt;id&gt;.zip</c> for each published dataset. With a token, every
-/// route lives under <c>/&lt;token&gt;/</c>, so the feed's relative item URLs
-/// carry it too.
+/// route but the <c>/healthz</c> health check lives under <c>/&lt;token&gt;/</c>,
+/// so the feed's relative item URLs carry it too.
 /// </summary>
 internal sealed class FeedServer : IAsyncDisposable
 {
@@ -64,6 +64,7 @@ internal sealed class FeedServer : IAsyncDisposable
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
+        ServeHost.MapHealth(app);
         app.MapGet(prefix + "/", context =>
         {
             context.Response.Redirect(prefix + "/" + S100Feed.FileName);
