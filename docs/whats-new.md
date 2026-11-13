@@ -13,6 +13,12 @@ month. For package versions and release assets, see
   timeline, and renders with the presentation the dataset was last drawn
   with. Failures are reported through `DatasetRenderFailed` with the new
   `MapSessionRenderKind.LiveRefresh`.
+- **`s100 tiles serve` is a WMS service.** `tiles serve` now also answers
+  OGC WMS 1.3.0 (and 1.1.1) requests at `wms`. GetMap draws any area in
+  EPSG:3857, EPSG:4326 or CRS:84 from the served tiles. GetFeatureInfo
+  reports the features and coverage values at a clicked point, as
+  `s100 identify` does, in HTML, GeoJSON or plain text, so the QGIS
+  Identify Features tool works on the chart. See [WMS](cli.md#wms).
 - **Pick sections.** Object Information content that isn't attribute rows
   now comes through one extension point. `FeatureInfo.Sections` holds a
   feature's sections; `IPickContributor`s registered in

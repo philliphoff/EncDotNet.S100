@@ -121,7 +121,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
 | [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
-| [`tiles serve`](#tiles-serve) | Serves a built tile set or datasets on XYZ URLs and as a WMTS service, for web maps and GIS desktops on this or another computer. |
+| [`tiles serve`](#tiles-serve) | Serves a built tile set or datasets on XYZ URLs and as WMTS and WMS services, for web maps and GIS desktops on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
@@ -404,7 +404,11 @@ The container comes from the output path:
   the display settings, prefixed `s100:`.
 
 Set `--container` to choose the container whatever the extension. An existing
-`.pmtiles` or `.mbtiles` file at the output path is replaced.
+`.pmtiles` or `.mbtiles` file at the output path is replaced only once the new
+one is finished: the new file is written beside it, with `.partial` added to
+its name, and then moved into its place. Until then a [`tiles serve`](#tiles-serve)
+reading the old file keeps serving it, and if the export fails or is stopped,
+the old file is left as it was.
 
 ### Tiles export options
 
@@ -518,7 +522,8 @@ map running on this computer can use them as a tile source. It serves either:
 - **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive or a
   `.mbtiles` database that [`tiles export`](#tiles-export) or another tool
   wrote. The tile set is read at each request, so if you export it again while
-  it's served, the next request sees the new tiles. Only PNG, JPEG and WebP
+  it's served, the next request sees the new tiles. A `.pmtiles` or `.mbtiles`
+  file keeps serving its old tiles until the new export is finished. Only PNG, JPEG and WebP
   raster tiles are served, not vector tiles.
 - **Datasets**, rendered when each tile is first asked for. It takes the same
   inputs and display options as `tiles export`: one dataset, repeated
@@ -583,6 +588,8 @@ The server has these routes:
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
+- `wms`, an [OGC WMS 1.3.0](#wms) service: GetCapabilities, GetMap, and,
+  when rendering datasets, GetFeatureInfo.
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
@@ -672,7 +679,58 @@ Tiles are served in both WMTS encodings:
   with a `{Time}` segment after the style for time-varying datasets.
 
 A request the service can't answer gets an OWS exception report that names
-the parameter at fault. The service has no GetFeatureInfo.
+the parameter at fault. The service has no GetFeatureInfo; use [WMS](#wms)
+to identify features.
+
+### WMS
+
+`tiles serve` is also an OGC WMS 1.3.0 service, for clients that ask for one
+image of the area they show, and to identify what's at a point. Its URL is
+printed at startup:
+
+```text
+http://127.0.0.1:8200/wms
+```
+
+- **QGIS:** choose **Layer > Add Layer > Add WMS/WMTS Layer**, add a
+  connection with the URL, connect, and add the `s100` layer. With the
+  **Identify Features** tool, click the chart to see what's there.
+- **ArcGIS Pro:** choose **Insert > Connections > Server > New WMS Server**
+  and enter the URL.
+- **GDAL:** open `WMS:http://127.0.0.1:8200/wms?SERVICE=WMS&REQUEST=GetCapabilities`.
+
+The service has one layer, `s100`, in EPSG:3857, EPSG:4326 and CRS:84. As for
+WMTS, each palette is a style, the `--palette` one first and the default, and
+S-104 and S-111 time steps are a `time` dimension.
+
+**GetMap** draws its image from the same tiles the XYZ URLs serve: those of
+the zoom level nearest the requested scale, stitched and resampled to the
+requested area and size. Symbols and text are therefore between about 0.7 and
+1.4 times their portrayed size. A request coarser than the minimum zoom draws
+nothing, and the capabilities give the matching `MaxScaleDenominator`, so
+clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
+a side; set `TRANSPARENT=TRUE` for a PNG to overlay other layers.
+
+**GetFeatureInfo** answers from the datasets, as
+[`identify`](#identify) does: the vector features at the clicked pixel, with
+their attributes, and the coverage values there (S-102 depths, S-104 water
+levels, S-111 currents, weather grids). Point and curve features within 5
+pixels of the click are matched. `FEATURE_COUNT` limits the features (1 by
+default, as WMS defines it), and `TIME` picks the time step sampled. The
+answer is in one of these formats (`INFO_FORMAT`):
+
+| Format | Content |
+|---|---|
+| `text/html` | A table per feature with its attributes, and the coverage values. |
+| `application/json`, `application/geo+json` | A GeoJSON FeatureCollection: a feature per vector feature and per coverage value, each a point at the clicked position, with what `identify --format json --attributes` reports as its properties. |
+| `text/plain` | The same as `text/html`, as text. |
+
+A built tile set has no datasets behind it, so its layer isn't queryable.
+
+Requests in WMS 1.1.1 are answered too: their `SRS`, `X` and `Y` parameters,
+and EPSG:4326 boxes in longitude, latitude order. In 1.3.0, EPSG:4326 boxes
+are latitude first and CRS:84 boxes longitude first. A request the service
+can't answer gets a WMS service exception report.
 
 The server runs until you press Ctrl+C or it receives SIGTERM.
 

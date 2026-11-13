@@ -124,9 +124,28 @@ jobs:
           docker stop smoke
           test "$(docker inspect smoke --format '{{.State.ExitCode}}')" = "0"
 
+      - name: Smoke-test prebuilt tiles
+        # The prebuilt-tiles Compose example: tiles export writes a PMTiles
+        # archive to a named volume once, then tiles serve serves it read-only.
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/smoke:/data:ro" -v smoke-tiles:/cache \
+            s100:smoke tiles export US5MA1BO.000 -o /cache/charts.pmtiles --max-zoom 12 --yes
+          docker run -d --name smoke-prebuilt -p 8201:8200 -v smoke-tiles:/cache:ro \
+            s100:smoke tiles serve /cache/charts.pmtiles --host 0.0.0.0 --no-token
+          for _ in $(seq 1 30); do
+            if docker exec smoke-prebuilt /app/s100 health; then break; fi
+            sleep 1
+          done
+          docker exec smoke-prebuilt /app/s100 health
+          curl -fsS http://127.0.0.1:8201/tiles.json | python3 -c 'import json, sys; t = json.load(sys.stdin); assert t["tiles"] and t["maxzoom"] == 12'
+          docker stop smoke-prebuilt
+
       - name: Show the server output
         if: failure()
-        run: docker logs smoke || true
+        run: |
+          docker logs smoke || true
+          docker logs smoke-prebuilt || true
 
       - name: Log in to the GitHub Container Registry
         if: env.PUSH == 'true'

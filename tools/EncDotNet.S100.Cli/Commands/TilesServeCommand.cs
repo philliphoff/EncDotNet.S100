@@ -167,13 +167,14 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 }
 
                 AnsiConsole.MarkupLine($"  WMTS:     [link]{Markup.Escape(new Uri(baseUri, WmtsService.CapabilitiesPath).AbsoluteUri)}[/]");
+                AnsiConsole.MarkupLine($"  WMS:      [link]{Markup.Escape(new Uri(baseUri, WmsService.Path).AbsoluteUri)}[/]");
                 if (!settings.NoViewer)
                     AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
             }
 
             if (source is RefreshingTileSource)
                 AnsiConsole.MarkupLine($"[grey]Checking the datasets for changes every {settings.RefreshSeconds} s.[/]");
-            AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256, or the WMTS capabilities URL in a GIS. Ctrl-C to stop.");
+            AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256, or the WMTS or WMS URL in a GIS. Ctrl-C to stop.");
 
             // The web host handles Ctrl-C and SIGTERM and stops itself.
             await server.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
@@ -226,7 +227,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 settings.Metatile,
                 settings.Parallel ?? Environment.ProcessorCount,
                 settings.CacheMegabytes * 1024L * 1024L,
-                diskCache);
+                diskCache,
+                new DatasetFeatureQuery(settings));
             return 0;
         }
         catch

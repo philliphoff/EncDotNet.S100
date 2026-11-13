@@ -244,7 +244,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
     /// result holds at most one sample per specification (the service selects
     /// the covering dataset for that spec).
     /// </summary>
-    private static List<CoverageSample> SampleCoverages(
+    internal static List<CoverageSample> SampleCoverages(
         IDatasetCatalog catalog,
         double latitude,
         double longitude,
@@ -275,14 +275,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
     }
 
     /// <summary>A coverage sample and the specification it came from.</summary>
-    private sealed record CoverageSample(string Spec, SampleCoverageResult Result);
+    internal sealed record CoverageSample(string Spec, SampleCoverageResult Result);
 
     /// <summary>
     /// The not-for-navigation notices of the products in the result that
     /// aren't S-100 (weather grids and CAP warnings), each once, in the order
     /// they appear: the registration's own notice, else the weather one.
     /// </summary>
-    private static List<string> Notices(
+    internal static List<string> Notices(
         IdentifyFeaturesResult features,
         IReadOnlyList<CoverageSample> samples)
     {
@@ -491,7 +491,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         Console.WriteLine(root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static JsonElement? TryDescribeAttributes(
+    internal static JsonElement? TryDescribeAttributes(
         DescribeFeatureService describer,
         DatasetId datasetId,
         string featureId)
@@ -501,7 +501,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         return result.TryGetValue(out var described) ? described.Attributes : null;
     }
 
-    private static JsonObject SampleToJson(SampledValue value) => value switch
+    internal static JsonObject SampleToJson(SampledValue value) => value switch
     {
         DepthSample d => new JsonObject
         {
@@ -579,7 +579,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         };
     }
 
-    private static string DescribeSample(SampledValue value) => value switch
+    internal static string DescribeSample(SampledValue value) => value switch
     {
         DepthSample d => $"depth {d.DepthMeters.ToString("0.##", CultureInfo.InvariantCulture)} m"
             + (d.UncertaintyMeters is { } u ? $" ±{u.ToString("0.##", CultureInfo.InvariantCulture)} m" : string.Empty),

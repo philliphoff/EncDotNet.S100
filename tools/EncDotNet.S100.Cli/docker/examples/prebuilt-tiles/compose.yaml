@@ -1,0 +1,40 @@
+# Prebuilt tiles: render the charts once, then serve the finished tiles.
+#
+# Put your datasets in ./charts next to this file, then:
+#
+#   docker compose run --rm export    # render ./charts into the tiles volume
+#   docker compose up -d              # serve it on http://localhost:8200/
+#
+# Run the export again whenever the charts change. The server keeps serving the
+# old archive until the new one is finished, then serves the new one; it
+# doesn't need a restart. See https://soundcharts.app/docs/docker.html.
+
+services:
+  # Renders every dataset in ./charts into one PMTiles archive. It's in the
+  # "export" profile, so `docker compose up` doesn't run it.
+  export:
+    image: ghcr.io/philliphoff/s100
+    command: tiles export /data -o /cache/charts.pmtiles --skip-empty --yes
+    volumes:
+      - ./charts:/data:ro
+      - tiles:/cache
+    profiles: [export]
+
+  # Serves the archive. Nothing is portrayed or rendered at request time.
+  tiles:
+    image: ghcr.io/philliphoff/s100
+    command: tiles serve /cache/charts.pmtiles --host 0.0.0.0 --no-token
+    ports:
+      - "8200:8200"
+    volumes:
+      - tiles:/cache:ro
+    healthcheck:
+      test: ["CMD", "/app/s100", "health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      start_interval: 1s
+    restart: unless-stopped
+
+volumes:
+  tiles:
