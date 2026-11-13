@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`s100 tiles serve` is a WMS service.** `tiles serve` now also answers
+  OGC WMS 1.3.0 (and 1.1.1) requests at `wms`. GetMap draws any area in
+  EPSG:3857, EPSG:4326 or CRS:84 from the served tiles. GetFeatureInfo
+  reports the features and coverage values at a clicked point, as
+  `s100 identify` does, in HTML, GeoJSON or plain text, so the QGIS
+  Identify Features tool works on the chart. See [WMS](cli.md#wms).
 - **Tide stations in SoundCharts.** A **Tide stations · predicted** row
   under *Other chart overlays* draws NOAA's tide stations from 1:500,000 as
   S-104 gauges with a dashed frame: rising, falling or turning at the view

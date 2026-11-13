@@ -18,7 +18,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// Serves an <see cref="ITileSource"/> over HTTP on the standard XYZ URLs
 /// (issue #865): <c>{z}/{x}/{y}.{ext}</c> tiles, a <c>tiles.json</c> TileJSON
 /// document whose tile URL is absolute, an OGC WMTS 1.0.0 service under
-/// <c>wmts</c> (<see cref="WmtsService"/>), and optionally a preview page at
+/// <c>wmts</c> (<see cref="WmtsService"/>), an OGC WMS 1.3.0 service at
+/// <c>wms</c> (<see cref="WmsService"/>), and optionally a preview page at
 /// the root. With a token, every route lives under <c>/&lt;token&gt;/</c>.
 /// </summary>
 /// <remarks>
@@ -96,6 +97,9 @@ internal sealed class TileServer : IAsyncDisposable
         app.MapGet(prefix + "/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source, prefix));
         app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
         app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+
+        // OGC WMS 1.3.0: GetCapabilities, GetMap and GetFeatureInfo.
+        app.MapGet(prefix + "/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context, prefix)));
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 

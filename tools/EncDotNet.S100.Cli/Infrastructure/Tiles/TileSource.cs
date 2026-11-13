@@ -29,6 +29,13 @@ internal interface ITileSource
     IReadOnlyList<DateTime> Times => [];
 
     /// <summary>
+    /// Finds the features and coverage values at a point in the datasets the
+    /// tiles are rendered from, for WMS GetFeatureInfo; <see langword="null"/>
+    /// when the tiles have no datasets behind them (a built tile set).
+    /// </summary>
+    DatasetFeatureQuery? FeatureQuery => null;
+
+    /// <summary>
     /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
     /// (rows numbered from the north) in <paramref name="palette"/> (one of
     /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at

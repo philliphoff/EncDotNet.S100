@@ -1,6 +1,6 @@
 #### Agent guidance
 
-`tiles serve` serves raster tiles on XYZ URLs and as WMTS. Its input is either a built
+`tiles serve` serves raster tiles on XYZ URLs, as WMTS and as WMS. Its input is either a built
 tile set — a `{z}/{x}/{y}` directory, a `.pmtiles` archive or a `.mbtiles`
 database — or datasets in the same forms `tiles export` takes (one dataset,
 repeated `--layer`, or an exchange set), which are rendered as their tiles are
@@ -34,6 +34,23 @@ the single style `default`. Time-varying datasets add a `Time` dimension (KVP
 `ExceptionReport` with status 400 (501 for unsupported operations). Point QGIS
 (Layer > Add WMS/WMTS Layer), ArcGIS Pro or GDAL (`WMTS:<capabilities URL>`)
 at the capabilities URL that the startup output prints.
+
+The same server is an OGC WMS 1.3.0 service at `wms` (KVP only;
+`SERVICE=WMS&REQUEST=GetCapabilities|GetMap|GetFeatureInfo`). One layer,
+`s100`; CRSs `EPSG:3857` (aliases 900913, 102100), `EPSG:4326` (latitude-first
+BBOX in 1.3.0, longitude-first in 1.1.1) and `CRS:84`; styles are the palettes
+with the `--palette` one first; `TIME` picks the step. GetMap composes from
+the XYZ tiles of the nearest zoom (symbols 0.7–1.4× their size; nothing below
+the minimum zoom, whose scale is the layer's `MaxScaleDenominator`), PNG or
+JPEG, at most 4096 px a side, opaque on `BGCOLOR` (white) unless
+`TRANSPARENT=TRUE`. GetFeatureInfo is offered only when rendering datasets (a
+built tile set's layer has `queryable="0"`): it opens the datasets into an
+identify catalogue on first use and reports what `s100 identify --attributes`
+would at the pixel centre (`I`/`J`, or 1.1.1 `X`/`Y`), matching points and
+curves within 5 px, up to `FEATURE_COUNT` (default 1, max 200) features, as
+`text/html`, `text/plain` or GeoJSON (`application/json`,
+`application/geo+json`; each result is a Point at the click). Errors are a WMS
+`ServiceExceptionReport` with status 400.
 
 For time-varying datasets (S-104, S-111), add `?t=<ISO 8601>` to a tile or
 `tiles.json` URL to pick the time step: it snaps to the nearest of the steps
