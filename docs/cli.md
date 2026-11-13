@@ -120,7 +120,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | Command | What it does |
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
-| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
+| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive, an MBTiles database, a GeoPackage or a GeoTIFF. |
 | [`tiles serve`](#tiles-serve) | Serves a built tile set or datasets on XYZ URLs and as WMTS and WMS services, for web maps and GIS desktops on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
@@ -402,9 +402,27 @@ The container comes from the output path:
   format many tile servers read. Rows are numbered from the south, as MBTiles
   requires. The `metadata` table holds the standard keys plus `tileSize` and
   the display settings, prefixed `s100:`.
+- **GeoPackage.** An output ending in `.gpkg` is written as one
+  [OGC GeoPackage](https://www.geopackage.org/) 1.4 tile pyramid, which
+  QGIS, ArcGIS Pro, GDAL and field apps such as QField open as an offline
+  raster layer. The tiles are in a table named `chart`, in EPSG:3857 on the
+  Web Mercator grid, so each zoom level is a tile matrix, and rows are
+  numbered from the north as in XYZ. The TileJSON is kept as GeoPackage
+  metadata. WebP tiles register the `gpkg_webp` extension, which not every
+  reader supports, so use PNG or JPEG for the widest reach.
+- **GeoTIFF.** An output ending in `.tif` or `.tiff` is written as one
+  [Cloud-Optimized GeoTIFF](https://cogeo.org/) in EPSG:3857, for tools that
+  take a single georeferenced image. The maximum zoom is the full-resolution
+  image and each lower zoom is an overview, down to an image a tile or two
+  across, so `--min-zoom` only limits how far the overviews go. The image is
+  whole tiles of its smallest overview, so it can reach past the data; tiles
+  with nothing on them are left out of the file, and read as transparent.
+  PNG and WebP tiles are stored as RGBA with Deflate compression, and JPEG
+  tiles as they are (no transparency, and empty areas read as black). The
+  file is a BigTIFF when it would pass 4 GB. It can't cross the antimeridian.
 
 Set `--container` to choose the container whatever the extension. An existing
-`.pmtiles` or `.mbtiles` file at the output path is replaced only once the new
+`.pmtiles`, `.mbtiles`, `.gpkg` or `.tif` file at the output path is replaced only once the new
 one is finished: the new file is written beside it, with `.partial` added to
 its name, and then moved into its place. Until then a [`tiles serve`](#tiles-serve)
 reading the old file keeps serving it, and if the export fails or is stopped,
@@ -417,11 +435,11 @@ the old file is left as it was.
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
 | `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
 | `--only <specs>` | all | Exchange-set and folder forms only. Tiles only these product specifications, comma-separated. |
-| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file or a `.mbtiles` file. Its parent folder must exist. |
-| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles` or `mbtiles`. |
+| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file, a `.mbtiles` file, a `.gpkg` file or a `.tif` file. Its parent folder must exist. |
+| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles`, `gpkg` or `geotiff`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
 | `--max-zoom <0-24>` | from the data | Highest zoom level. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. Datasets that can't draw in those tiles aren't portrayed. See [Zoom levels](#zoom-levels). |
 | `--tile-size <pixels>` | `256` | `256`, or `512` for high-DPI tiles of the same grid. |
 | `--format <format>` | `png` | `png`, `jpeg` (or `jpg`) or `webp`. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
@@ -451,6 +469,8 @@ s100 tiles export enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
 s100 tiles export --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
 s100 tiles export exchange-set/ -o tiles/ --format webp --skip-empty
 s100 tiles export enc.000 -o chart.mbtiles --max-zoom 16
+s100 tiles export exchange-set/ -o chart.gpkg --format jpeg
+s100 tiles export enc.000 -o chart.tif --max-zoom 15 --skip-empty
 s100 tiles export --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
 ```
 
@@ -492,6 +512,15 @@ finest cell's compilation scale. Products without these scales, such as GML
 products and coverages, start at the zoom where their extent fits in about one
 tile and go six levels deeper, up to zoom 18.
 
+With `--bbox`, datasets that can't draw in any of its tiles are closed before
+they're portrayed, and `tiles export` says how many it left out. A dataset is
+kept when its extent reaches the tiles that cover the box at the lowest zoom,
+or the ring of tiles around them, so symbols and text near an edge tile are
+drawn as they would be without `--bbox`. This saves time and memory when the
+box covers a small part of a large folder. The default zoom range then comes
+from the datasets that are kept. For a box that crosses the antimeridian,
+every dataset is kept.
+
 `tiles export` prints the number of tiles before it renders any. Each zoom level has
 four times the tiles of the one before, so a set grows quickly. Above 100,000
 tiles, `tiles export` asks before writing, or exits with code `2` when it can't ask.
@@ -519,10 +548,12 @@ s100 tiles serve <folder> [options]
 `tiles serve` serves raster tiles over HTTP on the standard XYZ URLs, so a web
 map running on this computer can use them as a tile source. It serves either:
 
-- **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive or a
-  `.mbtiles` database that [`tiles export`](#tiles-export) or another tool
-  wrote. The tile set is read at each request, so if you export it again while
-  it's served, the next request sees the new tiles. A `.pmtiles` or `.mbtiles`
+- **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive, a
+  `.mbtiles` database or a `.gpkg` GeoPackage that [`tiles export`](#tiles-export)
+  or another tool wrote. A GeoPackage must hold tiles in EPSG:3857 on the Web
+  Mercator grid, as `tiles export` and GDAL's `GoogleMapsCompatible` tiling
+  scheme write them. The tile set is read at each request, so if you export it again while
+  it's served, the next request sees the new tiles. A `.pmtiles`, `.mbtiles` or `.gpkg`
   file keeps serving its old tiles until the new export is finished. Only PNG, JPEG and WebP
   raster tiles are served, not vector tiles.
 - **Datasets**, rendered when each tile is first asked for. It takes the same
@@ -625,6 +656,7 @@ area, the tile format and display settings apply too; the output options
 ```bash
 s100 tiles serve chart.pmtiles
 s100 tiles serve chart.mbtiles --port 9000
+s100 tiles serve chart.gpkg
 s100 tiles serve tiles/ --host 0.0.0.0
 s100 tiles serve enc.000
 s100 tiles serve --layer enc.000 --layer bathy.h5 --palette night
@@ -1303,7 +1335,7 @@ S-100 products. See [Supported specifications](#supported-specifications).
 s100 health [--host <address>] [--port <port>] [--timeout <seconds>]
 ```
 
-`health` asks a running `tiles serve` or `feed serve` for its `/healthz` route
+`health` asks a running `tiles serve`, `feed serve` or `mcp serve --transport http` for its `/healthz` route
 and exits with `0` when it answers `200 OK`, or `1` when nothing is listening,
 the server answers with an error, or there's no answer in time. It prints what
 it asked and what came back. Use it as a container health check: the
@@ -1312,7 +1344,7 @@ it asked and what came back. Use it as a container health check: the
 | Option | Default | Description |
 |---|---|---|
 | `--host <address>` | `127.0.0.1` | The server's address. |
-| `--port <port>` | `8200` | The server's port. `tiles serve` listens on 8200 by default and `feed serve` on 8100. |
+| `--port <port>` | `8200` | The server's port. `tiles serve` listens on 8200 by default, `feed serve` on 8100 and `mcp serve --transport http` on 8300. |
 | `--timeout <seconds>` | `5` | How long to wait for an answer. |
 
 ```bash
@@ -1406,7 +1438,9 @@ s100 mcp serve --layer <dataset> [--layer <dataset> ...] [options]
 
 `mcp serve` runs an [MCP server](mcp-server.md) over standard input and
 output, so an AI agent that starts the process can query and render datasets
-without SoundCharts. It takes the same input forms as `render`. Datasets that
+without SoundCharts. With `--transport http`, it serves the same tools over
+HTTP instead, so agents on other computers, or in other containers, can
+connect to it. See [MCP over HTTP](#mcp-over-http). It takes the same input forms as `render`. Datasets that
 fail to load are skipped with a warning.
 
 To use it, configure your MCP client to run the command `s100` with the
@@ -1430,6 +1464,12 @@ lists them all.
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
 | `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample_coverage` and `sample_coverage_along` the nearest current station where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
+| `--transport <transport>` | `stdio` | `stdio`, or `http` to serve over HTTP. |
+| `--host <address>` | `127.0.0.1` | HTTP only. The address to listen on. `0.0.0.0` accepts other computers. |
+| `--port <port>` | `8300` | HTTP only. The port. `0` picks a free one. |
+| `--token <token>` | generated for a non-loopback host | HTTP only. The bearer token clients must send. Letters, digits, `-` and `_`. |
+| `--no-token` | off | HTTP only. Serves without a token, even on a non-loopback address. |
+| `--allow-changes` | off | HTTP only. Also serves the tools that open datasets by path and change the Library. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
@@ -1442,6 +1482,51 @@ s100 mcp serve --from exchange-set.zip --only S101,S102
 Standard output carries the MCP protocol. Startup messages, load warnings and
 errors go to standard error. The server runs until the client closes standard
 input, or until you interrupt it.
+
+### MCP over HTTP
+
+```bash
+s100 mcp serve charts/ --transport http
+s100 mcp serve charts/ --transport http --host 0.0.0.0 --token my-token
+```
+
+With `--transport http`, `mcp serve` serves the MCP
+[Streamable HTTP](https://modelcontextprotocol.io/specification/latest/basic/transports#streamable-http)
+transport at `http://<host>:<port>/mcp`, and prints that URL for each network
+address. It runs until you interrupt it or it's sent SIGTERM. Several clients
+can connect at once, and they share one session: one client's `set_palette`
+changes what `render_to_image` draws for the others.
+
+By default only this computer can connect. With `--host 0.0.0.0`, other
+computers can, and `mcp serve` generates a random token unless you pass
+`--token` or `--no-token`. It prints a token it generates at startup, but not
+one you pass. Clients send the token in a header:
+
+```text
+Authorization: Bearer <token>
+```
+
+A request without the token is answered `401 Unauthorized`. Pass `--token` to
+keep the same token across restarts. A request whose `Origin` header names
+another host is answered `403 Forbidden`, so a web page open in a browser
+can't use a server on your computer.
+
+Over HTTP, `mcp serve` leaves out the tools that reach beyond the datasets
+you served, because a client could use them to read any file the server can
+read or make it fetch any URL:
+
+- `open_dataset`, `close_dataset` and `close_all_datasets`.
+- The Library tools that change it: `add_library_source`,
+  `refresh_library_source`, `remove_library_source`,
+  `set_library_source_options`, `library_action`, `await_library_idle` and
+  `set_secom_identity`.
+
+The query, session, Library listing and tide tools are served. Pass
+`--allow-changes` to serve every tool, as over standard input and output.
+Sources you add with `--collection` are in the Library either way.
+
+`/healthz` answers `200 OK` without a token, so `s100 health --port 8300`
+checks the server. See [`health`](#health).
 
 ## feed serve
 

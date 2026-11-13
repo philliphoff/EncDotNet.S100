@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Reflection;
 using Avalonia.Controls;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.McpTools;
@@ -48,7 +49,7 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
             FeatureRef = entry.FeatureRef,
             DatasetFileName = entry.DatasetId,
             ProductSpec = "S-124",
-            NavigationalWarning = entry.Warning,
+            Sections = [new NavigationalWarningSection(entry.Warning)],
         }]);
 
     // A waypoint at 2600 m, inside 001/26's area, so the route meets it on two legs.

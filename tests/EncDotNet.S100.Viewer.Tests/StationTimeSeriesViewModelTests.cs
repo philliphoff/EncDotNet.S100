@@ -158,7 +158,7 @@ public class StationTimeSeriesViewModelTests
         {
             FeatureType = "WaterLevel",
             FeatureRef = "station:ST01",
-            StationSeries = snap,
+            Sections = [new StationSeriesSection(snap)],
         };
         Assert.NotNull(hit.StationSeries);
         Assert.Same(snap, hit.StationSeries);
@@ -188,7 +188,7 @@ public class StationTimeSeriesViewModelTests
                 FeatureType = "WaterLevel",
                 FeatureRef = "station:ST01",
                 ProductSpec = "S-104",
-                StationSeries = snap,
+                Sections = [new StationSeriesSection(snap)],
             },
         });
         Assert.True(report.HasStationSeries);
@@ -203,6 +203,44 @@ public class StationTimeSeriesViewModelTests
         Assert.Null(report.SelectedStationSeries);
         // The next pick disposes the chart of the one before.
         Assert.True(chart.IsDisposed);
+    }
+
+    [Fact]
+    public void PickReportViewModel_ChoosesTheChartByChannel_WhateverTheProduct()
+    {
+        var report = TestPickReport.Create();
+
+        // A tide prediction or another source's station: no S-104 or S-111
+        // product name, but the channels say which chart draws it.
+        report.SetPicks([new PickHit
+        {
+            FeatureType = "PredictedStation",
+            FeatureRef = "station:9447130",
+            Sections = [new StationSeriesSection(SyntheticSurfaceCurrent())],
+        }]);
+
+        Assert.IsType<S111StationTimeSeriesViewModel>(report.SelectedStationSeries);
+        Assert.False(report.HasSections);
+    }
+
+    [Fact]
+    public void PickReportViewModel_StationSeriesWithNoChart_ShowsItsRows()
+    {
+        var snap = new StationTimeSeriesSnapshot
+        {
+            StationId = "B1",
+            Latitude = 0,
+            Longitude = 0,
+            Times = [new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc)],
+            Channels = [new StationTimeSeriesChannel { Key = "waveHeight", DisplayName = "Wave height", Unit = "m", Values = [1.5f] }],
+        };
+        var report = TestPickReport.Create();
+
+        report.SetPicks([new PickHit { FeatureType = "Buoy", FeatureRef = "station:B1", Sections = [new StationSeriesSection(snap)] }]);
+
+        Assert.False(report.HasStationSeries);
+        var rows = Assert.IsType<PickSectionRowsViewModel>(Assert.Single(report.SelectedSections));
+        Assert.Contains(rows.Rows, r => r.DisplayName == "Wave height" && r.DisplayText == "1.5 to 1.5 m");
     }
 
     private sealed class FakeTimeAware : ITimeAwareDataset

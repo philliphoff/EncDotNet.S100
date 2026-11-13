@@ -84,6 +84,92 @@ public sealed record IceEggCodeSection(IceEggCode Egg) : PickSection
 }
 
 /// <summary>
+/// The full time series of a fixed-station observation, such as an S-104 water
+/// level or S-111 surface current station (data coding format 8), or a tide
+/// prediction written as one. Hosts chart it from its channels, whatever
+/// product it comes from, and move the chart's now-marker with the view time.
+/// </summary>
+/// <param name="Series">The station and its channels.</param>
+public sealed record StationSeriesSection(StationTimeSeriesSnapshot Series) : PickSection
+{
+    /// <summary>The kind of a <see cref="StationSeriesSection"/>.</summary>
+    public const string KindName = "station-series";
+
+    /// <inheritdoc />
+    [JsonIgnore]
+    public override string Kind => KindName;
+
+    /// <inheritdoc />
+    public override IReadOnlyList<PickAttribute> ToRows()
+    {
+        var rows = new List<PickAttribute>
+        {
+            Row("station", "Station", Series.StationName is { } name ? $"{name} ({Series.StationId})" : Series.StationId),
+        };
+        if (Series.Times.Count > 0)
+        {
+            rows.Add(Row("times", "Time steps", string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} from {1:yyyy-MM-dd HH:mm}Z to {2:yyyy-MM-dd HH:mm}Z",
+                Series.Times.Count, Series.Times[0], Series.Times[^1])));
+        }
+        foreach (var channel in Series.Channels)
+        {
+            var values = channel.Values
+                .Where(v => !float.IsNaN(v) && (channel.FillValue is not { } fill || v != fill))
+                .ToList();
+            if (values.Count == 0)
+                continue;
+            var range = string.Format(CultureInfo.InvariantCulture, "{0:0.##} to {1:0.##}", values.Min(), values.Max());
+            rows.Add(Row(channel.Key, channel.DisplayName, channel.Unit is { } unit ? $"{range} {unit}" : range));
+        }
+        return rows;
+    }
+
+    private static PickAttribute Row(string code, string name, string value) =>
+        new() { Code = code, Name = name, RawValue = value };
+}
+
+/// <summary>
+/// The message of a navigational warning (an S-124 <c>NavwarnPart</c>): its
+/// identification, type, validity, area and full text in every language.
+/// Object Information shows it as a warning card in place of attribute rows.
+/// </summary>
+/// <param name="Warning">The warning.</param>
+public sealed record NavigationalWarningSection(NavigationalWarningInfo Warning) : PickSection
+{
+    /// <summary>The kind of a <see cref="NavigationalWarningSection"/>.</summary>
+    public const string KindName = "nav-warning";
+
+    /// <inheritdoc />
+    [JsonIgnore]
+    public override string Kind => KindName;
+
+    /// <inheritdoc />
+    public override IReadOnlyList<PickAttribute> ToRows()
+    {
+        var rows = new List<PickAttribute>();
+        Add("warning", "Warning", Warning.Label);
+        Add("type", "Type", Warning.WarningType ?? Warning.GeneralType);
+        Add("title", "Title", Warning.Title);
+        Add("area", "Area", string.Join(", ", new[] { Warning.GeneralArea, Warning.Locality }.Where(a => !string.IsNullOrWhiteSpace(a))));
+        Add("validity", "Valid", string.Join("; ", Warning.Validity.Select(v => string.Format(
+            CultureInfo.InvariantCulture, "{0:yyyy-MM-dd HH:mm}Z to {1}",
+            v.Start, v.End is { } end ? end.ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture) : "further notice"))));
+        Add("cancellationDate", "Cancelled", Warning.CancellationDate?.ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture));
+        foreach (var text in Warning.Texts)
+            Add("text", text.Language is { } language ? $"Text ({language})" : "Text", text.Text);
+        return rows;
+
+        void Add(string code, string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                rows.Add(new PickAttribute { Code = code, Name = name, RawValue = value });
+        }
+    }
+}
+
+/// <summary>
 /// A registered <see cref="PickSection"/> kind: its name, its section type, a
 /// one-line description, and the JSON metadata MCP serializes it with.
 /// </summary>
@@ -129,6 +215,14 @@ public sealed class PickSectionKindRegistry
             IceEggCodeSection.KindName,
             PickSectionJsonContext.Default.IceEggCodeSection,
             "WMO / SIGRID-3 ice egg code: total concentration, then partial concentration, stage of development and form of ice for each ice type, with snow depth."));
+        registry.Register(new PickSectionKind(
+            StationSeriesSection.KindName,
+            PickSectionJsonContext.Default.StationSeriesSection,
+            "A fixed station's full time series: its time steps and each channel's values (water level height, or surface current speed and direction)."));
+        registry.Register(new PickSectionKind(
+            NavigationalWarningSection.KindName,
+            PickSectionJsonContext.Default.NavigationalWarningSection,
+            "A navigational warning's message: series and number, type, title, area, validity, cancellation and its text in each language."));
         return registry;
     }
 
@@ -175,4 +269,6 @@ public sealed class PickSectionKindRegistry
     UseStringEnumConverter = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(IceEggCodeSection))]
+[JsonSerializable(typeof(StationSeriesSection))]
+[JsonSerializable(typeof(NavigationalWarningSection))]
 internal sealed partial class PickSectionJsonContext : JsonSerializerContext;

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -142,6 +144,77 @@ public class PickSectionTests
         var kinds = PickSectionKindRegistry.CreateDefault();
 
         Assert.Throws<ArgumentException>(() => kinds.Register(kinds.Find(IceEggCodeSection.KindName)!));
+    }
+
+    private static StationTimeSeriesSnapshot Station() => new()
+    {
+        StationId = "9447130",
+        StationName = "Seattle",
+        Latitude = 47.6,
+        Longitude = -122.3,
+        Times = [new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 13, 1, 0, 0, DateTimeKind.Utc)],
+        Channels =
+        [
+            new StationTimeSeriesChannel { Key = "waterLevelHeight", DisplayName = "Height", Unit = "m", Values = [1.25f, -9999f], FillValue = -9999f },
+        ],
+    };
+
+    private static NavigationalWarningInfo Warning() => new()
+    {
+        Series = "NAVAREA IV",
+        Number = "123/26",
+        WarningType = "Local",
+        GeneralArea = "Gulf of Maine",
+        Validity = [new NavigationalWarningValidity(new DateTimeOffset(2026, 11, 13, 0, 0, 0, TimeSpan.Zero), null)],
+        Texts = [new NavigationalWarningText("eng", "Buoy off station.")],
+        AffectedAreas = [new S100FeatureGeometry { Primitive = S100GeometryType.Point, Points = [new GeoPosition(43, -70)] }],
+    };
+
+    [Fact]
+    public void StationSeriesSection_ToRows_SkipsFillValues()
+    {
+        var rows = new StationSeriesSection(Station()).ToRows();
+
+        Assert.Equal("Seattle (9447130)", rows.Single(r => r.Code == "station").RawValue);
+        Assert.Equal("1.25 to 1.25 m", rows.Single(r => r.Code == "waterLevelHeight").RawValue);
+    }
+
+    [Fact]
+    public void NavigationalWarningSection_ToRows_ListsTheMessage()
+    {
+        var rows = new NavigationalWarningSection(Warning()).ToRows();
+
+        Assert.Equal("NAVAREA IV 123/26", rows.Single(r => r.Code == "warning").RawValue);
+        Assert.Equal("2026-11-13 00:00Z to further notice", rows.Single(r => r.Code == "validity").RawValue);
+        Assert.Equal("Buoy off station.", rows.Single(r => r.Code == "text").RawValue);
+    }
+
+    [Fact]
+    public void KindRegistry_SerializesStationSeriesAndWarnings()
+    {
+        var kinds = PickSectionKindRegistry.CreateDefault();
+
+        var station = kinds.Find(StationSeriesSection.KindName)!.Serialize(new StationSeriesSection(Station()));
+        var warning = kinds.Find(NavigationalWarningSection.KindName)!.Serialize(new NavigationalWarningSection(Warning()));
+
+        Assert.Equal("9447130", station.GetProperty("series").GetProperty("stationId").GetString());
+        Assert.Equal(2, station.GetProperty("series").GetProperty("times").GetArrayLength());
+        Assert.Equal("123/26", warning.GetProperty("warning").GetProperty("number").GetString());
+        Assert.Equal("Point", warning.GetProperty("warning").GetProperty("affectedAreas")[0].GetProperty("primitive").GetString());
+    }
+
+    [Fact]
+    public void FeatureInfo_StationAndWarningShims_ReadTheSections()
+    {
+        var station = Station();
+        var warning = Warning();
+        var info = new FeatureInfo { FeatureRef = "f1", FeatureType = "x", Attributes = [] }
+            .WithSections([new StationSeriesSection(station), new NavigationalWarningSection(warning)]);
+
+#pragma warning disable CS0618 // The shims are what's under test.
+        Assert.Same(station, info.StationSeries);
+        Assert.Same(warning, info.NavigationalWarning);
+#pragma warning restore CS0618
     }
 
     private sealed record TestSection(string Note) : PickSection

@@ -195,7 +195,7 @@ public sealed class NavigationalWarningCardTests : IDisposable
             FeatureRef = "part.1",
             ProductSpec = "S-124",
             Attributes = [warningInformation, new PickAttribute { Code = "restriction", RawValue = "1", DisplayValue = null, Children = [] }],
-            NavigationalWarning = Warning(),
+            Sections = [new NavigationalWarningSection(Warning())],
         };
 
         vm.SetPicks([hit]);

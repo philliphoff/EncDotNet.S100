@@ -161,6 +161,14 @@ internal sealed class TileRenderSession : IDisposable
                 return 2;
             }
 
+            // With --bbox, a dataset wholly outside the area its tiles cover is
+            // closed before it is portrayed: in a large folder most datasets are,
+            // and their portrayals would hold most of the memory (#1464).
+            double[]? box = settings.BoundingBox is not null
+                && CompositeViewportBuilder.TryParseDoubles(settings.BoundingBox, 4, out var parsedBox)
+                    ? parsedBox
+                    : null;
+
             foreach (var (path, spec, applyInputUpdates) in inputs)
             {
                 IDatasetProcessor processor;
@@ -194,6 +202,32 @@ internal sealed class TileRenderSession : IDisposable
                 specsOpened.Add(spec);
             }
 
+            int outside = 0;
+            if (box is not null)
+            {
+                var filter = FilterBox(box, settings.MinZoom ?? LowestDefaultZoom(processors, box));
+                var crs = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+                for (int i = processors.Count - 1; i >= 0; i--)
+                {
+                    if (!IsOutside(processors[i], filter, crs))
+                        continue;
+
+                    (processors[i] as IDisposable)?.Dispose();
+                    processors.RemoveAt(i);
+                    specsOpened.RemoveAt(i);
+                    outside++;
+                }
+            }
+
+            if (outside > 0)
+                Console.Error.WriteLine($"Left out {outside} dataset(s) outside --bbox.");
+
+            if (processors.Count == 0 && outside > 0)
+            {
+                AnsiConsole.MarkupLine("[red]No dataset covers --bbox.[/]");
+                return 2;
+            }
+
             if (processors.Count == 0)
             {
                 AnsiConsole.MarkupLineInterpolated($"[red]No datasets that can be tiled were found in:[/] {folder ?? settings.ExchangeSetSource}");
@@ -214,6 +248,110 @@ internal sealed class TileRenderSession : IDisposable
                 catalogueManager.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// The WGS-84 box a dataset must reach to draw in a tile that covers
+    /// <paramref name="box"/>: the box grown to whole tiles, and one more ring
+    /// of tiles for symbols and text drawn past a dataset's extent, at the
+    /// lowest zoom written. Without <c>--min-zoom</c> that zoom isn't known
+    /// until the datasets are portrayed, so two levels below the zoom at which
+    /// the box fits in one tile stands in for it.
+    /// </summary>
+    internal static double[] FilterBox(double[] box, int? minZoom)
+    {
+        if (box[0] > box[2] || box[0] < -180 || box[2] > 180)
+            return box;
+
+        double west = box[0], south = box[1], east = box[2], north = box[3];
+        if (west > east || west < -180 || east > 180)
+            return box;
+
+        var (minX, minY) = WebMercator.FromLonLat(west, Math.Max(south, -WebMercator.MaxLatitude));
+        var (maxX, maxY) = WebMercator.FromLonLat(east, Math.Min(north, WebMercator.MaxLatitude));
+        double span = Math.Max(maxX - minX, maxY - minY);
+        int extentZoom = span > 0
+            ? Math.Clamp((int)Math.Floor(Math.Log2(2.0 * XyzTileGrid.Extent / span)), 0, XyzTileGrid.MaxZoom)
+            : DefaultZoomCeiling;
+        int zoom = Math.Clamp(minZoom ?? extentZoom - 2, 0, XyzTileGrid.MaxZoom);
+
+        double tile = 2.0 * XyzTileGrid.Extent / (1 << zoom);
+        double Down(double v) => (Math.Floor((v + XyzTileGrid.Extent) / tile) - 1) * tile - XyzTileGrid.Extent;
+        double Up(double v) => (Math.Ceiling((v + XyzTileGrid.Extent) / tile) + 1) * tile - XyzTileGrid.Extent;
+        double Clamp(double v) => Math.Clamp(v, -XyzTileGrid.Extent, XyzTileGrid.Extent);
+
+        var (grownWest, grownSouth) = WebMercator.ToLonLat(Clamp(Down(minX)), Clamp(Down(minY)));
+        var (grownEast, grownNorth) = WebMercator.ToLonLat(Clamp(Up(maxX)), Clamp(Up(maxY)));
+        return
+        [
+            grownWest,
+            grownSouth <= -WebMercator.MaxLatitude + 1e-9 ? -90 : grownSouth,
+            grownEast,
+            grownNorth >= WebMercator.MaxLatitude - 1e-9 ? 90 : grownNorth,
+        ];
+    }
+
+    /// <summary>
+    /// The lowest zoom the default zoom range can start at for
+    /// <paramref name="processors"/> and <paramref name="box"/>: the zoom of
+    /// the coarsest cell minimum display scale any of them declares, as
+    /// <see cref="ResolveZoomRange"/> derives it once they're portrayed. Over
+    /// every dataset, so it's no higher than the range of those left after
+    /// filtering. <see langword="null"/>, for the stand-in zoom, when a
+    /// dataset declares no scale (coverages, GML products), since its
+    /// portrayal may still set one.
+    /// </summary>
+    internal static int? LowestDefaultZoom(IReadOnlyList<IDatasetProcessor> processors, double[] box)
+    {
+        int coarsest = 0;
+        foreach (var processor in processors)
+        {
+            if (processor.Metadata.DisplayScale?.Minimum is not int scale || scale <= 0)
+                return null;
+            coarsest = Math.Max(coarsest, scale);
+        }
+
+        if (coarsest == 0)
+            return null;
+
+        var (_, minY) = WebMercator.FromLonLat(0, Math.Clamp(box[1], -WebMercator.MaxLatitude, WebMercator.MaxLatitude));
+        var (_, maxY) = WebMercator.FromLonLat(0, Math.Clamp(box[3], -WebMercator.MaxLatitude, WebMercator.MaxLatitude));
+        // The latitude ResolveLayout measures scales at: the box's middle in Web Mercator.
+        double referenceLatitude = WebMercator.ToLonLat(0, (minY + maxY) / 2.0).Latitude;
+        return XyzTileGrid.ZoomForScaleDenominator(coarsest, referenceLatitude);
+    }
+
+    /// <summary>
+    /// True when <paramref name="processor"/>'s extent is known and lies wholly
+    /// outside the WGS-84 box <c>west, south, east, north</c>. A box or an
+    /// extent that crosses the antimeridian, or reaches past ±180°, is never
+    /// outside, so nothing that might show is left out.
+    /// </summary>
+    internal static bool IsOutside(IDatasetProcessor processor, double[] box, ICrsTransformFactory crs)
+    {
+        BoundingBox? extent;
+        try
+        {
+            extent = processor.Metadata.GetGeographicExtent(crs);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return false;
+        }
+
+        if (extent is null)
+            return false;
+
+        double west = box[0], south = box[1], east = box[2], north = box[3];
+        if (west > east || west < -180 || east > 180
+            || extent.WestLongitude > extent.EastLongitude
+            || extent.WestLongitude < -180 || extent.EastLongitude > 180)
+        {
+            return false;
+        }
+
+        return extent.EastLongitude < west || extent.WestLongitude > east
+            || extent.NorthLatitude < south || extent.SouthLatitude > north;
     }
 
     /// <summary>

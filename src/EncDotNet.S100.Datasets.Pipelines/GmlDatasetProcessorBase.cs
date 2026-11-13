@@ -647,7 +647,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
             References = references,
-            NavigationalWarning = BuildNavigationalWarning(feature),
+            Sections = BuildNavigationalWarning(feature) is { } warning ? [new NavigationalWarningSection(warning)] : [],
         };
     }
 

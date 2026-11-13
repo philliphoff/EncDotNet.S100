@@ -266,6 +266,8 @@ public sealed class TilesExportCommandTests
     [InlineData("out.MBTiles", null, "MbTiles")]
     [InlineData("out", null, "Xyz")]
     [InlineData("out", "mbtiles", "MbTiles")]
+    [InlineData("out.GPKG", null, "GeoPackage")]
+    [InlineData("out", "geopackage", "GeoPackage")]
     [InlineData("out.pmtiles", "xyz", "Xyz")]
     public void Container_comes_from_the_option_or_the_extension(string output, string? option, string expected)
     {
@@ -299,6 +301,56 @@ public sealed class TilesExportCommandTests
                     Directory.Delete(directory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void A_dataset_outside_the_bbox_is_left_out()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+
+        var output = TempPath("outside") + ".pmtiles";
+        try
+        {
+            // The cell is off Massachusetts; the box is in the Gulf of Guinea.
+            int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, "--bbox", "1,1,2,2", "--max-zoom", "10"], TestContext.Current.CancellationToken);
+
+            Assert.Equal(2, exit);
+            Assert.False(File.Exists(output));
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void The_filter_box_covers_whole_tiles_and_a_ring_more_at_the_lowest_zoom()
+    {
+        double[] box = [-71.12, 42.28, -70.88, 42.42];
+
+        var grown = TileRenderSession.FilterBox(box, minZoom: 10);
+
+        // A zoom-10 tile is 360/1024 = 0.35° wide: the box grows to whole tiles,
+        // then by one more tile on every side.
+        double tile = 360.0 / 1024;
+        Assert.InRange(box[0] - grown[0], tile, 2 * tile);
+        Assert.InRange(grown[2] - box[2], tile, 2 * tile);
+        Assert.True(grown[1] < box[1] - 0.2 && grown[3] > box[3] + 0.2);
+
+        // A deeper lowest zoom grows it less.
+        var tighter = TileRenderSession.FilterBox(box, minZoom: 14);
+        Assert.True(tighter[0] > grown[0] && tighter[2] < grown[2]);
+    }
+
+    [Theory]
+    [InlineData(170, 10, -170, 20)]
+    [InlineData(-190, 10, -170, 20)]
+    public void A_box_across_the_antimeridian_is_not_grown(double west, double south, double east, double north)
+    {
+        double[] box = [west, south, east, north];
+
+        Assert.Equal(box, TileRenderSession.FilterBox(box, minZoom: 10));
     }
 
     [Fact]
