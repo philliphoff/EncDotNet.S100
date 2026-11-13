@@ -271,11 +271,13 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         string? timelineLabel = null;
         string? timelineDetail = null;
         DatasetForecastRun? forecastRun = null;
+        ILiveDatasetProcessor? live = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
             using (processorLease)
             {
                 adjustsDepths = processorLease.Processor is IDepthAdjustableProcessor;
+                live = processorLease.Processor as ILiveDatasetProcessor;
                 if (processorLease.Processor is ITimeAwareDatasetProcessor timeAware)
                 {
                     timePolicy = TimePolicy.TryCreate(
@@ -339,6 +341,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             }
             entry.CatalogueMinimumDisplayScale = minimumDisplayScale;
             entry.MaximumDisplayScale = maximumDisplayScale;
+            AttachLive(dataset.Id, entry, live);
             try
             {
                 (rangeChanged, changedCurrent) = RecomputeTimeState();
@@ -371,6 +374,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             {
                 if (created)
                 {
+                    DetachLive(entry);
                     _entries.Remove(dataset.Id);
                     _order.Remove(dataset.Id);
                 }
@@ -404,12 +408,22 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
     /// The installed result, or <see langword="null"/> when the dataset was
     /// removed or its processor changed while rendering.
     /// </returns>
-    public async Task<MapsuiDatasetResult?> RenderAsync(
+    public Task<MapsuiDatasetResult?> RenderAsync(
         MapDatasetId datasetId,
         MapPresentationState presentation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(presentation);
+        return RenderAsAsync(datasetId, presentation, MapSessionRenderKind.Render, cancellationToken);
+    }
+
+    // RenderAsync, reporting the render as kind on the lifecycle events.
+    private async Task<MapsuiDatasetResult?> RenderAsAsync(
+        MapDatasetId datasetId,
+        MapPresentationState presentation,
+        MapSessionRenderKind kind,
+        CancellationToken cancellationToken)
+    {
 
         CancellationTokenSource localCts;
         DateTime? selectedTime;
@@ -420,6 +434,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             if (!_entries.TryGetValue(datasetId, out var entry))
                 return null;
             datasetLock = entry.RenderLock;
+            entry.LastPresentation = presentation;
             entry.RenderCts?.Cancel();
             localCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
@@ -441,7 +456,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                 datasetId,
                 presentation,
                 selectedTime,
-                MapSessionRenderKind.Render,
+                kind,
                 localCts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -1377,6 +1392,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                     }
 
                     removal.Entry.RenderCts?.Cancel();
+                    if (!preserveState || removeProcessor)
+                        DetachLive(removal.Entry);
                 }
                 removed = undo.Count;
             }
@@ -1740,6 +1757,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             _depthRefreshCts?.Cancel();
             CancelEntryRenders();
             _authorityProvider.CurrentChanged -= OnAuthorityChanged;
+            foreach (var entry in _entries.Values)
+                DetachLive(entry);
             _entries.Clear();
             _order.Clear();
             _stackEntries = [];
@@ -2901,6 +2920,18 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         public TimeSpan? RenderedAge { get; set; }
 
         public CancellationTokenSource? RenderCts { get; set; }
+
+        /// <summary>The presentation the dataset was last rendered with, which a live refresh renders with again.</summary>
+        public MapPresentationState? LastPresentation { get; set; }
+
+        /// <summary>The live processor whose <see cref="ILiveDatasetProcessor.Changed"/> this entry listens to, or null.</summary>
+        public ILiveDatasetProcessor? LiveProcessor { get; set; }
+
+        /// <summary>The handler subscribed to <see cref="LiveProcessor"/>.</summary>
+        public EventHandler<DatasetChangedEventArgs>? LiveHandler { get; set; }
+
+        /// <summary>Cancels the pending live refresh when a newer change supersedes it.</summary>
+        public CancellationTokenSource? LiveRefreshCts { get; set; }
 
         public IReadOnlyList<ILayer> Layers { get; set; } = [];
 

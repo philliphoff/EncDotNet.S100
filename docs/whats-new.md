@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Datasets that change after loading.** A processor that implements
+  `ILiveDatasetProcessor` raises `Changed` when its data changes, such as a
+  feed polled on a timer, and the Mapsui map session draws the dataset again:
+  it waits 250 ms for more changes, picks up new available times for the
+  timeline, and renders with the presentation the dataset was last drawn
+  with. Failures are reported through `DatasetRenderFailed` with the new
+  `MapSessionRenderKind.LiveRefresh`.
 - **Pick sections.** Object Information content that isn't attribute rows
   now comes through one extension point. `FeatureInfo.Sections` holds a
   feature's sections; `IPickContributor`s registered in
