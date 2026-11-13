@@ -20,6 +20,26 @@ month. For package versions and release assets, see
   `get_tide_display` and `set_tide_display` read and set it, and
   `pick_features` with `select` now shows live overlay features such as a
   station.
+- **Current stations in SoundCharts.** A **Current stations · predicted**
+  row draws NOAA's tidal current stations from 1:500,000: S-111's arrow in
+  its speed band's colour rising from a dashed station frame, with the speed,
+  or a slack bar and the turn time. Stations are hidden where S-111 covers
+  them, and the Legend tab has their speed bands. A station's card has the
+  current now, the speed 12 hours each side of the view time, the slacks and
+  maxima, the flood and ebb directions and the depth; currents are for
+  display only, not route checks. `set_tide_display` turns them on with
+  `currentStations`.
+- **Predicted water level on the chart and the Timeline.** The DEPTHS pill
+  says when depths are adjusted by a prediction ("+ water level 14:20 ·
+  predicted", or "partly predicted" beside S-104), its flyout lists the
+  predicted stations, offers **Use tide predictions** where no S-104 meets the
+  view, and says when NOAA has revised the station list. The adjusted-area
+  edge and the new seam where S-104 hands over to predictions are clipped to
+  the loaded charts' water, and a picked station outlines its cell. With
+  predictions on, the Timeline and its time HUD show even with nothing timed
+  loaded: a **Tide predictions** lane follows the station nearest the map
+  centre, and *All loaded* shows the next 48 hours. `get_depth_basis` reports
+  `predicted` and the stations.
 - **Tide predictions from the shell and for agents.** `s100 tides stations`
   lists tide stations near a point, `s100 tides predict` predicts a station's
   heights or highs and lows as a table, CSV, JSON or an S-104 file, and
@@ -30,6 +50,15 @@ month. For package versions and release assets, see
   the station and carries the caveat. See
   [`tides predict`](cli.md#tides-predict) and
   [Find when the tide is above a height](scenarios/tide-above-a-height.md).
+- **Tidal current predictions from the shell and for agents.**
+  `s100 tides currents stations` lists current stations near a point, and
+  `s100 tides currents predict` predicts a station's speeds and directions or
+  its slacks and maxima as a table, CSV, JSON or an S-111 file. The MCP tools
+  `list_current_stations` and `predict_current` do the same for agents, and
+  with tide predictions on, `sample_coverage` fills S-111 gaps with a
+  predicted current. See
+  [`tides currents predict`](cli.md#tides-currents-predict) and
+  [Find slack water in a pass](scenarios/slack-water-in-a-pass.md).
 - **Tidal current predictions.** `EncDotNet.S100.Tides` predicts tidal
   currents: `CurrentPredictor` for a harmonic current station (major axis,
   or both axes for a rotary current) and `SubordinateCurrentPredictor` for a

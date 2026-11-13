@@ -10,6 +10,8 @@ internal sealed class GlobalTimeService
 {
     private MapsuiDatasetLayerSession? _session;
     private MapsuiMapTimeSnapshot _snapshot = MapsuiMapTimeSnapshot.Empty;
+    private bool _openEnded;
+    private DateTime _ownTime;
 
     /// <summary>
     /// The app's clock (the test clock under <c>--mcp-test-hooks</c>), which
@@ -24,8 +26,44 @@ internal sealed class GlobalTimeService
     /// <summary>The latest sample across all registered datasets.</summary>
     public DateTime? MaxTime => _snapshot.Maximum;
 
-    /// <summary>The current global map clock.</summary>
-    public DateTime? CurrentTime => _snapshot.Current;
+    /// <summary>
+    /// The current global map clock: the session's while a dataset has time
+    /// samples, else, while <see cref="HasOpenEndedTime"/>, the view time
+    /// open-ended predictions are read at.
+    /// </summary>
+    public DateTime? CurrentTime => _snapshot.IsActive ? _snapshot.Current : _openEnded ? _ownTime : null;
+
+    /// <summary>
+    /// Whether something with no end and no samples, such as tide predictions,
+    /// gives the view time a meaning (tide predictions design D14): the
+    /// Timeline and its HUD show, and the view time can be set, even with no
+    /// timed dataset loaded. It never sets the loaded range.
+    /// </summary>
+    public bool HasOpenEndedTime => _openEnded;
+
+    /// <summary>Whether there's a view time: a timed dataset is loaded, or <see cref="HasOpenEndedTime"/>.</summary>
+    public bool HasViewTime => _snapshot.IsActive || _openEnded;
+
+    /// <summary>
+    /// Turns <see cref="HasOpenEndedTime"/> on or off. Turning it on with no
+    /// timed dataset loaded puts the view time at now, Live.
+    /// </summary>
+    /// <param name="openEnded">On or off.</param>
+    public void SetOpenEndedTime(bool openEnded)
+    {
+        if (_openEnded == openEnded)
+            return;
+        _openEnded = openEnded;
+        if (openEnded && !_snapshot.IsActive)
+        {
+            _ownTime = Clock.GetUtcNow().UtcDateTime;
+            SetMode(TimeMode.Live);
+        }
+
+        RangeChanged?.Invoke();
+        if (CurrentTime is { } current)
+            CurrentTimeChanged?.Invoke(current);
+    }
 
     /// <summary>True when at least one registered dataset has time samples.</summary>
     public bool IsActive => _snapshot.IsActive;
@@ -111,6 +149,16 @@ internal sealed class GlobalTimeService
 
     private void SetClock(DateTime time)
     {
+        if (!_snapshot.IsActive && _openEnded)
+        {
+            // No timed dataset: the open-ended view time is ours to keep.
+            if (_ownTime == time)
+                return;
+            _ownTime = time;
+            CurrentTimeChanged?.Invoke(time);
+            return;
+        }
+
         if (_session is not null)
         {
             _session.SetCurrentTime(time);
@@ -147,7 +195,11 @@ internal sealed class GlobalTimeService
 
     private void OnTimeRangeChanged(object? sender, EventArgs e)
     {
+        var previous = _snapshot.IsActive ? _snapshot.Current : null;
         UpdateSnapshot();
+        // The last timed dataset closed under open-ended predictions: keep its view time.
+        if (!_snapshot.IsActive && _openEnded && previous is { } last)
+            _ownTime = last;
         RangeChanged?.Invoke();
     }
 

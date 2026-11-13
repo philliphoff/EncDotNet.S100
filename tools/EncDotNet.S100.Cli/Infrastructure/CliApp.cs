@@ -77,7 +77,7 @@ internal static class CliApp
 
             config.AddBranch("tides", tides =>
             {
-                tides.SetDescription("Predict tides offline from harmonic constituents (NOAA CO-OPS stations). Astronomical tide only, not a forecast; not for navigation.");
+                tides.SetDescription("Predict tides and tidal currents offline from harmonic constituents (NOAA CO-OPS stations). Astronomical tide and current only, not a forecast; not for navigation.");
 
                 tides.AddCommand<TidesStationsCommand>("stations")
                     .WithDescription("List tide stations near a point, nearest first, with their kind (harmonic or subordinate), reference station and datums.")
@@ -92,8 +92,25 @@ internal static class CliApp
                     .WithExample("tides", "predict", "--near", "47.6,-122.34", "--datum", "LAT", "--format", "csv")
                     .WithExample("tides", "predict", "9447130", "--from", "2026-11-13", "--to", "2026-11-20", "--step", "6m", "--format", "s104", "-o", "seattle.h5");
 
+                tides.AddBranch("currents", currents =>
+                {
+                    currents.SetDescription("Predict tidal currents offline from harmonic constituents (NOAA CO-OPS current stations). Astronomical current only, not a forecast; not for navigation.");
+
+                    currents.AddCommand<TidesCurrentStationsCommand>("stations")
+                        .WithDescription("List tidal current stations near a point, nearest first, with their kind, reference station, depth and flood and ebb directions.")
+                        .WithExample("tides", "currents", "stations", "--near", "48.406,-122.643")
+                        .WithExample("tides", "currents", "stations", "--near", "37.82,-122.46", "--radius", "5nm", "--format", "json");
+
+                    currents.AddCommand<TidesCurrentPredictCommand>("predict")
+                        .WithDescription("Predict the tidal current at a current station: speed and direction at a step, or the slacks and maxima, as a table, CSV, JSON or an S-111 dataset.")
+                        .WithExample("tides", "currents", "predict", "PUG1701_33")
+                        .WithExample("tides", "currents", "predict", "Deception Pass", "--events", "--from", "2026-11-13", "--to", "2026-11-14")
+                        .WithExample("tides", "currents", "predict", "--near", "37.82,-122.46", "--step", "10m", "--format", "csv")
+                        .WithExample("tides", "currents", "predict", "PUG1701_33", "--from", "2026-11-13", "--to", "2026-11-20", "--step", "10m", "--format", "s111", "-o", "deception-pass.h5");
+                });
+
                 tides.AddCommand<TidesUpdateCommand>("update")
-                    .WithDescription("Download NOAA CO-OPS's tide stations into the offline catalogue (about 10 minutes), or check whether NOAA has newer data.")
+                    .WithDescription("Download NOAA CO-OPS's tide and current stations into the offline catalogue (about 10 minutes), or check whether NOAA has newer data.")
                     .WithExample("tides", "update")
                     .WithExample("tides", "update", "--check");
             });

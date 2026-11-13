@@ -35,6 +35,7 @@ internal sealed class TidePredictionSourceService : IDisposable
     private Task _loading = Task.CompletedTask;
     private bool _requested;
     private volatile bool _attempted;
+    private bool _checked;
     private readonly Action<Action> _post;
     private bool _disposed;
 
@@ -110,6 +111,13 @@ internal sealed class TidePredictionSourceService : IDisposable
         {
             _sources.TidePredictions = catalogue;
             SetState(TidePredictionSourceState.InUse);
+            if (!_checked)
+            {
+                // Once a session: has NOAA published newer data than the list (D21)?
+                _checked = true;
+                _ = _list.CheckForUpdatesAsync();
+            }
+
             return;
         }
 

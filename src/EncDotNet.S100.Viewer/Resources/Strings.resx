@@ -8733,5 +8733,167 @@
   <data name="Tides_List_Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="TimelinePanel_PredictionsOnlyTooltip" xml:space="preserve">
+    <value>Only predictions are loaded, and they have no end: showing the next 48 hours.</value>
+  </data>
+  <data name="TimelinePanel_TideLane" xml:space="preserve">
+    <value>Tide predictions</value>
+  </data>
+  <data name="TimelinePanel_TideLaneTooltip" xml:space="preserve">
+    <value>Predicted tide at the station nearest the map centre: the astronomical tide only, with no start or end. It never sets the Timeline's range, and the data steps skip it.</value>
+  </data>
+  <data name="TimelinePanel_TideLaneStationFormat" xml:space="preserve">
+    <value>{0} {1} · {2:0.0} km</value>
+  </data>
+  <data name="TimelinePanel_TideLaneHighFormat" xml:space="preserve">
+    <value>H {0:0.0;−0.0}</value>
+  </data>
+  <data name="TimelinePanel_TideLaneLowFormat" xml:space="preserve">
+    <value>L {0:0.0;−0.0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat" xml:space="preserve">
+    <value>+ water level {0} · predicted</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat_Short" xml:space="preserve">
+    <value>+ predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat_Compact" xml:space="preserve">
+    <value>Predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · predicted · part of view</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedPartialFormat_Short" xml:space="preserve">
+    <value>+ predicted {0} · part</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedFormat" xml:space="preserve">
+    <value>+ water level {0} · partly predicted</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedFormat_Short" xml:space="preserve">
+    <value>Partly predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · partly predicted · part of view</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictedRowFormat" xml:space="preserve">
+    <value>Predicted · {0} NOAA stations · {1}</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictedMoreFormat" xml:space="preserve">
+    <value>{0}, +{1}</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictionsOrder" xml:space="preserve">
+    <value>S-104 first; predictions only where no S-104 covers.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictionsLeaveOut" xml:space="preserve">
+    <value>Predictions leave out wind, pressure and river flow.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OfferHeading" xml:space="preserve">
+    <value>Tide predictions are available here</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OfferBody" xml:space="preserve">
+    <value>No S-104 covers this view, but NOAA tide stations are in reach. Predictions are the astronomical tide only, not a forecast.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_StaleFormat" xml:space="preserve">
+    <value>NOAA has revised the station list since {0}. Predictions still work; refresh to use the new values.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Status_DepthBasisPopup_TidePredictionsLink" xml:space="preserve">
+    <value>Tide predictions settings</value>
+  </data>
+  <data name="Tides_CurrentsLayer" xml:space="preserve">
+    <value>Current stations · predicted</value>
+  </data>
+  <data name="Tides_CurrentsLayer_Description" xml:space="preserve">
+    <value>NOAA tidal current predictions: speed and direction from harmonic constants, not a forecast. Shown at 1:500,000 and larger; not where S-111 covers.</value>
+  </data>
+  <data name="Tides_Currents_LegendSpec" xml:space="preserve">
+    <value>CURRENT</value>
+  </data>
+  <data name="Tides_Currents_LegendCaption" xml:space="preserve">
+    <value>Speed, kn · S-111 speed bands · arrow points where the current flows · dashed frame = predicted. Not drawn where S-111 covers the station.</value>
+  </data>
+  <data name="Tides_Currents_LegendSlack" xml:space="preserve">
+    <value>Slack, with the turn time</value>
+  </data>
+  <data name="Tides_Currents_SpeedLabelFormat" xml:space="preserve">
+    <value>{0:0.0} kn</value>
+  </data>
+  <data name="Tides_Currents_SlackLabelFormat" xml:space="preserve">
+    <value>slack {0}</value>
+  </data>
+  <data name="Tides_Currents_Pick_Current" xml:space="preserve">
+    <value>Predicted current</value>
+  </data>
+  <data name="Tides_Currents_SpeedDirectionFormat" xml:space="preserve">
+    <value>{0:0.0} kn · {1:000}°</value>
+  </data>
+  <data name="Tides_Currents_SubtitleFormat" xml:space="preserve">
+    <value>NOAA current station {0} · {1} · {2}</value>
+  </data>
+  <data name="Tides_Currents_FromFormat" xml:space="preserve">
+    <value>subordinate · from {0}</value>
+  </data>
+  <data name="Tides_Currents_DepthFormat" xml:space="preserve">
+    <value>{0:0.#} m below the surface</value>
+  </data>
+  <data name="Tides_Currents_DepthUnknown" xml:space="preserve">
+    <value>Not given</value>
+  </data>
+  <data name="Tides_Card_NowAtFormat" xml:space="preserve">
+    <value>PREDICTED AT {0}</value>
+  </data>
+  <data name="Tides_Currents_Slack" xml:space="preserve">
+    <value>Slack</value>
+  </data>
+  <data name="Tides_Currents_MaxFlood" xml:space="preserve">
+    <value>Max flood</value>
+  </data>
+  <data name="Tides_Currents_MaxEbb" xml:space="preserve">
+    <value>Max ebb</value>
+  </data>
+  <data name="Tides_Currents_Flood" xml:space="preserve">
+    <value>flood</value>
+  </data>
+  <data name="Tides_Currents_Ebb" xml:space="preserve">
+    <value>ebb</value>
+  </data>
+  <data name="Tides_Currents_TurningFormat" xml:space="preserve">
+    <value>{0:0.0} kn, turning to {1} at {2}</value>
+  </data>
+  <data name="Tides_Currents_FlowFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Tides_Currents_KnotsFormat" xml:space="preserve">
+    <value>{0:0.0} kn</value>
+  </data>
+  <data name="Tides_Currents_DegreesFormat" xml:space="preserve">
+    <value>{0:000}°</value>
+  </data>
+  <data name="Tides_Currents_CurveCaption" xml:space="preserve">
+    <value>knots · flood above the line, ebb below</value>
+  </data>
+  <data name="Tides_Currents_SlacksAndMaxima" xml:space="preserve">
+    <value>SLACKS AND MAXIMA</value>
+  </data>
+  <data name="Tides_Currents_FloodDirection" xml:space="preserve">
+    <value>Flood direction</value>
+  </data>
+  <data name="Tides_Currents_EbbDirection" xml:space="preserve">
+    <value>Ebb direction</value>
+  </data>
+  <data name="Tides_Currents_Depth" xml:space="preserve">
+    <value>Depth</value>
+  </data>
+  <data name="Tides_Currents_UsedFor" xml:space="preserve">
+    <value>Used for</value>
+  </data>
+  <data name="Tides_Currents_DisplayOnly" xml:space="preserve">
+    <value>Display only. Not used in route checks.</value>
+  </data>
+  <data name="Tides_Currents_Note" xml:space="preserve">
+    <value>Predicted from NOAA harmonic constants. Wind and river flow change real currents, and in a pass the strongest stream can be well away from the station. Not for navigation.</value>
+  </data>
   <!-- Tides T5 end -->
 </root>
