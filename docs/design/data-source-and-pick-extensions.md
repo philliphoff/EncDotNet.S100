@@ -687,8 +687,20 @@ Each slice ships on its own and leaves the tree working.
    re-render on `Changed`.
 5. **`DynamicSourceProcessor`.** Add the adapter. Move NDBC and NMEA weather
    onto it first, since they already use `IDynamicFeaturePortrayal`.
-6. **AIS and own-ship portrayals.** Move both to `IDynamicFeaturePortrayal`
-   and mark `IDynamicFeatureRenderer` obsolete.
+6. **AIS and own-ship portrayals.** Built, except the interface's
+   obsolescence. Move both to `IDynamicFeaturePortrayal` and mark
+   `IDynamicFeatureRenderer` obsolete.
+   - `VesselPortrayal` (`EncDotNet.S100.Portrayals`) draws both, with the
+     course vector, arrowhead and true-scale outline as Part 9 augmented
+     geometry (`InstructionBuilder.PointAt` and `Path`). The outline is a
+     line, as S-52 draws it, without the old translucent fill, and the
+     outline and disc switch at the scale denominator where the hull is
+     22 px long, which is the same at every latitude. (The Mapsui renderer
+     reckoned the switch with `cos φ` the wrong way round, so it drew the
+     hull only from `22 / cos² φ` px.)
+   - `OwnShipRenderer` and `AisVesselRenderer` are obsolete.
+     `IDynamicFeatureRenderer` itself stays until slice 7: the overlay host
+     and `PortrayedDynamicFeatureRenderer` still go through it.
 7. **`SourceRegistration` and source dataset entries.** Add the registry,
    categories for sources and the `DatasetEntry` origin. Move AIS, NDBC,
    NMEA weather and own-ship registrations onto it, with the shared

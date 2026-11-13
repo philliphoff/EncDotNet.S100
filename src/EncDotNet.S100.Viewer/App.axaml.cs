@@ -1381,7 +1381,7 @@ public partial class App : Application
 
         // Vessel geometry provider — reads user-configured dimensions
         // from ViewerSettings.OwnShip and pushes them onto every
-        // DynamicFeature so OwnShipRenderer can draw a true-scale hull.
+        // DynamicFeature so VesselPortrayal.OwnShip can draw a true-scale hull.
         // The settings provider is wrapped by the overridable provider so
         // pirate mode can temporarily adopt an impersonated target's
         // dimensions without persisting them.
@@ -1410,23 +1410,33 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
 
-        // PR-D? upgraded own-ship symbology: register OwnShipRenderer
-        // under the "ownship" key so the dynamic-source host resolves
-        // it for the own-ship source (RendererKey = "ownship").
-        EncDotNet.S100.Renderers.Mapsui.DynamicSources.DynamicFeatureRendererServiceCollectionExtensions
-            .AddDynamicFeatureRenderer<EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer>(
-                services,
-                rendererKey: EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource.FeatureKind);
+        // Own-ship symbology: the code-defined VesselPortrayal, drawn through
+        // the portrayal renderer under the "ownship" key the own-ship source
+        // names (RendererKey = "ownship").
+        services.AddKeyedSingleton<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IDynamicFeatureRenderer>(
+            EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource.FeatureKind,
+            (sp, _) =>
+            {
+                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
+                return new EncDotNet.S100.Renderers.Mapsui.DynamicSources.PortrayedDynamicFeatureRenderer(
+                    EncDotNet.S100.Portrayals.Application.VesselPortrayal.OwnShip,
+                    () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
+            });
 
         // PR-D3: AIS overlay. The renderer is always registered (idempotent
         // and harmless when no AIS source is active). The dynamic source
         // itself is constructed lazily via Services.DynamicSources.Ais.
         // AisOverlayServiceCollectionExtensions.AddAisOverlay so it can
         // be conditioned on settings + the API-key environment variable.
-        EncDotNet.S100.Renderers.Mapsui.DynamicSources.DynamicFeatureRendererServiceCollectionExtensions
-            .AddDynamicFeatureRenderer<EncDotNet.S100.Renderers.Mapsui.DynamicSources.AisVesselRenderer>(
-                services,
-                rendererKey: "vessel.ais");
+        services.AddKeyedSingleton<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IDynamicFeatureRenderer>(
+            "vessel.ais",
+            (sp, _) =>
+            {
+                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
+                return new EncDotNet.S100.Renderers.Mapsui.DynamicSources.PortrayedDynamicFeatureRenderer(
+                    EncDotNet.S100.Portrayals.Application.VesselPortrayal.Ais,
+                    () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
+            });
         EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
             .AddAisOverlay(services);
 

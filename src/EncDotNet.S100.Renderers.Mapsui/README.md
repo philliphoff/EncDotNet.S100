@@ -452,19 +452,20 @@ note.
   predictor, capped at 10 nm) for a point, a line for a curve, and a
   translucent fill with an outline for a surface. It's also used when a
   source's `RendererKey` is `null` or not registered.
-- **`OwnShipRenderer`**: own-ship symbols under the key `"ownship"`. When the
-  vessel is longer than `MinVesselPixels` on screen (22 px, about 6 mm at
-  96 dpi), it draws a true-scale hull outline from `DynamicFeature.VesselGeometry`
-  with a cross at the GPS antenna; otherwise it draws a disc. Both modes draw a
-  heading vector with an arrowhead. Without `VesselGeometry`, for example for an
-  AIS target of unknown size, it always draws the disc. See the
-  [own-ship symbology](../../docs/design/own-ship-symbology.md) design note.
+- **`OwnShipRenderer`** and **`AisVesselRenderer`** are obsolete: draw
+  own-ship and AIS targets with `PortrayedDynamicFeatureRenderer` over
+  `VesselPortrayal.OwnShip` and `VesselPortrayal.Ais` (from
+  `EncDotNet.S100.Portrayals`), which SoundCharts does. The portrayal draws the
+  same symbology as Part 9 drawing instructions, so it renders headless too.
+  See the [own-ship symbology](../../docs/design/own-ship-symbology.md) design
+  note.
 - **`PortrayedDynamicFeatureRenderer`**: draws features with a code-defined
   `IDynamicFeaturePortrayal` (from `EncDotNet.S100.Portrayals`). It lowers the
   portrayal's drawing instructions with the same scene builder a vector product
   uses into self-styled Mapsui features (`MapsuiDisplayListRenderer.RenderFeatures`),
   in the palette its accessor returns. The NDBC observations
-  (`EncDotNet.S100.DynamicSources.Ndbc`) are drawn with it.
+  (`EncDotNet.S100.DynamicSources.Ndbc`), own-ship and AIS targets
+  (`VesselPortrayal`) are drawn with it.
 - **`KindMatchingRenderer`**: chooses a renderer by `DynamicFeature.Kind`, by
   exact match or dotted prefix (`"vessel"` matches `"vessel.cargo"`). The
   longest key wins.
