@@ -17,8 +17,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <summary>
 /// Serves an <see cref="ITileSource"/> over HTTP on the standard XYZ URLs
 /// (issue #865): <c>{z}/{x}/{y}.{ext}</c> tiles, a <c>tiles.json</c> TileJSON
-/// document whose tile URL is absolute, and optionally a preview page at the
-/// root. With a token, every route lives under <c>/&lt;token&gt;/</c>.
+/// document whose tile URL is absolute, an OGC WMTS 1.0.0 service under
+/// <c>wmts</c> (<see cref="WmtsService"/>), and optionally a preview page at
+/// the root. With a token, every route lives under <c>/&lt;token&gt;/</c>.
 /// </summary>
 /// <remarks>
 /// Every response allows any origin (CORS), so a web map on another local
@@ -62,7 +63,7 @@ internal sealed class TileServer : IAsyncDisposable
         {
             o.Providers.Add<BrotliCompressionProvider>();
             o.Providers.Add<GzipCompressionProvider>();
-            o.MimeTypes = ["application/json", "text/html"];
+            o.MimeTypes = ["application/json", "application/xml", "text/html"];
         });
 
         var app = builder.Build();
@@ -88,6 +89,13 @@ internal sealed class TileServer : IAsyncDisposable
             app.MapGet(prefix + "/{palette}/{z}/{x}/{tile}", context =>
                 TryPalette(context, source, out var palette) ? ServeTileAsync(context, source, palette) : Task.CompletedTask);
         }
+
+        // OGC WMTS 1.0.0: the capabilities document, the KVP endpoint and the
+        // RESTful tile URLs, with and without the Time dimension.
+        app.MapGet(prefix + "/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source, prefix));
+        app.MapGet(prefix + "/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source, prefix));
+        app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+        app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
@@ -152,8 +160,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         // The tile URL is absolute, built from the request, so it works from
         // whichever address the client reached this server on.
-        var request = context.Request;
-        var baseUri = new Uri($"{request.Scheme}://{request.Host}{prefix}/{(palette is null ? string.Empty : palette + "/")}");
+        var baseUri = new Uri(RequestBaseUri(context, prefix), palette is null ? string.Empty : palette + "/");
         var json = source.ToTileJson(palette, time);
         var tiles = TileUrlTemplate(baseUri, source.Format);
         if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
@@ -184,6 +191,12 @@ internal sealed class TileServer : IAsyncDisposable
         if (!TryTime(context, out var time))
             return;
 
+        await WriteTileAsync(context, source, zoom, x, y, palette, time).ConfigureAwait(false);
+    }
+
+    /// <summary>Writes tile <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>, 204 when empty, 304 when the ETag matches.</summary>
+    private static async Task WriteTileAsync(HttpContext context, ITileSource source, int zoom, int x, int y, string? palette, DateTime? time)
+    {
         var data = await source.ReadAsync(zoom, x, y, palette, time, context.RequestAborted).ConfigureAwait(false);
         context.Response.Headers.CacheControl = "no-cache";
         if (data is null)
@@ -203,6 +216,78 @@ internal sealed class TileServer : IAsyncDisposable
         context.Response.ContentType = TileSource.ContentType(source.Format);
         context.Response.ContentLength = data.Length;
         await context.Response.Body.WriteAsync(data, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>The base URL a client reached this server on, ending in <c>/</c>, so documents carry URLs that work from there.</summary>
+    private static Uri RequestBaseUri(HttpContext context, string prefix) =>
+        new($"{context.Request.Scheme}://{context.Request.Host}{prefix}/");
+
+    private static Task ServeWmtsCapabilitiesAsync(HttpContext context, ITileSource source, string prefix)
+    {
+        context.Response.ContentType = "application/xml; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-cache";
+        return context.Response.WriteAsync(WmtsService.BuildCapabilities(source, RequestBaseUri(context, prefix)), context.RequestAborted);
+    }
+
+    /// <summary>The WMTS KVP endpoint: <c>REQUEST=GetCapabilities</c> or <c>REQUEST=GetTile</c>. Parameter names are case-insensitive.</summary>
+    private static Task ServeWmtsKvpAsync(HttpContext context, ITileSource source, string prefix)
+    {
+        var query = context.Request.Query;
+        string? Get(string name) => query.TryGetValue(name, out var values) ? values.ToString() : null;
+
+        var service = Get("SERVICE");
+        if (string.IsNullOrEmpty(service))
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "MissingParameterValue", "SERVICE", "The SERVICE parameter is required.");
+        if (!string.Equals(service, "WMTS", StringComparison.OrdinalIgnoreCase))
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "InvalidParameterValue", "SERVICE", $"Unknown service '{service}'; this is WMTS.");
+
+        var request = Get("REQUEST");
+        if (string.Equals(request, "GetCapabilities", StringComparison.OrdinalIgnoreCase))
+            return ServeWmtsCapabilitiesAsync(context, source, prefix);
+        if (!string.Equals(request, "GetTile", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.IsNullOrEmpty(request)
+                ? WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "MissingParameterValue", "REQUEST", "The REQUEST parameter is required.")
+                : WmtsErrorAsync(context, StatusCodes.Status501NotImplemented, "OperationNotSupported", "REQUEST", $"Operation '{request}' isn't supported; use GetCapabilities or GetTile.");
+        }
+
+        var (tile, error) = WmtsService.ParseTile(
+            source, Get("LAYER"), Get("STYLE"), Get("FORMAT"), Get("TILEMATRIXSET"),
+            Get("TILEMATRIX"), Get("TILEROW"), Get("TILECOL"), Get(WmtsService.TimeDimension));
+        return ServeWmtsTileAsync(context, source, tile, error);
+    }
+
+    private static Task ServeWmtsRestTileAsync(HttpContext context, ITileSource source)
+    {
+        var values = context.Request.RouteValues;
+        var file = (string)values["tile"]!;
+        int dot = file.IndexOf('.', StringComparison.Ordinal);
+        if (dot < 0 || !MatchesFormat(file[(dot + 1)..], source.Format))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }
+
+        var (tile, error) = WmtsService.ParseTile(
+            source, (string?)values["layer"], (string?)values["style"], format: null, (string?)values["tileMatrixSet"],
+            (string?)values["tileMatrix"], (string?)values["tileRow"], file[..dot], (string?)values["time"]);
+        return ServeWmtsTileAsync(context, source, tile, error);
+    }
+
+    private static Task ServeWmtsTileAsync(HttpContext context, ITileSource source, WmtsService.TileRequest? tile, WmtsService.TileRequestError? error)
+    {
+        if (error is { } e)
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, e.Code, e.Locator, e.Message);
+
+        var t = tile!.Value;
+        return WriteTileAsync(context, source, t.Zoom, t.X, t.Y, t.Palette, t.Time);
+    }
+
+    private static Task WmtsErrorAsync(HttpContext context, int status, string code, string? locator, string message)
+    {
+        context.Response.StatusCode = status;
+        context.Response.ContentType = "application/xml; charset=utf-8";
+        return context.Response.WriteAsync(WmtsService.ExceptionReport(code, locator, message), context.RequestAborted);
     }
 
     private static Task ServeViewerAsync(HttpContext context)

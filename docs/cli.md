@@ -116,7 +116,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
 | [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
-| [`tiles serve`](#tiles-serve) | Serves a built tile set on XYZ URLs, as a tile source for web maps on this or another computer. |
+| [`tiles serve`](#tiles-serve) | Serves a built tile set or datasets on XYZ URLs and as a WMTS service, for web maps and GIS desktops on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
@@ -556,6 +556,9 @@ The server has these routes:
   `t` it names the chosen step in `s100.time` and carries it in its tile URL.
   Without `t`, `--time-step` applies. A `t` that isn't a time answers
   `400 Bad Request`; datasets that don't vary with time ignore it.
+- `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
+  document, and `wmts`, the same service in the KVP encoding, so GIS desktops
+  such as QGIS and ArcGIS Pro can add the tiles.
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
@@ -609,6 +612,41 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 
 In Leaflet, use the tile URL:
 `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
+
+### WMTS
+
+`tiles serve` is also an OGC WMTS 1.0.0 service, for GIS desktops and
+libraries that add tiles from a capabilities document. Its URL is printed at
+startup:
+
+```text
+http://127.0.0.1:8200/wmts/1.0.0/WMTSCapabilities.xml
+```
+
+- **QGIS:** choose **Layer > Add Layer > Add WMS/WMTS Layer**, add a
+  connection with the capabilities URL, connect, and add the `s100` layer.
+- **ArcGIS Pro:** choose **Insert > Connections > Server > New WMTS Server**
+  and enter the capabilities URL.
+- **GDAL:** open `WMTS:http://127.0.0.1:8200/wmts/1.0.0/WMTSCapabilities.xml`.
+
+The service has one layer, `s100`, on the `WebMercatorQuad` tile matrix set
+in EPSG:3857. The tile matrices are numbered by zoom level, from 0 to the
+maximum zoom, so a WMTS tile is the XYZ tile of the same zoom, column and row.
+Below the minimum zoom the tiles are empty, as on the XYZ URLs, so zoom in to
+see the chart. When rendering datasets, each palette is a WMTS style and the
+`--palette` one is the default; a built tile set has one style, `default`.
+For time-varying datasets (S-104, S-111), a `Time` dimension lists the time
+steps and defaults to `--time-step`.
+
+Tiles are served in both WMTS encodings:
+
+- **KVP:** `wmts?SERVICE=WMTS&REQUEST=GetTile&LAYER=s100&STYLE=night&TILEMATRIXSET=WebMercatorQuad&TILEMATRIX=13&TILEROW=2750&TILECOL=4066`,
+  with `TIME=` for a time step.
+- **RESTful:** `wmts/1.0.0/s100/{Style}/WebMercatorQuad/{TileMatrix}/{TileRow}/{TileCol}.png`,
+  with a `{Time}` segment after the style for time-varying datasets.
+
+A request the service can't answer gets an OWS exception report that names
+the parameter at fault. The service has no GetFeatureInfo.
 
 The server runs until you press Ctrl+C or it receives SIGTERM.
 

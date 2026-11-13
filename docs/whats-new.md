@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`s100 tiles serve` is a WMTS service.** Besides its XYZ URLs and
+  TileJSON, `tiles serve` now answers OGC WMTS 1.0.0 requests: a
+  capabilities document at `wmts/1.0.0/WMTSCapabilities.xml`, and GetTile in
+  the KVP and RESTful encodings, with palettes as styles and S-104 and S-111
+  time steps as a `Time` dimension. QGIS, ArcGIS Pro and GDAL can add the
+  tiles from that one URL. See [WMTS](cli.md#wmts).
 - **Tide predictions from the shell and for agents.** `s100 tides stations`
   lists tide stations near a point, `s100 tides predict` predicts a station's
   heights or highs and lows as a table, CSV, JSON or an S-104 file, and

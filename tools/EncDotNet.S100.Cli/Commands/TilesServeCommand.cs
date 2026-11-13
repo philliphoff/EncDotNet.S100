@@ -163,13 +163,14 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                         $"  Palettes: [link]{Markup.Escape(baseUri.AbsoluteUri + "{palette}/{z}/{x}/{y}." + TileSetMetadata.FormatToken(source.Format))}[/] ({string.Join(", ", source.Palettes)})");
                 }
 
+                AnsiConsole.MarkupLine($"  WMTS:     [link]{Markup.Escape(new Uri(baseUri, WmtsService.CapabilitiesPath).AbsoluteUri)}[/]");
                 if (!settings.NoViewer)
                     AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
             }
 
             if (source is RefreshingTileSource)
                 AnsiConsole.MarkupLine($"[grey]Checking the datasets for changes every {settings.RefreshSeconds} s.[/]");
-            AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256. Ctrl-C to stop.");
+            AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256, or the WMTS capabilities URL in a GIS. Ctrl-C to stop.");
 
             // The web host handles Ctrl-C and SIGTERM and stops itself.
             await server.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
