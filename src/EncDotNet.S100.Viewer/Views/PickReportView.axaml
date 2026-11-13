@@ -1108,12 +1108,23 @@
                                                    Text="{Binding DisplayLabel}"
                                                    TextTrimming="CharacterEllipsis"
                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_DynamicHit}" />
-                                        <TextBlock FontSize="11" Opacity="0.7">
+                                        <TextBlock FontSize="11" Opacity="0.7" IsVisible="{Binding ShowsAttributes}">
                                             <Run Text="{Binding SourceDisplayName}" />
                                             <Run Text=" · " FontWeight="Light" />
                                             <Run Text="{Binding Kind}" FontStyle="Italic" />
                                         </TextBlock>
+                                        <!-- A rich card in place of the values: a predicted
+                                             tide station's (tide predictions design D8). -->
+                                        <ContentControl Content="{Binding Card}"
+                                                        IsVisible="{Binding !ShowsAttributes}">
+                                            <ContentControl.DataTemplates>
+                                                <DataTemplate DataType="vm:TideStationCardViewModel">
+                                                    <views:TideStationCardView />
+                                                </DataTemplate>
+                                            </ContentControl.DataTemplates>
+                                        </ContentControl>
                                         <ItemsControl ItemsSource="{Binding Attributes}"
+                                                      IsVisible="{Binding ShowsAttributes}"
                                                       Margin="0,2,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:DynamicPickAttributeRow">

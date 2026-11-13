@@ -585,6 +585,11 @@ public partial class App : Application
             new McpTools.Groups.TidesMcpToolGroup(
                 McpTools.Groups.TidesMcpToolGroup.FileSource(sp.GetRequiredService<ViewerDataPaths>()),
                 sp.GetRequiredService<TimeProvider>()),
+            new McpTools.Groups.TideDisplayMcpToolGroup(
+                sp.GetRequiredService<Services.Tides.TideStationsOverlay>(),
+                sp.GetRequiredService<ViewerSettingsService>(),
+                sp.GetRequiredService<Services.Depth.TidePredictionSourceService>(),
+                sp.GetRequiredService<Services.Tides.TideStationListService>()),
             // Only with --mcp-test-hooks: set_test_clock and the ui_* tools are for scripted testing.
             new McpTools.Groups.TestHooksMcpToolGroup(
                 settings,
@@ -1304,10 +1309,15 @@ public partial class App : Application
             sp.GetRequiredService<DatasetLoaderService>());
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IGeographicPickPresenter>(sp =>
-            new DispatcherGeographicPickPresenter(sp.GetRequiredService<IPickService>(), UiThread.RunOrPost));
+            new DispatcherGeographicPickPresenter(
+                sp.GetRequiredService<IPickService>(),
+                UiThread.RunOrPost,
+                sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(),
+                () => sp.GetService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>()?.Current?.MercatorResolution));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>(),
+                sp.GetServices<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicPickCardFactory>()));
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
@@ -1425,6 +1435,11 @@ public partial class App : Application
         // or zoomed out (see Services.DynamicSources.Ndbc).
         EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsServiceCollectionExtensions
             .AddNdbcObservations(services);
+
+        // #1453: predicted tide stations. Hidden until the user ticks its
+        // Layer Stack row (tide predictions design D4).
+        EncDotNet.S100.Viewer.Services.Tides.TideStationsServiceCollectionExtensions
+            .AddTideStations(services);
 
         // #1073: own-ship wind and water temperature from NMEA 0183. Only
         // registered when SOUNDCHARTS_NMEA_INPUT names an input (UDP, TCP or
@@ -1735,15 +1750,8 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.TidePredictionSourceService(
             sp.GetRequiredService<ViewerSettingsService>(),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-            sp.GetRequiredService<ViewerDataPaths>().TideStationsFilePath,
-            action =>
-            {
-                if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
-                    action();
-                else
-                    Avalonia.Threading.Dispatcher.UIThread.Post(action);
-            },
-            sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.Depth.TidePredictionSourceService>>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationListService>(),
+            UiThread.RunOrPost));
         services.AddSingleton(sp =>
         {
             // The water level reads the source cache, so the prediction switch
@@ -1780,6 +1788,19 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
                 sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 () => legend.Palette));
+            // #1453 (tide predictions D4): the predicted tide stations' key,
+            // linked from their Layer stack row while it's on.
+            var tideStations = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>();
+            var viewTime = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>();
+            var timeFormat = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ITimeFormatProvider>();
+            legend.AddSource(new EncDotNet.S100.Viewer.Services.Tides.TideStationLegendSource(
+                tideStations,
+                () => legend.Palette,
+                () => timeFormat.Current,
+                () => viewTime.Current.UtcDateTime));
+            legend.SetDynamicSourceSection(
+                EncDotNet.S100.Viewer.Services.Tides.TideStationSource.SourceId,
+                EncDotNet.S100.Viewer.Services.Tides.TideStationLegendSource.SectionId);
             return legend;
         });
         // Hover to find (#1412, legends D19): a hovered Legend row rings its features.

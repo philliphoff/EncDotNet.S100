@@ -128,6 +128,28 @@ public class LayerStackViewModelDynamicSourceTests
     private static LayerStackEntry Entry(string id, S98DisplayPlane plane, int priority)
         => new(new MemoryLayer(id), new SubLayerStackItem(new SyntheticStackPayload(id), plane, priority, id));
 
+    [Fact]
+    public void DynamicEntry_with_a_legend_section_links_to_it_while_on()
+    {
+        var registry = new FakeRegistry();
+        var info = new DynamicSourceRegistrationInfo("tide-stations", "Tide stations · predicted", null)
+        {
+            Plane = S98DisplayPlane.OtherChartOverlays,
+        };
+        registry.Add(info);
+        string? shown = null;
+        var entry = new LayerStackDynamicEntryViewModel(registry, info, "TideStations", id => shown = id);
+
+        Assert.True(entry.HasLegend);
+        Assert.Equal("LayerStack.DynamicEntry.tide-stations.Legend", entry.LegendAutomationId);
+        entry.ShowLegendCommand.Execute(null);
+        Assert.Equal("TideStations", shown);
+
+        entry.IsActive = false;
+        Assert.False(entry.HasLegend);
+        Assert.False(new LayerStackDynamicEntryViewModel(registry, info, null, id => shown = id).HasLegend);
+    }
+
     private sealed class FakeRegistry : IS100DynamicSourceRegistry
     {
         private readonly List<DynamicSourceRegistrationInfo> _list = new();

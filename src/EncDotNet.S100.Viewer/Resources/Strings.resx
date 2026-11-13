@@ -8501,4 +8501,237 @@
   <data name="Findings_NotAForecast" xml:space="preserve">
     <value>not a forecast</value>
   </data>
+  <!-- Tides T5 begin -->
+  <data name="Tides_StationsLayer" xml:space="preserve">
+    <value>Tide stations · predicted</value>
+  </data>
+  <data name="Tides_StationsLayer_Description" xml:space="preserve">
+    <value>NOAA harmonic predictions: the astronomical tide only, not a forecast. Shown at 1:500,000 and larger; not where S-104 covers.</value>
+  </data>
+  <data name="Tides_LegendSpec" xml:space="preserve">
+    <value>TIDE</value>
+  </data>
+  <data name="Tides_LegendSourceFormat" xml:space="preserve">
+    <value>NOAA CO-OPS, {0:N0} in view</value>
+  </data>
+  <data name="Tides_LegendTimeFormat" xml:space="preserve">
+    <value>{0} · predicted</value>
+  </data>
+  <data name="Tides_LegendCaption" xml:space="preserve">
+    <value>Height above chart datum (MLLW) at the view time, from 1:150,000 · dashed frame = predicted. Not drawn where S-104 covers the station.</value>
+  </data>
+  <data name="Tides_Trend_Rising" xml:space="preserve">
+    <value>rising</value>
+  </data>
+  <data name="Tides_Trend_Falling" xml:space="preserve">
+    <value>falling</value>
+  </data>
+  <data name="Tides_Trend_Turning" xml:space="preserve">
+    <value>turning</value>
+  </data>
+  <data name="Tides_Trend_RisingLegend" xml:space="preserve">
+    <value>Rising</value>
+  </data>
+  <data name="Tides_Trend_FallingLegend" xml:space="preserve">
+    <value>Falling</value>
+  </data>
+  <data name="Tides_Trend_TurningLegend" xml:space="preserve">
+    <value>Turning (high or low within 20 min)</value>
+  </data>
+  <data name="Tides_Kind_Harmonic" xml:space="preserve">
+    <value>harmonic</value>
+  </data>
+  <data name="Tides_Kind_Subordinate" xml:space="preserve">
+    <value>subordinate</value>
+  </data>
+  <data name="Tides_Pick_Station" xml:space="preserve">
+    <value>Station</value>
+  </data>
+  <data name="Tides_Pick_Kind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Tides_Pick_PredictedHeight" xml:space="preserve">
+    <value>Predicted height</value>
+  </data>
+  <data name="Tides_Pick_Trend" xml:space="preserve">
+    <value>Trend</value>
+  </data>
+  <data name="Tides_HeightAboveDatumFormat" xml:space="preserve">
+    <value>{0:0.0;−0.0} m above {1}</value>
+  </data>
+  <data name="Tides_MetresFormat" xml:space="preserve">
+    <value>{0:0.0;−0.0} m</value>
+  </data>
+  <data name="Tides_SignedMetresFormat" xml:space="preserve">
+    <value>{0:+0.0;−0.0;0.0} m</value>
+  </data>
+  <data name="Tides_High" xml:space="preserve">
+    <value>High</value>
+  </data>
+  <data name="Tides_Low" xml:space="preserve">
+    <value>Low</value>
+  </data>
+  <data name="Tides_Day_Today" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="Tides_Day_Tomorrow" xml:space="preserve">
+    <value>Tomorrow</value>
+  </data>
+  <data name="Tides_Day_Yesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="Tides_DayAndClockFormat" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Tides_ProviderUnknown" xml:space="preserve">
+    <value>Unknown provider</value>
+  </data>
+  <data name="Tides_UsePredictions" xml:space="preserve">
+    <value>Use tide predictions</value>
+  </data>
+  <data name="Tides_Card_PredictedChip" xml:space="preserve">
+    <value>Predicted</value>
+  </data>
+  <data name="Tides_Card_SubtitleHarmonicFormat" xml:space="preserve">
+    <value>NOAA tide station {0} · harmonic · {1}</value>
+  </data>
+  <data name="Tides_Card_SubtitleSubordinateFormat" xml:space="preserve">
+    <value>NOAA tide station {0} · subordinate · from {1}</value>
+  </data>
+  <data name="Tides_Card_NowFormat" xml:space="preserve">
+    <value>PREDICTED HEIGHT AT {0}</value>
+  </data>
+  <data name="Tides_Card_TrendRateFormat" xml:space="preserve">
+    <value>{0} {1:0.0} m/h</value>
+  </data>
+  <data name="Tides_Card_CurveTitleFormat" xml:space="preserve">
+    <value>12 HOURS EACH SIDE OF {0}</value>
+  </data>
+  <data name="Tides_Card_CurveDatumFormat" xml:space="preserve">
+    <value>heights above {0}</value>
+  </data>
+  <data name="Tides_Card_PredictedSeries" xml:space="preserve">
+    <value>Predicted</value>
+  </data>
+  <data name="Tides_Card_S104Series" xml:space="preserve">
+    <value>S-104</value>
+  </data>
+  <data name="Tides_Card_HighsAndLows" xml:space="preserve">
+    <value>HIGHS AND LOWS</value>
+  </data>
+  <data name="Tides_Card_ReferenceHeading" xml:space="preserve">
+    <value>REFERENCE STATION</value>
+  </data>
+  <data name="Tides_Card_ReferenceStation" xml:space="preserve">
+    <value>Station</value>
+  </data>
+  <data name="Tides_Card_HighWater" xml:space="preserve">
+    <value>High water</value>
+  </data>
+  <data name="Tides_Card_LowWater" xml:space="preserve">
+    <value>Low water</value>
+  </data>
+  <data name="Tides_Card_ReferenceDistanceFormat" xml:space="preserve">
+    <value>{0} · {1:0.0} km</value>
+  </data>
+  <data name="Tides_Card_OffsetFormat" xml:space="preserve">
+    <value>{0}{1} h {2:00} m, {3}</value>
+  </data>
+  <data name="Tides_Card_HeightRatioFormat" xml:space="preserve">
+    <value>height ×{0:0.00}</value>
+  </data>
+  <data name="Tides_Card_HeightDifferenceFormat" xml:space="preserve">
+    <value>height {0:+0.00;−0.00;0.00} m</value>
+  </data>
+  <data name="Tides_Card_ReferenceNoteFormat" xml:space="preserve">
+    <value>Highs and lows are {0}'s with these offsets. The curve between them is {0}'s curve with the offsets interpolated between them, as NOAA computes it, so it's less certain than the times and heights of the highs and lows.</value>
+  </data>
+  <data name="Tides_Card_Datum" xml:space="preserve">
+    <value>Datum</value>
+  </data>
+  <data name="Tides_Card_DatumMllw" xml:space="preserve">
+    <value>Mean Lower Low Water (MLLW), the station's chart datum</value>
+  </data>
+  <data name="Tides_Card_Mhhw" xml:space="preserve">
+    <value>MHHW</value>
+  </data>
+  <data name="Tides_Card_MhhwFormat" xml:space="preserve">
+    <value>{0:0.00} m above {1}</value>
+  </data>
+  <data name="Tides_Card_UsedForDepths" xml:space="preserve">
+    <value>Used for depths</value>
+  </data>
+  <data name="Tides_Card_UsedYes" xml:space="preserve">
+    <value>Yes, within 10 km, where there's no S-104</value>
+  </data>
+  <data name="Tides_Card_UsedNoS104" xml:space="preserve">
+    <value>No: S-104 covers this station at the view time</value>
+  </data>
+  <data name="Tides_Card_UsedNoOff" xml:space="preserve">
+    <value>No: tide predictions are off</value>
+  </data>
+  <data name="Tides_Card_StationList" xml:space="preserve">
+    <value>Station list</value>
+  </data>
+  <data name="Tides_Card_StationListFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="Tides_Card_S104Heading" xml:space="preserve">
+    <value>USED FOR DEPTHS HERE: S-104</value>
+  </data>
+  <data name="Tides_Card_S104CoversFormat" xml:space="preserve">
+    <value>S-104 {0} covers this station at {1}, so depths use it, not this prediction.</value>
+  </data>
+  <data name="Tides_Card_S104Label" xml:space="preserve">
+    <value>S-104 at view time</value>
+  </data>
+  <data name="Tides_Card_PredictedLabel" xml:space="preserve">
+    <value>Predicted</value>
+  </data>
+  <data name="Tides_Card_DifferenceLabel" xml:space="preserve">
+    <value>Difference</value>
+  </data>
+  <data name="Tides_Card_S104AtFormat" xml:space="preserve">
+    <value>{0} · S-104</value>
+  </data>
+  <data name="Tides_Card_PredictedAtFormat" xml:space="preserve">
+    <value>{0} · astronomical only</value>
+  </data>
+  <data name="Tides_Card_DifferenceFormat" xml:space="preserve">
+    <value>{0} (wind, pressure, river flow)</value>
+  </data>
+  <data name="Tides_Card_NotAForecast" xml:space="preserve">
+    <value>Predicted from NOAA harmonic constants: the astronomical tide only. Wind, pressure and river flow can move the real water level 0.5 m or more. Not for navigation.</value>
+  </data>
+  <data name="Tides_List_Format" xml:space="preserve">
+    <value>{0} station list · {1} · {2:N0} tide and {3:N0} current stations</value>
+  </data>
+  <data name="Tides_List_None" xml:space="preserve">
+    <value>No station list yet. It's downloaded from NOAA the first time predictions or a station overlay are turned on (about 10 minutes).</value>
+  </data>
+  <data name="Tides_List_Downloading" xml:space="preserve">
+    <value>Downloading NOAA's station list…</value>
+  </data>
+  <data name="Tides_List_DownloadingProgressFormat" xml:space="preserve">
+    <value>Downloading NOAA's station list · {0:N0} of {1:N0} stations</value>
+  </data>
+  <data name="Tides_List_DateUnknown" xml:space="preserve">
+    <value>date unknown</value>
+  </data>
+  <data name="Tides_List_FailedFormat" xml:space="preserve">
+    <value>The download failed: {0}</value>
+  </data>
+  <data name="Tides_List_Stale" xml:space="preserve">
+    <value>NOAA has newer data than this list. Predictions still work; refresh to use the new values.</value>
+  </data>
+  <data name="Tides_List_Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Tides_List_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Tides_List_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <!-- Tides T5 end -->
 </root>

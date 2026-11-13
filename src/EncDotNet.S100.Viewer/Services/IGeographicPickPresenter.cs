@@ -33,5 +33,6 @@ internal interface IGeographicPickPresenter
     /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
     /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
     /// <param name="features">Resolved features under the pick, most-specific first.</param>
-    void Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features);
+    /// <returns>The dynamic-source features at the point, shown with them; nothing is shown when both are empty.</returns>
+    IReadOnlyList<ViewModels.DynamicPickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features);
 }

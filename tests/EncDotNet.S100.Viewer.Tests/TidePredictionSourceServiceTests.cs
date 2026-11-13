@@ -26,7 +26,7 @@ public sealed class TidePredictionSourceServiceTests : IDisposable
         var cache = new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         var changes = 0;
         cache.Changed += (_, _) => changes++;
-        using var service = new TidePredictionSourceService(settings, cache, path, action => action(), logger: null);
+        using var service = new TidePredictionSourceService(settings, cache, TideTestLists.At(path), action => action());
 
         Assert.Equal(TidePredictionSourceState.Off, service.State);
         Assert.Null(cache.TidePredictions);
@@ -49,7 +49,7 @@ public sealed class TidePredictionSourceServiceTests : IDisposable
         var settings = new Settings();
         settings.Set(true);
         var cache = new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
-        using var service = new TidePredictionSourceService(settings, cache, Path.Combine(_folder, "missing.json.gz"), action => action(), logger: null);
+        using var service = new TidePredictionSourceService(settings, cache, TideTestLists.At(Path.Combine(_folder, "missing.json.gz")), action => action());
 
         await service.Loading;
 

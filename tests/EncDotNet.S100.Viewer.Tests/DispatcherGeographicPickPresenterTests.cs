@@ -29,10 +29,12 @@ public class DispatcherGeographicPickPresenterTests
         var marshalled = false;
         var presenter = new DispatcherGeographicPickPresenter(
             pickService,
-            marshal: action => { marshalled = true; action(); });
+            marshal: action => { marshalled = true; action(); },
+            dynamicPicks: null,
+            resolution: () => null);
 
         var features = new[] { new GeographicPickFeature("test.gml", "1") };
-        presenter.Present(47.6, -122.3, features);
+        _ = presenter.Present(47.6, -122.3, features);
 
         Assert.True(marshalled);
         Assert.NotNull(pickService.Presented);

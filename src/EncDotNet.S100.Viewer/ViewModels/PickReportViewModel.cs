@@ -996,5 +996,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         foreach (var chart in _stationCharts.Values)
             chart.Dispose();
         _stationCharts.Clear();
+        // A dynamic hit's rich card (a predicted tide station's) follows the
+        // view time until the pick is replaced.
+        foreach (var hit in DynamicHits)
+            hit.Card?.Release();
     }
 }

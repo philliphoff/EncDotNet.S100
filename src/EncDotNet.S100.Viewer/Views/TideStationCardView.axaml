@@ -1,0 +1,182 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.TideStationCardView"
+             x:DataType="vm:TideStationCardViewModel"
+             AutomationProperties.AutomationId="Pick.TideStation">
+    <!-- The predicted tide station card (tide predictions design Q3, D8):
+         dashed means predicted (D7). -->
+    <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+            <SelectableTextBlock Grid.Column="0"
+                                 Text="{Binding Subtitle}"
+                                 FontSize="11"
+                                 Opacity="0.7"
+                                 TextWrapping="Wrap"
+                                 AutomationProperties.AutomationId="Pick.TideStation.Subtitle" />
+            <Panel Grid.Column="1" VerticalAlignment="Top" Margin="6,0,0,0">
+                <Rectangle Stroke="{DynamicResource BorderColor}"
+                           StrokeThickness="1"
+                           StrokeDashArray="3,2"
+                           RadiusX="3"
+                           RadiusY="3" />
+                <TextBlock Text="{x:Static loc:Strings.Tides_Card_PredictedChip}"
+                           Margin="6,1"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           AutomationProperties.AutomationId="Pick.TideStation.PredictedChip" />
+            </Panel>
+        </Grid>
+
+        <!-- Q3c: S-104 covers the station, so depths use it. -->
+        <Border IsVisible="{Binding IsCoveredByS104}"
+                BorderThickness="0"
+                CornerRadius="4"
+                Padding="10,8"
+                AutomationProperties.AutomationId="Pick.TideStation.S104">
+            <Border.Background>
+                <SolidColorBrush Color="{DynamicResource SuccessColor}" Opacity="0.14" />
+            </Border.Background>
+            <StackPanel Spacing="2">
+                <TextBlock Text="{x:Static loc:Strings.Tides_Card_S104Heading}"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           LetterSpacing="1" />
+                <TextBlock Text="{Binding S104Text}" FontSize="12" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- The predicted height now, in a dashed box. -->
+        <Panel AutomationProperties.AutomationId="Pick.TideStation.Now">
+            <Rectangle Stroke="{DynamicResource BorderColor}"
+                       StrokeThickness="1"
+                       StrokeDashArray="4,3"
+                       RadiusX="4"
+                       RadiusY="4" />
+            <Grid ColumnDefinitions="*,Auto" Margin="12,10">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding NowLabel}"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           LetterSpacing="1"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <SelectableTextBlock Text="{Binding NowHeight}"
+                                         FontSize="18"
+                                         FontWeight="Bold"
+                                         VerticalAlignment="Bottom"
+                                         AutomationProperties.AutomationId="Pick.TideStation.NowHeight" />
+                    <TextBlock Text="{Binding NowTrend}"
+                               FontSize="12"
+                               Opacity="0.8"
+                               VerticalAlignment="Bottom"
+                               Margin="0,0,0,2"
+                               AutomationProperties.AutomationId="Pick.TideStation.NowTrend" />
+                </StackPanel>
+            </Grid>
+        </Panel>
+
+        <!-- ±12 h round the view time. -->
+        <StackPanel Spacing="2">
+            <TextBlock FontSize="10" LetterSpacing="1" Opacity="0.7">
+                <Run Text="{Binding CurveTitle}" FontWeight="SemiBold" />
+                <Run Text="  " />
+                <Run Text="{Binding CurveDatum}" />
+            </TextBlock>
+            <lvc:CartesianChart MinHeight="180"
+                                Series="{Binding HeightSeries}"
+                                XAxes="{Binding TimeAxisArray}"
+                                YAxes="{Binding HeightAxisArray}"
+                                Sections="{Binding CardSections}"
+                                AutomationProperties.AutomationId="Pick.TideStation.Chart" />
+        </StackPanel>
+
+        <!-- S-104 against the prediction: a check, never a depth (Q3c). -->
+        <Grid IsVisible="{Binding IsCoveredByS104}"
+              ColumnDefinitions="Auto,12,*"
+              RowDefinitions="Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_S104Label}" FontSize="12" Opacity="0.7" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding S104AtTime}" FontSize="12" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_PredictedLabel}" FontSize="12" Opacity="0.7" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding PredictedAtTime}" FontSize="12" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_DifferenceLabel}" FontSize="12" Opacity="0.7" />
+            <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding Difference}" FontSize="12" AutomationProperties.AutomationId="Pick.TideStation.Difference" />
+        </Grid>
+
+        <!-- The last high or low greyed, then the next four. -->
+        <StackPanel Spacing="2">
+            <TextBlock Text="{x:Static loc:Strings.Tides_Card_HighsAndLows}"
+                       FontSize="10"
+                       FontWeight="SemiBold"
+                       LetterSpacing="1"
+                       Opacity="0.7" />
+            <ItemsControl ItemsSource="{Binding Extremes}"
+                          AutomationProperties.AutomationId="Pick.TideStation.Extremes">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TideExtremeRow">
+                        <Grid ColumnDefinitions="56,*,Auto" Opacity="{Binding Opacity}" Margin="0,1">
+                            <TextBlock Grid.Column="0" Text="{Binding Kind}" FontSize="12" FontWeight="SemiBold" />
+                            <TextBlock Grid.Column="1" Text="{Binding When}" FontSize="12" />
+                            <TextBlock Grid.Column="2" Text="{Binding Height}" FontSize="12" FontWeight="SemiBold" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- A subordinate station's reference station and offsets (D20). -->
+        <StackPanel IsVisible="{Binding HasReference}"
+                    Spacing="2"
+                    AutomationProperties.AutomationId="Pick.TideStation.Reference">
+            <TextBlock Text="{x:Static loc:Strings.Tides_Card_ReferenceHeading}"
+                       FontSize="10"
+                       FontWeight="SemiBold"
+                       LetterSpacing="1"
+                       Opacity="0.7" />
+            <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_ReferenceStation}" FontSize="12" Opacity="0.7" />
+                <SelectableTextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ReferenceStationText}" FontSize="12" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_HighWater}" FontSize="12" Opacity="0.7" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HighWaterOffset}" FontSize="12" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_LowWater}" FontSize="12" Opacity="0.7" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LowWaterOffset}" FontSize="12" />
+            </Grid>
+            <TextBlock Text="{Binding ReferenceNote}" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Datum, MHHW, Used for depths, Station list. -->
+        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="2">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_Datum}" FontSize="12" Opacity="0.7" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DatumText}" FontSize="12" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_Mhhw}" FontSize="12" Opacity="0.7" IsVisible="{Binding HasMhhw}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MhhwText}" FontSize="12" IsVisible="{Binding HasMhhw}" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_UsedForDepths}" FontSize="12" Opacity="0.7" />
+            <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+                <TextBlock Text="{Binding UsedForDepthsText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="Pick.TideStation.UsedForDepths" />
+                <Button IsVisible="{Binding CanTurnOn}"
+                        Command="{Binding UseTidePredictionsCommand}"
+                        Content="{x:Static loc:Strings.Tides_UsePredictions}"
+                        HorizontalAlignment="Left"
+                        FontSize="12"
+                        AutomationProperties.AutomationId="Pick.TideStation.UsePredictions" />
+            </StackPanel>
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="{x:Static loc:Strings.Tides_Card_StationList}" FontSize="12" Opacity="0.7" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding StationListText}" FontSize="12" />
+        </Grid>
+
+        <!-- "Not a forecast": fixed, never collapsed. -->
+        <Border Background="{DynamicResource MutedBackgroundColor}"
+                CornerRadius="4"
+                Padding="10,8"
+                AutomationProperties.AutomationId="Pick.TideStation.NotAForecast">
+            <TextBlock Text="{x:Static loc:Strings.Tides_Card_NotAForecast}"
+                       FontSize="11"
+                       TextWrapping="Wrap" />
+        </Border>
+    </StackPanel>
+</UserControl>
