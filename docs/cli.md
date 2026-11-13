@@ -120,7 +120,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | Command | What it does |
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
-| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive, an MBTiles database or a GeoPackage. |
+| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive, an MBTiles database, a GeoPackage or a GeoTIFF. |
 | [`tiles serve`](#tiles-serve) | Serves a built tile set or datasets on XYZ URLs and as WMTS and WMS services, for web maps and GIS desktops on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
@@ -410,9 +410,19 @@ The container comes from the output path:
   numbered from the north as in XYZ. The TileJSON is kept as GeoPackage
   metadata. WebP tiles register the `gpkg_webp` extension, which not every
   reader supports, so use PNG or JPEG for the widest reach.
+- **GeoTIFF.** An output ending in `.tif` or `.tiff` is written as one
+  [Cloud-Optimized GeoTIFF](https://cogeo.org/) in EPSG:3857, for tools that
+  take a single georeferenced image. The maximum zoom is the full-resolution
+  image and each lower zoom is an overview, down to an image a tile or two
+  across, so `--min-zoom` only limits how far the overviews go. The image is
+  whole tiles of its smallest overview, so it can reach past the data; tiles
+  with nothing on them are left out of the file, and read as transparent.
+  PNG and WebP tiles are stored as RGBA with Deflate compression, and JPEG
+  tiles as they are (no transparency, and empty areas read as black). The
+  file is a BigTIFF when it would pass 4 GB. It can't cross the antimeridian.
 
 Set `--container` to choose the container whatever the extension. An existing
-`.pmtiles`, `.mbtiles` or `.gpkg` file at the output path is replaced only once the new
+`.pmtiles`, `.mbtiles`, `.gpkg` or `.tif` file at the output path is replaced only once the new
 one is finished: the new file is written beside it, with `.partial` added to
 its name, and then moved into its place. Until then a [`tiles serve`](#tiles-serve)
 reading the old file keeps serving it, and if the export fails or is stopped,
@@ -425,8 +435,8 @@ the old file is left as it was.
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
 | `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
 | `--only <specs>` | all | Exchange-set and folder forms only. Tiles only these product specifications, comma-separated. |
-| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file, a `.mbtiles` file or a `.gpkg` file. Its parent folder must exist. |
-| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles` or `gpkg`. |
+| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file, a `.mbtiles` file, a `.gpkg` file or a `.tif` file. Its parent folder must exist. |
+| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles`, `gpkg` or `geotiff`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
 | `--max-zoom <0-24>` | from the data | Highest zoom level. |
 | `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. |
@@ -460,6 +470,7 @@ s100 tiles export --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 
 s100 tiles export exchange-set/ -o tiles/ --format webp --skip-empty
 s100 tiles export enc.000 -o chart.mbtiles --max-zoom 16
 s100 tiles export exchange-set/ -o chart.gpkg --format jpeg
+s100 tiles export enc.000 -o chart.tif --max-zoom 15 --skip-empty
 s100 tiles export --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
 ```
 
