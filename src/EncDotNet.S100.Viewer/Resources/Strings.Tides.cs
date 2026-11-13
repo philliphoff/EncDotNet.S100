@@ -83,6 +83,7 @@ internal static partial class Strings
     public static string Tides_List_Cancel => Get(nameof(Tides_List_Cancel));
     public static string TimelinePanel_PredictionsOnlyTooltip => Get(nameof(TimelinePanel_PredictionsOnlyTooltip));
     public static string TimelinePanel_TideLane => Get(nameof(TimelinePanel_TideLane));
+    public static string TimelinePanel_PredictionsOnly => Get(nameof(TimelinePanel_PredictionsOnly));
     public static string TimelinePanel_TideLaneTooltip => Get(nameof(TimelinePanel_TideLaneTooltip));
     public static string TimelinePanel_TideLaneStationFormat => Get(nameof(TimelinePanel_TideLaneStationFormat));
     public static string TimelinePanel_TideLaneHighFormat => Get(nameof(TimelinePanel_TideLaneHighFormat));

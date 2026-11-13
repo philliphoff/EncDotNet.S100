@@ -1137,6 +1137,9 @@
   <data name="Pick_Chart_Axis_Time" xml:space="preserve">
     <value>Time (UTC)</value>
   </data>
+  <data name="Pick_Chart_Axis_TimeLocal" xml:space="preserve">
+    <value>Time (local)</value>
+  </data>
   <data name="Pick_Chart_Axis_HeightMetres" xml:space="preserve">
     <value>Height (m)</value>
   </data>
@@ -1779,6 +1782,9 @@
   </data>
   <data name="TimelinePanel_NoData" xml:space="preserve">
     <value>No time-varying datasets loaded.</value>
+  </data>
+  <data name="TimelinePanel_PredictionsOnly" xml:space="preserve">
+    <value>Tide predictions only: no time-varying datasets loaded.</value>
   </data>
   <data name="TimelinePanel_EmptyTitle" xml:space="preserve">
     <value>No time-varying datasets</value>
@@ -7776,6 +7782,9 @@
   </data>
   <data name="Status_DepthBasis_DatumMismatch" xml:space="preserve">
     <value>Charted · datum mismatch</value>
+  </data>
+  <data name="Status_DepthBasis_ProductNotAdjustedFormat" xml:space="preserve">
+    <value>Charted · {0} not adjusted</value>
   </data>
   <data name="Status_DepthBasisPopup_AdjustedBasisFormat" xml:space="preserve">
     <value>Charted depth + water level at {0}. The safety contour and depth shading use the adjusted values.</value>

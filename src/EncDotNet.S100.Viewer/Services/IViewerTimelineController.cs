@@ -134,7 +134,19 @@ internal sealed record ViewerTimelineState(
 
     /// <summary>True while Follow passage pins the view time to the passage (#904).</summary>
     public bool FollowPassage { get; init; }
+
+    /// <summary>The Tide predictions lane (#1453), or null when it doesn't show.</summary>
+    public TimelineTidePredictionsState? TidePredictions { get; init; }
 }
+
+/// <summary>The Timeline's Tide predictions lane (#1453).</summary>
+/// <param name="StationId">The station the lane follows: the one nearest the map centre.</param>
+/// <param name="Station">The lane's station text as displayed.</param>
+/// <param name="Extremes">The highs and lows on the lane.</param>
+internal sealed record TimelineTidePredictionsState(
+    string StationId,
+    string Station,
+    IReadOnlyList<ViewModels.TideLaneMark> Extremes);
 
 /// <summary>The Timeline's passage and departure-window lanes (#904).</summary>
 /// <param name="Departure">The checked departure.</param>

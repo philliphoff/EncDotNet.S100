@@ -26,6 +26,12 @@ internal sealed partial class TimelineViewModel
         TidePredictions = new TidePredictionTimelineViewModel(
             () => _axis, () => _service.HasOpenEndedTime, list, predictors, viewport);
         list.Changed += (_, _) => TidePredictions.Refresh();
+        // With no time-aware dataset, the summary says the lane is all there is.
+        TidePredictions.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TidePredictionTimelineViewModel.HasLane))
+                OnPropertyChanged(nameof(RangeLabel));
+        };
         if (viewport is not null)
             viewport.ViewportChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(TidePredictions.Refresh);
         TidePredictions.Refresh();

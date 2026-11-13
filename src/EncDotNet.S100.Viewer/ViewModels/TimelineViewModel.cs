@@ -705,7 +705,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         {
             var samples = _service.AllSamples;
             if (samples.Count == 0 || _service.MinTime is null || _service.MaxTime is null)
-                return Strings.TimelinePanel_NoData;
+                return TidePredictions?.HasLane == true ? Strings.TimelinePanel_PredictionsOnly : Strings.TimelinePanel_NoData;
             var fmt = ActiveFormat;
             if (IsForecastTimeline)
             {

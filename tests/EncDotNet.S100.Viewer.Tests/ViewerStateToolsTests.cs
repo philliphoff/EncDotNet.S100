@@ -476,4 +476,29 @@ public sealed class ViewerStateToolsTests
             ["get_timeline_state", "set_view_time", "step_time", "set_timeline_view", "set_dataset_state", "select_dataset", "list_notifications", "dismiss_notification", "set_test_clock"],
             tools.Select(tool => tool.ProtocolTool.Name));
     }
+
+    [Fact]
+    public void TimelineState_ReportsTheTidePredictionsLane()
+    {
+        var high = new DateTime(2026, 11, 13, 16, 2, 0, DateTimeKind.Utc);
+        var state = new ViewerTimelineState(
+            false, high, null, true, null, null, 0, [], [], false, false, "13.11.2026 00:02",
+            "Tide predictions only: no time-varying datasets loaded.", [])
+        {
+            TidePredictions = new TimelineTidePredictionsState(
+                "9446484",
+                "Tacoma 9446484 · 1.2 km from centre",
+                [new TideLaneMark(0.25, true, "H 3.6", high, 3.6123)]),
+        };
+
+        var dto = GetTimelineStateTool.ToDto(state);
+
+        var lane = Assert.IsType<TimelineTidePredictionsDto>(dto.TidePredictions);
+        Assert.Equal("9446484", lane.StationId);
+        var extreme = Assert.Single(lane.Extremes);
+        Assert.Equal("high", extreme.Kind);
+        Assert.Equal(high, extreme.Time);
+        Assert.Equal(3.612, extreme.HeightMeters);
+        Assert.Null(GetTimelineStateTool.ToDto(state with { TidePredictions = null }).TidePredictions);
+    }
 }
