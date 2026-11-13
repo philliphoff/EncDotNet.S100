@@ -63,6 +63,9 @@ docker run --rm -p 8200:8200 -v path/to/charts:/data:ro ghcr.io/philliphoff/s100
 a new edition, or a new cell, into the mounted folder while it runs, or remove
 one.
 
+To run on a small computer, render the tiles in advance instead: see
+[Serve prebuilt tiles](#serve-prebuilt-tiles).
+
 ## Keep tiles and data between runs
 
 The image runs `s100` as a non-root user (user ID 1654) and has these folders:
@@ -117,6 +120,90 @@ docker compose up -d
 `docker compose ps` shows the service as `healthy` once it serves tiles. The
 first start portrays every dataset before it serves, so `start_period` allows
 for a large exchange set.
+
+## Serve prebuilt tiles
+
+`tiles serve` over datasets portrays every dataset when it starts and renders
+each tile the first time it's asked for. On a small computer, such as a
+Raspberry Pi, that takes minutes and gigabytes of memory. Instead, render the
+tiles once with [`tiles export`](cli.md#tiles-export) and serve the finished
+archive: the server then starts at once, uses little memory, and answers every
+tile by reading it from the file.
+
+The example
+[`compose.yaml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/docker/examples/prebuilt-tiles/compose.yaml)
+has two services. `export` renders every dataset in `./charts` into a PMTiles
+archive in the `tiles` volume, and `tiles` serves it:
+
+```yaml
+services:
+  export:
+    image: ghcr.io/philliphoff/s100
+    command: tiles export /data -o /cache/charts.pmtiles --skip-empty --yes
+    volumes:
+      - ./charts:/data:ro
+      - tiles:/cache
+    profiles: [export]
+
+  tiles:
+    image: ghcr.io/philliphoff/s100
+    command: tiles serve /cache/charts.pmtiles --host 0.0.0.0 --no-token
+    ports:
+      - "8200:8200"
+    volumes:
+      - tiles:/cache:ro
+    healthcheck:
+      test: ["CMD", "/app/s100", "health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      start_interval: 1s
+    restart: unless-stopped
+
+volumes:
+  tiles:
+```
+
+Render the tiles, then start the server:
+
+```bash
+docker compose run --rm export
+```
+
+```bash
+docker compose up -d
+```
+
+The `export` service is in the `export` profile, so `docker compose up` starts
+only the server. Run the export again whenever the charts change. The server
+keeps serving the old archive while the new one is written, and serves the new
+one as soon as it's finished, without a restart.
+
+`tiles export` prints the number of tiles before it renders any. A large
+folder of charts makes a large tile set: each zoom level holds four times the
+tiles of the one before. Add `--bbox` or `--max-zoom` to the export command to
+render only the area and the detail you need. See
+[Zoom levels](cli.md#zoom-levels).
+
+A tile set holds one palette. To serve day and night tiles, export each to its
+own archive with `--palette`, and run a `tiles serve` for each.
+
+As a rough guide, here are 186 NOAA ENC cells around Massachusetts, cut to
+Boston Harbor (`--bbox -71.12,42.28,-70.88,42.42`, zoom 10 to 16), with the
+container limited to 4 CPUs and 4 GB of memory on an arm64 Mac:
+
+| | Prebuilt | Rendered on demand |
+|---|---|---|
+| Export | 39 s, once: 1,992 tiles, 23 MB | none |
+| Healthy after starting | 1 s | 39 s |
+| First request for each of 311 tiles | median 2 ms, slowest 13 ms | median 2 ms, slowest 269 ms |
+| Memory while serving | 37 MB | 2.5 GB |
+
+A Raspberry Pi's cores are slower than a Mac's, so expect the export and the
+on-demand start to take longer there. Rendering on demand needs memory for
+every portrayed dataset; serving prebuilt tiles doesn't, so it suits a
+computer with little memory. You can also run the export on another computer
+and copy the archive to the one that serves it.
 
 ## Check a server's health
 
