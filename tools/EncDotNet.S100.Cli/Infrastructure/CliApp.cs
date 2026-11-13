@@ -93,7 +93,7 @@ internal static class CliApp
                     .WithExample("tides", "predict", "9447130", "--from", "2026-11-13", "--to", "2026-11-20", "--step", "6m", "--format", "s104", "-o", "seattle.h5");
 
                 tides.AddCommand<TidesUpdateCommand>("update")
-                    .WithDescription("Download NOAA CO-OPS's tide stations into the offline catalogue (about 8 minutes), or check whether NOAA has newer data.")
+                    .WithDescription("Download NOAA CO-OPS's tide stations into the offline catalogue (about 10 minutes), or check whether NOAA has newer data.")
                     .WithExample("tides", "update")
                     .WithExample("tides", "update", "--check");
             });

@@ -1018,11 +1018,13 @@ release builds aren't NativeAOT.
 s100 tides update [--check] [--catalogue <file>]
 ```
 
-`tides update` downloads NOAA CO-OPS's tide stations, with their harmonic
-constituents, datums and subordinate-station offsets, into the offline
-catalogue. It reads about 2,500 pages from NOAA's metadata API at a pace the
-API accepts, so it takes about 8 minutes. The other `tides` commands,
-`s100 mcp serve` and SoundCharts read the catalogue with no network.
+`tides update` downloads NOAA CO-OPS's tide and tidal current stations, with
+their harmonic constituents, datums and subordinate-station offsets, into the
+offline catalogue. It reads about 2,100 pages from NOAA's metadata API at a
+pace the API accepts, so it takes about 10 minutes. The other `tides`
+commands and `s100 mcp serve` read the catalogue with no network.
+SoundCharts reads its own station list; pass its path with `--catalogue` to
+fill it.
 
 The catalogue is `noaa-tide-stations.json.gz` in an `EncDotNet.S100/Tides`
 folder in your local application data:
@@ -1170,6 +1172,7 @@ lists them all.
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--tide-catalogue <file>` | the offline cache | The tide station catalogue `list_tide_stations` and `predict_tide` read. See [`tides update`](#tides-update). |
+| `--tide-predictions` | off | Fills S-104 gaps with tide predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest station within 10 km by water where no S-104 covers a point and time. See [Predicted water level in sampling](mcp-server.md#predicted-water-level-in-sampling). |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 

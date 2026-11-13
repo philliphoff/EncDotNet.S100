@@ -38,7 +38,7 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
             if (settings.Check)
                 return await CheckAsync(client, path, cancellationToken).ConfigureAwait(false);
 
-            Console.Error.WriteLine($"Downloading NOAA CO-OPS tide stations into {path}. This takes about 8 minutes.");
+            Console.Error.WriteLine($"Downloading NOAA CO-OPS tide stations into {path}. This takes about 10 minutes.");
             var lastPercent = -1;
             var progress = new SynchronousProgress(p =>
             {

@@ -22,10 +22,10 @@ internal sealed class TidesMcpToolGroup : IViewerMcpToolGroup
     public static TideCatalogueFileSource FileSource(ViewerDataPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        var path = paths.TideStationCatalogueFile;
+        var path = paths.TideStationsFilePath;
         return new TideCatalogueFileSource(
             path,
-            $"SoundCharts reads the station catalogue from {path}. Download NOAA's stations there with 's100 tides update --catalogue \"{path}\"' (about 8 minutes).");
+            $"SoundCharts reads the tide station list from {path}. Download NOAA's stations there with 's100 tides update --catalogue \"{path}\"' (about 10 minutes).");
     }
 
     public IEnumerable<McpServerTool> CreateTools() => TideMcpTools.Create(_catalogue, _time);

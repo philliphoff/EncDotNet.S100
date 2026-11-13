@@ -248,8 +248,9 @@ SoundCharts only.
 Both hosts provide these tools. They read the offline tide station catalogue
 that [`s100 tides update`](cli.md#tides-update) downloads from NOAA CO-OPS,
 and need no network. `s100 mcp serve` takes another catalogue with
-`--tide-catalogue`. SoundCharts reads the same file as the CLI, or
-`tides/noaa-tide-stations.json.gz` under `--data-dir`. Without a catalogue,
+`--tide-catalogue`. SoundCharts reads its own station list,
+`tide-stations.json.gz` beside its settings (or under `--data-dir`), the one
+**Use tide predictions where there's no S-104** reads. Without a catalogue,
 both tools return `tide_catalogue_not_available`, whose `hint` says how to
 get one.
 
@@ -265,8 +266,32 @@ matches several stations), `no_tide_station_near`, and
 A prediction leaves out wind, pressure and river flow, which can move the
 water 0.5 m or more. Quote `caveat` ("Astronomical tide only, not a
 forecast.") with any value. Predictions aren't S-104 and aren't for
-navigation. `sample_coverage` doesn't fall back to predictions yet
-([#1452](https://github.com/philliphoff/EncDotNet.S100/issues/1452)).
+navigation.
+
+### Predicted water level in sampling
+
+Where the host has tide predictions on (SoundCharts' **Use tide predictions
+where there's no S-104**, or `s100 mcp serve --tide-predictions`),
+`sample_coverage` and `sample_coverage_along` for `S-104` fall back to a
+prediction where no S-104 dataset covers the point and time: the station
+nearest by water within 10 km, as the route check uses. The result's
+`datasetId` is `tide-predictions`, its `value` is a `water_level_station`
+sample (height on the station's chart datum, with a trend from the rise over
+the hour round it), and it adds a `source`:
+
+```json
+"source": {
+  "kind": "prediction",
+  "station": { "id": "9447130", "name": "SEATTLE (Madison St.), Elliott Bay", "type": "tide", "kind": "harmonic", "referenceStationId": null, "distanceMeters": 420 },
+  "verticalDatum": 12,
+  "caveat": "Astronomical tide only, not a forecast.",
+  "catalogueDate": "2026-11-12T00:00:00+00:00"
+}
+```
+
+A value from a loaded dataset has no `source`. A `series` query is predicted
+at each instant; a `range` query every 30 minutes, at most 2,000 heights.
+With predictions off, or no station in reach, the S-104 error stands.
 
 ### Library tools
 

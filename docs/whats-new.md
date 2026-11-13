@@ -11,7 +11,9 @@ month. For package versions and release assets, see
   heights or highs and lows as a table, CSV, JSON or an S-104 file, and
   `s100 tides update` downloads NOAA's stations into an offline catalogue.
   The MCP tools `list_tide_stations` and `predict_tide` do the same for
-  agents, in SoundCharts and `s100 mcp serve`. See
+  agents, in SoundCharts and `s100 mcp serve`, and with tide predictions on,
+  `sample_coverage` fills S-104 gaps with a prediction whose `source` names
+  the station and carries the caveat. See
   [`tides predict`](cli.md#tides-predict) and
   [Find when the tide is above a height](scenarios/tide-above-a-height.md).
 - **Tidal current predictions.** `EncDotNet.S100.Tides` predicts tidal

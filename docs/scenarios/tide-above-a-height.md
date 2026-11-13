@@ -13,7 +13,7 @@ or more. They aren't a forecast and aren't for navigation.
 ## Prerequisites
 
 - The `s100` command-line tool. See [Install](../cli.md#install).
-- About 8 minutes of network access the first time, to download NOAA's tide
+- About 10 minutes of network access the first time, to download NOAA's tide
   stations. After that, everything works offline.
 
 ## Steps
@@ -25,7 +25,7 @@ or more. They aren't a forecast and aren't for navigation.
    ```
 
    It's kept in your local application data, where the other `tides`
-   commands, `s100 mcp serve` and SoundCharts find it. See
+   commands and `s100 mcp serve` find it. See
    [`tides update`](../cli.md#tides-update).
 
 2. Find the station. Seattle's is NOAA 9447130, a harmonic station on the

@@ -111,7 +111,7 @@ public sealed class McpServeCommandTests
         {
             Name = "s100-mcp-serve-tides",
             Command = host,
-            Arguments = ["mcp", "serve", "--tide-catalogue", catalogue],
+            Arguments = ["mcp", "serve", "--tide-catalogue", catalogue, "--tide-predictions"],
         });
         await using var client = await McpClient.CreateAsync(transport, cancellationToken: cts.Token);
 
@@ -133,6 +133,26 @@ public sealed class McpServeCommandTests
         Assert.Equal("harmonic", doc.RootElement.GetProperty("station").GetProperty("kind").GetString());
         Assert.True(doc.RootElement.GetProperty("extremes").GetArrayLength() >= 3);
         Assert.False(doc.RootElement.TryGetProperty("series", out _));
+
+        // With --tide-predictions, S-104 sampling falls back to the nearest station.
+        var sample = await client.CallToolAsync(
+            "sample_coverage",
+            new Dictionary<string, object?>
+            {
+                ["spec"] = "S-104",
+                ["latitude"] = 47.605,
+                ["longitude"] = -122.34,
+                ["time"] = "2026-11-18T20:00:00Z",
+            },
+            cancellationToken: cts.Token);
+        Assert.False(sample.IsError ?? false, "sample_coverage returned an error.");
+        using (var sampled = System.Text.Json.JsonDocument.Parse(sample.Content.OfType<TextContentBlock>().First().Text))
+        {
+            var source = sampled.RootElement.GetProperty("source");
+            Assert.Equal("prediction", source.GetProperty("kind").GetString());
+            Assert.Equal("9447130", source.GetProperty("station").GetProperty("id").GetString());
+            Assert.Equal("water_level_station", sampled.RootElement.GetProperty("value").GetProperty("$kind").GetString());
+        }
 
         var missing = await client.CallToolAsync(
             "list_tide_stations",

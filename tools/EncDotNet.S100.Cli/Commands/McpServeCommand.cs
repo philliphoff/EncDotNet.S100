@@ -7,6 +7,7 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Persistence;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Library;
 using EncDotNet.S100.Mcp.MutableTools;
@@ -94,6 +95,10 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [CommandOption("--tide-catalogue <FILE>")]
         [Description("The tide station catalogue for list_tide_stations and predict_tide: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
         public string? TideCatalogue { get; init; }
+
+        [CommandOption("--tide-predictions")]
+        [Description("Fill S-104 gaps with tide predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest station within 10 km by water where no S-104 covers a point and time. Astronomical tide only, not a forecast.")]
+        public bool TidePredictions { get; init; }
 
         [CommandOption(LuaEngineOption.Template)]
         [Description(LuaEngineOption.Description)]
@@ -223,7 +228,24 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 ? $"Library data: {root}"
                 : $"Library data: {root} (temporary; pass --data-dir to keep it)");
 
-            await S100McpStdioHost.RunAsync(catalog, additionalTools);
+            // Tide predictions fill S-104 gaps only when asked for, as in SoundCharts (D1).
+            RouteCheckSourceCache? routeCheckSources = null;
+            if (settings.TidePredictions)
+            {
+                var tidePath = TideCli.CataloguePath(settings.TideCatalogue);
+                var stations = await TideCli.Source(tidePath).GetAsync(cancellationToken).ConfigureAwait(false);
+                if (stations is null)
+                {
+                    Console.Error.WriteLine($"--tide-predictions: no tide station catalogue. {TideCli.MissingHint(tidePath)}");
+                    return 2;
+                }
+
+                routeCheckSources = new RouteCheckSourceCache(
+                    new ProjNetCrsTransformFactory(), new RouteCheckSourceOptions { TidePredictions = stations });
+                Console.Error.WriteLine($"Tide predictions fill S-104 gaps: {stations.Stations.Count} stations from {tidePath}.");
+            }
+
+            await S100McpStdioHost.RunAsync(catalog, additionalTools, routeCheckSources, cancellationToken);
             return 0;
         }
         catch (Exception ex)

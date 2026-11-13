@@ -163,7 +163,9 @@ file and reloads it when the file changes.
 | `PredictTideTool` | `predict_tide` | Predicts the astronomical tide at a station or the nearest station to a point, as a series or highs and lows. `ResolveAsync` finds the station and predictor without predicting. |
 
 SoundCharts and `s100 mcp serve` both run them, and the `s100 tides` commands
-call them directly. To build them as MCP tools, use `TideMcpTools` in
+call them directly. `SampleCoverageTool` and `SampleCoverageAlongTool`, given
+a `RouteCheckSourceCache` with tide predictions, fill S-104 gaps with a
+prediction and say so in the result's `Source`. To build them as MCP tools, use `TideMcpTools` in
 [`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md#add-host-tools).
 
 ### Viewer-only tools
