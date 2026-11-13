@@ -443,6 +443,24 @@ variable. `s100` and the MCP server use environment variables only. An AIS
 key already in `settings.json` moves to the store the first time SoundCharts
 reads it.
 
+As built (slice 8):
+
+- `[Secret(EnvironmentVariable = …)]`, `SecretReference` (`sc-secret:<name>`)
+  and `SourceCreationContext.ResolveSecret` are in `Datasets.Pipelines`: the
+  environment variable, then the stored secret the option refers to, then a
+  plain value. A host passes `ReadSecret`; `s100` and the MCP server leave it
+  unset.
+- SoundCharts' `ISecretStore` is Credential Manager on Windows (generic
+  credentials `SoundCharts:<name>`), the login Keychain on macOS (generic
+  passwords, service `SoundCharts`) and `secret-tool` on Linux (attributes
+  `service=SoundCharts name=<name>`, the secret on standard input).
+- The AIS key is the first secret: it moves from `settings.json` to the
+  store when SoundCharts starts, and Settings says where it's kept.
+- One change from the decision above: where there's no store, SoundCharts
+  keeps the key in `settings.json` rather than refusing to save it, so a
+  Linux user without `secret-tool` doesn't lose AIS. Settings says so and
+  names the environment variable.
+
 ### 2.5 Alternatives rejected
 
 - **Make every source a file product with a fake path.** It would work
@@ -780,8 +798,8 @@ Each slice ships on its own and leaves the tree working.
    categories for sources and the `DatasetEntry` origin. Move AIS, NDBC,
    NMEA weather and own-ship registrations onto it, with the shared
    activation wrapper.
-8. **Secret store.** Add `ISecretStore`, `[Secret]` and the AIS key
-   migration.
+8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
+   and the AIS key migration.
 9. **Add source UI and generic settings pages.**
 10. **Pick actions.** Move "Take helm" to a contributed action, and merge
     `DynamicPickHit` into `PickHit`.

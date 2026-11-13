@@ -36,7 +36,7 @@ internal static class AisOverlayServiceCollectionExtensions
             var settings = sp.GetRequiredService<ViewerSettings>();
             var loggerFactory = sp.GetService<ILoggerFactory>();
             var notifier = sp.GetService<IMapViewportNotifier>();
-            var raw = BuildSource(settings.AisOverlay, loggerFactory, notifier);
+            var raw = BuildSource(settings.AisOverlay, loggerFactory, notifier, sp.GetService<Secrets.ISecretStore>());
             return new ExcludingAisFeatureSource(raw);
         });
         services.AddSingleton<IDynamicFeatureSource>(sp =>
@@ -57,7 +57,8 @@ internal static class AisOverlayServiceCollectionExtensions
     internal static IDynamicFeatureSource BuildSource(
         AisOverlaySettings? overlaySettings,
         ILoggerFactory? loggerFactory,
-        IMapViewportNotifier? viewportNotifier = null)
+        IMapViewportNotifier? viewportNotifier = null,
+        Secrets.ISecretStore? secrets = null)
     {
         if (overlaySettings is null || !overlaySettings.Enabled)
             return new DisabledAisFeatureSource();
@@ -67,7 +68,14 @@ internal static class AisOverlayServiceCollectionExtensions
         var apiKey = Environment.GetEnvironmentVariable(
             overlaySettings.ApiKeyEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(apiKey))
-            apiKey = overlaySettings.ApiKey;
+        {
+            // Data source design note D7: settings.json keeps a reference
+            // to the key in the secret store, or the key itself on a machine
+            // with no store (or from before the store).
+            apiKey = EncDotNet.S100.Datasets.Pipelines.SecretReference.NameOf(overlaySettings.ApiKey) is { } name
+                ? secrets?.Read(name)
+                : overlaySettings.ApiKey;
+        }
         if (string.IsNullOrWhiteSpace(apiKey))
             return new DisabledAisFeatureSource();
 

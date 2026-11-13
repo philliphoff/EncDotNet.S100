@@ -1530,7 +1530,13 @@ which needs a free API key. In **Settings** > **Vessels** > **AIS Overlay**:
 1. Turn on **Enable AIS overlay**.
 2. Enter your **API key**, or set the `ENCDOTNET_AIS_STREAM_KEY` environment
    variable. The environment variable takes precedence. A key entered in
-   Settings is stored in plain text in `settings.json`.
+   Settings is saved in the computer's secret store: Credential Manager on
+   Windows, the Keychain on macOS, or the Secret Service (libsecret, through
+   `secret-tool`) on Linux. `settings.json` keeps only a reference to it, and
+   a key already in `settings.json` moves to the store the next time
+   SoundCharts starts. On a computer with no secret store, such as Linux
+   without `secret-tool`, the key stays in `settings.json` and Settings says
+   so; use the environment variable to keep it out of the file.
 3. Restart SoundCharts. Changes to this section take effect at the next start.
 
 SoundCharts doesn't subscribe to aisstream.io until you zoom in. The

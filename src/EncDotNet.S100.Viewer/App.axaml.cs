@@ -1689,6 +1689,9 @@ public partial class App : Application
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         // Settings (#1398): one service holds them; the Settings panel lists
         // its pages, each registered as an ISettingsPage.
+        // Data source design note D7: API keys live in the platform secret store.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Secrets.ISecretStore>(
+            _ => EncDotNet.S100.Viewer.Services.Secrets.PlatformSecretStore.Create());
         services.AddSingleton<ViewerSettingsService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings>(sp =>
             sp.GetRequiredService<ViewerSettingsService>());

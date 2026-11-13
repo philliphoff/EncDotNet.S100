@@ -421,6 +421,13 @@ the HTTP client. A host pauses a source outside its activation range
 setting `IsActive` to `false`. Register your own sources with
 `SourceRegistry.Register` at start-up.
 
+Mark an option that holds a key with `[Secret(EnvironmentVariable = "…")]`,
+and read it in `Create` with `context.ResolveSecret(options.ApiKey,
+"MY_FEED_KEY")`: the environment variable first, then the host's secret
+store when the option holds a `sc-secret:` reference (`SecretReference`),
+then the option's plain value. SoundCharts passes its secret store as
+`ReadSecret`; `s100` and the MCP server use environment variables only.
+
 ## Processor lifetime
 
 `DatasetProcessorOwner` owns the processors loaded into a map, independent of
