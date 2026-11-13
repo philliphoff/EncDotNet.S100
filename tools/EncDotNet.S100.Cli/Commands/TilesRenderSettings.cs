@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Cli.Commands;
 internal abstract class TilesRenderSettings : CommandSettings
 {
     [CommandArgument(0, "[input]")]
-    [Description("The dataset to tile, an exchange set (a directory containing a CATALOG.XML, a CATALOG.XML, or an exchange-set .zip), or a folder of datasets, searched recursively (an S-57 ENC_ROOT with a CATALOG.031 is read this way). tiles serve also takes a built tile set: a {z}/{x}/{y} directory, a .pmtiles archive or a .mbtiles database. Omit when using --layer or --exchange-set.")]
+    [Description("The dataset to tile, an exchange set (a directory containing a CATALOG.XML, a CATALOG.XML, or an exchange-set .zip), or a folder of datasets, searched recursively (an S-57 ENC_ROOT with a CATALOG.031 is read this way). tiles serve also takes a built tile set: a {z}/{x}/{y} directory, a .pmtiles archive, a .mbtiles database or a .gpkg GeoPackage. Omit when using --layer or --exchange-set.")]
     public string? Input { get; init; }
 
     [CommandOption("--layer <PATH>")]

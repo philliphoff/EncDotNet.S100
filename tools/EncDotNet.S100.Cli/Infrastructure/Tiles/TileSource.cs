@@ -107,17 +107,21 @@ internal static class TileSource
         if (read >= 7 && Encoding.ASCII.GetString(signature, 0, 7) == "PMTiles")
             return new PmTilesTileSource(path);
         if (read == 16 && Encoding.ASCII.GetString(signature) == "SQLite format 3\0")
-            return new MbTilesTileSource(path);
+        {
+            return IsGeoPackage(path)
+                ? new GeoPackageTileSource(path)
+                : new MbTilesTileSource(path);
+        }
 
         throw new InvalidDataException(
-            $"'{path}' is not a tile set: expected an XYZ directory, a PMTiles archive or an MBTiles database.");
+            $"'{path}' is not a tile set: expected an XYZ directory, a PMTiles archive, an MBTiles database or a GeoPackage.");
     }
 
     /// <summary>
     /// Whether <paramref name="path"/> looks like a built tile set rather than a
     /// dataset, a folder of datasets or an exchange set: an XYZ directory (one
     /// holding a <c>tiles.json</c>, or <c>{z}/{x}</c> folders with numeric names),
-    /// or a PMTiles or SQLite (MBTiles) file.
+    /// or a PMTiles or SQLite (MBTiles or GeoPackage) file.
     /// </summary>
     public static bool IsTileSet(string path)
     {
@@ -163,6 +167,39 @@ internal static class TileSource
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Whether the SQLite database at <paramref name="path"/> is a GeoPackage:
+    /// its application id is <c>GPKG</c> (or <c>GP10</c>/<c>GP11</c>), or it has
+    /// a <c>gpkg_contents</c> table. Any other SQLite file is read as MBTiles.
+    /// </summary>
+    internal static bool IsGeoPackage(string path)
+    {
+        // The application id is the big-endian integer at offset 68 of the header.
+        var header = new byte[72];
+        using (var stream = File.OpenRead(path))
+        {
+            if (stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false) < header.Length)
+                return false;
+        }
+
+        int applicationId = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(68));
+        if (applicationId == GeoPackage.ApplicationId || GeoPackage.LegacyApplicationIds.Contains(applicationId))
+            return true;
+        if (applicationId != 0)
+            return false;
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gpkg_contents'";
+        return command.ExecuteScalar() is not null;
     }
 
     /// <summary>The tile format named by a TileJSON or MBTiles <c>format</c> value.</summary>
