@@ -211,7 +211,7 @@ public sealed class TidesCommandTests : IDisposable
         try
         {
             var exit = CliApp.Build().Run(args);
-            return (exit, stdout.ToString(), stderr.ToString());
+            return (exit, stdout.ToString().ReplaceLineEndings("\n"), stderr.ToString().ReplaceLineEndings("\n"));
         }
         finally
         {
