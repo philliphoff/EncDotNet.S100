@@ -140,6 +140,12 @@ tools with a headless renderer.
 `EncDotNet.S100.Mcp.Tools` as MCP tools. SoundCharts serves them over its
 Library.
 
+`TideMcpTools.Create` (namespace `EncDotNet.S100.Mcp.Tides`) builds the
+read-only tide tools, `list_tide_stations` and `predict_tide`, over an
+`ITideCatalogueSource`, such as a `TideCatalogueFileSource` for the file
+`s100 tides update` writes. SoundCharts and `s100 mcp serve` both serve them.
+[Tide tools](../../docs/mcp-server.md#tide-tools) describes them.
+
 ## Security
 
 - The server listens on the loopback address by default, so other machines

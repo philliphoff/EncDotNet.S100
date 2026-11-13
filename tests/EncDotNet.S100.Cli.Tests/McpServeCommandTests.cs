@@ -35,9 +35,11 @@ public sealed class McpServeCommandTests
         "list_library_sources",
         "list_secom_services",
         "list_specs",
+        "list_tide_stations",
         "list_time_steps",
         "nearest_features",
         "open_dataset",
+        "predict_tide",
         "query_features",
         "query_library_items",
         "refresh_library_source",
@@ -95,6 +97,69 @@ public sealed class McpServeCommandTests
         var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? string.Empty;
         // FileDatasetCatalog derives a positional dataset's id from its file name.
         Assert.Contains("navwarn_surface.gml", text);
+    }
+
+    [Fact]
+    public async Task Serve_predicts_tides_from_the_tide_catalogue()
+    {
+        var host = HostPath();
+        var catalogue = FixturePath(Path.Combine("Tides", "puget-sound.json"));
+        Assert.SkipUnless(File.Exists(host), $"CLI host not found: {host}");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var transport = new StdioClientTransport(new StdioClientTransportOptions
+        {
+            Name = "s100-mcp-serve-tides",
+            Command = host,
+            Arguments = ["mcp", "serve", "--tide-catalogue", catalogue, "--tide-predictions"],
+        });
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: cts.Token);
+
+        var result = await client.CallToolAsync(
+            "predict_tide",
+            new Dictionary<string, object?>
+            {
+                ["station"] = "9447130",
+                ["from"] = "2026-11-13T00:00:00Z",
+                ["to"] = "2026-11-14T00:00:00Z",
+                ["mode"] = "extremes",
+            },
+            cancellationToken: cts.Token);
+
+        Assert.False(result.IsError ?? false, "predict_tide returned an error.");
+        var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "{}";
+        using var doc = System.Text.Json.JsonDocument.Parse(text);
+        Assert.Equal("prediction", doc.RootElement.GetProperty("kind").GetString());
+        Assert.Equal("harmonic", doc.RootElement.GetProperty("station").GetProperty("kind").GetString());
+        Assert.True(doc.RootElement.GetProperty("extremes").GetArrayLength() >= 3);
+        Assert.False(doc.RootElement.TryGetProperty("series", out _));
+
+        // With --tide-predictions, S-104 sampling falls back to the nearest station.
+        var sample = await client.CallToolAsync(
+            "sample_coverage",
+            new Dictionary<string, object?>
+            {
+                ["spec"] = "S-104",
+                ["latitude"] = 47.605,
+                ["longitude"] = -122.34,
+                ["time"] = "2026-11-18T20:00:00Z",
+            },
+            cancellationToken: cts.Token);
+        Assert.False(sample.IsError ?? false, "sample_coverage returned an error.");
+        using (var sampled = System.Text.Json.JsonDocument.Parse(sample.Content.OfType<TextContentBlock>().First().Text))
+        {
+            var source = sampled.RootElement.GetProperty("source");
+            Assert.Equal("prediction", source.GetProperty("kind").GetString());
+            Assert.Equal("9447130", source.GetProperty("station").GetProperty("id").GetString());
+            Assert.Equal("water_level_station", sampled.RootElement.GetProperty("value").GetProperty("$kind").GetString());
+        }
+
+        var missing = await client.CallToolAsync(
+            "list_tide_stations",
+            new Dictionary<string, object?> { ["latitude"] = 47.6 },
+            cancellationToken: cts.Token);
+        Assert.True(missing.IsError ?? false);
+        Assert.Contains("invalid_argument", missing.Content.OfType<TextContentBlock>().First().Text);
     }
 
     [Fact]

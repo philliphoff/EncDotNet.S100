@@ -11,6 +11,9 @@ command offers it, and treat paths as local filesystem paths.
 | Validate a dataset or verify an exchange set | `s100 validate` |
 | Query features or coverage values at a position | `s100 identify` |
 | Check an RTZ or S-421 route against datasets (land, depths, dangers, areas, S-124 warnings, UKC) | `s100 route check` |
+| Find tide stations near a point | `s100 tides stations` |
+| Predict the tide at a station (series, highs and lows, CSV, JSON or S-104) | `s100 tides predict` |
+| Download or check the offline tide station catalogue | `s100 tides update` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
 | Write XYZ raster tiles (folder, PMTiles or MBTiles) for a web map | `s100 tiles export` |
 | Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs | `s100 tiles serve` |
@@ -63,3 +66,4 @@ and no network update check.
 | `5` | Dataset schema is non-conforming. |
 | `6` | Validation findings failed the selected validation policy. |
 | `7` | `route check` findings reached the `--fail-on` level. |
+| `8` | `tides update --check` found newer NOAA data than the catalogue. |

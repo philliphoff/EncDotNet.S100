@@ -582,6 +582,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServiceDirectory>(),
                 sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
                 new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())),
+            new McpTools.Groups.TidesMcpToolGroup(
+                McpTools.Groups.TidesMcpToolGroup.FileSource(sp.GetRequiredService<ViewerDataPaths>()),
+                sp.GetRequiredService<TimeProvider>()),
             // Only with --mcp-test-hooks: set_test_clock and the ui_* tools are for scripted testing.
             new McpTools.Groups.TestHooksMcpToolGroup(
                 settings,
