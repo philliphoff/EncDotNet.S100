@@ -2,6 +2,8 @@ using System.Text.Json;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S104.Writing;
+using EncDotNet.S100.Datasets.S111;
+using EncDotNet.S100.Datasets.S111.Writing;
 using EncDotNet.S100.Hdf5.PureHdf;
 
 namespace EncDotNet.S100.Cli.Tests;
@@ -17,6 +19,8 @@ public sealed class TidesCommandTests : IDisposable
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "s100-tides-" + Guid.NewGuid().ToString("N"));
 
     private static string Catalogue => Path.Combine(AppContext.BaseDirectory, "TestData", "Tides", "puget-sound.json");
+
+    private static string CurrentCatalogue => Path.Combine(AppContext.BaseDirectory, "TestData", "Tides", "noaa-currents.json");
 
     public TidesCommandTests() => Directory.CreateDirectory(_directory);
 
@@ -146,6 +150,100 @@ public sealed class TidesCommandTests : IDisposable
         Assert.Contains($"s100 tides update --catalogue {missing}", stderr);
     }
 
+    [Fact]
+    public void Current_stations_json_is_the_list_current_stations_result()
+    {
+        var (exit, stdout, _) = Run(["tides", "currents", "stations", "--near", "37.82,-122.46", "--format", "json", "--catalogue", CurrentCatalogue]);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(stdout);
+        var stations = doc.RootElement.GetProperty("stations");
+        Assert.Equal("PCT0281_1", stations[0].GetProperty("id").GetString());
+        Assert.Equal("current", stations[0].GetProperty("type").GetString());
+        Assert.Equal("SFB1202_17", stations[0].GetProperty("referenceStationId").GetString());
+        Assert.Equal(6.4, stations[1].GetProperty("depthMeters").GetDouble());
+        Assert.Equal(6, doc.RootElement.GetProperty("catalogue").GetProperty("currentStationCount").GetInt32());
+    }
+
+    [Fact]
+    public void Current_stations_csv_has_a_row_per_station()
+    {
+        var (exit, stdout, stderr) = Run(["tides", "currents", "stations", "--near", "48.4,-122.64", "--format", "csv", "--catalogue", CurrentCatalogue]);
+
+        Assert.Equal(0, exit);
+        var lines = stdout.TrimEnd().Split('\n');
+        Assert.Equal(2, lines.Length);
+        Assert.StartsWith("id,name,kind,referenceStationId,", lines[0]);
+        Assert.StartsWith("PUG1701_33,Deception Pass (Narrows),harmonic,,", lines[1]);
+        Assert.EndsWith(",5.49,108,277,false", lines[1]);
+        Assert.Contains("6 current stations", stderr);
+    }
+
+    [Fact]
+    public void Current_predict_json_is_the_predict_current_result_in_utc()
+    {
+        var (exit, stdout, _) = Run([
+            "tides", "currents", "predict", "PUG1701", "--from", "2026-11-13T00:00Z", "--to", "2026-11-13T06:00Z",
+            "--step", "15m", "--format", "json", "--catalogue", CurrentCatalogue]);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(stdout);
+        var root = doc.RootElement;
+        Assert.Equal("PUG1701_33", root.GetProperty("station").GetProperty("id").GetString());
+        Assert.Equal("kn", root.GetProperty("unit").GetString());
+        Assert.Equal(25, root.GetProperty("series").GetArrayLength());
+        Assert.Equal("Astronomical tidal current only, not a forecast.", root.GetProperty("caveat").GetString());
+    }
+
+    [Fact]
+    public void Current_events_as_csv_in_utc()
+    {
+        var (exit, stdout, stderr) = Run([
+            "tides", "currents", "predict", "PCT0281_1", "--events", "--utc", "--from", "2026-11-13", "--to", "2026-11-14",
+            "--format", "csv", "--catalogue", CurrentCatalogue]);
+
+        Assert.Equal(0, exit);
+        var lines = stdout.TrimEnd().Split('\n');
+        Assert.Equal("time,event,predicted_speed_kn,direction_deg_true", lines[0]);
+        Assert.Contains(lines, l => l.Contains(",slack_before_flood,0.00,", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains(",max_flood,", StringComparison.Ordinal) && l.EndsWith(",70.0", StringComparison.Ordinal));
+        Assert.All(lines.Skip(1), l => Assert.Matches(@"^2026-11-13T\d\d:\d\d:00Z,", l));
+        Assert.Contains("from Golden Gate Bridge, 0.88 nm NE of SFB1202_17, with offsets", stderr);
+    }
+
+    [Fact]
+    public void Current_predict_s111_writes_a_station_dataset_that_reads_back()
+    {
+        var output = Path.Combine(_directory, "deception.h5");
+
+        var (exit, _, stderr) = Run([
+            "tides", "currents", "predict", "PUG1701_33", "--from", "2026-11-13T00:00Z", "--to", "2026-11-14T00:00Z",
+            "--step", "10m", "--format", "s111", "-o", output, "--catalogue", CurrentCatalogue]);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("145 predicted currents at Deception Pass (Narrows) PUG1701_33", stderr);
+        using var file = PureHdfFile.Open(output);
+        var data = Assert.IsType<S111DatasetData.StationSeries>(S111DatasetReader.ReadAny(file));
+        Assert.True(S111CurrentPredictions.IsPrediction(data.Dataset));
+        Assert.Equal(-5.49f, data.Dataset.SurfaceCurrentDepth!.Value, 2);
+        var station = Assert.Single(data.Dataset.Stations);
+        Assert.Equal("PUG1701_33", station.Identifier);
+        Assert.Equal(145, station.NumberOfTimes);
+        Assert.Equal(new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc), station.StartTime);
+    }
+
+    [Fact]
+    public void Current_predict_reports_an_unknown_or_ambiguous_station()
+    {
+        var unknown = Run(["tides", "currents", "predict", "Nowhere", "--catalogue", CurrentCatalogue]);
+        var ambiguous = Run(["tides", "currents", "predict", "Golden Gate", "--catalogue", CurrentCatalogue]);
+
+        Assert.Equal(2, unknown.Exit);
+        Assert.Contains("No current station has the id or name 'Nowhere'", unknown.Stderr);
+        Assert.Equal(2, ambiguous.Exit);
+        Assert.Contains("  SFB1202_17 Golden Gate Bridge, 0.88 nm NE of", ambiguous.Stderr);
+    }
+
     [Theory]
     [InlineData("tides", "predict")]
     [InlineData("tides", "predict", "9447130", "--near", "47.6,-122.3")]
@@ -153,6 +251,11 @@ public sealed class TidesCommandTests : IDisposable
     [InlineData("tides", "predict", "9447130", "--from", "tomorrow")]
     [InlineData("tides", "predict", "9447130", "--highs-lows", "--format", "s104")]
     [InlineData("tides", "predict", "9447130", "-o", "out.h5")]
+    [InlineData("tides", "currents", "predict")]
+    [InlineData("tides", "currents", "predict", "PUG1701_33", "--events", "--format", "s111")]
+    [InlineData("tides", "currents", "predict", "PUG1701_33", "--format", "s104")]
+    [InlineData("tides", "currents", "predict", "PUG1701_33", "-o", "out.h5")]
+    [InlineData("tides", "currents", "stations")]
     [InlineData("tides", "stations")]
     [InlineData("tides", "stations", "--near", "147,-122")]
     [InlineData("tides", "stations", "--near", "47.6,-122.3", "--radius", "far")]

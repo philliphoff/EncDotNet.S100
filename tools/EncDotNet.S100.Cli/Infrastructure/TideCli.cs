@@ -46,6 +46,10 @@ internal static class TideCli
     public static string DescribeCatalogue(TideCatalogueInfo info) =>
         Describe(info.Provider, info.Date, info.AgeDays, info.Stale, $", {info.StationCount} stations");
 
+    /// <summary>The catalogue's provenance and age, in a line, counting its current stations.</summary>
+    public static string DescribeCurrentCatalogue(TideCatalogueInfo info) =>
+        Describe(info.Provider, info.Date, info.AgeDays, info.Stale, $", {info.CurrentStationCount} current stations");
+
     /// <summary>A prediction's provenance and the catalogue's age at <paramref name="now"/>, in a line.</summary>
     public static string DescribeSource(string? provider, DateTimeOffset? date, DateTimeOffset now)
     {
@@ -185,11 +189,14 @@ internal static class TideCli
     public static int Fail(ToolError error)
     {
         Console.Error.WriteLine($"Error: {error.Message}");
-        if (error is TideStationNotFound { Candidates.Count: > 0 } notFound)
+        var candidates = error switch
         {
-            foreach (var candidate in notFound.Candidates)
-                Console.Error.WriteLine($"  {candidate}");
-        }
+            TideStationNotFound notFound => notFound.Candidates,
+            CurrentStationNotFound notFound => notFound.Candidates,
+            _ => [],
+        };
+        foreach (var candidate in candidates)
+            Console.Error.WriteLine($"  {candidate}");
 
         return 2;
     }

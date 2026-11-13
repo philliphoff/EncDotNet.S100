@@ -32,6 +32,8 @@
       href: scenarios/compose-s101-s102.md
     - name: Find when the tide is above a height
       href: scenarios/tide-above-a-height.md
+    - name: Find slack water in a pass
+      href: scenarios/slack-water-in-a-pass.md
     - name: Show wind and waves on the chart
       href: weather.md
 - name: Rendering and integration

@@ -24,6 +24,8 @@ internal static class SkillContent
             ["tides stations"] = "Commands.TidesStations.md",
             ["tides predict"] = "Commands.TidesPredict.md",
             ["tides update"] = "Commands.TidesUpdate.md",
+            ["tides currents stations"] = "Commands.TidesCurrentStations.md",
+            ["tides currents predict"] = "Commands.TidesCurrentPredict.md",
         };
 
     public static IReadOnlyCollection<string> GuidedCommandPaths { get; } =
