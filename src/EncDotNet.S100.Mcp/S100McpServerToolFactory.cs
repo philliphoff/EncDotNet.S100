@@ -192,6 +192,9 @@ internal static class S100McpServerToolFactory
             "unless outOfRange=\"nearest\", which samples the nearest step and reports timeStatus \"before_start\" or \"after_end\" " +
             "(in-range results report timeStatus \"in_range\"). Range/series queries return the covered part of the window with " +
             "truncated=true and coveredFrom/coveredTo when the data does not span it, and time_out_of_range only when there is no overlap. " +
+            "Where the host has tide predictions on and no S-104 or S-111 covers the point and time, the value is predicted at the nearest " +
+            "tide or current station within 10 km by water instead: 'source' is then set (kind \"prediction\", the station with its type " +
+            "\"tide\" or \"current\", caveat and catalogueDate); quote the caveat with the value. " +
             "Read-only and side-effect free.";
 
         var del = ([Description("Spec of the coverage to sample (S-102, S-104, S-111, GRIB2 or NetCDF; e.g. \"S-102/2.1.0\" or \"GRIB2\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,

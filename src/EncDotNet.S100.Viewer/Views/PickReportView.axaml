@@ -1121,6 +1121,9 @@
                                                 <DataTemplate DataType="vm:TideStationCardViewModel">
                                                     <views:TideStationCardView />
                                                 </DataTemplate>
+                                                <DataTemplate DataType="vm:CurrentStationCardViewModel">
+                                                    <views:CurrentStationCardView />
+                                                </DataTemplate>
                                             </ContentControl.DataTemplates>
                                         </ContentControl>
                                         <ItemsControl ItemsSource="{Binding Attributes}"

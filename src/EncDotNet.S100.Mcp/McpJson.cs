@@ -116,6 +116,9 @@ public static class McpJson
 // Tide prediction tool results (#1452).
 [JsonSerializable(typeof(ListTideStationsResult))]
 [JsonSerializable(typeof(PredictTideResult))]
+// Tidal current prediction tool results (#1454).
+[JsonSerializable(typeof(ListCurrentStationsResult))]
+[JsonSerializable(typeof(PredictCurrentResult))]
 // Sampled values, written polymorphically.
 [JsonSerializable(typeof(DepthSample))]
 [JsonSerializable(typeof(WaterLevelSample))]
@@ -146,6 +149,9 @@ public static class McpJson
 [JsonSerializable(typeof(TideStationNotFound))]
 [JsonSerializable(typeof(NoTideStationNear))]
 [JsonSerializable(typeof(TideDatumNotAvailable))]
+[JsonSerializable(typeof(CurrentStationNotFound))]
+[JsonSerializable(typeof(NoCurrentStationNear))]
+[JsonSerializable(typeof(CurrentStationNotPredictable))]
 // Tool parameter types the SDK binds.
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonElement?))]

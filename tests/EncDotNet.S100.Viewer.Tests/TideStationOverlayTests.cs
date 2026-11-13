@@ -87,7 +87,7 @@ public sealed class TideStationOverlayTests
         var list = TideTestLists.At(Fixture);
         await list.EnsureLoadedAsync();
         using var overlay = new TideStationsOverlay(
-            list, notifier: null, new FixedViewTime(ViewTime), new NoWaterLevel(), TimeProvider.System);
+            list, notifier: null, new FixedViewTime(ViewTime), new NoWaterLevel(), TimeProvider.System, () => TimeFormat.Utc, () => []);
         using var legend = new TideStationLegendSource(overlay, () => PaletteType.Day, () => TimeFormat.Utc, () => ViewTime);
         var changes = 0;
         legend.Changed += (_, _) => changes++;
@@ -190,7 +190,7 @@ public sealed class TideStationOverlayTests
                 list,
                 action => action());
             using var overlay = new TideStationsOverlay(
-                list, notifier: null, new FixedViewTime(ViewTime), new NoWaterLevel(), TimeProvider.System);
+                list, notifier: null, new FixedViewTime(ViewTime), new NoWaterLevel(), TimeProvider.System, () => TimeFormat.Utc, () => []);
             var tools = new McpTools.TideDisplayTools(overlay, settings, predictions, list, new ImmediateInvoker());
 
             var before = Assert.IsType<EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<McpTools.TideDisplayDto>.OkResult>(

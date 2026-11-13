@@ -219,8 +219,8 @@ SoundCharts only.
 | `set_display_combination` | Yes | Applies a display combination by `id`, or the active one again with `reapply: true`, as the **View** menu and **Reapply** do. Datasets of products it leaves out are made inactive, which takes them out of the S-98 rules and pick, not only the drawing; datasets of products it includes are made active. It also sets the combination's display category, viewing groups, layers and sub-layers. It never changes mariner safety settings, the **Navigational warnings** switch, display planes, the palette, own ship, AIS or routes, and route checks still use every loaded dataset. Products it names that aren't loaded aren't fetched. Returns `previousId`, `activeId`, the `datasets` whose Active flag changed and the `notLoadedProducts`. There's no tool to save, rename or delete views. Returns `display_combination_not_found` or `no_active_display_combination`. |
 | `get_weather_display` | No | Returns the **Weather** section of **Display controls**: `isobars`, `windSpeedFill`, `waveArrows`, `isotherms`, `currents`, `airTemperature`, `precipitation`, `thunderstormRisk` and `cloudCover` for weather grids, and `windRadii`, `pastTrack` and `forecastTimes` for tropical cyclones, each `true` when drawn; `sectionShown` (a GRIB2, NetCDF, tropical cyclone or surface analysis dataset is loaded) and `cycloneSwitchesShown` (a tropical cyclone is). |
 | `set_weather_display` | Yes | Sets **Weather** switches of **Display controls**, as their toggles do; an omitted argument is left as it is, and all are kept after a restart. The switches apply to every weather dataset whether or not the section shows. Returns what `get_weather_display` returns. |
-| `get_tide_display` | No | Returns SoundCharts' tide prediction state: `tideStations` (the **Tide stations · predicted** Layer stack row), `usePredictions` (**Use tide predictions where there's no S-104** in Mariner Settings) and `predictionState` (`off`, `loading`, `in_use` or `no_station_list`), `stationsInView` (stations in view at 1:500,000 and larger) and `stationsDrawn` (after thinning to 40 px and leaving out stations S-104 covers at the view time), and `stationList`: `present`, `provider`, `date`, `tideStations`, `currentStations`, `stale` (NOAA has newer data, or the list is over 12 months old when it can't check), `activity` (`idle`, `loading`, `downloading` or `checking`), download progress and `lastError`. |
-| `set_tide_display` | Yes | Sets `tideStations` and `usePredictions`, as the row and the setting do; an omitted one is left as it is, and both are kept after a restart. Turning either on with no station list cached starts NOAA's download (about 10 minutes); `refreshStationList: true` downloads it again. Returns what `get_tide_display` returns. |
+| `get_tide_display` | No | Returns SoundCharts' tide prediction state: `tideStations` (the **Tide stations · predicted** Layer stack row), `currentStations` (the **Current stations · predicted** row, with `currentStationsInView` and `currentStationsDrawn`, which leaves out stations S-111 covers), `usePredictions` (**Use tide predictions where there's no S-104** in Mariner Settings) and `predictionState` (`off`, `loading`, `in_use` or `no_station_list`), `stationsInView` (stations in view at 1:500,000 and larger) and `stationsDrawn` (after thinning to 40 px and leaving out stations S-104 covers at the view time), and `stationList`: `present`, `provider`, `date`, `tideStations`, `currentStations`, `stale` (NOAA has newer data, or the list is over 12 months old when it can't check), `activity` (`idle`, `loading`, `downloading` or `checking`), download progress and `lastError`. |
+| `set_tide_display` | Yes | Sets `tideStations`, `currentStations` and `usePredictions`, as the row and the setting do; an omitted one is left as it is, and both are kept after a restart. Turning either on with no station list cached starts NOAA's download (about 10 minutes); `refreshStationList: true` downloads it again. Returns what `get_tide_display` returns. |
 | `get_bathymetry_display` | No | Returns the **Bathymetry** section of **Display controls**: `reliefShading` (a hillshade over the S-102 depth bands, off by default), `true` when drawn; `sectionShown` (an S-102 dataset is loaded). |
 | `set_bathymetry_display` | Yes | Sets **Bathymetry** switches of **Display controls**, as their toggles do; an omitted argument is left as it is, and all are kept after a restart. The switch applies to every S-102 dataset whether or not the section shows. Returns what `get_bathymetry_display` returns. |
 | `get_aml_display` | No | Returns the **Additional Military Layers** section of **Display controls**: `products` (every AML product, loaded ones first, with `code`, `name`, `visible`, `cellCount` and `shownCount`), `followScaleBands`, the `scaleDenominator` the bands were applied at, `clbChipShown` (the "AML · CLB not used for depth checks" chip) and `sectionShown` (an AML cell is loaded). |
@@ -270,7 +270,29 @@ water 0.5 m or more. Quote `caveat` ("Astronomical tide only, not a
 forecast.") with any value. Predictions aren't S-104 and aren't for
 navigation.
 
-### Predicted water level in sampling
+### Tidal current tools
+
+Both hosts provide these tools too. They read the current stations in the
+same catalogue as the [tide tools](#tide-tools); a catalogue downloaded
+before current stations were added has none, and `s100 tides update` adds
+them. NOAA lists each depth bin at a current station as its own station, such
+as `PUG1701_33`.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_current_stations` | No | Lists tidal current stations within `radiusMeters` (default 50,000) of `latitude` and `longitude`, or in a box (`south`, `west`, `north`, `east`), nearest first, up to `limit` (default 10, at most 500). Each station has its `id`, `name`, `type` (`current`), `kind` (`harmonic` or `subordinate`), `position`, `distanceMeters`, `depthMeters` below the surface, `floodDirectionDegrees` and `ebbDirectionDegrees` (where the current sets, degrees true), `isRotary`, and for a subordinate station `referenceStationId`, `referenceStationName` and `offsets` (`slackBeforeFloodMinutes`, `maximumFloodMinutes`, `slackBeforeEbbMinutes`, `maximumEbbMinutes`, `maximumFloodRatio`, `maximumEbbRatio`). `catalogue` is as for `list_tide_stations`, with `currentStationCount`. |
+| `predict_current` | No | Predicts the astronomical tidal current at a `station` (an id, NOAA's id without its depth bin, or a name; the last two take the shallowest bin), or at the nearest station within `radiusMeters` (default 10,000) of `latitude` and `longitude`, the shallowest bin where several share a place. `from` and `to` set the window as for `predict_tide`. `mode` is `series` (default: every `stepMinutes`, default 30, at most 2,000), `events` (slacks and maxima, to the minute) or `both`. Returns the `station` (with `kind`, `referenceStationId`, `distanceMeters`, `depthMeters`, flood and ebb directions and `isRotary`), `kind: "prediction"`, `unit: "kn"`, `series` (`time`, `speedKnots`, `directionDegrees`, `phase`: `flood` or `ebb`), `events` (`time`, `kind`: `slack_before_flood`, `max_flood`, `min_flood`, `slack_before_ebb`, `max_ebb` or `min_ebb`, `speedKnots`, and `directionDegrees` except at slack), `method` for a subordinate station, `caveat` and `catalogueDate`. Times are UTC. |
+
+Errors: `current_station_not_found` (with up to ten `candidates` when a name
+matches several stations), `no_current_station_near` and
+`current_station_not_predictable`.
+
+Wind and river flow change real currents, and the strongest stream in a pass
+can be away from the station. Quote `caveat` ("Astronomical tidal current
+only, not a forecast.") with any value. Predicted currents aren't S-111,
+aren't for navigation and aren't used in route checks.
+
+### Predicted values in sampling
 
 Where the host has tide predictions on (SoundCharts' **Use tide predictions
 where there's no S-104**, or `s100 mcp serve --tide-predictions`),
@@ -294,6 +316,15 @@ the hour round it), and it adds a `source`:
 A value from a loaded dataset has no `source`. A `series` query is predicted
 at each instant; a `range` query every 30 minutes, at most 2,000 heights.
 With predictions off, or no station in reach, the S-104 error stands.
+
+The same switch fills S-111 gaps: `sample_coverage` and
+`sample_coverage_along` for `S-111` fall back to the predicted tidal current
+at the current station nearest by water within 10 km, the shallowest bin
+where several share a place. The `datasetId` is `current-predictions`, the
+`value` is a `surface_current_station` sample (speed in m/s and knots, and the
+direction the current sets toward), and `source` names the station with
+`type: "current"`, no `verticalDatum`, and the caveat "Astronomical tidal
+current only, not a forecast." `check_route` doesn't use predicted currents.
 
 ### Library tools
 
@@ -813,6 +844,8 @@ statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
 - "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
 - "When is the tide above 2 m at Seattle tomorrow afternoon?" See
   [Find when the tide is above a height](scenarios/tide-above-a-height.md).
+- "When is slack water at Deception Pass tomorrow afternoon?" See
+  [Find slack water in a pass](scenarios/slack-water-in-a-pass.md).
 - "Plan a mid-channel route from the harbour entrance to the marina: create a
   route, then add waypoints that stay clear of the charted safety contour, and
   set each leg's safety contour and cross-track limits."

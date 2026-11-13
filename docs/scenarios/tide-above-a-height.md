@@ -140,3 +140,5 @@ every field.
 - **An S-104 file.** `--format s104 -o seattle.h5` writes the series as an
   S-104 station dataset to open in SoundCharts. See
   [Write an S-104 dataset](../cli.md#write-an-s-104-dataset).
+- **Tidal currents.** For the stream rather than the height, see
+  [Find slack water in a pass](slack-water-in-a-pass.md).

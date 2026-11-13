@@ -14,7 +14,8 @@ public sealed record TideCatalogueInfo(
     [property: Description("Whole days since it was retrieved, or null when unknown.")] int? AgeDays,
     [property: Description("True when it's more than 12 months old (or of unknown age): refresh it before relying on it.")] bool Stale,
     [property: Description("The tidal datum epoch most of its stations use, such as \"1983-2001\".")] string? DatumEpoch,
-    [property: Description("How many stations it has.")] int StationCount);
+    [property: Description("How many tide stations it has.")] int StationCount,
+    [property: Description("How many current stations (depth bins) it has.")] int CurrentStationCount);
 
 /// <summary>A position in decimal degrees on WGS-84.</summary>
 public sealed record TidePosition(
@@ -38,7 +39,7 @@ public sealed record TideOffsetsDto(
 public sealed record TideStationDto(
     [property: Description("The station identifier, such as \"9447130\".")] string Id,
     [property: Description("The station's name.")] string Name,
-    [property: Description("Always \"tide\" (current stations come later).")] string Type,
+    [property: Description("Always \"tide\" (list_current_stations lists current stations).")] string Type,
     [property: Description("\"harmonic\" (predicted from its own constituents) or \"subordinate\" (from a reference station with offsets).")] string Kind,
     [property: Description("The station's position.")] TidePosition Position,
     [property: Description("Geodesic distance in metres from the point asked about (or the box's centre).")] double DistanceMeters,

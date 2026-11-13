@@ -97,29 +97,30 @@ public sealed record SampleCoverageResult(
     [property: Description("Windowed requests only: true when the requested window extends past the dataset's time range, so the series covers only part of it.")] bool? Truncated = null,
     [property: Description("Windowed requests only: start of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredFrom = null,
     [property: Description("Windowed requests only: end of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredTo = null,
-    [property: Description("Where a value that isn't from a loaded dataset came from: a tide prediction where no S-104 covers the point and time. Null for a dataset's value.")] SampleSource? Source = null);
+    [property: Description("Where a value that isn't from a loaded dataset came from: a tide prediction where no S-104 covers the point and time, or a tidal current prediction where no S-111 does. Null for a dataset's value.")] SampleSource? Source = null);
 
 /// <summary>
 /// Where a sampled value came from when it isn't a loaded dataset's: a
-/// harmonic tide prediction used where no S-104 covers the point and time.
+/// harmonic tide prediction used where no S-104 covers the point and time,
+/// or a tidal current prediction where no S-111 does.
 /// </summary>
 /// <param name="Kind">Always <c>prediction</c>.</param>
 /// <param name="Station">The station predicted.</param>
-/// <param name="VerticalDatum">The S-100 vertical datum code of the heights (MLLW is 12).</param>
+/// <param name="VerticalDatum">The S-100 vertical datum code of the heights (MLLW is 12); <c>null</c> for a current.</param>
 /// <param name="Caveat">The note to quote with the value.</param>
 /// <param name="CatalogueDate">When the station catalogue was retrieved.</param>
 [Description("Where a sampled value came from when it isn't a loaded dataset's.")]
 public sealed record SampleSource(
-    [property: Description("Always \"prediction\": the astronomical tide, not S-104 and not a forecast.")] string Kind,
+    [property: Description("Always \"prediction\": the astronomical tide or tidal current, not S-104 or S-111 and not a forecast.")] string Kind,
     [property: Description("The station the value is predicted at.")] SampleSourceStation Station,
-    [property: Description("The S-100 vertical datum code of the heights (MLLW is 12).")] int? VerticalDatum,
-    [property: Description("Quote this with the value: \"Astronomical tide only, not a forecast.\"")] string Caveat,
+    [property: Description("The S-100 vertical datum code of the heights (MLLW is 12); null for a current.")] int? VerticalDatum,
+    [property: Description("Quote this with the value: \"Astronomical tide only, not a forecast.\" or, for a current, \"Astronomical tidal current only, not a forecast.\"")] string Caveat,
     [property: Description("When the station catalogue was retrieved (UTC).")] DateTimeOffset? CatalogueDate);
 
 /// <summary>The station a predicted value comes from.</summary>
 /// <param name="Id">The station identifier.</param>
 /// <param name="Name">The station's name.</param>
-/// <param name="Type"><c>tide</c>.</param>
+/// <param name="Type"><c>tide</c> or <c>current</c>.</param>
 /// <param name="Kind"><c>harmonic</c> or <c>subordinate</c>.</param>
 /// <param name="ReferenceStationId">For a subordinate station, its reference station.</param>
 /// <param name="DistanceMeters">The station's distance from the point, by water where charts are loaded.</param>
@@ -127,7 +128,7 @@ public sealed record SampleSource(
 public sealed record SampleSourceStation(
     [property: Description("The station identifier, such as \"9447130\".")] string Id,
     [property: Description("The station's name.")] string? Name,
-    [property: Description("Always \"tide\".")] string Type,
+    [property: Description("\"tide\" for S-104's fallback or \"current\" for S-111's.")] string Type,
     [property: Description("\"harmonic\" or \"subordinate\".")] string Kind,
     [property: Description("For a subordinate station, its reference station's id; otherwise null.")] string? ReferenceStationId,
     [property: Description("Distance in metres from the point to the station, through the loaded charts' water where there are charts.")] double? DistanceMeters);
