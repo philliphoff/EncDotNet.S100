@@ -6,6 +6,41 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`s100` as a container image.** `ghcr.io/philliphoff/s100` runs `s100`
+  on Linux x64 and arm64 with nothing else to install. It runs as a non-root
+  user, reads datasets from `/data`, and keeps tiles in `/cache` and the tide
+  station catalogue and MCP Library in `/state`. Releases publish the version
+  tags and `latest`; nightly builds publish `nightly`. `tiles serve`,
+  `feed serve` and `mcp serve --transport http` answer `GET /healthz` without
+  a token, and the new `s100 health` command checks it, for health checks in
+  an image with no shell. `S100_NO_UPDATE_CHECK` turns off the update check.
+  See [Run s100 in Docker](docker.md).
+- **Serve and export a folder of charts.** `s100 tiles serve` and
+  `s100 tiles export` take a folder and render every dataset in it and its
+  subfolders: S-57 cells, an S-57 `ENC_ROOT` with its `CATALOG.031`, S-100
+  exchange sets and loose datasets. `--only` keeps some product
+  specifications. A folder is a built tile set only when it holds a
+  `tiles.json` or numbered `{z}/{x}` subfolders. A cell copied into a served
+  folder, or removed from it, is picked up at the next check.
+- **`--bbox` portrays less.** `s100 tiles export` and `s100 tiles serve` leave
+  out datasets that can't draw in the `--bbox` tiles before portraying them,
+  so a small area of a large folder needs much less memory. The tiles written
+  are the same.
+- **Re-export a served archive.** `tiles export` writes a PMTiles or MBTiles
+  archive beside the old one and moves it into place when it's finished, so
+  `tiles serve` keeps serving the old tiles during an export, and a failed
+  export leaves the old archive as it was. A Compose example renders tiles in
+  advance for a small computer; see
+  [Serve prebuilt tiles](docker.md#serve-prebuilt-tiles).
+- **MCP over HTTP.** `s100 mcp serve --transport http` serves the MCP tools
+  at `http://127.0.0.1:8300/mcp`, so agents on other computers or in other
+  containers can connect. On an address other than loopback it requires a
+  bearer token, it refuses requests from web pages on other origins, and it
+  leaves out the tools that open files by path or change the Library unless
+  you pass `--allow-changes`. See [MCP over HTTP](cli.md#mcp-over-http).
+- **Serve charts to a web map or GIS.** A new task page walks through
+  `tiles serve` with QGIS, MapLibre and Leaflet; see
+  [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md).
 - **A display plane for vessels.** `S98DisplayPlane.Vessels` (75) sits
   between the mariner's data and ECDIS alerts, so AIS targets drawn as a
   dataset stay above the chart. It's a stopgap until the layer order is

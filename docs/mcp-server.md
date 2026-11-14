@@ -85,7 +85,8 @@ forms and options, see [`mcp serve`](cli.md#mcp-serve).
 To run it as a service that clients connect to, possibly from other
 computers, pass `--transport http`. It then listens at
 `http://127.0.0.1:8300/mcp`, with a bearer token on any address other than
-loopback. See [MCP over HTTP](cli.md#mcp-over-http).
+loopback. See [MCP over HTTP](cli.md#mcp-over-http). To run it in a
+container, see [Give an agent the MCP tools](docker.md#give-an-agent-the-mcp-tools).
 
 ## Connect with mcp-inspector
 
