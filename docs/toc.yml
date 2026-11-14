@@ -34,6 +34,8 @@
       href: scenarios/tide-above-a-height.md
     - name: Find slack water in a pass
       href: scenarios/slack-water-in-a-pass.md
+    - name: Serve charts to a web map or GIS
+      href: scenarios/serve-chart-tiles.md
     - name: Show wind and waves on the chart
       href: weather.md
     - name: Run s100 in Docker

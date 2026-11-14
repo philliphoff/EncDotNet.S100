@@ -30,23 +30,31 @@ import { docs, links, standards, withBase } from '../data/content';
       </div>
       <div id="developers-cli" class="dev">
         <span class="eyebrow">Command line</span>
-        <div class="anchored"><h3>Render from the shell.</h3><Permalink to="developers-cli" label="The command line" /></div>
+        <div class="anchored"><h3>Render and serve from the shell.</h3><Permalink to="developers-cli" label="The command line" /></div>
         <p>
-          The self-contained <code>s100</code> tool renders, inspects and validates data, and serves S-100 feeds. It's
-          handy for batch jobs and CI, and needs no .NET install.
+          The self-contained <code>s100</code> tool renders, inspects and validates data, checks routes and predicts
+          tides. It serves a folder of charts as map tiles for web maps and GIS, with WMTS and WMS. It needs no .NET
+          install, and there's a Docker image too.
         </p>
-        <pre><span class="c"># any product, any palette</span>
-s100 render currents.h5 out.png \
-  --palette night --time-step 6</pre>
+        <pre><span class="c"># a folder of charts, as tiles</span>
+docker run -p 8200:8200 \
+  -v ./charts:/data:ro \
+  ghcr.io/philliphoff/s100 \
+  tiles serve /data --host 0.0.0.0</pre>
         <div class="links">
           <a href={withBase(docs.cli)}>CLI guide</a>
+          <a href={withBase(docs.serveTiles)}>Serve tiles</a>
+          <a href={withBase(docs.docker)}>Docker</a>
           <a href={links.releases}>Download</a>
         </div>
       </div>
       <div id="developers-mcp" class="dev">
         <span class="eyebrow">MCP</span>
         <div class="anchored"><h3>Let agents read the chart.</h3><Permalink to="developers-mcp" label="The MCP server" /></div>
-        <p>An optional MCP server lets AI agents query features, sample depths and currents, plan routes and drive the viewer.</p>
+        <p>
+          An optional MCP server lets AI agents query features, sample depths and currents, plan routes and drive the
+          viewer. <code>s100 mcp serve</code> runs the same tools without the app, locally or over HTTP.
+        </p>
         <Clip id="D2" alt="An AI agent plans a route in SoundCharts over MCP, finds a shoal with S-102 depths and moves two waypoints" title="Agent planning a route" detail="Transcript next to the viewer" sizes="(max-width: 960px) 100vw, 330px" />
         <div class="links"><a href={withBase(docs.mcp)}>MCP server docs</a></div>
       </div>

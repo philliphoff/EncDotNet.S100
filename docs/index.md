@@ -6,8 +6,11 @@ It includes:
 - **.NET libraries** that read each supported product, run its portrayal
   catalogue and render the result to an image or an interactive map.
 - **SoundCharts**, a desktop viewer for macOS, Windows and Linux.
-- **`s100`**, a command-line tool that inspects, validates and renders datasets.
-- **An MCP server** that gives AI agents access to loaded datasets.
+- **`s100`**, a command-line tool that inspects, validates, renders and
+  converts datasets, checks routes, predicts tides, and serves datasets as map
+  tiles, S-100 feeds and MCP tools. It's also published as a container image.
+- **An MCP server** that gives AI agents access to datasets, in SoundCharts or
+  from `s100`.
 
 ## Get started
 
@@ -16,6 +19,7 @@ It includes:
 - [Open a dataset in the desktop app](getting-started.md#desktop-app)
 - [Read and render a dataset from .NET](getting-started.md#net-library)
 - [Render a dataset from the command line](getting-started.md#command-line-tool)
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md)
 
 ## Supported products
 
@@ -81,10 +85,14 @@ flowchart LR
 - [Inspect S-124 warnings](scenarios/inspect-s124-warnings.md)
 - [Compose S-101 and S-102](scenarios/compose-s101-s102.md)
 - [Find when the tide is above a height](scenarios/tide-above-a-height.md)
+- [Find slack water in a pass](scenarios/slack-water-in-a-pass.md)
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): XYZ
+  tiles, WMTS and WMS from a folder of charts, for MapLibre, Leaflet and QGIS.
 - [Show wind and waves on the chart](weather.md): GRIB2 and NetCDF forecasts,
   CAP warnings, NDBC buoys and own-ship wind, which aren't for navigation.
-- [Run s100 in Docker](docker.md): serve tiles from a mounted folder, and the
-  MCP tools in a container.
+- [Run s100 in Docker](docker.md): serve tiles from a mounted folder, prebuilt
+  tiles on a small computer, and the MCP tools over standard input and output
+  or HTTP.
 
 **Rendering and integration**
 

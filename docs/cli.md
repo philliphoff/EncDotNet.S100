@@ -2,10 +2,12 @@
 
 `s100` is a cross-platform command-line tool for S-100 datasets. It renders one
 dataset, or a composite of several, to a PNG, JPEG or WebP image, or to a
-raster tile set for web maps. It also
+raster tile set for web maps, and serves those tiles to web maps and GIS
+desktops. It also
 validates datasets and exchange sets, reports what a dataset contains, picks
-the features at a point, checks routes, converts S-57 cells, serves datasets to
-AI agents over MCP, and publishes datasets as an S-100 feed.
+the features at a point, checks routes, converts S-57 and S-101 cells, predicts
+tides and tidal currents, serves datasets to AI agents over MCP, and publishes
+datasets as an S-100 feed.
 
 `s100` uses the same portrayal and validation code as the `EncDotNet.S100`
 library and SoundCharts. It renders through headless Skia renderers, so it
@@ -132,10 +134,10 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`tides currents predict`](#tides-currents-predict) | Predicts the tidal current at a station, as speeds and directions, slacks and maxima, or an S-111 dataset. |
 | [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, or checks for newer data. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
-| [`health`](#health) | Checks that a `tiles serve` or `feed serve` on this computer answers, for container health checks. |
+| [`health`](#health) | Checks that a `tiles serve`, `feed serve` or `mcp serve --transport http` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
-| [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
+| [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools for a set of datasets, over standard input and output or HTTP. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
 
@@ -1663,6 +1665,10 @@ in its light description. Lua-CSharp lists them as reference Lua does.
   render of a chart and a bathymetry surface.
 - [Find when the tide is above a height](scenarios/tide-above-a-height.md):
   `tides predict` and the `predict_tide` MCP tool at Seattle.
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): a worked
+  example of `tiles serve` with QGIS, MapLibre and Leaflet.
+- [Run s100 in Docker](docker.md): the container image, with Docker Compose
+  examples for `tiles serve` and `mcp serve`.
 - [S-98 interoperability](design/s98-interoperability.md): how composite
   layers are ordered.
 - [PMTiles](https://docs.protomaps.com/pmtiles/): the single-file tile

@@ -152,9 +152,11 @@ read-only tide and tidal current tools, `list_tide_stations`, `predict_tide`,
 
 - The server listens on the loopback address by default, so other machines
   can't reach it.
-- There's no authentication. Any process on the machine can connect. Don't
-  bind it to a routable address without an authenticating reverse proxy in
-  front of it.
+- `S100McpServer` has no authentication. Any process on the machine can
+  connect. Don't bind it to a routable address without an authenticating
+  reverse proxy in front of it. `s100 mcp serve --transport http` adds a bearer
+  token and an origin check of its own; see
+  [MCP over HTTP](../../docs/cli.md#mcp-over-http).
 - SoundCharts starts it only when you turn it on. Its settings offer only a
   loopback address; the `--mcp-bind` command-line option can change it.
 - The built-in tools only read the catalog. Host tools you add can change
