@@ -12,7 +12,11 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// </summary>
 public sealed class MapsuiLiveDatasetTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+    // A live refresh renders through WorkScheduler.Shared, which this test
+    // assembly's parallel S-101 portrayals also fill: on a small CI runner the
+    // refresh can queue for many seconds. The wait guards against a refresh
+    // that never comes, not against a slow one.
+    internal static readonly TimeSpan Timeout = TimeSpan.FromMinutes(2);
 
     [Fact]
     public async Task A_burst_of_changes_renders_the_dataset_once_more()
