@@ -494,10 +494,6 @@ public partial class MainWindow : ShadUI.Window
 
         tideStations?.Attach(_dynamicSourceOverlayHost);
 
-        // #1073: feed the NMEA weather source the own-ship fix and start
-        // reading its input (only present when an input is configured).
-        App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaWeatherOverlay>()?.Attach();
-
         // Pick highlight: keep a cursor-echo marker + selected-feature outline
         // on the overlay tier in sync with the current pick report, so the
         // pick stays visible as the user (or an MCP agent) pans the map.
@@ -698,6 +694,9 @@ public partial class MainWindow : ShadUI.Window
         // D3). Automated runs start from their CLI datasets alone.
         if (!needsAutomation)
             Opened += (_, _) => RestoreSavedSources();
+        // #1073: SOUNDCHARTS_NMEA_INPUT adds own-ship weather, in automated
+        // runs too, as it did when it was an overlay.
+        Opened += (_, _) => AddNmeaWeatherFromEnvironment();
 
         // Surface a recovery notification when the previous run terminated
         // without a clean shutdown (a native crash, FailFast, kill, …).
@@ -843,6 +842,22 @@ public partial class MainWindow : ShadUI.Window
             if (datasets.AddSource(registration) is { } entry)
                 datasets.RequestLoad(entry);
         }
+    }
+
+    /// <summary>
+    /// Adds and loads own-ship weather when <c>SOUNDCHARTS_NMEA_INPUT</c>
+    /// names an input. It isn't saved: the variable adds it at each start.
+    /// </summary>
+    private static void AddNmeaWeatherFromEnvironment()
+    {
+        if (EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaOwnShipLink.InputFromEnvironment() is not { } input)
+            return;
+        var datasets = App.Services.GetService<DatasetsViewModel>();
+        var entry = datasets?.AddSource(
+            EncDotNet.S100.Datasets.Pipelines.S100Sources.NmeaWeather,
+            new EncDotNet.S100.Datasets.Pipelines.NmeaWeatherSourceSettings { Input = input });
+        if (entry is not null)
+            datasets!.RequestLoad(entry);
     }
 
     private async Task FrameOnOwnShipAtStartupAsync()

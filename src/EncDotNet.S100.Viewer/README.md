@@ -1456,8 +1456,10 @@ to the input:
 | `tcp://plotter.local:10110` | A TCP NMEA server; reconnects when the connection drops |
 | A file path | A recording, replayed at 10 lines a second, over and over |
 
-The row then appears under **Other chart overlays** in the **Layer stack**
-panel. Without the variable there's no row.
+SoundCharts then adds **Own-ship weather (NMEA)** to the **Datasets** panel
+at each start, where you show, hide or remove it like a dataset (removed, it
+comes back at the next start while the variable is set). Without the
+variable it isn't added.
 
 - A small ring with a wind barb sits up and to the right of the own-ship
   symbol, with the true wind (such as **200° 14 kn**) and the water

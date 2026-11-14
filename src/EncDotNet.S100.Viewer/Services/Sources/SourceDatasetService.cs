@@ -20,6 +20,7 @@ internal sealed class SourceDatasetService : IDisposable
     private readonly ViewerSettings _settings;
     private readonly IMapViewportNotifier? _notifier;
     private readonly Secrets.ISecretStore? _secrets;
+    private readonly ISourceHostExtension[] _extensions;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
     private readonly object _lock = new();
@@ -35,7 +36,8 @@ internal sealed class SourceDatasetService : IDisposable
         ViewerSettings settings,
         IMapViewportNotifier? notifier = null,
         ILoggerFactory? loggerFactory = null,
-        Secrets.ISecretStore? secrets = null)
+        Secrets.ISecretStore? secrets = null,
+        IEnumerable<ISourceHostExtension>? extensions = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(settings);
@@ -43,6 +45,7 @@ internal sealed class SourceDatasetService : IDisposable
         _settings = settings;
         _notifier = notifier;
         _secrets = secrets;
+        _extensions = extensions?.ToArray() ?? [];
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger<SourceDatasetService>();
     }
@@ -103,8 +106,8 @@ internal sealed class SourceDatasetService : IDisposable
 
     /// <summary>
     /// Starts running a loaded source entry's processor, following the
-    /// entry's visibility and the view. Does nothing for a processor that
-    /// isn't hosted.
+    /// entry's visibility and the view, and attaches the
+    /// <see cref="ISourceHostExtension"/>s for its source.
     /// </summary>
     /// <param name="entry">The loaded source entry.</param>
     /// <param name="processor">Its registered processor.</param>
@@ -112,20 +115,42 @@ internal sealed class SourceDatasetService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(processor);
-        if (processor is not IHostedDatasetProcessor hosted || entry.SourceId is not { } sourceId)
+        if (entry.SourceId is not { } sourceId)
             return;
-        var activation = Find(sourceId)?.Activation ?? SourceActivation.Always;
         Detach(entry.Id);
-        var activator = new HostedSourceActivator(
-            hosted, activation, _notifier, entry.IsVisible, logger: _logger);
-        PropertyChangedEventHandler onChanged = (_, e) =>
+
+        var attached = new List<IDisposable>();
+        foreach (var extension in _extensions)
         {
-            if (e.PropertyName == nameof(DatasetEntry.IsVisible))
-                activator.SetVisible(entry.IsVisible);
-        };
-        entry.PropertyChanged += onChanged;
+            if (!string.Equals(extension.SourceId, sourceId, StringComparison.OrdinalIgnoreCase))
+                continue;
+            try
+            {
+                if (extension.Attach(entry, processor) is { } attachment)
+                    attached.Add(attachment);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _logger.LogWarning(ex, "Attaching {Extension} to the {Source} source failed.", extension.GetType().Name, sourceId);
+            }
+        }
+
+        HostedSourceActivator? activator = null;
+        PropertyChangedEventHandler? onChanged = null;
+        if (processor is IHostedDatasetProcessor hosted)
+        {
+            var activation = Find(sourceId)?.Activation ?? SourceActivation.Always;
+            var running = activator = new HostedSourceActivator(
+                hosted, activation, _notifier, entry.IsVisible, logger: _logger);
+            onChanged = (_, e) =>
+            {
+                if (e.PropertyName == nameof(DatasetEntry.IsVisible))
+                    running.SetVisible(entry.IsVisible);
+            };
+            entry.PropertyChanged += onChanged;
+        }
         lock (_lock)
-            _running[entry.Id] = new Running(entry, activator, onChanged);
+            _running[entry.Id] = new Running(entry, activator, onChanged, attached);
     }
 
     /// <summary>Whether the source entry's processor is running now.</summary>
@@ -133,7 +158,7 @@ internal sealed class SourceDatasetService : IDisposable
     public bool IsRunning(MapDatasetId id)
     {
         lock (_lock)
-            return _running.TryGetValue(id, out var running) && running.Activator.IsRunning;
+            return _running.TryGetValue(id, out var running) && running.Activator?.IsRunning == true;
     }
 
     /// <summary>Stops following a source entry; its processor is disposed by its owner.</summary>
@@ -146,8 +171,11 @@ internal sealed class SourceDatasetService : IDisposable
             if (!_running.Remove(id, out running))
                 return;
         }
-        running.Entry.PropertyChanged -= running.OnChanged;
-        running.Activator.Dispose();
+        if (running.OnChanged is not null)
+            running.Entry.PropertyChanged -= running.OnChanged;
+        running.Activator?.Dispose();
+        foreach (var attachment in running.Attached)
+            attachment.Dispose();
     }
 
     private static HttpClient CreateHttpClient()
@@ -168,5 +196,9 @@ internal sealed class SourceDatasetService : IDisposable
             Detach(id);
     }
 
-    private sealed record Running(DatasetEntry Entry, HostedSourceActivator Activator, PropertyChangedEventHandler OnChanged);
+    private sealed record Running(
+        DatasetEntry Entry,
+        HostedSourceActivator? Activator,
+        PropertyChangedEventHandler? OnChanged,
+        IReadOnlyList<IDisposable> Attached);
 }
