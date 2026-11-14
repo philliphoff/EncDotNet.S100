@@ -6,6 +6,10 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Own-ship weather in the Datasets panel.** With `SOUNDCHARTS_NMEA_INPUT`
+  set, SoundCharts adds **Own-ship weather (NMEA)** to the Datasets panel at
+  each start, instead of a Layer stack row; the barb still follows the own
+  ship while it's shown.
 - **API keys in the secret store.** SoundCharts saves the aisstream.io key
   in the computer's secret store (Credential Manager, the macOS Keychain or
   the Linux Secret Service) instead of `settings.json`, which keeps only a

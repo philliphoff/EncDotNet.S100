@@ -297,10 +297,30 @@ In SoundCharts (the viewer half of slice 7, so far):
   entry forgets it. Saved options wait for slice 9's settings pages.
 - NDBC observations moved from a Layer Stack overlay to a source entry. The
   overlay's toggle migrates: on becomes an added `ndbc.realtime`.
-- Still to do: NMEA weather (it needs an input and the own-ship fix
-  forwarded), AIS (its key waits for slice 8's secret store, and pirate
-  mode excludes a target) and own-ship (helm and take-helm), and
-  `AddDataSource` for `s100` and the MCP server.
+- NMEA weather is a source entry too, added at each start when
+  `SOUNDCHARTS_NMEA_INPUT` names an input (it isn't saved). SoundCharts
+  behaviour over a source is an `ISourceHostExtension`, attached while the
+  source's entry is loaded: `NmeaOwnShipLink` forwards the own-ship fix to
+  it while own-ship is shown.
+
+The rest of slice 7 was settled on 2026-11-14:
+
+- **AIS is a Datasets entry**, added like NDBC, with no restart. Its key and
+  zoom threshold stay in Settings › Vessels until slice 9's settings pages,
+  and the old switch migrates: on becomes an added AIS entry.
+- **Own-ship stays built in**, with its Layer stack row, drawn by
+  `VesselPortrayal`; it isn't a removable entry.
+- **Vessels stay above the chart before slice 3**: a source can ask to draw
+  above every dataset, and slice 3's vessel step replaces that.
+- **The vessel list and pirate mode follow the loaded AIS entry** through
+  `ISourceHostExtension`, and go empty or stop when it's removed; the
+  pirate-mode exclusion moves into how SoundCharts builds the AIS source.
+  "Take helm" keeps its path until slice 10.
+- **AIS redraws** are measured with a busy recorded log first; the
+  incremental overlay path stays only if a full redraw is over budget.
+- **NMEA weather's input** stays the environment variable; an input field
+  comes with slice 9.
+- Still to do: `AddDataSource` for `s100` and the MCP server.
 
 Behaviour that belongs to SoundCharts and not to the data stays there:
 pirate mode, own-ship helm and "take helm" are add-ons layered over a source,

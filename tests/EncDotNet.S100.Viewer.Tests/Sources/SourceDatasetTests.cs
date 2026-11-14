@@ -146,6 +146,26 @@ public sealed class SourceDatasetTests
     }
 
     [Fact]
+    public void Host_extensions_for_the_source_attach_while_its_loaded()
+    {
+        var registry = new SourceRegistry();
+        registry.Register(Registration());
+        var mine = new RecordingExtension("test.feed");
+        var other = new RecordingExtension("other.feed");
+        using var service = new SourceDatasetService(registry, Settings(), extensions: [mine, other]);
+        var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
+        var processor = service.CreateProcessor("test.feed", options: null);
+
+        service.Attach(entry, processor);
+        Assert.Equal(1, mine.Attached);
+        Assert.Equal(0, mine.Detached);
+        Assert.Equal(0, other.Attached);
+
+        service.Detach(entry.Id);
+        Assert.Equal(1, mine.Detached);
+    }
+
+    [Fact]
     public void Added_sources_are_saved_and_restored_in_order()
     {
         var settings = Settings();
@@ -182,6 +202,26 @@ public sealed class SourceDatasetTests
         {
             Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the activator.");
             await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+    }
+
+    private sealed class RecordingExtension(string sourceId) : ISourceHostExtension
+    {
+        public int Attached { get; private set; }
+
+        public int Detached { get; private set; }
+
+        public string SourceId => sourceId;
+
+        public IDisposable? Attach(DatasetEntry entry, IDatasetProcessor processor)
+        {
+            Attached++;
+            return new Callback(() => Detached++);
+        }
+
+        private sealed class Callback(Action onDispose) : IDisposable
+        {
+            public void Dispose() => onDispose();
         }
     }
 
