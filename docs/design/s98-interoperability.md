@@ -220,6 +220,7 @@ back):
 | `CautionsAndWarnings` | 50 | MSC.530 layer 3-4 + S-98 Main §9.2.1 layers 3-4 | S-124 navigational warnings |
 | `DynamicArrows` | 60 | S-111 PC `OverRadar` overlay (`displayPlane id="OverRadar"`) | S-111 arrow sublayer; S-104 trend glyphs (PR-J) |
 | `MarinerOverlay` | 70 | MSC.530 layers 8-9 | Mariner's own annotations (future) |
+| `Vessels` | 75 | MSC.530 layer 7 (drawn higher, as ECDIS practice does) | AIS targets from a data source; a stopgap until the category-derived order (data source design note D6) |
 | `EcdisAlerts` | 80 | MSC.530 layer 1, S-98 Main §9.2.1 layer 1 | ECDIS overscale, caution, AIO (future) |
 
 Notes:

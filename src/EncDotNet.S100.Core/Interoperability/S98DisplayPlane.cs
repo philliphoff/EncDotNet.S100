@@ -120,6 +120,20 @@ public enum S98DisplayPlane
     MarinerOverlay = 70,
 
     /// <summary>
+    /// AIS targets and other vessels drawn from a data source, above the
+    /// chart and the mariner's data and below ECDIS alerts.
+    /// </summary>
+    /// <remarks>
+    /// S-98 Main §9.2.1 ranks radar and AIS (layer 7) below official points
+    /// (layer 2), but the list is informative, and ECDIS practice draws
+    /// sparse, live, safety-critical targets on top. This plane is a stopgap
+    /// until the layer order is derived from information categories, where
+    /// vessels get their own step (data source design note D6, slice 3).
+    /// Own-ship stays in SoundCharts' overlay band, above every dataset.
+    /// </remarks>
+    Vessels = 75,
+
+    /// <summary>
     /// ECDIS visual alerts / indications (overscale, caution, AIO).
     /// MSC.530(106)/Rev.1 §Appendix 2 layer 1; S-98 Main §9.2.1
     /// layer 1. Reserved for PR-L3+ scope.

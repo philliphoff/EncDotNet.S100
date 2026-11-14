@@ -111,6 +111,7 @@ internal static partial class Strings
     public static string LayerStack_Plane_CautionsAndWarnings => Get(nameof(LayerStack_Plane_CautionsAndWarnings));
     public static string LayerStack_Plane_DynamicArrows => Get(nameof(LayerStack_Plane_DynamicArrows));
     public static string LayerStack_Plane_MarinerOverlay => Get(nameof(LayerStack_Plane_MarinerOverlay));
+    public static string LayerStack_Plane_Vessels => Get(nameof(LayerStack_Plane_Vessels));
     public static string LayerStack_Plane_EcdisAlerts => Get(nameof(LayerStack_Plane_EcdisAlerts));
 
     // Search

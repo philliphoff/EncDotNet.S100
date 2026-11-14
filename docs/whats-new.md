@@ -6,6 +6,11 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **A display plane for vessels.** `S98DisplayPlane.Vessels` (75) sits
+  between the mariner's data and ECDIS alerts, so AIS targets drawn as a
+  dataset stay above the chart. It's a stopgap until the layer order is
+  derived from information categories. The Layer stack lists it as
+  **Vessels**.
 - **API keys in the secret store.** SoundCharts saves the aisstream.io key
   in the computer's secret store (Credential Manager, the macOS Keychain or
   the Linux Secret Service) instead of `settings.json`, which keeps only a
