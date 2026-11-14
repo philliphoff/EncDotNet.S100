@@ -1450,11 +1450,28 @@ public partial class App : Application
         EncDotNet.S100.Viewer.Services.Tides.TideStationsServiceCollectionExtensions
             .AddTideStations(services);
 
-        // #1073: own-ship wind and water temperature from NMEA 0183. Only
-        // registered when SOUNDCHARTS_NMEA_INPUT names an input (UDP, TCP or
-        // a recording); see Services.DynamicSources.Nmea.
-        EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaWeatherServiceCollectionExtensions
-            .AddNmeaWeather(services);
+        // #1073: own-ship wind and water temperature from NMEA 0183 is a data
+        // source (S100Sources.NmeaWeather), added at start-up when
+        // SOUNDCHARTS_NMEA_INPUT names an input. The link forwards the
+        // own-ship fix to it while it's loaded.
+        services.AddSingleton(sp =>
+        {
+            var ownShipSource = sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
+            var link = new EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaOwnShipLink(
+                sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(),
+                ownShipSource is null ? null : () => ownShipSource.IsEnabled);
+            if (ownShipSource is not null)
+            {
+                ownShipSource.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource.IsEnabled))
+                        link.Refresh();
+                };
+            }
+            return link;
+        });
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Sources.ISourceHostExtension>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaOwnShipLink>());
 
         // Pirate mode: own-ship impersonates a selected live AIS target.
         // The controller reads the raw AIS source (via the exclusion

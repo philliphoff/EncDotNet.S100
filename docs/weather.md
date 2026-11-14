@@ -511,7 +511,7 @@ start SoundCharts:
 | `tcp://host:10110` | A TCP server, such as a multiplexer |
 | `path/to/recording.nmea` | A recorded file, replayed in a loop |
 
-**Own-ship wind and weather (NMEA)** then appears in the Layer stack. True
+**Own-ship weather (NMEA)** is then added to the Datasets panel at each start. True
 wind is drawn as a barb beside own ship. Without a heading, the relative
 wind is shown in grey. See the
 [DynamicSources.Nmea README](../src/EncDotNet.S100.DynamicSources.Nmea/README.md)
