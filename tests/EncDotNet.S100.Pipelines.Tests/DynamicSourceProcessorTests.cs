@@ -77,7 +77,7 @@ public sealed class DynamicSourceProcessorTests
 
         source.Publish(Point("t2", 43, -69));
 
-        await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await refreshed.Task.WaitAsync(MapsuiLiveDatasetTests.Timeout, TestContext.Current.CancellationToken);
         Assert.Equal(["t1", "t2"], processor.EnumerateFeatures().Select(f => f.FeatureRef).Order());
     }
 
