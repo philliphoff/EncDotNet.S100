@@ -44,6 +44,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
     private static readonly S98DisplayPlane[] PlanesTopFirst =
     {
         S98DisplayPlane.EcdisAlerts,
+        S98DisplayPlane.Vessels,
         S98DisplayPlane.MarinerOverlay,
         S98DisplayPlane.DynamicArrows,
         S98DisplayPlane.CautionsAndWarnings,
@@ -224,6 +225,7 @@ internal sealed class LayerStackPlaneViewModel : ViewModelBase
         S98DisplayPlane.CautionsAndWarnings => Strings.LayerStack_Plane_CautionsAndWarnings,
         S98DisplayPlane.DynamicArrows => Strings.LayerStack_Plane_DynamicArrows,
         S98DisplayPlane.MarinerOverlay => Strings.LayerStack_Plane_MarinerOverlay,
+        S98DisplayPlane.Vessels => Strings.LayerStack_Plane_Vessels,
         S98DisplayPlane.EcdisAlerts => Strings.LayerStack_Plane_EcdisAlerts,
         _ => Plane.ToString(),
     };

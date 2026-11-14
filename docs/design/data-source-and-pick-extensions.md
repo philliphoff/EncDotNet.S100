@@ -311,7 +311,10 @@ The rest of slice 7 was settled on 2026-11-14:
 - **Own-ship stays built in**, with its Layer stack row, drawn by
   `VesselPortrayal`; it isn't a removable entry.
 - **Vessels stay above the chart before slice 3**: a source can ask to draw
-  above every dataset, and slice 3's vessel step replaces that.
+  above every dataset, and slice 3's vessel step replaces that. As built,
+  the ask is a `S98DisplayPlane.Vessels` plane (75), between
+  `MarinerOverlay` and `EcdisAlerts`: the vessel step's place in D6, with
+  no special case in the map session. Own-ship stays in the overlay band.
 - **The vessel list and pirate mode follow the loaded AIS entry** through
   `ISourceHostExtension`, and go empty or stop when it's removed; the
   pirate-mode exclusion moves into how SoundCharts builds the AIS source.

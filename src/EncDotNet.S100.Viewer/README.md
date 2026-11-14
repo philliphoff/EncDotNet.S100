@@ -669,7 +669,7 @@ The **Layer stack** panel lists every visible layer in its S-98 display
 plane, grouped within each plane by S-98 priority. The planes include **Base
 chart (under)**, **Bathymetry**, **On-demand surface**, **Base chart (over)**,
 **Other chart overlays**, **Cautions and warnings**, **Dynamic arrows**,
-**Mariner overlay** and **ECDIS alerts**. **Show empty planes** shows planes
+**Mariner overlay**, **Vessels** (AIS targets) and **ECDIS alerts**. **Show empty planes** shows planes
 with no layers. The basemap is always at the bottom, and map tools (the
 measure tool and validation findings) are always at the top.
 

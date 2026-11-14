@@ -112,6 +112,9 @@
   <data name="LayerStack_Plane_MarinerOverlay" xml:space="preserve">
     <value>Mariner overlay</value>
   </data>
+  <data name="LayerStack_Plane_Vessels" xml:space="preserve">
+    <value>Vessels</value>
+  </data>
   <data name="LayerStack_Plane_EcdisAlerts" xml:space="preserve">
     <value>ECDIS alerts</value>
   </data>

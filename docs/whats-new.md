@@ -6,6 +6,11 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **A display plane for vessels.** `S98DisplayPlane.Vessels` (75) sits
+  between the mariner's data and ECDIS alerts, so AIS targets drawn as a
+  dataset stay above the chart. It's a stopgap until the layer order is
+  derived from information categories. The Layer stack lists it as
+  **Vessels**.
 - **Own-ship weather in the Datasets panel.** With `SOUNDCHARTS_NMEA_INPUT`
   set, SoundCharts adds **Own-ship weather (NMEA)** to the Datasets panel at
   each start, instead of a Layer stack row; the barb still follows the own

@@ -111,6 +111,8 @@ internal sealed class DeferredAisFeatureSource : IDynamicFeatureSource, IAsyncDi
         {
             DisplayName = "AIS targets",
             RendererKey = "vessel.ais",
+            // Vessels draw above the chart (data source design note D6).
+            Plane = EncDotNet.S100.Interoperability.S98DisplayPlane.Vessels,
         };
 
         _notifier.ViewportChanged += OnViewportChanged;

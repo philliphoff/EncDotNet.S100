@@ -131,6 +131,7 @@ internal sealed class DisabledAisFeatureSource : IDynamicFeatureSource, IAsyncDi
     {
         DisplayName = "AIS targets (disabled)",
         RendererKey = "vessel.ais",
+        Plane = EncDotNet.S100.Interoperability.S98DisplayPlane.Vessels,
     };
 
     public IReadOnlyList<DynamicFeature> CurrentFeatures => Array.Empty<DynamicFeature>();
