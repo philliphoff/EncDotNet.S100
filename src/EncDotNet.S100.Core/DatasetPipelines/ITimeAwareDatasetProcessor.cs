@@ -62,4 +62,12 @@ public interface ITimeAwareDatasetProcessor
     /// and to treat the timeline as a forecast.
     /// </summary>
     DatasetForecastRun? ForecastRun => null;
+
+    /// <summary>
+    /// How the values were produced (observed, predicted, analysed, hindcast
+    /// or forecast; S-104 and S-111 <c>dataDynamicity</c>), or
+    /// <see langword="null"/> (the default) when the dataset doesn't say. A
+    /// host labels the values with it (#1505).
+    /// </summary>
+    DataDynamicity? DataDynamicity => null;
 }

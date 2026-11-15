@@ -342,6 +342,25 @@ internal sealed partial class DatasetEntry : ViewModelBase
     }
 
     /// <summary>
+    /// How the dataset's values were produced (S-104 and S-111
+    /// <c>dataDynamicity</c>; #1505), or null when it doesn't say. The Legend
+    /// labels the product with it.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.DataDynamicity? DataDynamicity { get; private set; }
+
+    /// <summary>When the producer issued the dataset (UTC): a forecast's run time in its label; null when unknown.</summary>
+    public DateTime? IssueTime { get; private set; }
+
+    /// <summary>Records how the dataset's values were produced and when it was issued (#1505).</summary>
+    /// <param name="kind">How the values were produced, or null when the dataset doesn't say.</param>
+    /// <param name="issueTime">When the producer issued it (UTC), or null.</param>
+    public void SetDataDynamicity(EncDotNet.S100.Datasets.Pipelines.DataDynamicity? kind, DateTime? issueTime)
+    {
+        DataDynamicity = kind;
+        IssueTime = issueTime;
+    }
+
+    /// <summary>
     /// True when the dataset row shows the warning badge: a significant
     /// spec-version divergence (<see cref="HasVersionWarning"/>) or an
     /// axis-order warning (<see cref="HasAxisOrderWarning"/>).

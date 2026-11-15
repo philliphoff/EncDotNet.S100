@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Observed, predicted or forecast.** The viewer labels S-104 water levels
+  and S-111 currents by how they were produced, from S-104 `dataDynamicity`
+  and S-111 `typeOfCurrentData`: **Observed**, **Predicted · astronomical
+  tide only, not a forecast**, **Analysis**, **Hindcast** or **Forecast, run
+  {time}**, the run from the dataset's issue time. Object information shows it
+  in a **Data** row and the Legend after the section's source. A dataset that
+  doesn't say gets no label. SoundCharts for ArcGIS uses the same words.
+  Processors report it as `ITimeAwareDatasetProcessor.DataDynamicity`.
 - **`s100` as a container image.** `ghcr.io/philliphoff/s100` runs `s100`
   on Linux x64 and arm64 with nothing else to install. It runs as a non-root
   user, reads datasets from `/data`, and keeps tiles in `/cache` and the tide

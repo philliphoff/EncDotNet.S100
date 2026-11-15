@@ -41,6 +41,16 @@ internal sealed record LegendSection
     /// <summary>Whether the product varies with time and, if so, whether it has data at the view time (D5).</summary>
     public LegendTimeState TimeState { get; init; }
 
+    /// <summary>
+    /// How the product's values were produced (S-104 and S-111
+    /// <c>dataDynamicity</c>; #1505), from the dataset drawing at the view
+    /// time; <see langword="null"/> when it doesn't say.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.DataDynamicity? DataDynamicity { get; init; }
+
+    /// <summary>When that dataset was issued (UTC): a forecast's run time; <see langword="null"/> when unknown.</summary>
+    public DateTime? IssueTime { get; init; }
+
     /// <summary>A one-line caption where the unit or rule needs it ("Speed, kn · longer arrow = faster"); null for none.</summary>
     public string? Caption { get; init; }
 

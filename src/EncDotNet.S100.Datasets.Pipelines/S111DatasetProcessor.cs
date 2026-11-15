@@ -173,6 +173,26 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         _ => null,
     };
 
+    /// <inheritdoc />
+    /// <remarks>The dataset's <c>typeOfCurrentData</c> (S-111), mapped onto S-104's numbers.</remarks>
+    public DataDynamicity? DataDynamicity => _data switch
+    {
+        S111DatasetData.GriddedCoverage g => DataDynamicityCodes.FromS111TypeOfCurrentData(g.Dataset.TypeOfCurrentData),
+        S111DatasetData.StationSeries s => DataDynamicityCodes.FromS111TypeOfCurrentData(s.Dataset.TypeOfCurrentData),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The row that labels picked values as observed, predicted, analysed,
+    /// hindcast or forecast (#1505); none when the dataset doesn't say.
+    /// </summary>
+    private List<PickAttribute> WithDataDynamicity(List<PickAttribute> attributes)
+    {
+        if (DataDynamicity is { } kind)
+            attributes.Add(PickAttribute.DataDynamicityRow(kind, IssueTime));
+        return attributes;
+    }
+
     /// <summary>
     /// S-111 surface currents are always model forecasts, whatever their files
     /// are named, so the dataset is a run of the <c>S-111</c> product. The data
@@ -786,7 +806,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current (Station)",
             Sections = [new StationSeriesSection(BuildStationSeriesSnapshot(station))],
-            Attributes = new List<PickAttribute>
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -848,7 +868,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         station.StartTime, station.EndTime),
                     DateTimeRangeValue = (station.StartTime, station.EndTime),
                 },
-            },
+            }),
         };
     }
 
@@ -957,7 +977,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = $"({sample.Row},{sample.Col})",
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current",
-            Attributes = attrs,
+            Attributes = WithDataDynamicity(attrs),
         };
     }
 
@@ -995,7 +1015,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = best.Identifier,
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current (Station)",
-            Attributes = new List<PickAttribute>
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -1024,7 +1044,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
                     DateTimeValue = sampleTime,
                 },
-            },
+            }),
         };
     }
 
