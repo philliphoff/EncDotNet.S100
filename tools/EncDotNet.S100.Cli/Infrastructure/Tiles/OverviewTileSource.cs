@@ -32,6 +32,11 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// settings set of a palette; it follows a reload, keyed by
 /// <see cref="ITileSource.Revision"/>.
 /// </para>
+/// <para>
+/// Each group layer (issue #1495, <see cref="ITileSource.Layer"/>) has its
+/// own overview below its own minimum zoom, of the datasets the
+/// <c>/datasets</c> document puts in that layer.
+/// </para>
 /// </remarks>
 internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
 {
@@ -39,17 +44,28 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
     private const long CacheBytes = 16L * 1024 * 1024;
 
     private readonly ITileSource _inner;
+    private readonly OverviewTileSource? _parent;
+    private readonly string? _layer;
     private readonly TileCache _cache = new(CacheBytes);
+    private readonly ConcurrentDictionary<string, OverviewTileSource> _layers = new();
     private OverviewData? _data;
 
     /// <param name="inner">The tiles rendered from datasets. The overview disposes it.</param>
     /// <exception cref="ArgumentException"><paramref name="inner"/> has no datasets behind it.</exception>
     public OverviewTileSource(ITileSource inner)
+        : this(inner, parent: null, layer: null)
     {
-        ArgumentNullException.ThrowIfNull(inner);
         if (!inner.HasDatasets)
             throw new ArgumentException("An overview needs datasets behind the tiles.", nameof(inner));
+    }
+
+    /// <summary>The overview of a group layer (issue #1495): only the datasets in it.</summary>
+    private OverviewTileSource(ITileSource inner, OverviewTileSource? parent, string? layer)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
         _inner = inner;
+        _parent = parent;
+        _layer = layer;
     }
 
     /// <summary>The source the chart tiles come from.</summary>
@@ -65,6 +81,21 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
     public IReadOnlyList<string> Palettes => _inner.Palettes;
 
     public IReadOnlyList<DateTime> Times => _inner.Times;
+
+    public IReadOnlyList<string> Layers => _inner.Layers;
+
+    /// <summary>
+    /// The group layer <paramref name="id"/> with its own overview: the
+    /// coverage and names of its datasets alone, below its minimum zoom.
+    /// </summary>
+    public ITileSource? Layer(string id)
+    {
+        // A layer has no layers of its own; one that is gone (a dataset
+        // change) is gone here too.
+        if (_parent is not null || _inner.Layer(id) is not { } layer)
+            return null;
+        return _layers.GetOrAdd(id, _ => new OverviewTileSource(layer, this, id));
+    }
 
     public DatasetFeatureQuery? FeatureQuery => _inner.FeatureQuery;
 
@@ -147,6 +178,9 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // A layer's tiles belong to the source of every dataset.
+        if (_parent is not null)
+            return;
         if (_inner is IAsyncDisposable asyncDisposable)
             await asyncDisposable.DisposeAsync().ConfigureAwait(false);
         else
@@ -156,12 +190,14 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
     /// <summary>The overview of the datasets served now: built again after a reload.</summary>
     private OverviewData Current()
     {
-        var revision = _inner.Revision ?? string.Empty;
+        var root = _parent?._inner ?? _inner;
+        var revision = root.Revision ?? string.Empty;
         var data = Volatile.Read(ref _data);
         if (data is not null && data.Revision == revision)
             return data;
 
-        data = OverviewData.Build(_inner, revision);
+        // A layer's datasets are those the document puts in it.
+        data = OverviewData.Build(_inner, root.ToDatasetsJson(), revision, _layer);
         Volatile.Write(ref _data, data);
         return data;
     }
@@ -370,22 +406,32 @@ internal sealed class OverviewData
     public IReadOnlyList<OverviewDataset> Datasets { get; }
 
     /// <summary>Builds the overview of the datasets behind <paramref name="source"/>.</summary>
-    public static OverviewData Build(ITileSource source, string revision)
+    public static OverviewData Build(ITileSource source, string revision) =>
+        Build(source, source.ToDatasetsJson(), revision, layer: null);
+
+    /// <summary>
+    /// Builds the overview of <paramref name="datasets"/> (a <c>/datasets</c>
+    /// document) for the tiles of <paramref name="source"/>: only those in
+    /// <paramref name="layer"/> when it isn't <see langword="null"/>.
+    /// </summary>
+    public static OverviewData Build(ITileSource source, JsonObject? datasets, string revision, string? layer)
     {
         var tileJson = source.ToTileJson(palette: null);
         int chartMinZoom = (int?)tileJson["minzoom"] ?? 0;
         int tilePixels = (int?)tileJson["tileSize"] ?? XyzTileGrid.TileSize;
         var defaultPalette = ((string?)tileJson["s100"]?["palette"] ?? RenderedTileSource.AllPalettes[0]).Trim().ToLowerInvariant();
-        return new OverviewData(revision, chartMinZoom, tilePixels, defaultPalette, Parse(source.ToDatasetsJson()));
+        return new OverviewData(revision, chartMinZoom, tilePixels, defaultPalette, Parse(datasets, layer));
     }
 
     /// <summary>The datasets of a <c>/datasets</c> document that have a coverage.</summary>
-    internal static IReadOnlyList<OverviewDataset> Parse(JsonObject? document)
+    internal static IReadOnlyList<OverviewDataset> Parse(JsonObject? document, string? layer = null)
     {
         var datasets = new List<OverviewDataset>();
         foreach (var node in document?["datasets"]?.AsArray() ?? [])
         {
             if (node?["coverage"]?["coordinates"] is not JsonArray polygons)
+                continue;
+            if (layer is not null && !string.Equals((string?)node["layer"], layer, StringComparison.Ordinal))
                 continue;
 
             var rings = new List<(double X, double Y)[]>();

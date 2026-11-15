@@ -85,7 +85,8 @@ the chart's minimum zoom draw each dataset's coverage outline (from
 `/datasets`) and name instead of answering `204`; tiles with no coverage still
 answer `204`. TileJSON `minzoom` becomes 0, with the chart's in
 `s100.chartMinzoom` and the overview's range in `s100.overview`, and the WMS
-`MaxScaleDenominator` and WMTS `TileMatrixSetLimits` reach zoom 0.
+`MaxScaleDenominator` and WMTS `TileMatrixSetLimits` reach zoom 0. With
+`--layers-by`, each group layer draws the overview of its own datasets only.
 
 Rendering uses the `tiles export` display, zoom and area options, renders
 `--metatile`-square blocks around each requested tile, keeps up to `--cache-mb`

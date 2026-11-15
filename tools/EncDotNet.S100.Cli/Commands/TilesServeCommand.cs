@@ -85,6 +85,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("When rendering datasets: below their minimum zoom, draw each dataset's coverage outline and name instead of answering 204, and advertise WMS and WMTS down to zoom 0, so GIS clients still show where the charts are when zoomed out.")]
         public bool Overview { get; init; }
 
+        [CommandOption("--layers-by <GROUPING>")]
+        [Description("When rendering datasets: also serve the datasets as WMTS layers by group, each with its own time steps and extent, besides the one layer of all of them: 'product' (chart for S-57, S-101 and S-102; S104, S111, S124, … for the rest) or 'none' (default).")]
+        public string? LayersBy { get; init; }
+
         /// <inheritdoc/>
         public override string? FingerprintExcludedFolder => CacheDirectory;
 
@@ -100,6 +104,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 return ValidationResult.Error("--cache-dir applies only when rendering datasets, not when serving a built tile set.");
             if (ServesTileSet && ManageDatasets)
                 return ValidationResult.Error("--manage-datasets applies only when rendering datasets, not when serving a built tile set.");
+            if (LayersBy is not null && !TileLayers.Groupings.Contains(LayersBy.Trim().ToLowerInvariant()))
+                return ValidationResult.Error($"--layers-by must be one of: {string.Join(", ", TileLayers.Groupings)}.");
+            if (ServesTileSet && LayersBy is not null)
+                return ValidationResult.Error("--layers-by applies only when rendering datasets, not when serving a built tile set.");
             if (ClearCache && CacheDirectory is null)
                 return ValidationResult.Error("--clear-cache needs --cache-dir.");
             if (RefreshSeconds < 0)
@@ -219,6 +227,11 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 }
 
                 AnsiConsole.MarkupLine($"  WMTS:     [link]{Markup.Escape(new Uri(baseUri, WmtsService.CapabilitiesPath).AbsoluteUri)}[/]");
+                if (source.Layers.Count > 0)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"  Layers:   [link]{Markup.Escape(baseUri.AbsoluteUri + TileServer.LayersPath + "/{layer}/" + XyzDirectoryTileSink.TileJsonFileName)}[/] ({Markup.Escape(string.Join(", ", source.Layers))})");
+                }
                 AnsiConsole.MarkupLine($"  WMS:      [link]{Markup.Escape(new Uri(baseUri, WmsService.Path).AbsoluteUri)}[/]");
                 if (datasets is not null)
                     AnsiConsole.MarkupLine($"  Datasets: [link]{Markup.Escape(new Uri(baseUri, ServedDatasets.Path).AbsoluteUri)}[/]");
@@ -298,7 +311,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 marinerStyles,
                 settings.StrictTime,
                 managed?.Memory,
-                managed is null ? null : new DatasetTileKeys(session, layout, settings.Metatile));
+                managed is null ? null : new DatasetTileKeys(session, layout, settings.Metatile),
+                TileLayers.Assign(session.Paths, session.Specs, settings.LayersBy, changes));
             managed?.ReferenceLatitude ??= layout.ReferenceLatitude;
             return 0;
         }

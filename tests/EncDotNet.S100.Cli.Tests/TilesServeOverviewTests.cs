@@ -137,6 +137,38 @@ public sealed class TilesServeOverviewTests
     }
 
     [Fact]
+    public async Task Each_group_layer_draws_the_overview_of_its_own_datasets()
+    {
+        await using var overview = new OverviewTileSource(new ChartSource(layers: true));
+        await using var server = await TileServer.StartAsync(overview, IPAddress.Loopback, 0, token: null, cancellationToken: TestContext.Current.CancellationToken);
+        using var http = new HttpClient();
+        var ct = TestContext.Current.CancellationToken;
+        Assert.Equal(["areas"], overview.Layers);
+        Assert.Same(overview.Layer("areas"), overview.Layer("areas"));
+        Assert.Null(overview.Layer("points"));
+
+        async Task<HttpStatusCode> StatusAsync(string path)
+        {
+            using var response = await http.GetAsync(new Uri(server.BaseUri, path), ct);
+            return response.StatusCode;
+        }
+
+        var (ax, ay) = TileAt(3, 11, 50.5);
+        var (tx, ty) = TileAt(2, -69.995, 41.005);
+        Assert.Equal(HttpStatusCode.OK, await StatusAsync($"layers/areas/3/{ax}/{ay}.png"));
+        Assert.Equal(HttpStatusCode.NoContent, await StatusAsync($"layers/areas/2/{tx}/{ty}.png"));
+        Assert.Equal(HttpStatusCode.OK, await StatusAsync($"2/{tx}/{ty}.png"));
+
+        var tileJson = JsonNode.Parse(await http.GetStringAsync(new Uri(server.BaseUri, "layers/areas/tiles.json"), ct))!;
+        Assert.Equal(0, (int)tileJson["minzoom"]!);
+        Assert.Equal(10, (int)tileJson["s100"]!["chartMinzoom"]!);
+
+        var wmts = XDocument.Parse(await http.GetStringAsync(new Uri(server.BaseUri, WmtsService.CapabilitiesPath), ct));
+        var areas = wmts.Descendants(Wmts + "Layer").Single(l => l.Elements().Any(e => e.Name.LocalName == "Identifier" && e.Value == "areas"));
+        Assert.Equal("0", areas.Descendants(Wmts + "TileMatrixLimits").First().Element(Wmts + "TileMatrix")!.Value);
+    }
+
+    [Fact]
     public void Names_that_would_overlap_are_left_out()
     {
         var data = OverviewData.Build(new ChartSource(), "r");
@@ -290,7 +322,7 @@ public sealed class TilesServeOverviewTests
     }
 
     /// <summary>A chart from zoom 10 to 12 over three datasets, its tiles all one sentinel.</summary>
-    private sealed class ChartSource(bool datasets = true) : ITileSource
+    private sealed class ChartSource(bool datasets = true, bool layers = false) : ITileSource
     {
         public static readonly byte[] Tile = [1, 2, 3, 4];
 
@@ -304,19 +336,29 @@ public sealed class TilesServeOverviewTests
 
         public IReadOnlyList<string> Palettes => RenderedTileSource.AllPalettes;
 
+        public IReadOnlyList<string> Layers => layers ? ["areas"] : [];
+
+        // The layer of AREA1 and its copy; TINY is in another.
+        public ITileSource? Layer(string id) => layers && id == "areas" ? new ChartSource(datasets: false) : null;
+
         public bool HasDatasets => datasets;
 
         public string? Revision => "r1";
 
         public bool CanRenderViews => true;
 
-        public JsonObject? ToDatasetsJson() => new()
+        public JsonObject? ToDatasetsJson()
         {
-            ["datasets"] = new JsonArray(
-                Dataset("AREA1", 10, 50, 12, 51),
-                Dataset("AREA1-COPY", 10.2, 50.2, 11.8, 50.8),
-                Dataset("TINY", -70, 41, -69.99, 41.01)),
-        };
+            JsonArray list = [Dataset("AREA1", 10, 50, 12, 51), Dataset("AREA1-COPY", 10.2, 50.2, 11.8, 50.8), Dataset("TINY", -70, 41, -69.99, 41.01)];
+            if (layers)
+            {
+                list[0]!["layer"] = "areas";
+                list[1]!["layer"] = "areas";
+                list[2]!["layer"] = "points";
+            }
+
+            return new JsonObject { ["datasets"] = list };
+        }
 
         public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
         {

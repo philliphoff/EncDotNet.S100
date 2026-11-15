@@ -673,6 +673,9 @@ The server has these routes:
   when rendering datasets, GetFeatureInfo and [GetLegendGraphic](#legends).
 - With `--manage-datasets`, a `POST` or `DELETE` of `datasets` adds or
   removes datasets. See [Add and remove datasets](#add-and-remove-datasets).
+- With `--layers-by product`, or datasets added to a named layer, each
+  layer's tiles and TileJSON under `layers/{layer}/`, as the tiles of every
+  dataset are under the root. See [WMTS layers](#wmts-layers).
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
@@ -706,6 +709,7 @@ area, the tile format and display settings apply too; the output options
 | `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
 | `--manage-datasets` | off | When rendering datasets, accepts requests to add and remove datasets while serving. See [Add and remove datasets](#add-and-remove-datasets). |
 | `--overview` | off | When rendering datasets, draws each dataset's coverage outline and name below their minimum zoom instead of nothing, and advertises WMS and WMTS down to zoom 0. See [Overview below the minimum zoom](#overview-below-the-minimum-zoom). |
+| `--layers-by <grouping>` | `none` | When rendering datasets, also serves them as a WMTS layer per group, each with its own time steps and extent: `product`, or `none`. See [WMTS layers](#wmts-layers). |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
@@ -826,6 +830,7 @@ a reload; a built tile set has none, and `datasets` answers
 | `times` | The dataset's time steps in UTC, ascending; empty when it doesn't vary with time. |
 | `issueTime` | When a time-varying dataset was issued (a forecast's run), or `null`. |
 | `dataDynamicity` | How S-104 water levels and S-111 currents were produced: the S-104 `dataDynamicity` code, its name (`observation`, `astronomicalPrediction`, `analysisOrHybrid`, `hydrodynamicHindcast` or `hydrodynamicForecast`) and the viewer's label (`Observed`, `Predicted`, `Analysis`, `Hindcast` or `Forecast`). `null` when the dataset doesn't say. |
+| `layer` | The [WMTS layer](#wmts-layers) the dataset is in besides `s100`, or `null` for none. Present only when the server has such layers. |
 | `notForNavigation` | Always `true`: nothing `tiles serve` serves is for navigation. |
 
 ### Overview below the minimum zoom
@@ -857,6 +862,10 @@ s100 tiles serve ./ENC_ROOT --overview
   `--manage-datasets` changes them.
 - The [legends](#legends) describe the chart only; they have no row for the
   overview outline.
+- With `--layers-by`, each [WMTS layer](#wmts-layers) has its own overview
+  below its own minimum zoom, of the datasets in that layer only, on its
+  `layers/{layer}/` tiles and its WMTS layer; its TileJSON and
+  `TileMatrixSetLimits` reach zoom 0 in the same way.
 
 It is off by default, because it changes what existing clients get below the
 minimum zoom. Without it, a client that wants footprints can draw the
@@ -908,14 +917,17 @@ option; see [Dataset metadata](#dataset-metadata).
 - `POST datasets` with `{"paths": ["…"]}` (or `{"path": "…"}`) adds
   datasets. The paths are files on the server's computer, relative to the
   folder it was started in unless absolute. Those already served are left as
-  they are.
+  they are. With `"layer": "…"`, every dataset named, added or already
+  served, is put in that [WMTS layer](#wmts-layers), whatever `--layers-by`
+  says. A layer is named with 1 to 64 letters, digits, `_`, `-` and `.`,
+  starting with a letter or digit, and can't be `s100`.
 - `DELETE datasets` with the same body removes datasets. Any served dataset
   can be removed, including one of those it started with, but at least one
   must remain.
 
 The body must be sent as `application/json`. Each request answers with the
 datasets then served, in drawing order, each with its `path`, file `name`
-and `spec`:
+and `spec`, and its `layer` when there are layers:
 
 ```bash
 curl -X POST http://127.0.0.1:8200/datasets \
@@ -956,7 +968,8 @@ reaches every tile. `--refresh` still reopens the datasets when their files
 change, the added ones included.
 
 Changes last until the server stops. To serve the same set again after a
-restart, pass it on the command line.
+restart, pass it on the command line. A removed dataset leaves its layer; one
+added again without `layer` goes back to the layer `--layers-by` gives it.
 
 ### WMTS
 
@@ -999,6 +1012,44 @@ When rendering datasets, each style has a `LegendURL`: the WMS
 A request the service can't answer gets an OWS exception report that names
 the parameter at fault. The service has no GetFeatureInfo; use [WMS](#wms)
 to identify features.
+
+#### WMTS layers
+
+When it renders datasets, `tiles serve` can also serve them as several WMTS
+layers, one per group of datasets, so a GIS client can add, hide and step
+through each on its own, for example the chart, water levels and currents,
+from one server. The `s100` layer of every dataset stays as it is, so clients
+that use it see no change.
+
+- `--layers-by product` puts each dataset in the layer of its product:
+  `chart` for S-57, S-101 and S-102, and the product without its hyphen for
+  the rest (`S104`, `S111`, `S124`, …).
+- With [`--manage-datasets`](#add-and-remove-datasets), a client puts datasets
+  in a layer it names by adding them with `"layer": "…"`. That works with or
+  without `--layers-by`, and wins over it.
+
+Without `--layers-by` and without layers named by a client, the capabilities
+have the `s100` layer only, as before. The groups aren't the default because
+each layer is a scene of its own to compose (the vector datasets' portrayals
+are shared) and because, with one product, its layer would repeat `s100`.
+
+Each layer draws only its datasets, in the same styles, zoom range and tile
+matrix set as `s100`, and its styles link the same [legends](#legends),
+of every dataset. In the capabilities it has its own extent, the union of
+its datasets' bounds, and its own `Time` dimension, listing only its
+datasets' time steps, or none when they don't vary with time. Its tiles are
+at `wmts/1.0.0/{layer}/…` and `LAYER={layer}` like `s100`'s. A time snaps to
+the nearest of the layer's own steps. For XYZ clients, `tiles.json` lists the
+layers in `s100.layers`, each with the URL of its own TileJSON,
+`layers/{layer}/tiles.json` (or `layers/{layer}/{palette}/tiles.json`), whose
+tiles are `layers/{layer}/{z}/{x}/{y}.png`; it names the layer in `s100.layer`.
+The [dataset metadata](#dataset-metadata) gives each dataset's `layer`.
+
+```bash
+s100 tiles serve --layer enc.000 --layer water-levels.h5 --layer currents.h5 --layers-by product
+```
+
+[WMS](#wms) still has the one layer, `s100`, of every dataset.
 
 ### WMS
 

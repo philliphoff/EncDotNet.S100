@@ -28,6 +28,11 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// default style), and time-varying tiles have a <c>Time</c> dimension whose
 /// values are the time steps. A built tile set has one style, <c>default</c>.
 /// </para>
+/// <para>
+/// Besides the layer of every dataset, <c>s100</c>, the datasets can be
+/// served as a layer per group (issue #1495, <see cref="TileLayers"/>), each
+/// with its own time steps and extent, on the same tile matrix set.
+/// </para>
 /// </remarks>
 internal static class WmtsService
 {
@@ -37,7 +42,7 @@ internal static class WmtsService
     /// <summary>The path, under the server's base URL, of the KVP endpoint.</summary>
     public const string KvpPath = "wmts";
 
-    /// <summary>The identifier of the one layer served.</summary>
+    /// <summary>The identifier of the layer of every dataset (or of the built tile set).</summary>
     public const string LayerIdentifier = "s100";
 
     /// <summary>The identifier of the tile matrix set, after OGC 17-083r4's WebMercatorQuad.</summary>
@@ -78,42 +83,59 @@ internal static class WmtsService
         var extension = TileSetMetadata.FormatToken(source.Format);
         var defaultStyle = DefaultStyleOf(source, json);
         var styles = source.Palettes.Count > 0 ? source.Palettes : [defaultStyle];
-        var times = source.Times;
-
         var kvpUrl = baseUri.AbsoluteUri + KvpPath + "?";
-        var restTemplate = baseUri.AbsoluteUri + "wmts/1.0.0/" + LayerIdentifier + "/{Style}/"
-            + (times.Count > 0 ? "{" + TimeDimension + "}/" : string.Empty)
-            + "{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}." + extension;
 
-        var layer = new XElement(Wmts + "Layer",
-            new XElement(Ows + "Title", (string?)json["name"] ?? "s100 tiles"),
-            new XElement(Ows + "Abstract", (string?)json["description"] ?? string.Empty),
-            new XElement(Ows + "WGS84BoundingBox",
-                new XElement(Ows + "LowerCorner", Number(bounds[0]) + " " + Number(bounds[1])),
-                new XElement(Ows + "UpperCorner", Number(bounds[2]) + " " + Number(bounds[3]))),
-            new XElement(Ows + "Identifier", LayerIdentifier),
-            styles.Select(style => new XElement(Wmts + "Style",
-                style == defaultStyle ? new XAttribute("isDefault", "true") : null,
-                new XElement(Ows + "Title", style),
-                new XElement(Ows + "Identifier", style),
-                LegendGraphicService.WmtsLegendUrl(source, style, baseUri, Wmts, XLink))),
-            new XElement(Wmts + "Format", format),
-            times.Count > 0
-                ? new XElement(Wmts + "Dimension",
-                    new XElement(Ows + "Identifier", TimeDimension),
-                    new XElement(Ows + "UOM", "ISO8601"),
-                    new XElement(Wmts + "Default", TileRenderSession.FormatTime(DefaultTime(times, json))),
-                    new XElement(Wmts + "Current", "false"),
-                    times.Select(t => new XElement(Wmts + "Value", TileRenderSession.FormatTime(t))))
-                : null,
-            new XElement(Wmts + "TileMatrixSetLink",
-                new XElement(Wmts + "TileMatrixSet", TileMatrixSetIdentifier),
-                new XElement(Wmts + "TileMatrixSetLimits",
-                    Enumerable.Range(minZoom, maxZoom - minZoom + 1).Select(zoom => Limits(zoom, bounds)))),
-            new XElement(Wmts + "ResourceURL",
-                new XAttribute("format", format),
-                new XAttribute("resourceType", "tile"),
-                new XAttribute("template", restTemplate)));
+        // The layer of every dataset, then one per group of them (issue #1495).
+        var layers = new List<XElement> { Layer(LayerIdentifier, source, json, bounds) };
+        foreach (var id in source.Layers)
+        {
+            if (source.Layer(id) is not { } grouped)
+                continue;
+            var groupJson = grouped.ToTileJson(palette: null);
+            var groupBounds = groupJson["bounds"]?.AsArray().Select(b => (double)b!).ToArray() is { Length: 4 } g4 ? g4 : bounds;
+            layers.Add(Layer(id, grouped, groupJson, groupBounds));
+        }
+
+        XElement Layer(string identifier, ITileSource layerSource, JsonObject layerJson, double[] layerBounds)
+        {
+            var times = layerSource.Times;
+            var restTemplate = baseUri.AbsoluteUri + "wmts/1.0.0/" + identifier + "/{Style}/"
+                + (times.Count > 0 ? "{" + TimeDimension + "}/" : string.Empty)
+                + "{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}." + extension;
+            return LayerElement(identifier, layerJson, layerBounds, times, restTemplate);
+        }
+
+        XElement LayerElement(string identifier, JsonObject json, double[] bounds, IReadOnlyList<DateTime> times, string restTemplate) =>
+            new(Wmts + "Layer",
+                new XElement(Ows + "Title", (string?)json["name"] ?? "s100 tiles"),
+                new XElement(Ows + "Abstract", (string?)json["description"] ?? string.Empty),
+                new XElement(Ows + "WGS84BoundingBox",
+                    new XElement(Ows + "LowerCorner", Number(bounds[0]) + " " + Number(bounds[1])),
+                    new XElement(Ows + "UpperCorner", Number(bounds[2]) + " " + Number(bounds[3]))),
+                new XElement(Ows + "Identifier", identifier),
+                styles.Select(style => new XElement(Wmts + "Style",
+                    style == defaultStyle ? new XAttribute("isDefault", "true") : null,
+                    new XElement(Ows + "Title", style),
+                    new XElement(Ows + "Identifier", style),
+                    // Every layer shows the style's legend, of every dataset (issue #1501).
+                    LegendGraphicService.WmtsLegendUrl(source, style, baseUri, Wmts, XLink))),
+                new XElement(Wmts + "Format", format),
+                times.Count > 0
+                    ? new XElement(Wmts + "Dimension",
+                        new XElement(Ows + "Identifier", TimeDimension),
+                        new XElement(Ows + "UOM", "ISO8601"),
+                        new XElement(Wmts + "Default", TileRenderSession.FormatTime(DefaultTime(times, json))),
+                        new XElement(Wmts + "Current", "false"),
+                        times.Select(t => new XElement(Wmts + "Value", TileRenderSession.FormatTime(t))))
+                    : null,
+                new XElement(Wmts + "TileMatrixSetLink",
+                    new XElement(Wmts + "TileMatrixSet", TileMatrixSetIdentifier),
+                    new XElement(Wmts + "TileMatrixSetLimits",
+                        Enumerable.Range(minZoom, maxZoom - minZoom + 1).Select(zoom => Limits(zoom, bounds)))),
+                new XElement(Wmts + "ResourceURL",
+                    new XAttribute("format", format),
+                    new XAttribute("resourceType", "tile"),
+                    new XAttribute("template", restTemplate)));
 
         var document = new XDocument(
             new XDeclaration("1.0", "UTF-8", null),
@@ -131,7 +153,7 @@ internal static class WmtsService
                     Operation("GetCapabilities", kvpUrl),
                     Operation("GetTile", kvpUrl)),
                 new XElement(Wmts + "Contents",
-                    layer,
+                    layers,
                     TileMatrixSet(maxZoom, tileSize)),
                 new XElement(Wmts + "ServiceMetadataURL",
                     new XAttribute(XLink + "href", baseUri.AbsoluteUri + CapabilitiesPath))));
@@ -169,7 +191,8 @@ internal static class WmtsService
     /// <param name="Y">The tile row, numbered from the north.</param>
     /// <param name="Palette">The palette the style names, or <see langword="null"/> for the default.</param>
     /// <param name="Time">The requested time, or <see langword="null"/> for the default.</param>
-    public readonly record struct TileRequest(int Zoom, int X, int Y, string? Palette, DateTime? Time);
+    /// <param name="Layer">The layer: <see cref="LayerIdentifier"/>, or one of the source's <see cref="ITileSource.Layers"/>.</param>
+    public readonly record struct TileRequest(int Zoom, int X, int Y, string? Palette, DateTime? Time, string Layer = LayerIdentifier);
 
     /// <summary>Why a GetTile request was refused: the OWS exception code, the parameter and a message.</summary>
     public readonly record struct TileRequestError(string Code, string? Locator, string Message);
@@ -191,8 +214,8 @@ internal static class WmtsService
     {
         if (string.IsNullOrEmpty(layer))
             return Missing("LAYER");
-        if (!string.Equals(layer, LayerIdentifier, StringComparison.Ordinal))
-            return Invalid("LAYER", $"Unknown layer '{layer}'; this server has '{LayerIdentifier}'.");
+        if (!string.Equals(layer, LayerIdentifier, StringComparison.Ordinal) && !source.Layers.Contains(layer, StringComparer.Ordinal))
+            return Invalid("LAYER", $"Unknown layer '{layer}'; this server has {string.Join(", ", new[] { LayerIdentifier }.Concat(source.Layers).Select(l => "'" + l + "'"))}.");
         if (string.IsNullOrEmpty(tileMatrixSet))
             return Missing("TILEMATRIXSET");
         if (!string.Equals(tileMatrixSet, TileMatrixSetIdentifier, StringComparison.Ordinal))
@@ -230,7 +253,7 @@ internal static class WmtsService
             at = parsed.UtcDateTime;
         }
 
-        return (new TileRequest(zoom, x, y, palette, at), null);
+        return (new TileRequest(zoom, x, y, palette, at, layer), null);
 
         static (TileRequest?, TileRequestError?) Missing(string parameter) =>
             (null, new TileRequestError("MissingParameterValue", parameter, $"The {parameter} parameter is required."));

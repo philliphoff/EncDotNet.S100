@@ -12,6 +12,17 @@ month. For package versions and release assets, see
   and WMTS capabilities reach zoom 0, so a GIS layer no longer disappears when
   zoomed out. Without it, tiles below the minimum zoom stay empty, as before.
   See [Overview below the minimum zoom](cli.md#overview-below-the-minimum-zoom).
+- **Several WMTS layers from one `tiles serve`.** With `--layers-by product`,
+  `s100 tiles serve` also serves its datasets as a WMTS layer per product
+  (`chart` for S-57, S-101 and S-102; `S104`, `S111`, `S124`, … for the
+  rest), each with its own time steps and extent, so a GIS client can show
+  the chart, water levels and currents as separate layers from one server.
+  With `--manage-datasets`, a client can put the datasets it adds in a layer
+  it names. Each layer also has its own TileJSON, listed in `tiles.json`, and
+  the dataset metadata says which layer each dataset is in. The `s100` layer
+  is unchanged, and without the option the server is as before. Each layer's
+  styles link the same legends as `s100`'s. See
+  [WMTS layers](cli.md#wmts-layers).
 - **Legends for GIS clients.** When it renders datasets, `s100 tiles serve`
   draws the key of each style as a PNG, from the rows the viewer's Legend tab
   shows: WMS `GetLegendGraphic`, linked from a `LegendURL` on each WMS and

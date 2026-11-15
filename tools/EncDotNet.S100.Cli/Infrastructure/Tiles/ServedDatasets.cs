@@ -11,7 +11,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (<c>--manage-datasets</c>, issue #1494), through <c>POST</c> and
 /// <c>DELETE</c> <c>{prefix}/datasets</c>. A <c>GET</c> there is the dataset
 /// metadata document (issue #1504), which describes whichever set serves.
-/// Thread-safe: changes are made one at a time.
+/// Thread-safe: changes are made one at a time. Datasets can be added to a
+/// WMTS layer named in the request (issue #1495).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -70,9 +71,19 @@ internal sealed class ServedDatasets
         public bool Succeeded => Error is null;
     }
 
-    /// <summary>Serves <paramref name="paths"/> as well; those already served are left as they are.</summary>
-    public async Task<Result> AddAsync(IReadOnlyList<string> paths)
+    /// <summary>
+    /// Serves <paramref name="paths"/> as well; those already served are left
+    /// as they are, except that with <paramref name="layer"/> every one of
+    /// them is put in that WMTS layer (issue #1495).
+    /// </summary>
+    public async Task<Result> AddAsync(IReadOnlyList<string> paths, string? layer = null)
     {
+        if (layer is not null && !TileLayers.IsValidId(layer))
+        {
+            return new Result(StatusCodes.Status400BadRequest,
+                $"'{layer}' can't name a layer: use 1 to 64 letters, digits, '_', '-' and '.', starting with a letter or digit, other than '{WmtsService.LayerIdentifier}'.");
+        }
+
         var full = new List<string>();
         foreach (var path in paths)
         {
@@ -98,6 +109,12 @@ internal sealed class ServedDatasets
             var served = Datasets.Select(d => d.Path).ToHashSet(DatasetChanges.PathComparer);
             foreach (var path in full.Where(p => !served.Contains(p)))
                 changes = changes.WithAdded(path);
+            if (layer is not null)
+            {
+                foreach (var path in full)
+                    changes = changes.WithLayer(path, layer);
+            }
+
             return (changes, null);
         }).ConfigureAwait(false);
     }
@@ -148,7 +165,7 @@ internal sealed class ServedDatasets
             var (next, refused) = change(current);
             if (refused is { } r)
                 return r;
-            if (next == current || (next.Added.SequenceEqual(current.Added) && next.Removed.SequenceEqual(current.Removed)))
+            if (next == current || next.SameAs(current))
                 return new Result(StatusCodes.Status200OK);
 
             // Fingerprinted before opening, as at start-up: a file changed
@@ -180,7 +197,8 @@ internal sealed class ServedDatasets
     /// Maps <c>POST</c> (add) and <c>DELETE</c> (remove) <c>{prefix}/datasets</c>
     /// on <paramref name="app"/>. A change's body is JSON,
     /// <c>{"paths": ["…"]}</c> (or <c>{"path": "…"}</c>), sent as
-    /// <c>application/json</c>; every response lists the datasets then served.
+    /// <c>application/json</c>; an addition may name the WMTS layer to put the
+    /// datasets in, <c>"layer": "…"</c>. Every response lists the datasets then served.
     /// </summary>
     /// <param name="app">The web application.</param>
     /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
@@ -188,10 +206,13 @@ internal sealed class ServedDatasets
     public static void Map(WebApplication app, string prefix, ServedDatasets datasets)
     {
         app.MapPost(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.AddAsync));
-        app.MapDelete(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.RemoveAsync));
+        app.MapDelete(prefix + "/" + Path, context => ChangeAsync(context, datasets, RemoveAsync));
+
+        // A removal names no layer.
+        Task<Result> RemoveAsync(IReadOnlyList<string> paths, string? layer) => datasets.RemoveAsync(paths);
     }
 
-    private static async Task ChangeAsync(HttpContext context, ServedDatasets datasets, Func<IReadOnlyList<string>, Task<Result>> change)
+    private static async Task ChangeAsync(HttpContext context, ServedDatasets datasets, Func<IReadOnlyList<string>, string?, Task<Result>> change)
     {
         // JSON only: a browser can't send it from another site without asking first (CORS).
         if (!context.Request.HasJsonContentType())
@@ -222,7 +243,13 @@ internal sealed class ServedDatasets
             return;
         }
 
-        var result = await change(paths).ConfigureAwait(false);
+        if (!TryParseLayer(body.AsSpan(0, read), out var layer))
+        {
+            await WriteAsync(context, datasets, StatusCodes.Status400BadRequest, "The layer is a string: {\"paths\": [\"…\"], \"layer\": \"…\"}.").ConfigureAwait(false);
+            return;
+        }
+
+        var result = await change(paths, layer).ConfigureAwait(false);
         await WriteAsync(context, datasets, result.Status, result.Error).ConfigureAwait(false);
     }
 
@@ -264,16 +291,43 @@ internal sealed class ServedDatasets
         return true;
     }
 
+    /// <summary>Reads the optional <c>"layer"</c> of a body <see cref="TryParsePaths"/> read: a string, or absent or null.</summary>
+    internal static bool TryParseLayer(ReadOnlySpan<byte> json, out string? layer)
+    {
+        layer = null;
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (node is not JsonObject body || body["layer"] is null)
+            return true;
+        return body["layer"] is JsonValue value && value.TryGetValue(out layer);
+    }
+
     private static Task WriteAsync(HttpContext context, ServedDatasets datasets, int status, string? error)
     {
         var json = new JsonObject();
         if (error is not null)
             json["error"] = error;
-        json["datasets"] = new JsonArray([.. datasets.Datasets.Select(d => (JsonNode?)new JsonObject
+        var current = datasets._source.Current;
+        var layers = current.Layers.Count > 0 ? current.DatasetLayers : null;
+        json["datasets"] = new JsonArray([.. datasets.Datasets.Select((d, i) =>
         {
-            ["path"] = d.Path,
-            ["name"] = d.Name,
-            ["spec"] = d.Spec,
+            var dataset = new JsonObject
+            {
+                ["path"] = d.Path,
+                ["name"] = d.Name,
+                ["spec"] = d.Spec,
+            };
+            if (layers is not null && i < layers.Count)
+                dataset["layer"] = layers[i];
+            return (JsonNode?)dataset;
         })]);
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json";

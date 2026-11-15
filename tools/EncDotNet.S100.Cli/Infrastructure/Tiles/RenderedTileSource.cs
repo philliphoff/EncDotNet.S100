@@ -38,6 +38,14 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// the settings' values rather than the client's hash, so they are shared by
 /// hashes with the same values and never reused for other values.
 /// </para>
+/// <para>
+/// Datasets grouped into WMTS layers (issue #1495, <see cref="TileLayers"/>)
+/// are also served as each layer's own tiles (<see cref="Layer"/>), drawn
+/// from a scene of the layer's datasets alone. Vector datasets' portrayals
+/// are shared with the scene of every dataset, so a layer costs little more
+/// than compositing its datasets again. Its tiles are cached under the
+/// style and the layer.
+/// </para>
 /// </remarks>
 internal sealed class RenderedTileSource : ITileSource, IDisposable
 {
@@ -54,6 +62,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly SceneCache _scenes;
     private readonly MarinerStyleRegistry _styles;
     private readonly DatasetTileKeys? _contentKeys;
+    private readonly IReadOnlyList<string?> _datasetLayers;
+    private readonly IReadOnlyDictionary<string, LayerSource> _layers;
     private StyleList _palettes = new(0, AllPalettes);
     private readonly ConcurrentDictionary<(string Style, DateTime? Time, string? Variant, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
@@ -83,6 +93,11 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <paramref name="diskCache"/> reuse them for other sets of datasets;
     /// <see langword="null"/> to key them by every dataset served.
     /// </param>
+    /// <param name="layers">
+    /// The WMTS layer of each dataset besides the layer of every dataset
+    /// (issue #1495), by input index, <see langword="null"/> for one in no
+    /// other layer (<see cref="TileLayers.Assign"/>); <see langword="null"/> for none.
+    /// </param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -96,7 +111,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         MarinerStyleRegistry? marinerStyles = null,
         bool strictTime = false,
         TileCache? memoryCache = null,
-        DatasetTileKeys? contentKeys = null)
+        DatasetTileKeys? contentKeys = null,
+        IReadOnlyList<string?>? layers = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
@@ -115,10 +131,87 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _scenes = new SceneCache(session);
         _scenes.Seed(_defaultPalette, null, scene);
         Revision = diskCache?.Fingerprint ?? session.Fingerprint();
+        _datasetLayers = layers ?? new string?[session.Paths.Count];
+        _layers = OpenLayers();
         Legend = new TileLegend(requested => TryResolveStyle(requested, out var palette, out var mariner, out var key)
             ? new TileLegend.Resolved(key, palette, () => _scenes.Get(key, palette, mariner, new TimeChoice(null)))
             : null);
     }
+
+    /// <summary>The layers the datasets are grouped into, in the order their first dataset comes.</summary>
+    private Dictionary<string, LayerSource> OpenLayers()
+    {
+        var layers = new Dictionary<string, LayerSource>(StringComparer.Ordinal);
+        var members = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        var order = new List<string>();
+        for (int i = 0; i < _datasetLayers.Count; i++)
+        {
+            if (_datasetLayers[i] is not { } id)
+                continue;
+            if (!members.TryGetValue(id, out var set))
+            {
+                members[id] = set = [];
+                order.Add(id);
+            }
+
+            set.Add(i);
+        }
+
+        foreach (var id in order)
+            layers[id] = new LayerSource(this, id, members[id], _session.TimesOf(members[id]), LayerBounds(members[id]));
+        return layers;
+    }
+
+    /// <summary>
+    /// The bounds of a layer's datasets, within the area served: the union of
+    /// their extents, or the area's bounds when one isn't known or crosses the
+    /// antimeridian.
+    /// </summary>
+    private (double West, double South, double East, double North) LayerBounds(IReadOnlySet<int> datasets)
+    {
+        var all = _layout.Bounds;
+        var crs = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+        double west = double.PositiveInfinity, south = double.PositiveInfinity, east = double.NegativeInfinity, north = double.NegativeInfinity;
+        foreach (int i in datasets)
+        {
+            EncDotNet.S100.Pipelines.BoundingBox? extent;
+            try
+            {
+                extent = _session.Processors[i].Metadata.GetGeographicExtent(crs);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                extent = null;
+            }
+
+            if (extent is null || extent.WestLongitude > extent.EastLongitude
+                || !double.IsFinite(extent.SouthLatitude) || !double.IsFinite(extent.NorthLatitude))
+            {
+                return all;
+            }
+
+            west = Math.Min(west, extent.WestLongitude);
+            south = Math.Min(south, extent.SouthLatitude);
+            east = Math.Max(east, extent.EastLongitude);
+            north = Math.Max(north, extent.NorthLatitude);
+        }
+
+        // An area kept in a 0…360° frame or across the antimeridian is left whole.
+        if (all.West > all.East || all.West < -180 || all.East > 180)
+            return all;
+
+        var bounds = (Math.Max(west, all.West), Math.Max(south, all.South), Math.Min(east, all.East), Math.Min(north, all.North));
+        return bounds.Item1 < bounds.Item3 && bounds.Item2 < bounds.Item4 ? bounds : all;
+    }
+
+    /// <summary>The WMTS layers besides the layer of every dataset (issue #1495), in order.</summary>
+    public IReadOnlyList<string> Layers => [.. _layers.Keys];
+
+    /// <summary>The tiles of the layer <paramref name="id"/>, or <see langword="null"/> when there is none.</summary>
+    public ITileSource? Layer(string id) => _layers.GetValueOrDefault(id);
+
+    /// <summary>The layer of each dataset besides the layer of every dataset, by input index; <see langword="null"/> for none.</summary>
+    public IReadOnlyList<string?> DatasetLayers => _datasetLayers;
 
     public string Path => $"{_session.Specs.Count} dataset(s) ({string.Join(", ", _session.Specs.Distinct())})";
 
@@ -158,7 +251,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     // Coverage polygons come from the default scene's portrayal, which is
     // cached (and prepared at start-up).
-    public JsonObject ToDatasetsJson() => DatasetsDocument.Build(_session, _scenes.Get(_defaultPalette, null));
+    public JsonObject ToDatasetsJson() => DatasetsDocument.Build(_session, _scenes.Get(_defaultPalette, null), _layers.Count > 0 ? _datasetLayers : null);
 
     public IReadOnlyList<DateTime> Times => _session.Times;
 
@@ -186,9 +279,13 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <summary>The number of blocks rendered so far.</summary>
     public long BlocksRendered => Interlocked.Read(ref _blocksRendered);
 
-    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
+    public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
+        ReadAsync(zoom, x, y, palette, time, layer: null, cancellationToken);
+
+    /// <summary>A tile of every dataset, or of <paramref name="layer"/>'s alone.</summary>
+    private async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, LayerSource? layer, CancellationToken cancellationToken)
     {
-        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime) : new TimeChoice(null);
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime, layer?.Members) : new TimeChoice(null);
         if (choice.Empty
             || !TryResolveStyle(palette, out var paletteName, out var mariner, out var style)
             || zoom < _layout.MinZoom || zoom > _layout.MaxZoom
@@ -198,7 +295,10 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant, _contentKeys?.For(block));
+        if (layer is not null)
+            style += "~" + layer.Id;
+        var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
+        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant, content);
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -210,7 +310,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         {
             var render = _rendering.GetOrAdd(
                 (style, choice.Time, choice.Variant, block),
-                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Style, paletteName, mariner, choice, k.Block)));
+                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Style, paletteName, mariner, choice, k.Block, layer)));
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -284,19 +384,24 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         return view;
     }
 
-    public JsonObject ToTileJson(string? palette, DateTime? time = null)
+    public JsonObject ToTileJson(string? palette, DateTime? time = null) => ToTileJson(palette, time, layer: null);
+
+    /// <summary>The TileJSON of every dataset, or of <paramref name="layer"/>'s alone.</summary>
+    private JsonObject ToTileJson(string? palette, DateTime? time, LayerSource? layer)
     {
         if (!TryResolveStyle(palette, out var paletteName, out var mariner, out _))
             (paletteName, mariner) = (_defaultPalette, null);
-        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime) : new TimeChoice(null);
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime, layer?.Members) : new TimeChoice(null);
+        var specs = layer is null ? _session.Specs : [.. layer.Members.Order().Select(i => _session.Specs[i])];
+        var times = layer?.Times ?? Times;
         var json = new TileSetMetadata
         {
-            Name = "s100 tiles",
-            Description = $"S-100 portrayal of {string.Join(", ", _session.Specs.Distinct())} rendered on demand by s100 tiles serve.",
+            Name = layer is null ? "s100 tiles" : "s100 tiles: " + layer.Id,
+            Description = $"S-100 portrayal of {string.Join(", ", specs.Distinct())} rendered on demand by s100 tiles serve.",
             Format = Format,
             MinZoom = _layout.MinZoom,
             MaxZoom = _layout.MaxZoom,
-            Bounds = _layout.Bounds,
+            Bounds = layer?.Bounds ?? _layout.Bounds,
             TilePixelSize = _layout.TileOptions.PixelRatio * XyzTileGrid.TileSize,
             // With --strict-time, a time at which datasets draw other than at
             // their steps nearest a listed time is echoed as asked, so tile
@@ -307,16 +412,18 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         json["s100"]!["palettes"] = new JsonArray(AllPalettes.Select(p => (JsonNode?)p).ToArray());
         if (mariner is not null)
             json["s100"]!["style"] = palette!.Trim().ToLowerInvariant();
-        if (Times.Count > 0)
-            json["s100"]!["times"] = new JsonArray(Times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
-        if (StrictTime && Times.Count > 0)
+        if (layer is not null)
+            json["s100"]!["layer"] = layer.Id;
+        if (times.Count > 0)
+            json["s100"]!["times"] = new JsonArray(times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
+        if (StrictTime && times.Count > 0)
         {
             // Each time-varying dataset and the step it draws, null when it
             // has no data at the time asked for.
             json["s100"]!["strictTime"] = true;
             if (choice.Time is not null)
             {
-                json["s100"]!["datasets"] = new JsonArray([.. _session.DescribeTime(choice).Select(d => (JsonNode?)new JsonObject
+                json["s100"]!["datasets"] = new JsonArray([.. _session.DescribeTime(choice, layer?.Members).Select(d => (JsonNode?)new JsonObject
                 {
                     ["name"] = d.Name,
                     ["spec"] = d.Spec,
@@ -428,10 +535,55 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         return true;
     }
 
+    /// <summary>
+    /// The tiles of one WMTS layer (issue #1495): the datasets in it alone,
+    /// with their own time steps and bounds, in the same styles, zoom range
+    /// and tile grid as the tiles of every dataset.
+    /// </summary>
+    private sealed class LayerSource(
+        RenderedTileSource owner,
+        string id,
+        IReadOnlySet<int> members,
+        IReadOnlyList<DateTime> times,
+        (double West, double South, double East, double North) bounds) : ITileSource
+    {
+        public string Id => id;
+
+        /// <summary>The layer's datasets, by input index.</summary>
+        public IReadOnlySet<int> Members => members;
+
+        public (double West, double South, double East, double North) Bounds => bounds;
+
+        public string Path => $"{owner.Path} layer {id}";
+
+        public TileImageFormat Format => owner.Format;
+
+        public IReadOnlyList<string> Palettes => owner.Palettes;
+
+        public IReadOnlyList<DateTime> Times => times;
+
+        public MarinerStyleRegistry? MarinerStyles => owner.MarinerStyles;
+
+        public string? Revision => owner.Revision;
+
+        // The style's legend, of every dataset (issue #1501).
+        public bool HasLegend => owner.HasLegend;
+
+        public (int Width, int Height)? LegendSize(string? style) => owner.LegendSize(style);
+
+        public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+            owner.ReadLegendAsync(style, options, cancellationToken);
+
+        public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
+            owner.ReadAsync(zoom, x, y, palette, time, this, cancellationToken);
+
+        public JsonObject ToTileJson(string? palette, DateTime? time = null) => owner.ToTileJson(palette, time, this);
+    }
+
     /// <summary>The <see cref="Palettes"/> with <see cref="Sets"/> settings sets registered.</summary>
     private sealed record StyleList(int Sets, IReadOnlyList<string> Styles);
 
-    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string style, string palette, MarinerStyle? mariner, TimeChoice choice, TileBlock block)
+    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string style, string palette, MarinerStyle? mariner, TimeChoice choice, TileBlock block, LayerSource? layer)
     {
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
@@ -440,7 +592,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             // which runs its own jobs on the work scheduler, so it happens off
             // the request threads but outside a job; the block itself renders
             // and encodes as one Visible job.
-            var renderer = await Task.Run(() => _scenes.Get(style, palette, mariner, choice).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
+            var renderer = await Task.Run(() => _scenes.Get(style, palette, mariner, choice, layer?.Members).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
             var tiles = await WorkScheduler.Shared.RunAsync(
                 WorkStage.Raster,
                 _ => Render(renderer, block),
@@ -448,7 +600,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
                 WorkPriority.Visible()).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
             {
-                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant, _contentKeys?.For(block));
+                var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
+                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant, content);
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -517,8 +670,12 @@ internal sealed class SceneCache(TileRenderSession session)
     /// with <paramref name="mariner"/> over the start-up settings — drawing
     /// <paramref name="choice"/>, prepared on first use.
     /// </summary>
-    public TileScene Get(string style, string palette, MarinerStyle? mariner, TimeChoice choice) =>
-        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner, choice.HiddenWarnings))).Value;
+    /// <remarks>
+    /// With <paramref name="datasets"/>, the scene draws only those (a WMTS
+    /// layer's, issue #1495), and <paramref name="style"/> must tell it apart.
+    /// </remarks>
+    public TileScene Get(string style, string palette, MarinerStyle? mariner, TimeChoice choice, IReadOnlySet<int>? datasets = null) =>
+        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner, choice.HiddenWarnings, datasets))).Value;
 
     private Lazy<TileScene> Entry(string style, TimeChoice choice, Lazy<TileScene> create)
     {
