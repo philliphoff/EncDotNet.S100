@@ -85,6 +85,8 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public DatasetFeatureQuery? FeatureQuery => Current.FeatureQuery;
 
+    public MarinerStyleRegistry? MarinerStyles => Current.MarinerStyles;
+
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         var generation = Acquire();

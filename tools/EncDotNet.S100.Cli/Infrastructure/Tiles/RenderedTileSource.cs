@@ -29,6 +29,13 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (<see cref="SceneCache"/>). Tiles outside the tiled area or its zoom
 /// range, and tiles on which nothing was drawn, read as <see langword="null"/>.
 /// </para>
+/// <para>
+/// Mariner settings registered with <see cref="MarinerStyles"/> are served as
+/// the styles <c>{palette}-{hash}</c> (issue #1493), each portrayed with the
+/// registered values over the start-up ones. Tiles are cached under a key of
+/// the settings' values rather than the client's hash, so they are shared by
+/// hashes with the same values and never reused for other values.
+/// </para>
 /// </remarks>
 internal sealed class RenderedTileSource : ITileSource, IDisposable
 {
@@ -43,7 +50,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly TileCache _cache;
     private readonly DiskTileCache? _diskCache;
     private readonly SceneCache _scenes;
-    private readonly ConcurrentDictionary<(string Palette, DateTime? Time, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
+    private readonly MarinerStyleRegistry _styles;
+    private StyleList _palettes = new(0, AllPalettes);
+    private readonly ConcurrentDictionary<(string Style, DateTime? Time, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
 
     /// <param name="session">The opened datasets. The source disposes it.</param>
@@ -55,6 +64,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <param name="cacheBytes">The most encoded tile bytes kept in memory.</param>
     /// <param name="diskCache">Tiles kept on disk across runs, behind the memory cache; <see langword="null"/> for none.</param>
     /// <param name="featureQuery">Finds the features at a point in the same datasets, for WMS GetFeatureInfo; <see langword="null"/> for none. The source disposes it.</param>
+    /// <param name="marinerStyles">The mariner settings sets clients register; <see langword="null"/> for a new, empty one.</param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -64,7 +74,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         int parallel,
         long cacheBytes,
         DiskTileCache? diskCache = null,
-        DatasetFeatureQuery? featureQuery = null)
+        DatasetFeatureQuery? featureQuery = null,
+        MarinerStyleRegistry? marinerStyles = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
@@ -77,6 +88,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _cache = new TileCache(cacheBytes);
         _diskCache = diskCache;
         FeatureQuery = featureQuery;
+        _styles = marinerStyles ?? new MarinerStyleRegistry();
         _scenes = new SceneCache(session);
         _scenes.Seed(_defaultPalette, null, scene);
     }
@@ -85,7 +97,24 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public TileImageFormat Format => _session.Format;
 
-    public IReadOnlyList<string> Palettes => AllPalettes;
+    /// <summary>The palettes, then each registered mariner settings set in each palette (<c>{palette}-{hash}</c>).</summary>
+    public IReadOnlyList<string> Palettes
+    {
+        get
+        {
+            // Read at every tile request: rebuilt only when a set is registered.
+            int sets = _styles.Count;
+            var cached = Volatile.Read(ref _palettes);
+            if (cached.Sets == sets)
+                return cached.Styles;
+
+            var styles = new StyleList(sets, [.. AllPalettes, .. _styles.Styles(AllPalettes)]);
+            Volatile.Write(ref _palettes, styles);
+            return styles.Styles;
+        }
+    }
+
+    public MarinerStyleRegistry MarinerStyles => _styles;
 
     public IReadOnlyList<DateTime> Times => _session.Times;
 
@@ -102,9 +131,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
-        palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
         time = time is { } requested ? _session.SnapTime(requested) : null;
-        if (!AllPalettes.Contains(palette)
+        if (!TryResolveStyle(palette, out var paletteName, out var mariner, out var style)
             || zoom < _layout.MinZoom || zoom > _layout.MaxZoom
             || !TileSource.IsValid(zoom, x, y)
             || BlockFor(_layout.Area, _blockSize, zoom, x, y) is not { } block)
@@ -112,7 +140,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        var key = new TileKey(palette, zoom, x, y, time);
+        var key = new TileKey(style, zoom, x, y, time);
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -123,8 +151,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         else
         {
             var render = _rendering.GetOrAdd(
-                (palette, time, block),
-                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Palette, k.Time, k.Block)));
+                (style, time, block),
+                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Style, paletteName, mariner, k.Time, k.Block)));
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -134,7 +162,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public JsonObject ToTileJson(string? palette, DateTime? time = null)
     {
-        palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
+        if (!TryResolveStyle(palette, out var paletteName, out var mariner, out _))
+            (paletteName, mariner) = (_defaultPalette, null);
         time = time is { } requested ? _session.SnapTime(requested) : null;
         var json = new TileSetMetadata
         {
@@ -145,9 +174,11 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             MaxZoom = _layout.MaxZoom,
             Bounds = _layout.Bounds,
             TilePixelSize = _layout.TileOptions.PixelRatio * XyzTileGrid.TileSize,
-            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, palette, time),
+            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, paletteName, time, mariner),
         }.ToTileJson(tilesUrl: null);
         json["s100"]!["palettes"] = new JsonArray(AllPalettes.Select(p => (JsonNode?)p).ToArray());
+        if (mariner is not null)
+            json["s100"]!["style"] = palette!.Trim().ToLowerInvariant();
         if (Times.Count > 0)
             json["s100"]!["times"] = new JsonArray(Times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
         return json;
@@ -229,7 +260,34 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         static int Mod(int value, int divisor) => ((value % divisor) + divisor) % divisor;
     }
 
-    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string palette, DateTime? time, TileBlock block)
+    /// <summary>
+    /// Resolves a requested style — a palette, <c>{palette}-{hash}</c> of a
+    /// registered settings set, or <see langword="null"/> for the default
+    /// palette — to its palette, its mariner settings (<see langword="null"/>
+    /// for the start-up ones) and the key its tiles and scenes are cached under.
+    /// </summary>
+    private bool TryResolveStyle(string? requested, out string palette, out MarinerStyle? mariner, out string key)
+    {
+        var (name, hash) = MarinerStyleRegistry.Split(requested?.Trim().ToLowerInvariant() ?? _defaultPalette);
+        palette = name;
+        mariner = null;
+        key = name;
+        if (!AllPalettes.Contains(name))
+            return false;
+        if (hash is null)
+            return true;
+        if (!_styles.TryGet(hash, out var registered))
+            return false;
+
+        mariner = registered;
+        key = name + "-m" + registered.Key;
+        return true;
+    }
+
+    /// <summary>The <see cref="Palettes"/> with <see cref="Sets"/> settings sets registered.</summary>
+    private sealed record StyleList(int Sets, IReadOnlyList<string> Styles);
+
+    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string style, string palette, MarinerStyle? mariner, DateTime? time, TileBlock block)
     {
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
@@ -238,7 +296,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             // which runs its own jobs on the work scheduler, so it happens off
             // the request threads but outside a job; the block itself renders
             // and encodes as one Visible job.
-            var renderer = await Task.Run(() => _scenes.Get(palette, time).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
+            var renderer = await Task.Run(() => _scenes.Get(style, palette, mariner, time).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
             var tiles = await WorkScheduler.Shared.RunAsync(
                 WorkStage.Raster,
                 _ => Render(renderer, block),
@@ -246,7 +304,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
                 WorkPriority.Visible()).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
             {
-                var key = new TileKey(palette, block.Zoom, x, y, time);
+                var key = new TileKey(style, block.Zoom, x, y, time);
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -260,7 +318,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
             // Later requests find the tiles in the cache (or render again if
             // they were evicted).
-            _rendering.TryRemove((palette, time, block), out _);
+            _rendering.TryRemove((style, time, block), out _);
         }
     }
 
@@ -280,8 +338,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 }
 
 /// <summary>
-/// The prepared scenes of a <see cref="RenderedTileSource"/>, one per palette
-/// and time step, created on first use. Only the most recently used few are
+/// The prepared scenes of a <see cref="RenderedTileSource"/>, one per style
+/// (a palette, or a palette with mariner settings) and time step, created on first use. Only the most recently used few are
 /// kept, so stepping through a long forecast doesn't hold a scene per step;
 /// one evicted is prepared again when next needed. Thread-safe.
 /// </summary>
@@ -291,8 +349,8 @@ internal sealed class SceneCache(TileRenderSession session)
     public const int Capacity = 8;
 
     private readonly Lock _gate = new();
-    private readonly Dictionary<(string Palette, DateTime? Time), LinkedListNode<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)>> _entries = [];
-    private readonly LinkedList<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)> _recency = new();
+    private readonly Dictionary<(string Style, DateTime? Time), LinkedListNode<((string Style, DateTime? Time) Key, Lazy<TileScene> Scene)>> _entries = [];
+    private readonly LinkedList<((string Style, DateTime? Time) Key, Lazy<TileScene> Scene)> _recency = new();
 
     /// <summary>The number of scenes held.</summary>
     public int Count
@@ -308,14 +366,21 @@ internal sealed class SceneCache(TileRenderSession session)
     public void Seed(string palette, DateTime? time, TileScene scene) => Entry(palette, time, new Lazy<TileScene>(scene));
 
     /// <summary>The scene for <paramref name="palette"/> at <paramref name="time"/>, prepared on first use.</summary>
-    public TileScene Get(string palette, DateTime? time) =>
-        Entry(palette, time, new Lazy<TileScene>(() => session.Prepare(palette, time))).Value;
+    public TileScene Get(string palette, DateTime? time) => Get(palette, palette, null, time);
 
-    private Lazy<TileScene> Entry(string palette, DateTime? time, Lazy<TileScene> create)
+    /// <summary>
+    /// The scene for the style <paramref name="style"/> — <paramref name="palette"/>
+    /// with <paramref name="mariner"/> over the start-up settings — at
+    /// <paramref name="time"/>, prepared on first use.
+    /// </summary>
+    public TileScene Get(string style, string palette, MarinerStyle? mariner, DateTime? time) =>
+        Entry(style, time, new Lazy<TileScene>(() => session.Prepare(palette, time, mariner))).Value;
+
+    private Lazy<TileScene> Entry(string style, DateTime? time, Lazy<TileScene> create)
     {
         lock (_gate)
         {
-            var key = (palette, time);
+            var key = (style, time);
             if (_entries.TryGetValue(key, out var node))
             {
                 _recency.Remove(node);
@@ -335,7 +400,11 @@ internal sealed class SceneCache(TileRenderSession session)
     }
 }
 
-/// <summary>One tile in one palette, at one time step (<see langword="null"/> for <c>--time-step</c>).</summary>
+/// <summary>
+/// One tile in one style — a palette, or <c>{palette}-m{key}</c> with mariner
+/// settings (<see cref="MarinerStyle.Key"/>) — at one time step
+/// (<see langword="null"/> for <c>--time-step</c>).
+/// </summary>
 internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null);
 
 /// <summary>

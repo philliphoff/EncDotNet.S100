@@ -455,6 +455,19 @@ the old file is left as it was.
 | `--hide <categories>` | none | Hides drawing-instruction categories, comma-separated: `text`, `points`, `lines`, `areas`. |
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth land layer under the chart. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. See [Sea-ice display modes](#sea-ice-display-modes). |
+| `--display-category <category>` | `all` | Mariner setting: the ECDIS display category, `display-base`, `standard`, `other-information` or `all`. |
+| `--safety-contour <metres>` | `30` | Mariner setting: the safety contour. |
+| `--safety-depth <metres>` | `30` | Mariner setting: the safety depth. Shallower soundings are emphasised. |
+| `--shallow-contour <metres>` | `2` | Mariner setting: the shallow contour, used with `--four-shades`. |
+| `--deep-contour <metres>` | `30` | Mariner setting: the deep contour, used with `--four-shades`. |
+| `--four-shades` | off | Mariner setting: shades depth areas in four shades rather than two. |
+| `--no-soundings` | off | Mariner setting: doesn't draw soundings. |
+| `--no-shallow-water-dangers` | off | Mariner setting: doesn't emphasise isolated dangers in shallow water. |
+| `--symbolized-boundaries` | off | Mariner setting: draws symbolized area boundaries rather than plain ones. |
+| `--simplified-symbols` | off | Mariner setting: draws simplified point symbols rather than paper-chart ones. |
+| `--full-light-lines` | off | Mariner setting: draws light sector legs to their full nominal range. |
+| `--ignore-scamin` | off | Mariner setting: draws features at every scale, ignoring their scale minimum (SCAMIN). |
+| `--depth-unit <unit>` | `metres` | Mariner setting: the unit depths are shown in, `metres`, `feet`, `fathoms-feet` or `fathoms`. |
 | `--skip-empty` | off | Doesn't write tiles on which nothing was drawn. A web map shows a missing tile as empty. |
 | `--metatile <tiles>` | `4` | Renders blocks of this many tiles square at once, then cuts them apart. |
 | `--parallel <workers>` | processor count | Number of blocks rendered at once. |
@@ -610,6 +623,9 @@ The server has these routes:
 - When rendering datasets, `day/`, `dusk/` and `night/` hold the same two
   routes in that palette, for example `night/{z}/{x}/{y}.png` and
   `night/tiles.json`. Each palette is portrayed the first time it's asked for.
+- When rendering datasets, `settings/{hash}` registers a set of mariner
+  settings, served as the style `{palette}-{hash}`, for example
+  `day-a1b2/{z}/{x}/{y}.png`. See [Mariner settings](#mariner-settings).
 - When rendering time-varying datasets (S-104, S-111), a `t` query parameter
   on either route picks the time step, for example
   `{z}/{x}/{y}.png?t=2026-03-21T07:00Z`. The time is ISO 8601, UTC unless it
@@ -680,6 +696,55 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 In Leaflet, use the tile URL:
 `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
 
+### Mariner settings
+
+When `tiles serve` renders datasets, one server can serve the chart with
+several sets of mariner settings, as the viewer's Mariner settings and display
+category choose them. The [mariner setting options](#tiles-export-options)
+(`--display-category`, `--safety-contour` and the rest) set those of the plain
+tile URLs; without them the tiles look as they always have.
+
+A client registers another set with a `PUT` of a JSON object to
+`settings/{hash}`. It picks the hash, 1 to 64 letters, digits or `_`, for
+example a hash of the settings. Every value is optional, and one left out
+takes the server's own:
+
+```bash
+curl -X PUT http://127.0.0.1:8200/settings/a1b2 \
+  -H "Content-Type: application/json" \
+  -d '{ "displayCategory": "Standard", "safetyContour": 10, "fourShades": true }'
+```
+
+| Name | Value |
+|---|---|
+| `displayCategory` | `DisplayBase`, `Standard`, `OtherInformation` or `All`. |
+| `safetyContour`, `safetyDepth`, `shallowContour`, `deepContour` | Depths in metres, from 0 to 12000. |
+| `fourShades`, `soundings`, `shallowWaterDangers`, `plainBoundaries`, `simplifiedSymbols`, `fullLightLines`, `ignoreScaleMinimum` | `true` or `false`. |
+| `depthUnit` | `Metres`, `Feet`, `FathomsFeet` or `Fathoms`. |
+
+The set is then served in each palette as the style `{palette}-{hash}`, such
+as `day-a1b2` or `night-a1b2`:
+
+- on the tile URLs, as `day-a1b2/{z}/{x}/{y}.png` and `day-a1b2/tiles.json`,
+- as a [WMTS](#wmts) style, and
+- as a [WMS](#wms) `STYLES` value.
+
+The WMTS and WMS capabilities list the registered styles. Each set is
+portrayed the first time it's asked for, and its tiles are cached like the
+others, under its values, so sets with the same values share them.
+
+The `PUT` answers `201 Created` for a new hash and `200 OK` when the hash is
+already registered with the same values, both with the hash, its values and
+its styles. It answers `409 Conflict` when the hash is registered with other
+values (a hash names one set for the life of the server, so a cached tile is
+never stale), `400 Bad Request` for an unknown name or a value of the wrong
+type, and `507 Insufficient Storage` past 256 sets. A `GET` of
+`settings/{hash}` returns the set, or `404 Not Found`. Registered sets last
+until the server stops, and survive the datasets being reloaded. A style whose
+hash isn't registered answers `404 Not Found` on the tile URLs and an exception
+on WMTS and WMS. A built tile set has no mariner settings; export one per set
+with the same options instead.
+
 ### WMTS
 
 `tiles serve` is also an OGC WMTS 1.0.0 service, for GIS desktops and
@@ -701,7 +766,9 @@ in EPSG:3857. The tile matrices are numbered by zoom level, from 0 to the
 maximum zoom, so a WMTS tile is the XYZ tile of the same zoom, column and row.
 Below the minimum zoom the tiles are empty, as on the XYZ URLs, so zoom in to
 see the chart. When rendering datasets, each palette is a WMTS style and the
-`--palette` one is the default; a built tile set has one style, `default`.
+`--palette` one is the default, and each registered set of
+[mariner settings](#mariner-settings) adds a style per palette; a built tile
+set has one style, `default`.
 For time-varying datasets (S-104, S-111), a `Time` dimension lists the time
 steps and defaults to `--time-step`.
 
@@ -734,8 +801,9 @@ http://127.0.0.1:8200/wms
 - **GDAL:** open `WMS:http://127.0.0.1:8200/wms?SERVICE=WMS&REQUEST=GetCapabilities`.
 
 The service has one layer, `s100`, in EPSG:3857, EPSG:4326 and CRS:84. As for
-WMTS, each palette is a style, the `--palette` one first and the default, and
-S-104 and S-111 time steps are a `time` dimension.
+WMTS, each palette is a style, the `--palette` one first and the default,
+each registered set of [mariner settings](#mariner-settings) adds a style per
+palette, and S-104 and S-111 time steps are a `time` dimension.
 
 **GetMap** draws its image from the same tiles the XYZ URLs serve: those of
 the zoom level nearest the requested scale, stitched and resampled to the

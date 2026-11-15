@@ -56,7 +56,8 @@ internal sealed class TileRenderSession : IDisposable
 
     // The portrayal of each dataset that doesn't vary with time, per palette:
     // reused by every time step's scene.
-    private readonly Dictionary<(PaletteType Palette, int Index), VectorPortrayalResult> _timelessPortrayals = [];
+    // Keyed by the mariner settings too (MarinerStyle.Key), as they change the portrayal.
+    private readonly Dictionary<(PaletteType Palette, string Mariner, int Index), VectorPortrayalResult> _timelessPortrayals = [];
 
     private TileRenderSession(
         TilesRenderSettings settings,
@@ -364,10 +365,14 @@ internal sealed class TileRenderSession : IDisposable
     /// One of <see cref="Times"/>, each time-varying dataset being portrayed at
     /// its own step nearest it; <see langword="null"/> for <c>--time-step</c>.
     /// </param>
-    public TileScene Prepare(string? palette = null, DateTime? time = null)
+    /// <param name="mariner">
+    /// Mariner settings over the start-up ones (issue #1493); <see langword="null"/>
+    /// for the start-up ones alone.
+    /// </param>
+    public TileScene Prepare(string? palette = null, DateTime? time = null, MarinerStyle? mariner = null)
     {
         lock (_portrayGate)
-            return PrepareLocked(palette, time);
+            return PrepareLocked(palette, time, mariner);
     }
 
     /// <summary>
@@ -397,19 +402,25 @@ internal sealed class TileRenderSession : IDisposable
     private static bool VariesWithTime(IDatasetProcessor processor) =>
         processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0;
 
-    private TileScene PrepareLocked(string? palette, DateTime? time)
+    private TileScene PrepareLocked(string? palette, DateTime? time, MarinerStyle? marinerStyle)
     {
         RenderCommand.TryParsePalette(palette ?? _settings.Palette, out var parsedPalette);
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
         RenderCommand.TryParseDisplayMode(_settings.DisplayMode, out var displayModeId);
         var hidden = HiddenCategories(_settings);
         var nationalLanguage = RenderCommand.ResolveNationalLanguage(_settings.NationalLanguage);
+        var effectiveMariner = marinerStyle is null ? _settings.MarinerStyle : marinerStyle.Over(_settings.MarinerStyle);
+        string marinerKey = effectiveMariner.Key;
+        var mariner = effectiveMariner.ToMarinerSettings(nationalLanguage);
+        // Only when chosen, so the processors keep their own defaults (today's tiles) otherwise.
+        var contextMariner = effectiveMariner.IsEmpty ? null : mariner;
+        var ecdisDisplay = effectiveMariner.ToEcdisDisplay();
 
         RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport) =>
             RenderContextBuilder.Build(
                 processor, parsedPalette, _settings.SymbolScale, _settings.TextScale, _settings.TimeStep, hidden,
                 displayModeId: displayModeId, viewport: viewport, instant: time,
-                nationalLanguage: nationalLanguage);
+                nationalLanguage: nationalLanguage, mariner: contextMariner, ecdisDisplay: ecdisDisplay);
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
@@ -423,7 +434,7 @@ internal sealed class TileRenderSession : IDisposable
             var processor = _processors[i];
             if (processor is IVectorPortrayalSource
                 && !VariesWithTime(processor)
-                && _timelessPortrayals.TryGetValue((parsedPalette, i), out var cached))
+                && _timelessPortrayals.TryGetValue((parsedPalette, marinerKey, i), out var cached))
             {
                 inputs[i] = ChartCompositeInput.ForVector(cached);
                 continue;
@@ -439,16 +450,14 @@ internal sealed class TileRenderSession : IDisposable
             int i = pending[p].Index;
             inputs[i] = portrayed[p];
             if (portrayed[p].Vector is { } vector && !VariesWithTime(_processors[i]))
-                _timelessPortrayals[(parsedPalette, i)] = vector;
+                _timelessPortrayals[(parsedPalette, marinerKey, i)] = vector;
         }
 
         var vectorResults = inputs.Select(input => input.Vector).OfType<VectorPortrayalResult>().ToList();
         var options = new ChartCompositeOptions
         {
             Background = Background(_settings),
-            Mariner = nationalLanguage is null
-                ? MarinerSettings.Default
-                : MarinerSettings.Default with { NationalLanguage = nationalLanguage },
+            Mariner = mariner,
             HiddenCategories = hidden,
             Basemap = basemap,
             HonorScaleVisibility = true,
@@ -495,7 +504,11 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>The display settings baked into the tiles, as tile-set metadata records them.</summary>
-    public Dictionary<string, string> DescribeSettings(double referenceLatitude, string? palette = null, DateTime? time = null)
+    /// <param name="referenceLatitude">The latitude the zoom levels' scales are given at.</param>
+    /// <param name="palette">The palette; <see langword="null"/> for <c>--palette</c>.</param>
+    /// <param name="time">The time step; <see langword="null"/> for <c>--time-step</c>.</param>
+    /// <param name="mariner">Mariner settings over the start-up ones; <see langword="null"/> for those alone.</param>
+    public Dictionary<string, string> DescribeSettings(double referenceLatitude, string? palette = null, DateTime? time = null, MarinerStyle? mariner = null)
     {
         var description = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -514,6 +527,9 @@ internal sealed class TileRenderSession : IDisposable
             description["nationalLanguage"] = nationalLanguage;
         if (!string.IsNullOrWhiteSpace(_settings.DisplayMode))
             description["displayMode"] = _settings.DisplayMode.Trim().ToLowerInvariant();
+        var effectiveMariner = mariner is null ? _settings.MarinerStyle : mariner.Over(_settings.MarinerStyle);
+        foreach (var (name, value) in effectiveMariner.Describe())
+            description[name] = value;
         if (time is { } at)
             description["time"] = FormatTime(at);
         return description;
@@ -566,6 +582,8 @@ internal sealed class TileRenderSession : IDisposable
         // Only when set, so fingerprints from before the option existed still match.
         if (RenderCommand.ResolveNationalLanguage(settings.NationalLanguage) is { } nationalLanguage)
             Line("nationalLanguage", nationalLanguage);
+        if (!settings.MarinerStyle.IsEmpty)
+            Line("mariner", settings.MarinerStyle.Key);
 
         foreach (var file in InputFiles(settings))
         {
