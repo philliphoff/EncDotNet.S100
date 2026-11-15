@@ -13,6 +13,12 @@ month. For package versions and release assets, see
   steps and issue time, and its data dynamicity with the viewer's label. A GIS
   client can zoom to one dataset instead of the union of all of them, without
   opening the datasets itself. See [Dataset metadata](cli.md#dataset-metadata).
+- **The data revision of served tiles.** When `s100 tiles serve` renders
+  datasets, it publishes the fingerprint of the data and settings as
+  `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS
+  capabilities and in an `S100-Revision` header on `/healthz`. It changes when
+  `--refresh` reloads changed datasets, so a GIS client can put it in its tile
+  URLs to bust its own tile cache. See [`tiles serve`](cli.md#tiles-serve).
 - **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
   `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
   Pro and QGIS send when they export a layout. A 300 DPI map shows the same

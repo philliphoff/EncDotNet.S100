@@ -57,6 +57,15 @@ internal interface ITileSource
     JsonObject? ToDatasetsJson() => null;
 
     /// <summary>
+    /// The revision of the data and render settings the tiles are drawn from
+    /// (issue #1497): the disk-cache fingerprint, which changes whenever a
+    /// dataset or a setting that changes pixels does. Clients put it in their
+    /// URLs to bust their own tile caches. <see langword="null"/> when the
+    /// tiles aren't rendered here (a built tile set).
+    /// </summary>
+    string? Revision => null;
+
+    /// <summary>
     /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
     /// (rows numbered from the north) in <paramref name="palette"/> (one of
     /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at
