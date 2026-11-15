@@ -72,6 +72,13 @@ which nothing draws answers `204`. TileJSON then sets `s100.strictTime` and,
 with `t`, lists each time-varying dataset in `s100.datasets` (`name`, `spec`,
 `time`, `null` when it has no data at that time).
 
+With `--overview` (datasets only; off by default), tiles and WMS GetMap below
+the chart's minimum zoom draw each dataset's coverage outline (from
+`/datasets`) and name instead of answering `204`; tiles with no coverage still
+answer `204`. TileJSON `minzoom` becomes 0, with the chart's in
+`s100.chartMinzoom` and the overview's range in `s100.overview`, and the WMS
+`MaxScaleDenominator` and WMTS `TileMatrixSetLimits` reach zoom 0.
+
 Rendering uses the `tiles export` display, zoom and area options, renders
 `--metatile`-square blocks around each requested tile, keeps up to `--cache-mb`
 of tiles in memory, and runs at most `--parallel` renders at once. The first

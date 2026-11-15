@@ -77,6 +77,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("When rendering datasets: a time more than half a step outside a time-varying dataset's steps (before, after or in a gap) draws nothing for it, instead of its nearest step; a tile on which nothing draws answers 204.")]
         public bool StrictTime { get; init; }
 
+        [CommandOption("--overview")]
+        [Description("When rendering datasets: below their minimum zoom, draw each dataset's coverage outline and name instead of answering 204, and advertise WMS and WMTS down to zoom 0, so GIS clients still show where the charts are when zoomed out.")]
+        public bool Overview { get; init; }
+
         /// <inheritdoc/>
         public override string? FingerprintExcludedFolder => CacheDirectory;
 
@@ -86,6 +90,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
 
         public override ValidationResult Validate()
         {
+            if (ServesTileSet && Overview)
+                return ValidationResult.Error("--overview applies only when rendering datasets, not when serving a built tile set.");
             if (ServesTileSet && CacheDirectory is not null)
                 return ValidationResult.Error("--cache-dir applies only when rendering datasets, not when serving a built tile set.");
             if (ClearCache && CacheDirectory is null)
@@ -143,6 +149,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                         () => OpenRendered(settings, out var reopened, marinerStyles) == 0 ? reopened : null,
                         TimeSpan.FromSeconds(settings.RefreshSeconds),
                         line => AnsiConsole.MarkupLine($"[grey]{DateTime.Now:HH:mm:ss}[/] {Markup.Escape(line)}"));
+                if (settings.Overview)
+                    source = new OverviewTileSource(source);
             }
         }
         catch (Exception e) when (e is InvalidDataException or NotSupportedException or IOException)
@@ -189,8 +197,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                     AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
             }
 
-            if (source is RefreshingTileSource)
+            if (source is RefreshingTileSource or OverviewTileSource { Inner: RefreshingTileSource })
                 AnsiConsole.MarkupLine($"[grey]Checking the datasets for changes every {settings.RefreshSeconds} s.[/]");
+            if (source is OverviewTileSource overview)
+                AnsiConsole.MarkupLine($"[grey]Drawing dataset coverage and names below zoom {overview.ChartMinZoom}.[/]");
             AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256, or the WMTS or WMS URL in a GIS. Ctrl-C to stop.");
 
             // The web host handles Ctrl-C and SIGTERM and stops itself.

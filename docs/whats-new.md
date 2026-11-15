@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **An overview below the minimum zoom.** With `--overview`,
+  `s100 tiles serve` draws each dataset's coverage outline and name where the
+  chart's zoom levels end, on XYZ and WMTS tiles and WMS GetMap, and the WMS
+  and WMTS capabilities reach zoom 0, so a GIS layer no longer disappears when
+  zoomed out. Without it, tiles below the minimum zoom stay empty, as before.
+  See [Overview below the minimum zoom](cli.md#overview-below-the-minimum-zoom).
 - **Navigational warnings by validity in served tiles.** `s100 tiles serve`
   draws only the S-124 warnings in force at the time a client asks for, with
   `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its

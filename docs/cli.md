@@ -663,6 +663,9 @@ The server has these routes:
   the TileJSON for such a `t` keeps it in `s100.time` and its tile URL. With
   S-124 alone there are no time steps to list, so the capabilities advertise
   no `Time` dimension; a client still sends `TIME=` (WMS, WMTS KVP) or `t`.
+- With `--overview`, tiles below the datasets' minimum zoom show where the
+  datasets are instead of answering `204`. See
+  [Overview below the minimum zoom](#overview-below-the-minimum-zoom).
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
@@ -699,6 +702,7 @@ area, the tile format and display settings apply too; the output options
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
 | `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
+| `--overview` | off | When rendering datasets, draws each dataset's coverage outline and name below their minimum zoom instead of nothing, and advertises WMS and WMTS down to zoom 0. See [Overview below the minimum zoom](#overview-below-the-minimum-zoom). |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
@@ -821,6 +825,40 @@ a reload; a built tile set has none, and `datasets` answers
 | `dataDynamicity` | How S-104 water levels and S-111 currents were produced: the S-104 `dataDynamicity` code, its name (`observation`, `astronomicalPrediction`, `analysisOrHybrid`, `hydrodynamicHindcast` or `hydrodynamicForecast`) and the viewer's label (`Observed`, `Predicted`, `Analysis`, `Hindcast` or `Forecast`). `null` when the dataset doesn't say. |
 | `notForNavigation` | Always `true`: nothing `tiles serve` serves is for navigation. |
 
+### Overview below the minimum zoom
+
+The chart is drawn from a minimum zoom level that suits the datasets' scale,
+for a harbour cell about zoom 12. Below it the tiles are empty, the WMS
+capabilities give a `MaxScaleDenominator` (about 1:96,000 for that cell), and
+GIS clients hide the layer, so a user who zooms out loses sight of where the
+charts are. With `--overview`, the server draws an overview there instead:
+
+```bash
+s100 tiles serve ./ENC_ROOT --overview
+```
+
+- Below the chart's minimum zoom, XYZ and WMTS tiles and WMS GetMap draw each
+  dataset's coverage, outlined and lightly filled in magenta (dimmer at dusk
+  and night), with its name (the `id` of [Dataset metadata](#dataset-metadata)).
+  The coverage is the one `datasets` gives: the declared data coverage, or the
+  dataset's bounds when it declares none. A dataset too small to outline at a
+  zoom is drawn as a small square. Names are left out where they would overlap
+  one already drawn, the first dataset's first.
+- A tile with no coverage on it still answers `204 No Content`.
+- `tiles.json` gives `minzoom` 0, the chart's minimum zoom in
+  `s100.chartMinzoom` and the overview's zoom range in `s100.overview`. The
+  WMS layer's `MaxScaleDenominator` and the WMTS `TileMatrixSetLimits` reach
+  zoom 0 to match, so clients keep the layer visible.
+- The overview is the same for every set of mariner settings and at every
+  time, and follows the datasets when `--refresh` reloads them.
+
+It is off by default, because it changes what existing clients get below the
+minimum zoom. Without it, a client that wants footprints can draw the
+coverage polygons from `datasets` itself, as a separate layer, and show the
+chart from `s100.chartMinzoom` (or the `minzoom` without `--overview`) up.
+It applies only when rendering datasets; a built tile set has no coverage to
+draw.
+
 ### Run under a supervising process
 
 A program that starts `tiles serve` itself, such as a GIS add-in, can pass
@@ -871,7 +909,8 @@ The service has one layer, `s100`, on the `WebMercatorQuad` tile matrix set
 in EPSG:3857. The tile matrices are numbered by zoom level, from 0 to the
 maximum zoom, so a WMTS tile is the XYZ tile of the same zoom, column and row.
 Below the minimum zoom the tiles are empty, as on the XYZ URLs, so zoom in to
-see the chart. When rendering datasets, each palette is a WMTS style and the
+see the chart; with `--overview` they show the datasets' coverage and names
+(see [Overview below the minimum zoom](#overview-below-the-minimum-zoom)). When rendering datasets, each palette is a WMTS style and the
 `--palette` one is the default, and each registered set of
 [mariner settings](#mariner-settings) adds a style per palette; a built tile
 set has one style, `default`.
@@ -916,7 +955,9 @@ the zoom level nearest the requested scale, stitched and resampled to the
 requested area and size. Symbols and text are therefore between about 0.7 and
 1.4 times their portrayed size. A request coarser than the minimum zoom draws
 nothing, and the capabilities give the matching `MaxScaleDenominator`, so
-clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
+clients hide the layer there; with `--overview` it draws the datasets'
+coverage and names and the layer has no practical scale limit (see
+[Overview below the minimum zoom](#overview-below-the-minimum-zoom)). It draws PNG or JPEG images up to 4096 pixels on
 a side; set `TRANSPARENT=TRUE` for a PNG to overlay other layers.
 
 **Printing.** A client exporting a layout at a resolution higher than the
