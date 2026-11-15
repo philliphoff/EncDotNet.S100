@@ -139,9 +139,9 @@ internal static class WmsService
         var styles = Styles(source, json);
         var times = source.Times;
 
-        // Coarser than halfway past the minimum zoom, GetMap draws nothing;
+        // Coarser than the minimum zoom's scale, GetMap draws nothing;
         // clients that read this hide the layer there instead of asking.
-        double maxScale = 559082264.0287178 * 256 / tilePixels / Math.Pow(2, minZoom - 0.5);
+        double maxScale = 559082264.0287178 * 256 / tilePixels / Math.Pow(2, minZoom - WmsMapComposer.ZoomTolerance);
 
         var layer = new XElement(Wms + "Layer",
             new XAttribute("queryable", queryable ? "1" : "0"),

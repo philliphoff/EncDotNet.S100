@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **WMS and WMTS agree on the zoom level.** `s100 tiles serve` WMS GetMap
+  draws the zoom level a WMTS client such as ArcGIS Pro shows at the same
+  scale: the finest one no finer than the view, rather than the nearest. At
+  1:23,374, for example, both draw zoom 14, so WMS no longer shows soundings
+  and other features that WMTS hides there. The layer's
+  `MaxScaleDenominator` is now the minimum zoom's scale. See [WMS](cli.md#wms).
 - **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
   `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
   Pro and QGIS send when they export a layout. A 300 DPI map shows the same
