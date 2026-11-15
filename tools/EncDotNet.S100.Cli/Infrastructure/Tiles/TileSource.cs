@@ -44,6 +44,28 @@ internal interface ITileSource
     MarinerStyleRegistry? MarinerStyles => null;
 
     /// <summary>
+    /// Whether <see cref="ToDatasetsJson"/> describes the datasets the tiles
+    /// are rendered from; <see langword="false"/> for a built tile set.
+    /// </summary>
+    bool HasDatasets => false;
+
+    /// <summary>
+    /// The <c>/datasets</c> document (issue #1504): each dataset the tiles are
+    /// rendered from, as they are now; <see langword="null"/> when there are
+    /// none behind the tiles (a built tile set).
+    /// </summary>
+    JsonObject? ToDatasetsJson() => null;
+
+    /// <summary>
+    /// The revision of the data and render settings the tiles are drawn from
+    /// (issue #1497): the disk-cache fingerprint, which changes whenever a
+    /// dataset or a setting that changes pixels does. Clients put it in their
+    /// URLs to bust their own tile caches. <see langword="null"/> when the
+    /// tiles aren't rendered here (a built tile set).
+    /// </summary>
+    string? Revision => null;
+
+    /// <summary>
     /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
     /// (rows numbered from the north) in <paramref name="palette"/> (one of
     /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at

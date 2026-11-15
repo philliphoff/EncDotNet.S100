@@ -78,7 +78,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
-        ServeHost.MapHealth(app);
+        ServeHost.MapHealth(app, () => source.Revision);
         if (viewer)
             app.MapGet(prefix + "/", ServeViewerAsync);
 
@@ -99,6 +99,9 @@ internal sealed class TileServer : IAsyncDisposable
         app.MapGet(prefix + "/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source, prefix));
         app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
         app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+
+        // Each dataset's metadata (issue #1504).
+        app.MapGet(prefix + "/" + DatasetsDocument.Path, context => DatasetsDocument.ServeAsync(context, source));
 
         // Mariner settings sets, served as {palette}-{hash} styles (issue #1493).
         MarinerStyleRegistry.Map(app, prefix, () => source.MarinerStyles, () => source.Palettes);
@@ -175,6 +178,8 @@ internal sealed class TileServer : IAsyncDisposable
         if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
             tiles += "?t=" + Uri.EscapeDataString((string)step!);
         json["tiles"] = new System.Text.Json.Nodes.JsonArray(tiles);
+        if (source.HasDatasets && json["s100"] is System.Text.Json.Nodes.JsonObject s100)
+            s100["datasetsUrl"] = RequestBaseUri(context, prefix).AbsoluteUri + DatasetsDocument.Path;
 
         context.Response.ContentType = "application/json";
         context.Response.Headers.CacheControl = "no-cache";

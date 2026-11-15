@@ -64,6 +64,9 @@ internal sealed partial class DiskTileCache : IDisposable
     /// <summary>The folder this cache's tiles go in.</summary>
     public string Folder => Path.Combine(_kind.Directory, _fingerprint);
 
+    /// <summary>The fingerprint of the data and settings the cached tiles were rendered from.</summary>
+    public string Fingerprint => _fingerprint;
+
     /// <summary>The bytes counted against the budget, across every fingerprint folder.</summary>
     public long Size => _kind.TotalBytes;
 
@@ -118,7 +121,7 @@ internal sealed partial class DiskTileCache : IDisposable
         key.Time is { } time
             ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
                 + (key.Variant is { } variant ? "-" + variant : string.Empty)
-            : key.Palette,
+            : key.Palette + (key.Variant is { } untimed ? "-" + untimed : string.Empty),
         key.Zoom.ToString(CultureInfo.InvariantCulture),
         key.X.ToString(CultureInfo.InvariantCulture),
         key.Y.ToString(CultureInfo.InvariantCulture) + _extension);

@@ -100,6 +100,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         StrictTime = strictTime;
         _scenes = new SceneCache(session);
         _scenes.Seed(_defaultPalette, null, scene);
+        Revision = diskCache?.Fingerprint ?? session.Fingerprint();
     }
 
     public string Path => $"{_session.Specs.Count} dataset(s) ({string.Join(", ", _session.Specs.Distinct())})";
@@ -125,9 +126,22 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public MarinerStyleRegistry MarinerStyles => _styles;
 
+    public bool HasDatasets => true;
+
+    // Coverage polygons come from the default scene's portrayal, which is
+    // cached (and prepared at start-up).
+    public JsonObject ToDatasetsJson() => DatasetsDocument.Build(_session, _scenes.Get(_defaultPalette, null));
+
     public IReadOnlyList<DateTime> Times => _session.Times;
 
     public DatasetFeatureQuery? FeatureQuery { get; }
+
+    /// <summary>
+    /// The fingerprint of the datasets and settings these tiles are drawn from
+    /// (<see cref="TileRenderSession.Fingerprint()"/>), taken when the source
+    /// was opened: the same one the disk cache keeps them under.
+    /// </summary>
+    public string Revision { get; }
 
     /// <summary>Whether times outside a dataset's steps draw nothing for it (<c>--strict-time</c>).</summary>
     public bool StrictTime { get; }
@@ -258,6 +272,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             // URLs built from it draw the same.
             Settings = _session.DescribeSettings(_layout.ReferenceLatitude, paletteName, choice.Variant is null ? choice.Time : time, mariner),
         }.ToTileJson(tilesUrl: null);
+        json["s100"]!["revision"] = Revision;
         json["s100"]!["palettes"] = new JsonArray(AllPalettes.Select(p => (JsonNode?)p).ToArray());
         if (mariner is not null)
             json["s100"]!["style"] = palette!.Trim().ToLowerInvariant();
@@ -472,7 +487,7 @@ internal sealed class SceneCache(TileRenderSession session)
     /// <paramref name="choice"/>, prepared on first use.
     /// </summary>
     public TileScene Get(string style, string palette, MarinerStyle? mariner, TimeChoice choice) =>
-        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner))).Value;
+        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner, choice.HiddenWarnings))).Value;
 
     private Lazy<TileScene> Entry(string style, TimeChoice choice, Lazy<TileScene> create)
     {

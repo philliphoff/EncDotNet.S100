@@ -12,6 +12,25 @@ month. For package versions and release assets, see
   1:23,374, for example, both draw zoom 14, so WMS no longer shows soundings
   and other features that WMTS hides there. The layer's
   `MaxScaleDenominator` is now the minimum zoom's scale. See [WMS](cli.md#wms).
+- **Navigational warnings by validity in served tiles.** `s100 tiles serve`
+  draws only the S-124 warnings in force at the time a client asks for, with
+  `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its
+  view time: ended, cancelled and not-yet-in-force warnings are left out.
+  Without a time every warning draws, as before. See
+  [`tiles serve`](cli.md#tiles-serve).
+- **Dataset metadata from `tiles serve`.** When it renders datasets,
+  `s100 tiles serve` describes each one as JSON under `datasets`, and
+  `tiles.json` points to it in `s100.datasetsUrl`: the file, product and
+  edition, producer, the dataset's own bounds and coverage polygon, its time
+  steps and issue time, and its data dynamicity with the viewer's label. A GIS
+  client can zoom to one dataset instead of the union of all of them, without
+  opening the datasets itself. See [Dataset metadata](cli.md#dataset-metadata).
+- **The data revision of served tiles.** When `s100 tiles serve` renders
+  datasets, it publishes the fingerprint of the data and settings as
+  `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS
+  capabilities and in an `S100-Revision` header on `/healthz`. It changes when
+  `--refresh` reloads changed datasets, so a GIS client can put it in its tile
+  URLs to bust its own tile cache. See [`tiles serve`](cli.md#tiles-serve).
 - **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
   `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
   Pro and QGIS send when they export a layout. A 300 DPI map shows the same

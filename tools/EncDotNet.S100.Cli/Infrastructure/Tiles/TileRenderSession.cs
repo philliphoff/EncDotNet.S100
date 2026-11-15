@@ -59,6 +59,12 @@ internal sealed class TileRenderSession : IDisposable
     // Keyed by the mariner settings too (MarinerStyle.Key), as they change the portrayal.
     private readonly Dictionary<(PaletteType Palette, string Mariner, int Index), VectorPortrayalResult> _timelessPortrayals = [];
 
+    // The S-124 warnings, read on the first time asked for (issue #1499),
+    // and the parts left out at the last instant asked for: a client asks
+    // for many tiles at one time.
+    private readonly Lazy<SessionWarnings?> _warnings;
+    private volatile WarningsAtInstant? _lastWarnings;
+
     private TileRenderSession(
         TilesRenderSettings settings,
         IDisposable catalogueManager,
@@ -82,6 +88,7 @@ internal sealed class TileRenderSession : IDisposable
             .Distinct()
             .Order()
             .ToArray();
+        _warnings = new Lazy<SessionWarnings?>(ReadWarnings);
     }
 
     /// <summary>The product specification of each dataset, in input order.</summary>
@@ -92,6 +99,9 @@ internal sealed class TileRenderSession : IDisposable
 
     /// <summary>The tile encoding.</summary>
     public TileImageFormat Format { get; }
+
+    /// <summary>The opened datasets, in input order, as <see cref="Names"/> and <see cref="Specs"/> list them.</summary>
+    public IReadOnlyList<IDatasetProcessor> Processors => _processors;
 
     /// <summary>
     /// Opens and checks the datasets <paramref name="settings"/> names. On
@@ -383,10 +393,14 @@ internal sealed class TileRenderSession : IDisposable
     /// Mariner settings over the start-up ones (issue #1493); <see langword="null"/>
     /// for the start-up ones alone.
     /// </param>
-    public TileScene Prepare(string? palette = null, DateTime? time = null, IReadOnlyList<DateTime?>? steps = null, MarinerStyle? mariner = null)
+    /// <param name="hiddenWarnings">
+    /// The S-124 warning parts left out, by input index
+    /// (<see cref="TimeChoice.HiddenWarnings"/>); <see langword="null"/> to draw every warning.
+    /// </param>
+    public TileScene Prepare(string? palette = null, DateTime? time = null, IReadOnlyList<DateTime?>? steps = null, MarinerStyle? mariner = null, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings = null)
     {
         lock (_portrayGate)
-            return PrepareLocked(palette, time, steps, mariner);
+            return PrepareLocked(palette, time, steps, mariner, hiddenWarnings);
     }
 
     /// <summary>
@@ -395,9 +409,24 @@ internal sealed class TileRenderSession : IDisposable
     /// nearest the instant, however far away. With <paramref name="strict"/>
     /// (<c>--strict-time</c>), each draws its own step nearest the instant only
     /// when that step is at most half a step away (<see cref="StrictStep"/>),
-    /// and nothing otherwise.
+    /// and nothing otherwise. Either way S-124 warnings draw only when in
+    /// force at the instant (issue #1499), as the viewer's map draws them at
+    /// its view time (<see cref="NavigationalWarningSet.IsDrawnAt"/>).
     /// </summary>
     public TimeChoice ChooseTime(DateTime instant, bool strict)
+    {
+        var choice = ChooseStep(instant, strict);
+        return WarningsAt(AsUtc(instant)) is { } warnings
+            ? choice with
+            {
+                HiddenWarnings = warnings.Hidden,
+                Variant = Hash((choice.Variant ?? "-") + "|" + warnings.Signature),
+            }
+            : choice;
+    }
+
+    /// <summary>The steps drawn at <paramref name="instant"/>, before warnings are judged (<see cref="ChooseTime"/>).</summary>
+    private TimeChoice ChooseStep(DateTime instant, bool strict)
     {
         var snapped = SnapTime(instant);
         if (!strict || snapped is not { } at)
@@ -428,9 +457,93 @@ internal sealed class TileRenderSession : IDisposable
 
         // A short, stable name for the steps, for cache keys and file names.
         var signature = string.Join('.', steps.Select(s => s is { } t ? t.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-"));
-        var variant = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(signature)), 0, 8);
-        return new TimeChoice(at, steps, variant, !drawsSomething);
+        return new TimeChoice(at, steps, Hash(signature), !drawsSomething);
     }
+
+    /// <summary>A short, stable name for <paramref name="signature"/>: 16 lowercase hexadecimal characters.</summary>
+    private static string Hash(string signature) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(signature)), 0, 8);
+
+    /// <summary>
+    /// The S-124 warning parts not drawn at <paramref name="instant"/>, by
+    /// input index, or <see langword="null"/> when every part is drawn (or
+    /// there are none). A part is drawn when
+    /// <see cref="NavigationalWarningSet.IsDrawnAt"/> says so for the set of
+    /// every S-124 dataset served, so cancellations and in-force bulletins
+    /// count, as in the viewer; warnings not yet in force aren't drawn.
+    /// </summary>
+    internal WarningsAtInstant? WarningsAt(DateTime instant)
+    {
+        if (_warnings.Value is not { } warnings)
+            return null;
+        if (_lastWarnings is { } last && last.Instant == instant)
+            return last.Hidden is null ? null : last;
+
+        var at = new DateTimeOffset(AsUtc(instant));
+        var hidden = new IReadOnlySet<string>?[_processors.Count];
+        var signature = new System.Text.StringBuilder();
+        for (int i = 0; i < hidden.Length; i++)
+        {
+            if (warnings.Parts[i] is not { Count: > 0 } parts)
+                continue;
+
+            var left = parts
+                .Where(p => !warnings.Set.IsDrawnAt(p.Warning, at, showNotYetInForce: false))
+                .Select(p => p.FeatureRef)
+                .ToHashSet(StringComparer.Ordinal);
+            if (left.Count == 0)
+                continue;
+
+            hidden[i] = left;
+            signature.Append(i).Append(':').AppendJoin(',', left.Order(StringComparer.Ordinal)).Append(';');
+        }
+
+        var result = new WarningsAtInstant(instant, signature.Length == 0 ? null : hidden, signature.ToString());
+        _lastWarnings = result;
+        return result.Hidden is null ? null : result;
+    }
+
+    /// <summary>
+    /// Reads the parts and messages of every S-124 dataset, as the viewer's
+    /// Navigational warnings panel does; <see langword="null"/> when there are none.
+    /// </summary>
+    private SessionWarnings? ReadWarnings()
+    {
+        lock (_portrayGate)
+        {
+            var parts = new IReadOnlyList<NavigationalWarningFeature>?[_processors.Count];
+            var messages = new List<NavigationalWarningInfo>();
+            for (int i = 0; i < _processors.Count; i++)
+            {
+                if (!string.Equals(Specs[i], "S-124", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                NavigationalWarningInfo? message;
+                try
+                {
+                    parts[i] = _processors[i].GetNavigationalWarnings();
+                    message = _processors[i].GetNavigationalWarningMessage();
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    // A malformed dataset is drawn as it is, every warning.
+                    parts[i] = null;
+                    continue;
+                }
+
+                // A cancellation or bulletin may have no parts, yet ends others.
+                if (message is not null)
+                    messages.Add(message);
+                else
+                    messages.AddRange(parts[i]!.Select(p => p.Warning));
+            }
+
+            return parts.Any(p => p is { Count: > 0 }) ? new SessionWarnings(new NavigationalWarningSet(messages), parts) : null;
+        }
+    }
+
+    /// <summary>The S-124 warnings served: their set and each dataset's parts, by input index.</summary>
+    private sealed record SessionWarnings(NavigationalWarningSet Set, IReadOnlyList<NavigationalWarningFeature>?[] Parts);
 
     /// <summary>
     /// The step of <paramref name="sorted"/> nearest <paramref name="instant"/>,
@@ -507,7 +620,7 @@ internal sealed class TileRenderSession : IDisposable
     private static bool VariesWithTime(IDatasetProcessor processor) =>
         processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0;
 
-    private TileScene PrepareLocked(string? palette, DateTime? time, IReadOnlyList<DateTime?>? steps, MarinerStyle? marinerStyle)
+    private TileScene PrepareLocked(string? palette, DateTime? time, IReadOnlyList<DateTime?>? steps, MarinerStyle? marinerStyle, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings)
     {
         RenderCommand.TryParsePalette(palette ?? _settings.Palette, out var parsedPalette);
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
@@ -527,10 +640,15 @@ internal sealed class TileRenderSession : IDisposable
                 processor, parsedPalette, _settings.SymbolScale, _settings.TextScale, _settings.TimeStep, hidden,
                 displayModeId: displayModeId, viewport: viewport, instant: time,
                 nationalLanguage: nationalLanguage, mariner: contextMariner, ecdisDisplay: ecdisDisplay);
+            if (hiddenWarnings?[_processors.IndexOf(processor)] is { } hiddenParts)
+                context = context with { HiddenFeatures = hiddenParts };
             return steps is not null && VariesWithTime(processor)
                 ? context with { TimeStep = steps[_processors.IndexOf(processor)] }
                 : context;
         }
+
+        // Warnings left out at a time are portrayed for it, not cached.
+        bool Timeless(int index) => !VariesWithTime(_processors[index]) && hiddenWarnings?[index] is null;
 
         // With --strict-time, a time-varying dataset without a step at the
         // time asked for is left out.
@@ -550,7 +668,7 @@ internal sealed class TileRenderSession : IDisposable
 
             var processor = _processors[i];
             if (processor is IVectorPortrayalSource
-                && !VariesWithTime(processor)
+                && Timeless(i)
                 && _timelessPortrayals.TryGetValue((parsedPalette, marinerKey, i), out var cached))
             {
                 inputs[i] = ChartCompositeInput.ForVector(cached);
@@ -566,7 +684,7 @@ internal sealed class TileRenderSession : IDisposable
         {
             int i = pending[p].Index;
             inputs[i] = portrayed[p];
-            if (portrayed[p].Vector is { } vector && !VariesWithTime(_processors[i]))
+            if (portrayed[p].Vector is { } vector && Timeless(i))
                 _timelessPortrayals[(parsedPalette, marinerKey, i)] = vector;
         }
 
@@ -943,6 +1061,22 @@ internal sealed class TileScene
     public IReadOnlyList<VectorPortrayalResult> VectorResults { get; }
 
     /// <summary>
+    /// The declared data coverage (<c>DataCoverage</c>, or S-57 <c>M_COVR</c>)
+    /// of <paramref name="processor"/>'s portrayal in this scene; empty when it
+    /// declares none, isn't a vector dataset or isn't in the scene.
+    /// </summary>
+    public IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> CoverageOf(IDatasetProcessor processor)
+    {
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (ReferenceEquals(_processors[i], processor))
+                return _inputs[i]?.Vector?.CoverageAreas ?? [];
+        }
+
+        return [];
+    }
+
+    /// <summary>
     /// The renderer for <paramref name="zoom"/>, created once per zoom level.
     /// Coverage portrayal for the level runs on the work scheduler, so call
     /// this from outside a scheduler job.
@@ -1003,4 +1137,16 @@ internal sealed class TileScene
 /// </param>
 /// <param name="Variant">Tells apart choices with the same <paramref name="Time"/> and different <paramref name="Steps"/>; <see langword="null"/> without them.</param>
 /// <param name="Empty">Whether nothing draws at all.</param>
-internal sealed record TimeChoice(DateTime? Time, IReadOnlyList<DateTime?>? Steps = null, string? Variant = null, bool Empty = false);
+/// <param name="HiddenWarnings">
+/// The S-124 warning parts not in force at the time asked for, by input
+/// index (issue #1499), <see langword="null"/> for a dataset that draws all
+/// of its own; <see langword="null"/> when every warning draws.
+/// <paramref name="Variant"/> then tells the warnings drawn apart too.
+/// </param>
+internal sealed record TimeChoice(DateTime? Time, IReadOnlyList<DateTime?>? Steps = null, string? Variant = null, bool Empty = false, IReadOnlyList<IReadOnlySet<string>?>? HiddenWarnings = null);
+
+/// <summary>The S-124 warning parts left out at <paramref name="Instant"/> (<see cref="TileRenderSession.WarningsAt"/>).</summary>
+/// <param name="Instant">The time asked for, in UTC.</param>
+/// <param name="Hidden">The parts left out, by input index; <see langword="null"/> when every part draws.</param>
+/// <param name="Signature">A stable text of <paramref name="Hidden"/>, for cache keys.</param>
+internal sealed record WarningsAtInstant(DateTime Instant, IReadOnlyList<IReadOnlySet<string>?>? Hidden, string Signature);

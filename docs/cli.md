@@ -597,6 +597,16 @@ can't be opened, the old data keeps serving until the files change again.
 `--refresh 0` turns the checks off. A built tile set needs none: it's read at
 each request.
 
+When rendering datasets, the server publishes the data revision: the
+fingerprint the `--cache-dir` tiles are kept under (see below), 32 hexadecimal
+characters that change whenever a dataset or a setting that changes pixels
+does, including when `--refresh` reopens changed datasets. It's in
+`s100.revision` in the TileJSON, in the `updateSequence` attribute of the WMS
+and WMTS capabilities, and in the `S100-Revision` header of `/healthz`. A client
+that keeps its own tile cache, such as ArcGIS Pro for WMTS, can poll it and put
+it in its tile URLs (as an extra query parameter, which the server ignores) to
+fetch fresh tiles after a change. A built tile set has no revision.
+
 With `--cache-dir`, rendered tiles are also kept in that folder (in its
 `served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
@@ -644,6 +654,15 @@ The server has these routes:
   `null` when it has no data at that time. When the datasets draw other than at
   their steps nearest the nearest listed step, `s100.time` and the tile URL keep
   the `t` asked for.
+- When rendering S-124 navigational warnings, a `t` (or WMS `TIME`, or the
+  WMTS `Time` dimension) draws only the warnings in force at that instant, as
+  the viewer's map does at its view time: a warning that has ended, been
+  cancelled or dropped from the latest in-force bulletin, or isn't in force
+  yet, isn't drawn (S-98 §12.12). Without a time every warning draws, as
+  before. Times at which the same warnings are in force share their tiles, and
+  the TileJSON for such a `t` keeps it in `s100.time` and its tile URL. With
+  S-124 alone there are no time steps to list, so the capabilities advertise
+  no `Time` dimension; a client still sends `TIME=` (WMS, WMTS KVP) or `t`.
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
@@ -653,7 +672,8 @@ The server has these routes:
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
 - `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
-  It never has a token. See [`health`](#health).
+  It never has a token. When rendering datasets, its `S100-Revision` header
+  holds the data revision. See [`health`](#health).
 
 Every response allows any origin, so a page served from another port can use
 the tiles.
@@ -756,6 +776,50 @@ until the server stops, and survive the datasets being reloaded. A style whose
 hash isn't registered answers `404 Not Found` on the tile URLs and an exception
 on WMTS and WMS. A built tile set has no mariner settings; export one per set
 with the same options instead.
+
+### Dataset metadata
+
+When `tiles serve` renders datasets, `datasets` describes each of them, so a
+client needn't open the datasets itself. `tiles.json` points to it in
+`s100.datasetsUrl`. The document lists the datasets served now, so it follows
+a reload; a built tile set has none, and `datasets` answers
+`404 Not Found`.
+
+```json
+{
+  "notForNavigation": true,
+  "datasets": [
+    {
+      "id": "111US00_DBOFS_20260320T18Z_US4DE1BB",
+      "file": "111US00_DBOFS_20260320T18Z_US4DE1BB.h5",
+      "product": "S-111",
+      "edition": "1.0.0",
+      "producer": "US00",
+      "bounds": [-75.5999985, 38.7000008, -75.2999649, 39.0000343],
+      "coverage": { "type": "MultiPolygon", "coordinates": [ ... ] },
+      "coverageSource": "bounds",
+      "times": ["2026-03-20T19:00:00Z", "2026-03-20T20:00:00Z", ...],
+      "issueTime": "2026-03-20T19:22:48Z",
+      "dataDynamicity": { "code": 5, "value": "hydrodynamicForecast", "label": "Forecast" },
+      "notForNavigation": true
+    }
+  ]
+}
+```
+
+| Member | Content |
+|---|---|
+| `id` | The file name without its extension, with `-2`, `-3`, … when names repeat. |
+| `file` | The file name. |
+| `product`, `edition` | The product specification, such as `S-111`, and the edition the dataset declares, or `null`. |
+| `producer` | The producer code from the file name, by the product's naming convention: `US00` from `111US00_…`, `US` from the S-57 cell `US5MA1BO.000`. `null` when the name doesn't follow it. |
+| `bounds` | The dataset's own WGS-84 bounds, `[west, south, east, north]` as in TileJSON, or `null` when unknown. Use these, not the union in `tiles.json`, to zoom to a dataset. |
+| `coverage` | A GeoJSON MultiPolygon in WGS-84: the declared data coverage (S-101 `DataCoverage`, S-57 `M_COVR`) with its holes, or else the bounds. |
+| `coverageSource` | `dataCoverage` or `bounds`, for where `coverage` came from. |
+| `times` | The dataset's time steps in UTC, ascending; empty when it doesn't vary with time. |
+| `issueTime` | When a time-varying dataset was issued (a forecast's run), or `null`. |
+| `dataDynamicity` | How S-104 water levels and S-111 currents were produced: the S-104 `dataDynamicity` code, its name (`observation`, `astronomicalPrediction`, `analysisOrHybrid`, `hydrodynamicHindcast` or `hydrodynamicForecast`) and the viewer's label (`Observed`, `Predicted`, `Analysis`, `Hindcast` or `Forecast`). `null` when the dataset doesn't say. |
+| `notForNavigation` | Always `true`: nothing `tiles serve` serves is for navigation. |
 
 ### Run under a supervising process
 
