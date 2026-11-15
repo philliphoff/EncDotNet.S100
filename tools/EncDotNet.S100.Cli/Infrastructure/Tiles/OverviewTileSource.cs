@@ -70,6 +70,14 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
 
     public MarinerStyleRegistry? MarinerStyles => _inner.MarinerStyles;
 
+    // Legends describe the chart; the overview adds no row (issue #1503).
+    public bool HasLegend => _inner.HasLegend;
+
+    public (int Width, int Height)? LegendSize(string? style) => _inner.LegendSize(style);
+
+    public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+        _inner.ReadLegendAsync(style, options, cancellationToken);
+
     public bool HasDatasets => _inner.HasDatasets;
 
     public JsonObject? ToDatasetsJson() => _inner.ToDatasetsJson();

@@ -92,6 +92,34 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public bool HasDatasets => true;
 
+    public bool HasLegend => Current.HasLegend;
+
+    public (int Width, int Height)? LegendSize(string? style)
+    {
+        var generation = Acquire();
+        try
+        {
+            return generation.Source.LegendSize(style);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    public async ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.ReadLegendAsync(style, options, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
     public JsonObject? ToDatasetsJson()
     {
         var generation = Acquire();

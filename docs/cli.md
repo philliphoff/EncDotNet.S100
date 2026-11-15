@@ -670,7 +670,7 @@ The server has these routes:
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
 - `wms`, an [OGC WMS 1.3.0](#wms) service: GetCapabilities, GetMap, and,
-  when rendering datasets, GetFeatureInfo.
+  when rendering datasets, GetFeatureInfo and [GetLegendGraphic](#legends).
 - With `--manage-datasets`, a `POST` or `DELETE` of `datasets` adds or
   removes datasets. See [Add and remove datasets](#add-and-remove-datasets).
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
@@ -853,7 +853,10 @@ s100 tiles serve ./ENC_ROOT --overview
   WMS layer's `MaxScaleDenominator` and the WMTS `TileMatrixSetLimits` reach
   zoom 0 to match, so clients keep the layer visible.
 - The overview is the same for every set of mariner settings and at every
-  time, and follows the datasets when `--refresh` reloads them.
+  time, and follows the datasets when `--refresh` reloads them or
+  `--manage-datasets` changes them.
+- The [legends](#legends) describe the chart only; they have no row for the
+  overview outline.
 
 It is off by default, because it changes what existing clients get below the
 minimum zoom. Without it, a client that wants footprints can draw the
@@ -990,6 +993,9 @@ Tiles are served in both WMTS encodings:
 - **RESTful:** `wmts/1.0.0/s100/{Style}/WebMercatorQuad/{TileMatrix}/{TileRow}/{TileCol}.png`,
   with a `{Time}` segment after the style for time-varying datasets.
 
+When rendering datasets, each style has a `LegendURL`: the WMS
+[GetLegendGraphic](#legends) image of its key.
+
 A request the service can't answer gets an OWS exception report that names
 the parameter at fault. The service has no GetFeatureInfo; use [WMS](#wms)
 to identify features.
@@ -1072,10 +1078,49 @@ answer is in one of these formats (`INFO_FORMAT`):
 
 A built tile set has no datasets behind it, so its layer isn't queryable.
 
+**GetLegendGraphic** draws the key of a style; see [Legends](#legends).
+
 Requests in WMS 1.1.1 are answered too: their `SRS`, `X` and `Y` parameters,
 and EPSG:4326 boxes in longitude, latitude order. In 1.3.0, EPSG:4326 boxes
 are latitude first and CRS:84 boxes longitude first. A request the service
 can't answer gets a WMS service exception report.
+
+### Legends
+
+When rendering datasets, `tiles serve` draws the key of each style as one
+PNG image, for the legend GIS clients show next to the layer (ArcGIS Pro's
+Contents pane, QGIS's layer tree). The rows are the ones the viewer's Legend
+tab shows, from the same portrayal: a section per product (S-102 depth
+shades and safety contour, S-104 water levels, S-111 speed bands, S-124
+warnings, weather fields and so on) with its caption, and its group titles
+when it has more than one. Each style draws its rows in its palette, on a
+light sheet by day and a dark one at dusk and night, and with its
+[mariner settings](#mariner-settings), so four shades or another safety
+contour change the S-102 rows. A catalogue product with no legend of its own,
+such as S-101, has no rows: the viewer lists the symbols drawn in its view,
+and a server has no view.
+
+The WMS capabilities give each style a `LegendURL` with the image's size, and
+list the `sld:GetLegendGraphic` operation; the WMTS capabilities give each
+style a `LegendURL` to the same image. The request is:
+
+```text
+wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=s100&STYLE=night&FORMAT=image/png
+```
+
+| Parameter | Meaning |
+|---|---|
+| `LAYER` | `s100`. Required. |
+| `STYLE` | A style of the capabilities: a palette, or `{palette}-{hash}` of a registered settings set. The default style when left out. |
+| `FORMAT` | `image/png`, the only format and the default. |
+| `WIDTH`, `HEIGHT` | The size of each row's glyph in pixels, 1 to 256, as GeoServer reads them. 28 × 14 by default. |
+| `DPI`, `MAP_RESOLUTION`, `FORMAT_OPTIONS=dpi:N` | The display resolution, as for GetMap: text and glyphs scale by DPI / 96. |
+
+`SLD_VERSION` is accepted and ignored. The rows are those of the default time
+step; they don't change with time. The size in the capabilities is the
+default image's; for a registered set whose legend hasn't been drawn yet, it
+is the default style's until it has. A built tile set has no legend, and
+GetLegendGraphic answers a service exception.
 
 The server runs until you press Ctrl+C or it receives SIGTERM.
 

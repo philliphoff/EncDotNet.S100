@@ -87,6 +87,12 @@ internal static class WmsService
             return;
         }
 
+        if (string.Equals(request, LegendGraphicService.RequestName, StringComparison.OrdinalIgnoreCase))
+        {
+            await LegendGraphicService.HandleAsync(context, source, Get).ConfigureAwait(false);
+            return;
+        }
+
         bool getMap = string.Equals(request, "GetMap", StringComparison.OrdinalIgnoreCase)
             || string.Equals(request, "map", StringComparison.OrdinalIgnoreCase);
         bool getFeatureInfo = string.Equals(request, "GetFeatureInfo", StringComparison.OrdinalIgnoreCase)
@@ -168,7 +174,8 @@ internal static class WmsService
                 : null,
             styles.Select(style => new XElement(Wms + "Style",
                 new XElement(Wms + "Name", style),
-                new XElement(Wms + "Title", style))),
+                new XElement(Wms + "Title", style),
+                LegendGraphicService.WmsLegendUrl(source, style, baseUri, Wms, XLink))),
             new XElement(Wms + "MaxScaleDenominator", Number(maxScale)));
 
         var document = new XDocument(
@@ -188,7 +195,8 @@ internal static class WmsService
                     new XElement(Wms + "Request",
                         Operation("GetCapabilities", ["text/xml"], endpoint),
                         Operation("GetMap", MapFormats, endpoint),
-                        queryable ? Operation("GetFeatureInfo", InfoFormats, endpoint) : null),
+                        queryable ? Operation("GetFeatureInfo", InfoFormats, endpoint) : null,
+                        LegendGraphicService.WmsOperation(source, endpoint, Wms, XLink)),
                     new XElement(Wms + "Exception", new XElement(Wms + "Format", "XML")),
                     layer)));
 

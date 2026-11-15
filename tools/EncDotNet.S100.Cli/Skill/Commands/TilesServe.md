@@ -56,6 +56,14 @@ curves within 5 px, up to `FEATURE_COUNT` (default 1, max 200) features, as
 `application/geo+json`; each result is a Point at the click). Errors are a WMS
 `ServiceExceptionReport` with status 400.
 
+When rendering datasets, `REQUEST=GetLegendGraphic&LAYER=s100&STYLE=<style>`
+returns the style's key as a PNG (the viewer's Legend tab rows: a section per
+product with its caption and groups, in the style's palette and mariner
+settings; S-101 has no rows). `FORMAT` is `image/png`; `WIDTH`/`HEIGHT` set
+each row's glyph (default 28×14, max 256); `DPI`/`MAP_RESOLUTION`/
+`FORMAT_OPTIONS=dpi:N` scale it. Each WMS and WMTS style has a `LegendURL` to
+it, and the WMS capabilities list `sld:GetLegendGraphic`.
+
 For time-varying datasets (S-104, S-111), add `?t=<ISO 8601>` to a tile or
 `tiles.json` URL to pick the time step: it snaps to the nearest of the steps
 listed in TileJSON `s100.times`, the chosen one is echoed in `s100.time` and in

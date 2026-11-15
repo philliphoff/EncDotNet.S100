@@ -95,7 +95,8 @@ internal static class WmtsService
             styles.Select(style => new XElement(Wmts + "Style",
                 style == defaultStyle ? new XAttribute("isDefault", "true") : null,
                 new XElement(Ows + "Title", style),
-                new XElement(Ows + "Identifier", style))),
+                new XElement(Ows + "Identifier", style),
+                LegendGraphicService.WmtsLegendUrl(source, style, baseUri, Wmts, XLink))),
             new XElement(Wmts + "Format", format),
             times.Count > 0
                 ? new XElement(Wmts + "Dimension",
