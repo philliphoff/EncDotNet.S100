@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Dataset metadata from `tiles serve`.** When it renders datasets,
+  `s100 tiles serve` describes each one as JSON under `datasets`, and
+  `tiles.json` points to it in `s100.datasetsUrl`: the file, product and
+  edition, producer, the dataset's own bounds and coverage polygon, its time
+  steps and issue time, and its data dynamicity with the viewer's label. A GIS
+  client can zoom to one dataset instead of the union of all of them, without
+  opening the datasets itself. See [Dataset metadata](cli.md#dataset-metadata).
 - **The data revision of served tiles.** When `s100 tiles serve` renders
   datasets, it publishes the fingerprint of the data and settings as
   `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS

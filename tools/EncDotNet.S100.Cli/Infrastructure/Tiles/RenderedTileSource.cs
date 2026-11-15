@@ -126,6 +126,12 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public MarinerStyleRegistry MarinerStyles => _styles;
 
+    public bool HasDatasets => true;
+
+    // Coverage polygons come from the default scene's portrayal, which is
+    // cached (and prepared at start-up).
+    public JsonObject ToDatasetsJson() => DatasetsDocument.Build(_session, _scenes.Get(_defaultPalette, null));
+
     public IReadOnlyList<DateTime> Times => _session.Times;
 
     public DatasetFeatureQuery? FeatureQuery { get; }
