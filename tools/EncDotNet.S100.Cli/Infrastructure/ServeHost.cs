@@ -85,4 +85,26 @@ internal static class ServeHost
         var prefix = token is null ? string.Empty : Uri.EscapeDataString(token) + "/";
         return new Uri(string.Create(CultureInfo.InvariantCulture, $"http://{host}:{port}/{prefix}"));
     }
+
+    /// <summary>
+    /// A slim web application builder that watches no files (issue #1506).
+    /// </summary>
+    /// <remarks>
+    /// By default the host roots its content at the working directory and
+    /// reloads <c>appsettings.json</c> on change, which puts a file watcher on
+    /// that whole tree. On Windows a working directory given as an 8.3 short
+    /// path makes that watcher throw on a rename event that arrives with the
+    /// long path, on a thread pool thread, which ends the process. The servers
+    /// read no configuration files, so the content root is the app's own
+    /// folder and configuration doesn't reload: nothing is watched.
+    /// </remarks>
+    public static WebApplicationBuilder CreateBuilder() =>
+        WebApplication.CreateSlimBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+            Args = ["--" + ReloadConfigOnChangeKey + "=false"],
+        });
+
+    /// <summary>The host setting that turns configuration reload on change on or off.</summary>
+    internal const string ReloadConfigOnChangeKey = "hostBuilder:reloadConfigOnChange";
 }
