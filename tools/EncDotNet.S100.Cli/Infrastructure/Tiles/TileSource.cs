@@ -36,6 +36,14 @@ internal interface ITileSource
     DatasetFeatureQuery? FeatureQuery => null;
 
     /// <summary>
+    /// The mariner settings sets clients can register and ask for as
+    /// <c>{palette}-{hash}</c> styles (issue #1493), each listed in
+    /// <see cref="Palettes"/> once registered; <see langword="null"/> when the
+    /// tiles aren't rendered here (a built tile set).
+    /// </summary>
+    MarinerStyleRegistry? MarinerStyles => null;
+
+    /// <summary>
     /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
     /// (rows numbered from the north) in <paramref name="palette"/> (one of
     /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at

@@ -1,5 +1,8 @@
 using System.ComponentModel;
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Cli.Infrastructure.Tiles;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Rendering.Scene;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -109,6 +112,58 @@ internal abstract class TilesRenderSettings : CommandSettings
     [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod or ice-navigational (PROVISIONAL preview, not a POLARIS/RIO computation).")]
     public string? DisplayMode { get; init; }
 
+    [CommandOption("--display-category <CATEGORY>")]
+    [Description("Mariner setting: the ECDIS display category, display-base, standard, other-information or all. Default: every viewing group (all).")]
+    public string? DisplayCategory { get; init; }
+
+    [CommandOption("--safety-contour <METRES>")]
+    [Description("Mariner setting: the safety contour in metres (S-101 SafetyContour). Default 30.")]
+    public double? SafetyContour { get; init; }
+
+    [CommandOption("--safety-depth <METRES>")]
+    [Description("Mariner setting: the safety depth in metres; shallower soundings are emphasised (S-101 SafetyDepth). Default 30.")]
+    public double? SafetyDepth { get; init; }
+
+    [CommandOption("--shallow-contour <METRES>")]
+    [Description("Mariner setting: the shallow contour in metres, used with --four-shades (S-101 ShallowContour). Default 2.")]
+    public double? ShallowContour { get; init; }
+
+    [CommandOption("--deep-contour <METRES>")]
+    [Description("Mariner setting: the deep contour in metres, used with --four-shades (S-101 DeepContour). Default 30.")]
+    public double? DeepContour { get; init; }
+
+    [CommandOption("--four-shades")]
+    [Description("Mariner setting: shade depth areas in four shades rather than two (S-101 FourShades).")]
+    public bool FourShades { get; init; }
+
+    [CommandOption("--no-soundings")]
+    [Description("Mariner setting: don't draw soundings (S-101 viewing group 33010).")]
+    public bool NoSoundings { get; init; }
+
+    [CommandOption("--no-shallow-water-dangers")]
+    [Description("Mariner setting: don't emphasise isolated dangers in shallow water (S-101 ShallowWaterDangers).")]
+    public bool NoShallowWaterDangers { get; init; }
+
+    [CommandOption("--symbolized-boundaries")]
+    [Description("Mariner setting: draw symbolized area boundaries rather than plain ones (S-101 PlainBoundaries off).")]
+    public bool SymbolizedBoundaries { get; init; }
+
+    [CommandOption("--simplified-symbols")]
+    [Description("Mariner setting: draw simplified point symbols rather than paper-chart ones (S-101 SimplifiedSymbols).")]
+    public bool SimplifiedSymbols { get; init; }
+
+    [CommandOption("--full-light-lines")]
+    [Description("Mariner setting: draw light sector legs to their full nominal range (S-101 FullLightLines).")]
+    public bool FullLightLines { get; init; }
+
+    [CommandOption("--ignore-scamin")]
+    [Description("Mariner setting: draw features at every scale, ignoring their scale minimum (S-101 IgnoreScaleMinimum).")]
+    public bool IgnoreScaleMinimum { get; init; }
+
+    [CommandOption("--depth-unit <UNIT>")]
+    [Description("Mariner setting: the unit depths are shown in: metres (default), feet, fathoms-feet or fathoms.")]
+    public string? DepthUnit { get; init; }
+
     [CommandOption("--metatile <TILES>")]
     [Description("Render blocks of N x N tiles at once and cut them apart (1-16, default 4). Larger blocks are faster for dense data and use more memory.")]
     [DefaultValue(4)]
@@ -128,6 +183,35 @@ internal abstract class TilesRenderSettings : CommandSettings
     public bool Debug { get; init; }
 
     public bool IsComposite => Layers.Length > 0;
+
+    /// <summary>
+    /// The mariner settings chosen with the options above (issue #1493), only
+    /// those given set, so tiles rendered without any look as they always have.
+    /// </summary>
+    public MarinerStyle MarinerStyle => new()
+    {
+        DisplayCategory = TryParseDisplayCategory(DisplayCategory, out var category) ? category : null,
+        SafetyContour = SafetyContour,
+        SafetyDepth = SafetyDepth,
+        ShallowContour = ShallowContour,
+        DeepContour = DeepContour,
+        FourShades = FourShades ? true : null,
+        Soundings = NoSoundings ? false : null,
+        ShallowWaterDangers = NoShallowWaterDangers ? false : null,
+        PlainBoundaries = SymbolizedBoundaries ? false : null,
+        SimplifiedSymbols = SimplifiedSymbols ? true : null,
+        FullLightLines = FullLightLines ? true : null,
+        IgnoreScaleMinimum = IgnoreScaleMinimum ? true : null,
+        DepthUnit = TryParseDepthUnit(DepthUnit, out var unit) ? unit : null,
+    };
+
+    /// <summary>Parses <c>--display-category</c>: a category name, with or without hyphens, in any case.</summary>
+    internal static bool TryParseDisplayCategory(string? text, out EcdisDisplayCategory category) =>
+        MarinerStyle.TryParseName(text?.Replace("-", string.Empty, StringComparison.Ordinal), out category);
+
+    /// <summary>Parses <c>--depth-unit</c>: a unit name, with or without hyphens, in any case.</summary>
+    internal static bool TryParseDepthUnit(string? text, out DepthUnit unit) =>
+        MarinerStyle.TryParseName(text?.Replace("-", string.Empty, StringComparison.Ordinal), out unit);
 
     public bool IsExplicitExchangeSet => !string.IsNullOrWhiteSpace(ExchangeSet);
 
@@ -249,6 +333,21 @@ internal abstract class TilesRenderSettings : CommandSettings
         if (DisplayMode is not null && !RenderCommand.TryParseDisplayMode(DisplayMode, out _))
             return ValidationResult.Error(
                 $"Invalid --display-mode value '{DisplayMode}'. Use ice-concentration, ice-sod or ice-navigational.");
+        if (DisplayCategory is not null && !TryParseDisplayCategory(DisplayCategory, out _))
+            return ValidationResult.Error(
+                $"Invalid --display-category value '{DisplayCategory}'. Use display-base, standard, other-information or all.");
+        if (DepthUnit is not null && !TryParseDepthUnit(DepthUnit, out _))
+            return ValidationResult.Error($"Invalid --depth-unit value '{DepthUnit}'. Use metres, feet, fathoms-feet or fathoms.");
+        foreach (var (option, depth) in new[]
+                 {
+                     ("--safety-contour", SafetyContour), ("--safety-depth", SafetyDepth),
+                     ("--shallow-contour", ShallowContour), ("--deep-contour", DeepContour),
+                 })
+        {
+            if (depth is { } metres && !MarinerStyle.IsValidDepth(metres))
+                return ValidationResult.Error($"{option} must be a depth in metres from 0 to {MarinerStyle.MaxDepthMetres:0}.");
+        }
+
         if (Metatile is < 1 or > 16)
             return ValidationResult.Error("--metatile must be between 1 and 16.");
         if (Parallel is < 1)
