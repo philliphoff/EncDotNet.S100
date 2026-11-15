@@ -487,7 +487,7 @@ internal sealed class SceneCache(TileRenderSession session)
     /// <paramref name="choice"/>, prepared on first use.
     /// </summary>
     public TileScene Get(string style, string palette, MarinerStyle? mariner, TimeChoice choice) =>
-        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner))).Value;
+        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner, choice.HiddenWarnings))).Value;
 
     private Lazy<TileScene> Entry(string style, TimeChoice choice, Lazy<TileScene> create)
     {
