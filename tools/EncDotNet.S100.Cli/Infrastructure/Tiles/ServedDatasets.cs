@@ -8,7 +8,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 
 /// <summary>
 /// Adds datasets to and removes them from a running <c>tiles serve</c>
-/// (<c>--manage-datasets</c>, issue #1494), through <c>{prefix}/datasets</c>.
+/// (<c>--manage-datasets</c>, issue #1494), through <c>POST</c> and
+/// <c>DELETE</c> <c>{prefix}/datasets</c>. A <c>GET</c> there is the dataset
+/// metadata document (issue #1504), which describes whichever set serves.
 /// Thread-safe: changes are made one at a time.
 /// </summary>
 /// <remarks>
@@ -162,8 +164,8 @@ internal sealed class ServedDatasets
                 return new Result(StatusCodes.Status422UnprocessableEntity, $"The datasets couldn't be opened: {e.Message}");
             }
 
-            // TODO(#1497): bump the published data revision here once G5 lands;
-            // the session fingerprint already changes with the set.
+            // The published revision (issue #1497) follows: it is the new
+            // set's fingerprint, which includes the changes.
             return replaced
                 ? new Result(StatusCodes.Status200OK)
                 : new Result(StatusCodes.Status422UnprocessableEntity, "The datasets couldn't be opened; the server's output says why. The previous datasets are still served.");
@@ -175,17 +177,16 @@ internal sealed class ServedDatasets
     }
 
     /// <summary>
-    /// Maps <c>GET</c>, <c>POST</c> (add) and <c>DELETE</c> (remove)
-    /// <c>{prefix}/datasets</c> on <paramref name="app"/>. A change's body is
-    /// JSON, <c>{"paths": ["…"]}</c> (or <c>{"path": "…"}</c>), sent as
-    /// <c>application/json</c>; every response lists the datasets served.
+    /// Maps <c>POST</c> (add) and <c>DELETE</c> (remove) <c>{prefix}/datasets</c>
+    /// on <paramref name="app"/>. A change's body is JSON,
+    /// <c>{"paths": ["…"]}</c> (or <c>{"path": "…"}</c>), sent as
+    /// <c>application/json</c>; every response lists the datasets then served.
     /// </summary>
     /// <param name="app">The web application.</param>
     /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
     /// <param name="datasets">The datasets served.</param>
     public static void Map(WebApplication app, string prefix, ServedDatasets datasets)
     {
-        app.MapGet(prefix + "/" + Path, context => WriteAsync(context, datasets, StatusCodes.Status200OK, null));
         app.MapPost(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.AddAsync));
         app.MapDelete(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.RemoveAsync));
     }

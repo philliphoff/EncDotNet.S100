@@ -7,12 +7,18 @@ month. For package versions and release assets, see
 ## November 2026
 
 - **Add and remove datasets while serving.** With `--manage-datasets`,
-  `s100 tiles serve` lists its datasets at `datasets` and adds and removes
-  them on a `POST` or `DELETE` there, without restarting. The new set serves
-  once it's portrayed, and the TileJSON, WMTS and WMS documents describe it.
+  `s100 tiles serve` adds and removes datasets on a `POST` or `DELETE` of
+  `datasets`, without restarting. The new set serves once it's portrayed,
+  and the TileJSON, WMTS and WMS documents and the data revision follow it.
   Tiles are cached under the datasets that reach them, so adding a cell
   renders only its own tiles. Without the option nothing changes. See
   [Add and remove datasets](cli.md#add-and-remove-datasets).
+- **The data revision of served tiles.** When `s100 tiles serve` renders
+  datasets, it publishes the fingerprint of the data and settings as
+  `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS
+  capabilities and in an `S100-Revision` header on `/healthz`. It changes when
+  `--refresh` reloads changed datasets, so a GIS client can put it in its tile
+  URLs to bust its own tile cache. See [`tiles serve`](cli.md#tiles-serve).
 - **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
   `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
   Pro and QGIS send when they export a layout. A 300 DPI map shows the same

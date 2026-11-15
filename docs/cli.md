@@ -597,6 +597,16 @@ can't be opened, the old data keeps serving until the files change again.
 `--refresh 0` turns the checks off. A built tile set needs none: it's read at
 each request.
 
+When rendering datasets, the server publishes the data revision: the
+fingerprint the `--cache-dir` tiles are kept under (see below), 32 hexadecimal
+characters that change whenever a dataset or a setting that changes pixels
+does, including when `--refresh` reopens changed datasets. It's in
+`s100.revision` in the TileJSON, in the `updateSequence` attribute of the WMS
+and WMTS capabilities, and in the `S100-Revision` header of `/healthz`. A client
+that keeps its own tile cache, such as ArcGIS Pro for WMTS, can poll it and put
+it in its tile URLs (as an extra query parameter, which the server ignores) to
+fetch fresh tiles after a change. A built tile set has no revision.
+
 With `--cache-dir`, rendered tiles are also kept in that folder (in its
 `served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
@@ -649,13 +659,14 @@ The server has these routes:
   such as QGIS and ArcGIS Pro can add the tiles.
 - `wms`, an [OGC WMS 1.3.0](#wms) service: GetCapabilities, GetMap, and,
   when rendering datasets, GetFeatureInfo.
-- With `--manage-datasets`, `datasets` lists the datasets served, and adds
-  and removes them. See [Add and remove datasets](#add-and-remove-datasets).
+- With `--manage-datasets`, a `POST` or `DELETE` of `datasets` adds or
+  removes datasets. See [Add and remove datasets](#add-and-remove-datasets).
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
 - `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
-  It never has a token. See [`health`](#health).
+  It never has a token. When rendering datasets, its `S100-Revision` header
+  holds the data revision. See [`health`](#health).
 
 Every response allows any origin, so a page served from another port can use
 the tiles.
@@ -760,64 +771,6 @@ hash isn't registered answers `404 Not Found` on the tile URLs and an exception
 on WMTS and WMS. A built tile set has no mariner settings; export one per set
 with the same options instead.
 
-### Add and remove datasets
-
-With `--manage-datasets`, a client can change the datasets `tiles serve`
-renders without restarting it, through the `datasets` route. Like every
-other route it lives under the token, if there is one. Without the option the
-route doesn't exist.
-
-- `GET datasets` lists the datasets served, in drawing order, each with its
-  `path`, file `name` and `spec`.
-- `POST datasets` with `{"paths": ["…"]}` (or `{"path": "…"}`) adds
-  datasets. The paths are files on the server's computer, relative to the
-  folder it was started in unless absolute. Those already served are left as
-  they are.
-- `DELETE datasets` with the same body removes datasets. Any served dataset
-  can be removed, including one of those it started with, but at least one
-  must remain.
-
-The body must be sent as `application/json`. Each request answers with the
-datasets then served:
-
-```bash
-curl -X POST http://127.0.0.1:8200/datasets \
-  -H "Content-Type: application/json" \
-  -d '{ "paths": ["/charts/US5MA1BO.000"] }'
-```
-
-```json
-{
-  "datasets": [
-    { "path": "/charts/US4MA1BO.000", "name": "US4MA1BO.000", "spec": "S-57" },
-    { "path": "/charts/US5MA1BO.000", "name": "US5MA1BO.000", "spec": "S-57" }
-  ]
-}
-```
-
-A change opens and portrays the new set of datasets while the old one keeps
-serving, and the request returns once the new set serves. The TileJSON, WMTS
-and WMS documents then describe it: its area, zoom levels and time steps.
-Changes are made one at a time. A request answers `400 Bad Request`
-for a malformed body, a path that isn't a file or a file that isn't a dataset,
-`404 Not Found` for removing a dataset that isn't served, `409 Conflict` for
-removing every dataset, `415 Unsupported Media Type` for a body that isn't
-JSON, and `422 Unprocessable Entity` when the new set can't be opened; the old
-set then keeps serving. Each error response has an `error` member saying why.
-
-Each tile is cached under the datasets that reach it (those whose extent comes
-within a tile of its block), not under every dataset served, in memory and in
-`--cache-dir`. Adding a cell therefore renders only the tiles it reaches, and
-the others are served from the cache. The latitude the zoom levels' scales are
-measured at is kept from the datasets the server started with, so adding a
-dataset elsewhere doesn't change how the others draw; it can differ slightly
-from a server started with the new set. A dataset whose extent isn't known
-reaches every tile. `--refresh` still reopens the datasets when their files
-change, the added ones included.
-
-Changes last until the server stops. To serve the same set again after a
-restart, pass it on the command line.
-
 ### Run under a supervising process
 
 A program that starts `tiles serve` itself, such as a GIS add-in, can pass
@@ -847,6 +800,65 @@ while datasets are portrayed can come before it. The members are:
 ```bash
 s100 tiles serve exchange-set/ --port 0 --ready-json
 ```
+
+### Add and remove datasets
+
+With `--manage-datasets`, a client can change the datasets `tiles serve`
+renders without restarting it, with a `POST` or `DELETE` of `datasets`.
+Like every other route it lives under the token, if there is one. Without
+the option the datasets can't be changed.
+
+- `POST datasets` with `{"paths": ["…"]}` (or `{"path": "…"}`) adds
+  datasets. The paths are files on the server's computer, relative to the
+  folder it was started in unless absolute. Those already served are left as
+  they are.
+- `DELETE datasets` with the same body removes datasets. Any served dataset
+  can be removed, including one of those it started with, but at least one
+  must remain.
+
+The body must be sent as `application/json`. Each request answers with the
+datasets then served, in drawing order, each with its `path`, file `name`
+and `spec`:
+
+```bash
+curl -X POST http://127.0.0.1:8200/datasets \
+  -H "Content-Type: application/json" \
+  -d '{ "paths": ["/charts/US5MA1BO.000"] }'
+```
+
+```json
+{
+  "datasets": [
+    { "path": "/charts/US4MA1BO.000", "name": "US4MA1BO.000", "spec": "S-57" },
+    { "path": "/charts/US5MA1BO.000", "name": "US5MA1BO.000", "spec": "S-57" }
+  ]
+}
+```
+
+A change opens and portrays the new set of datasets while the old one keeps
+serving, and the request returns once the new set serves. The TileJSON, WMTS
+and WMS documents then describe it: its area, zoom levels and time steps. Its
+data revision (`s100.revision` in the TileJSON, `updateSequence` in the
+capabilities, the `S100-Revision` header on `/healthz`) changes too, and is
+the same again when the set is. Changes are made one at a time. A request answers `400 Bad Request`
+for a malformed body, a path that isn't a file or a file that isn't a dataset,
+`404 Not Found` for removing a dataset that isn't served, `409 Conflict` for
+removing every dataset, `415 Unsupported Media Type` for a body that isn't
+JSON, and `422 Unprocessable Entity` when the new set can't be opened; the old
+set then keeps serving. Each error response has an `error` member saying why.
+
+Each tile is cached under the datasets that reach it (those whose extent comes
+within a tile of its block), not under every dataset served, in memory and in
+`--cache-dir`. Adding a cell therefore renders only the tiles it reaches, and
+the others are served from the cache. The latitude the zoom levels' scales are
+measured at is kept from the datasets the server started with, so adding a
+dataset elsewhere doesn't change how the others draw; it can differ slightly
+from a server started with the new set. A dataset whose extent isn't known
+reaches every tile. `--refresh` still reopens the datasets when their files
+change, the added ones included.
+
+Changes last until the server stops. To serve the same set again after a
+restart, pass it on the command line.
 
 ### WMTS
 

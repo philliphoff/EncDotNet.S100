@@ -66,6 +66,9 @@ internal sealed partial class DiskTileCache : IDisposable
     /// <summary>The folder this cache's tiles go in.</summary>
     public string Folder => Path.Combine(_kind.Directory, _fingerprint);
 
+    /// <summary>The fingerprint of the data and settings the cached tiles were rendered from.</summary>
+    public string Fingerprint => _fingerprint;
+
     /// <summary>The bytes counted against the budget, across every fingerprint folder.</summary>
     public long Size => _kind.TotalBytes;
 

@@ -90,6 +90,9 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public MarinerStyleRegistry? MarinerStyles => Current.MarinerStyles;
 
+    /// <summary>The revision of the datasets currently served; changes when they are reopened.</summary>
+    public string? Revision => Current.Revision;
+
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         var generation = Acquire();

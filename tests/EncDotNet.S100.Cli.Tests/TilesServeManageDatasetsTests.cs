@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Commands;
+using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
 using EncDotNet.S100.Rendering.Scene;
 
@@ -12,17 +13,17 @@ namespace EncDotNet.S100.Cli.Tests;
 /// Tests for <c>tiles serve --manage-datasets</c> (issue #1494): datasets added
 /// and removed while serving, the tiles of those still served staying cached.
 /// </summary>
-public sealed class TilesServeDatasetsTests : IDisposable
+public sealed class TilesServeManageDatasetsTests : IDisposable
 {
     private static string S57 => Path.Combine(AppContext.BaseDirectory, "TestData", "US5MA1BO.000");
 
     // Aids to navigation in Chesapeake Bay, far from the S-57 cell (Boston).
     private static string S125 => Path.Combine(AppContext.BaseDirectory, "TestData", "S125", "aton_point.gml");
 
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "tiles-serve-datasets-" + Guid.NewGuid().ToString("N"));
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "tiles-serve-manage-datasets-" + Guid.NewGuid().ToString("N"));
     private readonly List<string> _log = [];
 
-    public TilesServeDatasetsTests() => Directory.CreateDirectory(_root);
+    public TilesServeManageDatasetsTests() => Directory.CreateDirectory(_root);
 
     public void Dispose()
     {
@@ -281,11 +282,9 @@ public sealed class TilesServeDatasetsTests : IDisposable
         var uri = new Uri(server.BaseUri, ServedDatasets.Path);
 
         // Only under the token.
-        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/datasets"), ct)).StatusCode);
-
-        var listed = JsonNode.Parse(await http.GetStringAsync(uri, ct))!;
-        Assert.Equal(cell, (string?)listed["datasets"]![0]!["path"]);
-        Assert.Equal("S-57", (string?)listed["datasets"]![0]!["spec"]);
+        using (var outside = await http.PostAsJsonAsync(new Uri($"http://127.0.0.1:{server.Port}/datasets"), new { paths = new[] { atons } }, ct))
+            Assert.Equal(HttpStatusCode.NotFound, outside.StatusCode);
+        Assert.Single(datasets.Datasets);
 
         // Not JSON: refused, as a form posted from another site would be.
         using (var form = await http.PostAsync(uri, new StringContent("{\"paths\": [\"" + atons + "\"]}", Encoding.UTF8, "text/plain"), ct))
@@ -296,6 +295,7 @@ public sealed class TilesServeDatasetsTests : IDisposable
             Assert.Equal(HttpStatusCode.OK, add.StatusCode);
             var json = JsonNode.Parse(await add.Content.ReadAsStringAsync(ct))!;
             Assert.Equal([cell, atons], json["datasets"]!.AsArray().Select(d => (string?)d!["path"]));
+            Assert.Equal("S-125", (string?)json["datasets"]![1]!["spec"]);
         }
 
         // The documents describe the new set.
@@ -318,7 +318,7 @@ public sealed class TilesServeDatasetsTests : IDisposable
     }
 
     [Fact]
-    public async Task Without_manage_datasets_there_is_no_datasets_endpoint()
+    public async Task Without_manage_datasets_datasets_cannot_be_changed()
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
         Assert.Equal(0, TilesServeCommand.OpenRendered(SettingsFor(Copy(S57)), out var rendered));
@@ -327,7 +327,52 @@ public sealed class TilesServeDatasetsTests : IDisposable
         await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, token: null, cancellationToken: ct);
         using var http = new HttpClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri(server.BaseUri, ServedDatasets.Path), ct)).StatusCode);
+        // Not found, or not allowed where a GET describes the datasets (issue #1504).
+        using var add = await http.PostAsJsonAsync(new Uri(server.BaseUri, ServedDatasets.Path), new { paths = new[] { Copy(S125) } }, ct);
+        Assert.Contains(add.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed });
+        using var remove = new HttpRequestMessage(HttpMethod.Delete, new Uri(server.BaseUri, ServedDatasets.Path)) { Content = JsonContent.Create(new { path = "x" }) };
+        Assert.Contains((await http.SendAsync(remove, ct)).StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed });
+        Assert.Single(source.Session.Paths);
+    }
+
+    [Fact]
+    public async Task A_change_publishes_a_new_revision()
+    {
+        Assert.SkipUnless(File.Exists(S57) && File.Exists(S125), "Fixtures not present.");
+        var cell = Copy(S57);
+        var atons = Copy(S125);
+        var (source, datasets) = Managed(SettingsFor(cell));
+        await using var _ = source;
+        var ct = TestContext.Current.CancellationToken;
+        await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, "tok", cancellationToken: ct, datasets: datasets);
+        using var http = new HttpClient();
+        var healthz = new Uri($"http://127.0.0.1:{server.Port}{ServeHost.HealthPath}");
+
+        async Task<(string? TileJson, string? Health)> RevisionsAsync()
+        {
+            var tileJson = JsonNode.Parse(await http.GetStringAsync(new Uri(server.BaseUri, "tiles.json"), ct))!;
+            using var health = await http.GetAsync(healthz, ct);
+            health.EnsureSuccessStatusCode();
+            return ((string?)tileJson["s100"]!["revision"], health.Headers.GetValues(ServeHost.RevisionHeader).Single());
+        }
+
+        var before = await RevisionsAsync();
+        Assert.NotNull(before.TileJson);
+        Assert.Equal(before.TileJson, before.Health);
+
+        using (var add = await http.PostAsJsonAsync(new Uri(server.BaseUri, ServedDatasets.Path), new { paths = new[] { atons } }, ct))
+            Assert.Equal(HttpStatusCode.OK, add.StatusCode);
+        var added = await RevisionsAsync();
+        Assert.NotEqual(before.TileJson, added.TileJson);
+        Assert.Equal(added.TileJson, added.Health);
+
+        // Removing it serves the start-up set, at its revision, again.
+        Assert.True((await datasets.RemoveAsync([atons])).Succeeded);
+        Assert.Equal(before, await RevisionsAsync());
+
+        // An unchanged set keeps its revision.
+        Assert.Equal(200, (await datasets.AddAsync([cell])).Status);
+        Assert.Equal(before, await RevisionsAsync());
     }
 
     [Fact]

@@ -47,7 +47,7 @@ internal sealed class TileServer : IAsyncDisposable
     public int Port => BaseUri.Port;
 
     /// <summary>Starts serving <paramref name="source"/> on <paramref name="address"/>:<paramref name="port"/> (0 for any free port).</summary>
-    /// <remarks>With <paramref name="datasets"/>, <c>datasets</c> adds and removes datasets (issue #1494).</remarks>
+    /// <remarks>With <paramref name="datasets"/>, a <c>POST</c> or <c>DELETE</c> of <c>datasets</c> adds or removes datasets (issue #1494).</remarks>
     public static async Task<TileServer> StartAsync(
         ITileSource source,
         IPAddress address,
@@ -80,7 +80,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
-        ServeHost.MapHealth(app);
+        ServeHost.MapHealth(app, () => source.Revision);
         if (viewer)
             app.MapGet(prefix + "/", ServeViewerAsync);
 
