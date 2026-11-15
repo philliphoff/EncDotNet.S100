@@ -346,6 +346,9 @@ internal sealed class LegendService : IDisposable
         var timeState = timed.Length == 0 ? LegendTimeState.None
             : drawing is not null ? LegendTimeState.Data
             : LegendTimeState.NoData;
+        // How its values were produced (#1505): the drawing dataset's, else the topmost that says.
+        var kindOf = datasets.FirstOrDefault(d => drawing is not null && ReferenceEquals(d.Entry?.LayerTime, drawing) && d.Entry!.DataDynamicity is not null)?.Entry
+            ?? datasets.FirstOrDefault(d => d.Entry?.DataDynamicity is not null)?.Entry;
 
         return new LegendSection
         {
@@ -356,6 +359,8 @@ internal sealed class LegendService : IDisposable
             DatasetIds = [.. datasets.Select(d => d.Id)],
             TimeSummary = (drawing ?? timed.FirstOrDefault())?.Text,
             TimeState = timeState,
+            DataDynamicity = kindOf?.DataDynamicity,
+            IssueTime = kindOf?.IssueTime,
             IsInView = datasets.Any(d => IsInView(d.Entry)),
             IsExpanded = !_expanded.TryGetValue(section.Id, out var expanded) || expanded,
             Plane = section.Plane,

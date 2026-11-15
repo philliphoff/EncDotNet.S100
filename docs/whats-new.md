@@ -13,6 +13,14 @@ month. For package versions and release assets, see
   drawn directly at the print resolution, and may be larger than 4096 pixels.
   Requests without them are drawn as before. See
   [WMS](cli.md#wms).
+- **Observed, predicted or forecast.** The viewer labels S-104 water levels
+  and S-111 currents by how they were produced, from S-104 `dataDynamicity`
+  and S-111 `typeOfCurrentData`: **Observed**, **Predicted · astronomical
+  tide only, not a forecast**, **Analysis**, **Hindcast** or **Forecast, run
+  {time}**, the run from the dataset's issue time. Object information shows it
+  in a **Data** row and the Legend after the section's source. A dataset that
+  doesn't say gets no label. SoundCharts for ArcGIS uses the same words.
+  Processors report it as `ITimeAwareDatasetProcessor.DataDynamicity`.
 - **`s100` as a container image.** `ghcr.io/philliphoff/s100` runs `s100`
   on Linux x64 and arm64 with nothing else to install. It runs as a non-root
   user, reads datasets from `/data`, and keeps tiles in `/cache` and the tide
@@ -45,6 +53,11 @@ month. For package versions and release assets, see
   bearer token, it refuses requests from web pages on other origins, and it
   leaves out the tools that open files by path or change the Library unless
   you pass `--allow-changes`. See [MCP over HTTP](cli.md#mcp-over-http).
+- **A start-up line for programs.** `s100 tiles serve --ready-json` prints
+  one line of JSON when the server is listening, with the bound port, the
+  token and the tile, TileJSON, WMTS, WMS and health check URLs, so a program
+  that starts it with `--port 0` needn't read the start-up text. See
+  [Run under a supervising process](cli.md#run-under-a-supervising-process).
 - **Serve charts to a web map or GIS.** A new task page walks through
   `tiles serve` with QGIS, MapLibre and Leaflet; see
   [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md).
@@ -641,6 +654,12 @@ month. For package versions and release assets, see
   Annex C leaves to the converter. It's for testing the S-57 → S-101
   translation and for tools that read only S-57, not for producing ENCs. See
   [Converting S-101 to S-57](s101-to-s57.md).
+
+- **`tiles serve` no longer exits on a file rename.** `tiles serve`,
+  `feed serve` and `mcp serve --transport http` no longer watch the working
+  directory for configuration changes. On Windows, a server started from a
+  short (8.3) path could end with an `ArgumentOutOfRangeException` when a
+  file under that folder was renamed.
 
 ## October 2026
 

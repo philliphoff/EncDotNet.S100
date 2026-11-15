@@ -70,7 +70,8 @@ public static class S104FixtureBuilder
         int? verticalDatum = null,
         ProjectedGrid? projected = null,
         string? productSpecification = null,
-        IReadOnlyDictionary<string, object>? extraRootAttributes = null)
+        IReadOnlyDictionary<string, object>? extraRootAttributes = null,
+        int? dataDynamicity = null)
         where TRow : struct
     {
         var instance = new H5Group
@@ -93,6 +94,8 @@ public static class S104FixtureBuilder
                 ["values"] = values,
             },
         };
+        if (dataDynamicity is int dynamicity)
+            instance.Attributes["dataDynamicity"] = (byte)dynamicity;
 
         var rootAttributes = new Dictionary<string, object>
         {

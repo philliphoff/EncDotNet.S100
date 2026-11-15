@@ -117,6 +117,7 @@ internal sealed partial class DiskTileCache : IDisposable
         _fingerprint,
         key.Time is { } time
             ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
+                + (key.Variant is { } variant ? "-" + variant : string.Empty)
             : key.Palette,
         key.Zoom.ToString(CultureInfo.InvariantCulture),
         key.X.ToString(CultureInfo.InvariantCulture),

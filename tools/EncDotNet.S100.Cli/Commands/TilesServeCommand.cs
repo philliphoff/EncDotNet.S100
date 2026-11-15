@@ -46,6 +46,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("Don't serve the preview map page at the root URL.")]
         public bool NoViewer { get; init; }
 
+        [CommandOption("--ready-json")]
+        [Description("When the server is listening, also print one line of JSON on standard output with the bound host, port, token and URLs, for a supervising process.")]
+        public bool ReadyJson { get; init; }
+
         [CommandOption("--cache-mb <MEGABYTES>")]
         [Description("When rendering datasets: the most memory rendered tiles are kept in, in megabytes (default 256).")]
         [DefaultValue(256)]
@@ -68,6 +72,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("When rendering datasets: how often to check their files for changes, reopening them when they change (default 10; 0 never checks).")]
         [DefaultValue(10)]
         public int RefreshSeconds { get; init; } = 10;
+
+        [CommandOption("--strict-time")]
+        [Description("When rendering datasets: a time more than half a step outside a time-varying dataset's steps (before, after or in a gap) draws nothing for it, instead of its nearest step; a tile on which nothing draws answers 204.")]
+        public bool StrictTime { get; init; }
 
         /// <inheritdoc/>
         public override string? FingerprintExcludedFolder => CacheDirectory;
@@ -153,6 +161,13 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
 
             await using var server = await TileServer.StartAsync(source, address, settings.Port, token, viewer: !settings.NoViewer).ConfigureAwait(false);
 
+            if (settings.ReadyJson)
+            {
+                // Written directly, not through the console renderer, so it's never wrapped (issue #1496).
+                Console.Out.WriteLine(ServeReadyLine.Format(address, server.Port, token, source.Format, viewer: !settings.NoViewer));
+                Console.Out.Flush();
+            }
+
             var what = source is ITileSetSource set ? $"{ContainerName(set.Container)}, " : "rendered on demand, ";
             AnsiConsole.MarkupLine(
                 $"Serving [bold]{Markup.Escape(source.Path)}[/] ({what}{TileSetMetadata.FormatToken(source.Format)}, zoom {tileJson["minzoom"]?.ToString() ?? "?"}–{tileJson["maxzoom"]?.ToString() ?? "?"}):");
@@ -228,7 +243,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 settings.Parallel ?? Environment.ProcessorCount,
                 settings.CacheMegabytes * 1024L * 1024L,
                 diskCache,
-                new DatasetFeatureQuery(settings));
+                new DatasetFeatureQuery(settings),
+                settings.StrictTime);
             return 0;
         }
         catch

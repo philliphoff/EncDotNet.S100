@@ -63,13 +63,15 @@ internal sealed class TileRenderSession : IDisposable
         IDisposable catalogueManager,
         IDisposable? resolution,
         List<IDatasetProcessor> processors,
-        IReadOnlyList<string> specs)
+        IReadOnlyList<string> specs,
+        IReadOnlyList<string>? names = null)
     {
         _settings = settings;
         _catalogueManager = catalogueManager;
         _resolution = resolution;
         _processors = processors;
         Specs = specs;
+        Names = names ?? specs;
         TryParseImage(settings, out var format);
         Format = format;
         Times = processors
@@ -83,6 +85,9 @@ internal sealed class TileRenderSession : IDisposable
 
     /// <summary>The product specification of each dataset, in input order.</summary>
     public IReadOnlyList<string> Specs { get; }
+
+    /// <summary>The file name of each dataset, in input order.</summary>
+    public IReadOnlyList<string> Names { get; }
 
     /// <summary>The tile encoding.</summary>
     public TileImageFormat Format { get; }
@@ -99,6 +104,7 @@ internal sealed class TileRenderSession : IDisposable
         IDisposable? resolution = null;
         var processors = new List<IDatasetProcessor>();
         var specsOpened = new List<string>();
+        var namesOpened = new List<string>();
         bool opened = false;
         try
         {
@@ -200,6 +206,7 @@ internal sealed class TileRenderSession : IDisposable
 
                 processors.Add(processor);
                 specsOpened.Add(spec);
+                namesOpened.Add(Path.GetFileName(path));
             }
 
             int outside = 0;
@@ -215,6 +222,7 @@ internal sealed class TileRenderSession : IDisposable
                     (processors[i] as IDisposable)?.Dispose();
                     processors.RemoveAt(i);
                     specsOpened.RemoveAt(i);
+                    namesOpened.RemoveAt(i);
                     outside++;
                 }
             }
@@ -234,7 +242,7 @@ internal sealed class TileRenderSession : IDisposable
                 return 2;
             }
 
-            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened);
+            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened, namesOpened);
             opened = true;
             return 0;
         }
@@ -364,10 +372,107 @@ internal sealed class TileRenderSession : IDisposable
     /// One of <see cref="Times"/>, each time-varying dataset being portrayed at
     /// its own step nearest it; <see langword="null"/> for <c>--time-step</c>.
     /// </param>
-    public TileScene Prepare(string? palette = null, DateTime? time = null)
+    /// <param name="steps">
+    /// With <c>--strict-time</c>, the step each dataset draws, by input index
+    /// (<see cref="TimeChoice.Steps"/>): a time-varying dataset without one
+    /// is left out. <see langword="null"/> for each dataset's step nearest
+    /// <paramref name="time"/>.
+    /// </param>
+    public TileScene Prepare(string? palette = null, DateTime? time = null, IReadOnlyList<DateTime?>? steps = null)
     {
         lock (_portrayGate)
-            return PrepareLocked(palette, time);
+            return PrepareLocked(palette, time, steps);
+    }
+
+    /// <summary>
+    /// What draws at <paramref name="instant"/>. By default each time-varying
+    /// dataset draws its step nearest the entry of <see cref="Times"/>
+    /// nearest the instant, however far away. With <paramref name="strict"/>
+    /// (<c>--strict-time</c>), each draws its own step nearest the instant only
+    /// when that step is at most half a step away (<see cref="StrictStep"/>),
+    /// and nothing otherwise.
+    /// </summary>
+    public TimeChoice ChooseTime(DateTime instant, bool strict)
+    {
+        var snapped = SnapTime(instant);
+        if (!strict || snapped is not { } at)
+            return new TimeChoice(snapped);
+
+        instant = AsUtc(instant);
+        var steps = new DateTime?[_processors.Count];
+        bool differs = false, drawsSomething = false;
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (!VariesWithTime(_processors[i]))
+            {
+                drawsSomething = true;
+                continue;
+            }
+
+            var times = ((ITimeAwareDatasetProcessor)_processors[i]).AvailableTimes
+                .Select(AsUtc).Distinct().Order().ToArray();
+            steps[i] = StrictStep(times, instant);
+            drawsSomething |= steps[i] is not null;
+            differs |= steps[i] != AsUtc(RenderContextBuilder.Nearest(times, at));
+        }
+
+        // When every dataset draws what it would by default, the default
+        // scene and its cached tiles serve.
+        if (!differs)
+            return new TimeChoice(at);
+
+        // A short, stable name for the steps, for cache keys and file names.
+        var signature = string.Join('.', steps.Select(s => s is { } t ? t.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-"));
+        var variant = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(signature)), 0, 8);
+        return new TimeChoice(at, steps, variant, !drawsSomething);
+    }
+
+    /// <summary>
+    /// The step of <paramref name="sorted"/> nearest <paramref name="instant"/>,
+    /// or <see langword="null"/> when it is more than half a step away: before
+    /// the first step, after the last or in a gap. A step is the median
+    /// interval between steps, an hour for a single step.
+    /// </summary>
+    /// <param name="sorted">A dataset's steps, ascending and distinct.</param>
+    /// <param name="instant">The time asked for.</param>
+    internal static DateTime? StrictStep(IReadOnlyList<DateTime> sorted, DateTime instant)
+    {
+        if (sorted.Count == 0)
+            return null;
+
+        var nearest = RenderContextBuilder.Nearest(sorted, instant);
+        return (nearest - instant).Duration() <= TypicalStep(sorted) / 2 ? nearest : null;
+    }
+
+    /// <summary>The median interval between steps, robust to long gaps; an hour for a single step.</summary>
+    private static TimeSpan TypicalStep(IReadOnlyList<DateTime> sorted)
+    {
+        if (sorted.Count < 2)
+            return TimeSpan.FromHours(1);
+
+        var intervals = new TimeSpan[sorted.Count - 1];
+        for (int i = 1; i < sorted.Count; i++)
+            intervals[i - 1] = sorted[i] - sorted[i - 1];
+        Array.Sort(intervals);
+        return intervals[intervals.Length / 2];
+    }
+
+    /// <summary>
+    /// Each time-varying dataset and the step it draws in <paramref name="choice"/>,
+    /// <see langword="null"/> when it has no data then.
+    /// </summary>
+    public IEnumerable<(string Name, string Spec, DateTime? Step)> DescribeTime(TimeChoice choice)
+    {
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (!VariesWithTime(_processors[i]))
+                continue;
+
+            var step = choice.Steps is { } steps
+                ? steps[i]
+                : choice.Time is { } at ? RenderContextBuilder.NearestTimeStep(_processors[i], at) is { } s ? AsUtc(s) : null : null;
+            yield return (Names[i], Specs[i], step);
+        }
     }
 
     /// <summary>
@@ -397,7 +502,7 @@ internal sealed class TileRenderSession : IDisposable
     private static bool VariesWithTime(IDatasetProcessor processor) =>
         processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0;
 
-    private TileScene PrepareLocked(string? palette, DateTime? time)
+    private TileScene PrepareLocked(string? palette, DateTime? time, IReadOnlyList<DateTime?>? steps)
     {
         RenderCommand.TryParsePalette(palette ?? _settings.Palette, out var parsedPalette);
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
@@ -405,11 +510,20 @@ internal sealed class TileRenderSession : IDisposable
         var hidden = HiddenCategories(_settings);
         var nationalLanguage = RenderCommand.ResolveNationalLanguage(_settings.NationalLanguage);
 
-        RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport) =>
-            RenderContextBuilder.Build(
+        RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport)
+        {
+            var context = RenderContextBuilder.Build(
                 processor, parsedPalette, _settings.SymbolScale, _settings.TextScale, _settings.TimeStep, hidden,
                 displayModeId: displayModeId, viewport: viewport, instant: time,
                 nationalLanguage: nationalLanguage);
+            return steps is not null && VariesWithTime(processor)
+                ? context with { TimeStep = steps[_processors.IndexOf(processor)] }
+                : context;
+        }
+
+        // With --strict-time, a time-varying dataset without a step at the
+        // time asked for is left out.
+        bool Drawn(int index) => steps is null || !VariesWithTime(_processors[index]) || steps[index] is not null;
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
@@ -420,6 +534,9 @@ internal sealed class TileRenderSession : IDisposable
         bool hasCoverage = false;
         for (int i = 0; i < _processors.Count; i++)
         {
+            if (!Drawn(i))
+                continue;
+
             var processor = _processors[i];
             if (processor is IVectorPortrayalSource
                 && !VariesWithTime(processor)
@@ -442,6 +559,12 @@ internal sealed class TileRenderSession : IDisposable
                 _timelessPortrayals[(parsedPalette, i)] = vector;
         }
 
+        // Datasets left out by --strict-time are left out of the scene too.
+        var drawn = Enumerable.Range(0, _processors.Count).Where(Drawn).ToArray();
+        IReadOnlyList<IDatasetProcessor> sceneProcessors = drawn.Length == _processors.Count ? _processors : [.. drawn.Select(i => _processors[i])];
+        if (drawn.Length != _processors.Count)
+            inputs = [.. drawn.Select(i => inputs[i])];
+
         var vectorResults = inputs.Select(input => input.Vector).OfType<VectorPortrayalResult>().ToList();
         var options = new ChartCompositeOptions
         {
@@ -456,7 +579,7 @@ internal sealed class TileRenderSession : IDisposable
             KeepAreaSymbolsInView = false,
         };
 
-        return new TileScene(_processors, inputs, vectorResults, hasCoverage, ChartCompositorFactory.Create(), options, ContextFor, _portrayGate);
+        return new TileScene(sceneProcessors, inputs, vectorResults, hasCoverage, ChartCompositorFactory.Create(), options, ContextFor, _portrayGate);
     }
 
     /// <summary>
@@ -849,3 +972,17 @@ internal sealed class TileScene
         return zoomInputs;
     }
 }
+
+/// <summary>
+/// What draws at a time asked for (<see cref="TileRenderSession.ChooseTime"/>).
+/// </summary>
+/// <param name="Time">The entry of <see cref="TileRenderSession.Times"/> nearest the time asked for; <see langword="null"/> for <c>--time-step</c>.</param>
+/// <param name="Steps">
+/// With <c>--strict-time</c>, when some dataset draws other than at its step
+/// nearest <paramref name="Time"/>: the step each dataset draws, by input
+/// index, <see langword="null"/> for one that draws nothing (or doesn't vary
+/// with time). Otherwise <see langword="null"/>.
+/// </param>
+/// <param name="Variant">Tells apart choices with the same <paramref name="Time"/> and different <paramref name="Steps"/>; <see langword="null"/> without them.</param>
+/// <param name="Empty">Whether nothing draws at all.</param>
+internal sealed record TimeChoice(DateTime? Time, IReadOnlyList<DateTime?>? Steps = null, string? Variant = null, bool Empty = false);
