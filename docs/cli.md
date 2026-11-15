@@ -618,6 +618,16 @@ The server has these routes:
   `t` it names the chosen step in `s100.time` and carries it in its tile URL.
   Without `t`, `--time-step` applies. A `t` that isn't a time answers
   `400 Bad Request`; datasets that don't vary with time ignore it.
+- With `--strict-time`, a `t` (or WMS/WMTS `TIME`) more than half a step
+  before a time-varying dataset's first step, after its last or inside a gap
+  in its steps draws nothing for that dataset, instead of its nearest step. A
+  step is the median interval between the dataset's steps (an hour for a single
+  step). A tile on which nothing draws answers `204 No Content`. The TileJSON
+  then sets `s100.strictTime` and, with `t`, lists each time-varying dataset in
+  `s100.datasets` with its file `name`, `spec` and the step it draws in `time`,
+  `null` when it has no data at that time. When the datasets draw other than at
+  their steps nearest the nearest listed step, `s100.time` and the tile URL keep
+  the `t` asked for.
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
@@ -651,6 +661,7 @@ area, the tile format and display settings apply too; the output options
 | `--no-viewer` | off | Doesn't serve the preview page. |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
+| `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
