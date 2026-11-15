@@ -25,7 +25,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (<see cref="DiskTileCache"/>) and read from there before rendering.
 /// At most <c>--parallel</c> blocks render at once. Each palette, and each
 /// time step asked for with a <c>t</c> query parameter (snapped to the nearest
-/// of <see cref="Times"/>), is portrayed the first time it is asked for
+/// of <see cref="Times"/>; with <c>--strict-time</c>, each dataset to its own
+/// step within half a step, or left out), is portrayed the first time it is asked for
 /// (<see cref="SceneCache"/>). Tiles outside the tiled area or its zoom
 /// range, and tiles on which nothing was drawn, read as <see langword="null"/>.
 /// </para>
@@ -43,7 +44,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly TileCache _cache;
     private readonly DiskTileCache? _diskCache;
     private readonly SceneCache _scenes;
-    private readonly ConcurrentDictionary<(string Palette, DateTime? Time, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
+    private readonly ConcurrentDictionary<(string Palette, DateTime? Time, string? Variant, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
 
     /// <param name="session">The opened datasets. The source disposes it.</param>
@@ -55,6 +56,11 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <param name="cacheBytes">The most encoded tile bytes kept in memory.</param>
     /// <param name="diskCache">Tiles kept on disk across runs, behind the memory cache; <see langword="null"/> for none.</param>
     /// <param name="featureQuery">Finds the features at a point in the same datasets, for WMS GetFeatureInfo; <see langword="null"/> for none. The source disposes it.</param>
+    /// <param name="strictTime">
+    /// Whether a time-varying dataset draws nothing at a time more than half a
+    /// step from its own steps (<c>--strict-time</c>), instead of its step
+    /// nearest the nearest of <see cref="Times"/>.
+    /// </param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -64,7 +70,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         int parallel,
         long cacheBytes,
         DiskTileCache? diskCache = null,
-        DatasetFeatureQuery? featureQuery = null)
+        DatasetFeatureQuery? featureQuery = null,
+        bool strictTime = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
@@ -77,6 +84,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _cache = new TileCache(cacheBytes);
         _diskCache = diskCache;
         FeatureQuery = featureQuery;
+        StrictTime = strictTime;
         _scenes = new SceneCache(session);
         _scenes.Seed(_defaultPalette, null, scene);
     }
@@ -91,6 +99,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public DatasetFeatureQuery? FeatureQuery { get; }
 
+    /// <summary>Whether times outside a dataset's steps draw nothing for it (<c>--strict-time</c>).</summary>
+    public bool StrictTime { get; }
+
     /// <summary>The area and zoom range served.</summary>
     public TileLayout Layout => _layout;
 
@@ -103,8 +114,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
-        time = time is { } requested ? _session.SnapTime(requested) : null;
-        if (!AllPalettes.Contains(palette)
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime) : new TimeChoice(null);
+        if (choice.Empty
+            || !AllPalettes.Contains(palette)
             || zoom < _layout.MinZoom || zoom > _layout.MaxZoom
             || !TileSource.IsValid(zoom, x, y)
             || BlockFor(_layout.Area, _blockSize, zoom, x, y) is not { } block)
@@ -112,7 +124,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        var key = new TileKey(palette, zoom, x, y, time);
+        var key = new TileKey(palette, zoom, x, y, choice.Time, choice.Variant);
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -123,8 +135,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         else
         {
             var render = _rendering.GetOrAdd(
-                (palette, time, block),
-                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Palette, k.Time, k.Block)));
+                (palette, choice.Time, choice.Variant, block),
+                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Palette, choice, k.Block)));
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -135,7 +147,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     public JsonObject ToTileJson(string? palette, DateTime? time = null)
     {
         palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
-        time = time is { } requested ? _session.SnapTime(requested) : null;
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime) : new TimeChoice(null);
         var json = new TileSetMetadata
         {
             Name = "s100 tiles",
@@ -145,11 +157,30 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             MaxZoom = _layout.MaxZoom,
             Bounds = _layout.Bounds,
             TilePixelSize = _layout.TileOptions.PixelRatio * XyzTileGrid.TileSize,
-            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, palette, time),
+            // With --strict-time, a time at which datasets draw other than at
+            // their steps nearest a listed time is echoed as asked, so tile
+            // URLs built from it draw the same.
+            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, palette, choice.Variant is null ? choice.Time : time),
         }.ToTileJson(tilesUrl: null);
         json["s100"]!["palettes"] = new JsonArray(AllPalettes.Select(p => (JsonNode?)p).ToArray());
         if (Times.Count > 0)
             json["s100"]!["times"] = new JsonArray(Times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
+        if (StrictTime && Times.Count > 0)
+        {
+            // Each time-varying dataset and the step it draws, null when it
+            // has no data at the time asked for.
+            json["s100"]!["strictTime"] = true;
+            if (choice.Time is not null)
+            {
+                json["s100"]!["datasets"] = new JsonArray([.. _session.DescribeTime(choice).Select(d => (JsonNode?)new JsonObject
+                {
+                    ["name"] = d.Name,
+                    ["spec"] = d.Spec,
+                    ["time"] = d.Step is { } step ? TileRenderSession.FormatTime(step) : null,
+                })]);
+            }
+        }
+
         return json;
     }
 
@@ -229,7 +260,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         static int Mod(int value, int divisor) => ((value % divisor) + divisor) % divisor;
     }
 
-    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string palette, DateTime? time, TileBlock block)
+    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string palette, TimeChoice choice, TileBlock block)
     {
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
@@ -238,7 +269,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             // which runs its own jobs on the work scheduler, so it happens off
             // the request threads but outside a job; the block itself renders
             // and encodes as one Visible job.
-            var renderer = await Task.Run(() => _scenes.Get(palette, time).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
+            var renderer = await Task.Run(() => _scenes.Get(palette, choice).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
             var tiles = await WorkScheduler.Shared.RunAsync(
                 WorkStage.Raster,
                 _ => Render(renderer, block),
@@ -246,7 +277,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
                 WorkPriority.Visible()).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
             {
-                var key = new TileKey(palette, block.Zoom, x, y, time);
+                var key = new TileKey(palette, block.Zoom, x, y, choice.Time, choice.Variant);
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -260,7 +291,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
             // Later requests find the tiles in the cache (or render again if
             // they were evicted).
-            _rendering.TryRemove((palette, time, block), out _);
+            _rendering.TryRemove((palette, choice.Time, choice.Variant, block), out _);
         }
     }
 
@@ -291,8 +322,8 @@ internal sealed class SceneCache(TileRenderSession session)
     public const int Capacity = 8;
 
     private readonly Lock _gate = new();
-    private readonly Dictionary<(string Palette, DateTime? Time), LinkedListNode<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)>> _entries = [];
-    private readonly LinkedList<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)> _recency = new();
+    private readonly Dictionary<(string Palette, DateTime? Time, string? Variant), LinkedListNode<((string Palette, DateTime? Time, string? Variant) Key, Lazy<TileScene> Scene)>> _entries = [];
+    private readonly LinkedList<((string Palette, DateTime? Time, string? Variant) Key, Lazy<TileScene> Scene)> _recency = new();
 
     /// <summary>The number of scenes held.</summary>
     public int Count
@@ -305,17 +336,20 @@ internal sealed class SceneCache(TileRenderSession session)
     }
 
     /// <summary>Adds a scene already prepared.</summary>
-    public void Seed(string palette, DateTime? time, TileScene scene) => Entry(palette, time, new Lazy<TileScene>(scene));
+    public void Seed(string palette, DateTime? time, TileScene scene) => Entry(palette, new TimeChoice(time), new Lazy<TileScene>(scene));
 
     /// <summary>The scene for <paramref name="palette"/> at <paramref name="time"/>, prepared on first use.</summary>
-    public TileScene Get(string palette, DateTime? time) =>
-        Entry(palette, time, new Lazy<TileScene>(() => session.Prepare(palette, time))).Value;
+    public TileScene Get(string palette, DateTime? time) => Get(palette, new TimeChoice(time));
 
-    private Lazy<TileScene> Entry(string palette, DateTime? time, Lazy<TileScene> create)
+    /// <summary>The scene for <paramref name="palette"/> drawing <paramref name="choice"/>, prepared on first use.</summary>
+    public TileScene Get(string palette, TimeChoice choice) =>
+        Entry(palette, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps))).Value;
+
+    private Lazy<TileScene> Entry(string palette, TimeChoice choice, Lazy<TileScene> create)
     {
         lock (_gate)
         {
-            var key = (palette, time);
+            var key = (palette, choice.Time, choice.Variant);
             if (_entries.TryGetValue(key, out var node))
             {
                 _recency.Remove(node);
@@ -335,8 +369,12 @@ internal sealed class SceneCache(TileRenderSession session)
     }
 }
 
-/// <summary>One tile in one palette, at one time step (<see langword="null"/> for <c>--time-step</c>).</summary>
-internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null);
+/// <summary>
+/// One tile in one palette, at one time step (<see langword="null"/> for
+/// <c>--time-step</c>); <paramref name="Variant"/> tells apart the datasets
+/// <c>--strict-time</c> draws at that step (<see cref="TimeChoice.Variant"/>).
+/// </summary>
+internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null, string? Variant = null);
 
 /// <summary>
 /// Encoded tiles kept in memory up to a byte budget, evicting the least

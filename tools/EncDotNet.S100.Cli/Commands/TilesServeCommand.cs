@@ -73,6 +73,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [DefaultValue(10)]
         public int RefreshSeconds { get; init; } = 10;
 
+        [CommandOption("--strict-time")]
+        [Description("When rendering datasets: a time more than half a step outside a time-varying dataset's steps (before, after or in a gap) draws nothing for it, instead of its nearest step; a tile on which nothing draws answers 204.")]
+        public bool StrictTime { get; init; }
+
         /// <inheritdoc/>
         public override string? FingerprintExcludedFolder => CacheDirectory;
 
@@ -239,7 +243,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 settings.Parallel ?? Environment.ProcessorCount,
                 settings.CacheMegabytes * 1024L * 1024L,
                 diskCache,
-                new DatasetFeatureQuery(settings));
+                new DatasetFeatureQuery(settings),
+                settings.StrictTime);
             return 0;
         }
         catch
