@@ -115,7 +115,8 @@ public sealed class SourceDatasetTests
         Assert.False(processor.IsActive);
 
         notifier.Publish(Harbour);
-        await WaitUntilAsync(() => processor.IsActive);
+        // The activator sets IsActive before it calls Start, so wait for both.
+        await WaitUntilAsync(() => processor.IsActive && processor.Starts == 1);
         Assert.Equal(1, processor.Starts);
         Assert.Equal(-71.0, processor.Area!.Value.MinLongitude);
 
@@ -242,7 +243,9 @@ public sealed class SourceDatasetTests
     {
         private volatile bool _isActive;
 
-        public int Starts { get; private set; }
+        private int _starts;
+
+        public int Starts => Volatile.Read(ref _starts);
 
         public GeographicBounds? Area { get; private set; }
 
@@ -254,7 +257,7 @@ public sealed class SourceDatasetTests
 
         public SpecRef Spec => new(SpecName.Ndbc, default);
 
-        public void Start() => Starts++;
+        public void Start() => Interlocked.Increment(ref _starts);
 
         public void UpdateArea(GeographicBounds? area) => Area = area;
 

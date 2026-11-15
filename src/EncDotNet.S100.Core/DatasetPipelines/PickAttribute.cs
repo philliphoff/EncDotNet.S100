@@ -118,6 +118,46 @@ public sealed class PickAttribute
     }
 
     /// <summary>
+    /// The <see cref="Code"/> of the row that says how the picked values were
+    /// produced (<see cref="DataDynamicityRow"/>): <c>"dataDynamicity"</c>.
+    /// </summary>
+    public const string DataDynamicityCode = "dataDynamicity";
+
+    /// <summary>
+    /// The row that says how the picked values were produced (#1505):
+    /// <see cref="DataDynamicityCode"/>, named "Data", with the S-104
+    /// <c>dataDynamicity</c> number as its raw value and an English label as
+    /// its display value. A forecast carries its run time (the dataset's issue
+    /// time) in <see cref="DateTimeValue"/>; hosts with their own wording, such
+    /// as the viewer, relabel it from <see cref="RawValue"/>.
+    /// </summary>
+    /// <param name="kind">How the values were produced.</param>
+    /// <param name="runTime">A forecast's run time (UTC), or <see langword="null"/> when unknown or not a forecast.</param>
+    /// <returns>The row.</returns>
+    public static PickAttribute DataDynamicityRow(DataDynamicity kind, DateTime? runTime)
+    {
+        var run = kind == DataDynamicity.HydrodynamicForecast ? runTime : null;
+        var label = kind switch
+        {
+            DataDynamicity.Observation => "Observed",
+            DataDynamicity.AstronomicalPrediction => "Predicted · astronomical tide only, not a forecast",
+            DataDynamicity.AnalysisOrHybrid => "Analysis",
+            DataDynamicity.HydrodynamicHindcast => "Hindcast",
+            _ => run is { } r
+                ? "Forecast, run " + r.ToString("yyyy-MM-dd HH:mm'Z'", System.Globalization.CultureInfo.InvariantCulture)
+                : "Forecast",
+        };
+        return new PickAttribute
+        {
+            Code = DataDynamicityCode,
+            Name = "Data",
+            RawValue = ((int)kind).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DisplayValue = label,
+            DateTimeValue = run,
+        };
+    }
+
+    /// <summary>
     /// The <see cref="Code"/> of a stale-data line (<see cref="StaleNotice"/>):
     /// <c>"stale"</c>.
     /// </summary>

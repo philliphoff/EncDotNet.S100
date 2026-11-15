@@ -35,6 +35,10 @@ internal static class PickAttributeFormatter
             ? attr.Children
             : Format(attr.Children, timeFormat, depthUnit);
 
+        // Observed, Predicted, Analysis, Hindcast or Forecast, run {time} (#1505).
+        if (Services.DataDynamicityText.LabelOf(attr, timeFormat) is { } dataKind)
+            return With(attr, dataKind, children);
+
         if (attr.DateTimeValue is { } dt)
             return With(attr, TimeFormatting.Format(dt, timeFormat), children);
 

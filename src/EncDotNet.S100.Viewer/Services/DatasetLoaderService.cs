@@ -456,6 +456,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
             entry.SetVersionAssessment(processor.VersionAssessment);
             entry.SetAxisOrder(processor.AxisOrder);
+            entry.SetDataDynamicity(
+                (processor as ITimeAwareDatasetProcessor)?.DataDynamicity,
+                (processor as ITimeAwareDatasetProcessor)?.IssueTime);
             entry.SetPortrayalSpec(processor.PortrayalSpec.Name);
             // AML rows, outlines and the MARKING pill follow the portrayal's
             // real drawn state (#1371), not a fixed "not drawn".
