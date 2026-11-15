@@ -12,6 +12,14 @@ month. For package versions and release assets, see
   1:23,374, for example, both draw zoom 14, so WMS no longer shows soundings
   and other features that WMTS hides there. The layer's
   `MaxScaleDenominator` is now the minimum zoom's scale. See [WMS](cli.md#wms).
+- **Add and remove datasets while serving.** With `--manage-datasets`,
+  `s100 tiles serve` adds and removes datasets on a `POST` or `DELETE` of
+  `datasets`, without restarting. The new set serves once it's portrayed,
+  and the TileJSON, WMTS, WMS and dataset metadata documents and the data
+  revision follow it.
+  Tiles are cached under the datasets that reach them, so adding a cell
+  renders only its own tiles. Without the option nothing changes. See
+  [Add and remove datasets](cli.md#add-and-remove-datasets).
 - **Navigational warnings by validity in served tiles.** `s100 tiles serve`
   draws only the S-124 warnings in force at the time a client asks for, with
   `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its

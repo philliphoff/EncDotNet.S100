@@ -34,6 +34,9 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
     private readonly Task _loop;
     private readonly List<Task> _retiring = [];
 
+    // Serialises checks and replacements (issue #1494), so they don't open the datasets twice at once.
+    private readonly SemaphoreSlim _changing = new(1, 1);
+
     private Generation _current;
     private string _servedFingerprint;
     private string? _pendingFingerprint;
@@ -150,11 +153,53 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     /// <summary>
     /// Checks the input files once, and reopens the datasets when a change has
-    /// held since the previous check. Not to be called concurrently; the
-    /// refresh loop is its only caller while serving.
+    /// held since the previous check. Waits for a <see cref="ReplaceAsync"/>
+    /// under way, and the other way round.
     /// </summary>
     /// <returns>Whether the datasets were reopened.</returns>
     public async Task<bool> CheckAsync()
+    {
+        await _changing.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await CheckCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _changing.Release();
+        }
+    }
+
+    /// <summary>
+    /// Opens other datasets now and serves them in place of the current ones
+    /// once they are ready (<c>--manage-datasets</c>, issue #1494). The current
+    /// ones keep serving until then, and when they can't be opened.
+    /// </summary>
+    /// <param name="open">Opens and prepares the datasets; <see langword="null"/> when they can't be (having said why). An exception it throws is thrown here.</param>
+    /// <param name="fingerprint">The fingerprint the datasets are opened at, which later checks compare with.</param>
+    /// <param name="replaced">Called once they serve, before any later check or replacement starts.</param>
+    /// <returns>Whether the datasets were replaced.</returns>
+    public async Task<bool> ReplaceAsync(Func<RenderedTileSource?> open, string fingerprint, Action? replaced = null)
+    {
+        await _changing.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var opened = await Task.Run(open).ConfigureAwait(false);
+            if (opened is null)
+                return false;
+
+            Serve(opened, fingerprint, $"Now serving {opened.Path}, zoom {opened.Layout.MinZoom}–{opened.Layout.MaxZoom}.");
+            _pendingFingerprint = null;
+            replaced?.Invoke();
+            return true;
+        }
+        finally
+        {
+            _changing.Release();
+        }
+    }
+
+    private async Task<bool> CheckCoreAsync()
     {
         string fingerprint;
         try
@@ -199,21 +244,27 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
             return false;
         }
 
+        Serve(reopened, fingerprint, $"The datasets changed; now serving {reopened.Path}, zoom {reopened.Layout.MinZoom}–{reopened.Layout.MaxZoom}.");
+        return true;
+    }
+
+    /// <summary>Switches new requests to <paramref name="opened"/>, and retires the datasets they replace.</summary>
+    private void Serve(RenderedTileSource opened, string fingerprint, string message)
+    {
         Generation retired;
         lock (_gate)
         {
             retired = _current;
-            _current = new Generation(reopened);
+            _current = new Generation(opened);
         }
 
         _servedFingerprint = fingerprint;
         _failedFingerprint = null;
         Interlocked.Increment(ref _reloads);
-        _log($"The datasets changed; now serving {reopened.Path}, zoom {reopened.Layout.MinZoom}–{reopened.Layout.MaxZoom}.");
+        _log(message);
 
         lock (_retiring)
             _retiring.Add(RetireAsync(retired));
-        return true;
     }
 
     public async ValueTask DisposeAsync()
@@ -227,6 +278,9 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         {
         }
 
+        // Let a replacement under way finish; none starts after this.
+        await _changing.WaitAsync().ConfigureAwait(false);
+
         Task[] retiring;
         lock (_retiring)
             retiring = [.. _retiring];
@@ -238,6 +292,7 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
         await RetireAsync(current).ConfigureAwait(false);
         _stopping.Dispose();
+        _changing.Dispose();
     }
 
     private async Task RunAsync(TimeSpan interval, CancellationToken cancellationToken)
