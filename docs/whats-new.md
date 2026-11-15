@@ -38,6 +38,11 @@ month. For package versions and release assets, see
   bearer token, it refuses requests from web pages on other origins, and it
   leaves out the tools that open files by path or change the Library unless
   you pass `--allow-changes`. See [MCP over HTTP](cli.md#mcp-over-http).
+- **A start-up line for programs.** `s100 tiles serve --ready-json` prints
+  one line of JSON when the server is listening, with the bound port, the
+  token and the tile, TileJSON, WMTS, WMS and health check URLs, so a program
+  that starts it with `--port 0` needn't read the start-up text. See
+  [Run under a supervising process](cli.md#run-under-a-supervising-process).
 - **Serve charts to a web map or GIS.** A new task page walks through
   `tiles serve` with QGIS, MapLibre and Leaflet; see
   [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md).

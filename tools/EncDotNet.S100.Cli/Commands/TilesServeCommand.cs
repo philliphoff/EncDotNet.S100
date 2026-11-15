@@ -46,6 +46,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("Don't serve the preview map page at the root URL.")]
         public bool NoViewer { get; init; }
 
+        [CommandOption("--ready-json")]
+        [Description("When the server is listening, also print one line of JSON on standard output with the bound host, port, token and URLs, for a supervising process.")]
+        public bool ReadyJson { get; init; }
+
         [CommandOption("--cache-mb <MEGABYTES>")]
         [Description("When rendering datasets: the most memory rendered tiles are kept in, in megabytes (default 256).")]
         [DefaultValue(256)]
@@ -152,6 +156,13 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
             var tileJson = source.ToTileJson(palette: null);
 
             await using var server = await TileServer.StartAsync(source, address, settings.Port, token, viewer: !settings.NoViewer).ConfigureAwait(false);
+
+            if (settings.ReadyJson)
+            {
+                // Written directly, not through the console renderer, so it's never wrapped (issue #1496).
+                Console.Out.WriteLine(ServeReadyLine.Format(address, server.Port, token, source.Format, viewer: !settings.NoViewer));
+                Console.Out.Flush();
+            }
 
             var what = source is ITileSetSource set ? $"{ContainerName(set.Container)}, " : "rendered on demand, ";
             AnsiConsole.MarkupLine(

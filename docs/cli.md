@@ -649,6 +649,7 @@ area, the tile format and display settings apply too; the output options
 | `--token <token>` | generated for a non-loopback host | An access token that becomes part of every URL. Letters, digits, `-` and `_`. |
 | `--no-token` | off | Serves without a token, even on a non-loopback address. |
 | `--no-viewer` | off | Doesn't serve the preview page. |
+| `--ready-json` | off | When the server is listening, also prints one line of JSON with the bound port and URLs. See [Run under a supervising process](#run-under-a-supervising-process). |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
@@ -679,6 +680,36 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 
 In Leaflet, use the tile URL:
 `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
+
+### Run under a supervising process
+
+A program that starts `tiles serve` itself, such as a GIS add-in, can pass
+`--port 0` to get a free port and `--ready-json` to learn which one. When the
+server is listening, `tiles serve` then prints one line of JSON on standard
+output, before the usual start-up text:
+
+```json
+{"event":"ready","host":"127.0.0.1","port":49731,"token":null,"baseUrl":"http://127.0.0.1:49731/","tiles":"http://127.0.0.1:49731/{z}/{x}/{y}.png","tileJson":"http://127.0.0.1:49731/tiles.json","wmts":"http://127.0.0.1:49731/wmts/1.0.0/WMTSCapabilities.xml","wms":"http://127.0.0.1:49731/wms","healthz":"http://127.0.0.1:49731/healthz","preview":"http://127.0.0.1:49731/"}
+```
+
+Read standard output until a line starts with `{` and parse it. Lines printed
+while datasets are portrayed can come before it. The members are:
+
+| Member | Content |
+|---|---|
+| `event` | Always `ready`. |
+| `host` | The address to connect to: the `--host` address, or `127.0.0.1` (`::1`) when listening on `0.0.0.0` (`::`). |
+| `port` | The bound port. |
+| `token` | The access token, or `null` when there's none. |
+| `baseUrl` | The base URL, with the token. |
+| `tiles` | The XYZ tile URL template. |
+| `tileJson`, `wmts`, `wms` | The TileJSON, WMTS capabilities and WMS URLs. |
+| `healthz` | The [health check](#health) URL, which has no token. |
+| `preview` | The preview page URL, or `null` with `--no-viewer`. |
+
+```bash
+s100 tiles serve exchange-set/ --port 0 --ready-json
+```
 
 ### WMTS
 
