@@ -118,6 +118,8 @@ internal static class WmtsService
             new XDeclaration("1.0", "UTF-8", null),
             new XElement(Wmts + "Capabilities",
                 new XAttribute("version", "1.0.0"),
+                // The data revision (issue #1497), so a client can tell the data changed.
+                json["s100"]?["revision"] is { } wmtsRevision ? new XAttribute("updateSequence", (string)wmtsRevision!) : null,
                 new XAttribute(XNamespace.Xmlns + "ows", Ows),
                 new XAttribute(XNamespace.Xmlns + "xlink", XLink),
                 new XElement(Ows + "ServiceIdentification",
