@@ -73,6 +73,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [DefaultValue(10)]
         public int RefreshSeconds { get; init; } = 10;
 
+        [CommandOption("--manage-datasets")]
+        [Description("When rendering datasets: accept requests to add and remove datasets while serving, at the datasets URL. The tiles of datasets that stay served stay cached.")]
+        public bool ManageDatasets { get; init; }
+
         [CommandOption("--strict-time")]
         [Description("When rendering datasets: a time more than half a step outside a time-varying dataset's steps (before, after or in a gap) draws nothing for it, instead of its nearest step; a tile on which nothing draws answers 204.")]
         public bool StrictTime { get; init; }
@@ -94,6 +98,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 return ValidationResult.Error("--overview applies only when rendering datasets, not when serving a built tile set.");
             if (ServesTileSet && CacheDirectory is not null)
                 return ValidationResult.Error("--cache-dir applies only when rendering datasets, not when serving a built tile set.");
+            if (ServesTileSet && ManageDatasets)
+                return ValidationResult.Error("--manage-datasets applies only when rendering datasets, not when serving a built tile set.");
             if (ClearCache && CacheDirectory is null)
                 return ValidationResult.Error("--clear-cache needs --cache-dir.");
             if (RefreshSeconds < 0)
@@ -123,6 +129,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
     {
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         ITileSource source;
+        ServedDatasets? datasets = null;
         try
         {
             if (settings.ServesTileSet)
@@ -136,19 +143,39 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 var fingerprint = TileRenderSession.Fingerprint(settings);
                 // One registry across reloads, so registered settings survive them.
                 var marinerStyles = new MarinerStyleRegistry();
-                int exitCode = OpenRendered(settings, out var rendered, marinerStyles);
+                // With --manage-datasets, one memory cache and scale latitude across
+                // changes to the datasets, so the tiles of those still served stay cached.
+                var managed = settings.ManageDatasets ? new ManagedDatasetTiles(settings.CacheMegabytes * 1024L * 1024L) : null;
+                DatasetChanges Changes() => datasets?.Changes ?? DatasetChanges.None;
+                int exitCode = OpenRendered(settings, out var rendered, marinerStyles, managed: managed);
                 if (rendered is null)
                     return exitCode;
 
-                source = settings.RefreshSeconds == 0
-                    ? rendered
-                    : new RefreshingTileSource(
+                if (settings.RefreshSeconds == 0 && managed is null)
+                {
+                    source = rendered;
+                }
+                else
+                {
+                    var refreshing = new RefreshingTileSource(
                         rendered,
                         fingerprint,
-                        () => TileRenderSession.Fingerprint(settings),
-                        () => OpenRendered(settings, out var reopened, marinerStyles) == 0 ? reopened : null,
-                        TimeSpan.FromSeconds(settings.RefreshSeconds),
+                        () => TileRenderSession.Fingerprint(settings, Changes()),
+                        () => OpenRendered(settings, out var reopened, marinerStyles, Changes(), managed) == 0 ? reopened : null,
+                        settings.RefreshSeconds == 0 ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(settings.RefreshSeconds),
                         line => AnsiConsole.MarkupLine($"[grey]{DateTime.Now:HH:mm:ss}[/] {Markup.Escape(line)}"));
+                    source = refreshing;
+                    if (managed is not null)
+                    {
+                        datasets = new ServedDatasets(
+                            refreshing,
+                            changes => OpenRendered(settings, out var changed, marinerStyles, changes, managed) == 0 ? changed : null,
+                            changes => TileRenderSession.Fingerprint(settings, changes));
+                    }
+                }
+
+                // Outermost, over the refreshing source: a reload or a dataset
+                // change gives a new revision, and the overview follows it.
                 if (settings.Overview)
                     source = new OverviewTileSource(source);
             }
@@ -169,7 +196,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
             var token = ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
             var tileJson = source.ToTileJson(palette: null);
 
-            await using var server = await TileServer.StartAsync(source, address, settings.Port, token, viewer: !settings.NoViewer).ConfigureAwait(false);
+            await using var server = await TileServer.StartAsync(source, address, settings.Port, token, viewer: !settings.NoViewer, datasets: datasets).ConfigureAwait(false);
 
             if (settings.ReadyJson)
             {
@@ -193,11 +220,13 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
 
                 AnsiConsole.MarkupLine($"  WMTS:     [link]{Markup.Escape(new Uri(baseUri, WmtsService.CapabilitiesPath).AbsoluteUri)}[/]");
                 AnsiConsole.MarkupLine($"  WMS:      [link]{Markup.Escape(new Uri(baseUri, WmsService.Path).AbsoluteUri)}[/]");
+                if (datasets is not null)
+                    AnsiConsole.MarkupLine($"  Datasets: [link]{Markup.Escape(new Uri(baseUri, ServedDatasets.Path).AbsoluteUri)}[/]");
                 if (!settings.NoViewer)
                     AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
             }
 
-            if (source is RefreshingTileSource or OverviewTileSource { Inner: RefreshingTileSource })
+            if (((source as OverviewTileSource)?.Inner ?? source) is RefreshingTileSource && settings.RefreshSeconds > 0)
                 AnsiConsole.MarkupLine($"[grey]Checking the datasets for changes every {settings.RefreshSeconds} s.[/]");
             if (source is OverviewTileSource overview)
                 AnsiConsole.MarkupLine($"[grey]Drawing dataset coverage and names below zoom {overview.ChartMinZoom}.[/]");
@@ -220,10 +249,17 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
     /// <param name="settings">The command's settings.</param>
     /// <param name="source">The source opened, or <see langword="null"/> on failure.</param>
     /// <param name="marinerStyles">The mariner settings clients register; <see langword="null"/> for a new registry.</param>
-    internal static int OpenRendered(Settings settings, out RenderedTileSource? source, MarinerStyleRegistry? marinerStyles = null)
+    /// <param name="changes">Datasets added and removed while serving (issue #1494); <see langword="null"/> for none.</param>
+    /// <param name="managed">With <c>--manage-datasets</c>, what tiles share across changes to the datasets; <see langword="null"/> otherwise.</param>
+    internal static int OpenRendered(
+        Settings settings,
+        out RenderedTileSource? source,
+        MarinerStyleRegistry? marinerStyles = null,
+        DatasetChanges? changes = null,
+        ManagedDatasetTiles? managed = null)
     {
         source = null;
-        int opened = TileRenderSession.TryOpen(settings, out var session);
+        int opened = TileRenderSession.TryOpen(settings, out var session, changes);
         if (session is null)
             return opened;
 
@@ -231,7 +267,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         {
             AnsiConsole.MarkupLine($"[grey]Portraying {session.Specs.Count} dataset(s) ({Markup.Escape(string.Join(", ", session.Specs.Distinct()))})…[/]");
             var scene = session.Prepare();
-            if (session.ResolveLayout(scene) is not { } layout)
+            if (session.ResolveLayout(scene, managed?.ReferenceLatitude) is not { } layout)
             {
                 AnsiConsole.MarkupLine("[red]The datasets have no geometry to tile; pass --bbox to serve an explicit area.[/]");
                 session.Dispose();
@@ -260,7 +296,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 diskCache,
                 new DatasetFeatureQuery(settings),
                 marinerStyles,
-                settings.StrictTime);
+                settings.StrictTime,
+                managed?.Memory,
+                managed is null ? null : new DatasetTileKeys(session, layout, settings.Metatile));
+            managed?.ReferenceLatitude ??= layout.ReferenceLatitude;
             return 0;
         }
         catch

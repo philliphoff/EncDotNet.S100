@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using EncDotNet.S100.Cli.Commands;
@@ -20,6 +22,23 @@ public sealed class TilesServeOverviewTests
     private static readonly XNamespace Wmts = "http://www.opengis.net/wmts/1.0";
 
     private static string S57 => Path.Combine(AppContext.BaseDirectory, "TestData", "US5MA1BO.000");
+
+    // Aids to navigation in Chesapeake Bay, far from the S-57 cell (Boston).
+    private static string S125 => Path.Combine(AppContext.BaseDirectory, "TestData", "S125", "aton_point.gml");
+
+    [Fact]
+    public void Every_tile_source_member_is_forwarded()
+    {
+        // A member ITileSource implements by default would otherwise answer
+        // for the chart source behind the overview (Revision, HasDatasets, …).
+        var map = typeof(OverviewTileSource).GetInterfaceMap(typeof(ITileSource));
+        var missing = map.TargetMethods
+            .Where(m => m.DeclaringType != typeof(OverviewTileSource))
+            .Select(m => m.Name)
+            .ToArray();
+        Assert.Empty(missing);
+        Assert.Equal(typeof(ITileSource).GetMethods(BindingFlags.Instance | BindingFlags.Public).Length, map.TargetMethods.Length);
+    }
 
     [Fact]
     public async Task Below_the_minimum_zoom_tiles_draw_the_coverage()
@@ -172,6 +191,75 @@ public sealed class TilesServeOverviewTests
         }
 
         Assert.Null(await rendered.ReadAsync(11, TileAt(11, longitude, latitude).X, TileAt(11, longitude, latitude).Y, null, null, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task The_overview_follows_a_change_to_the_datasets()
+    {
+        Assert.SkipUnless(File.Exists(S57) && File.Exists(S125), "Fixtures not present.");
+        var root = Directory.CreateTempSubdirectory("s100-overview-manage-");
+        try
+        {
+            var cell = System.IO.Path.Combine(root.FullName, System.IO.Path.GetFileName(S57));
+            var atons = System.IO.Path.Combine(root.FullName, System.IO.Path.GetFileName(S125));
+            File.Copy(S57, cell);
+            File.Copy(S125, atons);
+            var settings = new TilesServeCommand.Settings { Input = cell, MinZoom = 14, MaxZoom = 14, Parallel = 2, ManageDatasets = true, Overview = true };
+            Assert.True(settings.Validate().Successful);
+
+            // As tiles serve --manage-datasets --refresh 0 --overview sets it up.
+            var managed = new ManagedDatasetTiles(64L * 1024 * 1024);
+            var styles = new MarinerStyleRegistry();
+            ServedDatasets? datasets = null;
+            DatasetChanges Changes() => datasets?.Changes ?? DatasetChanges.None;
+            var fingerprint = TileRenderSession.Fingerprint(settings);
+            Assert.Equal(0, TilesServeCommand.OpenRendered(settings, out var initial, styles, managed: managed));
+            var refreshing = new RefreshingTileSource(
+                initial!,
+                fingerprint,
+                () => TileRenderSession.Fingerprint(settings, Changes()),
+                () => TilesServeCommand.OpenRendered(settings, out var reopened, styles, Changes(), managed) == 0 ? reopened : null,
+                Timeout.InfiniteTimeSpan,
+                _ => { });
+            datasets = new ServedDatasets(
+                refreshing,
+                changes => TilesServeCommand.OpenRendered(settings, out var changed, styles, changes, managed) == 0 ? changed : null,
+                changes => TileRenderSession.Fingerprint(settings, changes));
+            await using var overview = new OverviewTileSource(refreshing);
+            var ct = TestContext.Current.CancellationToken;
+            await using var server = await TileServer.StartAsync(overview, IPAddress.Loopback, 0, "tok", cancellationToken: ct, datasets: datasets);
+            using var http = new HttpClient();
+
+            var (cellX, cellY) = TileAt(6, -70.31, 41.29);
+            var (atonX, atonY) = TileAt(6, -76.2, 36.98);
+            async Task<HttpStatusCode> StatusAsync(int x, int y)
+            {
+                using var response = await http.GetAsync(new Uri(server.BaseUri, $"6/{x}/{y}.png"), ct);
+                return response.StatusCode;
+            }
+
+            Assert.Equal(HttpStatusCode.OK, await StatusAsync(cellX, cellY));
+            Assert.Equal(HttpStatusCode.NoContent, await StatusAsync(atonX, atonY));
+
+            using (var add = await http.PostAsJsonAsync(new Uri(server.BaseUri, ServedDatasets.Path), new { paths = new[] { atons } }, ct))
+                Assert.Equal(HttpStatusCode.OK, add.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, await StatusAsync(atonX, atonY));
+            Assert.Equal(HttpStatusCode.OK, await StatusAsync(cellX, cellY));
+
+            Assert.True((await datasets.RemoveAsync([cell])).Succeeded);
+            Assert.Equal(HttpStatusCode.NoContent, await StatusAsync(cellX, cellY));
+            Assert.Equal(HttpStatusCode.OK, await StatusAsync(atonX, atonY));
+        }
+        finally
+        {
+            try
+            {
+                root.Delete(recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     /// <summary>The XYZ tile holding a point.</summary>

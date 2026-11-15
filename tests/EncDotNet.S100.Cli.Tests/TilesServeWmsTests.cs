@@ -166,7 +166,7 @@ public sealed class TilesServeWmsTests
         using var http = new HttpClient();
 
         using var map = await GetMapAsync(http, server.BaseUri,
-            $"SERVICE=WMS&REQUEST=GetMap&LAYERS=s100&STYLES=day&{crsAndBox}&WIDTH=200&HEIGHT=120&FORMAT=image/png&TRANSPARENT=TRUE");
+            $"SERVICE=WMS&REQUEST=GetMap&LAYERS=s100&STYLES=day&{crsAndBox}&WIDTH=256&HEIGHT=120&FORMAT=image/png&TRANSPARENT=TRUE");
 
         // Longitudes -90…90: the eastern half is drawn, top to bottom.
         Assert.Equal(0, map.GetPixel(50, 60).Alpha);
@@ -175,18 +175,47 @@ public sealed class TilesServeWmsTests
     }
 
     [Fact]
-    public void The_nearest_zoom_is_drawn_and_none_below_the_minimum()
+    public void The_zoom_a_wmts_client_shows_is_drawn_and_none_below_the_minimum()
     {
         double zoom12 = 40075016.68557849 / 256 / 4096;
 
+        // The finest zoom no finer than the request, as WMTS clients pick
+        // their tile matrix (issue #1502): between zooms 11 and 12, zoom 11.
         Assert.Equal(12, WmsMapComposer.ZoomFor(zoom12, 256, 10, 16));
-        Assert.Equal(12, WmsMapComposer.ZoomFor(zoom12 * 1.3, 256, 10, 16));
+        Assert.Equal(12, WmsMapComposer.ZoomFor(zoom12 / 1.9, 256, 10, 16));
+        Assert.Equal(11, WmsMapComposer.ZoomFor(zoom12 * 1.3, 256, 10, 16));
         Assert.Equal(11, WmsMapComposer.ZoomFor(zoom12 * 1.5, 256, 10, 16));
         Assert.Equal(16, WmsMapComposer.ZoomFor(zoom12 / 1000, 256, 10, 16));
-        Assert.Null(WmsMapComposer.ZoomFor(zoom12 * 8, 256, 10, 16));
+        Assert.Equal(10, WmsMapComposer.ZoomFor(zoom12 * 4, 256, 10, 16));
+        Assert.Null(WmsMapComposer.ZoomFor(zoom12 * 4.1, 256, 10, 16));
+
+        // A zoom's scale rounded, a hair coarser, still draws that zoom.
+        Assert.Equal(12, WmsMapComposer.ZoomFor(zoom12 * 1.001, 256, 10, 16));
+        Assert.Equal(11, WmsMapComposer.ZoomFor(zoom12 * 1.02, 256, 10, 16));
 
         // 512-pixel tiles cover the same ground at one zoom lower.
         Assert.Equal(11, WmsMapComposer.ZoomFor(zoom12, 512, 10, 16));
+    }
+
+    [Theory]
+    [InlineData(23374, 14)] // ArcGIS Pro's 1:23,374 (issue #1502): WMTS zoom 14.
+    [InlineData(18056, 15)] // ArcGIS Pro's zoom 15 scale, rounded.
+    [InlineData(36112, 14)]
+    [InlineData(36500, 13)]
+    [InlineData(17061.84, 15)] // The WMTS ScaleDenominator of zoom 15, at 0.28 mm a pixel.
+    [InlineData(25000, 14)]
+    public void A_scale_draws_the_tile_matrix_a_wmts_client_draws(double scale, int expected)
+    {
+        // A client at 96 DPI: a pixel is 0.0254 / 96 m on its screen. Its
+        // WMTS tile matrices are ScaleDenominator × 0.28 mm a pixel, and it
+        // draws the finest one no finer than its view.
+        double metresPerPixel = scale * 0.0254 / 96;
+        int wmts = Enumerable.Range(0, 25)
+            .Where(zoom => 559082264.0287178 / (1L << zoom) * 0.00028 >= metresPerPixel * (1 - 0.006))
+            .Max();
+
+        Assert.Equal(expected, wmts);
+        Assert.Equal(wmts, WmsMapComposer.ZoomFor(metresPerPixel, 256, 0, 24));
     }
 
     [Theory]

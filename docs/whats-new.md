@@ -12,6 +12,20 @@ month. For package versions and release assets, see
   and WMTS capabilities reach zoom 0, so a GIS layer no longer disappears when
   zoomed out. Without it, tiles below the minimum zoom stay empty, as before.
   See [Overview below the minimum zoom](cli.md#overview-below-the-minimum-zoom).
+- **WMS and WMTS agree on the zoom level.** `s100 tiles serve` WMS GetMap
+  draws the zoom level a WMTS client such as ArcGIS Pro shows at the same
+  scale: the finest one no finer than the view, rather than the nearest. At
+  1:23,374, for example, both draw zoom 14, so WMS no longer shows soundings
+  and other features that WMTS hides there. The layer's
+  `MaxScaleDenominator` is now the minimum zoom's scale. See [WMS](cli.md#wms).
+- **Add and remove datasets while serving.** With `--manage-datasets`,
+  `s100 tiles serve` adds and removes datasets on a `POST` or `DELETE` of
+  `datasets`, without restarting. The new set serves once it's portrayed,
+  and the TileJSON, WMTS, WMS and dataset metadata documents and the data
+  revision follow it.
+  Tiles are cached under the datasets that reach them, so adding a cell
+  renders only its own tiles. Without the option nothing changes. See
+  [Add and remove datasets](cli.md#add-and-remove-datasets).
 - **Navigational warnings by validity in served tiles.** `s100 tiles serve`
   draws only the S-124 warnings in force at the time a client asks for, with
   `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its
