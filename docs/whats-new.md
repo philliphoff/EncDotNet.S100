@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Legends for GIS clients.** When it renders datasets, `s100 tiles serve`
+  draws the key of each style as a PNG, from the rows the viewer's Legend tab
+  shows: WMS `GetLegendGraphic`, linked from a `LegendURL` on each WMS and
+  WMTS style, so ArcGIS Pro and QGIS show the S-102 shades, S-111 speed bands
+  and the rest next to the layer. Each style's key is in its palette and with
+  its mariner settings. The grouping of sub-layer legends into product
+  sections moved from the viewer into `EncDotNet.S100.Core`
+  (`ProductLegends`), and `EncDotNet.S100.Renderers.Skia` draws the image
+  (`LegendSheetRenderer`). See [Legends](cli.md#legends).
 - **Navigational warnings by validity in served tiles.** `s100 tiles serve`
   draws only the S-124 warnings in force at the time a client asks for, with
   `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its

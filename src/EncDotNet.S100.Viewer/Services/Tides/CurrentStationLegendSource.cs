@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;

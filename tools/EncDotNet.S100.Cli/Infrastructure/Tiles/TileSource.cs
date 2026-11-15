@@ -44,6 +44,30 @@ internal interface ITileSource
     MarinerStyleRegistry? MarinerStyles => null;
 
     /// <summary>
+    /// The legend graphics of the styles (issue #1501): WMS
+    /// <c>GetLegendGraphic</c> and the capabilities' <c>LegendURL</c>s;
+    /// <see langword="null"/> when the tiles aren't rendered here (a built
+    /// tile set). Read it through <see cref="ReadLegendAsync"/> and
+    /// <see cref="LegendSize"/>, which keep the datasets open while they draw.
+    /// </summary>
+    bool HasLegend => false;
+
+    /// <summary>
+    /// The size of <paramref name="style"/>'s legend graphic with the default
+    /// options (<see cref="TileLegend.SizeOf"/>), or <see langword="null"/>
+    /// when there is none.
+    /// </summary>
+    (int Width, int Height)? LegendSize(string? style) => null;
+
+    /// <summary>
+    /// <paramref name="style"/>'s legend graphic as a PNG
+    /// (<see cref="TileLegend.Render"/>), or <see langword="null"/> when the
+    /// style isn't served or the source has no legend.
+    /// </summary>
+    ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<byte[]?>(null);
+
+    /// <summary>
     /// Whether <see cref="ToDatasetsJson"/> describes the datasets the tiles
     /// are rendered from; <see langword="false"/> for a built tile set.
     /// </summary>
