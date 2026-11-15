@@ -54,6 +54,27 @@ internal interface ITileSource
     ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Whether <see cref="RenderViewAsync"/> draws any box directly from the
+    /// datasets (issue #1500, WMS GetMap at a print DPI); a built tile set can't.
+    /// </summary>
+    bool CanRenderViews => false;
+
+    /// <summary>
+    /// Draws the Web Mercator box <paramref name="minX"/>, <paramref name="minY"/>,
+    /// <paramref name="maxX"/>, <paramref name="maxY"/> as a
+    /// <paramref name="width"/> × <paramref name="height"/> image with the
+    /// content of <paramref name="zoom"/>'s tiles, its symbols and text scaled
+    /// as resampling those tiles would scale them (see
+    /// <see cref="Rendering.Engine.ChartTileRenderer.RenderView"/>), or
+    /// <see langword="null"/> when the source can't (<see cref="CanRenderViews"/>)
+    /// or <paramref name="zoom"/> isn't served. The caller disposes the image.
+    /// </summary>
+    ValueTask<SkiaSharp.SKBitmap?> RenderViewAsync(
+        int zoom, double minX, double minY, double maxX, double maxY, int width, int height,
+        string? palette, DateTime? time, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<SkiaSharp.SKBitmap?>(null);
+
+    /// <summary>
     /// A TileJSON 3.0.0 document describing the tiles in <paramref name="palette"/>
     /// at the time step nearest <paramref name="time"/>, without its
     /// <c>tiles</c> URL template (the server adds it).

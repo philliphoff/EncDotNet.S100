@@ -197,10 +197,12 @@ Describes one package in `src/<project>/README.md`.
 Before you open a pull request:
 
 1. Build the site the way CI does, which fails on broken links and anchors.
-   The first command checks out the EncDotNet docs the site includes:
+   The first two commands check out the EncDotNet and EncDotNet.ArcGIS docs
+   the site includes:
 
    ```bash
    docs/fetch-encdotnet.sh
+   docs/fetch-encdotnet-arcgis.sh
    docfx docfx.json --warningsAsErrors
    ```
 

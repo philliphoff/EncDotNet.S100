@@ -21,17 +21,57 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// Web Mercator columns are linear in longitude, so a plate carrée image is
 /// drawn row by row: each output row is the stitched row at its latitude.
 /// </para>
+/// <para>
+/// At a DPI other than <see cref="StandardDpi"/> (issue #1500), the image is
+/// the standard-DPI image of the same view at a finer (or coarser)
+/// resolution: the zoom level, and so the SCAMIN content, is chosen from the
+/// display resolution (the request's × DPI / 96) and symbols and text are
+/// scaled by DPI / 96, so they keep their physical size. A source that renders
+/// from datasets draws the box directly (<see cref="ITileSource.RenderViewAsync"/>);
+/// a built tile set's tiles are resampled, so its image is only as sharp as
+/// the tiles.
+/// </para>
 /// </remarks>
 internal static class WmsMapComposer
 {
-    /// <summary>The largest image edge served, in pixels.</summary>
+    /// <summary>The largest image edge served at <see cref="StandardDpi"/>, in pixels.</summary>
     public const int MaxSize = 4096;
+
+    /// <summary>The largest image edge served at any DPI, in pixels.</summary>
+    public const int MaxPrintSize = 16384;
+
+    /// <summary>The most pixels in one image at a DPI above the standard (8192²).</summary>
+    public const long MaxPrintPixels = 8192L * 8192;
+
+    /// <summary>The DPI a request is drawn at unless it asks for another: OGC's 0.28 mm pixel.</summary>
+    public const double StandardDpi = 96;
+
+    /// <summary>The lowest and highest DPI accepted.</summary>
+    public const double MinDpi = 24, MaxDpi = 1200;
 
     private const double MaxLatitude = 85.0511287798066;
 
     /// <summary>
     /// The image of <paramref name="box"/> at <paramref name="width"/> ×
     /// <paramref name="height"/> pixels, drawn over <paramref name="background"/>
+    /// (transparent when <see langword="null"/>), encoded as <paramref name="format"/>.
+    /// </summary>
+    public static Task<byte[]> ComposeAsync(
+        ITileSource source,
+        WmsBox box,
+        int width,
+        int height,
+        string? palette,
+        DateTime? time,
+        SKColor? background,
+        TileImageFormat format,
+        CancellationToken cancellationToken) =>
+        ComposeAsync(source, box, width, height, palette, time, background, format, StandardDpi, cancellationToken);
+
+    /// <summary>
+    /// The image of <paramref name="box"/> at <paramref name="width"/> ×
+    /// <paramref name="height"/> pixels for a display of <paramref name="dpi"/>
+    /// dots per inch, drawn over <paramref name="background"/>
     /// (transparent when <see langword="null"/>), encoded as <paramref name="format"/>.
     /// </summary>
     public static async Task<byte[]> ComposeAsync(
@@ -43,13 +83,14 @@ internal static class WmsMapComposer
         DateTime? time,
         SKColor? background,
         TileImageFormat format,
+        double dpi,
         CancellationToken cancellationToken)
     {
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
         {
             canvas.Clear(background ?? SKColors.Transparent);
-            await DrawAsync(canvas, source, box, width, height, palette, time, cancellationToken).ConfigureAwait(false);
+            await DrawAsync(canvas, source, box, width, height, palette, time, dpi, cancellationToken).ConfigureAwait(false);
         }
 
         using var image = SKImage.FromBitmap(bitmap);
@@ -72,6 +113,10 @@ internal static class WmsMapComposer
         return Math.Min(zoom, maxZoom);
     }
 
+    /// <summary>The largest image edge served at <paramref name="dpi"/>: <see cref="MaxSize"/> scaled by DPI / 96, up to <see cref="MaxPrintSize"/>.</summary>
+    internal static int MaxSizeFor(double dpi) =>
+        dpi <= StandardDpi ? MaxSize : (int)Math.Min(MaxPrintSize, Math.Ceiling(MaxSize * dpi / StandardDpi));
+
     private static async Task DrawAsync(
         SKCanvas canvas,
         ITileSource source,
@@ -80,6 +125,7 @@ internal static class WmsMapComposer
         int height,
         string? palette,
         DateTime? time,
+        double dpi,
         CancellationToken cancellationToken)
     {
         var json = source.ToTileJson(palette, time);
@@ -106,8 +152,32 @@ internal static class WmsMapComposer
         if (maxX <= minX || maxY <= minY)
             return;
 
-        if (ZoomFor((maxX - minX) / width, tilePixels, minZoom, maxZoom) is not { } zoom)
+        // The zoom level of the display resolution: the request's at 96 DPI.
+        double scale = dpi / StandardDpi;
+        if (ZoomFor((maxX - minX) / width * scale, tilePixels, minZoom, maxZoom) is not { } zoom)
             return;
+
+        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+        using var paint = new SKPaint();
+        if (dpi != StandardDpi && source.CanRenderViews)
+        {
+            // Draw the extent directly, a Web Mercator pixel as wide as an
+            // output pixel; a plate carrée image is then resampled row by row.
+            int viewWidth = width;
+            double pixelX = (maxX - minX) / width;
+            int viewHeight = box.IsMercator
+                ? Math.Max(1, (int)Math.Round((maxY - minY) / (box.MaxY - box.MinY) * height))
+                : (int)Math.Clamp(Math.Ceiling((maxY - minY) / pixelX), 1, Math.Min(MaxPrintSize, 4.0 * height));
+            using var view = await source.RenderViewAsync(
+                zoom, minX, minY, maxX, maxY, viewWidth, viewHeight, palette, time, cancellationToken).ConfigureAwait(false);
+            if (view is null)
+                return;
+
+            using var viewImage = SKImage.FromBitmap(view);
+            Resample(canvas, viewImage, box, width, height, minX, minY, maxX, maxY,
+                minX, maxY, pixelX, (maxY - minY) / viewHeight, sampling, paint);
+            return;
+        }
 
         // The tiles under the extent; columns unwrapped past ±180°.
         double tileSize = XyzTileGrid.TileWorldSize(zoom);
@@ -153,11 +223,37 @@ internal static class WmsMapComposer
         double originX = (firstColumn * tileSize) - XyzTileGrid.Extent;
         double originY = XyzTileGrid.Extent - (firstRow * tileSize);
         double pixel = tileSize / tilePixels;
-        float SourceX(double mercatorX) => (float)((mercatorX - originX) / pixel);
-        float SourceY(double mercatorY) => (float)((originY - mercatorY) / pixel);
+        Resample(canvas, mosaicImage, box, width, height, minX, minY, maxX, maxY, originX, originY, pixel, pixel, sampling, paint);
+    }
 
-        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
-        using var paint = new SKPaint();
+    /// <summary>
+    /// Draws the Web Mercator extent <paramref name="minX"/> … <paramref name="maxY"/>
+    /// of <paramref name="mosaicImage"/>, whose top-left corner lies at
+    /// <paramref name="originX"/>, <paramref name="originY"/> and whose pixels
+    /// are <paramref name="pixelX"/> × <paramref name="pixelY"/> metres, into
+    /// the <paramref name="width"/> × <paramref name="height"/> image of
+    /// <paramref name="box"/>.
+    /// </summary>
+    private static void Resample(
+        SKCanvas canvas,
+        SKImage mosaicImage,
+        WmsBox box,
+        int width,
+        int height,
+        double minX,
+        double minY,
+        double maxX,
+        double maxY,
+        double originX,
+        double originY,
+        double pixelX,
+        double pixelY,
+        SKSamplingOptions sampling,
+        SKPaint paint)
+    {
+        float SourceX(double mercatorX) => (float)((mercatorX - originX) / pixelX);
+        float SourceY(double mercatorY) => (float)((originY - mercatorY) / pixelY);
+
         if (box.IsMercator)
         {
             // Rows past the projection's limit (outside ±85.05°) stay empty.

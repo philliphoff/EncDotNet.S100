@@ -172,6 +172,12 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
   before building the docs locally. Those pages are edited in the EncDotNet
   repository, and a new or renamed page there needs a matching entry in
   `docfx.json`, `docs/toc.yml` or `src/toc.yml` here.
+- It also includes the user-facing pages of
+  [SoundCharts for ArcGIS](https://github.com/philliphoff/EncDotNet.ArcGIS)
+  (under `docs/arcgis/`). `docs/fetch-encdotnet-arcgis.sh` checks out its
+  latest release into `external/`. Those pages are edited in the
+  EncDotNet.ArcGIS repository, and a new or renamed page there needs a
+  matching entry in `docs/toc.yml` here.
 - When editing the viewer (`src/EncDotNet.S100.Viewer/**`), follow the
   localization and UI rules in `.github/instructions/viewer.instructions.md`
   (every user-facing string lives in `Resources/Strings.resx`).

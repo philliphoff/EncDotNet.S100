@@ -76,6 +76,8 @@ flowchart LR
   testing and S-57-only tools, following S-65 Annex C.
 - [S-57 and ISO 8211 libraries](../external/EncDotNet/docs/index.md): read S-57
   cells, update cells and exchange sets, and ISO 8211 files, with EncDotNet.
+- [SoundCharts for ArcGIS](../external/EncDotNet.ArcGIS/docs/index.md): show
+  S-100 charts in ArcGIS Pro, with the add-in built on these libraries.
 - [Route checks and under-keel clearance](route-checks.md): what each route
   finding means, UKC and confidence, and the RTZ and S-421 route formats.
 

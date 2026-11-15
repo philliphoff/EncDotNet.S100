@@ -13,6 +13,13 @@ month. For package versions and release assets, see
   Tiles are cached under the datasets that reach them, so adding a cell
   renders only its own tiles. Without the option nothing changes. See
   [Add and remove datasets](cli.md#add-and-remove-datasets).
+- **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
+  `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
+  Pro and QGIS send when they export a layout. A 300 DPI map shows the same
+  features as the screen, with symbols and text at the same printed size,
+  drawn directly at the print resolution, and may be larger than 4096 pixels.
+  Requests without them are drawn as before. See
+  [WMS](cli.md#wms).
 - **Mariner settings in served and exported tiles.** `s100 tiles serve` and
   `s100 tiles export` take the viewer's mariner settings as options: the
   display category, safety contour and depth, shallow and deep contours, four
