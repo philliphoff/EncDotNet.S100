@@ -80,6 +80,14 @@
       href: ../external/EncDotNet/docs/glossary.md
     - name: Versioning and compatibility
       href: ../external/EncDotNet/docs/versioning.md
+- name: SoundCharts for ArcGIS
+  items:
+    - name: Overview
+      href: ../external/EncDotNet.ArcGIS/docs/index.md
+    - name: Install SoundCharts for ArcGIS
+      href: ../external/EncDotNet.ArcGIS/docs/install.md
+    - name: SoundCharts Tools
+      href: ../external/EncDotNet.ArcGIS/docs/toolbox.md
 - name: Contributing
   items:
     - name: C# coding style

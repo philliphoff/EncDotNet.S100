@@ -108,7 +108,7 @@ internal static class WmsService
         {
             var m = map!.Value;
             var image = await WmsMapComposer.ComposeAsync(
-                source, m.Box, m.Width, m.Height, m.Palette, m.Time, m.Background, m.Format, context.RequestAborted).ConfigureAwait(false);
+                source, m.Box, m.Width, m.Height, m.Palette, m.Time, m.Background, m.Format, m.Dpi, context.RequestAborted).ConfigureAwait(false);
             context.Response.ContentType = TileSource.ContentType(m.Format);
             context.Response.ContentLength = image.Length;
             context.Response.Headers.CacheControl = "no-cache";
@@ -207,7 +207,8 @@ internal static class WmsService
 
     /// <summary>A GetMap request (or the map part of a GetFeatureInfo request), parsed and checked.</summary>
     internal readonly record struct WmsMap(
-        WmsBox Box, int Width, int Height, string? Palette, DateTime? Time, TileImageFormat Format, SKColor? Background, bool Legacy);
+        WmsBox Box, int Width, int Height, string? Palette, DateTime? Time, TileImageFormat Format, SKColor? Background, bool Legacy,
+        double Dpi = WmsMapComposer.StandardDpi);
 
     /// <summary>Why a request was refused: the WMS exception code (none for a general error) and a message.</summary>
     internal readonly record struct WmsError(string? Code, string Message);
@@ -216,7 +217,9 @@ internal static class WmsService
     /// Reads the map parameters every GetMap and GetFeatureInfo has:
     /// <c>LAYERS</c>, <c>STYLES</c>, <c>CRS</c> (or 1.1.1's <c>SRS</c>),
     /// <c>BBOX</c>, <c>WIDTH</c>, <c>HEIGHT</c>, <c>FORMAT</c>,
-    /// <c>TRANSPARENT</c>, <c>BGCOLOR</c> and <c>TIME</c>.
+    /// <c>TRANSPARENT</c>, <c>BGCOLOR</c> and <c>TIME</c>, and the display
+    /// resolution, from the vendor parameters <c>DPI</c>, <c>MAP_RESOLUTION</c>
+    /// or <c>FORMAT_OPTIONS=dpi:N</c> (<see cref="ParseDpi"/>).
     /// </summary>
     internal static (WmsMap? Map, WmsError? Error) ParseMap(ITileSource source, Func<string, string?> get, bool requireFormat)
     {
@@ -270,10 +273,20 @@ internal static class WmsService
             _ => WmsBox.Degrees(numbers[0], numbers[1], numbers[2], numbers[3]),
         };
 
-        if (!TryParseSize(get("WIDTH"), out int width))
-            return Fail(null, $"WIDTH must be a whole number from 1 to {WmsMapComposer.MaxSize}.");
-        if (!TryParseSize(get("HEIGHT"), out int height))
-            return Fail(null, $"HEIGHT must be a whole number from 1 to {WmsMapComposer.MaxSize}.");
+        var (dpi, dpiError) = ParseDpi(get);
+        if (dpiError is not null)
+            return Fail(null, dpiError);
+
+        int maxSize = WmsMapComposer.MaxSizeFor(dpi);
+        if (!TryParseSize(get("WIDTH"), maxSize, out int width))
+            return Fail(null, $"WIDTH must be a whole number from 1 to {maxSize}{AtDpi(dpi)}.");
+        if (!TryParseSize(get("HEIGHT"), maxSize, out int height))
+            return Fail(null, $"HEIGHT must be a whole number from 1 to {maxSize}{AtDpi(dpi)}.");
+        if (maxSize > WmsMapComposer.MaxSize && (long)width * height > WmsMapComposer.MaxPrintPixels)
+        {
+            return Fail(null, $"A {width} × {height} map is more than {WmsMapComposer.MaxPrintPixels:N0} pixels; "
+                + "ask for it in parts and put them together.");
+        }
 
         var format = TileImageFormat.Png;
         var formatText = get("FORMAT");
@@ -315,9 +328,59 @@ internal static class WmsService
         }
 
         return (new WmsMap(box, width, height, palette, time, format,
-            transparent && format != TileImageFormat.Jpeg ? null : background, legacy), null);
+            transparent && format != TileImageFormat.Jpeg ? null : background, legacy, dpi), null);
 
         static (WmsMap?, WmsError?) Fail(string? code, string message) => (null, new WmsError(code, message));
+
+        static string AtDpi(double dpi) =>
+            dpi == WmsMapComposer.StandardDpi ? string.Empty : $" at {Number(dpi)} DPI";
+    }
+
+    /// <summary>
+    /// The display resolution a map is drawn for (issue #1500): the first of
+    /// <c>DPI</c> (GeoServer, QGIS), <c>MAP_RESOLUTION</c> (MapServer, QGIS) and
+    /// the <c>dpi</c> key of <c>FORMAT_OPTIONS</c> (GeoServer, as
+    /// <c>dpi:300</c>, keys separated by <c>;</c>) that's given, or
+    /// <see cref="WmsMapComposer.StandardDpi"/>; with the reason when the value
+    /// given isn't a number from <see cref="WmsMapComposer.MinDpi"/> to
+    /// <see cref="WmsMapComposer.MaxDpi"/>.
+    /// </summary>
+    internal static (double Dpi, string? Error) ParseDpi(Func<string, string?> get)
+    {
+        string? name = null, text = null;
+        foreach (var parameter in (ReadOnlySpan<string>)["DPI", "MAP_RESOLUTION"])
+        {
+            if (get(parameter) is { Length: > 0 } value)
+            {
+                (name, text) = (parameter, value);
+                break;
+            }
+        }
+
+        if (text is null && get("FORMAT_OPTIONS") is { Length: > 0 } options)
+        {
+            foreach (var option in options.Split(';', ','))
+            {
+                var pair = option.Split(':', 2);
+                if (pair.Length == 2 && string.Equals(pair[0].Trim(), "dpi", StringComparison.OrdinalIgnoreCase))
+                {
+                    (name, text) = ("FORMAT_OPTIONS dpi", pair[1]);
+                    break;
+                }
+            }
+        }
+
+        if (text is null)
+            return (WmsMapComposer.StandardDpi, null);
+
+        if (!double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double dpi)
+            || !double.IsFinite(dpi) || dpi < WmsMapComposer.MinDpi || dpi > WmsMapComposer.MaxDpi)
+        {
+            return (WmsMapComposer.StandardDpi,
+                $"{name} '{text}' must be a number from {Number(WmsMapComposer.MinDpi)} to {Number(WmsMapComposer.MaxDpi)}.");
+        }
+
+        return (dpi, null);
     }
 
     private static async Task FeatureInfoAsync(HttpContext context, ITileSource source, WmsMap map, Func<string, string?> get)
@@ -361,7 +424,7 @@ internal static class WmsService
             : 1;
         var (latitude, longitude, pixelMetres) = map.Box.PixelPosition(i, j, map.Width, map.Height);
         var result = await featureQuery.QueryAsync(
-            latitude, longitude, Math.Clamp(pixelMetres * PickRadiusPixels, 1, 100_000), count,
+            latitude, longitude, Math.Clamp(pixelMetres * PickRadiusPixels * map.Dpi / WmsMapComposer.StandardDpi, 1, 100_000), count,
             map.Time, context.RequestAborted).ConfigureAwait(false);
 
         context.Response.Headers.CacheControl = "no-cache";
@@ -685,8 +748,8 @@ internal static class WmsService
         return context.Response.WriteAsync(ExceptionReport(error.Code, error.Message), context.RequestAborted);
     }
 
-    private static bool TryParseSize(string? text, out int size) =>
-        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out size) && size is >= 1 and <= WmsMapComposer.MaxSize;
+    private static bool TryParseSize(string? text, int maxSize, out int size) =>
+        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out size) && size >= 1 && size <= maxSize;
 
     /// <summary>The styles, the default (the <c>--palette</c> one) first, as WMS takes the first as the default.</summary>
     private static List<string> Styles(ITileSource source, JsonObject json)
