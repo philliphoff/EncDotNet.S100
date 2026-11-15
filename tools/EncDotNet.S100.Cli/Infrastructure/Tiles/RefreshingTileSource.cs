@@ -98,6 +98,23 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         }
     }
 
+    public bool CanRenderViews => true;
+
+    public async ValueTask<SkiaSharp.SKBitmap?> RenderViewAsync(
+        int zoom, double minX, double minY, double maxX, double maxY, int width, int height,
+        string? palette, DateTime? time, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.RenderViewAsync(zoom, minX, minY, maxX, maxY, width, height, palette, time, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
     public JsonObject ToTileJson(string? palette, DateTime? time = null)
     {
         var generation = Acquire();

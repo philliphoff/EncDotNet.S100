@@ -745,11 +745,25 @@ nothing, and the capabilities give the matching `MaxScaleDenominator`, so
 clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
 a side; set `TRANSPARENT=TRUE` for a PNG to overlay other layers.
 
+**Printing.** A client exporting a layout at a resolution higher than the
+screen's, such as ArcGIS Pro or QGIS, asks for more pixels for the same view
+and says how many dots per inch they're for, with `DPI`, `MAP_RESOLUTION` or
+`FORMAT_OPTIONS=dpi:N` (the first of these given counts; 24 to 1200, 96 by
+default). GetMap then draws the 96 DPI map of the same view, sharper: the zoom
+level, and so which features show at that scale (SCAMIN), comes from the
+display scale, and symbols and text are scaled by DPI / 96, so they print at
+the size they have on screen. When the server renders from datasets, it draws
+the requested area directly at the print resolution rather than from the
+tiles; a built tile set's tiles are resampled, so they print at the right size
+but no sharper. Above 96 DPI, images may be up to 4096 × DPI / 96 pixels on a
+side (at most 16,384) and 67 million pixels in all; ask for a larger print in
+parts. Without these parameters GetMap is unchanged.
+
 **GetFeatureInfo** answers from the datasets, as
 [`identify`](#identify) does: the vector features at the clicked pixel, with
 their attributes, and the coverage values there (S-102 depths, S-104 water
 levels, S-111 currents, weather grids). Point and curve features within 5
-pixels of the click are matched. `FEATURE_COUNT` limits the features (1 by
+pixels of the click (at 96 DPI; scaled with `DPI`) are matched. `FEATURE_COUNT` limits the features (1 by
 default, as WMS defines it), and `TIME` picks the time step sampled. The
 answer is in one of these formats (`INFO_FORMAT`):
 

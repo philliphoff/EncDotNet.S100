@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
+  `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
+  Pro and QGIS send when they export a layout. A 300 DPI map shows the same
+  features as the screen, with symbols and text at the same printed size,
+  drawn directly at the print resolution, and may be larger than 4096 pixels.
+  Requests without them are drawn as before. See
+  [WMS](cli.md#wms).
 - **`s100` as a container image.** `ghcr.io/philliphoff/s100` runs `s100`
   on Linux x64 and arm64 with nothing else to install. It runs as a non-root
   user, reads datasets from `/data`, and keeps tiles in `/cache` and the tide
