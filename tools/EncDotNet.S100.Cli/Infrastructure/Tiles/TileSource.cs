@@ -44,6 +44,19 @@ internal interface ITileSource
     MarinerStyleRegistry? MarinerStyles => null;
 
     /// <summary>
+    /// Whether <see cref="ToDatasetsJson"/> describes the datasets the tiles
+    /// are rendered from; <see langword="false"/> for a built tile set.
+    /// </summary>
+    bool HasDatasets => false;
+
+    /// <summary>
+    /// The <c>/datasets</c> document (issue #1504): each dataset the tiles are
+    /// rendered from, as they are now; <see langword="null"/> when there are
+    /// none behind the tiles (a built tile set).
+    /// </summary>
+    JsonObject? ToDatasetsJson() => null;
+
+    /// <summary>
     /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
     /// (rows numbered from the north) in <paramref name="palette"/> (one of
     /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at

@@ -87,6 +87,21 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public MarinerStyleRegistry? MarinerStyles => Current.MarinerStyles;
 
+    public bool HasDatasets => true;
+
+    public JsonObject? ToDatasetsJson()
+    {
+        var generation = Acquire();
+        try
+        {
+            return generation.Source.ToDatasetsJson();
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         var generation = Acquire();
