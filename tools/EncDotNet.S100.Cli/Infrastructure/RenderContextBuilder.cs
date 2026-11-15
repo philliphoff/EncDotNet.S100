@@ -24,7 +24,9 @@ internal static class RenderContextBuilder
         string? displayModeId = null,
         Viewport? viewport = null,
         DateTime? instant = null,
-        string? nationalLanguage = null)
+        string? nationalLanguage = null,
+        MarinerSettings? mariner = null,
+        EcdisDisplaySettings? ecdisDisplay = null)
     {
         DateTime? timeStep = instant is { } at
             ? NearestTimeStep(processor, at)
@@ -40,10 +42,13 @@ internal static class RenderContextBuilder
             Basemap = basemap,
             DisplayModeId = displayModeId,
             Viewport = viewport,
+            EcdisDisplay = ecdisDisplay,
             // Only set when chosen, so processors keep their own defaults otherwise.
-            Mariner = string.IsNullOrEmpty(nationalLanguage)
-                ? null
-                : MarinerSettings.Default with { NationalLanguage = nationalLanguage },
+            Mariner = mariner is not null
+                ? (string.IsNullOrEmpty(nationalLanguage) ? mariner : mariner with { NationalLanguage = nationalLanguage })
+                : string.IsNullOrEmpty(nationalLanguage)
+                    ? null
+                    : MarinerSettings.Default with { NationalLanguage = nationalLanguage },
         };
     }
 

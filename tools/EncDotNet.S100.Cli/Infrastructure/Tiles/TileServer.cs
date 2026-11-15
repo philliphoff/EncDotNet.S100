@@ -100,6 +100,9 @@ internal sealed class TileServer : IAsyncDisposable
         app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
         app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
 
+        // Mariner settings sets, served as {palette}-{hash} styles (issue #1493).
+        MarinerStyleRegistry.Map(app, prefix, () => source.MarinerStyles, () => source.Palettes);
+
         // OGC WMS 1.3.0: GetCapabilities, GetMap and GetFeatureInfo.
         app.MapGet(prefix + "/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context, prefix)));
 

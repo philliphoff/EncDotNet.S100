@@ -13,6 +13,16 @@ month. For package versions and release assets, see
   drawn directly at the print resolution, and may be larger than 4096 pixels.
   Requests without them are drawn as before. See
   [WMS](cli.md#wms).
+- **Mariner settings in served and exported tiles.** `s100 tiles serve` and
+  `s100 tiles export` take the viewer's mariner settings as options: the
+  display category, safety contour and depth, shallow and deep contours, four
+  shades, soundings, shallow-water dangers, plain boundaries, simplified
+  symbols, full light lines, ignoring SCAMIN and the depth unit. A
+  `tiles serve` client can also register more sets of settings under
+  `settings/{hash}` and ask for each as the WMTS or WMS style
+  `{palette}-{hash}`, so one server serves the chart as several mariners set
+  it. Without them the tiles are as before. See
+  [Mariner settings](cli.md#mariner-settings).
 - **Observed, predicted or forecast.** The viewer labels S-104 water levels
   and S-111 currents by how they were produced, from S-104 `dataDynamicity`
   and S-111 `typeOfCurrentData`: **Observed**, **Predicted · astronomical

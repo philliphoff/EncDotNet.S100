@@ -128,7 +128,9 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 // Fingerprint before opening: a change made meanwhile is then
                 // seen as one, rather than missed.
                 var fingerprint = TileRenderSession.Fingerprint(settings);
-                int exitCode = OpenRendered(settings, out var rendered);
+                // One registry across reloads, so registered settings survive them.
+                var marinerStyles = new MarinerStyleRegistry();
+                int exitCode = OpenRendered(settings, out var rendered, marinerStyles);
                 if (rendered is null)
                     return exitCode;
 
@@ -138,7 +140,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                         rendered,
                         fingerprint,
                         () => TileRenderSession.Fingerprint(settings),
-                        () => OpenRendered(settings, out var reopened) == 0 ? reopened : null,
+                        () => OpenRendered(settings, out var reopened, marinerStyles) == 0 ? reopened : null,
                         TimeSpan.FromSeconds(settings.RefreshSeconds),
                         line => AnsiConsole.MarkupLine($"[grey]{DateTime.Now:HH:mm:ss}[/] {Markup.Escape(line)}"));
             }
@@ -205,7 +207,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
     }
 
     /// <summary>Opens the datasets and prepares them in the default palette, so problems show before serving.</summary>
-    internal static int OpenRendered(Settings settings, out RenderedTileSource? source)
+    /// <param name="settings">The command's settings.</param>
+    /// <param name="source">The source opened, or <see langword="null"/> on failure.</param>
+    /// <param name="marinerStyles">The mariner settings clients register; <see langword="null"/> for a new registry.</param>
+    internal static int OpenRendered(Settings settings, out RenderedTileSource? source, MarinerStyleRegistry? marinerStyles = null)
     {
         source = null;
         int opened = TileRenderSession.TryOpen(settings, out var session);
@@ -244,6 +249,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 settings.CacheMegabytes * 1024L * 1024L,
                 diskCache,
                 new DatasetFeatureQuery(settings),
+                marinerStyles,
                 settings.StrictTime);
             return 0;
         }
