@@ -49,7 +49,7 @@ internal sealed class FeedServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(address);
 
-        var builder = WebApplication.CreateSlimBuilder();
+        var builder = ServeHost.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(k => k.Listen(address, port));
         builder.Services.AddResponseCompression(o =>

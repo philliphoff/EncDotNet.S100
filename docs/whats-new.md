@@ -635,6 +635,12 @@ month. For package versions and release assets, see
   translation and for tools that read only S-57, not for producing ENCs. See
   [Converting S-101 to S-57](s101-to-s57.md).
 
+- **`tiles serve` no longer exits on a file rename.** `tiles serve`,
+  `feed serve` and `mcp serve --transport http` no longer watch the working
+  directory for configuration changes. On Windows, a server started from a
+  short (8.3) path could end with an `ArgumentOutOfRangeException` when a
+  file under that folder was renamed.
+
 ## October 2026
 
 - **One time readout on the map, and step buttons that stay put.**

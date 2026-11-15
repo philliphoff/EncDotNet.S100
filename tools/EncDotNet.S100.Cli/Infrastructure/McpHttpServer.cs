@@ -63,7 +63,7 @@ internal sealed class McpHttpServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(address);
 
-        var builder = WebApplication.CreateSlimBuilder();
+        var builder = ServeHost.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(k => k.Listen(address, port));
         builder.Services
