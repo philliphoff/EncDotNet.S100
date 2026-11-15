@@ -90,6 +90,21 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public MarinerStyleRegistry? MarinerStyles => Current.MarinerStyles;
 
+    public bool HasDatasets => true;
+
+    public JsonObject? ToDatasetsJson()
+    {
+        var generation = Acquire();
+        try
+        {
+            return generation.Source.ToDatasetsJson();
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
     /// <summary>The revision of the datasets currently served; changes when they are reopened.</summary>
     public string? Revision => Current.Revision;
 

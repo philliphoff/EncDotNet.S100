@@ -336,6 +336,37 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
     }
 
     [Fact]
+    public async Task The_dataset_metadata_lists_the_changed_set()
+    {
+        Assert.SkipUnless(File.Exists(S57) && File.Exists(S125), "Fixtures not present.");
+        var cell = Copy(S57);
+        var atons = Copy(S125);
+        var (source, datasets) = Managed(SettingsFor(cell));
+        await using var _ = source;
+        var ct = TestContext.Current.CancellationToken;
+        await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, "tok", cancellationToken: ct, datasets: datasets);
+        using var http = new HttpClient();
+        var uri = new Uri(server.BaseUri, ServedDatasets.Path);
+
+        async Task<string[]> FilesAsync()
+        {
+            var json = JsonNode.Parse(await http.GetStringAsync(uri, ct))!;
+            return [.. json["datasets"]!.AsArray().Select(d => (string)d!["file"]!)];
+        }
+
+        Assert.Equal(["US5MA1BO.000"], await FilesAsync());
+
+        using (var add = await http.PostAsJsonAsync(uri, new { paths = new[] { atons } }, ct))
+            Assert.Equal(HttpStatusCode.OK, add.StatusCode);
+        Assert.Equal(["US5MA1BO.000", "aton_point.gml"], await FilesAsync());
+
+        using (var remove = new HttpRequestMessage(HttpMethod.Delete, uri) { Content = JsonContent.Create(new { path = cell }) })
+        using (var response = await http.SendAsync(remove, ct))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["aton_point.gml"], await FilesAsync());
+    }
+
+    [Fact]
     public async Task A_change_publishes_a_new_revision()
     {
         Assert.SkipUnless(File.Exists(S57) && File.Exists(S125), "Fixtures not present.");

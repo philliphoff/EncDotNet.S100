@@ -771,6 +771,50 @@ hash isn't registered answers `404 Not Found` on the tile URLs and an exception
 on WMTS and WMS. A built tile set has no mariner settings; export one per set
 with the same options instead.
 
+### Dataset metadata
+
+When `tiles serve` renders datasets, `datasets` describes each of them, so a
+client needn't open the datasets itself. `tiles.json` points to it in
+`s100.datasetsUrl`. The document lists the datasets served now, so it follows
+a reload; a built tile set has none, and `datasets` answers
+`404 Not Found`.
+
+```json
+{
+  "notForNavigation": true,
+  "datasets": [
+    {
+      "id": "111US00_DBOFS_20260320T18Z_US4DE1BB",
+      "file": "111US00_DBOFS_20260320T18Z_US4DE1BB.h5",
+      "product": "S-111",
+      "edition": "1.0.0",
+      "producer": "US00",
+      "bounds": [-75.5999985, 38.7000008, -75.2999649, 39.0000343],
+      "coverage": { "type": "MultiPolygon", "coordinates": [ ... ] },
+      "coverageSource": "bounds",
+      "times": ["2026-03-20T19:00:00Z", "2026-03-20T20:00:00Z", ...],
+      "issueTime": "2026-03-20T19:22:48Z",
+      "dataDynamicity": { "code": 5, "value": "hydrodynamicForecast", "label": "Forecast" },
+      "notForNavigation": true
+    }
+  ]
+}
+```
+
+| Member | Content |
+|---|---|
+| `id` | The file name without its extension, with `-2`, `-3`, … when names repeat. |
+| `file` | The file name. |
+| `product`, `edition` | The product specification, such as `S-111`, and the edition the dataset declares, or `null`. |
+| `producer` | The producer code from the file name, by the product's naming convention: `US00` from `111US00_…`, `US` from the S-57 cell `US5MA1BO.000`. `null` when the name doesn't follow it. |
+| `bounds` | The dataset's own WGS-84 bounds, `[west, south, east, north]` as in TileJSON, or `null` when unknown. Use these, not the union in `tiles.json`, to zoom to a dataset. |
+| `coverage` | A GeoJSON MultiPolygon in WGS-84: the declared data coverage (S-101 `DataCoverage`, S-57 `M_COVR`) with its holes, or else the bounds. |
+| `coverageSource` | `dataCoverage` or `bounds`, for where `coverage` came from. |
+| `times` | The dataset's time steps in UTC, ascending; empty when it doesn't vary with time. |
+| `issueTime` | When a time-varying dataset was issued (a forecast's run), or `null`. |
+| `dataDynamicity` | How S-104 water levels and S-111 currents were produced: the S-104 `dataDynamicity` code, its name (`observation`, `astronomicalPrediction`, `analysisOrHybrid`, `hydrodynamicHindcast` or `hydrodynamicForecast`) and the viewer's label (`Observed`, `Predicted`, `Analysis`, `Hindcast` or `Forecast`). `null` when the dataset doesn't say. |
+| `notForNavigation` | Always `true`: nothing `tiles serve` serves is for navigation. |
+
 ### Run under a supervising process
 
 A program that starts `tiles serve` itself, such as a GIS add-in, can pass
@@ -808,6 +852,9 @@ renders without restarting it, with a `POST` or `DELETE` of `datasets`.
 Like every other route it lives under the token, if there is one. Without
 the option the datasets can't be changed.
 
+A `GET` of `datasets` describes the datasets served, with or without the
+option; see [Dataset metadata](#dataset-metadata).
+
 - `POST datasets` with `{"paths": ["…"]}` (or `{"path": "…"}`) adds
   datasets. The paths are files on the server's computer, relative to the
   folder it was started in unless absolute. Those already served are left as
@@ -837,7 +884,8 @@ curl -X POST http://127.0.0.1:8200/datasets \
 
 A change opens and portrays the new set of datasets while the old one keeps
 serving, and the request returns once the new set serves. The TileJSON, WMTS
-and WMS documents then describe it: its area, zoom levels and time steps. Its
+and WMS documents and the [dataset metadata](#dataset-metadata) then describe
+it: its area, zoom levels and time steps. Its
 data revision (`s100.revision` in the TileJSON, `updateSequence` in the
 capabilities, the `S100-Revision` header on `/healthz`) changes too, and is
 the same again when the set is. Changes are made one at a time. A request answers `400 Bad Request`

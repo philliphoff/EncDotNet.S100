@@ -9,10 +9,18 @@ month. For package versions and release assets, see
 - **Add and remove datasets while serving.** With `--manage-datasets`,
   `s100 tiles serve` adds and removes datasets on a `POST` or `DELETE` of
   `datasets`, without restarting. The new set serves once it's portrayed,
-  and the TileJSON, WMTS and WMS documents and the data revision follow it.
+  and the TileJSON, WMTS, WMS and dataset metadata documents and the data
+  revision follow it.
   Tiles are cached under the datasets that reach them, so adding a cell
   renders only its own tiles. Without the option nothing changes. See
   [Add and remove datasets](cli.md#add-and-remove-datasets).
+- **Dataset metadata from `tiles serve`.** When it renders datasets,
+  `s100 tiles serve` describes each one as JSON under `datasets`, and
+  `tiles.json` points to it in `s100.datasetsUrl`: the file, product and
+  edition, producer, the dataset's own bounds and coverage polygon, its time
+  steps and issue time, and its data dynamicity with the viewer's label. A GIS
+  client can zoom to one dataset instead of the union of all of them, without
+  opening the datasets itself. See [Dataset metadata](cli.md#dataset-metadata).
 - **The data revision of served tiles.** When `s100 tiles serve` renders
   datasets, it publishes the fingerprint of the data and settings as
   `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS
