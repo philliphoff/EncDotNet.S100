@@ -17,7 +17,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (<c>&lt;palette&gt;-&lt;yyyyMMddTHHmmssZ&gt;</c> for a time step asked for by
 /// URL), where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>)
 /// names the data and settings they were rendered from, so a tile is only
-/// reused for the same ones. A tile with nothing on it is an empty file.
+/// reused for the same ones. A tile keyed by the datasets that reach it
+/// (<see cref="TileKey.Content"/>, <c>--manage-datasets</c>) goes under that
+/// key instead. A tile with nothing on it is an empty file.
 /// </para>
 /// <para>
 /// The store only reads, counts, evicts or clears its own kind folder, so the
@@ -117,7 +119,7 @@ internal sealed partial class DiskTileCache : IDisposable
     public void Dispose() => _store.Dispose();
 
     private string KeyFor(TileKey key) => string.Join('/',
-        _fingerprint,
+        key.Content ?? _fingerprint,
         key.Time is { } time
             ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
                 + (key.Variant is { } variant ? "-" + variant : string.Empty)

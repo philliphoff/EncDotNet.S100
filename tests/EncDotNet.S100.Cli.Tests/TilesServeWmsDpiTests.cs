@@ -119,7 +119,7 @@ public sealed class TilesServeWmsDpiTests
         }
 
         // At 300 DPI the same view is 800 pixels across, drawn from zoom 2
-        // (not zoom 4, which 800 pixels at 96 DPI would pick).
+        // (not zoom 3, which 800 pixels at 96 DPI would pick).
         source.ZoomsRead.Clear();
         using (var map = await GetBitmapAsync(http, server.BaseUri, Query(800, "&DPI=300")))
         {
@@ -131,7 +131,7 @@ public sealed class TilesServeWmsDpiTests
 
         source.ZoomsRead.Clear();
         (await GetBitmapAsync(http, server.BaseUri, Query(800, string.Empty))).Dispose();
-        Assert.All(source.ZoomsRead, zoom => Assert.Equal(4, zoom));
+        Assert.All(source.ZoomsRead, zoom => Assert.Equal(3, zoom));
 
         // Wider than 4096 pixels is allowed at 300 DPI, through any of the parameters.
         foreach (var dpi in (string[])["&DPI=300", "&MAP_RESOLUTION=300", "&FORMAT_OPTIONS=dpi:300"])
@@ -178,7 +178,7 @@ public sealed class TilesServeWmsDpiTests
 
         // Shrunk back to the screen's pixels, the print matches the screen:
         // symbols and text keep their physical size and the same features show.
-        // Asking for the same pixels without the DPI draws zoom 15, with smaller
+        // Asking for the same pixels without the DPI draws zoom 14, with smaller
         // symbols and more of them.
         double printDifference = Difference(screen, print);
         double naiveDifference = Difference(screen, naive);

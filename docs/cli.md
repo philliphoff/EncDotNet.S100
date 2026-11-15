@@ -668,6 +668,8 @@ The server has these routes:
   such as QGIS and ArcGIS Pro can add the tiles.
 - `wms`, an [OGC WMS 1.3.0](#wms) service: GetCapabilities, GetMap, and,
   when rendering datasets, GetFeatureInfo and [GetLegendGraphic](#legends).
+- With `--manage-datasets`, a `POST` or `DELETE` of `datasets` adds or
+  removes datasets. See [Add and remove datasets](#add-and-remove-datasets).
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
@@ -699,6 +701,7 @@ area, the tile format and display settings apply too; the output options
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
 | `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
+| `--manage-datasets` | off | When rendering datasets, accepts requests to add and remove datasets while serving. See [Add and remove datasets](#add-and-remove-datasets). |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
@@ -851,6 +854,69 @@ while datasets are portrayed can come before it. The members are:
 s100 tiles serve exchange-set/ --port 0 --ready-json
 ```
 
+### Add and remove datasets
+
+With `--manage-datasets`, a client can change the datasets `tiles serve`
+renders without restarting it, with a `POST` or `DELETE` of `datasets`.
+Like every other route it lives under the token, if there is one. Without
+the option the datasets can't be changed.
+
+A `GET` of `datasets` describes the datasets served, with or without the
+option; see [Dataset metadata](#dataset-metadata).
+
+- `POST datasets` with `{"paths": ["…"]}` (or `{"path": "…"}`) adds
+  datasets. The paths are files on the server's computer, relative to the
+  folder it was started in unless absolute. Those already served are left as
+  they are.
+- `DELETE datasets` with the same body removes datasets. Any served dataset
+  can be removed, including one of those it started with, but at least one
+  must remain.
+
+The body must be sent as `application/json`. Each request answers with the
+datasets then served, in drawing order, each with its `path`, file `name`
+and `spec`:
+
+```bash
+curl -X POST http://127.0.0.1:8200/datasets \
+  -H "Content-Type: application/json" \
+  -d '{ "paths": ["/charts/US5MA1BO.000"] }'
+```
+
+```json
+{
+  "datasets": [
+    { "path": "/charts/US4MA1BO.000", "name": "US4MA1BO.000", "spec": "S-57" },
+    { "path": "/charts/US5MA1BO.000", "name": "US5MA1BO.000", "spec": "S-57" }
+  ]
+}
+```
+
+A change opens and portrays the new set of datasets while the old one keeps
+serving, and the request returns once the new set serves. The TileJSON, WMTS
+and WMS documents and the [dataset metadata](#dataset-metadata) then describe
+it: its area, zoom levels and time steps. Its
+data revision (`s100.revision` in the TileJSON, `updateSequence` in the
+capabilities, the `S100-Revision` header on `/healthz`) changes too, and is
+the same again when the set is. Changes are made one at a time. A request answers `400 Bad Request`
+for a malformed body, a path that isn't a file or a file that isn't a dataset,
+`404 Not Found` for removing a dataset that isn't served, `409 Conflict` for
+removing every dataset, `415 Unsupported Media Type` for a body that isn't
+JSON, and `422 Unprocessable Entity` when the new set can't be opened; the old
+set then keeps serving. Each error response has an `error` member saying why.
+
+Each tile is cached under the datasets that reach it (those whose extent comes
+within a tile of its block), not under every dataset served, in memory and in
+`--cache-dir`. Adding a cell therefore renders only the tiles it reaches, and
+the others are served from the cache. The latitude the zoom levels' scales are
+measured at is kept from the datasets the server started with, so adding a
+dataset elsewhere doesn't change how the others draw; it can differ slightly
+from a server started with the new set. A dataset whose extent isn't known
+reaches every tile. `--refresh` still reopens the datasets when their files
+change, the added ones included.
+
+Changes last until the server stops. To serve the same set again after a
+restart, pass it on the command line.
+
 ### WMTS
 
 `tiles serve` is also an OGC WMTS 1.0.0 service, for GIS desktops and
@@ -914,12 +980,28 @@ WMTS, each palette is a style, the `--palette` one first and the default,
 each registered set of [mariner settings](#mariner-settings) adds a style per
 palette, and S-104 and S-111 time steps are a `time` dimension.
 
-**GetMap** draws its image from the same tiles the XYZ URLs serve: those of
-the zoom level nearest the requested scale, stitched and resampled to the
-requested area and size. Symbols and text are therefore between about 0.7 and
-1.4 times their portrayed size. A request coarser than the minimum zoom draws
-nothing, and the capabilities give the matching `MaxScaleDenominator`, so
-clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
+**GetMap** draws its image from the same tiles the XYZ URLs serve, stitched
+and resampled to the requested area and size, at the zoom level a WMTS client
+shows at the same scale, so WMS and WMTS show the same features (SCAMIN) at
+the same scale:
+
+- WMTS clients read each tile matrix's `ScaleDenominator` at OGC's 0.28 mm
+  pixel, which gives its resolution in metres per pixel (zoom 14 is
+  1:34,124, or 9.55 m a pixel; zoom 15 is 1:17,062, or 4.78 m). ArcGIS Pro
+  shows the same levels as 1:36,112 and 1:18,056, at its 96 DPI pixel.
+- A client draws the finest tile matrix whose resolution is no finer than its
+  view's, and enlarges its tiles until it reaches the next one. ArcGIS Pro at
+  1:23,374 draws zoom 14.
+- GetMap does the same with the request's resolution, the box's width in
+  Web Mercator metres over its width in pixels: the finest zoom level no
+  finer than that, so 1:23,374 draws zoom 14 too. A request less than 1%
+  coarser than a level's resolution, such as one at its rounded scale, draws
+  that level.
+
+Symbols and text are therefore between 1 and 2 times their portrayed size,
+as in a WMTS client. A request coarser than the minimum zoom draws nothing,
+and the capabilities give the minimum zoom's scale as `MaxScaleDenominator`,
+so clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
 a side; set `TRANSPARENT=TRUE` for a PNG to overlay other layers.
 
 **Printing.** A client exporting a layout at a resolution higher than the

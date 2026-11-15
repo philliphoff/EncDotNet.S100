@@ -53,6 +53,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly DiskTileCache? _diskCache;
     private readonly SceneCache _scenes;
     private readonly MarinerStyleRegistry _styles;
+    private readonly DatasetTileKeys? _contentKeys;
     private StyleList _palettes = new(0, AllPalettes);
     private readonly ConcurrentDictionary<(string Style, DateTime? Time, string? Variant, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
@@ -72,6 +73,16 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// step from its own steps (<c>--strict-time</c>), instead of its step
     /// nearest the nearest of <see cref="Times"/>.
     /// </param>
+    /// <param name="memoryCache">
+    /// The memory cache, shared with the sources the datasets are reopened as;
+    /// <see langword="null"/> for one of its own of <paramref name="cacheBytes"/>.
+    /// </param>
+    /// <param name="contentKeys">
+    /// Keys tiles by the datasets that reach them (<c>--manage-datasets</c>,
+    /// issue #1494), so a shared <paramref name="memoryCache"/> and the
+    /// <paramref name="diskCache"/> reuse them for other sets of datasets;
+    /// <see langword="null"/> to key them by every dataset served.
+    /// </param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -83,7 +94,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         DiskTileCache? diskCache = null,
         DatasetFeatureQuery? featureQuery = null,
         MarinerStyleRegistry? marinerStyles = null,
-        bool strictTime = false)
+        bool strictTime = false,
+        TileCache? memoryCache = null,
+        DatasetTileKeys? contentKeys = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
@@ -93,7 +106,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _defaultPalette = defaultPalette.Trim().ToLowerInvariant();
         _blockSize = blockSize;
         _renderSlots = new SemaphoreSlim(parallel, parallel);
-        _cache = new TileCache(cacheBytes);
+        _cache = memoryCache ?? new TileCache(cacheBytes);
+        _contentKeys = contentKeys;
         _diskCache = diskCache;
         FeatureQuery = featureQuery;
         _styles = marinerStyles ?? new MarinerStyleRegistry();
@@ -163,6 +177,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <summary>The area and zoom range served.</summary>
     public TileLayout Layout => _layout;
 
+    /// <summary>The datasets rendered.</summary>
+    internal TileRenderSession Session => _session;
+
     /// <summary>The number of prepared scenes (palette and time step) held.</summary>
     internal int ScenesHeld => _scenes.Count;
 
@@ -181,7 +198,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant);
+        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant, _contentKeys?.For(block));
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -431,7 +448,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
                 WorkPriority.Visible()).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
             {
-                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant);
+                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant, _contentKeys?.For(block));
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -532,9 +549,11 @@ internal sealed class SceneCache(TileRenderSession session)
 /// settings (<see cref="MarinerStyle.Key"/>) — at one time step
 /// (<see langword="null"/> for <c>--time-step</c>); <paramref name="Variant"/>
 /// tells apart the datasets <c>--strict-time</c> draws at that step
-/// (<see cref="TimeChoice.Variant"/>).
+/// (<see cref="TimeChoice.Variant"/>). <paramref name="Content"/> is the
+/// <see cref="DatasetTileKeys"/> key of the datasets that reach it, when tiles
+/// are keyed by those (<c>--manage-datasets</c>); <see langword="null"/> otherwise.
 /// </summary>
-internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null, string? Variant = null);
+internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null, string? Variant = null, string? Content = null);
 
 /// <summary>
 /// Encoded tiles kept in memory up to a byte budget, evicting the least

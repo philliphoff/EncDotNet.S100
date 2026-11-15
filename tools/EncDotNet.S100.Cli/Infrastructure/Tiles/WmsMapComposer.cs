@@ -5,17 +5,20 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 
 /// <summary>
 /// Draws a WMS GetMap image from the XYZ tiles of an <see cref="ITileSource"/>:
-/// the tiles of the nearest zoom level are fetched (from the source's caches,
+/// the tiles of the zoom level a WMTS client would show at that scale are
+/// fetched (from the source's caches,
 /// or rendered), stitched, and resampled to the requested box and size, in
 /// Web Mercator or in plate carrée (EPSG:4326, CRS:84).
 /// </summary>
 /// <remarks>
 /// <para>
-/// The zoom level is the one whose resolution is nearest the request's, so the
-/// tiles are scaled by a factor between about 0.7 and 1.4 and symbols and text
-/// keep close to their portrayed size. A request coarser than the minimum zoom
-/// draws nothing, as the tiles below it are empty; one finer than the maximum
-/// zoom enlarges the maximum zoom's tiles.
+/// The zoom level is the one WMTS clients such as ArcGIS Pro draw at the same
+/// scale (issue #1502): the finest whose resolution is no finer than the
+/// request's (within <see cref="ZoomTolerance"/>), so WMS and WMTS show the
+/// same features at the same scale. The tiles are enlarged by a factor between
+/// 1 and 2, as a WMTS client enlarges them. A request coarser than the minimum
+/// zoom draws nothing, as the tiles below it are empty; one finer than the
+/// maximum zoom enlarges the maximum zoom's tiles.
 /// </para>
 /// <para>
 /// Web Mercator columns are linear in longitude, so a plate carrée image is
@@ -45,6 +48,13 @@ internal static class WmsMapComposer
 
     /// <summary>The DPI a request is drawn at unless it asks for another: OGC's 0.28 mm pixel.</summary>
     public const double StandardDpi = 96;
+
+    /// <summary>
+    /// How far, in zoom levels, a request may be coarser than a zoom level's
+    /// resolution and still draw that level: about 0.7 %, so a client asking
+    /// at a tile matrix's rounded scale gets that tile matrix.
+    /// </summary>
+    internal const double ZoomTolerance = 0.01;
 
     /// <summary>The lowest and highest DPI accepted.</summary>
     public const double MinDpi = 24, MaxDpi = 1200;
@@ -102,12 +112,14 @@ internal static class WmsMapComposer
     /// <summary>
     /// The zoom level whose tiles are drawn for a request of
     /// <paramref name="metresPerPixel"/> Web Mercator metres per pixel, or
-    /// <see langword="null"/> when it's coarser than <paramref name="minZoom"/>.
+    /// <see langword="null"/> when it's coarser than <paramref name="minZoom"/>:
+    /// the finest level whose resolution is no finer than the request's, as a
+    /// WMTS client picks its tile matrix, so 1:23,374 draws zoom 14, not 15.
     /// </summary>
     internal static int? ZoomFor(double metresPerPixel, int tilePixels, int minZoom, int maxZoom)
     {
         double ideal = Math.Log2(WebMercator.Circumference / (tilePixels * metresPerPixel));
-        int zoom = (int)Math.Round(ideal, MidpointRounding.AwayFromZero);
+        int zoom = (int)Math.Floor(ideal + ZoomTolerance);
         if (zoom < minZoom)
             return null;
         return Math.Min(zoom, maxZoom);
