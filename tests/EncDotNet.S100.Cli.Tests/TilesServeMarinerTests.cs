@@ -7,7 +7,6 @@ using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Cli.Tests;
