@@ -2,7 +2,6 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -277,7 +276,7 @@ internal sealed class LegendService : IDisposable
             }
 
             var spec = sub.Spec ?? dataset?.ProductSpec ?? string.Empty;
-            var id = SectionId(spec, sub.Key);
+            var id = ProductLegends.SectionId(spec, sub.Key);
             if (!sections.TryGetValue(id, out var section))
             {
                 section = new SectionBuilder(id, spec, SectionTitle(spec, sub.Key, sub.Name), item.Plane);
@@ -391,29 +390,18 @@ internal sealed class LegendService : IDisposable
 
     /// <summary>
     /// The section a sub-layer belongs to: its product, or for a weather grid
-    /// (one spec for every field) the field.
+    /// (one spec for every field) the field (<see cref="ProductLegends.SectionId"/>).
     /// </summary>
     /// <param name="spec">The spec the dataset loads under.</param>
     /// <param name="layerKey">The sub-layer's key.</param>
-    internal static string SectionId(string spec, string layerKey) =>
-        IsWeatherGrid(spec, layerKey) ? layerKey : spec;
+    internal static string SectionId(string spec, string layerKey) => ProductLegends.SectionId(spec, layerKey);
 
-    private static bool IsWeatherGrid(string spec, string layerKey) =>
-        layerKey.StartsWith("weather.", StringComparison.Ordinal)
-        && !string.Equals(spec, SpecName.TropicalCyclone, StringComparison.OrdinalIgnoreCase)
-        && !string.Equals(spec, SpecName.Codsus, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>The section's name: the product's ("Surface currents"), or a weather field's ("Wave height").</summary>
+    /// <summary>The section's name, localized: the product's ("Surface currents"), or a weather field's ("Wave height").</summary>
     /// <param name="spec">The spec the dataset loads under.</param>
     /// <param name="layerKey">The sub-layer's key.</param>
     /// <param name="layerName">The sub-layer's name, "Wave height: gfswave.grib2".</param>
-    internal static string SectionTitle(string spec, string layerKey, string layerName)
-    {
-        if (!IsWeatherGrid(spec, layerKey))
-            return ProductTitle(spec) ?? spec;
-        var name = GroupTitle(layerName);
-        return name.Length > 0 ? name : spec;
-    }
+    internal static string SectionTitle(string spec, string layerKey, string layerName) =>
+        ProductLegends.SectionTitle(spec, layerKey, layerName, ProductTitle);
 
     private static string? ProductTitle(string spec) => spec.ToUpperInvariant() switch
     {
@@ -434,13 +422,6 @@ internal sealed class LegendService : IDisposable
         _ => null,
     };
 
-    /// <summary>A sub-layer's name without its dataset: "Wave height: gfswave.grib2" → "Wave height".</summary>
-    private static string GroupTitle(string layerName)
-    {
-        var colon = layerName.IndexOf(": ", StringComparison.Ordinal);
-        return colon > 0 ? layerName[..colon] : layerName;
-    }
-
     /// <summary>
     /// The id of the section a layer stack entry's legend is in, for the Layer
     /// stack's <b>Legend</b> link (D8); null when the entry carries no legend.
@@ -449,7 +430,7 @@ internal sealed class LegendService : IDisposable
     internal static string? SectionIdOf(LayerStackEntry item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return LegendOf(item) is { } sub ? SectionId(sub.Spec ?? string.Empty, sub.Key) : null;
+        return LegendOf(item) is { } sub ? ProductLegends.SectionId(sub.Spec ?? string.Empty, sub.Key) : null;
     }
 
     /// <summary>
@@ -500,7 +481,7 @@ internal sealed class LegendService : IDisposable
                 continue;
             }
 
-            var id = SectionId(sub.Spec ?? hit.ProductSpec ?? string.Empty, sub.Key);
+            var id = ProductLegends.SectionId(sub.Spec ?? hit.ProductSpec ?? string.Empty, sub.Key);
             if (Sections.FirstOrDefault(s => s.Id == id) is not { } section)
                 continue;
             var row = section.Groups
@@ -638,10 +619,8 @@ internal sealed class LegendService : IDisposable
     {
         // Every coverage kind can carry rows (#1406): S-102 grids, S-104
         // isolines and stations, S-111 arrows and stations, weather fills.
-        CoverageStackPayload { SubLayer: { Legend.Count: > 0 } coverage } payload =>
-            new SubLayerLegend(payload.Result.Spec.Name, coverage.LayerKey, coverage.LayerName, coverage.Legend, coverage.LegendCaption, Title: null),
-        VectorStackPayload { SubLayer.Legend.Count: > 0 } vector =>
-            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend, vector.SubLayer.LegendCaption, vector.SubLayer.LegendTitle),
+        CoverageStackPayload coverage => SubLayerLegend.Of(coverage.SubLayer, coverage.Result.Spec.Name),
+        VectorStackPayload vector => SubLayerLegend.Of(vector.SubLayer, vector.Result.Spec.Name),
         _ => null,
     };
 
@@ -720,13 +699,11 @@ internal sealed class LegendService : IDisposable
             _viewport.ViewportChanged -= OnViewportChanged;
     }
 
-    internal sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption, string? Title);
-
     private sealed record SectionDataset(string Id, DatasetEntry? Entry);
 
     private sealed class SectionBuilder(string id, string spec, string title, Interoperability.S98DisplayPlane plane)
     {
-        private readonly HashSet<string> _groupKeys = new(StringComparer.Ordinal);
+        private readonly LegendGroupSet _groups = new();
         private readonly HashSet<string> _datasetIds = new(StringComparer.Ordinal);
 
         public string Id { get; } = id;
@@ -737,9 +714,13 @@ internal sealed class LegendService : IDisposable
 
         public Interoperability.S98DisplayPlane Plane { get; } = plane;
 
-        public List<LegendGroup> Groups { get; } = [];
+        // A catalogue product's key (D7) replaces the sub-layer groups.
+        private LegendGroup? _catalogue;
+        private string? _catalogueCaption;
 
-        public string? Caption { get; private set; }
+        public IReadOnlyList<LegendGroup> Groups => _catalogue is { } catalogue ? [catalogue] : _groups.Groups;
+
+        public string? Caption => _catalogue is null ? _groups.Caption : _catalogueCaption;
 
         public List<SectionDataset> Datasets { get; } = [];
 
@@ -754,21 +735,14 @@ internal sealed class LegendService : IDisposable
 
         public void SetCatalogue(string caption, LegendGroup group)
         {
-            Caption = caption;
-            Groups.Clear();
-            Groups.Add(group);
+            _catalogueCaption = caption;
+            _catalogue = group;
         }
 
         public void Add(string datasetId, DatasetEntry? entry, SubLayerLegend sub)
         {
             AddDataset(datasetId, entry);
-            if (_groupKeys.Add(sub.Key))
-            {
-                // The caption is the topmost group's (D4): its first sub-layer is the top one.
-                if (Groups.Count == 0)
-                    Caption = sub.Caption;
-                Groups.Add(new LegendGroup(sub.Key, sub.Title ?? GroupTitle(sub.Name), sub.Rows));
-            }
+            _groups.Add(sub);
         }
     }
 }
