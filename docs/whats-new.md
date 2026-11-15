@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The data revision of served tiles.** When `s100 tiles serve` renders
+  datasets, it publishes the fingerprint of the data and settings as
+  `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS
+  capabilities and in an `S100-Revision` header on `/healthz`. It changes when
+  `--refresh` reloads changed datasets, so a GIS client can put it in its tile
+  URLs to bust its own tile cache. See [`tiles serve`](cli.md#tiles-serve).
 - **Mariner settings in served and exported tiles.** `s100 tiles serve` and
   `s100 tiles export` take the viewer's mariner settings as options: the
   display category, safety contour and depth, shallow and deep contours, four

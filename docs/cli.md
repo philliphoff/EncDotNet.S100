@@ -597,6 +597,16 @@ can't be opened, the old data keeps serving until the files change again.
 `--refresh 0` turns the checks off. A built tile set needs none: it's read at
 each request.
 
+When rendering datasets, the server publishes the data revision: the
+fingerprint the `--cache-dir` tiles are kept under (see below), 32 hexadecimal
+characters that change whenever a dataset or a setting that changes pixels
+does, including when `--refresh` reopens changed datasets. It's in
+`s100.revision` in the TileJSON, in the `updateSequence` attribute of the WMS
+and WMTS capabilities, and in the `S100-Revision` header of `/healthz`. A client
+that keeps its own tile cache, such as ArcGIS Pro for WMTS, can poll it and put
+it in its tile URLs (as an extra query parameter, which the server ignores) to
+fetch fresh tiles after a change. A built tile set has no revision.
+
 With `--cache-dir`, rendered tiles are also kept in that folder (in its
 `served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
@@ -653,7 +663,8 @@ The server has these routes:
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
 - `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
-  It never has a token. See [`health`](#health).
+  It never has a token. When rendering datasets, its `S100-Revision` header
+  holds the data revision. See [`health`](#health).
 
 Every response allows any origin, so a page served from another port can use
 the tiles.

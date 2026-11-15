@@ -78,7 +78,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
-        ServeHost.MapHealth(app);
+        ServeHost.MapHealth(app, () => source.Revision);
         if (viewer)
             app.MapGet(prefix + "/", ServeViewerAsync);
 
