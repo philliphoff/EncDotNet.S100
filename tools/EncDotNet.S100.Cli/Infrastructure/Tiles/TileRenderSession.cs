@@ -99,6 +99,9 @@ internal sealed class TileRenderSession : IDisposable
     /// <summary>The product specification of each dataset, in input order.</summary>
     public IReadOnlyList<string> Specs { get; }
 
+    /// <summary>The changes to the start-up datasets opened (issue #1494); <see langword="null"/> for none.</summary>
+    public DatasetChanges? Changes => _changes;
+
     /// <summary>The file name of each dataset, in input order.</summary>
     public IReadOnlyList<string> Names { get; }
 
@@ -414,10 +417,14 @@ internal sealed class TileRenderSession : IDisposable
     /// The S-124 warning parts left out, by input index
     /// (<see cref="TimeChoice.HiddenWarnings"/>); <see langword="null"/> to draw every warning.
     /// </param>
-    public TileScene Prepare(string? palette = null, DateTime? time = null, IReadOnlyList<DateTime?>? steps = null, MarinerStyle? mariner = null, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings = null)
+    /// <param name="datasets">
+    /// The datasets drawn, by input index: those of one WMTS layer (issue #1495);
+    /// <see langword="null"/> for all of them.
+    /// </param>
+    public TileScene Prepare(string? palette = null, DateTime? time = null, IReadOnlyList<DateTime?>? steps = null, MarinerStyle? mariner = null, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings = null, IReadOnlySet<int>? datasets = null)
     {
         lock (_portrayGate)
-            return PrepareLocked(palette, time, steps, mariner, hiddenWarnings);
+            return PrepareLocked(palette, time, steps, mariner, hiddenWarnings, datasets);
     }
 
     /// <summary>
@@ -430,10 +437,18 @@ internal sealed class TileRenderSession : IDisposable
     /// force at the instant (issue #1499), as the viewer's map draws them at
     /// its view time (<see cref="NavigationalWarningSet.IsDrawnAt"/>).
     /// </summary>
-    public TimeChoice ChooseTime(DateTime instant, bool strict)
+    /// <param name="instant">The time asked for.</param>
+    /// <param name="strict">Whether <c>--strict-time</c> applies.</param>
+    /// <param name="datasets">
+    /// The datasets of one WMTS layer (issue #1495), by input index, whose
+    /// own time steps the instant snaps to and whose alone are judged;
+    /// <see langword="null"/> for all of them.
+    /// </param>
+    public TimeChoice ChooseTime(DateTime instant, bool strict, IReadOnlySet<int>? datasets = null)
     {
-        var choice = ChooseStep(instant, strict);
+        var choice = ChooseStep(instant, strict, datasets);
         return WarningsAt(AsUtc(instant)) is { } warnings
+            && (datasets is null || datasets.Any(i => warnings.Hidden![i] is not null))
             ? choice with
             {
                 HiddenWarnings = warnings.Hidden,
@@ -443,9 +458,10 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>The steps drawn at <paramref name="instant"/>, before warnings are judged (<see cref="ChooseTime"/>).</summary>
-    private TimeChoice ChooseStep(DateTime instant, bool strict)
+    private TimeChoice ChooseStep(DateTime instant, bool strict, IReadOnlySet<int>? datasets)
     {
-        var snapped = SnapTime(instant);
+        var times = datasets is null ? Times : TimesOf(datasets);
+        var snapped = times.Count == 0 ? (DateTime?)null : RenderContextBuilder.Nearest(times, AsUtc(instant));
         if (!strict || snapped is not { } at)
             return new TimeChoice(snapped);
 
@@ -454,17 +470,20 @@ internal sealed class TileRenderSession : IDisposable
         bool differs = false, drawsSomething = false;
         for (int i = 0; i < _processors.Count; i++)
         {
+            if (datasets is not null && !datasets.Contains(i))
+                continue;
+
             if (!VariesWithTime(_processors[i]))
             {
                 drawsSomething = true;
                 continue;
             }
 
-            var times = ((ITimeAwareDatasetProcessor)_processors[i]).AvailableTimes
+            var own = ((ITimeAwareDatasetProcessor)_processors[i]).AvailableTimes
                 .Select(AsUtc).Distinct().Order().ToArray();
-            steps[i] = StrictStep(times, instant);
+            steps[i] = StrictStep(own, instant);
             drawsSomething |= steps[i] is not null;
-            differs |= steps[i] != AsUtc(RenderContextBuilder.Nearest(times, at));
+            differs |= steps[i] != AsUtc(RenderContextBuilder.Nearest(own, at));
         }
 
         // When every dataset draws what it would by default, the default
@@ -596,11 +615,13 @@ internal sealed class TileRenderSession : IDisposable
     /// Each time-varying dataset and the step it draws in <paramref name="choice"/>,
     /// <see langword="null"/> when it has no data then.
     /// </summary>
-    public IEnumerable<(string Name, string Spec, DateTime? Step)> DescribeTime(TimeChoice choice)
+    /// <param name="choice">What draws.</param>
+    /// <param name="datasets">The datasets of one WMTS layer, by input index; <see langword="null"/> for all.</param>
+    public IEnumerable<(string Name, string Spec, DateTime? Step)> DescribeTime(TimeChoice choice, IReadOnlySet<int>? datasets = null)
     {
         for (int i = 0; i < _processors.Count; i++)
         {
-            if (!VariesWithTime(_processors[i]))
+            if (!VariesWithTime(_processors[i]) || (datasets is not null && !datasets.Contains(i)))
                 continue;
 
             var step = choice.Steps is { } steps
@@ -615,6 +636,19 @@ internal sealed class TileRenderSession : IDisposable
     /// ascending and without duplicates; empty when none of them varies.
     /// </summary>
     public IReadOnlyList<DateTime> Times { get; }
+
+    /// <summary>
+    /// The time steps of the time-varying datasets among <paramref name="datasets"/>
+    /// (by input index), in UTC, ascending and without duplicates.
+    /// </summary>
+    public IReadOnlyList<DateTime> TimesOf(IReadOnlySet<int> datasets) =>
+        [.. datasets.Where(i => i >= 0 && i < _processors.Count)
+            .Select(i => _processors[i])
+            .OfType<ITimeAwareDatasetProcessor>()
+            .SelectMany(p => p.AvailableTimes)
+            .Select(AsUtc)
+            .Distinct()
+            .Order()];
 
     /// <summary>
     /// The entry of <see cref="Times"/> nearest <paramref name="instant"/>, or
@@ -637,7 +671,7 @@ internal sealed class TileRenderSession : IDisposable
     private static bool VariesWithTime(IDatasetProcessor processor) =>
         processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0;
 
-    private TileScene PrepareLocked(string? palette, DateTime? time, IReadOnlyList<DateTime?>? steps, MarinerStyle? marinerStyle, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings)
+    private TileScene PrepareLocked(string? palette, DateTime? time, IReadOnlyList<DateTime?>? steps, MarinerStyle? marinerStyle, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings, IReadOnlySet<int>? datasets)
     {
         RenderCommand.TryParsePalette(palette ?? _settings.Palette, out var parsedPalette);
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
@@ -668,8 +702,10 @@ internal sealed class TileRenderSession : IDisposable
         bool Timeless(int index) => !VariesWithTime(_processors[index]) && hiddenWarnings?[index] is null;
 
         // With --strict-time, a time-varying dataset without a step at the
-        // time asked for is left out.
-        bool Drawn(int index) => steps is null || !VariesWithTime(_processors[index]) || steps[index] is not null;
+        // time asked for is left out; so is one outside the layer drawn.
+        bool Drawn(int index) =>
+            (datasets is null || datasets.Contains(index))
+            && (steps is null || !VariesWithTime(_processors[index]) || steps[index] is not null);
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
@@ -705,7 +741,7 @@ internal sealed class TileRenderSession : IDisposable
                 _timelessPortrayals[(parsedPalette, marinerKey, i)] = vector;
         }
 
-        // Datasets left out by --strict-time are left out of the scene too.
+        // Datasets left out by --strict-time or the layer are left out of the scene too.
         var drawn = Enumerable.Range(0, _processors.Count).Where(Drawn).ToArray();
         IReadOnlyList<IDatasetProcessor> sceneProcessors = drawn.Length == _processors.Count ? _processors : [.. drawn.Select(i => _processors[i])];
         if (drawn.Length != _processors.Count)
@@ -842,6 +878,10 @@ internal sealed class TileRenderSession : IDisposable
 
             foreach (var removed in changes.Removed)
                 Line("removed", removed);
+
+            // The layers clients put datasets in (issue #1495) change those layers' tiles.
+            foreach (var (path, layer) in changes.Layers)
+                Line("layer", path + "=" + layer);
         }
 
         return Hash(text);

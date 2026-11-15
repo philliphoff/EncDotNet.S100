@@ -38,7 +38,7 @@ internal sealed class DatasetTileKeys
     private readonly int _blockSize;
     private readonly TileArea _area;
     private readonly Dataset[] _datasets;
-    private readonly ConcurrentDictionary<TileBlock, string> _keys = new();
+    private readonly ConcurrentDictionary<(TileBlock Block, string? Layer), string> _keys = new();
 
     /// <param name="session">The opened datasets.</param>
     /// <param name="layout">The area and scale latitude served.</param>
@@ -56,7 +56,15 @@ internal sealed class DatasetTileKeys
     }
 
     /// <summary>The key of <paramref name="block"/>'s tiles.</summary>
-    public string For(TileBlock block) => _keys.GetOrAdd(block, Compute);
+    public string For(TileBlock block) => _keys.GetOrAdd((block, null), k => Compute(k.Block, null));
+
+    /// <summary>
+    /// The key of <paramref name="block"/>'s tiles in the WMTS layer <paramref name="layer"/>
+    /// (issue #1495), which draws only <paramref name="datasets"/> (by input index):
+    /// only those that reach the block count.
+    /// </summary>
+    public string For(TileBlock block, string layer, IReadOnlySet<int> datasets) =>
+        _keys.GetOrAdd((block, layer), k => Compute(k.Block, datasets));
 
     /// <summary>The indices of the datasets that reach <paramref name="block"/>, in input order.</summary>
     internal IEnumerable<int> Reaching(TileBlock block)
@@ -78,7 +86,7 @@ internal sealed class DatasetTileKeys
         }
     }
 
-    private string Compute(TileBlock block)
+    private string Compute(TileBlock block, IReadOnlySet<int>? datasets)
     {
         var text = new StringBuilder(_settings).Append('\n')
             .Append("zoom=").Append(block.Zoom.ToString(CultureInfo.InvariantCulture)).Append('\n');
@@ -91,6 +99,9 @@ internal sealed class DatasetTileKeys
         bool coverage = false;
         foreach (int i in Reaching(block))
         {
+            if (datasets is not null && !datasets.Contains(i))
+                continue;
+
             text.Append("dataset=").Append(_datasets[i].Fingerprint).Append('\n');
             coverage |= _datasets[i].IsCoverage;
         }

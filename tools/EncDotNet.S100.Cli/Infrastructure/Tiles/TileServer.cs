@@ -21,7 +21,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <c>wmts</c> (<see cref="WmtsService"/>), an OGC WMS 1.3.0 service at
 /// <c>wms</c> (<see cref="WmsService"/>), and optionally a preview page at
 /// the root. With a token, every route lives under <c>/&lt;token&gt;/</c>,
-/// except the <c>/healthz</c> health check.
+/// except the <c>/healthz</c> health check. Rendered datasets grouped into
+/// layers (issue #1495) also serve each layer's tiles and TileJSON under
+/// <c>layers/{layer}/</c>.
 /// </summary>
 /// <remarks>
 /// Every response allows any origin (CORS), so a web map on another local
@@ -32,6 +34,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// </remarks>
 internal sealed class TileServer : IAsyncDisposable
 {
+    /// <summary>The path, under the server's base URL, of the layers' tiles: <c>layers/{layer}/…</c>.</summary>
+    public const string LayersPath = "layers";
+
     private readonly WebApplication _app;
 
     private TileServer(WebApplication app, Uri baseUri)
@@ -95,6 +100,26 @@ internal sealed class TileServer : IAsyncDisposable
                 TryPalette(context, source, out var palette) ? ServeTileAsync(context, source, palette) : Task.CompletedTask);
         }
 
+        if (source.HasDatasets)
+        {
+            // Each layer's tiles (issue #1495), under /layers/{layer}/, as the
+            // tiles of every dataset are under the root. Layers can come and
+            // go with --manage-datasets, so they are looked up at each request.
+            var layers = prefix + "/" + LayersPath + "/{layer}/";
+            app.MapGet(layers + XyzDirectoryTileSink.TileJsonFileName, context =>
+                TryLayer(context, source, out var layer) ? ServeTileJsonAsync(context, layer, prefix, palette: null, LayerOf(context)) : Task.CompletedTask);
+            app.MapGet(layers + "{z}/{x}/{tile}", context =>
+                TryLayer(context, source, out var layer) ? ServeTileAsync(context, layer, palette: null) : Task.CompletedTask);
+            app.MapGet(layers + "{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
+                TryLayer(context, source, out var layer) && TryPalette(context, layer, out var palette)
+                    ? ServeTileJsonAsync(context, layer, prefix, palette, LayerOf(context))
+                    : Task.CompletedTask);
+            app.MapGet(layers + "{palette}/{z}/{x}/{tile}", context =>
+                TryLayer(context, source, out var layer) && TryPalette(context, layer, out var palette)
+                    ? ServeTileAsync(context, layer, palette)
+                    : Task.CompletedTask);
+        }
+
         // OGC WMTS 1.0.0: the capabilities document, the KVP endpoint and the
         // RESTful tile URLs, with and without the Time dimension.
         app.MapGet(prefix + "/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source, prefix));
@@ -149,6 +174,22 @@ internal sealed class TileServer : IAsyncDisposable
         return false;
     }
 
+    /// <summary>Reads the <c>{layer}</c> route value; answers 404 when the source has no such layer.</summary>
+    private static bool TryLayer(HttpContext context, ITileSource source, out ITileSource layer)
+    {
+        if (source.Layer(LayerOf(context)) is { } found)
+        {
+            layer = found;
+            return true;
+        }
+
+        layer = source;
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return false;
+    }
+
+    private static string LayerOf(HttpContext context) => (string)context.Request.RouteValues["layer"]!;
+
     /// <summary>
     /// Reads the optional <c>t</c> query parameter, an ISO 8601 instant (UTC
     /// unless it says otherwise); answers 400 when it isn't one.
@@ -171,21 +212,41 @@ internal sealed class TileServer : IAsyncDisposable
         return false;
     }
 
-    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette)
+    /// <param name="context">The request.</param>
+    /// <param name="source">The tiles: of every dataset, or of <paramref name="layer"/>.</param>
+    /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
+    /// <param name="palette">The palette, or <see langword="null"/> for the default.</param>
+    /// <param name="layer">The layer (issue #1495), or <see langword="null"/> for every dataset.</param>
+    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette, string? layer = null)
     {
         if (!TryTime(context, out var time))
             return;
 
         // The tile URL is absolute, built from the request, so it works from
         // whichever address the client reached this server on.
-        var baseUri = new Uri(RequestBaseUri(context, prefix), palette is null ? string.Empty : palette + "/");
+        var root = RequestBaseUri(context, prefix);
+        var layerPath = layer is null ? string.Empty : LayersPath + "/" + Uri.EscapeDataString(layer) + "/";
+        var baseUri = new Uri(root, layerPath + (palette is null ? string.Empty : palette + "/"));
         var json = source.ToTileJson(palette, time);
         var tiles = TileUrlTemplate(baseUri, source.Format);
         if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
             tiles += "?t=" + Uri.EscapeDataString((string)step!);
         json["tiles"] = new System.Text.Json.Nodes.JsonArray(tiles);
         if (source.HasDatasets && json["s100"] is System.Text.Json.Nodes.JsonObject s100)
-            s100["datasetsUrl"] = RequestBaseUri(context, prefix).AbsoluteUri + DatasetsDocument.Path;
+            s100["datasetsUrl"] = root.AbsoluteUri + DatasetsDocument.Path;
+        if (layer is not null && json["s100"] is System.Text.Json.Nodes.JsonObject layerS100)
+            layerS100["datasetsUrl"] = root.AbsoluteUri + DatasetsDocument.Path;
+
+        // The layers of the datasets (issue #1495), each with its TileJSON.
+        if (layer is null && source.Layers.Count > 0 && json["s100"] is System.Text.Json.Nodes.JsonObject withLayers)
+        {
+            withLayers["layers"] = new System.Text.Json.Nodes.JsonArray([.. source.Layers.Select(id => (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject
+            {
+                ["id"] = id,
+                ["tilejson"] = root.AbsoluteUri + LayersPath + "/" + Uri.EscapeDataString(id) + "/"
+                    + (palette is null ? string.Empty : palette + "/") + XyzDirectoryTileSink.TileJsonFileName,
+            })]);
+        }
 
         context.Response.ContentType = "application/json";
         context.Response.Headers.CacheControl = "no-cache";
@@ -300,7 +361,10 @@ internal sealed class TileServer : IAsyncDisposable
             return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, e.Code, e.Locator, e.Message);
 
         var t = tile!.Value;
-        return WriteTileAsync(context, source, t.Zoom, t.X, t.Y, t.Palette, t.Time);
+        var layer = t.Layer == WmtsService.LayerIdentifier ? source : source.Layer(t.Layer);
+        if (layer is null)
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "InvalidParameterValue", "LAYER", $"Unknown layer '{t.Layer}'.");
+        return WriteTileAsync(context, layer, t.Zoom, t.X, t.Y, t.Palette, t.Time);
     }
 
     private static Task WmtsErrorAsync(HttpContext context, int status, string code, string? locator, string message)

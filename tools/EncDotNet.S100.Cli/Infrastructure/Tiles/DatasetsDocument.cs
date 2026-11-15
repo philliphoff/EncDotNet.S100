@@ -46,7 +46,11 @@ internal static partial class DatasetsDocument
     /// <summary>Describes the datasets of <paramref name="session"/>, in input order.</summary>
     /// <param name="session">The datasets served.</param>
     /// <param name="scene">A scene of all of them, for their declared data coverage; <see langword="null"/> to use their bounds alone.</param>
-    public static JsonObject Build(TileRenderSession session, TileScene? scene)
+    /// <param name="layers">
+    /// The WMTS layer each dataset is in besides the layer of every dataset
+    /// (issue #1495), by input index; <see langword="null"/> when there are no such layers.
+    /// </param>
+    public static JsonObject Build(TileRenderSession session, TileScene? scene, IReadOnlyList<string?>? layers = null)
     {
         ArgumentNullException.ThrowIfNull(session);
 
@@ -79,6 +83,10 @@ internal static partial class DatasetsDocument
                 ["dataDynamicity"] = timeAware?.DataDynamicity is { } kind ? Dynamicity(kind) : null,
                 ["notForNavigation"] = true,
             });
+
+            // Only when there are layers, so the document is otherwise as before.
+            if (layers is not null)
+                datasets[^1]!["layer"] = layers[i];
         }
 
         return new JsonObject
