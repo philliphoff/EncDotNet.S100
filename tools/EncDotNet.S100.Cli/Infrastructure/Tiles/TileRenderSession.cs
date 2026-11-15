@@ -100,6 +100,9 @@ internal sealed class TileRenderSession : IDisposable
     /// <summary>The tile encoding.</summary>
     public TileImageFormat Format { get; }
 
+    /// <summary>The opened datasets, in input order, as <see cref="Names"/> and <see cref="Specs"/> list them.</summary>
+    public IReadOnlyList<IDatasetProcessor> Processors => _processors;
+
     /// <summary>
     /// Opens and checks the datasets <paramref name="settings"/> names. On
     /// failure, prints why and returns a non-zero exit code with
@@ -1056,6 +1059,22 @@ internal sealed class TileScene
 
     /// <summary>The vector datasets' portrayal results (for their display scales).</summary>
     public IReadOnlyList<VectorPortrayalResult> VectorResults { get; }
+
+    /// <summary>
+    /// The declared data coverage (<c>DataCoverage</c>, or S-57 <c>M_COVR</c>)
+    /// of <paramref name="processor"/>'s portrayal in this scene; empty when it
+    /// declares none, isn't a vector dataset or isn't in the scene.
+    /// </summary>
+    public IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> CoverageOf(IDatasetProcessor processor)
+    {
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (ReferenceEquals(_processors[i], processor))
+                return _inputs[i]?.Vector?.CoverageAreas ?? [];
+        }
+
+        return [];
+    }
 
     /// <summary>
     /// The renderer for <paramref name="zoom"/>, created once per zoom level.
