@@ -51,6 +51,11 @@ jobs:
       - name: Check out EncDotNet docs
         run: docs/fetch-encdotnet.sh
 
+      # SoundCharts for ArcGIS's user docs are built into this site from the
+      # add-in's latest release.
+      - name: Check out EncDotNet.ArcGIS docs
+        run: docs/fetch-encdotnet-arcgis.sh
+
       # Any warning (e.g. a broken link or bookmark) fails the build, on pull
       # requests as well as on main.
       - name: Build docs
