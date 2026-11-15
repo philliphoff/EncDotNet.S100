@@ -46,6 +46,7 @@ internal sealed class TileRenderSession : IDisposable
     private const int DefaultZoomCeiling = 18;
 
     private readonly TilesRenderSettings _settings;
+    private readonly DatasetChanges? _changes;
     private readonly IDisposable _catalogueManager;
     private readonly IDisposable? _resolution;
     private readonly List<IDatasetProcessor> _processors;
@@ -65,14 +66,18 @@ internal sealed class TileRenderSession : IDisposable
         IDisposable? resolution,
         List<IDatasetProcessor> processors,
         IReadOnlyList<string> specs,
-        IReadOnlyList<string>? names = null)
+        IReadOnlyList<string>? names = null,
+        IReadOnlyList<string>? paths = null,
+        DatasetChanges? changes = null)
     {
         _settings = settings;
+        _changes = changes;
         _catalogueManager = catalogueManager;
         _resolution = resolution;
         _processors = processors;
         Specs = specs;
         Names = names ?? specs;
+        Paths = paths ?? Names;
         TryParseImage(settings, out var format);
         Format = format;
         Times = processors
@@ -90,6 +95,12 @@ internal sealed class TileRenderSession : IDisposable
     /// <summary>The file name of each dataset, in input order.</summary>
     public IReadOnlyList<string> Names { get; }
 
+    /// <summary>The full path of each dataset, in input order.</summary>
+    public IReadOnlyList<string> Paths { get; }
+
+    /// <summary>The opened datasets, in input order.</summary>
+    internal IReadOnlyList<IDatasetProcessor> Processors => _processors;
+
     /// <summary>The tile encoding.</summary>
     public TileImageFormat Format { get; }
 
@@ -98,7 +109,10 @@ internal sealed class TileRenderSession : IDisposable
     /// failure, prints why and returns a non-zero exit code with
     /// <paramref name="session"/> <see langword="null"/>.
     /// </summary>
-    public static int TryOpen(TilesRenderSettings settings, out TileRenderSession? session)
+    /// <param name="settings">The command's settings.</param>
+    /// <param name="session">The opened datasets, or <see langword="null"/> on failure.</param>
+    /// <param name="changes">Datasets added to and removed from those <paramref name="settings"/> names while serving (issue #1494); <see langword="null"/> for none.</param>
+    public static int TryOpen(TilesRenderSettings settings, out TileRenderSession? session, DatasetChanges? changes = null)
     {
         session = null;
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build(LuaEngineOption.Resolve(settings.LuaEngine));
@@ -106,6 +120,7 @@ internal sealed class TileRenderSession : IDisposable
         var processors = new List<IDatasetProcessor>();
         var specsOpened = new List<string>();
         var namesOpened = new List<string>();
+        var pathsOpened = new List<string>();
         bool opened = false;
         try
         {
@@ -154,6 +169,9 @@ internal sealed class TileRenderSession : IDisposable
 
                 inputs = resolved;
             }
+
+            if (changes is { IsEmpty: false } && !changes.TryApply(ref inputs, applyUpdates))
+                return 2;
 
             if (inputs.Count == 0)
             {
@@ -208,6 +226,7 @@ internal sealed class TileRenderSession : IDisposable
                 processors.Add(processor);
                 specsOpened.Add(spec);
                 namesOpened.Add(Path.GetFileName(path));
+                pathsOpened.Add(Path.GetFullPath(path));
             }
 
             int outside = 0;
@@ -224,6 +243,7 @@ internal sealed class TileRenderSession : IDisposable
                     processors.RemoveAt(i);
                     specsOpened.RemoveAt(i);
                     namesOpened.RemoveAt(i);
+                    pathsOpened.RemoveAt(i);
                     outside++;
                 }
             }
@@ -243,7 +263,7 @@ internal sealed class TileRenderSession : IDisposable
                 return 2;
             }
 
-            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened, namesOpened);
+            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened, namesOpened, pathsOpened, changes);
             opened = true;
             return 0;
         }
@@ -596,20 +616,26 @@ internal sealed class TileRenderSession : IDisposable
     /// <see langword="null"/> when the datasets have no geometry and no
     /// <c>--bbox</c> is given.
     /// </summary>
-    public TileLayout? ResolveLayout(TileScene scene)
+    /// <param name="scene">The prepared datasets.</param>
+    /// <param name="referenceLatitude">
+    /// The latitude zoom levels' scales are measured at; <see langword="null"/>
+    /// for the middle of the area. <c>tiles serve --manage-datasets</c> keeps
+    /// the first one, so adding a dataset doesn't change the others' tiles.
+    /// </param>
+    public TileLayout? ResolveLayout(TileScene scene, double? referenceLatitude = null)
     {
         if (!TryResolveArea(_settings, scene.Scene, out var area))
             return null;
 
-        double referenceLatitude = WebMercator.ToLonLat(0, (area.MinY + area.MaxY) / 2.0).Latitude;
-        var (minZoom, maxZoom) = ResolveZoomRange(_settings, scene.VectorResults, area, referenceLatitude);
+        referenceLatitude ??= WebMercator.ToLonLat(0, (area.MinY + area.MaxY) / 2.0).Latitude;
+        var (minZoom, maxZoom) = ResolveZoomRange(_settings, scene.VectorResults, area, referenceLatitude.Value);
         var tileOptions = new ChartTileOptions
         {
             PixelRatio = _settings.TileSize / XyzTileGrid.TileSize,
-            ReferenceLatitude = referenceLatitude,
+            ReferenceLatitude = referenceLatitude.Value,
             Background = Background(_settings),
         };
-        return new TileLayout(area, referenceLatitude, minZoom, maxZoom, tileOptions);
+        return new TileLayout(area, referenceLatitude.Value, minZoom, maxZoom, tileOptions);
     }
 
     /// <summary>Encodes a rendered tile in the session's format and quality.</summary>
@@ -672,14 +698,69 @@ internal sealed class TileRenderSession : IDisposable
     /// The palette is not included; it is part of each tile's key.
     /// </summary>
     /// <returns>32 lowercase hexadecimal characters.</returns>
-    public string Fingerprint() => Fingerprint(_settings);
+    public string Fingerprint() => Fingerprint(_settings, _changes);
 
     /// <summary>
     /// The <see cref="Fingerprint()"/> of the datasets <paramref name="settings"/>
     /// name, without opening them: only their files' paths, sizes and write
     /// times are read.
     /// </summary>
-    public static string Fingerprint(TilesRenderSettings settings)
+    /// <param name="settings">The command's settings.</param>
+    /// <param name="changes">Datasets added and removed while serving (issue #1494); <see langword="null"/> for none.</param>
+    public static string Fingerprint(TilesRenderSettings settings, DatasetChanges? changes = null)
+    {
+        var text = SettingsText(settings);
+        void Line(string name, object? value) =>
+            text.Append(name).Append('=').Append(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+
+        foreach (var file in InputFiles(settings))
+            FileLine(text, file);
+
+        // Only when there are any, so fingerprints without them still match.
+        if (changes is { IsEmpty: false })
+        {
+            foreach (var added in changes.Added)
+            {
+                foreach (var file in DatasetFiles(added))
+                    FileLine(text, file);
+            }
+
+            foreach (var removed in changes.Removed)
+                Line("removed", removed);
+        }
+
+        return Hash(text);
+    }
+
+    /// <summary>
+    /// A fingerprint of the options that change pixels and the <c>s100</c>
+    /// version, without any input file: what every dataset's tiles share
+    /// (<see cref="DatasetTileKeys"/>).
+    /// </summary>
+    internal string SettingsFingerprint() => Hash(SettingsText(_settings));
+
+    /// <summary>A fingerprint of one dataset's files: its own and its sibling files' paths, sizes and write times.</summary>
+    internal static string DatasetFingerprint(string path)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var file in DatasetFiles(path))
+            FileLine(text, file);
+        return Hash(text);
+    }
+
+    private static string Hash(System.Text.StringBuilder text)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
+        return Convert.ToHexStringLower(hash, 0, 16);
+    }
+
+    private static void FileLine(System.Text.StringBuilder text, string file)
+    {
+        var info = new FileInfo(file);
+        text.Append("file=").Append($"{info.FullName}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}").Append('\n');
+    }
+
+    private static System.Text.StringBuilder SettingsText(TilesRenderSettings settings)
     {
         TryParseImage(settings, out var format);
         var text = new System.Text.StringBuilder();
@@ -707,15 +788,7 @@ internal sealed class TileRenderSession : IDisposable
             Line("nationalLanguage", nationalLanguage);
         if (!settings.MarinerStyle.IsEmpty)
             Line("mariner", settings.MarinerStyle.Key);
-
-        foreach (var file in InputFiles(settings))
-        {
-            var info = new FileInfo(file);
-            Line("file", $"{info.FullName}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}");
-        }
-
-        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
-        return Convert.ToHexStringLower(hash, 0, 16);
+        return text;
     }
 
     /// <summary>
@@ -741,16 +814,21 @@ internal sealed class TileRenderSession : IDisposable
 
         var files = new List<string>();
         foreach (var path in settings.IsComposite ? settings.Layers : [settings.Input!])
-        {
-            var full = Path.GetFullPath(path);
-            var directory = Path.GetDirectoryName(full)!;
-            var stem = Path.GetFileNameWithoutExtension(full);
-            files.Add(full);
-            files.AddRange(Directory.EnumerateFiles(directory, stem + ".*")
-                .Where(f => !string.Equals(f, full, StringComparison.Ordinal))
-                .Order(StringComparer.Ordinal));
-        }
+            files.AddRange(DatasetFiles(path));
 
+        return files;
+    }
+
+    /// <summary>A dataset file and its sibling files (S-101 and S-57 update files share its name).</summary>
+    private static List<string> DatasetFiles(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(full)!;
+        var stem = Path.GetFileNameWithoutExtension(full);
+        List<string> files = [full];
+        files.AddRange(Directory.EnumerateFiles(directory, stem + ".*")
+            .Where(f => !string.Equals(f, full, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal));
         return files;
     }
 

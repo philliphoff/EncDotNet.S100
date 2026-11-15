@@ -47,13 +47,15 @@ internal sealed class TileServer : IAsyncDisposable
     public int Port => BaseUri.Port;
 
     /// <summary>Starts serving <paramref name="source"/> on <paramref name="address"/>:<paramref name="port"/> (0 for any free port).</summary>
+    /// <remarks>With <paramref name="datasets"/>, <c>datasets</c> adds and removes datasets (issue #1494).</remarks>
     public static async Task<TileServer> StartAsync(
         ITileSource source,
         IPAddress address,
         int port,
         string? token,
         bool viewer = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ServedDatasets? datasets = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(address);
@@ -105,6 +107,10 @@ internal sealed class TileServer : IAsyncDisposable
 
         // OGC WMS 1.3.0: GetCapabilities, GetMap and GetFeatureInfo.
         app.MapGet(prefix + "/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context, prefix)));
+
+        // Adding and removing datasets, with --manage-datasets (issue #1494).
+        if (datasets is not null)
+            ServedDatasets.Map(app, prefix, datasets);
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 

@@ -1,0 +1,298 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using EncDotNet.S100.Datasets.Pipelines;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+
+namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
+
+/// <summary>
+/// Adds datasets to and removes them from a running <c>tiles serve</c>
+/// (<c>--manage-datasets</c>, issue #1494), through <c>{prefix}/datasets</c>.
+/// Thread-safe: changes are made one at a time.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A change opens and portrays the new set of datasets while the current one
+/// keeps serving, then switches requests over (<see cref="RefreshingTileSource.ReplaceAsync"/>),
+/// so the request that made it returns once the new set serves. If the new
+/// set can't be opened, the current one keeps serving. The TileJSON, WMTS and
+/// WMS documents describe whichever set serves when they are asked for.
+/// </para>
+/// <para>
+/// Tiles are keyed by the datasets that reach them (<see cref="DatasetTileKeys"/>)
+/// in memory and on disk, and the latitude scales are measured at is kept
+/// from the first set, so the tiles of datasets still served stay cached.
+/// </para>
+/// </remarks>
+internal sealed class ServedDatasets
+{
+    /// <summary>The path of the datasets under the server's base URL.</summary>
+    public const string Path = "datasets";
+
+    /// <summary>The largest request body accepted, in bytes.</summary>
+    public const int MaxBodyBytes = 64 * 1024;
+
+    private readonly RefreshingTileSource _source;
+    private readonly Func<DatasetChanges, RenderedTileSource?> _open;
+    private readonly Func<DatasetChanges, string> _fingerprint;
+    private readonly SemaphoreSlim _editing = new(1, 1);
+    private DatasetChanges _changes = DatasetChanges.None;
+
+    /// <param name="source">The source serving the datasets.</param>
+    /// <param name="open">Opens the start-up datasets with changes; <see langword="null"/> when they can't be (having said why).</param>
+    /// <param name="fingerprint">The fingerprint of the start-up datasets with changes.</param>
+    public ServedDatasets(RefreshingTileSource source, Func<DatasetChanges, RenderedTileSource?> open, Func<DatasetChanges, string> fingerprint)
+    {
+        _source = source;
+        _open = open;
+        _fingerprint = fingerprint;
+    }
+
+    /// <summary>The changes to the start-up datasets that serve now.</summary>
+    public DatasetChanges Changes => Volatile.Read(ref _changes);
+
+    /// <summary>The datasets served now, in input order.</summary>
+    public IReadOnlyList<(string Path, string Name, string Spec)> Datasets
+    {
+        get
+        {
+            var session = _source.Current.Session;
+            return [.. session.Paths.Select((path, i) => (path, session.Names[i], session.Specs[i]))];
+        }
+    }
+
+    /// <summary>The outcome of a change: an HTTP status, and why it failed.</summary>
+    public readonly record struct Result(int Status, string? Error = null)
+    {
+        public bool Succeeded => Error is null;
+    }
+
+    /// <summary>Serves <paramref name="paths"/> as well; those already served are left as they are.</summary>
+    public async Task<Result> AddAsync(IReadOnlyList<string> paths)
+    {
+        var full = new List<string>();
+        foreach (var path in paths)
+        {
+            string resolved;
+            try
+            {
+                resolved = System.IO.Path.GetFullPath(path);
+            }
+            catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return new Result(StatusCodes.Status400BadRequest, $"'{path}' is not a valid path.");
+            }
+
+            if (!File.Exists(resolved))
+                return new Result(StatusCodes.Status400BadRequest, $"'{path}' is not a file that exists.");
+            if (DatasetPipelineFactory.DetectProductSpec(resolved) is null)
+                return new Result(StatusCodes.Status400BadRequest, $"'{path}' is not a dataset this tool can read.");
+            full.Add(resolved);
+        }
+
+        return await ChangeAsync(changes =>
+        {
+            var served = Datasets.Select(d => d.Path).ToHashSet(DatasetChanges.PathComparer);
+            foreach (var path in full.Where(p => !served.Contains(p)))
+                changes = changes.WithAdded(path);
+            return (changes, null);
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>Stops serving <paramref name="paths"/>, which must be served now; at least one dataset must remain.</summary>
+    public async Task<Result> RemoveAsync(IReadOnlyList<string> paths)
+    {
+        return await ChangeAsync(changes =>
+        {
+            var served = Datasets.Select(d => d.Path).ToHashSet(DatasetChanges.PathComparer);
+            var removing = new HashSet<string>(DatasetChanges.PathComparer);
+            foreach (var path in paths)
+            {
+                string full;
+                try
+                {
+                    full = System.IO.Path.GetFullPath(path);
+                }
+                catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+                {
+                    return (changes, new Result(StatusCodes.Status400BadRequest, $"'{path}' is not a valid path."));
+                }
+
+                if (!served.Contains(full))
+                    return (changes, new Result(StatusCodes.Status404NotFound, $"'{path}' is not served."));
+                removing.Add(full);
+            }
+
+            if (removing.Count >= served.Count)
+                return (changes, new Result(StatusCodes.Status409Conflict, "At least one dataset must remain served."));
+
+            foreach (var path in removing)
+                changes = changes.WithRemoved(path);
+            return (changes, null);
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Works out new changes from the current ones, then opens the datasets
+    /// with them and serves those; nothing changes on failure.
+    /// </summary>
+    private async Task<Result> ChangeAsync(Func<DatasetChanges, (DatasetChanges Changes, Result? Refused)> change)
+    {
+        await _editing.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var current = Changes;
+            var (next, refused) = change(current);
+            if (refused is { } r)
+                return r;
+            if (next == current || (next.Added.SequenceEqual(current.Added) && next.Removed.SequenceEqual(current.Removed)))
+                return new Result(StatusCodes.Status200OK);
+
+            // Fingerprinted before opening, as at start-up: a file changed
+            // meanwhile is then seen by --refresh as a change.
+            var fingerprint = _fingerprint(next);
+            bool replaced;
+            try
+            {
+                replaced = await _source.ReplaceAsync(() => _open(next), fingerprint, () => Volatile.Write(ref _changes, next)).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                return new Result(StatusCodes.Status422UnprocessableEntity, $"The datasets couldn't be opened: {e.Message}");
+            }
+
+            // TODO(#1497): bump the published data revision here once G5 lands;
+            // the session fingerprint already changes with the set.
+            return replaced
+                ? new Result(StatusCodes.Status200OK)
+                : new Result(StatusCodes.Status422UnprocessableEntity, "The datasets couldn't be opened; the server's output says why. The previous datasets are still served.");
+        }
+        finally
+        {
+            _editing.Release();
+        }
+    }
+
+    /// <summary>
+    /// Maps <c>GET</c>, <c>POST</c> (add) and <c>DELETE</c> (remove)
+    /// <c>{prefix}/datasets</c> on <paramref name="app"/>. A change's body is
+    /// JSON, <c>{"paths": ["…"]}</c> (or <c>{"path": "…"}</c>), sent as
+    /// <c>application/json</c>; every response lists the datasets served.
+    /// </summary>
+    /// <param name="app">The web application.</param>
+    /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
+    /// <param name="datasets">The datasets served.</param>
+    public static void Map(WebApplication app, string prefix, ServedDatasets datasets)
+    {
+        app.MapGet(prefix + "/" + Path, context => WriteAsync(context, datasets, StatusCodes.Status200OK, null));
+        app.MapPost(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.AddAsync));
+        app.MapDelete(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.RemoveAsync));
+    }
+
+    private static async Task ChangeAsync(HttpContext context, ServedDatasets datasets, Func<IReadOnlyList<string>, Task<Result>> change)
+    {
+        // JSON only: a browser can't send it from another site without asking first (CORS).
+        if (!context.Request.HasJsonContentType())
+        {
+            await WriteAsync(context, datasets, StatusCodes.Status415UnsupportedMediaType, "Send the paths as application/json: {\"paths\": [\"…\"]}.").ConfigureAwait(false);
+            return;
+        }
+
+        if (context.Request.ContentLength > MaxBodyBytes)
+        {
+            await WriteAsync(context, datasets, StatusCodes.Status413PayloadTooLarge, $"The request is larger than {MaxBodyBytes} bytes.").ConfigureAwait(false);
+            return;
+        }
+
+        var body = new byte[MaxBodyBytes + 1];
+        int read = 0, n;
+        while (read < body.Length && (n = await context.Request.Body.ReadAsync(body.AsMemory(read), context.RequestAborted).ConfigureAwait(false)) > 0)
+            read += n;
+        if (read > MaxBodyBytes)
+        {
+            await WriteAsync(context, datasets, StatusCodes.Status413PayloadTooLarge, $"The request is larger than {MaxBodyBytes} bytes.").ConfigureAwait(false);
+            return;
+        }
+
+        if (!TryParsePaths(body.AsSpan(0, read), out var paths, out var error))
+        {
+            await WriteAsync(context, datasets, StatusCodes.Status400BadRequest, error).ConfigureAwait(false);
+            return;
+        }
+
+        var result = await change(paths).ConfigureAwait(false);
+        await WriteAsync(context, datasets, result.Status, result.Error).ConfigureAwait(false);
+    }
+
+    /// <summary>Reads <c>{"paths": ["…", …]}</c> or <c>{"path": "…"}</c>.</summary>
+    internal static bool TryParsePaths(ReadOnlySpan<byte> json, out IReadOnlyList<string> paths, out string error)
+    {
+        paths = [];
+        error = "The body is {\"paths\": [\"…\"]}, the dataset files' paths on the server.";
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (node is not JsonObject body)
+            return false;
+
+        var list = new List<string>();
+        if (body["path"] is JsonValue single && single.TryGetValue<string>(out var one))
+            list.Add(one);
+        if (body["paths"] is JsonArray many)
+        {
+            foreach (var item in many)
+            {
+                if (item is not JsonValue value || !value.TryGetValue<string>(out var path))
+                    return false;
+                list.Add(path);
+            }
+        }
+
+        if (list.Count == 0 || list.Any(string.IsNullOrWhiteSpace))
+            return false;
+
+        paths = list;
+        return true;
+    }
+
+    private static Task WriteAsync(HttpContext context, ServedDatasets datasets, int status, string? error)
+    {
+        var json = new JsonObject();
+        if (error is not null)
+            json["error"] = error;
+        json["datasets"] = new JsonArray([.. datasets.Datasets.Select(d => (JsonNode?)new JsonObject
+        {
+            ["path"] = d.Path,
+            ["name"] = d.Name,
+            ["spec"] = d.Spec,
+        })]);
+        context.Response.StatusCode = status;
+        context.Response.ContentType = "application/json";
+        context.Response.Headers.CacheControl = "no-cache";
+        return context.Response.WriteAsync(json.ToJsonString(TileSetMetadata.JsonOptions), context.RequestAborted);
+    }
+}
+
+/// <summary>
+/// What the tiles of <c>tiles serve --manage-datasets</c> share across changes
+/// to the datasets (issue #1494): the memory cache, and the latitude the zoom
+/// levels' scales are measured at, kept from the first datasets so adding one
+/// elsewhere doesn't change how the others draw.
+/// </summary>
+/// <param name="memoryBytes">The most encoded tile bytes kept in memory.</param>
+internal sealed class ManagedDatasetTiles(long memoryBytes)
+{
+    /// <summary>The memory cache every opening of the datasets uses.</summary>
+    public TileCache Memory { get; } = new(memoryBytes);
+
+    /// <summary>The scale latitude of the first datasets opened; <see langword="null"/> before.</summary>
+    public double? ReferenceLatitude { get; set; }
+}

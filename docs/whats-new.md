@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Add and remove datasets while serving.** With `--manage-datasets`,
+  `s100 tiles serve` lists its datasets at `datasets` and adds and removes
+  them on a `POST` or `DELETE` there, without restarting. The new set serves
+  once it's portrayed, and the TileJSON, WMTS and WMS documents describe it.
+  Tiles are cached under the datasets that reach them, so adding a cell
+  renders only its own tiles. Without the option nothing changes. See
+  [Add and remove datasets](cli.md#add-and-remove-datasets).
 - **Mariner settings in served and exported tiles.** `s100 tiles serve` and
   `s100 tiles export` take the viewer's mariner settings as options: the
   display category, safety contour and depth, shallow and deep contours, four
