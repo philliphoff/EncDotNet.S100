@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 
@@ -170,6 +171,72 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
 
         return data.Length == 0 ? null : data;
+    }
+
+    public bool CanRenderViews => true;
+
+    public async ValueTask<SKBitmap?> RenderViewAsync(
+        int zoom, double minX, double minY, double maxX, double maxY, int width, int height,
+        string? palette, DateTime? time, CancellationToken cancellationToken)
+    {
+        palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
+        time = time is { } requested ? _session.SnapTime(requested) : null;
+        if (!AllPalettes.Contains(palette) || zoom < _layout.MinZoom || zoom > _layout.MaxZoom)
+            return null;
+
+        await _renderSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // As for a block: the scene and the zoom level's renderer are
+            // prepared off the request thread, outside a job.
+            var renderer = await Task.Run(() => _scenes.Get(palette, time).RendererFor(zoom, _layout), cancellationToken).ConfigureAwait(false);
+            return await WorkScheduler.Shared.RunAsync(
+                WorkStage.Raster,
+                _ => ClipToTiles(renderer.RenderView(zoom, minX, minY, maxX, maxY, width, height), zoom, minX, maxY, (maxX - minX) / width, (maxY - minY) / height),
+                cancellationToken,
+                WorkPriority.Visible()).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderSlots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Clears what <paramref name="view"/> shows outside the tiles served at
+    /// <paramref name="zoom"/> (those that cover the tiled area), as the tiles
+    /// themselves would leave it.
+    /// </summary>
+    private SKBitmap ClipToTiles(SKBitmap view, int zoom, double originX, double originY, double pixelX, double pixelY)
+    {
+        // A box past ±180° shows the world's copies; leave it whole.
+        if (originX < -XyzTileGrid.Extent || originX + (view.Width * pixelX) > XyzTileGrid.Extent)
+            return view;
+
+        var area = _layout.Area;
+        double size = XyzTileGrid.TileWorldSize(zoom);
+        var (firstRow, lastRow) = XyzTileGrid.Rows(zoom, area.MinY, area.MaxY);
+        double top = XyzTileGrid.Extent - (firstRow * size), bottom = XyzTileGrid.Extent - ((lastRow + 1) * size);
+
+        // An area across the antimeridian or round the world is left whole
+        // east to west; its tiles wrap.
+        double west = double.NegativeInfinity, east = double.PositiveInfinity;
+        if (area.MinX >= -XyzTileGrid.Extent && area.MaxX <= XyzTileGrid.Extent)
+        {
+            west = (Math.Floor((area.MinX + XyzTileGrid.Extent) / size) * size) - XyzTileGrid.Extent;
+            east = (Math.Ceiling((area.MaxX + XyzTileGrid.Extent) / size) * size) - XyzTileGrid.Extent;
+        }
+
+        float Px(double x) => (float)Math.Clamp((x - originX) / pixelX, -1, view.Width + 1);
+        float Py(double y) => (float)Math.Clamp((originY - y) / pixelY, -1, view.Height + 1);
+        var inside = new SKRect(Px(west), Py(top), Px(east), Py(bottom));
+        if (inside.Left <= 0 && inside.Top <= 0 && inside.Right >= view.Width && inside.Bottom >= view.Height)
+            return view;
+
+        using var canvas = new SKCanvas(view);
+        canvas.ClipRect(inside, SKClipOperation.Difference);
+        canvas.Clear(SKColors.Transparent);
+        return view;
     }
 
     public JsonObject ToTileJson(string? palette, DateTime? time = null)

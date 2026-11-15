@@ -222,6 +222,28 @@ public class ChartTileRendererTests
         Assert.Equal(new SKColor(0xFF, 0x00, 0x00), tile.Bitmap.GetPixel(10, 500));
     }
 
+    [Fact]
+    public void RenderView_draws_a_box_at_a_zoom_levels_scale_and_any_resolution()
+    {
+        // A box from 0° to 1° east and north, past its minimum display scale at zoom 8.
+        var scene = Prepare(Area("a.000", "#FF0000", Box(0, 1, 0, 1), minimumDisplayScale: 2_000_000));
+        var renderer = new ChartTileRenderer(scene);
+        var (minX, minY) = WebMercator.FromLonLat(-1, -1);
+        var (maxX, maxY) = WebMercator.FromLonLat(2, 2);
+
+        // Zoom 9 shows it; the image is as big as asked, the box where it lies.
+        using (var view = renderer.RenderView(9, minX, minY, maxX, maxY, 900, 600))
+        {
+            Assert.Equal((900, 600), (view.Width, view.Height));
+            Assert.Equal(new SKColor(0xFF, 0x00, 0x00), view.GetPixel(450, 300));
+            Assert.Equal(0, view.GetPixel(100, 500).Alpha);
+        }
+
+        // Zoom 8's scale leaves it out, whatever the image resolution.
+        using (var view = renderer.RenderView(8, minX, minY, maxX, maxY, 900, 600))
+            Assert.Equal(0, view.GetPixel(450, 300).Alpha);
+    }
+
     private static ChartTile RenderCenterTile(ChartTileRenderer renderer, int zoom)
     {
         // The tile just north-east of (0°, 0°).
