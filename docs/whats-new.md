@@ -14,6 +14,12 @@ month. For package versions and release assets, see
   Tiles are cached under the datasets that reach them, so adding a cell
   renders only its own tiles. Without the option nothing changes. See
   [Add and remove datasets](cli.md#add-and-remove-datasets).
+- **Navigational warnings by validity in served tiles.** `s100 tiles serve`
+  draws only the S-124 warnings in force at the time a client asks for, with
+  `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its
+  view time: ended, cancelled and not-yet-in-force warnings are left out.
+  Without a time every warning draws, as before. See
+  [`tiles serve`](cli.md#tiles-serve).
 - **Dataset metadata from `tiles serve`.** When it renders datasets,
   `s100 tiles serve` describes each one as JSON under `datasets`, and
   `tiles.json` points to it in `s100.datasetsUrl`: the file, product and
