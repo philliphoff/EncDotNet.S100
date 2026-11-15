@@ -644,6 +644,15 @@ The server has these routes:
   `null` when it has no data at that time. When the datasets draw other than at
   their steps nearest the nearest listed step, `s100.time` and the tile URL keep
   the `t` asked for.
+- When rendering S-124 navigational warnings, a `t` (or WMS `TIME`, or the
+  WMTS `Time` dimension) draws only the warnings in force at that instant, as
+  the viewer's map does at its view time: a warning that has ended, been
+  cancelled or dropped from the latest in-force bulletin, or isn't in force
+  yet, isn't drawn (S-98 §12.12). Without a time every warning draws, as
+  before. Times at which the same warnings are in force share their tiles, and
+  the TileJSON for such a `t` keeps it in `s100.time` and its tile URL. With
+  S-124 alone there are no time steps to list, so the capabilities advertise
+  no `Time` dimension; a client still sends `TIME=` (WMS, WMTS KVP) or `t`.
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.

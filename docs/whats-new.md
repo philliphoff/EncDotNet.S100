@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Navigational warnings by validity in served tiles.** `s100 tiles serve`
+  draws only the S-124 warnings in force at the time a client asks for, with
+  `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its
+  view time: ended, cancelled and not-yet-in-force warnings are left out.
+  Without a time every warning draws, as before. See
+  [`tiles serve`](cli.md#tiles-serve).
 - **Mariner settings in served and exported tiles.** `s100 tiles serve` and
   `s100 tiles export` take the viewer's mariner settings as options: the
   display category, safety contour and depth, shallow and deep contours, four
