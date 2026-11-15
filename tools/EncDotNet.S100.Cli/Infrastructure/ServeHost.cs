@@ -20,19 +20,27 @@ internal static class ServeHost
     /// <summary>The health check's path, <c>/healthz</c>, which is outside any token.</summary>
     public const string HealthPath = "/healthz";
 
+    /// <summary>The response header of <see cref="HealthPath"/> carrying the data revision, when there is one.</summary>
+    public const string RevisionHeader = "S100-Revision";
+
     /// <summary>
     /// Maps <see cref="HealthPath"/>, which answers <c>200 OK</c> with the text
     /// <c>ok</c> while the server runs. It sits outside the token prefix so a
     /// container or load balancer health check needs no token, and it says
-    /// nothing about what's served.
+    /// nothing about what's served beyond, with <paramref name="revision"/>, an
+    /// opaque <see cref="RevisionHeader"/> (issue #1497).
     /// </summary>
-    public static void MapHealth(IEndpointRouteBuilder endpoints)
+    /// <param name="endpoints">The routes to add to.</param>
+    /// <param name="revision">The current data revision; <see langword="null"/> (or returning it) for none.</param>
+    public static void MapHealth(IEndpointRouteBuilder endpoints, Func<string?>? revision = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        endpoints.MapGet(HealthPath, static context =>
+        endpoints.MapGet(HealthPath, context =>
         {
             context.Response.ContentType = "text/plain";
             context.Response.Headers.CacheControl = "no-store";
+            if (revision?.Invoke() is { } current)
+                context.Response.Headers[RevisionHeader] = current;
             return context.Response.WriteAsync("ok");
         });
     }

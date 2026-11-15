@@ -175,6 +175,8 @@ internal static class WmsService
             new XDeclaration("1.0", "UTF-8", null),
             new XElement(Wms + "WMS_Capabilities",
                 new XAttribute("version", "1.3.0"),
+                // The data revision (issue #1497), so a client can tell the data changed.
+                json["s100"]?["revision"] is { } wmsRevision ? new XAttribute("updateSequence", (string)wmsRevision!) : null,
                 new XAttribute(XNamespace.Xmlns + "xlink", XLink),
                 new XElement(Wms + "Service",
                     new XElement(Wms + "Name", "WMS"),
