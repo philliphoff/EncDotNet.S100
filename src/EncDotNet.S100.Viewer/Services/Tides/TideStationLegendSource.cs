@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;

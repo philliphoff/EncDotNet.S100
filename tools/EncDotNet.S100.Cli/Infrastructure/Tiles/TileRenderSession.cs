@@ -1175,6 +1175,9 @@ internal sealed class TileScene
     /// <summary>The vector datasets' portrayal results (for their display scales).</summary>
     public IReadOnlyList<VectorPortrayalResult> VectorResults { get; }
 
+    /// <summary>Each dataset's full-extent portrayal, by input index; read for its legend rows (<see cref="TileLegend"/>).</summary>
+    public IReadOnlyList<ChartCompositeInput?> Inputs => _inputs;
+
     /// <summary>
     /// The declared data coverage (<c>DataCoverage</c>, or S-57 <c>M_COVR</c>)
     /// of <paramref name="processor"/>'s portrayal in this scene; empty when it

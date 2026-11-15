@@ -133,6 +133,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         Revision = diskCache?.Fingerprint ?? session.Fingerprint();
         _datasetLayers = layers ?? new string?[session.Paths.Count];
         _layers = OpenLayers();
+        Legend = new TileLegend(requested => TryResolveStyle(requested, out var palette, out var mariner, out var key)
+            ? new TileLegend.Resolved(key, palette, () => _scenes.Get(key, palette, mariner, new TimeChoice(null)))
+            : null);
     }
 
     /// <summary>The layers the datasets are grouped into, in the order their first dataset comes.</summary>
@@ -234,6 +237,17 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     public MarinerStyleRegistry MarinerStyles => _styles;
 
     public bool HasDatasets => true;
+
+    /// <summary>The legend graphics of the styles (issue #1501).</summary>
+    public TileLegend Legend { get; }
+
+    public bool HasLegend => Legend.HasRows;
+
+    public (int Width, int Height)? LegendSize(string? style) => Legend.SizeOf(style);
+
+    // Building a style's legend may portray, so it runs off the request thread.
+    public async ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+        await Task.Run(() => Legend.Render(style, options), cancellationToken).ConfigureAwait(false);
 
     // Coverage polygons come from the default scene's portrayal, which is
     // cached (and prepared at start-up).
@@ -551,6 +565,14 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         public MarinerStyleRegistry? MarinerStyles => owner.MarinerStyles;
 
         public string? Revision => owner.Revision;
+
+        // The style's legend, of every dataset (issue #1501).
+        public bool HasLegend => owner.HasLegend;
+
+        public (int Width, int Height)? LegendSize(string? style) => owner.LegendSize(style);
+
+        public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+            owner.ReadLegendAsync(style, options, cancellationToken);
 
         public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
             owner.ReadAsync(zoom, x, y, palette, time, this, cancellationToken);

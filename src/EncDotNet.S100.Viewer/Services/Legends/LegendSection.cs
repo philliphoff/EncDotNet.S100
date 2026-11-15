@@ -72,7 +72,8 @@ internal sealed record LegendSection
     public required S98DisplayPlane Plane { get; init; }
 
     /// <summary>
-    /// The rows, one group per kind of sub-layer, top of the stack first: a
+    /// The rows (<see cref="LegendGroup"/>, shared with <c>s100 tiles serve</c>
+    /// through <see cref="ProductLegends"/>), one group per kind of sub-layer, top of the stack first: a
     /// tropical cyclone's track and its areas, or an AML cell's families. A
     /// section of one group shows no group title.
     /// </summary>
@@ -84,12 +85,6 @@ internal sealed record LegendSection
     /// <summary>True when the product varies with time and has no data at the view time.</summary>
     public bool HasNoDataAtViewTime => TimeState == LegendTimeState.NoData;
 }
-
-/// <summary>The rows of one kind of sub-layer in a <see cref="LegendSection"/>.</summary>
-/// <param name="Key">The sub-layer key (<c>"weather.tc.track"</c>).</param>
-/// <param name="Title">The sub-layer's name, "Tropical cyclone track", "AML seabed".</param>
-/// <param name="Rows">The rows, in the palette the sub-layer was last drawn in.</param>
-internal sealed record LegendGroup(string Key, string Title, IReadOnlyList<LegendEntry> Rows);
 
 /// <summary>What a section's product draws at the view time.</summary>
 internal enum LegendTimeState

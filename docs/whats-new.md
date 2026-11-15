@@ -14,8 +14,18 @@ month. For package versions and release assets, see
   With `--manage-datasets`, a client can put the datasets it adds in a layer
   it names. Each layer also has its own TileJSON, listed in `tiles.json`, and
   the dataset metadata says which layer each dataset is in. The `s100` layer
-  is unchanged, and without the option the server is as before. See
+  is unchanged, and without the option the server is as before. Each layer's
+  styles link the same legends as `s100`'s. See
   [WMTS layers](cli.md#wmts-layers).
+- **Legends for GIS clients.** When it renders datasets, `s100 tiles serve`
+  draws the key of each style as a PNG, from the rows the viewer's Legend tab
+  shows: WMS `GetLegendGraphic`, linked from a `LegendURL` on each WMS and
+  WMTS style, so ArcGIS Pro and QGIS show the S-102 shades, S-111 speed bands
+  and the rest next to the layer. Each style's key is in its palette and with
+  its mariner settings. The grouping of sub-layer legends into product
+  sections moved from the viewer into `EncDotNet.S100.Core`
+  (`ProductLegends`), and `EncDotNet.S100.Renderers.Skia` draws the image
+  (`LegendSheetRenderer`). See [Legends](cli.md#legends).
 - **WMS and WMTS agree on the zoom level.** `s100 tiles serve` WMS GetMap
   draws the zoom level a WMTS client such as ArcGIS Pro shows at the same
   scale: the finest one no finer than the view, rather than the nearest. At

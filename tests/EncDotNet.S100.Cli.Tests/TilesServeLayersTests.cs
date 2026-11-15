@@ -204,6 +204,14 @@ public sealed class TilesServeLayersTests : IDisposable
         Assert.InRange(all[1], Math.Min(chart[1], s111[1]) - 0.01, Math.Min(chart[1], s111[1]) + 0.01);
         Assert.InRange(all[3], Math.Max(chart[3], s111[3]) - 0.01, Math.Max(chart[3], s111[3]) + 0.01);
 
+        // Each layer has the same styles, each with the style's legend.
+        string?[] Legends(string layer) =>
+            [.. layers[layer].Elements(Wmts + "Style").Select(st => st.Element(Wmts + "LegendURL")?.Attribute(XName.Get("href", "http://www.w3.org/1999/xlink"))?.Value)];
+        Assert.NotEmpty(Legends(WmtsService.LayerIdentifier));
+        Assert.All(Legends(WmtsService.LayerIdentifier), Assert.NotNull);
+        Assert.Equal(Legends(WmtsService.LayerIdentifier), Legends(TileLayers.Chart));
+        Assert.Equal(Legends(WmtsService.LayerIdentifier), Legends("S111"));
+
         // Each layer's tile URLs name it.
         Assert.Contains("/wmts/1.0.0/S111/{Style}/{Time}/", layers["S111"].Element(Wmts + "ResourceURL")!.Attribute("template")!.Value, StringComparison.Ordinal);
         Assert.Contains("/wmts/1.0.0/chart/{Style}/{TileMatrixSet}/", layers[TileLayers.Chart].Element(Wmts + "ResourceURL")!.Attribute("template")!.Value, StringComparison.Ordinal);

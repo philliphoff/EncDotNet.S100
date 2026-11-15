@@ -101,6 +101,34 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public bool HasDatasets => true;
 
+    public bool HasLegend => Current.HasLegend;
+
+    public (int Width, int Height)? LegendSize(string? style)
+    {
+        var generation = Acquire();
+        try
+        {
+            return generation.Source.LegendSize(style);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    public async ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.ReadLegendAsync(style, options, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
     public JsonObject? ToDatasetsJson()
     {
         var generation = Acquire();
@@ -370,6 +398,14 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         public MarinerStyleRegistry? MarinerStyles => owner.MarinerStyles;
 
         public string? Revision => owner.Revision;
+
+        // The style's legend, of every dataset (issue #1501).
+        public bool HasLegend => owner.HasLegend;
+
+        public (int Width, int Height)? LegendSize(string? style) => owner.LegendSize(style);
+
+        public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+            owner.ReadLegendAsync(style, options, cancellationToken);
 
         public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
         {
