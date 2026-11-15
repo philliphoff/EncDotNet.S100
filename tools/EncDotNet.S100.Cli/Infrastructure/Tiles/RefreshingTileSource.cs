@@ -86,6 +86,15 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public IReadOnlyList<DateTime> Times => Current.Times;
 
+    public IReadOnlyList<string> Layers => Current.Layers;
+
+    /// <summary>
+    /// The tiles of the layer <paramref name="id"/>, from whichever datasets
+    /// serve at each call; <see langword="null"/> when the datasets served now
+    /// have no such layer.
+    /// </summary>
+    public ITileSource? Layer(string id) => Current.Layer(id) is null ? null : new LayerSource(this, id);
+
     public DatasetFeatureQuery? FeatureQuery => Current.FeatureQuery;
 
     public MarinerStyleRegistry? MarinerStyles => Current.MarinerStyles;
@@ -342,6 +351,53 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
         await generation.Source.DrainAsync().ConfigureAwait(false);
         generation.Source.Dispose();
+    }
+
+    /// <summary>
+    /// A layer of the datasets served (issue #1495), read from the current
+    /// opening at each call. A layer that a change removes reads as empty.
+    /// </summary>
+    private sealed class LayerSource(RefreshingTileSource owner, string id) : ITileSource
+    {
+        public string Path => owner.Path + " layer " + id;
+
+        public TileImageFormat Format => owner.Format;
+
+        public IReadOnlyList<string> Palettes => owner.Palettes;
+
+        public IReadOnlyList<DateTime> Times => owner.Current.Layer(id)?.Times ?? [];
+
+        public MarinerStyleRegistry? MarinerStyles => owner.MarinerStyles;
+
+        public string? Revision => owner.Revision;
+
+        public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
+        {
+            var generation = owner.Acquire();
+            try
+            {
+                return generation.Source.Layer(id) is { } layer
+                    ? await layer.ReadAsync(zoom, x, y, palette, time, cancellationToken).ConfigureAwait(false)
+                    : null;
+            }
+            finally
+            {
+                owner.Release(generation);
+            }
+        }
+
+        public JsonObject ToTileJson(string? palette, DateTime? time = null)
+        {
+            var generation = owner.Acquire();
+            try
+            {
+                return (generation.Source.Layer(id) ?? generation.Source).ToTileJson(palette, time);
+            }
+            finally
+            {
+                owner.Release(generation);
+            }
+        }
     }
 
     /// <summary>One opening of the datasets, and how many requests are reading from it.</summary>

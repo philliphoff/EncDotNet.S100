@@ -29,6 +29,19 @@ internal interface ITileSource
     IReadOnlyList<DateTime> Times => [];
 
     /// <summary>
+    /// The identifiers of the WMTS layers served besides the layer of every
+    /// dataset (issue #1495, <see cref="TileLayers"/>), each a group of the
+    /// datasets; empty when there are none.
+    /// </summary>
+    IReadOnlyList<string> Layers => [];
+
+    /// <summary>
+    /// The tiles of the layer <paramref name="id"/> (one of <see cref="Layers"/>),
+    /// with its own time steps and bounds; <see langword="null"/> when there is no such layer.
+    /// </summary>
+    ITileSource? Layer(string id) => null;
+
+    /// <summary>
     /// Finds the features and coverage values at a point in the datasets the
     /// tiles are rendered from, for WMS GetFeatureInfo; <see langword="null"/>
     /// when the tiles have no datasets behind them (a built tile set).

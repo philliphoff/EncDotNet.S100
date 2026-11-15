@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Several WMTS layers from one `tiles serve`.** With `--layers-by product`,
+  `s100 tiles serve` also serves its datasets as a WMTS layer per product
+  (`chart` for S-57, S-101 and S-102; `S104`, `S111`, `S124`, … for the
+  rest), each with its own time steps and extent, so a GIS client can show
+  the chart, water levels and currents as separate layers from one server.
+  With `--manage-datasets`, a client can put the datasets it adds in a layer
+  it names. Each layer also has its own TileJSON, listed in `tiles.json`, and
+  the dataset metadata says which layer each dataset is in. The `s100` layer
+  is unchanged, and without the option the server is as before. See
+  [WMTS layers](cli.md#wmts-layers).
 - **Add and remove datasets while serving.** With `--manage-datasets`,
   `s100 tiles serve` adds and removes datasets on a `POST` or `DELETE` of
   `datasets`, without restarting. The new set serves once it's portrayed,
