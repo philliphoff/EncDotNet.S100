@@ -263,6 +263,71 @@ public sealed class ChartTileRenderer
         return tiles;
     }
 
+    /// <summary>
+    /// Renders any Web Mercator box as one image, with the content and symbol
+    /// size of <paramref name="zoom"/>'s tiles resampled to it, but drawn
+    /// directly at the image's resolution, so it stays sharp.
+    /// </summary>
+    /// <remarks>
+    /// The box is evaluated at <paramref name="zoom"/>'s scale denominator
+    /// (<see cref="ScaleDenominator"/>), so it shows what that zoom level's tiles
+    /// show, and symbols and text are scaled by the ratio of the zoom level's
+    /// resolution to the image's: the image is what stitching the zoom level's
+    /// tiles and resampling them to <paramref name="widthPixels"/> ×
+    /// <paramref name="heightPixels"/> would give, without the blur. A print
+    /// renders a box at a finer resolution than the display it matches (WMS
+    /// <c>DPI</c>) this way.
+    /// </remarks>
+    /// <param name="zoom">The zoom level whose content and scale are drawn.</param>
+    /// <param name="minX">The western edge, in Web Mercator metres; may lie past ±180°.</param>
+    /// <param name="minY">The southern edge, in Web Mercator metres.</param>
+    /// <param name="maxX">The eastern edge, in Web Mercator metres.</param>
+    /// <param name="maxY">The northern edge, in Web Mercator metres.</param>
+    /// <param name="widthPixels">The image width.</param>
+    /// <param name="heightPixels">The image height.</param>
+    /// <returns>The image, cleared to <see cref="ChartTileOptions.Background"/>. The caller disposes it.</returns>
+    public SKBitmap RenderView(int zoom, double minX, double minY, double maxX, double maxY, int widthPixels, int heightPixels)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(zoom);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        if (!(maxX > minX) || !(maxY > minY))
+            throw new ArgumentException("The box must have an area.", nameof(maxX));
+
+        // The box in the zoom level's own (logical) pixels, which symbols and
+        // text are sized in; the canvas then scales them to the image.
+        double resolution = XyzTileGrid.Resolution(zoom);
+        int logicalWidth = (int)Math.Clamp(Math.Round((maxX - minX) / resolution), 1, 1 << 20);
+        int logicalHeight = (int)Math.Clamp(Math.Round((maxY - minY) / resolution), 1, 1 << 20);
+
+        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY, clampLatitude: false);
+        var viewport = new Viewport
+        {
+            MinLongitude = minLon,
+            MaxLongitude = maxLon,
+            MinLatitude = minLat,
+            MaxLatitude = maxLat,
+            WidthPixels = logicalWidth,
+            HeightPixels = logicalHeight,
+            ScaleDenominator = ScaleDenominator(zoom),
+        };
+
+        // A box reaching past ±180° shows the world on the other side there.
+        var copies = minX < -XyzTileGrid.Extent || maxX > XyzTileGrid.Extent ? AdjacentWorldCopies : _worldCopies;
+
+        var bitmap = new SKBitmap(widthPixels, heightPixels, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(ToSkia(_options.Background));
+            canvas.Scale((float)widthPixels / logicalWidth, (float)heightPixels / logicalHeight);
+            _scene.Draw(canvas, viewport, copies);
+            canvas.Flush();
+        }
+
+        return bitmap;
+    }
+
     private static uint BackgroundPixel(RgbaColor color)
     {
         using var probe = new SKBitmap(1, 1, SKColorType.Rgba8888, SKAlphaType.Premul);
