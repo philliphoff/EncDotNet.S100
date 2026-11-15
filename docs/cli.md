@@ -634,6 +634,16 @@ The server has these routes:
   `t` it names the chosen step in `s100.time` and carries it in its tile URL.
   Without `t`, `--time-step` applies. A `t` that isn't a time answers
   `400 Bad Request`; datasets that don't vary with time ignore it.
+- With `--strict-time`, a `t` (or WMS/WMTS `TIME`) more than half a step
+  before a time-varying dataset's first step, after its last or inside a gap
+  in its steps draws nothing for that dataset, instead of its nearest step. A
+  step is the median interval between the dataset's steps (an hour for a single
+  step). A tile on which nothing draws answers `204 No Content`. The TileJSON
+  then sets `s100.strictTime` and, with `t`, lists each time-varying dataset in
+  `s100.datasets` with its file `name`, `spec` and the step it draws in `time`,
+  `null` when it has no data at that time. When the datasets draw other than at
+  their steps nearest the nearest listed step, `s100.time` and the tile URL keep
+  the `t` asked for.
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
@@ -665,8 +675,10 @@ area, the tile format and display settings apply too; the output options
 | `--token <token>` | generated for a non-loopback host | An access token that becomes part of every URL. Letters, digits, `-` and `_`. |
 | `--no-token` | off | Serves without a token, even on a non-loopback address. |
 | `--no-viewer` | off | Doesn't serve the preview page. |
+| `--ready-json` | off | When the server is listening, also prints one line of JSON with the bound port and URLs. See [Run under a supervising process](#run-under-a-supervising-process). |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
+| `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
@@ -744,6 +756,36 @@ until the server stops, and survive the datasets being reloaded. A style whose
 hash isn't registered answers `404 Not Found` on the tile URLs and an exception
 on WMTS and WMS. A built tile set has no mariner settings; export one per set
 with the same options instead.
+
+### Run under a supervising process
+
+A program that starts `tiles serve` itself, such as a GIS add-in, can pass
+`--port 0` to get a free port and `--ready-json` to learn which one. When the
+server is listening, `tiles serve` then prints one line of JSON on standard
+output, before the usual start-up text:
+
+```json
+{"event":"ready","host":"127.0.0.1","port":49731,"token":null,"baseUrl":"http://127.0.0.1:49731/","tiles":"http://127.0.0.1:49731/{z}/{x}/{y}.png","tileJson":"http://127.0.0.1:49731/tiles.json","wmts":"http://127.0.0.1:49731/wmts/1.0.0/WMTSCapabilities.xml","wms":"http://127.0.0.1:49731/wms","healthz":"http://127.0.0.1:49731/healthz","preview":"http://127.0.0.1:49731/"}
+```
+
+Read standard output until a line starts with `{` and parse it. Lines printed
+while datasets are portrayed can come before it. The members are:
+
+| Member | Content |
+|---|---|
+| `event` | Always `ready`. |
+| `host` | The address to connect to: the `--host` address, or `127.0.0.1` (`::1`) when listening on `0.0.0.0` (`::`). |
+| `port` | The bound port. |
+| `token` | The access token, or `null` when there's none. |
+| `baseUrl` | The base URL, with the token. |
+| `tiles` | The XYZ tile URL template. |
+| `tileJson`, `wmts`, `wms` | The TileJSON, WMTS capabilities and WMS URLs. |
+| `healthz` | The [health check](#health) URL, which has no token. |
+| `preview` | The preview page URL, or `null` with `--no-viewer`. |
+
+```bash
+s100 tiles serve exchange-set/ --port 0 --ready-json
+```
 
 ### WMTS
 

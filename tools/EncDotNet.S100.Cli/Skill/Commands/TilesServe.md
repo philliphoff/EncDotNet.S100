@@ -65,6 +65,13 @@ steps ignore it. Vector datasets are portrayed once per palette and reused
 across time steps; only the most recent eight palette/time combinations are
 kept prepared.
 
+With `--strict-time`, a time more than half a step (the median interval
+between a dataset's steps) before, after or in a gap in a time-varying
+dataset's steps draws nothing for it instead of its nearest step; a tile on
+which nothing draws answers `204`. TileJSON then sets `s100.strictTime` and,
+with `t`, lists each time-varying dataset in `s100.datasets` (`name`, `spec`,
+`time`, `null` when it has no data at that time).
+
 Rendering uses the `tiles export` display, zoom and area options, renders
 `--metatile`-square blocks around each requested tile, keeps up to `--cache-mb`
 of tiles in memory, and runs at most `--parallel` renders at once. The first
