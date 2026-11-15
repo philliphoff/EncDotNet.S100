@@ -8405,6 +8405,30 @@
     <value>{0} · {1}</value>
     <comment>Legend section header detail; {0} source, {1} time summary</comment>
   </data>
+  <data name="DataDynamicity_Observed" xml:space="preserve">
+    <value>Observed</value>
+    <comment>S-104/S-111 dataDynamicity 1: observed values (#1505, SoundCharts brief §7.2)</comment>
+  </data>
+  <data name="DataDynamicity_Predicted" xml:space="preserve">
+    <value>Predicted · astronomical tide only, not a forecast</value>
+    <comment>dataDynamicity 2: astronomical prediction; always says it's not a forecast</comment>
+  </data>
+  <data name="DataDynamicity_Analysis" xml:space="preserve">
+    <value>Analysis</value>
+    <comment>dataDynamicity 3: analysis or hybrid</comment>
+  </data>
+  <data name="DataDynamicity_Hindcast" xml:space="preserve">
+    <value>Hindcast</value>
+    <comment>dataDynamicity 4: hydrodynamic hindcast</comment>
+  </data>
+  <data name="DataDynamicity_Forecast" xml:space="preserve">
+    <value>Forecast</value>
+    <comment>dataDynamicity 5 (S-111: 6): hydrodynamic forecast, run time unknown</comment>
+  </data>
+  <data name="DataDynamicity_ForecastRunFormat" xml:space="preserve">
+    <value>Forecast, run {0}</value>
+    <comment>{0}: the forecast's run time, from the dataset's issue time</comment>
+  </data>
   <data name="Legend_NoDataAtFormat" xml:space="preserve">
     <value>No data at {0}</value>
     <comment>Legend section header when the product has no data at the view time (legends D5); {0} is the view time of day</comment>

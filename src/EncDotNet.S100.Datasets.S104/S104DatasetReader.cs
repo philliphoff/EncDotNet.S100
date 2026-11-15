@@ -187,6 +187,7 @@ public static class S104DatasetReader
             Metadata = metadata,
             DataCodingFormat = dataCodingFormat,
             MethodWaterLevelProduct = methodWaterLevelProduct,
+            DataDynamicity = ReadDataDynamicity(wlGroup),
             Coverages = coverages,
             AxisOrder = gridAxisOrder,
         })

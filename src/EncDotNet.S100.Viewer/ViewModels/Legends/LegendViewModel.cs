@@ -369,9 +369,17 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
                 Strings.Legend_NoDataAtFormat,
                 TimeFormatting.FormatClock(_viewTime.Current.UtcDateTime, _timeFormat.Current));
         }
-        return section.TimeSummary is { Length: > 0 } time
+        var detail = section.TimeSummary is { Length: > 0 } time
             ? string.Format(CultureInfo.CurrentCulture, Strings.Legend_SourceAndTimeFormat, section.Source, time)
             : section.Source;
+        // Observed, Predicted, Analysis, Hindcast or Forecast, run {time} (#1505).
+        return section.DataDynamicity is { } kind
+            ? string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.Legend_SourceAndTimeFormat,
+                detail,
+                DataDynamicityText.Label(kind, section.IssueTime, _timeFormat.Current))
+            : detail;
     }
 
     /// <summary>The tile a row's glyph sits on: the palette's chart background (D10).</summary>

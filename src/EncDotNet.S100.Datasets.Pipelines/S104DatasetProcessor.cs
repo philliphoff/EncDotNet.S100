@@ -165,6 +165,26 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         _ => null,
     };
 
+    /// <inheritdoc />
+    /// <remarks>The dataset's <c>dataDynamicity</c> (S-104 Edition 2.0.0).</remarks>
+    public DataDynamicity? DataDynamicity => _data switch
+    {
+        S104DatasetData.GriddedCoverage g => DataDynamicityCodes.FromS104(g.Dataset.DataDynamicity),
+        S104DatasetData.StationSeries s => DataDynamicityCodes.FromS104(s.Dataset.DataDynamicity),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The row that labels picked values as observed, predicted, analysed,
+    /// hindcast or forecast (#1505); none when the dataset doesn't say.
+    /// </summary>
+    private List<PickAttribute> WithDataDynamicity(List<PickAttribute> attributes)
+    {
+        if (DataDynamicity is { } kind)
+            attributes.Add(PickAttribute.DataDynamicityRow(kind, IssueTime));
+        return attributes;
+    }
+
     /// <summary>
     /// S-104 water level steps: forecasts, each held until the next step for
     /// one typical step. Treated as forecasts until the reader exposes
@@ -720,7 +740,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level (Station)",
             Sections = [new StationSeriesSection(BuildStationSeriesSnapshot(station))],
-            Attributes = new List<PickAttribute>
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -782,7 +802,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         station.StartTime, station.EndTime),
                     DateTimeRangeValue = (station.StartTime, station.EndTime),
                 },
-            },
+            }),
         };
     }
 
@@ -886,7 +906,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = $"({sample.Row},{sample.Col})",
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level",
-            Attributes = attrs,
+            Attributes = WithDataDynamicity(attrs),
         };
     }
 
@@ -926,7 +946,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = best.Identifier,
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level (Station)",
-            Attributes = new List<PickAttribute>
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -955,7 +975,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
                     DateTimeValue = sampleTime,
                 },
-            },
+            }),
         };
     }
 
