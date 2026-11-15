@@ -3,7 +3,6 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Legends;
 using Microsoft.Extensions.Time.Testing;
