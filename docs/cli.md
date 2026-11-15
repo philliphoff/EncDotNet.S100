@@ -1023,12 +1023,28 @@ WMTS, each palette is a style, the `--palette` one first and the default,
 each registered set of [mariner settings](#mariner-settings) adds a style per
 palette, and S-104 and S-111 time steps are a `time` dimension.
 
-**GetMap** draws its image from the same tiles the XYZ URLs serve: those of
-the zoom level nearest the requested scale, stitched and resampled to the
-requested area and size. Symbols and text are therefore between about 0.7 and
-1.4 times their portrayed size. A request coarser than the minimum zoom draws
-nothing, and the capabilities give the matching `MaxScaleDenominator`, so
-clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
+**GetMap** draws its image from the same tiles the XYZ URLs serve, stitched
+and resampled to the requested area and size, at the zoom level a WMTS client
+shows at the same scale, so WMS and WMTS show the same features (SCAMIN) at
+the same scale:
+
+- WMTS clients read each tile matrix's `ScaleDenominator` at OGC's 0.28 mm
+  pixel, which gives its resolution in metres per pixel (zoom 14 is
+  1:34,124, or 9.55 m a pixel; zoom 15 is 1:17,062, or 4.78 m). ArcGIS Pro
+  shows the same levels as 1:36,112 and 1:18,056, at its 96 DPI pixel.
+- A client draws the finest tile matrix whose resolution is no finer than its
+  view's, and enlarges its tiles until it reaches the next one. ArcGIS Pro at
+  1:23,374 draws zoom 14.
+- GetMap does the same with the request's resolution, the box's width in
+  Web Mercator metres over its width in pixels: the finest zoom level no
+  finer than that, so 1:23,374 draws zoom 14 too. A request less than 1%
+  coarser than a level's resolution, such as one at its rounded scale, draws
+  that level.
+
+Symbols and text are therefore between 1 and 2 times their portrayed size,
+as in a WMTS client. A request coarser than the minimum zoom draws nothing,
+and the capabilities give the minimum zoom's scale as `MaxScaleDenominator`,
+so clients hide the layer there. It draws PNG or JPEG images up to 4096 pixels on
 a side; set `TRANSPARENT=TRUE` for a PNG to overlay other layers.
 
 **Printing.** A client exporting a layout at a resolution higher than the
