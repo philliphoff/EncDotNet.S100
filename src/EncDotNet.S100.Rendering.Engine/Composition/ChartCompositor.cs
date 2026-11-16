@@ -122,6 +122,14 @@ public sealed class ChartCompositeOptions
     /// symbol at its representative point instead of one per tile.
     /// </summary>
     public bool KeepAreaSymbolsInView { get; init; } = true;
+
+    /// <summary>
+    /// How S-100 Part 9 millimetres and points become pixels in vector layers.
+    /// Defaults to <see cref="SymbolSizeProfile.Screen"/>, the viewer's sizes;
+    /// use <see cref="SymbolSizeProfile.Part9Millimetres"/> for physical sizes
+    /// in print.
+    /// </summary>
+    public SymbolSizeProfile SizeProfile { get; init; } = SymbolSizeProfile.Screen;
 }
 
 /// <summary>
@@ -292,7 +300,7 @@ public sealed class ChartCompositor
                         var finer = finerByDataset.GetValueOrDefault(item.SourceDatasetId) ?? [];
                         steps.Add(() =>
                         {
-                            var scene = LowerVector(vector, options.HiddenCategories);
+                            var scene = LowerVector(vector, options.HiddenCategories, options.SizeProfile);
                             var layer = new VectorCompositeLayer(scene, options.HonorScaleVisibility)
                             {
                                 EnableSeamWrap = options.EnableSeamWrap,
@@ -443,7 +451,8 @@ public sealed class ChartCompositor
             nameof(input));
     }
 
-    private static VectorScene LowerVector(VectorStackPayload payload, DrawingInstructionCategory hiddenCategories)
+    private static VectorScene LowerVector(
+        VectorStackPayload payload, DrawingInstructionCategory hiddenCategories, SymbolSizeProfile sizeProfile)
     {
         var result = payload.Result;
         return HeadlessVectorRenderer.BuildScene(
@@ -455,7 +464,8 @@ public sealed class ChartCompositor
             result.SymbolScale,
             result.TextScale,
             result.AreaFillProvider,
-            hiddenCategories);
+            hiddenCategories,
+            sizeProfile);
     }
 }
 

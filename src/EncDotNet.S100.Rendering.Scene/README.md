@@ -54,6 +54,7 @@ resolved to `RgbaColor`. The XML docs on `PaintOp` give the full unit contract.
 |---|---|
 | `VectorScene`, `PaintOp` (`PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`, `TextPaintOp`) | The ordered list of resolved paint operations. Each op carries its own scale minimum (SCAMIN). |
 | `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles come in as PNG bytes through the `PatternResolver` delegate (`Func<string, byte[]?>`), so the builder doesn't rasterise anything itself. Pattern fills are priority-clipped with `PatternPriorityClipper`. |
+| `SymbolSizeProfile` | The factors that turn S-100 Part 9 millimetres and points into pixels. `Screen`, the default, is the viewer's sizes; `Part9Millimetres(dpi)` draws physical sizes for print. See [Symbol sizes](../../docs/embedding-the-renderer.md#symbol-sizes). |
 | `IVectorSceneRenderer<TSurface>` | The contract a rendering backend implements to draw a `VectorScene` onto its own surface type. |
 | `WorldToScreen` | The EPSG:3857-to-pixel transform for a `Viewport`. When the viewport is shifted across the ±180° antimeridian, it wraps ops into that window. |
 | `SeamAwareBoundsAccumulator` | Computes the extent to fit a dataset to. For geometry that straddles the antimeridian, it shifts the western part east so the dataset is framed on its true extent instead of the whole world. |

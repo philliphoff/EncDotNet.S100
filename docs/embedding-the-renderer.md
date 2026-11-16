@@ -152,6 +152,40 @@ To render a display list fitted to its own extent in one call, use
 `HeadlessVectorRenderer.Render`, which builds the scene and the viewport for
 you.
 
+### Symbol sizes
+
+`VectorSceneBuilder.SizeProfile` sets how S-100 Part 9 millimetres and points
+become pixels. The default, `SymbolSizeProfile.Screen`, is what the viewer
+draws:
+
+| What | Size |
+|---|---|
+| Point symbols | 0.6 of their SVG size at 96 DPI |
+| Line widths, dashes and offsets | 0.32 mm per pixel |
+| Pattern area fills | 1.5 pixels per millimetre |
+| Text | Font points drawn as pixels: 10 pt is 10 px |
+
+These are tuned for a screen, not physical size. To match the viewer's output
+in another renderer, such as ArcGIS Pro, QGIS or SVG drawing the same
+instructions, use these factors.
+
+For print, use `SymbolSizeProfile.Part9Millimetres(dpi)`, which draws every
+size at its physical size per S-100 Part 9 at the output resolution. Point
+symbols then come out about 1.6 times their screen size:
+
+```csharp
+var builder = new VectorSceneBuilder
+{
+    ResolveColor = ColorResolver.Create(palette),
+    SizeProfile = SymbolSizeProfile.Part9Millimetres(dotsPerInch: 300),
+};
+```
+
+`HeadlessVectorRenderer.Render` and `BuildScene` take the same profile as
+`sizeProfile`, and also use it for pattern tiles. `ChartCompositeOptions` has
+it as `SizeProfile`. The global symbol and text scales multiply on top of the
+profile.
+
 ### Coverage and composite images
 
 - **Coverage products** (S-102, S-104 and S-111) don't produce a display list.
