@@ -477,12 +477,12 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 var portrayal = vectorSource.BuildVectorPortrayalAsync(renderContext)
                     .GetAwaiter().GetResult();
                 var json = DisplayListJsonWriter.Serialize(
-                    portrayal, Path.GetFileName(datasetPath), settings.Palette.Trim().ToLowerInvariant());
+                    portrayal, Path.GetFileName(datasetPath), settings.Palette.Trim().ToLowerInvariant(), hidden);
                 File.WriteAllText(outputPath, json);
 
                 int instructionCount = portrayal.SubLayers.Sum(l => l.Instructions.Count);
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[green]Wrote[/] {outputPath} ([grey]{spec}, display-list, {instructionCount} instruction(s)[/])");
+                    $"[green]Wrote[/] {outputPath} ([grey]{spec}, display-list, {instructionCount} instruction(s), schema v{DisplayListJsonWriter.SchemaVersion}[/])");
                 return 0;
             }
 

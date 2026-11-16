@@ -269,13 +269,13 @@ public sealed class RenderCommandTests
             Assert.Equal("S-124", root.GetProperty("product").GetString());
             Assert.Equal("navwarn_surface.gml", root.GetProperty("dataset").GetString());
 
-            var instructions = root.GetProperty("instructions");
+            var instructions = root.GetProperty("ops");
             Assert.Equal(JsonValueKind.Array, instructions.ValueKind);
             Assert.Equal(
-                root.GetProperty("instructionCount").GetInt32(), instructions.GetArrayLength());
+                root.GetProperty("opCount").GetInt32(), instructions.GetArrayLength());
             Assert.True(instructions.GetArrayLength() > 0);
 
-            // Every instruction carries the base portrayal fields the format promises.
+            // Every op carries the base portrayal fields the format promises.
             foreach (var instruction in instructions.EnumerateArray())
             {
                 Assert.False(string.IsNullOrEmpty(instruction.GetProperty("kind").GetString()));
@@ -283,6 +283,93 @@ public sealed class RenderCommandTests
                 Assert.True(instruction.TryGetProperty("plane", out _));
                 Assert.True(instruction.TryGetProperty("drawingPriority", out _));
             }
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_json_hands_out_the_drawn_scene_of_an_s101_cell()
+    {
+        var dataset = FixturePath(Path.Combine("S101", "101AA00DS0008.000"));
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        try
+        {
+            Assert.Equal(0, CliApp.Build().Run(["render", dataset, output], TestContext.Current.CancellationToken));
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(output));
+            var root = doc.RootElement;
+            Assert.Equal(DisplayListJsonWriter.SchemaVersion, root.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal("EPSG:4326", root.GetProperty("crs").GetString());
+            var ops = root.GetProperty("ops").EnumerateArray().ToList();
+            Assert.Equal(root.GetProperty("opCount").GetInt32(), ops.Count);
+
+            static bool InCell(JsonElement position) =>
+                position[0].GetDouble() is > 62 and < 63 && position[1].GetDouble() is > -33 and < -32;
+
+            for (int i = 0; i < ops.Count; i++)
+            {
+                var op = ops[i];
+                Assert.Equal(i, op.GetProperty("order").GetInt32());
+                Assert.True(op.TryGetProperty("plane", out _));
+                Assert.True(op.TryGetProperty("drawingPriority", out _));
+                Assert.True(op.GetProperty("viewingGroups").GetArrayLength() > 0);
+
+                switch (op.GetProperty("kind").GetString())
+                {
+                    case "area":
+                    case "pattern":
+                        var shell = op.GetProperty("rings")[0];
+                        Assert.True(shell.GetArrayLength() >= 3);
+                        Assert.All(shell.EnumerateArray(), p => Assert.True(InCell(p)));
+                        break;
+                    case "line":
+                        var coordinates = op.GetProperty("coordinates");
+                        Assert.True(coordinates.GetArrayLength() >= 2);
+                        Assert.All(coordinates.EnumerateArray(), p => Assert.True(InCell(p)));
+                        Assert.StartsWith("#", op.GetProperty("color").GetString());
+                        Assert.True(op.GetProperty("widthPx").GetDouble() >= 1);
+                        break;
+                    case "point":
+                    case "text":
+                        Assert.True(InCell(op.GetProperty("anchor")));
+                        Assert.False(string.IsNullOrEmpty(op.GetProperty("placement").GetProperty("kind").GetString()));
+                        break;
+                    default:
+                        Assert.Fail($"Unexpected kind {op.GetProperty("kind")}");
+                        break;
+                }
+            }
+
+            JsonElement First(string kind, Func<JsonElement, bool> where) =>
+                ops.First(o => o.GetProperty("kind").GetString() == kind && where(o));
+
+            // A named point symbol with its resolved scale and pivot.
+            var point = First("point", o => o.TryGetProperty("symbol", out _));
+            Assert.True(point.GetProperty("scale").GetDouble() > 0);
+            Assert.Equal(2, point.GetProperty("pivot").GetArrayLength());
+
+            // A complex line style: its dashes and the symbols it places, by name.
+            var styled = First("line", o => o.TryGetProperty("lineSymbols", out _));
+            Assert.False(string.IsNullOrEmpty(styled.GetProperty("lineStyle").GetString()));
+            Assert.False(string.IsNullOrEmpty(styled.GetProperty("lineSymbols")[0].GetProperty("symbol").GetString()));
+            Assert.True(styled.GetProperty("symbolIntervalPx").GetDouble() > 0);
+
+            // Text with its font fields, offset and a line placement on a curve.
+            var text = First("text", o => o.TryGetProperty("offsetPx", out _));
+            Assert.True(text.GetProperty("fontSizePx").GetDouble() > 0);
+            Assert.False(string.IsNullOrEmpty(text.GetProperty("fontWeight").GetString()));
+            Assert.False(string.IsNullOrEmpty(text.GetProperty("verticalAlignment").GetString()));
+            var onLine = First("text", o => o.GetProperty("placement").GetProperty("kind").GetString() == "Line");
+            Assert.InRange(onLine.GetProperty("placement").GetProperty("linePosition").GetDouble(), 0, 1);
+
+            // A pattern fill names its area fill.
+            Assert.False(string.IsNullOrEmpty(First("pattern", _ => true).GetProperty("areaFill").GetString()));
         }
         finally
         {

@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The drawn chart as JSON.** `s100 render --format json` now writes what
+  the renderer draws rather than a summary of the display list: every line
+  edge, area ring, pattern fill, symbol and label with its full geometry in
+  longitude and latitude, resolved colours, sizes in display pixels, font
+  fields, offsets, rotation, drawing priority, viewing groups, scale limits,
+  and the anchor each symbol and label is placed at. Line suppression, pattern
+  clipping and multi-part splitting are already applied, so a GIS or vector
+  renderer in another process can draw the chart the way the viewer does. The
+  document has a `schemaVersion` (now 2) and its entries are in `ops`, which
+  replaces `instructions`. See [Display-list output](cli.md#display-list-output).
 - **An overview below the minimum zoom.** With `--overview`,
   `s100 tiles serve` draws each dataset's coverage outline and name where the
   chart's zoom levels end, on XYZ and WMTS tiles and WMS GetMap, and the WMS
