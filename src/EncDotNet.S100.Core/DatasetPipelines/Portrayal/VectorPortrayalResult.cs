@@ -93,6 +93,15 @@ public sealed class VectorPortrayalResult
     /// </summary>
     public Func<string, string?>? SymbolTitleProvider { get; init; }
 
+    /// <summary>
+    /// Resolves an SVG symbol name to the symbol as parsed vector geometry
+    /// (<see cref="SvgSymbol.Geometry"/>: paths, circles and palette-token
+    /// colours), or null. Covers the same symbols as
+    /// <see cref="SymbolProvider"/>, from the same catalogue records, so a
+    /// renderer that draws symbols natively need not parse SVG.
+    /// </summary>
+    public Func<string, SymbolGeometry?>? SymbolGeometryProvider { get; init; }
+
     /// <summary>Resolves a line-style name to its resolved style (or null).</summary>
     public Func<string, LineStyle?>? LineStyleProvider { get; init; }
 
