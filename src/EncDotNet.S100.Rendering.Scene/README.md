@@ -67,6 +67,23 @@ foreach (var edge in LineEdges.Resolve(instructions, geometryProvider))
 
 These are the same runs the scene's `LinePaintOp`s stroke.
 
+Area patterns come out the same way. `PatternRegions.Resolve` returns, for each
+pattern and drawing priority, the region where that pattern is drawn, with
+S-100 Part 9 pattern priority clipping already applied: where patterned areas
+overlap, only the highest-priority pattern shows, and no pattern shows over an
+opaque colour fill such as land.
+
+```csharp
+foreach (var region in PatternRegions.Resolve(instructions, geometryProvider))
+{
+    // region.PatternReference: the area fill to tile, such as DQUALB01.
+    // region.Instructions: the AreaInstructions it fills (features, scale limits).
+    // region.Area: the visible Polygon or MultiPolygon, in EPSG:3857 metres.
+}
+```
+
+These are the regions the scene's `PatternAreaPaintOp`s fill.
+
 ## Main types
 
 | Type | Role |
@@ -80,6 +97,7 @@ These are the same runs the scene's `LinePaintOp`s stroke.
 | `RotatedViewport` | Geometry for drawing a rotated viewport as a north-up cover that's then rotated onto the output. |
 | `ResolvedSymbol`, `SymbolAsset` | A resolved point symbol and its pivot (S-100 Part 9 §11.5). |
 | `PatternPriorityClipper` | Clips tiled pattern area fills by display priority (S-100 Part 9 §11.3). It subtracts higher-priority pattern areas and opaque solid fills, such as land, from each lower-priority pattern. |
+| `PatternRegions`, `PatternRegion` | The area patterns of a display list as data: each pattern's visible region after priority clipping, for renderers that draw the portrayal themselves. |
 | `PatternClipMemoizer` | An optional delegate you pass to `VectorSceneBuilder.PatternClipCache` to reuse the clip result. The clip doesn't depend on the palette, so a rebuild that only changes the palette can skip it. |
 | `CoverageSymbolField` | The oriented symbols of a styled coverage grid, such as S-111 current arrows, flattened to EPSG:3857 arrays so every backend places, sizes and thins them the same way. |
 | `ColorResolver` | Resolves S-100 colour tokens to `RgbaColor`. |
