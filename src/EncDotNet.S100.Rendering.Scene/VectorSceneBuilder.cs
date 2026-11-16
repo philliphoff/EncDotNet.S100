@@ -163,7 +163,18 @@ public sealed class VectorSceneBuilder
     /// <summary>Builds a resolved scene from the supplied display list and geometry.</summary>
     public VectorScene Build(
         IReadOnlyList<DrawingInstruction> instructions,
-        IFeatureGeometryProvider geometryProvider)
+        IFeatureGeometryProvider geometryProvider) =>
+        Build(instructions, geometryProvider, patternRegions: null);
+
+    /// <summary>
+    /// Builds a resolved scene and, when <paramref name="patternRegions"/> is
+    /// supplied, adds to it the priority-clipped pattern regions the scene's
+    /// <see cref="PatternAreaPaintOp"/>s are rebuilt from.
+    /// </summary>
+    internal VectorScene Build(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider,
+        List<PatternRegion>? patternRegions)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
@@ -185,7 +196,7 @@ public sealed class VectorSceneBuilder
         }
 
         var ops = new List<PaintOp>(sorted.Count);
-        var patternPriorities = new List<(PatternAreaPaintOp Op, int Priority)>();
+        var patternPriorities = new List<(PatternAreaPaintOp Op, AreaInstruction Instruction)>();
         HashSet<string>? featuresWithPatterns = null;
 
         foreach (var instruction in sorted)
@@ -243,8 +254,8 @@ public sealed class VectorSceneBuilder
             foreach (var op in built)
             {
                 ops.Add(op);
-                if (op is PatternAreaPaintOp patternOp)
-                    patternPriorities.Add((patternOp, instruction.DrawingPriority));
+                if (op is PatternAreaPaintOp patternOp && instruction is AreaInstruction patternInstruction)
+                    patternPriorities.Add((patternOp, patternInstruction));
             }
         }
 
@@ -253,7 +264,7 @@ public sealed class VectorSceneBuilder
         // path via PatternPriorityClipper) so the headless Skia backend and the
         // Mapsui TiledScene subsystem clip identically to the Mapsui feature arm.
         if (patternPriorities.Count > 0)
-            ClipPatternAreas(ops, patternPriorities, featuresWithPatterns);
+            ClipPatternAreas(ops, patternPriorities, featuresWithPatterns, patternRegions);
 
         return new VectorScene(ops) { ScaleMinimumCap = OutOfBandMinDisplayScale, PreferLiveDrawing = PreferLiveDrawing };
     }
@@ -316,8 +327,9 @@ public sealed class VectorSceneBuilder
     /// </remarks>
     private void ClipPatternAreas(
         List<PaintOp> ops,
-        List<(PatternAreaPaintOp Op, int Priority)> patternPriorities,
-        HashSet<string>? featuresWithPatterns)
+        List<(PatternAreaPaintOp Op, AreaInstruction Instruction)> patternPriorities,
+        HashSet<string>? featuresWithPatterns,
+        List<PatternRegion>? patternRegions)
     {
         // Fully-opaque non-patterned solid colour fills (e.g. land) occlude
         // patterns. Translucent fills (alpha < 255 — an AreaInstruction's
@@ -349,9 +361,13 @@ public sealed class VectorSceneBuilder
         var groupTemplates = new Dictionary<(string, int), PatternGroupTemplate>(PatternGroupKeyComparer);
         var unclippable = new List<PatternAreaPaintOp>();
         var priorityOf = new Dictionary<PatternAreaPaintOp, int>(ReferenceEqualityComparer.Instance);
+        var groupInstructions = patternRegions is null
+            ? null
+            : new Dictionary<(string, int), List<AreaInstruction>>(PatternGroupKeyComparer);
 
-        foreach (var (op, priority) in patternPriorities)
+        foreach (var (op, instruction) in patternPriorities)
         {
+            int priority = instruction.DrawingPriority;
             priorityOf[op] = priority;
             var polygon = CreatePolygon(op.WorldShell, op.WorldHoles);
             if (polygon is null)
@@ -376,6 +392,15 @@ public sealed class VectorSceneBuilder
             }
 
             list.Add(polygon);
+
+            if (groupInstructions is not null)
+            {
+                if (!groupInstructions.TryGetValue(key, out var members))
+                    groupInstructions[key] = members = [];
+                // A multi-part surface lowers to several ops of one instruction.
+                if (!members.Contains(instruction, ReferenceEqualityComparer.Instance))
+                    members.Add(instruction);
+            }
         }
 
         // The shared clipper requires entries pre-sorted ascending by priority.
@@ -405,6 +430,12 @@ public sealed class VectorSceneBuilder
                 : (PatternGroupTemplate?)null;
             if (template is null)
                 continue;
+
+            if (groupInstructions is not null
+                && groupInstructions.TryGetValue((patternRef, priority), out var members))
+            {
+                patternRegions!.Add(new PatternRegion(patternRef, priority, members, geometry));
+            }
 
             foreach (var (shell, holes) in EnumeratePolygonRings(geometry))
             {

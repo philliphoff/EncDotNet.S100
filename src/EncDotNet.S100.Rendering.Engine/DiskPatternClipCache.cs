@@ -58,7 +58,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// rejects stale ones. Increment whenever the serialization frame or the
     /// clip algorithm changes in a way that invalidates persisted geometry.
     /// </summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     /// <summary>The kind name hosts open for this cache (also its folder name).</summary>
     public const string KindName = "PatternClipCache";
