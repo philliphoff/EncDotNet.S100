@@ -851,22 +851,9 @@ public sealed class VectorSceneBuilder
     private PointPaintOp BuildPoint(
         PointInstruction instruction, FeatureGeometry geometry, Func<FeatureGeometry, SurfacePlacement?> placementOf)
     {
-        (double X, double Y) world;
-        PlacementArea? placementArea = null;
-        if (instruction.CoordinateOverride is { } anchor)
-        {
-            world = ProjectAnchor(anchor.Latitude, anchor.Longitude);
-        }
-        else if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
-        {
-            world = placement.Anchor;
-            if (instruction.AreaPlacement == AreaPlacementMode.VisibleParts)
-                placementArea = placement.Area;
-        }
-        else
-        {
-            world = ProjectAnchor(geometry.Coordinates[0].Latitude, geometry.Coordinates[0].Longitude);
-        }
+        var (world, placementArea, anchorPlacement) = ResolveAnchor(
+            geometry, instruction.CoordinateOverride, instruction.LinePlacementPosition,
+            instruction.AreaPlacement, forText: false, placementOf)!.Value;
 
         var symOffsetXpx = instruction.LocalOffsetX / S100PixelSizeMm;
         var symOffsetYpx = instruction.LocalOffsetY / S100PixelSizeMm;
@@ -890,6 +877,7 @@ public sealed class VectorSceneBuilder
             ScaleMaximum = instruction.ScaleMaximum,
             World = world,
             PlacementArea = placementArea,
+            Placement = anchorPlacement,
             Symbol = symbol,
             FallbackColor = ColorResolver.ResolveSymbolColor(instruction.SymbolReference, ResolveColor),
             FallbackScale = 0.15 * instruction.SymbolScale * SymbolScale,
@@ -903,52 +891,17 @@ public sealed class VectorSceneBuilder
     private TextPaintOp? BuildText(
         TextInstruction instruction, FeatureGeometry geometry, Func<FeatureGeometry, SurfacePlacement?> placementOf)
     {
-        // Text on a curve or surface with several parts goes on its longest
-        // curve or largest surface: the joined Coordinates would put it on a
-        // gap, or at a centroid outside every part (issue #643).
-        var coords = geometry.Parts.Count > 1
-            ? geometry.Type == GeometryType.Surface
-                ? geometry.Parts.MaxBy(RingArea)!
-                : geometry.Parts.MaxBy(PolylineLength)!
-            : geometry.Coordinates;
         if (string.IsNullOrEmpty(instruction.Text))
             return null;
 
-        (double X, double Y) world;
-        PlacementArea? placementArea = null;
-        if (instruction.CoordinateOverride is { } anchor)
-        {
-            world = ProjectAnchor(anchor.Latitude, anchor.Longitude);
-        }
-        else if (coords.Count == 0)
+        if (ResolveAnchor(
+                geometry, instruction.CoordinateOverride, instruction.LinePlacementPosition,
+                instruction.AreaPlacement, forText: true, placementOf) is not { } resolved)
         {
             return null;
         }
-        else if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
-            && geometry.Type == GeometryType.Curve)
-        {
-            var (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
-            world = ProjectAnchor(lat, lon);
-        }
-        else if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
-        {
-            world = placement.Anchor;
-            if (instruction.AreaPlacement == AreaPlacementMode.VisibleParts)
-                placementArea = placement.Area;
-        }
-        else if (geometry.Type == GeometryType.Surface && coords.Count >= 3)
-        {
-            var (lat, lon) = ComputeRingCentroid(coords);
-            world = ProjectAnchor(lat, lon);
-        }
-        else if (geometry.Type == GeometryType.Curve && coords.Count >= 2)
-        {
-            world = ProjectAnchor(coords[coords.Count / 2].Latitude, coords[coords.Count / 2].Longitude);
-        }
-        else
-        {
-            world = ProjectAnchor(coords[0].Latitude, coords[0].Longitude);
-        }
+
+        var (world, placementArea, anchorPlacement) = resolved;
 
         var foreColor = ColorResolver.ApplyTransparency(
             ResolveColor(instruction.FontColor), instruction.FontTransparency);
@@ -967,6 +920,7 @@ public sealed class VectorSceneBuilder
             ScaleMaximum = instruction.ScaleMaximum,
             World = world,
             PlacementArea = placementArea,
+            Placement = anchorPlacement,
             Text = instruction.Text,
             FontSizePx = instruction.FontSize * TextScale,
             ForeColor = foreColor,
@@ -984,43 +938,136 @@ public sealed class VectorSceneBuilder
     }
 
     /// <summary>
+    /// The anchor a point symbol or text is drawn at (S-100 Part 9 §11.4/§11.5
+    /// <c>AugmentedPoint</c>, <c>LinePlacement</c> and <c>AreaPlacement</c>),
+    /// the surface a live view keeps it in, and how it was chosen. Point
+    /// symbols and text share it, so they land on the same spot; text has its
+    /// own fallbacks on a curve or surface. Null when there is nowhere to put text.
+    /// </summary>
+    private static ((double X, double Y) World, PlacementArea? Area, AnchorPlacement Placement)? ResolveAnchor(
+        FeatureGeometry geometry,
+        GeoPosition? coordinateOverride,
+        double? linePlacementPosition,
+        AreaPlacementMode areaPlacement,
+        bool forText,
+        Func<FeatureGeometry, SurfacePlacement?> placementOf)
+    {
+        if (coordinateOverride is { } anchor)
+            return (ProjectAnchor(anchor.Latitude, anchor.Longitude), null, new(AnchorPlacementKind.Coordinate));
+
+        // A line placement on a curve with several parts goes on its longest
+        // curve, and text on its longest curve or largest surface: the joined
+        // Coordinates would put it on a gap, or at a centroid outside every
+        // part (issue #643).
+        int part = 0;
+        var coords = geometry.Coordinates;
+        if (geometry.Parts.Count > 1
+            && (forText || (linePlacementPosition.HasValue && geometry.Type == GeometryType.Curve)))
+        {
+            part = geometry.Type == GeometryType.Surface
+                ? IndexOfMax(geometry.Parts, RingArea)
+                : IndexOfMax(geometry.Parts, PolylineLength);
+            coords = geometry.Parts[part];
+        }
+
+        if (coords.Count == 0)
+            return forText ? null : (ProjectAnchor(geometry.Coordinates[0].Latitude, geometry.Coordinates[0].Longitude), null, new(AnchorPlacementKind.Point));
+
+        if (linePlacementPosition is { } position && coords.Count >= 2 && geometry.Type == GeometryType.Curve)
+        {
+            var (at, fraction, segment, t) = InterpolateAlongPolyline(coords, position);
+            return (ProjectAnchor(at.Latitude, at.Longitude), null,
+                new(AnchorPlacementKind.Line, part, fraction, segment, t));
+        }
+
+        if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
+        {
+            bool visibleParts = areaPlacement == AreaPlacementMode.VisibleParts;
+            return (placement.Anchor, visibleParts ? placement.Area : null,
+                new(AnchorPlacementKind.Surface, placement.Part, VisibleParts: visibleParts));
+        }
+
+        if (forText && geometry.Type == GeometryType.Surface && coords.Count >= 3)
+        {
+            var (lat, lon) = ComputeRingCentroid(coords);
+            return (ProjectAnchor(lat, lon), null, new(AnchorPlacementKind.RingVertexMean, part));
+        }
+
+        if (forText && geometry.Type == GeometryType.Curve && coords.Count >= 2)
+        {
+            int middle = coords.Count / 2;
+            return (ProjectAnchor(coords[middle].Latitude, coords[middle].Longitude), null,
+                new(AnchorPlacementKind.CurveMiddleVertex, part, Segment: middle));
+        }
+
+        return (ProjectAnchor(coords[0].Latitude, coords[0].Longitude), null, new(AnchorPlacementKind.Point, part));
+    }
+
+    private static int IndexOfMax(IReadOnlyList<IReadOnlyList<GeoPosition>> parts, Func<IReadOnlyList<GeoPosition>, double> measure)
+    {
+        int best = 0;
+        double bestValue = measure(parts[0]);
+        for (int i = 1; i < parts.Count; i++)
+        {
+            var value = measure(parts[i]);
+            if (value > bestValue)
+            {
+                best = i;
+                bestValue = value;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
     /// Where a surface's point symbols and text go (S-100 Part 9
     /// <c>AreaPlacement</c>): <see cref="Anchor"/>, a representative point
-    /// inside its largest part, and <see cref="Area"/>, the whole surface for
-    /// keeping them in view.
+    /// inside its largest part (<see cref="Part"/>, an index into
+    /// <c>FeatureGeometry.Parts</c>), and <see cref="Area"/>, the whole surface
+    /// for keeping them in view.
     /// </summary>
-    private sealed record SurfacePlacement((double X, double Y) Anchor, PlacementArea Area);
+    private sealed record SurfacePlacement((double X, double Y) Anchor, PlacementArea Area, int Part);
 
     private static SurfacePlacement? PlaceOnSurface(FeatureGeometry geometry)
     {
         var polygons = new List<Polygon>();
-        void Add(IReadOnlyList<GeoPosition> shell, IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
+        var partOf = new List<int>();
+        void Add(IReadOnlyList<GeoPosition> shell, IReadOnlyList<IReadOnlyList<GeoPosition>> holes, int part)
         {
             if (shell.Count < 3)
                 return;
             foreach (var (worldShell, worldHoles) in AntimeridianGeometry.ProjectSurface(shell, holes))
             {
                 if (CreatePolygon(worldShell, worldHoles) is { IsEmpty: false } polygon)
+                {
                     polygons.Add(polygon);
+                    partOf.Add(part);
+                }
             }
         }
 
         if (geometry.Parts.Count > 1)
         {
             for (int i = 0; i < geometry.Parts.Count; i++)
-                Add(geometry.Parts[i], i < geometry.PartInteriorRings.Count ? geometry.PartInteriorRings[i] : []);
+                Add(geometry.Parts[i], i < geometry.PartInteriorRings.Count ? geometry.PartInteriorRings[i] : [], i);
         }
         else
         {
-            Add(geometry.Coordinates, geometry.InteriorRings);
+            Add(geometry.Coordinates, geometry.InteriorRings, 0);
         }
 
         if (polygons.Count == 0)
             return null;
 
-        var largest = polygons.MaxBy(p => p.Area)!;
+        int largest = 0;
+        for (int i = 1; i < polygons.Count; i++)
+        {
+            if (polygons[i].Area > polygons[largest].Area)
+                largest = i;
+        }
         Geometry area = polygons.Count == 1 ? polygons[0] : ClipGeometryFactory.CreateMultiPolygon([.. polygons]);
-        return new SurfacePlacement(PlacementArea.RepresentativePoint(largest), new PlacementArea(area));
+        return new SurfacePlacement(
+            PlacementArea.RepresentativePoint(polygons[largest]), new PlacementArea(area), partOf[largest]);
     }
 
     // A point or label anchor poleward of the Web-Mercator limit (e.g. the
@@ -1072,13 +1119,16 @@ public sealed class VectorSceneBuilder
         return length;
     }
 
-    private static GeoPosition InterpolateAlongPolyline(
+    // The point a fraction of the way along a polyline, measured in plain
+    // latitude/longitude degrees, with the fraction used (clamped to 0–1), the
+    // index of the vertex starting the segment it lands on and how far along
+    // that segment it is.
+    private static (GeoPosition At, double Fraction, int Segment, double SegmentPosition) InterpolateAlongPolyline(
         IReadOnlyList<GeoPosition> coords, double fraction)
     {
-        if (coords.Count < 2)
-            return coords[0];
-
         fraction = Math.Clamp(fraction, 0.0, 1.0);
+        if (coords.Count < 2)
+            return (coords[0], fraction, 0, 0);
 
         double totalLength = 0;
         for (int i = 1; i < coords.Count; i++)
@@ -1089,7 +1139,7 @@ public sealed class VectorSceneBuilder
         }
 
         if (totalLength <= 0)
-            return coords[0];
+            return (coords[0], fraction, 0, 0);
 
         double targetLength = totalLength * fraction;
         double accumulated = 0;
@@ -1103,15 +1153,15 @@ public sealed class VectorSceneBuilder
             if (accumulated + segmentLength >= targetLength)
             {
                 double t = segmentLength > 0 ? (targetLength - accumulated) / segmentLength : 0;
-                return new GeoPosition(
+                return (new GeoPosition(
                     coords[i - 1].Latitude + t * dLat,
-                    coords[i - 1].Longitude + t * dLon);
+                    coords[i - 1].Longitude + t * dLon), fraction, i - 1, t);
             }
 
             accumulated += segmentLength;
         }
 
-        return coords[^1];
+        return (coords[^1], fraction, coords.Count - 2, 1);
     }
 
     private static GeoPosition ComputeRingCentroid(

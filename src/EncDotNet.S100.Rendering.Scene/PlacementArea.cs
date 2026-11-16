@@ -31,8 +31,11 @@ public sealed class PlacementArea
         MaxY = envelope.MaxY;
     }
 
-    /// <summary>The surface, in EPSG:3857 metres (for <see cref="VectorSceneSerializer"/>).</summary>
-    internal Geometry Area => _area;
+    /// <summary>
+    /// The surface, in EPSG:3857 metres: every part of the feature's surface,
+    /// which <see cref="AnchorIn"/> picks the visible part from.
+    /// </summary>
+    public Geometry Area => _area;
 
     /// <summary>West edge of the area, in EPSG:3857 metres.</summary>
     public double MinX { get; }
