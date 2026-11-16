@@ -159,34 +159,11 @@ public sealed class VectorSceneBuilder
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
 
-        // S-100 Part 9 draw order: display plane, then drawing priority, then the
-        // geometry rule within a priority (areas, pattern fills, lines, points,
-        // text). A higher-priority area therefore covers a lower-priority line
-        // (#1126). The sort is stable, so ties keep display-list order.
-        var sorted = instructions
-            .OrderBy(i => i.Plane == EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
-            .ThenBy(i => i.DrawingPriority)
-            .ThenBy(i => i switch
-            {
-                AreaInstruction { AreaFillReference: not null } => 1,
-                AreaInstruction => 0,
-                LineInstruction => 2,
-                PointInstruction => 3,
-                TextInstruction => 4,
-                _ => 5,
-            })
-            .ToList();
+        var sorted = DrawOrder(instructions);
 
         // Where lines of different features share an edge, the one drawn last
         // hides the others there (S-100 Part 9 line suppression).
-        var suppressed = LineSuppression.Apply(sorted, line =>
-        {
-            if (line.CoordinatesOverride is { } coordinates)
-                return [coordinates];
-            if (geometryProvider.GetGeometry(line.FeatureReference) is not { Coordinates.Count: > 0 } lineGeometry)
-                return null;
-            return lineGeometry.Parts.Count > 1 ? lineGeometry.Parts : [lineGeometry.Coordinates];
-        });
+        var suppressed = LineSuppression.Apply(sorted, line => LinePolylines(line, geometryProvider));
 
         // Where each surface's point symbols and text go, worked out once per
         // feature (S-100 Part 9 AreaPlacement).
@@ -270,6 +247,44 @@ public sealed class VectorSceneBuilder
             ClipPatternAreas(ops, patternPriorities, featuresWithPatterns);
 
         return new VectorScene(ops) { ScaleMinimumCap = OutOfBandMinDisplayScale, PreferLiveDrawing = PreferLiveDrawing };
+    }
+
+    /// <summary>
+    /// Sorts a display list into S-100 Part 9 draw order: display plane, then
+    /// drawing priority, then the geometry rule within a priority (areas,
+    /// pattern fills, lines, points, text). A higher-priority area therefore
+    /// covers a lower-priority line (#1126). The sort is stable, so ties keep
+    /// display-list order.
+    /// </summary>
+    internal static List<DrawingInstruction> DrawOrder(IReadOnlyList<DrawingInstruction> instructions) =>
+        instructions
+            .OrderBy(i => i.Plane == EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
+            .ThenBy(i => i.DrawingPriority)
+            .ThenBy(i => i switch
+            {
+                AreaInstruction { AreaFillReference: not null } => 1,
+                AreaInstruction => 0,
+                LineInstruction => 2,
+                PointInstruction => 3,
+                TextInstruction => 4,
+                _ => 5,
+            })
+            .ToList();
+
+    /// <summary>
+    /// The polylines a line instruction draws: its coordinates override, else
+    /// each part of its feature's geometry, or <see langword="null"/> when it
+    /// has none.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<GeoPosition>>? LinePolylines(
+        LineInstruction line,
+        IFeatureGeometryProvider geometryProvider)
+    {
+        if (line.CoordinatesOverride is { } coordinates)
+            return [coordinates];
+        if (geometryProvider.GetGeometry(line.FeatureReference) is not { Coordinates.Count: > 0 } lineGeometry)
+            return null;
+        return lineGeometry.Parts.Count > 1 ? lineGeometry.Parts : [lineGeometry.Coordinates];
     }
 
     private static readonly GeometryFactory ClipGeometryFactory = new();

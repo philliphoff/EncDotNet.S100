@@ -48,6 +48,25 @@ Each op in `scene.Ops` is in S-100 Part 9 draw order. Coordinates are EPSG:3857
 metres, sizes are logical display pixels (1 px = 0.32 mm), and colours are
 resolved to `RgbaColor`. The XML docs on `PaintOp` give the full unit contract.
 
+## Get line instructions per edge
+
+A renderer that draws the portrayal itself (GIS symbology, vector PDF or SVG)
+can take the line instructions as data instead of a scene. `LineEdges.Resolve`
+returns each run a line instruction strokes, in geographic coordinates and
+Part 9 draw order, with S-100 Part 9 line suppression already applied: a curve
+shared by several features, such as a dashed boundary between two areas, is
+handed out once, by the instruction drawn last there.
+
+```csharp
+foreach (var edge in LineEdges.Resolve(instructions, geometryProvider))
+{
+    // edge.Instruction: the LineInstruction (style, colour, width, scale limits).
+    // edge.Coordinates: the GeoPosition polyline to stroke with it.
+}
+```
+
+These are the same runs the scene's `LinePaintOp`s stroke.
+
 ## Main types
 
 | Type | Role |
