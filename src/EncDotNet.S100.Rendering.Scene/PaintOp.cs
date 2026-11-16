@@ -96,6 +96,9 @@ public sealed class PointPaintOp : PaintOp
     /// </summary>
     public PlacementArea? PlacementArea { get; init; }
 
+    /// <summary>How <see cref="World"/> was chosen (S-100 Part 9 line and area placement).</summary>
+    public AnchorPlacement Placement { get; init; }
+
     /// <summary>
     /// The resolved SVG symbol, or <see langword="null"/> when no symbol could
     /// be resolved (the backend falls back to a coloured dot of
@@ -276,6 +279,9 @@ public sealed class TextPaintOp : PaintOp
     /// <see cref="World"/>.
     /// </summary>
     public PlacementArea? PlacementArea { get; init; }
+
+    /// <summary>How <see cref="World"/> was chosen (S-100 Part 9 line and area placement).</summary>
+    public AnchorPlacement Placement { get; init; }
 
     /// <summary>The literal text to render.</summary>
     public required string Text { get; init; }

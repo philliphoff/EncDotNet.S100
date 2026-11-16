@@ -36,8 +36,11 @@ public static class VectorSceneSerializer
     /// The format version. Bump it when the layout changes; a reader refuses
     /// any other version.
     /// </summary>
-    /// <remarks>Version 2 stores each text op's <see cref="TextPaintOp.FontSlant"/>.</remarks>
-    public const int FormatVersion = 2;
+    /// <remarks>
+    /// Version 2 stores each text op's <see cref="TextPaintOp.FontSlant"/>;
+    /// version 3 each point and text op's <see cref="AnchorPlacement"/>.
+    /// </remarks>
+    public const int FormatVersion = 3;
 
     private const uint Magic = 0x4E435353; // "SSCN" little-endian
 
@@ -191,6 +194,7 @@ public static class VectorSceneSerializer
                 WriteHeader(w, TagPoint, op, t);
                 WritePoint(w, point.World);
                 WriteArea(w, point.PlacementArea, t);
+                WritePlacement(w, point.Placement);
                 w.Write(point.Symbol.HasValue);
                 if (point.Symbol is { } symbol)
                 {
@@ -258,6 +262,7 @@ public static class VectorSceneSerializer
                 WriteHeader(w, TagText, op, t);
                 WritePoint(w, text.World);
                 WriteArea(w, text.PlacementArea, t);
+                WritePlacement(w, text.Placement);
                 w.Write7BitEncodedInt(t.String(text.Text));
                 w.Write(text.FontSizePx);
                 WriteColor(w, text.ForeColor);
@@ -322,6 +327,16 @@ public static class VectorSceneSerializer
         w.Write(p.Y);
     }
 
+    private static void WritePlacement(BinaryWriter w, AnchorPlacement placement)
+    {
+        w.Write7BitEncodedInt((int)placement.Kind);
+        w.Write7BitEncodedInt(placement.Part);
+        w.Write(placement.LinePosition);
+        w.Write7BitEncodedInt(placement.Segment);
+        w.Write(placement.SegmentPosition);
+        w.Write(placement.VisibleParts);
+    }
+
     private static void WriteRing(BinaryWriter w, IReadOnlyList<(double X, double Y)> ring)
     {
         w.Write7BitEncodedInt(ring.Count);
@@ -384,6 +399,7 @@ public static class VectorSceneSerializer
                 {
                     var world = ReadPoint(r);
                     var area = t.Area(r);
+                    var placement = ReadPlacement(r);
                     ResolvedSymbol? symbol = r.ReadBoolean() ? ReadSymbol(r, t) : null;
                     return new PointPaintOp
                     {
@@ -392,6 +408,7 @@ public static class VectorSceneSerializer
                         ScaleMaximum = scaleMaximum,
                         World = world,
                         PlacementArea = area,
+                        Placement = placement,
                         Symbol = symbol,
                         FallbackColor = ReadColor(r),
                         FallbackScale = r.ReadDouble(),
@@ -477,6 +494,7 @@ public static class VectorSceneSerializer
                     ScaleMaximum = scaleMaximum,
                     World = ReadPoint(r),
                     PlacementArea = t.Area(r),
+                    Placement = ReadPlacement(r),
                     Text = t.String(r),
                     FontSizePx = r.ReadDouble(),
                     ForeColor = ReadColor(r),
@@ -501,6 +519,14 @@ public static class VectorSceneSerializer
         new(t.String(r), r.ReadDouble(), r.ReadDouble(), r.ReadDouble());
 
     private static (double X, double Y) ReadPoint(BinaryReader r) => (r.ReadDouble(), r.ReadDouble());
+
+    private static AnchorPlacement ReadPlacement(BinaryReader r) => new(
+        (AnchorPlacementKind)r.Read7BitEncodedInt(),
+        r.Read7BitEncodedInt(),
+        r.ReadDouble(),
+        r.Read7BitEncodedInt(),
+        r.ReadDouble(),
+        r.ReadBoolean());
 
     private static (double X, double Y)[] ReadRing(BinaryReader r)
     {
