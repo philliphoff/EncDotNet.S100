@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using EncDotNet.S100.Collections;
 
 namespace EncDotNet.S100.Pipelines.Vector;
@@ -48,6 +49,18 @@ public sealed class SvgSymbol
     /// units. Defaults to <c>0</c>; the bundled catalogues do not set it.
     /// </summary>
     public double PivotY { get; init; }
+
+    private StrongBox<SymbolGeometry?>? _geometry;
+
+    /// <summary>
+    /// The symbol as parsed vector geometry (paths, circles and palette-token
+    /// colours), for renderers that draw symbols natively instead of
+    /// rasterising the SVG. Parsed from <see cref="SvgContent"/> on first
+    /// use and kept with this record, so a catalogue's cached symbol is
+    /// parsed once. <see langword="null"/> when the SVG is not well-formed.
+    /// </summary>
+    public SymbolGeometry? Geometry =>
+        (_geometry ??= new StrongBox<SymbolGeometry?>(SymbolGeometryParser.TryParse(SvgContent, Name))).Value;
 }
 
 /// <summary>

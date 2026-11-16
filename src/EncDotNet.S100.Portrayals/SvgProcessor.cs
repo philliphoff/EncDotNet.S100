@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Portrayals;
 
@@ -59,70 +60,46 @@ public static class SvgProcessor
         foreach (var pi in doc.Nodes().OfType<XProcessingInstruction>().ToList())
             pi.Remove();
 
-        // 2. Remove elements with class containing "layout"
+        // 2. Remove layout-only elements (symbol box, svg box, pivot point)
         var layoutElements = svg.Descendants()
-            .Where(e => (e.Attribute("class")?.Value ?? "").Contains("layout"))
+            .Where(e => SvgSymbolClasses.Read(e.Attribute("class")?.Value).IsLayout)
             .ToList();
         foreach (var el in layoutElements)
             el.Remove();
 
-        // 3. Process remaining elements: resolve CSS classes to inline styles
+        // 3. Process remaining elements: resolve CSS classes to inline styles.
+        //    The class reading is shared with SymbolGeometryParser so the
+        //    renderers and the geometry hand-out agree on every symbol.
         foreach (var el in svg.Descendants().ToList())
         {
             var classAttr = el.Attribute("class");
             if (classAttr is null) continue;
 
-            var classes = classAttr.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var classes = SvgSymbolClasses.Read(classAttr.Value);
             string? fill = null;
             string? stroke = null;
-            string? strokeLinecap = null;
-            string? strokeLinejoin = null;
-            List<string>? unrecognized = null;
 
-            foreach (var cls in classes)
-            {
-                if (cls == "f0")
-                {
-                    fill = "none";
-                }
-                else if (cls == "sl")
-                {
-                    strokeLinecap = "round";
-                    strokeLinejoin = "round";
-                }
-                else if (cls.Length > 1 && cls[0] == 'f' && char.IsUpper(cls[1]))
-                {
-                    // Fill class: fTOKEN (e.g. fCHBLK → fill:#000000)
-                    if (palette is not null && palette.TryResolve(cls[1..], out var fHex))
-                        fill = fHex;
-                }
-                else if (cls.Length > 1 && cls[0] == 's' && char.IsUpper(cls[1]))
-                {
-                    // Stroke class: sTOKEN (e.g. sCHBLK → stroke:#000000)
-                    if (palette is not null && palette.TryResolve(cls[1..], out var sHex))
-                        stroke = sHex;
-                }
-                else
-                {
-                    // Unrecognized class — preserve it
-                    unrecognized ??= [];
-                    unrecognized.Add(cls);
-                }
-            }
+            if (classes.FillNone)
+                fill = "none";
+            else if (classes.FillToken is not null && palette is not null && palette.TryResolve(classes.FillToken, out var fHex))
+                fill = fHex;
+
+            if (classes.StrokeToken is not null && palette is not null && palette.TryResolve(classes.StrokeToken, out var sHex))
+                stroke = sHex;
 
             // Apply resolved inline attributes, preserving any existing ones
             if (fill is not null && el.Attribute("fill") is null)
                 el.SetAttributeValue("fill", fill);
             if (stroke is not null && el.Attribute("stroke") is null)
                 el.SetAttributeValue("stroke", stroke);
-            if (strokeLinecap is not null && el.Attribute("stroke-linecap") is null)
-                el.SetAttributeValue("stroke-linecap", strokeLinecap);
-            if (strokeLinejoin is not null && el.Attribute("stroke-linejoin") is null)
-                el.SetAttributeValue("stroke-linejoin", strokeLinejoin);
+            if (classes.RoundCapsAndJoins && el.Attribute("stroke-linecap") is null)
+                el.SetAttributeValue("stroke-linecap", "round");
+            if (classes.RoundCapsAndJoins && el.Attribute("stroke-linejoin") is null)
+                el.SetAttributeValue("stroke-linejoin", "round");
 
-            // Update or remove the class attribute
-            if (unrecognized is { Count: > 0 })
-                classAttr.Value = string.Join(' ', unrecognized);
+            // Keep only the classes that are not styling directives
+            if (classes.OtherClasses.Count > 0)
+                classAttr.Value = string.Join(' ', classes.OtherClasses);
             else
                 classAttr.Remove();
         }

@@ -211,6 +211,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
             SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
+            SymbolGeometryProvider = name => prewarm.ResolveSymbol(name)?.Geometry,
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             FallbackGeographicExtent = ComputeGeographicExtent(),
