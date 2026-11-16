@@ -28,6 +28,13 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// </remarks>
 public interface IPortrayalAssetSource
 {
+    /// <summary>
+    /// The name of every SVG symbol the catalogue defines, in catalogue
+    /// order, without loading any of them. Each resolves through
+    /// <see cref="GetSymbolAsync"/>. See <see cref="CatalogueSymbolSet"/>.
+    /// </summary>
+    IReadOnlyCollection<string> SymbolNames { get; }
+
     /// <summary>Resolves an SVG symbol by name from the catalogue resources.</summary>
     ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default);
 

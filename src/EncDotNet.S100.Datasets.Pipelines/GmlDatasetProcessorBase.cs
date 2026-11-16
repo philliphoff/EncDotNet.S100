@@ -420,6 +420,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 SymbolScale = context?.SymbolScale ?? 1.0,
                 TextScale = context?.TextScale ?? 1.0,
                 SymbolProvider = output.SymbolSvg,
+                CatalogueSymbols = new CatalogueSymbolSet(_catalogue),
                 AreaFillProvider = output.AreaFill,
                 LineStyleProvider = output.LineStyle,
                 GeographicExtent = ComputeGeographicExtent(),

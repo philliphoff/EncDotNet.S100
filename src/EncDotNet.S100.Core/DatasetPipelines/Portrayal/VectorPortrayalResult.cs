@@ -102,6 +102,16 @@ public sealed class VectorPortrayalResult
     /// </summary>
     public Func<string, SymbolGeometry?>? SymbolGeometryProvider { get; init; }
 
+    /// <summary>
+    /// Every symbol the portrayal catalogue defines, not only those this
+    /// dataset uses (which <see cref="SymbolProvider"/> and
+    /// <see cref="SymbolGeometryProvider"/> cover), so a renderer can build
+    /// one complete symbol style and reuse it across datasets. Symbols load
+    /// only when asked for; the normal render path never touches it. Null
+    /// for products without a symbol catalogue.
+    /// </summary>
+    public CatalogueSymbolSet? CatalogueSymbols { get; init; }
+
     /// <summary>Resolves a line-style name to its resolved style (or null).</summary>
     public Func<string, LineStyle?>? LineStyleProvider { get; init; }
 

@@ -212,6 +212,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
             SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
             SymbolGeometryProvider = name => prewarm.ResolveSymbol(name)?.Geometry,
+            CatalogueSymbols = new CatalogueSymbolSet(_catalogue),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             FallbackGeographicExtent = ComputeGeographicExtent(),

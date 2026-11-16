@@ -282,6 +282,8 @@ public class S101PipelineTests
 
         public IReadOnlyList<EncDotNet.S100.Pipelines.Vector.Lua.LuaContextParameter> ContextParameters => [];
 
+        public IReadOnlyCollection<string> SymbolNames => [];
+
         public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default) =>
             new(new SvgSymbol { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" });
 
