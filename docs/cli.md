@@ -322,49 +322,160 @@ supports.
 ### Display-list output
 
 With a `.json` output path or `--format json`, the single-dataset form writes
-the dataset's S-100 Part 9 display list instead of an image: the drawing
-instructions the portrayal produced, with their symbols, line styles, area
-fills, colours, display planes, drawing priorities, viewing groups and text.
-Use it to review, diff or snapshot-test a portrayal change as text.
+what the renderer draws as data instead of an image: every line, area, pattern
+fill, symbol and text label, with its full geometry, resolved colours and sizes,
+and the anchor it's placed at. A renderer in another process (an ArcGIS Pro or
+QGIS symbology exporter, a vector PDF or SVG writer) can draw the chart from it
+the way the viewer does. It's also handy to review, diff or snapshot-test a
+portrayal change as text.
 
 ```bash
-s100 render warnings.gml warnings.json
+s100 render 101AA00DS0008.000 chart.json
 s100 render warnings.gml out.txt --format json
 ```
 
+The entries come from the same scene the image is drawn from, so they already
+have the portrayal's decisions applied:
+
+- A line shared by several features (adjoining areas, or a line feature on an
+  area's edge) is given once, by the line drawn last, so a shared dashed edge
+  isn't drawn as overlapping copies that look solid (S-100 Part 9 line
+  suppression).
+- A multi-part curve or surface gives one entry per part.
+- A pattern fill's rings are only the part left visible after higher-priority
+  patterns and opaque fills are cut away.
+- Point symbols and text carry the anchor the viewer uses: the centroid or an
+  interior point of a surface, the position along a curve, and so on.
+- Colours are resolved for the palette, and sizes are in display pixels.
+
+Vector products (S-101, S-57 and the GML products) have display lists. Coverage
+products (S-102, S-104, S-111) don't, and `render` exits with code `3`.
+`--palette`, `--national-language`, `--symbol-scale`, `--text-scale`,
+`--display-mode`, `--time-step`, `--hide` and `--show-layer` change the output
+as they change the image. `--width`, `--height`, `--quality` and `--background`
+are ignored. `--bbox`, `--center` and `--scale` are errors, because the output
+has no viewport. The output has no timings, so two runs over the same dataset
+and options produce identical files.
+
+#### The document
+
 ```json
 {
-  "dataset": "navwarn_surface.gml",
-  "product": "S-124",
-  "spec": "S-124/2.0.0",
+  "schemaVersion": 2,
+  "dataset": "101AA00DS0008.000",
+  "product": "S-101",
+  "spec": "S-101/0.0.0",
   "palette": "day",
-  "instructionCount": 3,
-  "categoryCounts": { "areas": 0, "lines": 0, "points": 3, "text": 0 },
-  "instructions": [
+  "symbolScale": 1,
+  "textScale": 1,
+  "crs": "EPSG:4326",
+  "sizeProfile": {
+    "svgPixelsPerMillimetre": 3.7795,
+    "pointSymbolScale": 0.6,
+    "millimetresPerPixel": 0.32,
+    "patternPixelsPerMillimetre": 1.5,
+    "pixelsPerFontPoint": 1
+  },
+  "subLayerCount": 2,
+  "instructionCount": 517,
+  "opCount": 517,
+  "categoryCounts": { "areas": 43, "patterns": 17, "lines": 140, "points": 56, "text": 261 },
+  "subLayers": [
+    { "index": 0, "key": "s101.areas", "name": "S-101 (areas): 101AA00DS0008.000", "plane": "BaseChartUnder", "instructionCount": 60 }
+  ],
+  "ops": [
     {
-      "kind": "point",
-      "feature": "f1",
-      "subLayer": 0,
+      "kind": "line",
+      "order": 118,
+      "subLayer": 1,
+      "feature": "42",
       "plane": "UnderRadar",
-      "viewingGroup": 31020,
+      "viewingGroups": [12410],
       "drawingPriority": 15,
-      "symbol": "NavigationalWarningFeaturePart",
-      "geometry": { "type": "Surface", "vertexCount": 5, "anchor": [51.05, 1.2] }
+      "coordinates": [[62.7584818, -32.4908714], [62.7724818, -32.4828714]],
+      "lineStyle": "PILPNT01",
+      "stroke": true,
+      "widthPx": 1,
+      "dashArrayPx": [18.75, 18.75],
+      "symbolIntervalPx": 37.5,
+      "lineSymbols": [{ "symbol": "PILPNT02", "positionPx": 28.125, "rotation": 0, "scale": 0.8268, "pivot": [0, 0] }],
+      "color": "#4C5B63FF",
+      "colorToken": "CSTLN"
+    },
+    {
+      "kind": "text",
+      "order": 209,
+      "subLayer": 1,
+      "feature": "25",
+      "plane": "UnderRadar",
+      "viewingGroups": [33020, 90031],
+      "drawingPriority": 15,
+      "anchor": [62.7230744, -32.4746663],
+      "placement": { "kind": "Line", "part": 0, "linePosition": 0.5, "segment": 1, "segmentPosition": 0.5 },
+      "text": "3",
+      "fontSizePx": 10,
+      "fontWeight": "Medium",
+      "fontProportion": "Proportional",
+      "fontSlant": "Upright",
+      "horizontalAlignment": "Center",
+      "verticalAlignment": "Center",
+      "color": "#768C97FF",
+      "colorToken": "DEPCN"
     }
   ]
 }
 ```
 
-- Vector products (S-101, S-57 and the GML products) have display lists.
-  Coverage products (S-102, S-104, S-111) don't, and `render` exits with code
-  `3`.
-- Geometry is summarised as its type, vertex count and one latitude/longitude
-  anchor. The output has no timings, so two runs over the same dataset and
-  options produce identical files.
-- `--palette`, `--national-language`, `--symbol-scale`, `--text-scale`,
-  `--display-mode` and `--time-step` change the instructions. `--width`, `--height`, `--quality` and
-  `--background` are ignored. `--bbox`, `--center` and `--scale` are errors,
-  because a display list has no viewport.
+`schemaVersion` changes when a field is removed or changes meaning. New fields
+can appear without a change, so ignore fields you don't know. Fields with no
+value are left out.
+
+The top level:
+
+| Field | Meaning |
+|---|---|
+| `crs` | Always `EPSG:4326`: positions are `[longitude, latitude]` in degrees, as in GeoJSON, to 7 decimal places. Near the antimeridian a line or ring can run past ±180° so it stays continuous. |
+| `sizeProfile` | How S-100 Part 9 sizes were turned into display pixels. `millimetresPerPixel` converts any `…Px` value back to millimetres. |
+| `instructionCount` | Drawing instructions in the portrayal's display list. |
+| `opCount` | Entries in `ops`. An instruction can give several (one per edge or part) or none (no geometry, or every edge drawn by another line). |
+| `subLayers` | The portrayal's sub-layers, drawn in this order. |
+| `ops` | What's drawn, in draw order. |
+
+Every entry in `ops` has:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `area`, `pattern`, `line`, `point` or `text`. |
+| `order` | Position in the draw order, from 0. Draw entries in this order. |
+| `subLayer` | Index into `subLayers`. |
+| `feature` | The dataset feature it portrays. |
+| `plane` | `UnderRadar` or `OverRadar`. |
+| `viewingGroups` | The viewing groups it belongs to. It's hidden if any of them is turned off. |
+| `drawingPriority` | Its S-100 Part 9 drawing priority. |
+| `scaleMinimum`, `scaleMaximum` | The scale denominators it's drawn between (SCAMIN, SCAMAX). Draw it when `scaleMaximum` ≤ the display's scale denominator ≤ `scaleMinimum`; a missing one is no limit. |
+
+By kind:
+
+| Kind | Fields |
+|---|---|
+| `area` | `rings`: the outer ring then any holes, each a list of positions. `fill` (`#RRGGBBAA`, with transparency applied), `fillToken` (the palette colour name), `transparency`, and `outline` (`color`, `widthPx`) when there is one. |
+| `pattern` | `rings` and `areaFill`, the catalogue area-fill name. The rings are the part left visible after clipping. |
+| `line` | `coordinates`; `lineStyle`, the catalogue line style or `_simple_`; `stroke`, `false` when the style only places symbols; `color`, `colorToken`, `widthPx`; `dashArrayPx`, alternating on and off lengths, with `dashPhasePx` where the first dash starts; `defaultDash` when the line is dashed with no dash lengths given; and `lineSymbols` repeated every `symbolIntervalPx`, each with its `symbol` name, `positionPx` within the interval, `rotation` relative to the line's direction, `scale` and `pivot`. |
+| `point` | `anchor`, `placement`, `symbol` (the catalogue symbol name), `scale` (multiply the symbol's SVG size at `svgPixelsPerMillimetre` by this), `pivot` (the symbol's pivot as a fraction of its width and height from the centre), `rotation` in degrees clockwise with `rotationCrs` (`Portrayal` keeps the angle on screen, `Geographic` turns with the chart), and `offsetPx`. A symbol that couldn't be found has `fallbackColor` instead, drawn as a dot. |
+| `text` | `anchor`, `placement`, `text`, `font` (the font reference, when given), `fontSizePx`, `fontWeight`, `fontProportion`, `fontSlant`, `color`, `colorToken`, `background`, `halo` (`color`, `widthPx`), `horizontalAlignment`, `verticalAlignment`, `offsetPx` and the portrayal's `rotation`, which the viewer doesn't apply. |
+
+`offsetPx` is `[x, y]` in display pixels from the anchor, with `y` as the
+renderer applies it on screen.
+
+`placement` says how a point symbol's or text's anchor was chosen:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `Point` (the feature's point, or the first vertex), `Coordinate` (a position given by the portrayal, such as each sounding), `Line` (a fraction along a curve), `Surface` (inside a surface), `CurveMiddleVertex` or `RingVertexMean`. |
+| `part` | The part of a multi-part feature it's on. |
+| `linePosition` | For `Line`, the fraction along the curve, from 0 to 1. |
+| `segment`, `segmentPosition` | For `Line`, the vertex that starts the segment the anchor is on and how far along that segment, in the feature's own latitude and longitude. For `CurveMiddleVertex`, `segment` is the vertex. |
+| `visibleParts` | `true` when the viewer moves the anchor into the part of the surface in view as you pan. `anchor` is where it goes with the whole surface in view. |
 
 ## tiles export
 

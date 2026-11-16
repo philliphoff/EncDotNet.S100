@@ -211,7 +211,13 @@ public sealed class VectorSceneBuilder
             if (instruction is LineInstruction keptLine && suppressed.TryGetValue(keptLine, out var keptPolylines))
             {
                 foreach (var polyline in keptPolylines)
-                    ops.AddRange(BuildLine(keptLine, polyline));
+                {
+                    foreach (var op in BuildLine(keptLine, polyline))
+                    {
+                        op.Instruction = keptLine;
+                        ops.Add(op);
+                    }
+                }
                 continue;
             }
 
@@ -253,6 +259,7 @@ public sealed class VectorSceneBuilder
 
             foreach (var op in built)
             {
+                op.Instruction = instruction;
                 ops.Add(op);
                 if (op is PatternAreaPaintOp patternOp && instruction is AreaInstruction patternInstruction)
                     patternPriorities.Add((patternOp, patternInstruction));
@@ -818,7 +825,8 @@ public sealed class VectorSceneBuilder
                 symbols.Add(new LineSymbolPlacement(
                     new ResolvedSymbol(asset.ProcessedSvg, SizeProfile.LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
                     placed.Position / SizeProfile.MillimetresPerPixel,
-                    placed.Rotation));
+                    placed.Rotation,
+                    placed.Reference));
             }
         }
 
