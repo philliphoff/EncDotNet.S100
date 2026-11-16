@@ -61,6 +61,8 @@ public sealed class CataloguePreWarmTests
     {
         public int LineStyleLookups { get; private set; }
 
+        public IReadOnlyCollection<string> SymbolNames => [];
+
         public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default) =>
             new(new SvgSymbol { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" });
 

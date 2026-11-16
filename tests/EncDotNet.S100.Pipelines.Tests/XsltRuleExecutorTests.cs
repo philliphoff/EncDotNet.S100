@@ -188,6 +188,8 @@ public class XsltRuleExecutorTests
             new((string?)null);
         public IReadOnlyList<LuaContextParameter> ContextParameters => [];
 
+        public IReadOnlyCollection<string> SymbolNames => [];
+
         public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default) =>
             new(new SvgSymbol { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" });
 

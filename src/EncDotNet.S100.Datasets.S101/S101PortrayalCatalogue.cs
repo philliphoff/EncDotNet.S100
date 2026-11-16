@@ -397,6 +397,14 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Symbols ────────────────────────────────────────────────────────
 
+    private IReadOnlyCollection<string>? _symbolNames;
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> SymbolNames => _symbolNames ??= _provider.Catalogue.Symbols
+        .Select(s => s.Id)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
     /// <inheritdoc/>
     public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default)
     {
