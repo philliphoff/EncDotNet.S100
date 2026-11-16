@@ -83,68 +83,68 @@ internal static class SvgPathData
                     break;
 
                 case 'C':
-                {
-                    if (!r.Number(out var x1) || !r.Number(out var y1) || !r.Number(out var x2) ||
-                        !r.Number(out var y2) || !r.Number(out var x) || !r.Number(out var y))
-                        return segments;
-                    lcx = ox + x2;
-                    lcy = oy + y2;
-                    cx = ox + x;
-                    cy = oy + y;
-                    segments.Add(new SymbolCubicTo(ox + x1, oy + y1, lcx, lcy, cx, cy));
-                    break;
-                }
+                    {
+                        if (!r.Number(out var x1) || !r.Number(out var y1) || !r.Number(out var x2) ||
+                            !r.Number(out var y2) || !r.Number(out var x) || !r.Number(out var y))
+                            return segments;
+                        lcx = ox + x2;
+                        lcy = oy + y2;
+                        cx = ox + x;
+                        cy = oy + y;
+                        segments.Add(new SymbolCubicTo(ox + x1, oy + y1, lcx, lcy, cx, cy));
+                        break;
+                    }
 
                 case 'S':
-                {
-                    if (!r.Number(out var x2) || !r.Number(out var y2) || !r.Number(out var x) || !r.Number(out var y))
-                        return segments;
-                    var reflect = prev is 'C' or 'S';
-                    var x1 = reflect ? 2 * cx - lcx : cx;
-                    var y1 = reflect ? 2 * cy - lcy : cy;
-                    lcx = ox + x2;
-                    lcy = oy + y2;
-                    cx = ox + x;
-                    cy = oy + y;
-                    segments.Add(new SymbolCubicTo(x1, y1, lcx, lcy, cx, cy));
-                    break;
-                }
+                    {
+                        if (!r.Number(out var x2) || !r.Number(out var y2) || !r.Number(out var x) || !r.Number(out var y))
+                            return segments;
+                        var reflect = prev is 'C' or 'S';
+                        var x1 = reflect ? 2 * cx - lcx : cx;
+                        var y1 = reflect ? 2 * cy - lcy : cy;
+                        lcx = ox + x2;
+                        lcy = oy + y2;
+                        cx = ox + x;
+                        cy = oy + y;
+                        segments.Add(new SymbolCubicTo(x1, y1, lcx, lcy, cx, cy));
+                        break;
+                    }
 
                 case 'Q':
-                {
-                    if (!r.Number(out var qx) || !r.Number(out var qy) || !r.Number(out var x) || !r.Number(out var y))
-                        return segments;
-                    lqx = ox + qx;
-                    lqy = oy + qy;
-                    var (ex, ey) = (ox + x, oy + y);
-                    segments.Add(QuadToCubic(cx, cy, lqx, lqy, ex, ey));
-                    (cx, cy) = (ex, ey);
-                    break;
-                }
+                    {
+                        if (!r.Number(out var qx) || !r.Number(out var qy) || !r.Number(out var x) || !r.Number(out var y))
+                            return segments;
+                        lqx = ox + qx;
+                        lqy = oy + qy;
+                        var (ex, ey) = (ox + x, oy + y);
+                        segments.Add(QuadToCubic(cx, cy, lqx, lqy, ex, ey));
+                        (cx, cy) = (ex, ey);
+                        break;
+                    }
 
                 case 'T':
-                {
-                    if (!r.Number(out var x) || !r.Number(out var y))
-                        return segments;
-                    var reflect = prev is 'Q' or 'T';
-                    lqx = reflect ? 2 * cx - lqx : cx;
-                    lqy = reflect ? 2 * cy - lqy : cy;
-                    var (ex, ey) = (ox + x, oy + y);
-                    segments.Add(QuadToCubic(cx, cy, lqx, lqy, ex, ey));
-                    (cx, cy) = (ex, ey);
-                    break;
-                }
+                    {
+                        if (!r.Number(out var x) || !r.Number(out var y))
+                            return segments;
+                        var reflect = prev is 'Q' or 'T';
+                        lqx = reflect ? 2 * cx - lqx : cx;
+                        lqy = reflect ? 2 * cy - lqy : cy;
+                        var (ex, ey) = (ox + x, oy + y);
+                        segments.Add(QuadToCubic(cx, cy, lqx, lqy, ex, ey));
+                        (cx, cy) = (ex, ey);
+                        break;
+                    }
 
                 case 'A':
-                {
-                    if (!r.Number(out var rx) || !r.Number(out var ry) || !r.Number(out var rot) ||
-                        !r.Flag(out var large) || !r.Flag(out var sweep) || !r.Number(out var x) || !r.Number(out var y))
-                        return segments;
-                    cx = ox + x;
-                    cy = oy + y;
-                    segments.Add(new SymbolArcTo(Math.Abs(rx), Math.Abs(ry), rot, large, sweep, cx, cy));
-                    break;
-                }
+                    {
+                        if (!r.Number(out var rx) || !r.Number(out var ry) || !r.Number(out var rot) ||
+                            !r.Flag(out var large) || !r.Flag(out var sweep) || !r.Number(out var x) || !r.Number(out var y))
+                            return segments;
+                        cx = ox + x;
+                        cy = oy + y;
+                        segments.Add(new SymbolArcTo(Math.Abs(rx), Math.Abs(ry), rot, large, sweep, cx, cy));
+                        break;
+                    }
 
                 case 'Z':
                     segments.Add(SymbolClosePath.Instance);
