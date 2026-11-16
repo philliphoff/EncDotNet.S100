@@ -24,7 +24,8 @@ public readonly record struct SymbolAsset(
 /// <see cref="DrawingInstruction"/>s plus an <see cref="IFeatureGeometryProvider"/>)
 /// into a resolved <see cref="VectorScene"/>: instructions are sorted into
 /// Part 9 draw order, colours/symbols/line-styles are resolved, sizes are
-/// converted from millimetres to display pixels (<c>1 px = 0.32 mm</c>), and
+/// converted from millimetres to display pixels by the <see cref="SizeProfile"/>
+/// (by default <c>1 px = 0.32 mm</c>), and
 /// geometry is projected to EPSG:3857. The result is consumed by both the
 /// headless <c>SkiaDisplayListRenderer</c> and the Mapsui renderer so
 /// the S-100 portrayal-correctness logic lives in exactly one place.
@@ -91,6 +92,14 @@ public sealed class VectorSceneBuilder
 
     /// <summary>Global scale factor applied to all point symbols (default 1.0).</summary>
     public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// The factors that turn S-100 Part 9 millimetres and points into display
+    /// pixels. Defaults to <see cref="SymbolSizeProfile.Screen"/>, the viewer's
+    /// sizes; use <see cref="SymbolSizeProfile.Part9Millimetres"/> for physical
+    /// sizes in print.
+    /// </summary>
+    public SymbolSizeProfile SizeProfile { get; init; } = SymbolSizeProfile.Screen;
 
     /// <summary>Global scale factor applied to all text labels (default 1.0).</summary>
     public double TextScale { get; init; } = 1.0;
@@ -709,7 +718,7 @@ public sealed class VectorSceneBuilder
             }
         }
 
-        var widthPx = width > 0 ? (width / S100PixelSizeMm) : 0.0;
+        var widthPx = width > 0 ? (width / SizeProfile.MillimetresPerPixel) : 0.0;
         widthPx = Math.Max(widthPx, 1.0);
 
         IReadOnlyList<float>? dashArray = null;
@@ -730,7 +739,7 @@ public sealed class VectorSceneBuilder
             }
 
             var interval = instruction.DashIntervalLength > end ? instruction.DashIntervalLength : end * 2;
-            (dashArray, dashPhase) = BuildDashArray(flat, interval);
+            (dashArray, dashPhase) = BuildDashArray(flat, interval, SizeProfile.MillimetresPerPixel);
         }
         else if (dashed)
         {
@@ -763,10 +772,10 @@ public sealed class VectorSceneBuilder
     private IEnumerable<PaintOp> BuildStyledLine(
         LineInstruction instruction, IReadOnlyList<GeoPosition> coords, LineStyle style)
     {
-        var widthPx = Math.Max(style.Width / S100PixelSizeMm, 1.0);
+        var widthPx = Math.Max(style.Width / SizeProfile.MillimetresPerPixel, 1.0);
         var interval = style.IntervalLength > 0 ? style.IntervalLength : DashPatternEnd(style.DashPattern);
 
-        var (dashArray, dashPhase) = BuildDashArray(style.DashPattern, interval);
+        var (dashArray, dashPhase) = BuildDashArray(style.DashPattern, interval, SizeProfile.MillimetresPerPixel);
 
         var symbols = new List<LineSymbolPlacement>(style.Symbols.Count);
         if (SymbolResolver is not null && interval > 0)
@@ -776,8 +785,8 @@ public sealed class VectorSceneBuilder
                 if (SymbolResolver(placed.Reference) is not { } asset)
                     continue;
                 symbols.Add(new LineSymbolPlacement(
-                    new ResolvedSymbol(asset.ProcessedSvg, LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
-                    placed.Position / S100PixelSizeMm,
+                    new ResolvedSymbol(asset.ProcessedSvg, SizeProfile.LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
+                    placed.Position / SizeProfile.MillimetresPerPixel,
                     placed.Rotation));
             }
         }
@@ -800,18 +809,10 @@ public sealed class VectorSceneBuilder
                 DashPhasePx = dashPhase,
                 Stroke = style.HasPen,
                 Symbols = symbols,
-                SymbolIntervalPx = interval / S100PixelSizeMm,
+                SymbolIntervalPx = interval / SizeProfile.MillimetresPerPixel,
             };
         }
     }
-
-    /// <summary>
-    /// Scale for symbols placed along a line. The symbol pictures come out at
-    /// 96 DPI, while a line style's positions and dashes are millimetres at
-    /// 0.32 mm per pixel; this sizes the symbols in the line's own millimetres
-    /// so they fit the gaps the style leaves for them.
-    /// </summary>
-    private static readonly double LineSymbolScale = 1 / S100PixelSizeMm / (96 / 25.4);
 
     /// <summary>The end of a line style's last dash, in millimetres: its interval when the file gives none.</summary>
     private static double DashPatternEnd(float[]? dashes)
@@ -831,7 +832,8 @@ public sealed class VectorSceneBuilder
     /// that dash at its start within the interval. Returns no array for a solid
     /// line.
     /// </summary>
-    internal static (IReadOnlyList<float>? DashArray, double Phase) BuildDashArray(float[]? dashes, double intervalMm)
+    internal static (IReadOnlyList<float>? DashArray, double Phase) BuildDashArray(
+        float[]? dashes, double intervalMm, double millimetresPerPixel = S100PixelSizeMm)
     {
         if (dashes is null || dashes.Length < 2 || intervalMm <= 0)
             return (null, 0);
@@ -853,13 +855,13 @@ public sealed class VectorSceneBuilder
             var (start, length) = pairs[i];
             var nextStart = i + 1 < pairs.Count ? pairs[i + 1].Start : pairs[0].Start + intervalMm;
             var gap = Math.Max(nextStart - (start + length), 0);
-            array.Add((float)Math.Max(length / S100PixelSizeMm, 0.5));
-            array.Add((float)Math.Max(gap / S100PixelSizeMm, 0.5));
+            array.Add((float)Math.Max(length / millimetresPerPixel, 0.5));
+            array.Add((float)Math.Max(gap / millimetresPerPixel, 0.5));
         }
 
         // The pattern starts at the first dash; the line starts that far
         // before it in the interval.
-        var phase = (intervalMm - pairs[0].Start) % intervalMm / S100PixelSizeMm;
+        var phase = (intervalMm - pairs[0].Start) % intervalMm / millimetresPerPixel;
         return (array, phase);
     }
 
@@ -883,8 +885,8 @@ public sealed class VectorSceneBuilder
             world = ProjectAnchor(geometry.Coordinates[0].Latitude, geometry.Coordinates[0].Longitude);
         }
 
-        var symOffsetXpx = instruction.LocalOffsetX / S100PixelSizeMm;
-        var symOffsetYpx = instruction.LocalOffsetY / S100PixelSizeMm;
+        var symOffsetXpx = instruction.LocalOffsetX / SizeProfile.MillimetresPerPixel;
+        var symOffsetYpx = instruction.LocalOffsetY / SizeProfile.MillimetresPerPixel;
 
         SymbolAsset? asset = null;
         if (!string.IsNullOrEmpty(instruction.SymbolReference) && SymbolResolver is not null)
@@ -893,7 +895,7 @@ public sealed class VectorSceneBuilder
         ResolvedSymbol? symbol = asset is { } a
             ? new ResolvedSymbol(
                 a.ProcessedSvg,
-                0.6 * instruction.SymbolScale * SymbolScale,
+                SizeProfile.PointSymbolScale * instruction.SymbolScale * SymbolScale,
                 a.PivotRelativeX,
                 a.PivotRelativeY)
             : null;
@@ -907,7 +909,7 @@ public sealed class VectorSceneBuilder
             PlacementArea = placementArea,
             Symbol = symbol,
             FallbackColor = ColorResolver.ResolveSymbolColor(instruction.SymbolReference, ResolveColor),
-            FallbackScale = 0.15 * instruction.SymbolScale * SymbolScale,
+            FallbackScale = SizeProfile.FallbackDotScale * instruction.SymbolScale * SymbolScale,
             Rotation = instruction.Rotation,
             RotationCrs = instruction.RotationCrs,
             OffsetXpx = symOffsetXpx,
@@ -983,18 +985,18 @@ public sealed class VectorSceneBuilder
             World = world,
             PlacementArea = placementArea,
             Text = instruction.Text,
-            FontSizePx = instruction.FontSize * TextScale,
+            FontSizePx = instruction.FontSize * SizeProfile.PixelsPerFontPoint * TextScale,
             ForeColor = foreColor,
             BackColor = backColor,
             HorizontalAlignment = instruction.HorizontalAlignment,
             VerticalAlignment = instruction.VerticalAlignment,
-            OffsetXpx = (instruction.OffsetX ?? 0) / S100PixelSizeMm,
-            OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
+            OffsetXpx = (instruction.OffsetX ?? 0) / SizeProfile.MillimetresPerPixel,
+            OffsetYpx = (instruction.OffsetY ?? 0) / SizeProfile.MillimetresPerPixel,
             FontWeight = instruction.FontWeight,
             FontProportion = instruction.FontProportion,
             FontSlant = instruction.FontSlant,
             HaloColor = string.IsNullOrEmpty(instruction.HaloColor) ? null : ResolveColor(instruction.HaloColor),
-            HaloWidthPx = instruction.HaloWidth / S100PixelSizeMm * TextScale,
+            HaloWidthPx = instruction.HaloWidth / SizeProfile.MillimetresPerPixel * TextScale,
         };
     }
 
