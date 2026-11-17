@@ -182,8 +182,8 @@ public sealed class TilesServeLayersTests : IDisposable
             [.. layers[layer].Elements(Wmts + "Dimension").Elements(Wmts + "Value").Select(v => v.Value)];
         double[] Box(string layer) =>
         [
-            .. layers[layer].Element(Ows + "WGS84BoundingBox")!.Element(Ows + "LowerCorner")!.Value.Split(' ').Select(double.Parse),
-            .. layers[layer].Element(Ows + "WGS84BoundingBox")!.Element(Ows + "UpperCorner")!.Value.Split(' ').Select(double.Parse),
+            .. layers[layer].Element(Ows + "WGS84BoundingBox")!.Element(Ows + "LowerCorner")!.Value.Split(' ').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)),
+            .. layers[layer].Element(Ows + "WGS84BoundingBox")!.Element(Ows + "UpperCorner")!.Value.Split(' ').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)),
         ];
 
         // The chart doesn't vary with time; the currents have their own steps.
@@ -275,6 +275,76 @@ public sealed class TilesServeLayersTests : IDisposable
             Assert.Equal(chartTile, await xyz.Content.ReadAsByteArrayAsync(ct));
         using (var unknown = await http.GetAsync(new Uri(server.BaseUri, $"wmts/1.0.0/S104/default/WebMercatorQuad/{Zoom}/{cy}/{cx}.png"), ct))
             Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+    }
+
+    [Fact]
+    public async Task Layer_tiles_are_served_with_an_overview_and_a_disk_cache()
+    {
+        // A layer's tiles were keyed on disk as "day~chart", which the cache
+        // refused, so every chart tile at chart zooms answered 500.
+        Assert.SkipUnless(File.Exists(S57) && File.Exists(S111), "S-57 or S-111 fixture not present.");
+        var ct = TestContext.Current.CancellationToken;
+        var cacheDirectory = Path.Combine(_root, "cache");
+        var settings = new TilesServeCommand.Settings
+        {
+            Layers = [S57, S111],
+            LayersBy = TileLayers.Product,
+            MinZoom = Zoom,
+            MaxZoom = ChartZoom,
+            Metatile = 1,
+            Parallel = 2,
+            Overview = true,
+            CacheDirectory = cacheDirectory,
+        };
+
+        // The tiles to expect, drawn without a disk cache.
+        (int X, int Y) at;
+        byte[] expected;
+        using (var plain = OpenRendered(ByProduct()))
+        {
+            var chart = plain.Layer(TileLayers.Chart)!;
+            at = await DrawnTileAsync(chart, ChartZoom, null);
+            expected = (await chart.ReadAsync(ChartZoom, at.X, at.Y, null, null, ct))!;
+        }
+
+        var errors = new StringWriter();
+        string fingerprint;
+        await using (var source = new OverviewTileSource(OpenRendered(settings)))
+        {
+            fingerprint = source.Revision!;
+            await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, token: null, cancellationToken: ct, errors: errors);
+            using var http = new HttpClient();
+            foreach (var path in new[]
+            {
+                $"wmts/1.0.0/chart/day/WebMercatorQuad/{ChartZoom}/{at.Y}/{at.X}.png",
+                $"wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=chart&STYLE=day&TILEMATRIXSET=WebMercatorQuad&TILEMATRIX={ChartZoom}&TILEROW={at.Y}&TILECOL={at.X}&FORMAT=image/png",
+                $"layers/chart/{ChartZoom}/{at.X}/{at.Y}.png",
+            })
+            {
+                using var response = await http.GetAsync(new Uri(server.BaseUri, path), ct);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Equal(expected, await response.Content.ReadAsByteArrayAsync(ct));
+            }
+
+            // The layer's overview still answers below the chart's zoom.
+            int overviewZoom = Zoom - 1;
+            var (ox, oy) = TileAt(overviewZoom, -70.0, 41.3);
+            using (var overview = await http.GetAsync(new Uri(server.BaseUri, $"wmts/1.0.0/chart/day/WebMercatorQuad/{overviewZoom}/{oy}/{ox}.png"), ct))
+                Assert.True(overview.StatusCode is HttpStatusCode.OK or HttpStatusCode.NoContent, $"{overview.StatusCode}");
+        }
+
+        Assert.Equal(string.Empty, errors.ToString());
+
+        // The layer's tiles are kept in a folder of their own, apart from the
+        // tiles of every dataset, and read back by the next run.
+        Assert.True(File.Exists(Path.Combine(
+            cacheDirectory, DiskTileCache.KindName, fingerprint, DiskTileCache.LayersFolder, TileLayers.Chart, "day",
+            ChartZoom.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            at.X.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            at.Y.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".png")));
+        using var again = OpenRendered(settings);
+        Assert.Equal(expected, await again.Layer(TileLayers.Chart)!.ReadAsync(ChartZoom, at.X, at.Y, "day", null, ct));
+        Assert.Equal(0, again.BlocksRendered);
     }
 
     [Fact]
