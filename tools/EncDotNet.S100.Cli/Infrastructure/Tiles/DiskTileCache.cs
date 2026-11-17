@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// rooted at the cache folder (map rendering slice 11), stored as
 /// <c>&lt;root&gt;/served/&lt;fingerprint&gt;/&lt;palette&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.&lt;ext&gt;</c>
 /// (<c>&lt;palette&gt;-&lt;yyyyMMddTHHmmssZ&gt;</c> for a time step asked for by
-/// URL), where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>)
+/// URL; under <c>layers/&lt;layer&gt;/</c> first for a group layer's tile), where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>)
 /// names the data and settings they were rendered from, so a tile is only
 /// reused for the same ones. A tile keyed by the datasets that reach it
 /// (<see cref="TileKey.Content"/>, <c>--manage-datasets</c>) goes under that
@@ -33,6 +33,9 @@ internal sealed partial class DiskTileCache : IDisposable
 {
     /// <summary>The store kind name, which is also its folder name under the cache folder.</summary>
     public const string KindName = "served";
+
+    /// <summary>The folder, under a fingerprint folder, of the group layers' tiles (issue #1495): <c>layers/&lt;layer&gt;/…</c>.</summary>
+    public const string LayersFolder = "layers";
 
     // Files take whole blocks on disk; count each tile at least this much, so a
     // flood of empty tiles is bounded too.
@@ -118,15 +121,20 @@ internal sealed partial class DiskTileCache : IDisposable
     /// <summary>Waits briefly for queued writes, so they reach the disk.</summary>
     public void Dispose() => _store.Dispose();
 
-    private string KeyFor(TileKey key) => string.Join('/',
+    // A layer's tiles go in a folder of their own: no palette is called
+    // "layers", and layer ids are already safe path segments.
+    private string KeyFor(TileKey key) => string.Join('/', new[]
+    {
         key.Content ?? _fingerprint,
+        key.Layer is { } layer ? LayersFolder + "/" + layer : null,
         key.Time is { } time
             ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
                 + (key.Variant is { } variant ? "-" + variant : string.Empty)
             : key.Palette + (key.Variant is { } untimed ? "-" + untimed : string.Empty),
         key.Zoom.ToString(CultureInfo.InvariantCulture),
         key.X.ToString(CultureInfo.InvariantCulture),
-        key.Y.ToString(CultureInfo.InvariantCulture) + _extension);
+        key.Y.ToString(CultureInfo.InvariantCulture) + _extension,
+    }.OfType<string>());
 
     [GeneratedRegex("^[0-9a-f]{32}$")]
     private static partial Regex FingerprintPattern();

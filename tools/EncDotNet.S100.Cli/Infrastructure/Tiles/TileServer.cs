@@ -60,7 +60,8 @@ internal sealed class TileServer : IAsyncDisposable
         string? token,
         bool viewer = true,
         CancellationToken cancellationToken = default,
-        ServedDatasets? datasets = null)
+        ServedDatasets? datasets = null,
+        TextWriter? errors = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(address);
@@ -76,10 +77,26 @@ internal sealed class TileServer : IAsyncDisposable
         });
 
         var app = builder.Build();
-        app.Use((context, next) =>
+        errors ??= Console.Error;
+        app.Use(async (context, next) =>
         {
             context.Response.Headers.AccessControlAllowOrigin = "*";
-            return next(context);
+            try
+            {
+                await next(context).ConfigureAwait(false);
+            }
+            catch (Exception e) when (!(e is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+            {
+                // Logging providers are cleared, so an unhandled error would
+                // otherwise be an unexplained 500: report it with its route.
+                ReportError(errors, context, e);
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.Clear();
+                    context.Response.Headers.AccessControlAllowOrigin = "*";
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                }
+            }
         });
         app.UseResponseCompression();
 
@@ -161,6 +178,24 @@ internal sealed class TileServer : IAsyncDisposable
     {
         await _app.StopAsync().ConfigureAwait(false);
         await _app.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes an error a request failed with to <paramref name="errors"/>:
+    /// the method, the path and query, the layer when the route names one
+    /// (<c>{layer}</c>, or the WMTS <c>LAYER</c> parameter), and the exception.
+    /// </summary>
+    private static void ReportError(TextWriter errors, HttpContext context, Exception exception)
+    {
+        var request = context.Request;
+        var layer = request.RouteValues.TryGetValue("layer", out var routed) ? routed as string
+            : request.Query.TryGetValue("LAYER", out var queried) ? queried.ToString()
+            : null;
+        var message = $"Error serving {request.Method} {request.Path}{request.QueryString}"
+            + (string.IsNullOrEmpty(layer) ? string.Empty : $" (layer '{layer}')")
+            + $": {exception}";
+        lock (errors)
+            errors.WriteLine(message);
     }
 
     /// <summary>Reads the <c>{palette}</c> route value; answers 404 when the source has no such palette.</summary>

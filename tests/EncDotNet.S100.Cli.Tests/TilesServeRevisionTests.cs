@@ -66,6 +66,50 @@ public sealed class TilesServeRevisionTests : IDisposable
         }
     }
 
+    /// <summary>A source whose tiles fail to read.</summary>
+    private sealed class FailingSource : ITileSource
+    {
+        public string Path => "failing";
+
+        public TileImageFormat Format => TileImageFormat.Png;
+
+        public IReadOnlyList<string> Layers => ["chart"];
+
+        public ITileSource? Layer(string id) => id == "chart" ? this : null;
+
+        public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The tile store broke.");
+
+        public JsonObject ToTileJson(string? palette, DateTime? time = null) => new()
+        {
+            ["name"] = "Failing chart",
+            ["minzoom"] = 1,
+            ["maxzoom"] = 3,
+            ["bounds"] = new JsonArray(-10.0, -5.0, 10.0, 5.0),
+            ["tileSize"] = 256,
+        };
+    }
+
+    [Fact]
+    public async Task A_tile_that_fails_answers_500_and_is_reported_with_its_route_and_layer()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var errors = new StringWriter();
+        await using var server = await TileServer.StartAsync(new FailingSource(), IPAddress.Loopback, 0, token: null, cancellationToken: ct, errors: errors);
+        using var http = new HttpClient();
+
+        using (var response = await http.GetAsync(new Uri(server.BaseUri, "wmts?SERVICE=WMTS&REQUEST=GetTile&LAYER=chart&STYLE=default&TILEMATRIXSET=WebMercatorQuad&TILEMATRIX=2&TILEROW=1&TILECOL=1&FORMAT=image/png"), ct))
+        {
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            Assert.Equal("*", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        }
+
+        var report = errors.ToString();
+        Assert.Contains("GET /wmts?SERVICE=WMTS", report, StringComparison.Ordinal);
+        Assert.Contains("(layer 'chart')", report, StringComparison.Ordinal);
+        Assert.Contains("The tile store broke.", report, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task The_revision_is_published_in_capabilities_and_the_health_check()
     {

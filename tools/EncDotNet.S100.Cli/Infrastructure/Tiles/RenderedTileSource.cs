@@ -295,10 +295,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        if (layer is not null)
-            style += "~" + layer.Id;
         var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
-        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant, content);
+        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant, content, layer?.Id);
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -309,8 +307,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         else
         {
             var render = _rendering.GetOrAdd(
-                (style, choice.Time, choice.Variant, block),
-                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Style, paletteName, mariner, choice, k.Block, layer)));
+                (SceneStyle(style, layer), choice.Time, choice.Variant, block),
+                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(style, paletteName, mariner, choice, k.Block, layer)));
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -583,8 +581,17 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <summary>The <see cref="Palettes"/> with <see cref="Sets"/> settings sets registered.</summary>
     private sealed record StyleList(int Sets, IReadOnlyList<string> Styles);
 
+    /// <summary>
+    /// The key of <paramref name="style"/>'s scenes and block renders for
+    /// <paramref name="layer"/>: <c>{style}~{layer}</c>, apart from those of
+    /// every dataset. Tiles carry the layer in <see cref="TileKey.Layer"/> instead.
+    /// </summary>
+    private static string SceneStyle(string style, LayerSource? layer) =>
+        layer is null ? style : style + "~" + layer.Id;
+
     private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string style, string palette, MarinerStyle? mariner, TimeChoice choice, TileBlock block, LayerSource? layer)
     {
+        var sceneStyle = SceneStyle(style, layer);
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -592,7 +599,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             // which runs its own jobs on the work scheduler, so it happens off
             // the request threads but outside a job; the block itself renders
             // and encodes as one Visible job.
-            var renderer = await Task.Run(() => _scenes.Get(style, palette, mariner, choice, layer?.Members).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
+            var renderer = await Task.Run(() => _scenes.Get(sceneStyle, palette, mariner, choice, layer?.Members).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
             var tiles = await WorkScheduler.Shared.RunAsync(
                 WorkStage.Raster,
                 _ => Render(renderer, block),
@@ -601,7 +608,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             foreach (var ((x, y), data) in tiles)
             {
                 var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
-                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant, content);
+                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant, content, layer?.Id);
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -615,7 +622,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
             // Later requests find the tiles in the cache (or render again if
             // they were evicted).
-            _rendering.TryRemove((style, choice.Time, choice.Variant, block), out _);
+            _rendering.TryRemove((sceneStyle, choice.Time, choice.Variant, block), out _);
         }
     }
 
@@ -709,8 +716,10 @@ internal sealed class SceneCache(TileRenderSession session)
 /// (<see cref="TimeChoice.Variant"/>). <paramref name="Content"/> is the
 /// <see cref="DatasetTileKeys"/> key of the datasets that reach it, when tiles
 /// are keyed by those (<c>--manage-datasets</c>); <see langword="null"/> otherwise.
+/// <paramref name="Layer"/> is the group layer (issue #1495) the tile draws
+/// alone, or <see langword="null"/> for the tile of every dataset.
 /// </summary>
-internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null, string? Variant = null, string? Content = null);
+internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null, string? Variant = null, string? Content = null, string? Layer = null);
 
 /// <summary>
 /// Encoded tiles kept in memory up to a byte budget, evicting the least
