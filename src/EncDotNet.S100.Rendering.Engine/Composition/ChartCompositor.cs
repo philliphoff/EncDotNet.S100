@@ -461,7 +461,7 @@ public sealed class ChartCompositor
     /// rebuilds a sub-layer on each compose, so a hit is decided by the
     /// instructions themselves (the same instances, in order), not the instance.
     /// </summary>
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<VectorPortrayalResult, System.Collections.Concurrent.ConcurrentDictionary<(string LayerKey, DrawingInstructionCategory Hidden, SymbolSizeProfile Profile), LoweredVector>> s_lowered = [];
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<VectorPortrayalResult, System.Collections.Concurrent.ConcurrentDictionary<(string LayerKey, DrawingInstructionCategory Hidden, SymbolSizeProfile Profile), LoweredVector>> LoweredScenes = [];
 
     /// <summary>A sub-layer's instructions and the scene they lowered to.</summary>
     private sealed record LoweredVector(IReadOnlyList<DrawingInstruction> Instructions, VectorScene Scene);
@@ -469,7 +469,7 @@ public sealed class ChartCompositor
     private static VectorScene LowerVector(
         VectorStackPayload payload, DrawingInstructionCategory hiddenCategories, SymbolSizeProfile sizeProfile)
     {
-        var byKey = s_lowered.GetOrCreateValue(payload.Result);
+        var byKey = LoweredScenes.GetOrCreateValue(payload.Result);
         var key = (payload.SubLayer.LayerKey, hiddenCategories, sizeProfile);
         var instructions = payload.SubLayer.Instructions;
         if (byKey.TryGetValue(key, out var kept) && SameInstructions(kept.Instructions, instructions))
