@@ -695,7 +695,10 @@ datasets, as `tiles export` searches it.
 When it renders datasets, `tiles serve` renders the block of `--metatile` ×
 `--metatile` tiles around a requested tile and keeps every tile of the block in
 memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
-`--parallel` blocks render at a time.
+`--parallel` blocks render at a time. With `--verbose`, it prints a line for
+each block it renders: the zoom and tiles, the time spent waiting for a render
+slot, preparing the zoom level, drawing and encoding, and how many requests
+waited on it.
 
 While it serves datasets, `tiles serve` checks their files every `--refresh`
 seconds (default 10) and reopens them when they change: when you copy in a new
@@ -824,6 +827,7 @@ area, the tile format and display settings apply too; the output options
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
+| `--verbose` | off | When rendering datasets, prints a line for each block rendered, with where its time went. |
 
 ```bash
 s100 tiles serve chart.pmtiles

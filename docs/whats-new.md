@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Faster `tiles serve` with S-102.** Tiles that include S-102 bathymetry
+  now render in tens of milliseconds a block instead of around 14 seconds,
+  and the first tile at each zoom level no longer lowers every chart again.
+  A WMTS layer that holds every dataset, such as `chart` from
+  `--layers-by product` over S-57 and S-102, now shares the tiles of the
+  `s100` layer instead of rendering its own. With `--verbose`, the server
+  prints where each block's time went.
 - **The drawn chart as JSON.** `s100 render --format json` now writes what
   the renderer draws rather than a summary of the display list: every line
   edge, area ring, pattern fill, symbol and label with its full geometry in

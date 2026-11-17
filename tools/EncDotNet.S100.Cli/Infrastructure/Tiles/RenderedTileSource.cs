@@ -68,6 +68,10 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly ConcurrentDictionary<(string Style, DateTime? Time, string? Variant, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
 
+    // With --verbose: a line per block rendered, and the requests waiting on each block render.
+    private readonly Action<string>? _blockLog;
+    private readonly ConcurrentDictionary<(string Style, DateTime? Time, string? Variant, TileBlock Block), int> _waiting = new();
+
     /// <param name="session">The opened datasets. The source disposes it.</param>
     /// <param name="scene">The datasets prepared in <paramref name="defaultPalette"/>.</param>
     /// <param name="layout">The area and zoom range to serve.</param>
@@ -112,8 +116,10 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         bool strictTime = false,
         TileCache? memoryCache = null,
         DatasetTileKeys? contentKeys = null,
-        IReadOnlyList<string?>? layers = null)
+        IReadOnlyList<string?>? layers = null,
+        Action<string>? blockLog = null)
     {
+        _blockLog = blockLog;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
 
@@ -306,9 +312,12 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
         else
         {
+            var renderKey = (SceneStyle(style, layer), choice.Time, choice.Variant, block);
             var render = _rendering.GetOrAdd(
-                (SceneStyle(style, layer), choice.Time, choice.Variant, block),
+                renderKey,
                 k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(style, paletteName, mariner, choice, k.Block, layer)));
+            if (_blockLog is not null)
+                _waiting.AddOrUpdate(renderKey, 1, (_, n) => n + 1);
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -572,8 +581,11 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
             owner.ReadLegendAsync(style, options, cancellationToken);
 
+        // A layer of every dataset (such as --layers-by product over one
+        // product) draws what the tiles of every dataset draw, so it shares
+        // their scenes, renders and cached tiles rather than rendering its own.
         public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
-            owner.ReadAsync(zoom, x, y, palette, time, this, cancellationToken);
+            owner.ReadAsync(zoom, x, y, palette, time, members.Count == owner._session.Paths.Count ? null : this, cancellationToken);
 
         public JsonObject ToTileJson(string? palette, DateTime? time = null) => owner.ToTileJson(palette, time, this);
     }
@@ -592,19 +604,35 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string style, string palette, MarinerStyle? mariner, TimeChoice choice, TileBlock block, LayerSource? layer)
     {
         var sceneStyle = SceneStyle(style, layer);
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
         {
+            long slotted = System.Diagnostics.Stopwatch.GetTimestamp();
+
             // Preparing the scene and the zoom level's renderer may portray,
             // which runs its own jobs on the work scheduler, so it happens off
             // the request threads but outside a job; the block itself renders
             // and encodes as one Visible job.
             var renderer = await Task.Run(() => _scenes.Get(sceneStyle, palette, mariner, choice, layer?.Members).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
+            long prepared = System.Diagnostics.Stopwatch.GetTimestamp();
+            TimeSpan drawn = default;
             var tiles = await WorkScheduler.Shared.RunAsync(
                 WorkStage.Raster,
-                _ => Render(renderer, block),
+                _ => Render(renderer, block, out drawn),
                 CancellationToken.None,
                 WorkPriority.Visible()).ConfigureAwait(false);
+            if (_blockLog is not null)
+            {
+                var total = System.Diagnostics.Stopwatch.GetElapsedTime(prepared);
+                _waiting.TryRemove((sceneStyle, choice.Time, choice.Variant, block), out int waiting);
+                _blockLog(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"block {sceneStyle} z{block.Zoom} {block.X},{block.Y} {block.Columns}x{block.Rows}: " +
+                    $"queued {System.Diagnostics.Stopwatch.GetElapsedTime(started, slotted).TotalMilliseconds:F0} ms, " +
+                    $"prepared {System.Diagnostics.Stopwatch.GetElapsedTime(slotted, prepared).TotalMilliseconds:F0} ms, " +
+                    $"drawn {drawn.TotalMilliseconds:F0} ms, encoded {(total - drawn).TotalMilliseconds:F0} ms, " +
+                    $"{waiting} request(s) waiting"));
+            }
             foreach (var ((x, y), data) in tiles)
             {
                 var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
@@ -626,9 +654,11 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
     }
 
-    private Dictionary<(int X, int Y), byte[]> Render(ChartTileRenderer renderer, TileBlock block)
+    private Dictionary<(int X, int Y), byte[]> Render(ChartTileRenderer renderer, TileBlock block, out TimeSpan drawn)
     {
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         var rendered = renderer.Render(block);
+        drawn = System.Diagnostics.Stopwatch.GetElapsedTime(start);
         try
         {
             return rendered.ToDictionary(t => (t.X, t.Y), t => t.IsEmpty ? [] : _session.Encode(t));

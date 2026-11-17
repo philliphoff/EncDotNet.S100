@@ -65,7 +65,14 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         // only: no-data fill stays flat.
         float[]? shade = layer.ReliefShade is { } rs && rs.Length == rows * cols ? rs : null;
 
+        // Written straight into the pixel buffer: SKBitmap.SetPixel is a
+        // native call per pixel, which dominated drawing large grids.
+        var pixels = bitmap.GetPixelSpan();
+        int rowBytes = bitmap.RowBytes;
         for (int row = 0; row < rows; row++)
+        {
+            // Grid row 0 is the southernmost (bottom of image), so flip vertically.
+            var line = pixels.Slice((rows - 1 - row) * rowBytes, cols * 4);
             for (int col = 0; col < cols; col++)
             {
                 int index = row * cols + col;
@@ -73,9 +80,9 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
                 SKColor color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor, out bool isBand);
                 if (isBand && shade is not null)
                     color = Shade(color, shade[index]);
-                // Grid row 0 is the southernmost (bottom of image), so flip vertically.
-                bitmap.SetPixel(col, rows - 1 - row, color);
+                WritePremultipliedRgba(line.Slice(col * 4, 4), color);
             }
+        }
 
         S100Diag.Telemetry.CoverageFrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
@@ -107,6 +114,34 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         }
 
         return SKColors.Transparent;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="color"/> (unpremultiplied) as one Rgba8888
+    /// premultiplied pixel, rounding as Skia premultiplies.
+    /// </summary>
+    private static void WritePremultipliedRgba(Span<byte> pixel, SKColor color)
+    {
+        byte a = color.Alpha;
+        if (a == 255)
+        {
+            pixel[0] = color.Red;
+            pixel[1] = color.Green;
+            pixel[2] = color.Blue;
+            pixel[3] = 255;
+            return;
+        }
+
+        pixel[0] = Premultiply(color.Red, a);
+        pixel[1] = Premultiply(color.Green, a);
+        pixel[2] = Premultiply(color.Blue, a);
+        pixel[3] = a;
+
+        static byte Premultiply(byte channel, byte alpha)
+        {
+            int product = (channel * alpha) + 128;
+            return (byte)((product + (product >> 8)) >> 8);
+        }
     }
 
     // SKColor is unpremultiplied, so shade the channels directly.

@@ -148,8 +148,9 @@ public sealed class ChartCompositeOptions
 /// vector layers in the shared viewport.
 /// </para>
 /// <para>
-/// A compositor holds no state between calls; <see cref="Prepare"/> and
-/// <see cref="Render"/> may run concurrently.
+/// A compositor holds no state between calls, beyond the lowered vector
+/// scenes kept with the portrayal results they came from; <see cref="Prepare"/>
+/// and <see cref="Render"/> may run concurrently.
 /// </para>
 /// </remarks>
 public sealed class ChartCompositor
@@ -451,7 +452,50 @@ public sealed class ChartCompositor
             nameof(input));
     }
 
+    /// <summary>
+    /// The scene a vector sub-layer lowered to, kept per portrayal result while
+    /// that result lives, by sub-layer and lowering settings. A composition
+    /// prepared again for the same portrayals — <c>tiles serve</c> does once per
+    /// zoom level, re-portraying only coverage products — reuses the lowering,
+    /// which with pattern clipping is most of the cost. S-98 depth suppression
+    /// rebuilds a sub-layer on each compose, so a hit is decided by the
+    /// instructions themselves (the same instances, in order), not the instance.
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<VectorPortrayalResult, System.Collections.Concurrent.ConcurrentDictionary<(string LayerKey, DrawingInstructionCategory Hidden, SymbolSizeProfile Profile), LoweredVector>> s_lowered = [];
+
+    /// <summary>A sub-layer's instructions and the scene they lowered to.</summary>
+    private sealed record LoweredVector(IReadOnlyList<DrawingInstruction> Instructions, VectorScene Scene);
+
     private static VectorScene LowerVector(
+        VectorStackPayload payload, DrawingInstructionCategory hiddenCategories, SymbolSizeProfile sizeProfile)
+    {
+        var byKey = s_lowered.GetOrCreateValue(payload.Result);
+        var key = (payload.SubLayer.LayerKey, hiddenCategories, sizeProfile);
+        var instructions = payload.SubLayer.Instructions;
+        if (byKey.TryGetValue(key, out var kept) && SameInstructions(kept.Instructions, instructions))
+            return kept.Scene;
+
+        var scene = LowerVectorCore(payload, hiddenCategories, sizeProfile);
+        byKey[key] = new LoweredVector(instructions, scene);
+        return scene;
+
+        static bool SameInstructions(IReadOnlyList<DrawingInstruction> a, IReadOnlyList<DrawingInstruction> b)
+        {
+            if (ReferenceEquals(a, b))
+                return true;
+            if (a.Count != b.Count)
+                return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (!ReferenceEquals(a[i], b[i]))
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
+    private static VectorScene LowerVectorCore(
         VectorStackPayload payload, DrawingInstructionCategory hiddenCategories, SymbolSizeProfile sizeProfile)
     {
         var result = payload.Result;

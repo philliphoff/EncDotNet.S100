@@ -249,14 +249,19 @@ public sealed class CoverageHeadlessRenderer
         DrawCore(canvas, layer, dest, Project);
     }
 
-    private void DrawCore(
-        SKCanvas canvas,
-        StyledCoverageLayer layer,
-        SKRect colorDest,
-        Func<(double X, double Y), (float X, float Y)> project)
+    /// <summary>
+    /// The colour raster of <paramref name="layer"/>, one pixel per grid cell.
+    /// The last one built is kept, so a renderer that draws the same layer
+    /// again — once per tile, as a <see cref="CoverageCompositeLayer"/> does —
+    /// builds it once. Safe to call concurrently; the image is immutable.
+    /// </summary>
+    private SKImage ColorRaster(StyledCoverageLayer layer)
     {
-        if (layer.ColorScheme is not null)
+        lock (_rasterGate)
         {
+            if (_raster is { } cached && ReferenceEquals(cached.Layer, layer))
+                return cached.Image;
+
             var rasterRenderer = new SkiaCoverageRenderer { NoDataColor = NoDataColor };
             // SkiaCoverageRenderer emits one pixel per grid cell and ignores the
             // viewport pixel size, so the viewport here only carries the extent.
@@ -271,7 +276,28 @@ public sealed class CoverageHeadlessRenderer
                 ScaleDenominator = 1.0,
             };
             using var raster = rasterRenderer.Render(layer, nativeViewport);
-            using var rasterImage = SKImage.FromBitmap(raster);
+
+            // A copy the image owns, so the bitmap can go. An image replaced
+            // here may still be drawing on another thread, so it's left to the
+            // finalizer rather than disposed.
+            var image = SKImage.FromBitmap(raster);
+            _raster = (layer, image);
+            return image;
+        }
+    }
+
+    private readonly Lock _rasterGate = new();
+    private (StyledCoverageLayer Layer, SKImage Image)? _raster;
+
+    private void DrawCore(
+        SKCanvas canvas,
+        StyledCoverageLayer layer,
+        SKRect colorDest,
+        Func<(double X, double Y), (float X, float Y)> project)
+    {
+        if (layer.ColorScheme is not null)
+        {
+            var rasterImage = ColorRaster(layer);
 
             // Clip the up-scaled surface to water at output-pixel resolution
             // (issue #483): the land polygons are projected through the same
