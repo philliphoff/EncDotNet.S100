@@ -97,6 +97,26 @@ public class SkiaCoverageRendererTests
         Assert.Equal(187, pixel.Blue);
     }
 
+    [Theory]
+    [InlineData(147, 174, 187, 128)]
+    [InlineData(255, 0, 64, 1)]
+    [InlineData(13, 71, 161, 254)]
+    [InlineData(200, 100, 50, 0)]
+    public void Render_TranslucentColor_PremultipliesAsSetPixel(byte r, byte g, byte b, byte a)
+    {
+        // The pixels are written straight into the buffer; they must match
+        // what SKBitmap.SetPixel premultiplies to.
+        var depths = new float[,] { { float.NaN, 5f } };
+        var layer = MakeStyledLayer(depths, noDataValue: float.NaN);
+        var renderer = new SkiaCoverageRenderer { NoDataColor = new RgbaColor(r, g, b, a) };
+        using var bitmap = renderer.Render(layer, DefaultViewport);
+
+        using var expected = new SKBitmap(1, 1, SKColorType.Rgba8888, SKAlphaType.Premul);
+        expected.SetPixel(0, 0, new SKColor(r, g, b, a));
+
+        Assert.Equal(expected.GetPixelSpan().ToArray(), bitmap.GetPixelSpan()[..4].ToArray());
+    }
+
     [Fact]
     public void Render_OutOfRangeValue_ProducesTransparent()
     {

@@ -89,6 +89,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("When rendering datasets: also serve the datasets as WMTS layers by group, each with its own time steps and extent, besides the one layer of all of them: 'product' (chart for S-57, S-101 and S-102; S104, S111, S124, … for the rest) or 'none' (default).")]
         public string? LayersBy { get; init; }
 
+        [CommandOption("--verbose")]
+        [Description("When rendering datasets: print a line for each block rendered, with its zoom, tiles, the time spent waiting for a render slot, preparing, drawing and encoding, and how many requests waited on it.")]
+        public bool Verbose { get; init; }
+
         /// <inheritdoc/>
         public override string? FingerprintExcludedFolder => CacheDirectory;
 
@@ -312,7 +316,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 settings.StrictTime,
                 managed?.Memory,
                 managed is null ? null : new DatasetTileKeys(session, layout, settings.Metatile),
-                TileLayers.Assign(session.Paths, session.Specs, settings.LayersBy, changes));
+                TileLayers.Assign(session.Paths, session.Specs, settings.LayersBy, changes),
+                settings.Verbose ? line => AnsiConsole.MarkupLine($"[grey]{DateTime.Now:HH:mm:ss.fff} {Markup.Escape(line)}[/]") : null);
             managed?.ReferenceLatitude ??= layout.ReferenceLatitude;
             return 0;
         }
