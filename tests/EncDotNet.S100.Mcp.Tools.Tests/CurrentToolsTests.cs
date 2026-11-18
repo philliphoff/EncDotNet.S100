@@ -223,6 +223,60 @@ public sealed class CurrentToolsTests
         Assert.Equal("Astronomical tidal current only, not a forecast.", source.Caveat);
         Assert.Equal(Catalogue.Value.Retrieved, source.CatalogueDate);
         Assert.InRange(source.Station.DistanceMeters!.Value, 0, 1_000);
+        Assert.Equal("high", source.Confidence);
+        Assert.StartsWith("Predicted at Deception Pass (Narrows), ", source.Note);
+    }
+
+    [Fact]
+    public async Task A_pass_station_does_not_reach_the_bay_beyond_it()
+    {
+        // Skagit Bay off Hope Island, 4.7 km from the Deception Pass narrows
+        // (#1545): within a tide station's 10 km, beyond a current station's 2 km.
+        var result = await SampleTool(predictions: true).InvokeAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken);
+
+        Assert.IsType<NoDatasetCoversPoint>(Error(result));
+    }
+
+    [Fact]
+    public async Task The_current_station_reach_is_configurable()
+    {
+        var tool = SampleTool(predictions: true, currentReachMeters: 10_000);
+
+        var result = Ok(await tool.InvokeAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken));
+
+        Assert.Equal(DeceptionPass, Assert.IsType<SurfaceCurrentStationSample>(result.Value).StationId);
+        Assert.InRange(result.Source!.Station.DistanceMeters!.Value, 4_000, 5_500);
+        Assert.Equal("low", result.Source.Confidence);
+    }
+
+    [Theory]
+    [InlineData(48.4134, "medium")] // ~800 m north of the narrows station
+    [InlineData(48.4197, "low")] // ~1.5 km north
+    public async Task Confidence_falls_with_the_station_distance(double latitude, string expected)
+    {
+        var result = Ok(await SampleTool(predictions: true).InvokeAsync(S111(latitude, -122.64312, Now), TestContext.Current.CancellationToken));
+
+        var source = result.Source!;
+        Assert.Equal(expected, source.Confidence);
+        Assert.Contains("Tidal currents change over short distances", source.Note);
+    }
+
+    [Theory]
+    [InlineData(0, "high")]
+    [InlineData(500, "high")]
+    [InlineData(500.5, "medium")]
+    [InlineData(1_000, "medium")]
+    [InlineData(1_001, "low")]
+    public void Confidence_bands(double distance, string expected) =>
+        Assert.Equal(expected, PredictedCurrentSampler.Confidence(distance));
+
+    [Fact]
+    public void Note_names_the_distance_and_warns_past_the_high_band()
+    {
+        Assert.Equal("Predicted at Narrows, 180 m away by water.", PredictedCurrentSampler.Note("Narrows", 180.4, byWater: true));
+        Assert.Equal(
+            "Predicted at Narrows, 1.5 km away. Tidal currents change over short distances, most of all either side of a narrows: the current here may differ a lot.",
+            PredictedCurrentSampler.Note("Narrows", 1_480, byWater: false));
     }
 
     [Fact]
@@ -249,10 +303,13 @@ public sealed class CurrentToolsTests
         Assert.IsType<NoDatasetCoversPoint>(Error(far));
     }
 
-    private static SampleCoverageTool SampleTool(bool predictions)
+    private static SampleCoverageTool SampleTool(bool predictions, double? currentReachMeters = null)
     {
         var transforms = new ProjNetCrsTransformFactory();
-        var cache = new RouteCheckSourceCache(transforms, new RouteCheckSourceOptions { TidePredictions = predictions ? Catalogue.Value : null });
+        var options = new RouteCheckSourceOptions { TidePredictions = predictions ? Catalogue.Value : null };
+        if (currentReachMeters is { } reach)
+            options = options with { MaxCurrentStationDistanceMeters = reach };
+        var cache = new RouteCheckSourceCache(transforms, options);
         return new SampleCoverageTool(new EmptyCatalog(), transforms, cache, new FixedTime(Now));
     }
 

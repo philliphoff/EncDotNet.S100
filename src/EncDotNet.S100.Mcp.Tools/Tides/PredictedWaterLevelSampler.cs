@@ -16,7 +16,8 @@ namespace EncDotNet.S100.Mcp.Tools.Tides;
 /// The predictions are the host's <see cref="RouteCheckSourceCache.TidePredictions"/>,
 /// so they follow its switch (SoundCharts' "Use tide predictions where there's
 /// no S-104", <c>s100 mcp serve --tide-predictions</c>). A station reaches
-/// <see cref="WaterReach.DefaultReachMeters"/> through the loaded charts' water.
+/// <see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/> (10 km by
+/// default) through the loaded charts' water.
 /// </remarks>
 internal sealed class PredictedWaterLevelSampler
 {
@@ -48,7 +49,7 @@ internal sealed class PredictedWaterLevelSampler
 
         var datasets = _catalog.Datasets;
         var mask = _sources.Get(datasets).WaterMask;
-        var source = new TidePredictionWaterLevelSource(catalogue, new WaterReach(mask));
+        var source = new TidePredictionWaterLevelSource(catalogue, new WaterReach(mask, _sources.Options.MaxStationDistanceMeters));
         var position = new GeoPosition(request.Latitude, request.Longitude);
         if (source.Locate(position) is not [var series, ..])
             return null;

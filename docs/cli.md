@@ -1987,7 +1987,8 @@ lists them all.
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
-| `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample_coverage` and `sample_coverage_along` the nearest current station where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
+| `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample_coverage` and `sample_coverage_along` the nearest current station within `--current-station-reach` where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
+| `--current-station-reach <metres>` | `2000` | With `--tide-predictions` only. How far, by water, a current station's prediction applies. Much shorter than a tide station's 10 km, because tidal currents change over short distances. |
 | `--transport <transport>` | `stdio` | `stdio`, or `http` to serve over HTTP. |
 | `--host <address>` | `127.0.0.1` | HTTP only. The address to listen on. `0.0.0.0` accepts other computers. |
 | `--port <port>` | `8300` | HTTP only. The port. `0` picks a free one. |
