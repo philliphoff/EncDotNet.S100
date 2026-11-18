@@ -690,8 +690,8 @@ public partial class MainWindow : ShadUI.Window
             Opened += async (_, _) => await FrameOnOwnShipAtStartupAsync();
         }
 
-        // Add back the data sources the user added last time (design note
-        // D3). Automated runs start from their CLI datasets alone.
+        // Put the live feeds subscribed to in the Library on the map (design
+        // note D8). Automated runs start from their CLI datasets alone.
         if (!needsAutomation)
             Opened += (_, _) => RestoreSavedSources();
         // #1073: SOUNDCHARTS_NMEA_INPUT adds own-ship weather, in automated
@@ -829,20 +829,9 @@ public partial class MainWindow : ShadUI.Window
     /// before framing, then gives up quietly. No-op when the overlay is
     /// disabled or an explicit CLI viewport was supplied.
     /// </summary>
-    /// <summary>Adds and loads the data sources saved in <see cref="ViewerSettings.SourceDatasets"/>.</summary>
-    private static void RestoreSavedSources()
-    {
-        var sources = App.Services.GetService<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>();
-        var datasets = App.Services.GetService<DatasetsViewModel>();
-        if (sources is null || datasets is null)
-            return;
-        // Added in saved order, each at the top, so the last added is on top as before.
-        foreach (var registration in sources.SavedRegistrations())
-        {
-            if (datasets.AddSource(registration) is { } entry)
-                datasets.RequestLoad(entry);
-        }
-    }
+    /// <summary>Puts the live feeds subscribed to in the Library on the map, and follows the Library.</summary>
+    private static void RestoreSavedSources() =>
+        App.Services.GetService<EncDotNet.S100.Viewer.Services.Sources.LiveFeedLibrary>()?.Start();
 
     /// <summary>
     /// Adds and loads own-ship weather when <c>SOUNDCHARTS_NMEA_INPUT</c>

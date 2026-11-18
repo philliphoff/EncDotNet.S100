@@ -25,5 +25,7 @@ internal static partial class Strings
     public static string Button_AddLiveFeed => Get(nameof(Button_AddLiveFeed));
     public static string Ais_SourceName => Get(nameof(Ais_SourceName));
     public static string Ais_SourceDescription => Get(nameof(Ais_SourceDescription));
+    public static string Library_LiveFeedsCollection => Get(nameof(Library_LiveFeedsCollection));
+    public static string Library_AddMenu_LiveFeeds => Get(nameof(Library_AddMenu_LiveFeeds));
     public static string Ais_KeyNeededFormat => Get(nameof(Ais_KeyNeededFormat));
 }

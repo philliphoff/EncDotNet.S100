@@ -324,7 +324,7 @@
         </DataTemplate>
         <!-- The "Add to Library" menu, shared by the toolbar and the empty state,
              grouped by where the data is. -->
-        <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft">
+        <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft" Opening="OnAddMenuOpening">
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_ThisComputer}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.ThisComputer"/>
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding Tree.AddFolderCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Folder"/>
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding Tree.AddExchangeSetZipCommand}"  AutomationProperties.AutomationId="Library.AddMenu.ExchangeSet"/>
@@ -336,6 +336,9 @@
             <Separator />
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_AnotherComputer}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.AnotherComputer"/>
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding Tree.AddSharedFeedCommand}"  AutomationProperties.AutomationId="Library.AddMenu.SharedFeed"/>
+            <Separator />
+            <!-- D8: the live feeds, listed when the menu opens (OnAddMenuOpening). -->
+            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_LiveFeeds}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.LiveFeeds"/>
         </MenuFlyout>
 
         <!-- Rarely used, destructive actions live here rather than on the toolbar. -->

@@ -1471,20 +1471,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _sessionEntries.Remove(entry.Id);
         _subLayersDecided.RemoveWhere(decided => decided.Dataset == entry.Id);
         _library.RemoveSessionCatalogue(entry.DisplayName);
-        if (entry.SourceId is { } sourceId)
-        {
-            // Removing a source from the panel stops it and drops it from the
-            // sources added at start-up.
+        // Removing a feed from the panel stops it. Whether it comes back is
+        // the Library's (LiveFeedLibrary, design note D8).
+        if (entry.SourceId is not null)
             _sources?.Detach(entry.Id);
-            // D8: removing a feed also stops it coming back at start-up; say so.
-            if (_sources?.Forget(sourceId) == true)
-            {
-                _notifications.Create(Strings.Toast_Info)
-                    .WithSeverity(NotificationSeverity.Info)
-                    .WithContent(string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Toast_SourceRemovedFormat, entry.DisplayName))
-                    .Show();
-            }
-        }
         entry.IsLoaded = false;
         DatasetRemoved?.Invoke(entry);
     }

@@ -976,7 +976,25 @@ Each slice ships on its own and leaves the tree working.
    options, saved today only by id). "Unsubscribe" there, "Remove from map"
    in Datasets. The AIS key and zoom threshold leave Settings › Vessels,
    NMEA weather's input leaves the environment variable, and the Datasets
-   plug button goes. Needs 7b; best after 7c, so AIS moves once.
+   plug button goes. Needs 7b; best after 7c, so AIS moves once. Split in
+   two:
+   - **9a. Live feeds as a Library source kind.** Built. `LiveFeedSource`
+     (kind `LIVE`, holding the registration id) is a `CollectionSource`
+     with a no-op `LiveFeedIndexer`. The Library's Add menu lists the feeds
+     under **Live feeds**; choosing one adds it to a "Live feeds" collection.
+     SoundCharts' `LiveFeedLibrary` puts every subscribed feed on the map at
+     start-up and follows the Library: removing the feed from the Library
+     takes it off the map, while removing its Datasets row only takes it off
+     until the next start (a toast says so). `ViewerSettings.SourceDatasets`
+     moves into the Library once and empties; the old switch migrations
+     still feed it. The Datasets toolbar's plug button is gone; the empty
+     panel's **Add a live feed** subscribes through the Library too.
+     Automated runs and the `SOUNDCHARTS_NMEA_INPUT` entry don't touch it.
+   - **9b. Feed settings pages.** Each feed's details pane in the Library is
+     generated from its `OptionsType`, with `[Secret]` options in the D7
+     store and the options saved on the `LiveFeedSource`; "Key needed" as
+     a row and node status; the AIS key and zoom threshold and NMEA
+     weather's input move there.
 10. **Pick actions.** Part 1 is built (P4, P5 as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and
     merge `DynamicPickHit` into `PickHit`. Ships with 7c (decided
@@ -989,7 +1007,7 @@ Also left:
 - **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
   `StationSeries`, `NavigationalWarning`) in the release after next.
 
-Order: 7b, then 7c with 10, then 9 and 7d, with slice 3 whenever the IEC
+Order: 7b, then 7c with 10, then 9a, 9b and 7d, with slice 3 whenever the IEC
 62288 question (§6) is answered. Slice 3 is independent of the rest; live
 sources take their place in the derived order once it's in.
 

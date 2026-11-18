@@ -1418,13 +1418,14 @@ holds.
 ## Show buoy observations
 
 **NDBC observations** shows the latest observations from NOAA National
-Data Buoy Center buoys and C-MAN stations. It's a live feed: add it with
-**Add a live feed** (the plug button) in the **Datasets** panel's toolbar,
-or the button of the same name when the panel is empty, and choose **NDBC
-observations**. It's listed with your datasets, and you show, hide and
-remove it the same way; its place in the drawing order comes from the
-layer order, so it has no move buttons. SoundCharts adds it again the next
-time it starts, until you remove it. If you had the old **NDBC buoy
+Data Buoy Center buoys and C-MAN stations. It's a live feed: in the **Library**, choose **Add** and then, under
+**Live feeds**, **NDBC observations** (or **Add a live feed** when the
+**Datasets** panel is empty). That subscribes to it in a **Live feeds**
+collection and puts it on the map. It's listed with your datasets, and you
+show and hide it the same way; its place in the drawing order comes from
+the layer order, so it has no move buttons. Removing its row takes it off
+the map until SoundCharts next starts; to unsubscribe, remove it from the
+Library. If you had the old **NDBC buoy
 observations** Layer stack row turned on, it's added for you.
 
 A live feed's row is labelled with what it shows (**Observations**) and says
@@ -1553,12 +1554,12 @@ which needs a free API key. It's a live feed, like NDBC observations.
    SoundCharts starts. On a computer with no secret store, such as Linux
    without `secret-tool`, the key stays in `settings.json` and Settings says
    so; use the environment variable to keep it out of the file.
-2. In the **Datasets** panel, choose **Add a live feed** (the plug button)
-   and then **AIS targets**. There's no restart. Without a key, adding it
+2. In the **Library**, choose **Add** and then, under **Live feeds**,
+   **AIS targets**. There's no restart. Without a key, adding it
    says where to enter one.
 
 AIS targets are listed with your datasets under **Vessels**, and added again
-the next time SoundCharts starts, until you remove them. If you had the old
+the next time SoundCharts starts, until you remove them from the Library. If you had the old
 **Enable AIS overlay** switch on, they're added for you. They draw above the
 chart (the **Vessels** plane), and their row says what they're doing, such as
 **Waiting for zoom (below 50°)** or **Live · updated just now**.
