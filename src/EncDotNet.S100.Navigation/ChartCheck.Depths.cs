@@ -72,7 +72,13 @@ public sealed partial class ChartCheck
                 }
 
                 _cancellationToken.ThrowIfCancellationRequested();
-                var details = new SafetyContourFeatureDetails { FeatureType = feature.FeatureType, IsStructure = IsStructure(feature.FeatureType) };
+                var structure = IsStructure(feature.FeatureType);
+                var details = new SafetyContourFeatureDetails
+                {
+                    FeatureType = feature.FeatureType,
+                    IsStructure = structure,
+                    IsBerth = structure && IsBerth(feature),
+                };
                 if (feature.Surfaces.Count > 0)
                 {
                     CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor, _ => details);
@@ -101,6 +107,37 @@ public sealed partial class ChartCheck
         private static bool IsStructure(string featureType) =>
             SkinOfTheEarth.Classify(featureType) == SkinOfTheEarthClass.None
             && featureType is not (SkinOfTheEarth.Coastline or "LandRegion" or "LandElevation");
+
+        // A structure a vessel lies against at a berth (#1548): a pontoon, a
+        // floating dock, or a shoreline construction that is a pier, wharf,
+        // landing steps or fender. Breakwaters, moles, groynes, training and
+        // sea walls guard a harbour rather than berth in it, and a ruined
+        // structure or one that is under water, covers and uncovers or is
+        // awash is a hazard however close to the berth it is.
+        private static bool IsBerth(RouteChartFeature feature)
+        {
+            if (feature.Condition == RuinedCondition
+                || feature.WaterLevelEffect is AlwaysUnderWater or CoversAndUncovers or Awash)
+            {
+                return false;
+            }
+
+            return feature.FeatureType switch
+            {
+                "Pontoon" or "FloatingDock" => true,
+                "ShorelineConstruction" => feature.ShorelineConstructionCategory is { } category && BerthCategories.Contains(category),
+                _ => false,
+            };
+        }
+
+        // categoryOfShorelineConstruction (S-57 CATSLC): 4 pier (jetty), 5
+        // promenade pier, 6 wharf (quay), 11 landing steps, 14 fender, 15
+        // solid face wharf, 16 open face wharf.
+        private static readonly HashSet<int> BerthCategories = [4, 5, 6, 11, 14, 15, 16];
+        private const int RuinedCondition = 2;
+        private const int AlwaysUnderWater = 3;
+        private const int CoversAndUncovers = 4;
+        private const int Awash = 5;
 
         // Soundings no deeper than the safety contour inside the cross-track
         // limits, from the finest cell where they are: the soundings the

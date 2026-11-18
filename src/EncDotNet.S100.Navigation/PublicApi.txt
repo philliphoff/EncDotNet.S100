@@ -592,6 +592,7 @@ namespace EncDotNet.S100.Navigation
         public RouteChartFeature(EncDotNet.S100.Navigation.RouteChartFeatureKind Kind, EncDotNet.S100.Navigation.RouteChartCell Cell, string FeatureId, string FeatureType, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves) { }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartAlert> Alerts { get; init; }
         public EncDotNet.S100.Navigation.RouteChartCell Cell { get; init; }
+        public int? Condition { get; init; }
         public System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves { get; init; }
         public bool DepthIsDefault { get; init; }
         public double? DepthMeters { get; init; }
@@ -599,6 +600,7 @@ namespace EncDotNet.S100.Navigation
         public string FeatureType { get; init; }
         public EncDotNet.S100.Navigation.RouteChartFeatureKind Kind { get; init; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Points { get; init; }
+        public int? ShorelineConstructionCategory { get; init; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces { get; init; }
         public int? WaterLevelEffect { get; init; }
     }
@@ -1217,6 +1219,7 @@ namespace EncDotNet.S100.Navigation
     {
         public SafetyContourFeatureDetails() { }
         public required string FeatureType { get; init; }
+        public bool IsBerth { get; init; }
         public bool IsStructure { get; init; }
     }
     public sealed class ShoalDetails : EncDotNet.S100.Navigation.RouteFindingDetails

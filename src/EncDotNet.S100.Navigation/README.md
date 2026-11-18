@@ -319,7 +319,7 @@ leg's limits with one half-width.
 | `route_check.overhead_on_route` | Check | A bridge, span, overhead cable or pipeline, or conveyor inside the limits (Info in the near band) |
 | `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert |
 | `route_check.safety_contour_in_corridor` | Check | Such areas reach inside the limits, but the track doesn't cross them |
-| `route_check.berth_structures` | Info | Pontoons, floating docks, shoreline constructions and other structures that raise `SafetyContour` within `RouteCheckSettings.BerthRadius` (default 100 m) of the departure or arrival, one finding per end |
+| `route_check.berth_structures` | Info | Berthing structures (pontoons, floating docks, piers, wharves; not breakwaters, ruined or submerged structures) that raise `SafetyContour` within `RouteCheckSettings.BerthRadius` (default 100 m) of the departure or arrival, one finding per end |
 | `route_check.soundings_below_safety_contour` | Check | Soundings inside the limits, in deeper areas, are no deeper than the safety contour (S-101 `SOUNDG03`) |
 | `route_check.crosses_s102_shoal` | MustReview | The track crosses S-102 cells shallower than the safety contour |
 | `route_check.s102_shoal_in_corridor` | Check | S-102 cells shallower than the safety contour inside the limits, off the track |

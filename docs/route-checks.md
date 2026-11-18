@@ -94,7 +94,7 @@ These checks run when the safety contour and safety depth are both set.
 |---|---|---|
 | `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
 | `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
-| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, one finding per end. |
+| `route_check.berth_structures` | Info | Berthing structures (pontoons, floating docks, piers, wharves) that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, one finding per end. |
 | `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
@@ -111,11 +111,21 @@ land) is titled for itself, "Crosses a structure" or "Structure inside the
 cross-track limits", with the safety contour alert as its reason.
 
 A route that starts or ends at a marina berth always touches its pontoons and
-piers, so structures within the berth radius of the departure or arrival
-waypoint are grouped into one Info finding per end, "Structures at the
-departure berth" or "Structures at the arrival berth", which lists them. The
-radius is a setting (`--berth-radius` in `s100 route check`,
+piers, so berthing structures within the berth radius of the departure or
+arrival waypoint are grouped into one Info finding per end, "Structures at
+the departure berth" or "Structures at the arrival berth", which lists them.
+The radius is a setting (`--berth-radius` in `s100 route check`,
 `berthRadiusMeters` in `check_route`); 0 turns the grouping off.
+
+A berthing structure is one a vessel lies against: a `Pontoon`, a
+`FloatingDock`, or a `ShorelineConstruction` whose
+`categoryOfShorelineConstruction` (S-57 `CATSLC`) is 4 pier (jetty), 5
+promenade pier, 6 wharf (quay), 11 landing steps, 14 fender, 15 solid face
+wharf or 16 open face wharf. A ruined structure (`condition` 2) or one that
+is always under water, covers and uncovers or is awash (`waterLevelEffect` 3,
+4 or 5) isn't one, and neither are breakwaters, moles, groynes, training
+walls, sea walls or a shoreline construction without a category. Those stay
+"Crosses a structure" (Must review) however close to the berth they are.
 
 Soundings follow the portrayal's `SOUNDG03`: a sounding counts when it's no
 deeper than the safety contour. The safety depth only decides how the chart

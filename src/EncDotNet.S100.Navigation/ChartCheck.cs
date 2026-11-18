@@ -919,10 +919,11 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 details,
                 group));
 
-        // #1548: the structures that raise the SafetyContour alert within
-        // the berth radius of the departure or the arrival become one INFO
-        // finding per end. A route that starts or ends at a berth always
-        // touches its pontoons and piers.
+        // #1548: the berthing structures (SafetyContourFeatureDetails.IsBerth)
+        // that raise the SafetyContour alert within the berth radius of the
+        // departure or the arrival become one INFO finding per end. A route
+        // that starts or ends at a berth always touches its pontoons and
+        // piers; a breakwater it crosses stays a MUST REVIEW crossing.
         public void GroupBerthStructures(GeoPosition departure, GeoPosition arrival, int lastLeg, double totalDistance, double radius)
         {
             if (!(radius > 0))
@@ -934,7 +935,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             var atArrival = new List<Entry>();
             _entries.RemoveAll(e =>
             {
-                if (e.Details is not SafetyContourFeatureDetails { IsStructure: true })
+                if (e.Details is not SafetyContourFeatureDetails { IsBerth: true })
                 {
                     return false;
                 }

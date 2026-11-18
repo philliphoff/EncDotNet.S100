@@ -88,7 +88,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         public double? NearbyMeters { get; init; }
 
         [CommandOption("--berth-radius <METERS>")]
-        [Description("How far from the departure and arrival, in metres, pontoons, floating docks and shoreline constructions count as the berth: one berth-structures finding (info) per end instead of crossings. Default 100; 0 turns it off.")]
+        [Description("How far from the departure and arrival, in metres, berthing structures (pontoons, floating docks, piers, wharves, landing steps, fenders; never breakwaters or ruined, submerged or awash structures) count as the berth: one berth-structures finding (info) per end instead of crossings. Default 100; 0 turns it off.")]
         public double? BerthRadiusMeters { get; init; }
 
         [CommandOption("--areas-off <KINDS>")]

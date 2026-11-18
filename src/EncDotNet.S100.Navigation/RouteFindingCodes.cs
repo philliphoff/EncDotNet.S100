@@ -93,8 +93,9 @@ public static class RouteFindingCodes
     public static RouteFindingCode SafetyContourInCorridor { get; } = new("route_check.safety_contour_in_corridor", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
     /// <summary>
-    /// The structures that raise the <c>SafetyContour</c> alert (pontoons,
-    /// floating docks, shoreline constructions and the like) within the
+    /// The berthing structures that raise the <c>SafetyContour</c> alert
+    /// (pontoons, floating docks, piers and wharves;
+    /// <see cref="SafetyContourFeatureDetails.IsBerth"/>) within the
     /// berth radius (<see cref="RouteCheckSettings.BerthRadius"/>) of the
     /// departure or arrival, in one finding per end (#1548). INFO: a route
     /// that starts or ends at a berth always touches them.

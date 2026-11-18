@@ -124,7 +124,8 @@ internal sealed partial class CatalogRouteChartSource : IRouteChartSource
                 }
 
                 IS100Feature geometry = feature;
-                var effect = kind == RouteChartFeatureKind.Danger ? ReadNumber(feature, WaterLevelEffectCodes) : null;
+                var effect = kind is RouteChartFeatureKind.Danger or RouteChartFeatureKind.Alerted ? ReadNumber(feature, WaterLevelEffectCodes) : null;
+                var alerted = kind == RouteChartFeatureKind.Alerted;
                 var (dangerDepth, depthIsDefault) = kind == RouteChartFeatureKind.Danger ? DangerDepth(feature, effect) : (null, false);
                 result.Add(new RouteChartFeature(
                     kind,
@@ -143,6 +144,8 @@ internal sealed partial class CatalogRouteChartSource : IRouteChartSource
                     },
                     WaterLevelEffect = effect is { } code ? (int)code : null,
                     DepthIsDefault = depthIsDefault,
+                    ShorelineConstructionCategory = alerted && ReadNumber(feature, ShorelineConstructionCategoryCodes) is { } category ? (int)category : null,
+                    Condition = alerted && ReadNumber(feature, ConditionCodes) is { } condition ? (int)condition : null,
                     Alerts = featureAlerts,
                 });
             }
@@ -201,6 +204,8 @@ internal sealed partial class CatalogRouteChartSource : IRouteChartSource
     private static readonly string[] ValueOfSoundingCodes = ["valueOfSounding", "VALSOU"];
     private static readonly string[] WaterLevelEffectCodes = ["waterLevelEffect", "WATLEV"];
     private static readonly string[] DefaultClearanceDepthCodes = ["defaultClearanceDepth"];
+    private static readonly string[] ShorelineConstructionCategoryCodes = ["categoryOfShorelineConstruction", "CATSLC"];
+    private static readonly string[] ConditionCodes = ["condition", "CONDTN"];
 
     private static RouteChartFeatureKind? Classify(Feature feature) => feature.GeometryType switch
     {

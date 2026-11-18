@@ -155,7 +155,7 @@ public sealed record RouteChartFeature(
     public double? DepthMeters { get; init; }
 
     /// <summary>
-    /// The S-101 <c>waterLevelEffect</c> code of a danger (1 partly
+    /// The S-101 <c>waterLevelEffect</c> code of a danger or a structure (1 partly
     /// submerged at high water, 2 always dry, 3 always under water, 4 covers
     /// and uncovers, 5 awash, 6 subject to inundation or flooding, 7
     /// floating), or <c>null</c> when it isn't given.
@@ -169,6 +169,21 @@ public sealed record RouteChartFeature(
     /// depth to show, such as -15 m for a floating obstruction.
     /// </summary>
     public bool DepthIsDefault { get; init; }
+
+    /// <summary>
+    /// The S-101 <c>categoryOfShorelineConstruction</c> code (S-57
+    /// <c>CATSLC</c>) of a shoreline construction, such as 1 breakwater or 4
+    /// pier (jetty), or <c>null</c> when it isn't given. Tells the
+    /// structures a vessel berths against from the ones that guard a harbour
+    /// (#1548).
+    /// </summary>
+    public int? ShorelineConstructionCategory { get; init; }
+
+    /// <summary>
+    /// The S-101 <c>condition</c> code (S-57 <c>CONDTN</c>) of a structure,
+    /// such as 2 ruined, or <c>null</c> when it isn't given.
+    /// </summary>
+    public int? Condition { get; init; }
 
     /// <summary>
     /// The alerts the feature's portrayal raises at the query's depths

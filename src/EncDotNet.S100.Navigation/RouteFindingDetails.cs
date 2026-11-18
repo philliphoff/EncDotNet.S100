@@ -344,6 +344,15 @@ public sealed class SafetyContourFeatureDetails : RouteFindingDetails
     /// or land. Its finding is titled for the structure, not for depth.
     /// </summary>
     public bool IsStructure { get; init; }
+
+    /// <summary>
+    /// <c>true</c> for a structure a vessel lies against at a berth (#1548):
+    /// a pontoon, a floating dock, or a pier, wharf, landing steps or fender
+    /// that isn't ruined, under water, covering and uncovering or awash. Only
+    /// these are grouped into <see cref="RouteFindingCodes.BerthStructures"/>
+    /// near the departure and arrival; a breakwater or mole never is.
+    /// </summary>
+    public bool IsBerth { get; init; }
 }
 
 /// <summary>Which end of a route a finding is at.</summary>
