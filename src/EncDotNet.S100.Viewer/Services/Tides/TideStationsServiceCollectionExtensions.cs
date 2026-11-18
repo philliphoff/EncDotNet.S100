@@ -45,9 +45,9 @@ internal static class TideStationsServiceCollectionExtensions
         // (TideFeeds, registered with the source registry); removing an entry
         // turns its source off.
         services.AddSingleton<Sources.ISourceHostExtension>(sp =>
-            new TideFeedHostExtension(TideFeeds.TideStationsId, sp.GetRequiredService<TideStationsOverlay>().Source));
+            new TideFeedHostExtension(TideFeeds.TideStationsId, () => sp.GetRequiredService<TideStationsOverlay>().Source));
         services.AddSingleton<Sources.ISourceHostExtension>(sp =>
-            new TideFeedHostExtension(TideFeeds.CurrentStationsId, sp.GetRequiredService<TideStationsOverlay>().Currents));
+            new TideFeedHostExtension(TideFeeds.CurrentStationsId, () => sp.GetRequiredService<TideStationsOverlay>().Currents));
 
         services.AddSingleton(sp => new TideStationCardFactory(
             sp.GetRequiredService<TideStationListService>(),

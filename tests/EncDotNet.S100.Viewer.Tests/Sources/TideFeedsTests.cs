@@ -41,7 +41,7 @@ public sealed class TideFeedsTests
         processor.Dispose();
         // The processor doesn't own the source; the host extension turns it off.
         Assert.True(overlay.Source.IsActive);
-        var extension = new TideFeedHostExtension(TideFeeds.TideStationsId, overlay.Source);
+        var extension = new TideFeedHostExtension(TideFeeds.TideStationsId, () => overlay.Source);
         extension.Attach(DatasetEntry.ForSource(registration), processor)!.Dispose();
         Assert.False(overlay.Source.IsActive);
     }

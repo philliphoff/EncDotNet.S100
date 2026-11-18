@@ -73,15 +73,19 @@ internal static class TideFeeds
 /// entry goes, since its processor doesn't own it (<see cref="TideFeeds"/>).
 /// </summary>
 /// <param name="sourceId">The registration id.</param>
-/// <param name="source">The source.</param>
-internal sealed class TideFeedHostExtension(string sourceId, EncDotNet.S100.DynamicSources.IPausableDynamicSource source) : ISourceHostExtension
+/// <param name="source">
+/// The source, resolved when an entry loads: the overlay depends on the
+/// loaded datasets, which depend on the source host, so it can't be built
+/// with the host.
+/// </param>
+internal sealed class TideFeedHostExtension(string sourceId, Func<EncDotNet.S100.DynamicSources.IPausableDynamicSource> source) : ISourceHostExtension
 {
     /// <inheritdoc />
     public string SourceId => sourceId;
 
     /// <inheritdoc />
     public IDisposable? Attach(DatasetEntry entry, IDatasetProcessor processor) =>
-        new Detach(source);
+        new Detach(source());
 
     private sealed class Detach(EncDotNet.S100.DynamicSources.IPausableDynamicSource source) : IDisposable
     {
