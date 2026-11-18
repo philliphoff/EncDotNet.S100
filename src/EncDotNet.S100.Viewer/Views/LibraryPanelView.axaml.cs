@@ -37,6 +37,42 @@ public partial class LibraryPanelView : UserControl
 
     private LibraryPanelViewModel? _viewModel;
 
+    /// <summary>
+    /// Lists the live feeds under the Add menu's Live feeds header (data source
+    /// design note D8). One already subscribed to is shown as added; choosing
+    /// it puts it back on the map.
+    /// </summary>
+    private void OnAddMenuOpening(object? sender, EventArgs e)
+    {
+        if (sender is not MenuFlyout flyout)
+            return;
+        var header = flyout.Items.OfType<MenuItem>()
+            .FirstOrDefault(i => Avalonia.Automation.AutomationProperties.GetAutomationId(i) == "Library.AddMenu.LiveFeeds");
+        if (header is null)
+            return;
+        var start = flyout.Items.IndexOf(header) + 1;
+        while (flyout.Items.Count > start)
+            flyout.Items.RemoveAt(start);
+        var feeds = App.Services.GetService(typeof(Services.Sources.LiveFeedLibrary)) as Services.Sources.LiveFeedLibrary;
+        if (feeds is null)
+            return;
+        var subscribed = feeds.Subscribed;
+        foreach (var registration in feeds.Offered)
+        {
+            var item = new MenuItem
+            {
+                Header = subscribed.Contains(registration.Id)
+                    ? string.Format(System.Globalization.CultureInfo.CurrentCulture, EncDotNet.S100.Viewer.Resources.Strings.Label_DataSourceAlreadyAddedFormat, registration.DisplayName)
+                    : registration.DisplayName,
+            };
+            ToolTip.SetTip(item, registration.Description);
+            Avalonia.Automation.AutomationProperties.SetAutomationId(item, "Library.AddMenu.LiveFeed." + registration.Id);
+            Avalonia.Automation.AutomationProperties.SetName(item, registration.DisplayName);
+            item.Click += (_, _) => feeds.Subscribe(registration);
+            flyout.Items.Add(item);
+        }
+    }
+
     /// <summary>Derives the SECOM tone tints (#883) from the live theme.</summary>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {

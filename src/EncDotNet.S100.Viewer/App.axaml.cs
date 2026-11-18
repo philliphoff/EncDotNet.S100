@@ -815,6 +815,7 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Weather.WeatherFeedIndexer>(),
+                    new EncDotNet.S100.Collections.Indexing.LiveFeedIndexer(),
                 ]);
         });
         services.AddSingleton(sp =>
@@ -1326,7 +1327,6 @@ public partial class App : Application
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService(
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.SourceRegistry>(),
-            sp.GetRequiredService<ViewerSettings>(),
             sp.GetService<IMapViewportNotifier>(),
             sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.Secrets.ISecretStore>(),
@@ -1334,6 +1334,17 @@ public partial class App : Application
             TimeProvider.System,
             // D8: a source's row status changes off the UI thread.
             UiThread.RunOrPost));
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.LiveFeedLibrary(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<ViewerSettings>(),
+            UiThread.RunOrPost,
+            name => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>()
+                .Create(EncDotNet.S100.Viewer.Resources.Strings.Toast_Info)
+                .WithSeverity(EncDotNet.S100.Viewer.Services.Notifications.NotificationSeverity.Info)
+                .WithContent(string.Format(System.Globalization.CultureInfo.CurrentCulture, EncDotNet.S100.Viewer.Resources.Strings.Toast_SourceRemovedFormat, name))
+                .Show()));
         services.AddSingleton<DatasetLoaderService>();
         services.AddSingleton<IDatasetLoaderService>(sp =>
             sp.GetRequiredService<DatasetLoaderService>());

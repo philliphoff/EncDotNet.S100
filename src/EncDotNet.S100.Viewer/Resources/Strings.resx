@@ -9035,7 +9035,7 @@
     <value>Vessels</value>
   </data>
   <data name="Toast_SourceRemovedFormat" xml:space="preserve">
-    <value>Removed {0}. It won't be added when SoundCharts starts; add it again with Add a live feed.</value>
+    <value>Removed {0} from the map until SoundCharts next starts. To stop it for good, unsubscribe from it in the Library.</value>
     <comment>{0} = the feed's name, e.g. "NDBC observations".</comment>
   </data>
   <data name="Button_AddLiveFeed" xml:space="preserve">
@@ -9053,5 +9053,13 @@
   <data name="Ais_KeyNeededFormat" xml:space="preserve">
     <value>AIS targets need an aisstream.io API key. Enter it in Settings › Vessels, or set the {0} environment variable.</value>
     <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="Library_LiveFeedsCollection" xml:space="preserve">
+    <value>Live feeds</value>
+    <comment>The name of the Library collection that holds the live feeds subscribed to.</comment>
+  </data>
+  <data name="Library_AddMenu_LiveFeeds" xml:space="preserve">
+    <value>Live feeds</value>
+    <comment>Library Add menu group header for live feeds (AIS, NDBC observations, ...).</comment>
   </data>
 </root>

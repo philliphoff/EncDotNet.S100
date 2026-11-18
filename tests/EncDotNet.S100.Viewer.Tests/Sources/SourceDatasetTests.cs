@@ -131,7 +131,7 @@ public sealed class SourceDatasetTests
     {
         var registry = new SourceRegistry();
         registry.Register(Registration());
-        using var service = new SourceDatasetService(registry, Settings(), new FakeNotifier { Current = Harbour });
+        using var service = new SourceDatasetService(registry, new FakeNotifier { Current = Harbour });
         var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
         var processor = (FakeHostedProcessor)service.CreateProcessor("test.feed", options: null);
 
@@ -154,7 +154,7 @@ public sealed class SourceDatasetTests
         registry.Register(Registration());
         var mine = new RecordingExtension("test.feed");
         var other = new RecordingExtension("other.feed");
-        using var service = new SourceDatasetService(registry, Settings(), extensions: [mine, other]);
+        using var service = new SourceDatasetService(registry, extensions: [mine, other]);
         var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
         var processor = service.CreateProcessor("test.feed", options: null);
 
@@ -204,7 +204,7 @@ public sealed class SourceDatasetTests
         var processor = new FakeHostedProcessor();
         var registry = new SourceRegistry();
         registry.Register(Registration() with { StaleAfter = TimeSpan.FromMinutes(5), Create = _ => processor, Group = SourceGroup.Observations });
-        using var service = new SourceDatasetService(registry, Settings(), new FakeNotifier { Current = Harbour }, timeProvider: time);
+        using var service = new SourceDatasetService(registry, new FakeNotifier { Current = Harbour }, timeProvider: time);
         var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
 
         service.Attach(entry, service.CreateProcessor("test.feed", options: null));
@@ -253,22 +253,6 @@ public sealed class SourceDatasetTests
 
         Assert.Same(source, datasets.Entries[0]);
         Assert.Same(file, datasets.Entries[1]);
-    }
-
-    [Fact]
-    public void Added_sources_are_saved_and_restored_in_order()
-    {
-        var settings = Settings();
-        using var service = new SourceDatasetService(SourceRegistry.Default, settings);
-
-        Assert.True(service.Remember(S100Sources.NdbcObservationsId));
-        Assert.False(service.Remember("NDBC.Realtime"));
-        settings.SourceDatasets.Add("acme.gone");
-
-        Assert.Equal([S100Sources.NdbcObservations], service.SavedRegistrations());
-
-        Assert.True(service.Forget(S100Sources.NdbcObservationsId));
-        Assert.Empty(service.SavedRegistrations());
     }
 
     [Theory]

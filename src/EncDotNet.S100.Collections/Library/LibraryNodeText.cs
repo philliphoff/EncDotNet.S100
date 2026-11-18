@@ -107,6 +107,7 @@ public static partial class LibraryNodeText
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
         SecomSource => "SECOM",
+        LiveFeedSource => "LIVE",
         S128CatalogueSource => "S-128",
         LocalManifestSource => "JSON",
         null => throw new ArgumentNullException(nameof(source)),
@@ -175,6 +176,7 @@ public static partial class LibraryNodeText
         S128CatalogueSource c => c.Path,
         LocalManifestSource m => m.Path,
         S100FeedSource f => LibraryTextFormat.MaskToken(f.FeedUri),
+        LiveFeedSource l => l.RegistrationId,
         _ => SourceUrl(source)?.AbsoluteUri ?? string.Empty,
     };
 
@@ -193,6 +195,7 @@ public static partial class LibraryNodeText
         S100ForecastFeedSource f => f.ModelsUri.Host,
         SecomSource s => s.ServiceUri.Host,
         WeatherFeedSource w => w.Service.ModelName ?? w.ServiceUri.Host,
+        LiveFeedSource l => l.RegistrationId,
         _ => source.GetType().Name,
     };
 

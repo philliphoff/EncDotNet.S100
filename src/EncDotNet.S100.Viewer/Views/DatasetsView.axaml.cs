@@ -17,7 +17,6 @@ public partial class DatasetsView : UserControl
         EmptyAddButton.Click += OnAddClick;
         ToolbarAddButton.Click += OnAddClick;
         SourcesAddButton.Click += OnAddClick;
-        ((MenuFlyout)ToolbarAddSourceButton.Flyout!).Opening += OnAddSourceFlyoutOpening;
         ((MenuFlyout)EmptyAddSourceButton.Flyout!).Opening += OnAddSourceFlyoutOpening;
     }
 
@@ -48,14 +47,8 @@ public partial class DatasetsView : UserControl
             ToolTip.SetTip(item, registration.Description);
             Avalonia.Automation.AutomationProperties.SetAutomationId(item, "Datasets.Toolbar.AddSource." + registration.Id);
             Avalonia.Automation.AutomationProperties.SetName(item, registration.DisplayName);
-            item.Click += (_, _) =>
-            {
-                if (vm.AddSource(registration) is { } entry)
-                {
-                    sources.Remember(registration.Id);
-                    vm.RequestLoad(entry);
-                }
-            };
+            // D8: subscribing puts it in the Library's Live feeds, which puts it on the map.
+            item.Click += (_, _) => App.Services.GetService<Services.Sources.LiveFeedLibrary>()?.Subscribe(registration);
             flyout.Items.Add(item);
         }
     }
