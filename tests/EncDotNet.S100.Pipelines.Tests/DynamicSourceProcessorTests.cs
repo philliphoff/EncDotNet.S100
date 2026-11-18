@@ -41,6 +41,27 @@ public sealed class DynamicSourceProcessorTests
     }
 
     [Fact]
+    public void A_vessel_gets_a_vessel_section_instead_of_motion_rows()
+    {
+        var source = new TrackerSource();
+        source.Publish(Point("ais:366000001", 42, -70, new Dictionary<string, object?> { ["mmsi"] = 366000001u, ["vesselName"] = "SEA STAR " }) with
+        {
+            Motion = new DynamicMotion { SpeedOverGround = Speed.FromKnots(11.5) },
+            VesselGeometry = new DynamicVesselGeometry { LengthMetres = 180, BeamMetres = 30, BowOffsetMetres = 150, PortOffsetMetres = 15 },
+        });
+        using var processor = new DynamicSourceProcessor(source, new StubPortrayal(), Spec);
+
+        var info = processor.GetFeatureInfo("ais:366000001")!;
+
+        var vessel = Assert.IsType<VesselSection>(Assert.Single(info.Sections));
+        Assert.Equal("366000001", vessel.Mmsi);
+        Assert.Equal("SEA STAR", vessel.Name);
+        Assert.Equal(11.5, vessel.SpeedOverGroundKnots);
+        Assert.Equal(180, vessel.LengthMetres);
+        Assert.DoesNotContain(info.Attributes, a => a.Code == "speedOverGround");
+    }
+
+    [Fact]
     public void An_empty_source_has_no_extent_and_no_features()
     {
         using var processor = new DynamicSourceProcessor(new TrackerSource(), new StubPortrayal(), Spec);

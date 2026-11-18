@@ -772,6 +772,18 @@ action registered by the own-ship feature, which applies to features that
 carry an MMSI, replacing `TryGetAisMmsi` in `PickReportViewModel`. "Open
 warning" and "Show time series" can follow.
 
+As built (slice 10, part 1): `PickAction` and `PickActionRegistry` are in
+Core, with a process-wide `PickActionRegistry.Default` the host fills at
+start-up; `ActionsFor(PickContext)` skips an action whose test throws.
+`PickContext.For(info, processor)` builds the context contributors and
+actions share, and the context now carries the feature's `Sections`.
+SoundCharts' `PickService` gives each `PickHit` its `Actions`, the pick
+report shows them as buttons (`PickReport.Action.<id>`) and raises
+`PickActionRequested`, and `TakeHelmPickAction` (`own-ship.take-helm`)
+applies to a pick with a `VesselSection` that has an MMSI. AIS is still an
+overlay, so its card keeps its own "Take helm" button until 7c moves AIS to
+the dataset path.
+
 #### P5. Live hits join the same pipeline
 
 Once live sources are processors (§D2), `DynamicPickHit` merges into
@@ -781,6 +793,12 @@ Once live sources are processors (§D2), `DynamicPickHit` merges into
 title becomes the feature type name and its properties become rows. The
 default rows built from `Motion` and `VesselGeometry` become a built-in
 `vessel` section.
+
+As built: `VesselSection` (`vessel`) holds the name, MMSI, course and speed
+over ground, heading, length and beam, and is registered for MCP.
+`DynamicSourceProcessor` gives it to a feature that is a vessel (one with a
+hull or an MMSI), with or without a describer, and then leaves motion out of
+the rows. The merge of `DynamicPickHit` into `PickHit` comes with 7c.
 
 #### P6. Section kinds are registered
 
@@ -938,7 +956,7 @@ Each slice ships on its own and leaves the tree working.
    in Datasets. The AIS key and zoom threshold leave Settings › Vessels,
    NMEA weather's input leaves the environment variable, and the Datasets
    plug button goes. Needs 7b; best after 7c, so AIS moves once.
-10. **Pick actions.** Move "Take helm" to a contributed action, make the
+10. **Pick actions.** Part 1 is built (P4, P5 as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and
     merge `DynamicPickHit` into `PickHit`. Ships with 7c (decided
     2026-11-18).

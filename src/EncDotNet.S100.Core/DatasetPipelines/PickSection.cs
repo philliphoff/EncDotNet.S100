@@ -170,6 +170,59 @@ public sealed record NavigationalWarningSection(NavigationalWarningInfo Warning)
 }
 
 /// <summary>
+/// A picked vessel's identity, motion and size, from any live source that
+/// knows them, such as an AIS target or own-ship (data source design note
+/// P5). Hosts offer vessel actions, such as "Take helm", for a section with
+/// an <see cref="Mmsi"/>.
+/// </summary>
+/// <param name="Name">The vessel's name, or <see langword="null"/>.</param>
+/// <param name="Mmsi">Its MMSI, or <see langword="null"/>.</param>
+/// <param name="CourseOverGroundDegrees">Course over ground, degrees true.</param>
+/// <param name="HeadingDegrees">Heading, degrees true.</param>
+/// <param name="SpeedOverGroundKnots">Speed over ground, knots.</param>
+/// <param name="LengthMetres">Length overall, metres.</param>
+/// <param name="BeamMetres">Beam, metres.</param>
+public sealed record VesselSection(
+    string? Name,
+    string? Mmsi,
+    double? CourseOverGroundDegrees,
+    double? HeadingDegrees,
+    double? SpeedOverGroundKnots,
+    double? LengthMetres,
+    double? BeamMetres) : PickSection
+{
+    /// <summary>The kind of a <see cref="VesselSection"/>.</summary>
+    public const string KindName = "vessel";
+
+    /// <inheritdoc />
+    [JsonIgnore]
+    public override string Kind => KindName;
+
+    /// <inheritdoc />
+    public override IReadOnlyList<PickAttribute> ToRows()
+    {
+        var rows = new List<PickAttribute>();
+        Add("vesselName", "Name", Name);
+        Add("mmsi", "MMSI", Mmsi);
+        Add("courseOverGround", "Course over ground", Format(CourseOverGroundDegrees, "{0:0.#}°"));
+        Add("heading", "Heading", Format(HeadingDegrees, "{0:0.#}°"));
+        Add("speedOverGround", "Speed over ground", Format(SpeedOverGroundKnots, "{0:0.#} kn"));
+        Add("length", "Length", Format(LengthMetres, "{0:0.#} m"));
+        Add("beam", "Beam", Format(BeamMetres, "{0:0.#} m"));
+        return rows;
+
+        void Add(string code, string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                rows.Add(new PickAttribute { Code = code, Name = name, RawValue = value });
+        }
+
+        static string? Format(double? value, string format) =>
+            value is { } v ? string.Format(CultureInfo.InvariantCulture, format, v) : null;
+    }
+}
+
+/// <summary>
 /// A registered <see cref="PickSection"/> kind: its name, its section type, a
 /// one-line description, and the JSON metadata MCP serializes it with.
 /// </summary>
@@ -219,6 +272,10 @@ public sealed class PickSectionKindRegistry
             StationSeriesSection.KindName,
             PickSectionJsonContext.Default.StationSeriesSection,
             "A fixed station's full time series: its time steps and each channel's values (water level height, or surface current speed and direction)."));
+        registry.Register(new PickSectionKind(
+            VesselSection.KindName,
+            PickSectionJsonContext.Default.VesselSection,
+            "A vessel's name, MMSI, course and speed over ground, heading, length and beam, from AIS or own-ship."));
         registry.Register(new PickSectionKind(
             NavigationalWarningSection.KindName,
             PickSectionJsonContext.Default.NavigationalWarningSection,
@@ -271,4 +328,5 @@ public sealed class PickSectionKindRegistry
 [JsonSerializable(typeof(IceEggCodeSection))]
 [JsonSerializable(typeof(StationSeriesSection))]
 [JsonSerializable(typeof(NavigationalWarningSection))]
+[JsonSerializable(typeof(VesselSection))]
 internal sealed partial class PickSectionJsonContext : JsonSerializerContext;

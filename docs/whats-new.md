@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Pick actions and a vessel section.** A host can offer actions on a
+  picked feature, such as "Take helm", through `PickActionRegistry`; each
+  `PickAction` decides from the pick's `PickContext`, which now carries the
+  feature's sections. A live source's vessel features get a `VesselSection`
+  (name, MMSI, course, speed, heading, length and beam), which MCP's
+  `identify_features` and `describe_feature` include. SoundCharts shows a
+  pick's actions as buttons, and offers "Take helm" on any picked vessel
+  with an MMSI.
 - **Live feed rows say what they're doing.** In the Datasets panel, a live
   feed such as NDBC observations shows its status instead of a product
   name: waiting for zoom, paused while hidden, live with the time of its
