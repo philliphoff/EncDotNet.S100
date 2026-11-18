@@ -286,6 +286,41 @@ public class AreaCheckTests
     }
 
     [Fact]
+    public void A_coarse_area_is_cut_where_finer_cells_chart_the_track()
+    {
+        // #1543: the coarse cell's area spans 0,002°–0,009° E; a fine cell
+        // covers 0,004°–0,006° E partway along the leg, so the coarse area
+        // counts before and after the fine cell only, with a finding each.
+        var fine = new FakeCell("101FINE", 22_000, p => p.Longitude is >= 0.004 and <= 0.006);
+        var coarse = new FakeCell("101COARSE", 350_000);
+        var area = Area(RouteAreaKind.CautionArea, 0.002, 0.009) with { Cell = coarse, Feature = new RouteFindingFeature("101COARSE", "1") };
+
+        var result = Checks.Areas(new FakeAreas([area], [fine, coarse]), new PassagePlan([East]), AtDeparture);
+
+        Assert.Equal(2, result.Findings.Count);
+        Assert.Equal(2, result.Detail!.Matches.Count);
+        Assert.All(result.Detail.Matches, m => Assert.Equal(RouteAreaRelation.Enters, m.Relation));
+        Assert.Equal(result.Detail.Matches.Select(m => m.Finding), result.Findings);
+        Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct().Count());
+
+        var (before, after) = (result.Detail.Matches[0], result.Detail.Matches[1]);
+        Assert.Equal(0.002 * E, before.StartDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.004 * E, before.EndDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.006 * E, after.StartDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.009 * E, after.EndDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.006 * E, after.Finding!.Location!.StartDistanceMeters, tolerance: 2.0);
+
+        // Where the fine cell covers the track from partway on, the coarse
+        // area ends where the fine coverage starts.
+        var fromMidway = new FakeCell("101FINE", 22_000, p => p.Longitude >= 0.005);
+        var trimmed = Checks.Areas(new FakeAreas([area], [fromMidway, coarse]), new PassagePlan([East]), AtDeparture);
+        var match = Assert.Single(trimmed.Detail!.Matches);
+        Assert.Single(trimmed.Findings);
+        Assert.Equal(0.002 * E, match.StartDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.005 * E, match.EndDistanceMeters, tolerance: 2.0);
+    }
+
+    [Fact]
     public void A_source_is_queried_per_leg_and_areas_are_counted_once()
     {
         var area = Area(RouteAreaKind.CautionArea, 0.004, 0.006);
