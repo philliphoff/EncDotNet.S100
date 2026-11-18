@@ -524,9 +524,9 @@ to go.
 
 | Code | Group | When |
 | --- | --- | --- |
-| `route_check.enters_prohibited_area` | MustReview | The track enters an S-101 area whose `restriction` is entry prohibited (7) or entry restricted (8) |
+| `route_check.enters_prohibited_area` | MustReview | The track enters an S-101 area whose `restriction` is entry prohibited (7) |
 | `route_check.prohibited_area_in_corridor` | Check | Such an area reaches inside the limits, but the track doesn't enter it |
-| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area, offshore production or seaplane landing area or marine farm; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like); MustReview when the track enters an area to be avoided |
+| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area (entry restricted (8) is Check, since it often applies only to some vessels), offshore production or seaplane landing area or marine farm; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like); MustReview when the track enters an area to be avoided |
 | `route_check.caution_area` | Check | A `CautionArea` |
 | `route_check.traffic_area` | Check or Info | A precautionary area or submarine transit lane; Info for an inshore traffic zone; MustReview when the track enters a traffic separation zone |
 | `route_check.anchorage_area` | Check | An `AnchorageArea` |

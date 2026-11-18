@@ -467,7 +467,7 @@ public class RouteFindingFormatter
 
     // ---- Area findings ----
 
-    /// <summary>Title when the track enters an area where entry is prohibited or restricted ({0}: the area's name or kind).</summary>
+    /// <summary>Title when the track enters an area where entry is prohibited ({0}: the area's name or kind).</summary>
     protected virtual string AreaEntersFormat => "Enters {0}";
 
     /// <summary>Title when the track crosses any other area ({0}: the area's name or kind).</summary>

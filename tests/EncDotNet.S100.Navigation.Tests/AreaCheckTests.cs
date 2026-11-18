@@ -48,6 +48,12 @@ public class AreaCheckTests
             plan ?? new PassagePlan([EastPassage], Departure),
             Fixture.Settings(at ?? Departure));
 
+    // The verdict of the area check's findings over East.
+    private static RouteCheckVerdict Verdict(params RouteArea[] areas) =>
+        RouteCheckVerdict.From(
+            RouteFinding.Sort(Checks.Areas(new FakeAreas(areas, null), new PassagePlan([EastPassage], Departure), AtDeparture).Findings),
+            null);
+
     [Theory]
     // #1127: entering a traffic separation zone or an area to be avoided is a
     // decision to make; only reaching into the corridor is worth checking.
@@ -121,8 +127,39 @@ public class AreaCheckTests
         Assert.Equal("route_check.enters_prohibited_area.101TEST/RestrictedArea.0.004", finding.Id);
     }
 
+    [Fact]
+    public void Entering_an_entry_restricted_area_is_checked_not_must_review()
+    {
+        // #1546: NOAA charts large-vessel Regulated Navigation Areas (33 CFR
+        // 165.1301) cell-wide as entry restricted; they mustn't drive a small
+        // boat's verdict or headline.
+        var result = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, restrictions: [8], name: "Regulated Navigation Area"));
+
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), (finding.Code, finding.Group));
+        Assert.Equal("Crosses Regulated Navigation Area", finding.Title);
+        Assert.StartsWith("Leg 1 → 2 · S-101 restricted area · entry restricted · ", finding.Meta, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Only_entry_prohibited_drives_the_verdict_and_headline()
+    {
+        var restricted = Area(RouteAreaKind.RestrictedArea, 0.002, 0.003, restrictions: [8], name: "Regulated Navigation Area");
+        var prohibited = Area(RouteAreaKind.RestrictedArea, 0.005, 0.006, restrictions: [7], name: "Naval Restricted Area");
+
+        var restrictedOnly = Verdict(restricted);
+        var both = Verdict(restricted, prohibited);
+
+        Assert.Equal(RouteCheckVerdictKind.Check, restrictedOnly.Kind);
+        Assert.Equal("Crosses Regulated Navigation Area", restrictedOnly.Headline!.Title);
+        Assert.Equal(RouteCheckVerdictKind.MustReview, both.Kind);
+        Assert.Equal("Enters Naval Restricted Area", both.Headline!.Title);
+    }
+
     [Theory]
-    [InlineData(new[] { 8 }, RouteFindingGroup.MustReview)]
+    [InlineData(new[] { 7 }, RouteFindingGroup.MustReview)]
+    [InlineData(new[] { 8 }, RouteFindingGroup.Check)]
+    [InlineData(new[] { 7, 8 }, RouteFindingGroup.MustReview)]
     [InlineData(new[] { 27 }, RouteFindingGroup.Check)]
     [InlineData(new int[0], RouteFindingGroup.Check)]
     [InlineData(new[] { 1, 3 }, RouteFindingGroup.Info)]
