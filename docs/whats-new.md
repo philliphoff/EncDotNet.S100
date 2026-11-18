@@ -22,6 +22,13 @@ month. For package versions and release assets, see
   `identify_features` and `describe_feature` include. SoundCharts shows a
   pick's actions as buttons, and offers "Take helm" on any picked vessel
   with an MMSI.
+- **Tide and current stations are live feeds.** **Tide stations ·
+  predicted** and **Current stations · predicted** move from their Layer
+  stack rows to the Library's **Live feeds**, and show as Datasets rows
+  under **Predictions**; a row that was on is subscribed for you. Picking a
+  station still shows its card with the predicted curve. MCP's
+  `set_tide_display` subscribes and unsubscribes them. For developers, a
+  `DynamicFeatureDescription` can now carry pick `Sections`.
 - **Live feed settings in the Library.** Select a live feed in the Library's
   **Live feeds** collection to set it up: the aisstream.io key and zoom
   threshold for AIS targets (moved from Settings › Vessels, with a key you'd
