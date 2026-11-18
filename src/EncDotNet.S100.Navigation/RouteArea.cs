@@ -154,7 +154,10 @@ public enum RouteAreaRelation
     Off,
 }
 
-/// <summary>One area against the route, found or not.</summary>
+/// <summary>
+/// One area against the route, found or not; or one stretch of it, when a
+/// finer cell charts the place between its stretches.
+/// </summary>
 /// <param name="Area">The area.</param>
 /// <param name="Relation">How it relates to the route.</param>
 /// <param name="LegIndex">The leg where the route first meets it, or <c>null</c> when off.</param>
@@ -172,7 +175,11 @@ public sealed record RouteAreaMatch(
     RouteFinding? Finding);
 
 /// <summary>What <see cref="AreaCheck"/> found besides its findings: every area near the route.</summary>
-/// <param name="Matches">One entry per area near the route, in force or not, in the order the source gave them.</param>
+/// <param name="Matches">
+/// One entry per area near the route, in force or not, in the order the source
+/// gave them; an area counted on several stretches of the track, between
+/// stretches a finer cell charts, has one entry per stretch, in route order.
+/// </param>
 public sealed record AreaCheckResult(IReadOnlyList<RouteAreaMatch> Matches);
 
 /// <summary>Tuning for <see cref="AreaCheck"/>.</summary>
