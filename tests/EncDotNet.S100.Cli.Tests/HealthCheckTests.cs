@@ -107,7 +107,11 @@ public sealed class HealthCheckTests : IDisposable
             port = ((IPEndPoint)listener.LocalEndpoint).Port;
         }
 
-        var (healthy, message) = await HealthCommand.ProbeAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5), ct);
+        // A refused connection comes back at once on Linux and macOS, but on
+        // Windows a connect to a closed loopback port is retried for a few
+        // seconds before it is refused. A generous timeout keeps a loaded
+        // runner from reporting "didn't answer" before the refusal arrives.
+        var (healthy, message) = await HealthCommand.ProbeAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(30), ct);
 
         Assert.False(healthy);
         Assert.Equal($"Unhealthy: nothing is listening at http://127.0.0.1:{port}/healthz.", message);
