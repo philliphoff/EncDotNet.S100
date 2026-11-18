@@ -23,6 +23,8 @@ internal static partial class Strings
     public static string Clearance_Gap_WaterLevelPredicted => Get(nameof(Clearance_Gap_WaterLevelPredicted));
     public static string Check_ConfidencePredictedFormat => Get(nameof(Check_ConfidencePredictedFormat));
     public static string Check_WindowCaveatPredicted => Get(nameof(Check_WindowCaveatPredicted));
+    public static string Check_WindowCaveatLowestLow => Get(nameof(Check_WindowCaveatLowestLow));
+    public static string Check_WindowCaveatChartDatum => Get(nameof(Check_WindowCaveatChartDatum));
     public static string Findings_WaterLevelPredictedFormat => Get(nameof(Findings_WaterLevelPredictedFormat));
     public static string Findings_TightOnPredictedFormat => Get(nameof(Findings_TightOnPredictedFormat));
     public static string Findings_PredictedStationsFormat => Get(nameof(Findings_PredictedStationsFormat));

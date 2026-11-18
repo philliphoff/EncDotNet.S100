@@ -705,7 +705,12 @@ How it samples and classifies:
 - **Confidence** is reported separately from the state, as a list of
   reasons: `charted_depth_from_s101`, `datum_unconfirmed` and
   `water_level_predicted`, or an empty
-  list at full confidence. A sample on S-101 depth that meets the required
+  list at full confidence. A swept departure can also carry
+  `water_level_from_lowest_low`: no water level covers part of the route,
+  and the charted depth meets the setting there at the lowest water level
+  applied on the route during that departure's passage, capped at 0 m.
+  `water_level_at_chart_datum` is the same with no water level applied
+  during the passage, so the gap was judged at 0 m. A sample on S-101 depth that meets the required
   UKC is `meets_settings` with `confidence: ["charted_depth_from_s101"]`.
   SoundCharts draws it in the band's colour, dashed. The result, `minimum`,
   each leg, each sample and each swept departure has a `confidence` list.

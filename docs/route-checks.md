@@ -263,6 +263,8 @@ settings and still be lower confidence. The reasons are:
 | `charted_depth_from_s101` | The depth is from S-101 because no S-102 covers the stretch. |
 | `datum_unconfirmed` | The depth or water-level datum isn't declared, or isn't an S-100 code, so they can't be confirmed to share a reference. The water level is applied anyway. |
 | `water_level_predicted` | The water level is a harmonic tide prediction, not S-104: the astronomical tide only. Wind, pressure and river flow can move the real water level 0.5 m or more. |
+| `water_level_from_lowest_low` | Departure options only. No water level covers part of the route. The departure is judged there with the lowest water level applied anywhere on the route during its passage, capped at chart datum (0 m), and the charted depth at that level meets your settings, so the departure isn't failed for the gap. Where it doesn't meet them, the departure still has no data there and doesn't meet your settings. |
+| `water_level_at_chart_datum` | As `water_level_from_lowest_low`, but no water level was applied anywhere on the route during the passage, so the gap was judged at chart datum (0 m). The real low may be below datum. |
 
 SoundCharts draws a lower-confidence stretch in its state's colour, dashed.
 The verdict follows the clearance; the confidence reasons qualify it and
