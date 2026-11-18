@@ -113,6 +113,26 @@ internal interface ITileSource
     ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Whether <see cref="ReadAsync(int, int, int, string?, DateTime?, int, CancellationToken)"/>
+    /// draws tiles at <paramref name="pixelRatio"/> image pixels per tile
+    /// pixel (issue #1563): 1 for 256-pixel tiles, 2 for 512-pixel ("@2x")
+    /// tiles of the same grid. Only tiles rendered here can; a built tile set
+    /// has the one size it was built at.
+    /// </summary>
+    bool CanReadPixelRatio(int pixelRatio) => false;
+
+    /// <summary>
+    /// The tile <see cref="ReadAsync(int, int, int, string?, DateTime?, CancellationToken)"/>
+    /// reads, drawn at <paramref name="pixelRatio"/> image pixels per tile
+    /// pixel whatever the source's own tile size: a <c>256 × pixelRatio</c>
+    /// pixel image with symbols, text and line widths scaled to match.
+    /// <see langword="null"/> when there is no tile there, or the source can't
+    /// draw at that ratio (<see cref="CanReadPixelRatio"/>).
+    /// </summary>
+    ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<byte[]?>(null);
+
+    /// <summary>
     /// Whether <see cref="RenderViewAsync"/> draws any box directly from the
     /// datasets (issue #1500, WMS GetMap at a print DPI); a built tile set can't.
     /// </summary>

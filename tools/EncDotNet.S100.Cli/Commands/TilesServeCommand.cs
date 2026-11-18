@@ -213,7 +213,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
             if (settings.ReadyJson)
             {
                 // Written directly, not through the console renderer, so it's never wrapped (issue #1496).
-                Console.Out.WriteLine(ServeReadyLine.Format(address, server.Port, token, source.Format, viewer: !settings.NoViewer));
+                Console.Out.WriteLine(ServeReadyLine.Format(address, server.Port, token, source.Format, viewer: !settings.NoViewer, highDpi: source.CanReadPixelRatio(2)));
                 Console.Out.Flush();
             }
 
@@ -223,6 +223,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
             foreach (var baseUri in ServeHost.DisplayAddresses(address).Select(a => ServeHost.BaseUri(a, server.Port, token)))
             {
                 AnsiConsole.MarkupLine($"  Tiles:    [link]{Markup.Escape(TileServer.TileUrlTemplate(baseUri, source.Format))}[/]");
+                if (source.CanReadPixelRatio(2))
+                    AnsiConsole.MarkupLine($"  High-DPI: [link]{Markup.Escape(TileServer.TileUrlTemplate(baseUri, source.Format, highDpi: true))}[/] (512-pixel tiles)");
                 AnsiConsole.MarkupLine($"  TileJSON: [link]{Markup.Escape(new Uri(baseUri, XyzDirectoryTileSink.TileJsonFileName).AbsoluteUri)}[/]");
                 if (source.Palettes.Count > 0)
                 {

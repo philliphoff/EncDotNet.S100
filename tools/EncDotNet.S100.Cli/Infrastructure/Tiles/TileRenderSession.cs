@@ -21,6 +21,24 @@ internal readonly record struct TileArea(double MinX, double MinY, double MaxX, 
 /// </summary>
 internal sealed record TileLayout(TileArea Area, double ReferenceLatitude, int MinZoom, int MaxZoom, ChartTileOptions TileOptions)
 {
+    /// <summary>
+    /// This layout with tiles drawn at <paramref name="pixelRatio"/> image
+    /// pixels per tile pixel (2 for 512-pixel "@2x" tiles of the same grid);
+    /// this layout itself when it already draws at that ratio.
+    /// </summary>
+    public TileLayout AtPixelRatio(int pixelRatio) =>
+        pixelRatio == TileOptions.PixelRatio
+            ? this
+            : this with
+            {
+                TileOptions = new ChartTileOptions
+                {
+                    PixelRatio = pixelRatio,
+                    ReferenceLatitude = TileOptions.ReferenceLatitude,
+                    Background = TileOptions.Background,
+                },
+            };
+
     /// <summary>The WGS-84 bounds of the area, the full longitude range when it wraps the antimeridian.</summary>
     public (double West, double South, double East, double North) Bounds
     {
@@ -1146,7 +1164,8 @@ internal sealed class TileScene
     private readonly ChartCompositeOptions _options;
     private readonly Func<IDatasetProcessor, Viewport?, RenderContext> _contextFor;
     private readonly Lock _portrayGate;
-    private readonly ConcurrentDictionary<int, Lazy<ChartTileRenderer>> _renderers = new();
+    private readonly ConcurrentDictionary<int, Lazy<ChartComposition>> _zoomScenes = new();
+    private readonly ConcurrentDictionary<(int Zoom, int PixelRatio), Lazy<ChartTileRenderer>> _renderers = new();
 
     internal TileScene(
         IReadOnlyList<IDatasetProcessor> processors,
@@ -1195,14 +1214,23 @@ internal sealed class TileScene
     }
 
     /// <summary>
-    /// The renderer for <paramref name="zoom"/>, created once per zoom level.
-    /// Coverage portrayal for the level runs on the work scheduler, so call
-    /// this from outside a scheduler job.
+    /// The renderer for <paramref name="zoom"/> at the pixel ratio of
+    /// <paramref name="layout"/>'s tile options, created once per zoom level
+    /// and pixel ratio. Coverage portrayal for the level runs on the work
+    /// scheduler, so call this from outside a scheduler job; it is shared by
+    /// the pixel ratios, as it depends on the zoom level alone.
     /// </summary>
     public ChartTileRenderer RendererFor(int zoom, TileLayout layout) =>
-        _renderers.GetOrAdd(zoom, z => new Lazy<ChartTileRenderer>(() => new ChartTileRenderer(
-            _hasCoverage ? _compositor.PrepareAsync(PortrayCoverageForZoom(layout, z), _options).GetAwaiter().GetResult() : Scene,
+        _renderers.GetOrAdd((zoom, layout.TileOptions.PixelRatio), _ => new Lazy<ChartTileRenderer>(() => new ChartTileRenderer(
+            SceneFor(zoom, layout),
             layout.TileOptions))).Value;
+
+    /// <summary>The composite drawn at <paramref name="zoom"/>: coverage portrayed again for the level, or the full-extent scene.</summary>
+    private ChartComposition SceneFor(int zoom, TileLayout layout) =>
+        !_hasCoverage
+            ? Scene
+            : _zoomScenes.GetOrAdd(zoom, z => new Lazy<ChartComposition>(() =>
+                _compositor.PrepareAsync(PortrayCoverageForZoom(layout, z), _options).GetAwaiter().GetResult())).Value;
 
     /// <summary>
     /// Re-portrays each coverage input for one zoom level, against a viewport

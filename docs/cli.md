@@ -739,7 +739,9 @@ palettes are served too, under their own URLs.
 The server has these routes:
 
 - `{z}/{x}/{y}.png` (or `.jpg`, `.webp`), the tiles. Rows are numbered from
-  the north for every container, MBTiles included. Each tile has an `ETag` so
+  the north for every container, MBTiles included. When rendering datasets,
+  `{z}/{x}/{y}@2x.png` is the same tile at 512 pixels, for high-DPI screens;
+  see [High-DPI tiles](#high-dpi-tiles). Each tile has an `ETag` so
   browsers can revalidate it. A tile with nothing on it, or outside the tile
   set, answers `204 No Content`, which web maps show as empty.
 - `tiles.json`, a [TileJSON](https://github.com/mapbox/tilejson-spec) document
@@ -853,6 +855,70 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 
 In Leaflet, use the tile URL:
 `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
+
+### High-DPI tiles
+
+On a high-DPI display, such as one scaled 2x, a map that stretches 256-pixel
+tiles shows soft text and lines. When it renders datasets, `tiles serve` also
+serves 512-pixel tiles of the same 256-pixel grid: each covers the same area
+at the same zoom as the 256-pixel tile, with symbols, text and line widths
+drawn at twice the pixel density, as
+[`tiles export --tile-size 512`](#tiles-export-options) writes them. They
+aren't 256-pixel tiles enlarged.
+
+Ask for them by adding `@2x` to the row in any tile URL, for example
+`{z}/{x}/{y}@2x.png`, `night/{z}/{x}/{y}@2x.png` or
+`layers/{layer}/{z}/{x}/{y}@2x.png`. So one server answers both 1x and 2x
+clients:
+
+- **TileJSON:** add `scale=2` to a TileJSON URL, as in
+  `tiles.json?scale=2`, for a document whose tile URL has `@2x` and whose
+  `tileSize` is `512`. The TileJSON lists the pixel ratios served in
+  `s100.pixelRatios`, `[1, 2]`.
+- **MapLibre GL JS:** use the `scale=2` TileJSON on a high-DPI screen, and
+  declare `tileSize: 256` for the source either way, so each tile fills 256
+  CSS pixels and the screen's extra pixels show the detail:
+
+  ```js
+  const scale = window.devicePixelRatio > 1 ? "?scale=2" : "";
+  map.addSource("chart", {
+    type: "raster",
+    url: "http://127.0.0.1:8200/tiles.json" + scale,
+    tileSize: 256,
+  });
+  ```
+
+  The preview page does this.
+- **Leaflet:** put `{r}` after the row in the tile URL. Leaflet replaces it
+  with `@2x` on a high-DPI screen and with nothing otherwise:
+  `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}{r}.png")`. Don't also pass
+  `detectRetina`, which asks for the next zoom's tiles instead.
+
+`--tile-size 512` makes the 512-pixel tiles the plain `{z}/{x}/{y}` tiles, for
+a client that can't ask for `@2x`, such as one that uses WMTS:
+
+```bash
+s100 tiles serve exchange-set/ --tile-size 512 --cache-dir ~/.cache/s100-tiles
+```
+
+- **WMTS:** the `WebMercatorQuad` matrices have 512-pixel tiles at half the
+  scale denominator of each zoom, for every layer and style. They're no
+  longer the well-known `GoogleMapsCompatible` scale set, so a client that
+  matches tiles by scale shows each zoom's tiles at their own scale. WMTS
+  has no `@2x` tiles; its tile size is the `--tile-size`.
+- **XYZ and TileJSON:** the TileJSON says `tileSize: 512`. Declare
+  `tileSize: 256` for the source in the web map, as above. `@2x` serves the
+  same tiles.
+
+WMS GetMap needs neither: it draws at the resolution a client asks for with
+`DPI`, `MAP_RESOLUTION` or `FORMAT_OPTIONS=dpi:N`.
+
+A 512-pixel tile takes four times the pixels, so it takes more of `--cache-mb`
+and `--cache-dir-mb`, and a `--metatile` block of them takes four times the
+memory while it renders. `@2x` tiles are cached apart from the tiles of the
+served size, and tiles cached in `--cache-dir` with one `--tile-size` aren't
+reused with the other. A built tile set has the one size it was built at, so
+`tiles serve` answers `404 Not Found` for its `@2x` tiles.
 
 ### Mariner settings
 
@@ -997,7 +1063,7 @@ server is listening, `tiles serve` then prints one line of JSON on standard
 output, before the usual start-up text:
 
 ```json
-{"event":"ready","host":"127.0.0.1","port":49731,"token":null,"baseUrl":"http://127.0.0.1:49731/","tiles":"http://127.0.0.1:49731/{z}/{x}/{y}.png","tileJson":"http://127.0.0.1:49731/tiles.json","wmts":"http://127.0.0.1:49731/wmts/1.0.0/WMTSCapabilities.xml","wms":"http://127.0.0.1:49731/wms","healthz":"http://127.0.0.1:49731/healthz","preview":"http://127.0.0.1:49731/"}
+{"event":"ready","host":"127.0.0.1","port":49731,"token":null,"baseUrl":"http://127.0.0.1:49731/","tiles":"http://127.0.0.1:49731/{z}/{x}/{y}.png","tilesHighDpi":"http://127.0.0.1:49731/{z}/{x}/{y}@2x.png","tileJson":"http://127.0.0.1:49731/tiles.json","wmts":"http://127.0.0.1:49731/wmts/1.0.0/WMTSCapabilities.xml","wms":"http://127.0.0.1:49731/wms","healthz":"http://127.0.0.1:49731/healthz","preview":"http://127.0.0.1:49731/"}
 ```
 
 Read standard output until a line starts with `{` and parse it. Lines printed
@@ -1011,6 +1077,7 @@ while datasets are portrayed can come before it. The members are:
 | `token` | The access token, or `null` when there's none. |
 | `baseUrl` | The base URL, with the token. |
 | `tiles` | The XYZ tile URL template. |
+| `tilesHighDpi` | The URL template of the 512-pixel [`@2x` tiles](#high-dpi-tiles), or `null` when serving a built tile set. |
 | `tileJson`, `wmts`, `wms` | The TileJSON, WMTS capabilities and WMS URLs. |
 | `healthz` | The [health check](#health) URL, which has no token. |
 | `preview` | The preview page URL, or `null` with `--no-viewer`. |
@@ -1105,7 +1172,8 @@ http://127.0.0.1:8200/wmts/1.0.0/WMTSCapabilities.xml
 The service has one layer, `s100`, on the `WebMercatorQuad` tile matrix set
 in EPSG:3857. The tile matrices are numbered by zoom level, from 0 to the
 maximum zoom, so a WMTS tile is the XYZ tile of the same zoom, column and row.
-Below the minimum zoom the tiles are empty, as on the XYZ URLs, so zoom in to
+With `--tile-size 512`, the matrices have 512-pixel tiles (see
+[High-DPI tiles](#high-dpi-tiles)). Below the minimum zoom the tiles are empty, as on the XYZ URLs, so zoom in to
 see the chart; with `--overview` they show the datasets' coverage and names
 (see [Overview below the minimum zoom](#overview-below-the-minimum-zoom)). When rendering datasets, each palette is a WMTS style and the
 `--palette` one is the default, and each registered set of
