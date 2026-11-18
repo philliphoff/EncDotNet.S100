@@ -15,6 +15,10 @@
 > (P6). A second round on 2026-11-13 settled the AML and CAP categories,
 > fills under S-102 and a dataset's own category (all in D6).
 >
+> A UX review on 2026-11-18 settled where live sources live in SoundCharts
+> (D8): they stay datasets, but they're added and configured in the
+> Library, as online S-124 sources already are. §5 is re-planned around it.
+>
 > Builds on [Dynamic feature sources](dynamic-feature-source.md),
 > [Dynamic source pick](dynamic-source-pick.md),
 > [Wind and wave data](weather-sources.md) (§8, product traits and
@@ -220,6 +224,9 @@ exists. The Datasets panel, layer stack, visibility and removal then work for
 both kinds. Details that only make sense for files, such as the file name
 and size, are hidden for sources.
 
+D8 decides where a source is added and configured (the Library), and what
+its Datasets row shows (status, not file details).
+
 #### D4. One registration type for sources that aren't files
 
 File products are found by detection. Sources are configured instead: with a
@@ -255,9 +262,10 @@ services.AddDataSource(AisSources.AisStream);
 SoundCharts builds from the registry:
 
 - an **Add source** list, which could share the "Add online source" wizard's
-  category and search UI (`online-catalogue-dialog.md`);
+  category and search UI (`online-catalogue-dialog.md`); D8 puts it in the
+  Library's Add menu as **Live feeds**;
 - a settings page per source from its `Options` type, replacing per-source
-  settings classes;
+  settings classes; D8 puts these in the Library too;
 - viewport gating from `Activation`, replacing `DeferredAisFeatureSource` and
   the gating half of `NdbcObservationsOverlay` with one shared wrapper.
 
@@ -292,7 +300,8 @@ In SoundCharts (the viewer half of slice 7, so far):
   passes it the view after 300 ms of quiet, and pauses it while the entry is
   hidden or the view is wider than the registration's `Activation` allows.
 - **Add a data source** in the Datasets panel lists the sources that need no
-  options or have defaults. Added sources are saved by id in
+  options or have defaults. It's temporary: D8 moves adding a source to the
+  Library. Added sources are saved by id in
   `ViewerSettings.SourceDatasets` and added again at start-up; removing the
   entry forgets it. Saved options wait for slice 9's settings pages.
 - NDBC observations moved from a Layer Stack overlay to a source entry. The
@@ -306,10 +315,13 @@ In SoundCharts (the viewer half of slice 7, so far):
 The rest of slice 7 was settled on 2026-11-14:
 
 - **AIS is a Datasets entry**, added like NDBC, with no restart. Its key and
-  zoom threshold stay in Settings › Vessels until slice 9's settings pages,
-  and the old switch migrates: on becomes an added AIS entry.
+  zoom threshold stay in Settings › Vessels until its Library feed's
+  settings page (D8, slice 9), and the old switch migrates: on becomes an
+  added AIS entry. D8 adds that its row is grouped as vessels, has no
+  reorder controls, and says when it's waiting for zoom.
 - **Own-ship stays built in**, with its Layer stack row, drawn by
-  `VesselPortrayal`; it isn't a removable entry.
+  `VesselPortrayal`; it isn't a removable entry. D8 keeps it that way; a
+  pinned own-ship row at the top of Datasets is a possible later step.
 - **Vessels stay above the chart before slice 3**: a source can ask to draw
   above every dataset, and slice 3's vessel step replaces that. As built,
   the ask is a `S98DisplayPlane.Vessels` plane (75), between
@@ -318,11 +330,17 @@ The rest of slice 7 was settled on 2026-11-14:
 - **The vessel list and pirate mode follow the loaded AIS entry** through
   `ISourceHostExtension`, and go empty or stop when it's removed; the
   pirate-mode exclusion moves into how SoundCharts builds the AIS source.
-  "Take helm" keeps its path until slice 10.
+  "Take helm" was to keep its path until slice 10, but it can't: it finds
+  targets through the overlay hit test (see slice 7c in §5).
 - **AIS redraws** are measured with a busy recorded log first; the
   incremental overlay path stays only if a full redraw is over budget.
-- **NMEA weather's input** stays the environment variable; an input field
-  comes with slice 9.
+  Measured on 4 cores, a full map-session redraw of `VesselPortrayal`
+  targets takes about 8 ms for 200 targets, 12–20 ms for 500 and 28–36 ms
+  for 1,000 (portrayal alone 0.5, 2.4 and 4.6 ms). With changes batched
+  every 250 ms that's under 15% of a core at 1,000 targets, so AIS redraws
+  in full and the incremental path goes.
+- **NMEA weather's input** stays the environment variable until it's an
+  option of its Library feed (D8, slice 9).
 - Still to do: `AddDataSource` for `s100` and the MCP server.
 
 Behaviour that belongs to SoundCharts and not to the data stays there:
@@ -484,6 +502,64 @@ As built (slice 8):
   Linux user without `secret-tool` doesn't lose AIS. Settings says so and
   names the environment variable.
 
+#### D8. Live sources are datasets, added and configured in the Library
+
+A UX review on 2026-11-18 asked whether live sources need their own space
+instead of sitting among datasets. To a mariner a live source is a
+subscription, and the dataset is what it puts on the chart; freshness is a
+scale (a static ENC, a Library feed that refreshes, NDBC every 10 minutes,
+AIS every second), not a file/live split. So sources stay datasets, as D3
+has them: show, hide, isolate, picks, the Layer stack and time stay in one
+place.
+
+What was wrong was the rest of the model as first built (slice 7):
+
+- **Lifetimes differ in one list.** Files aren't restored at start-up (only
+  Open Recent lists them), but sources are, and "Remove" means either
+  "unload now" or "unsubscribe for good".
+- **There's no status.** A source row's subtitle is its spec (`NDBC`). It
+  can't say live, waiting for zoom, paused while hidden, failing or stale,
+  so AIS showing nothing until you zoom in looks broken.
+- **File controls that don't apply.** Validation, file fields and
+  reorder buttons show on source rows; under S-98 ordering, reordering a
+  source does nothing visible.
+- **Three Adds and an overloaded word.** Open on Exchange sets, Add and
+  the plug on Datasets, and the Library's own Add; "source" means an
+  exchange set's path, a Library collection and a feed. The empty Datasets
+  panel offers only Open dataset.
+- **Settings are elsewhere.** The AIS key and zoom threshold are in
+  Settings › Vessels with a restart, NMEA's input is an environment
+  variable, and nothing on the row links to them.
+
+The decision:
+
+- **The Library holds the subscription; Datasets holds what's on the map.**
+  Live feeds become a Library source kind, **Live feeds**, in the Library's
+  Add menu and wizard beside Online and Another computer, as SECOM and
+  online S-124 sources already are. Credentials (the D7 secret store),
+  options (the settings pages generated from `OptionsType`) and the
+  subscription live there. Adding a feed puts its dataset in Datasets.
+  `ViewerSettings.SourceDatasets` becomes Library-owned, and the Datasets
+  panel's plug button goes.
+- **Two actions, two places.** "Remove from map" in Datasets unloads the
+  dataset for the session; "Unsubscribe" in the Library ends the feed.
+- **A source's Datasets row says what it's doing**: a status line (Live,
+  Waiting for zoom (below 50°), Paused, Stale 14 min, Key needed,
+  Failed) with the last update, and a link to its Library settings. File
+  details, the Validation tab and reorder controls are hidden on it.
+- **Rows group by what they are**: observations (NDBC), own-ship sensors
+  (NMEA weather, shown with own-ship) and vessels (AIS).
+- **Placement**: NDBC, NMEA weather and AIS are Library feeds with
+  Datasets entries. Own-ship stays built in. Predicted tide stations, the
+  last Layer stack-only toggle, become a source entry too (computed, no
+  network), since they're a product derived from loaded S-104.
+- **Rejected**: a separate Live panel, which would split show/hide, picks,
+  the Layer stack and time again and leave polled feeds such as NDBC
+  between the two; and a Live tab in Datasets, which shows each source in
+  two tabs and adds a third Add.
+
+Questions for real users are in §6.
+
 ### 2.5 Alternatives rejected
 
 - **Make every source a file product with a fake path.** It would work
@@ -502,6 +578,9 @@ As built (slice 8):
 - **Interoperability Catalogue only, with built-in defaults.** It's purely
   S-98, but a catalogue can't name products that aren't S-100, which is
   where most new data comes from.
+- **A separate Live panel, or a Live tab in Datasets** (D8). The panel
+  splits show/hide, picks, the Layer stack and time into two places; the
+  tab lists each source twice and adds a third Add.
 - **Retire `IDynamicFeatureSource` in favour of `ILiveDatasetProcessor`.**
   A processor is a lot to implement for a feed of points.
   `IDynamicFeatureSource` with `DynamicFeatureTracker` stays the way to write
@@ -816,20 +895,54 @@ Each slice ships on its own and leaves the tree working.
    - `OwnShipRenderer` and `AisVesselRenderer` are obsolete.
      `IDynamicFeatureRenderer` itself stays until slice 7: the overlay host
      and `PortrayedDynamicFeatureRenderer` still go through it.
-7. **`SourceRegistration` and source dataset entries.** The library half is
-   built, and SoundCharts lists NDBC as a source entry (D4 as built). Add the registry,
-   categories for sources and the `DatasetEntry` origin. Move AIS, NDBC,
-   NMEA weather and own-ship registrations onto it, with the shared
-   activation wrapper.
+7. **`SourceRegistration` and source dataset entries.** Built: the library
+   half (#1485), NDBC (#1486) and NMEA weather (#1488) as source entries,
+   and the `Vessels` plane stopgap (#1489). The rest is re-planned under D8
+   as slices 7b–7d and 9.
+   - **7b. Source rows that say what they're doing** (D8). A status for each
+     source entry (Live, Waiting for zoom, Paused, Stale, Key needed,
+     Failed) with the last update, from `HostedSourceActivator` and the
+     processor; file details, Validation and reorder hidden on source rows;
+     rows grouped as observations, own-ship sensors and vessels; Add in the
+     empty Datasets panel; a confirmation when removing a source; one
+     meaning for "source" in strings and automation ids. Needs nothing
+     else, and goes first so AIS lands in a list that can say "waiting for
+     zoom".
+   - **7c. AIS as a source entry.** Its registration, the old switch
+     migrating to an added entry, no restart, the vessel list and pirate
+     mode following the loaded entry (`ISourceHostExtension`), and
+     `IDynamicFeatureRenderer` removed once nothing draws through it. Needs
+     7b. "Take helm" and the AIS pick card find targets through the overlay
+     hit test, so they can't keep their path once AIS is a dataset. The
+     proposal is to ship 7c with slice 10; the alternative keeps AIS in the
+     overlay pick service, undrawn, until slice 10, at the cost of each AIS
+     pick showing twice. Not yet decided.
+   - **7d. Predicted tide stations as a source entry** (D8), replacing their
+     Layer stack toggle. Needs 7b.
 8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
    and the AIS key migration.
-9. **Add source UI and generic settings pages.**
-10. **Pick actions.** Move "Take helm" to a contributed action, and merge
-    `DynamicPickHit` into `PickHit`.
+9. **Live feeds in the Library** (D8). `SourceRegistry` feeds the Library's
+   Add menu and wizard as **Live feeds**; each feed's settings page is
+   generated from its `OptionsType`, with secrets in the D7 store; the
+   Library owns the subscription and the saved list (and each feed's
+   options, saved today only by id). "Unsubscribe" there, "Remove from map"
+   in Datasets. The AIS key and zoom threshold leave Settings › Vessels,
+   NMEA weather's input leaves the environment variable, and the Datasets
+   plug button goes. Needs 7b; best after 7c, so AIS moves once.
+10. **Pick actions.** Move "Take helm" to a contributed action, make the
+    AIS card a pick section, let live hits join the same pipeline (P5), and
+    merge `DynamicPickHit` into `PickHit`. Proposed to ship with 7c.
 
-Slices 1–2, slice 3 and slices 4–9 are independent of each other. Live
-sources take their place in the layer order once slices 3 and 5 are in.
-Slice 10 needs slices 2 and 5.
+Also left:
+
+- **`AddDataSource` for `s100` and the MCP server**, so they can render
+  and query a source such as NDBC.
+- **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
+  `StationSeries`, `NavigationalWarning`) in the release after next.
+
+Order: 7b, then 7c (with 10, if that's decided), then 9 and 7d, with slice 3 whenever the IEC
+62288 question (§6) is answered. Slice 3 is independent of the rest; live
+sources take their place in the derived order once it's in.
 
 ## 6. Open questions
 
@@ -838,6 +951,14 @@ Slice 10 needs slices 2 and 5.
   §9.2.1. IEC 62288 §5 and the IMO symbol guidance (SN.1/Circ.243/Rev.2)
   hold the presentation rules for own-ship and targets. Check them before
   slice 3 ships.
+
+- **For real users** (D8): do mariners expect AIS and own-ship sensors
+  among chart data or apart from it (an ECDIS user and a desktop planner
+  may differ)? Is the start-up asymmetry a problem, and should files be
+  restored too? Which status matters most at a glance: last update,
+  connection, or why nothing shows? Where do users look to add a feed:
+  the Library, Datasets or Settings? Does anyone reorder overlays by hand?
+  Should removing a source hide it, pause it or unsubscribe?
 
 The other questions of the second draft were settled on 2026-11-13: NATO
 AML and CAP categories, fills under S-102 (the base step), and a dataset's
