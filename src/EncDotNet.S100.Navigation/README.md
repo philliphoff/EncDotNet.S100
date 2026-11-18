@@ -242,6 +242,13 @@ the same samples, in `ClearanceCheckResult.Departures` (`report.Departures`):
   a long forecast, the step widens so the sweep stays under `maxDepartures`
   (default 2000). Without S-104 coverage there's no sweep.
 
+Where no water-level dataset covers part of the route, the sweep judges that
+stretch with the water level at chart datum (0 m). If the charted depth alone
+meets the setting there, the departure can still meet your settings, with
+`ConfidenceReasons.WaterLevelAtChartDatum`; otherwise the stretch is "no data"
+and the departure doesn't meet them. The passage check itself still reports
+the stretch as a `NoWaterLevelCoverage` gap.
+
 `DepartureSweep.Windows()` returns the runs of departures that meet the
 settings, `NearestMeeting(departure)` the meeting departure closest to one,
 and `ArrivalAfterDataEnds()` the departures that arrive after the water-level

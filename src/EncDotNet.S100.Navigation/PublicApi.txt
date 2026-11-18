@@ -140,6 +140,7 @@ namespace EncDotNet.S100.Navigation
         ChartedDepthFromS101 = 1,
         DatumUnconfirmed = 2,
         WaterLevelPredicted = 4,
+        WaterLevelAtChartDatum = 8,
     }
     public sealed class CycloneCheckStorm : System.IEquatable<EncDotNet.S100.Navigation.CycloneCheckStorm>
     {

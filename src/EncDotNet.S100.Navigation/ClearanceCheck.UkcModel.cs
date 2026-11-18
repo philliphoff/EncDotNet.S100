@@ -229,7 +229,7 @@ public sealed partial class ClearanceCheck
                     var point = profile.Points[i];
                     var leg = legs[point.LegIndex];
                     var eta = schedule.EtaAt(point.LegIndex, point.AlongLeg);
-                    var eval = EvaluatePoint(point, leg, eta ?? departure);
+                    var eval = AtChartDatumInGap(EvaluatePoint(point, leg, eta ?? departure), point, leg);
                     tally.Add(eval, MinutesFor(point, leg), i);
                 }
 
@@ -469,6 +469,39 @@ public sealed partial class ClearanceCheck
             };
 
             return new PointEvaluation(used, status, height, stepTime, agreement, required, clearance, band, state, confidence);
+        }
+
+        /// <summary>
+        /// For the departure sweep (#1544): where no water-level dataset covers a
+        /// sample, judges it with the water level at chart datum (0 m). A sample
+        /// whose charted depth alone meets the setting then counts as meeting it,
+        /// with <see cref="ConfidenceReasons.WaterLevelAtChartDatum"/>; one that
+        /// doesn't stays "no data", since the real level is unknown. Gaps in time
+        /// (before or after the data), masked values and datum mismatches are left
+        /// as they are.
+        /// </summary>
+        private PointEvaluation AtChartDatumInGap(PointEvaluation eval, ProfilePoint point, PassageLeg leg)
+        {
+            if (eval.Status != WaterLevelStatus.NoCoverage || point.Depth is not { } depth)
+            {
+                return eval;
+            }
+
+            var charted = depth.DepthMeters - (_options.SubtractDepthUncertainty ? depth.UncertaintyMeters ?? 0 : 0);
+            var clearance = charted - leg.Draft!.Value.TotalMetres - leg.Squat.TotalMetres;
+            if (clearance < eval.Required)
+            {
+                return eval;
+            }
+
+            var band = clearance < eval.Required + _options.TightMarginMeters ? ClearanceBand.Tight : ClearanceBand.Meets;
+            return eval with
+            {
+                Clearance = clearance,
+                Band = band,
+                State = band == ClearanceBand.Tight ? UkcState.Tight : UkcState.MeetsSettings,
+                Confidence = eval.Confidence | ConfidenceReasons.WaterLevelAtChartDatum,
+            };
         }
 
         private static void RequireDrafts(IReadOnlyList<PassageLeg> legs, string paramName)

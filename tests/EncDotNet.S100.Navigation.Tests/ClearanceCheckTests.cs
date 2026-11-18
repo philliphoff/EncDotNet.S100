@@ -601,6 +601,59 @@ public class ClearanceCheckTests
         Assert.Equal(ConfidenceReasons.DatumUnconfirmed, sweep.MeetingConfidence());
     }
 
+    // A rising tide (0 m at the fixture departure, +1 m an hour) that covers
+    // either the whole leg or only its first half; the second half is the gap.
+    private static FakeWater RisingTide(bool gapInSecondHalf)
+    {
+        var origin = Fixture.Departure.UtcDateTime;
+        var series = new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => (t - origin).TotalHours);
+        return new FakeWater((_, lon) => gapInSecondHalf && lon > 0.05 ? [] : [series]);
+    }
+
+    private static DepartureRange GapWindow =>
+        DepartureRange.Between(Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30));
+
+    [Fact]
+    public void A_water_level_gap_over_water_deep_at_chart_datum_leaves_the_window_unchanged()
+    {
+        // #1544: 12 m in the first half needs +2 m of tide for draft 12 and UKC 2;
+        // the second half is 20 m, which clears the keel at any tide.
+        var depth = new FakeDepth((_, lon) => FakeDepth.Bathymetry(lon > 0.05 ? 20 : 12));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+
+        var covered = Sweep(depth, RisingTide(gapInSecondHalf: false), legs, GapWindow)!;
+        var gap = Sweep(depth, RisingTide(gapInSecondHalf: true), legs, GapWindow)!;
+
+        Assert.NotEmpty(covered.Windows());
+        Assert.Equal(covered.Windows(), gap.Windows());
+        Assert.Equal(covered.Options.Select(o => o.Verdict), gap.Options.Select(o => o.Verdict));
+        Assert.All(gap.Options.Where(o => o.MeetsSettings), o => Assert.True(o.Confidence.HasFlag(ConfidenceReasons.WaterLevelAtChartDatum)));
+        Assert.All(covered.Options, o => Assert.False(o.Confidence.HasFlag(ConfidenceReasons.WaterLevelAtChartDatum)));
+        Assert.True(gap.MeetingConfidence().HasFlag(ConfidenceReasons.WaterLevelAtChartDatum));
+
+        // The passage check still reports the gap, and doesn't pass it on charted depth alone.
+        var clearance = Clearance(depth, RisingTide(gapInSecondHalf: true), new PassagePlan(legs, Fixture.Departure.AddHours(4)));
+        Assert.Contains(clearance.Gaps, g => g.Kind == PassageStretchKind.NoWaterLevelCoverage);
+        Assert.Equal(PassageVerdict.IncompleteData, clearance.Verdict);
+    }
+
+    [Fact]
+    public void A_water_level_gap_over_shallow_water_still_removes_departures()
+    {
+        // As above, but the second half is 13 m: 1 m of UKC at chart datum, below
+        // the 2 m setting. With the tide it would meet; without it, it's unknown.
+        var depth = new FakeDepth((_, lon) => FakeDepth.Bathymetry(lon > 0.05 ? 13 : 12));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+
+        var covered = Sweep(depth, RisingTide(gapInSecondHalf: false), legs, GapWindow)!;
+        var gap = Sweep(depth, RisingTide(gapInSecondHalf: true), legs, GapWindow)!;
+
+        Assert.NotEmpty(covered.Windows());
+        Assert.Empty(gap.Windows());
+        Assert.All(gap.Options, o => Assert.Contains(o.Verdict, new[] { PassageVerdict.IncompleteData, PassageVerdict.BelowSetting }));
+        Assert.Contains(gap.Options, o => o.Verdict == PassageVerdict.IncompleteData);
+    }
+
     [Fact]
     public void The_water_level_range_sweep_starts_at_a_whole_step_and_hatches_late_arrivals()
     {

@@ -72,6 +72,15 @@ public enum ConfidenceReasons
     /// 0.5 m or more.
     /// </summary>
     WaterLevelPredicted = 4,
+
+    /// <summary>
+    /// No water-level dataset covers part of the passage, and the departure
+    /// sweep judged it with the water level at chart datum (0 m): the charted
+    /// depth alone meets the setting there. Only departure options carry this;
+    /// the passage check itself reports the stretch as a gap
+    /// (<see cref="PassageStretchKind.NoWaterLevelCoverage"/>).
+    /// </summary>
+    WaterLevelAtChartDatum = 8,
 }
 
 /// <summary>How the clearance compares with the required UKC, ignoring confidence.</summary>
