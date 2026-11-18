@@ -935,7 +935,7 @@ Each slice ships on its own and leaves the tree working.
      labels the row (Observations, Own-ship sensor, Vessels). "Key needed"
      comes with AIS (7c), and the settings link with slice 9. The plug
      button's wording is now "Add a live feed".
-   - **7c. AIS as a source entry.** Its registration, the old switch
+   - **7c. AIS as a source entry.** Built (the note after 7d). Its registration, the old switch
      migrating to an added entry, no restart, the vessel list and pirate
      mode following the loaded entry (`ISourceHostExtension`), and
      `IDynamicFeatureRenderer` removed once nothing draws through it. Needs
@@ -946,6 +946,27 @@ Each slice ships on its own and leaves the tree working.
      twice).
    - **7d. Predicted tide stations as a source entry** (D8), replacing their
      Layer stack toggle. Needs 7b.
+
+     7c as built: SoundCharts registers `ais.aisstream` (`AisSource`) in
+     `SourceRegistry.Default`, so the registration can wrap its source for
+     pirate mode (`ExcludingAisFeatureSource`, which now passes `Start`,
+     `UpdateArea` and `LastError` through). `AisDynamicFeatureSource` can
+     defer its subscription until `Start` and implements
+     `IStartableDynamicSource` and `IAreaFilteredDynamicSource`; a driver
+     that can't change its area in place is subscribed to again. The key and
+     the zoom threshold still come from Settings › Vessels; without a key,
+     adding the feed fails with a message saying where to enter one ("Key
+     needed" as a row status waits for slice 9). `AisHostExtension` attaches
+     pirate mode (`PirateModeController.AttachAis`), the vessel list
+     (`VesselListViewModel.SetAisSource`) and the Vessels tab (`AisPresence`)
+     to the loaded entry. The Settings switch is gone and migrates to an
+     added entry. `AisOverlayServiceCollectionExtensions`,
+     `DeferredAisFeatureSource` and `DisabledAisFeatureSource` are removed,
+     with the AIS overlay card's own "Take helm" button: AIS picks come
+     through the dataset path, with a `VesselSection` and the
+     `own-ship.take-helm` action. `IDynamicFeatureRenderer` and the overlay
+     pick path stay for own-ship and tide stations; `DynamicPickHit` merges
+     into `PickHit` once tide stations move (7d).
 8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
    and the AIS key migration.
 9. **Live feeds in the Library** (D8). `SourceRegistry` feeds the Library's

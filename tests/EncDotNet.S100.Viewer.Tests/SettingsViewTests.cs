@@ -27,12 +27,12 @@ public sealed class SettingsViewTests : IDisposable
         var vm = TestSettings.Shell(new ViewerSettingsService(new ViewerSettings { SettingsFilePath = _settingsPath }));
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
         Assert.True(host.IsShown("Settings.DistanceUnit"));
-        Assert.False(host.IsShown("Settings.AisEnabled"));
+        Assert.False(host.IsShown("Settings.AisApiKey"));
 
         host.Click(host.Find<TabItem>("Settings.Category.Vessels"));
 
         Assert.Equal(SettingsCategory.Vessels, vm.SelectedCategory);
-        Assert.True(host.IsShown("Settings.AisEnabled"));
+        Assert.True(host.IsShown("Settings.AisApiKey"));
         Assert.False(host.IsShown("Settings.DistanceUnit"));
     }
 

@@ -54,13 +54,6 @@ internal sealed class VesselsSettingsPageViewModel(ViewerSettingsService setting
         set => Settings.OwnShipPortOffsetMetres = value;
     }
 
-    /// <inheritdoc cref="ViewerSettingsService.AisEnabled" />
-    public bool AisEnabled
-    {
-        get => Settings.AisEnabled;
-        set => Settings.AisEnabled = value;
-    }
-
     /// <inheritdoc cref="ViewerSettingsService.AisApiKey" />
     public string? AisApiKey
     {

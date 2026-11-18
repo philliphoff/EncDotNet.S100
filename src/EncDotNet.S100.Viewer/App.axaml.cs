@@ -367,7 +367,6 @@ public partial class App : Application
 
             if (pickReport is not null)
             {
-                pickReport.TakeHelmRequested += (_, mmsi) => pirateCoordinator.Engage(mmsi);
                 // P4: "Take helm" is a pick action on any picked vessel with an
                 // MMSI, whatever source it came from.
                 pickReport.PickActionRequested += (_, request) =>
@@ -1314,7 +1313,17 @@ public partial class App : Application
             sp.GetRequiredService<AboutDialogViewModel>);
 
         services.AddSingleton<DatasetProcessorOwner>();
-        services.AddSingleton(EncDotNet.S100.Datasets.Pipelines.SourceRegistry.Default);
+        services.AddSingleton(sp =>
+        {
+            // Slice 7c: SoundCharts' own AIS feed joins the built-in sources.
+            var registry = EncDotNet.S100.Datasets.Pipelines.SourceRegistry.Default;
+            if (!registry.TryResolve(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id, out _))
+            {
+                registry.Register(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Registration(
+                    sp.GetRequiredService<ViewerSettings>()));
+            }
+            return registry;
+        });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService(
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.SourceRegistry>(),
             sp.GetRequiredService<ViewerSettings>(),
@@ -1446,22 +1455,18 @@ public partial class App : Application
                     () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
             });
 
-        // PR-D3: AIS overlay. The renderer is always registered (idempotent
-        // and harmless when no AIS source is active). The dynamic source
-        // itself is constructed lazily via Services.DynamicSources.Ais.
-        // AisOverlayServiceCollectionExtensions.AddAisOverlay so it can
-        // be conditioned on settings + the API-key environment variable.
-        services.AddKeyedSingleton<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IDynamicFeatureRenderer>(
-            "vessel.ais",
-            (sp, _) =>
-            {
-                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
-                return new EncDotNet.S100.Renderers.Mapsui.DynamicSources.PortrayedDynamicFeatureRenderer(
-                    EncDotNet.S100.Portrayals.Application.VesselPortrayal.Ais,
-                    () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
-            });
-        EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
-            .AddAisOverlay(services);
+        // Slice 7c (data source design note D8): AIS targets are a live feed
+        // added in the Datasets panel. Pirate mode, the vessel list and the
+        // Vessels tab follow the loaded entry through AisHostExtension.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisPresence>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Sources.ISourceHostExtension>(sp =>
+        {
+            var presence = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisPresence>();
+            return new EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisHostExtension(
+                sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
+                () => sp.GetService<VesselListViewModel>(),
+                loaded => UiThread.RunOrPost(() => presence.Set(loaded)));
+        });
 
         // #1070: NDBC buoy observations are a data source the user adds to
         // the Datasets panel (S100Sources.NdbcObservations, design note D3).
@@ -1502,7 +1507,7 @@ public partial class App : Application
         // followed target so it is not double-drawn.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>(),
+                exclusion: null, // Attached while an AIS entry is loaded (AisHostExtension).
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryOverride>()));
 
@@ -1724,7 +1729,7 @@ public partial class App : Application
             sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
-            sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
+            helmTargetSource: null)); // AIS: set while an AIS entry is loaded (AisHostExtension).
         // Settings (#1398): one service holds them; the Settings panel lists
         // its pages, each registered as an ISettingsPage.
         // Data source design note D7: API keys live in the platform secret store.
@@ -2164,8 +2169,7 @@ public partial class App : Application
             tooltip: Strings.Tooltip_RoutesPanel,
             iconFactory: static () => new FluentIcon { Icon = Icon.Flow, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
-        // Vessels tab — shown only while the AIS overlay is enabled
-        // (its visibility source bridges ViewerSettingsService.AisEnabled).
+        // Vessels tab — shown only while an AIS entry is loaded (AisPresence).
         services.AddActivityTab<VesselListViewModel, VesselListView>(
             id: "Vessels",
             order: 60,
@@ -2176,7 +2180,7 @@ public partial class App : Application
             persistAsLastSelected: false,
             visibilitySourceFactory: static sp =>
                 new EncDotNet.S100.Viewer.ViewModels.Activities.AisOverlayVisibilitySource(
-                    sp.GetRequiredService<ViewerSettingsService>()));
+                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisPresence>()));
         // Helm tab — shown only while own-vessel tracking is enabled
         // (its visibility source bridges ViewerSettingsService.OwnShipOverlayEnabled).
         services.AddActivityTab<HelmViewModel, HelmView>(

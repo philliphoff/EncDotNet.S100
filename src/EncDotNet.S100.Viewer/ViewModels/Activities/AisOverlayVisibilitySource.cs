@@ -1,34 +1,30 @@
-using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 
 namespace EncDotNet.S100.Viewer.ViewModels.Activities;
 
 /// <summary>
-/// <see cref="ITabVisibilitySource"/> that shows the Vessels tab only
-/// while the AIS overlay is enabled. Bridges
-/// <see cref="ViewerSettingsService.AisEnabled"/> /
-/// <see cref="ViewerSettingsService.AisEnabledChanged"/> to the
-/// activity-tab visibility contract, mirroring
-/// <see cref="OwnShipTrackingVisibilitySource"/> for the Helm tab.
+/// <see cref="ITabVisibilitySource"/> that shows the Vessels tab only while
+/// an AIS entry is loaded in the Datasets panel (data source design note D8),
+/// mirroring <see cref="OwnShipTrackingVisibilitySource"/> for the Helm tab.
 /// </summary>
 internal sealed class AisOverlayVisibilitySource : ITabVisibilitySource, IDisposable
 {
-    private readonly ViewerSettingsService _settings;
+    private readonly AisPresence _presence;
 
-    public AisOverlayVisibilitySource(ViewerSettingsService settings)
+    public AisOverlayVisibilitySource(AisPresence presence)
     {
-        ArgumentNullException.ThrowIfNull(settings);
-        _settings = settings;
-        _settings.AisEnabledChanged += OnAisEnabledChanged;
+        ArgumentNullException.ThrowIfNull(presence);
+        _presence = presence;
+        _presence.Changed += OnChanged;
     }
 
     /// <inheritdoc />
-    public bool IsVisible => _settings.AisEnabled;
+    public bool IsVisible => _presence.IsLoaded;
 
     /// <inheritdoc />
     public event Action<bool>? VisibilityChanged;
 
-    private void OnAisEnabledChanged(bool enabled) => VisibilityChanged?.Invoke(enabled);
+    private void OnChanged(bool loaded) => VisibilityChanged?.Invoke(loaded);
 
-    public void Dispose()
-        => _settings.AisEnabledChanged -= OnAisEnabledChanged;
+    public void Dispose() => _presence.Changed -= OnChanged;
 }

@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// the live <c>Mapsui.Navigator</c>. Subscribers registered before
 /// <c>Bind</c> simply see no events until then; this matches the
 /// "gate is closed by default" semantics of
-/// <see cref="DynamicSources.Ais.DeferredAisFeatureSource"/>.
+/// <see cref="Sources.HostedSourceActivator"/>.
 /// </para>
 /// <para>
 /// Threading: <see cref="ViewportChanged"/> fires on whatever thread

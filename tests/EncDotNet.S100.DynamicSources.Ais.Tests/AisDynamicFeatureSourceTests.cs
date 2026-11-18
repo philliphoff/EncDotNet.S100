@@ -299,6 +299,40 @@ public class AisDynamicFeatureSourceTests
         Assert.Equal(DynamicSourceChangeKind.Removed, changes[^1].Kind);
         Assert.Contains("ais:7", changes[^1].ChangedIds);
     }
+
+    [Fact]
+    public async Task A_deferred_source_subscribes_on_Start_with_the_area_set_before()
+    {
+        var driver = new FakeAisMessageSource();
+        await using var source = new AisDynamicFeatureSource("ais", driver, deferSubscription: true);
+        var area = new BoundingBox(41.5, -71.5, 43.0, -69.5);
+
+        ((IAreaFilteredDynamicSource)source).UpdateArea(area);
+        Assert.Empty(driver.Subscriptions);
+        Assert.False(source.IsStarted);
+
+        source.Start();
+        source.Start();
+
+        var subscription = Assert.Single(driver.Subscriptions);
+        Assert.Equal(area, subscription.ActiveRequest.Area);
+        Assert.True(source.IsStarted);
+    }
+
+    [Fact]
+    public async Task An_area_the_driver_cant_take_in_place_subscribes_again()
+    {
+        var driver = new FakeAisMessageSource();
+        await using var source = new AisDynamicFeatureSource("ais", driver, deferSubscription: true);
+        source.Start();
+        driver.Subscriptions[0].SupportsAreaUpdate = false;
+        var area = new BoundingBox(41.5, -71.5, 43.0, -69.5);
+
+        ((IAreaFilteredDynamicSource)source).UpdateArea(area);
+
+        Assert.Equal(2, driver.Subscriptions.Count);
+        Assert.Equal(area, driver.Subscriptions[1].ActiveRequest.Area);
+    }
 }
 
 internal static class AsyncDisposableExtensions

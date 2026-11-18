@@ -2841,7 +2841,7 @@
     <value>AIS Overlay</value>
   </data>
   <data name="Settings_AisSection_Help" xml:space="preserve">
-    <value>Live AIS targets streamed from aisstream.io. Requires a free API key from https://aisstream.io. Changes take effect on next viewer restart.</value>
+    <value>Live AIS targets from aisstream.io, added with Add a live feed in the Datasets panel. They need a free API key from https://aisstream.io. A new key or zoom threshold takes effect when AIS targets are next added or SoundCharts starts.</value>
   </data>
   <data name="Settings_AisEnabled" xml:space="preserve">
     <value>Enable AIS overlay</value>
@@ -2955,10 +2955,10 @@
     <value>Select to centre the map on this vessel.</value>
   </data>
   <data name="Vessels_Empty_DisabledTitle" xml:space="preserve">
-    <value>AIS overlay is off</value>
+    <value>AIS targets aren't added</value>
   </data>
   <data name="Vessels_Empty_DisabledDescription" xml:space="preserve">
-    <value>Enable it under Settings → Vessels → AIS Overlay to list nearby vessels.</value>
+    <value>Add AIS targets with Add a live feed in the Datasets panel to list nearby vessels.</value>
   </data>
   <data name="Vessels_Empty_NoDataTitle" xml:space="preserve">
     <value>No vessels yet</value>
@@ -9043,5 +9043,15 @@
   </data>
   <data name="SourceStatus_LiveJustNow" xml:space="preserve">
     <value>Live · updated just now</value>
+  </data>
+  <data name="Ais_SourceName" xml:space="preserve">
+    <value>AIS targets</value>
+  </data>
+  <data name="Ais_SourceDescription" xml:space="preserve">
+    <value>Live AIS vessel targets from aisstream.io, for the area in view. Needs a free API key (Settings › Vessels). Not for navigation.</value>
+  </data>
+  <data name="Ais_KeyNeededFormat" xml:space="preserve">
+    <value>AIS targets need an aisstream.io API key. Enter it in Settings › Vessels, or set the {0} environment variable.</value>
+    <comment>{0} = environment variable name.</comment>
   </data>
 </root>

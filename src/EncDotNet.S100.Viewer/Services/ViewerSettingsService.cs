@@ -1200,7 +1200,6 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
 
 
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
-        _aisEnabled = ais.Enabled;
         _aisApiKey = LoadAisApiKey(ais);
         _aisActivationViewportSpanDegrees = ais.ActivationViewportSpanDegrees;
     }
@@ -1437,35 +1436,6 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
     private void EnsureAisOverlaySettings()
     {
         _settings.AisOverlay ??= new AisOverlaySettings();
-    }
-
-    /// <summary>
-    /// Raised when <see cref="AisEnabled"/> changes. The activity bar
-    /// wires this (via <see cref="ViewModels.Activities.AisOverlayVisibilitySource"/>)
-    /// so the Vessels tab appears / disappears live with the overlay
-    /// opt-in.
-    /// </summary>
-    public event Action<bool>? AisEnabledChanged;
-
-    private bool _aisEnabled;
-    /// <summary>
-    /// User opt-in for the AIS overlay. Persisted to
-    /// <see cref="AisOverlaySettings.Enabled"/>. Effective on next
-    /// viewer restart.
-    /// </summary>
-    public bool AisEnabled
-    {
-        get => _aisEnabled;
-        set
-        {
-            if (SetProperty(ref _aisEnabled, value))
-            {
-                EnsureAisOverlaySettings();
-                _settings.AisOverlay!.Enabled = value;
-                _settings.Save();
-                AisEnabledChanged?.Invoke(value);
-            }
-        }
     }
 
     /// <summary>The name the AIS key is saved under in the secret store.</summary>

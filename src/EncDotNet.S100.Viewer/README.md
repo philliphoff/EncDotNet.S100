@@ -1540,29 +1540,40 @@ heading.
 
 ### Show AIS vessels
 
-The AIS overlay shows live targets from [aisstream.io](https://aisstream.io),
-which needs a free API key. In **Settings** > **Vessels** > **AIS Overlay**:
+**AIS targets** shows live vessels from [aisstream.io](https://aisstream.io),
+which needs a free API key. It's a live feed, like NDBC observations.
 
-1. Turn on **Enable AIS overlay**.
-2. Enter your **API key**, or set the `ENCDOTNET_AIS_STREAM_KEY` environment
-   variable. The environment variable takes precedence. A key entered in
-   Settings is saved in the computer's secret store: Credential Manager on
-   Windows, the Keychain on macOS, or the Secret Service (libsecret, through
+1. Enter your **API key** in **Settings** > **Vessels** > **AIS Overlay**,
+   or set the `ENCDOTNET_AIS_STREAM_KEY` environment variable. The
+   environment variable takes precedence. A key entered in Settings is saved
+   in the computer's secret store: Credential Manager on Windows, the
+   Keychain on macOS, or the Secret Service (libsecret, through
    `secret-tool`) on Linux. `settings.json` keeps only a reference to it, and
    a key already in `settings.json` moves to the store the next time
    SoundCharts starts. On a computer with no secret store, such as Linux
    without `secret-tool`, the key stays in `settings.json` and Settings says
    so; use the environment variable to keep it out of the file.
-3. Restart SoundCharts. Changes to this section take effect at the next start.
+2. In the **Datasets** panel, choose **Add a live feed** (the plug button)
+   and then **AIS targets**. There's no restart. Without a key, adding it
+   says where to enter one.
+
+AIS targets are listed with your datasets under **Vessels**, and added again
+the next time SoundCharts starts, until you remove them. If you had the old
+**Enable AIS overlay** switch on, they're added for you. They draw above the
+chart (the **Vessels** plane), and their row says what they're doing, such as
+**Waiting for zoom (below 50°)** or **Live · updated just now**.
 
 SoundCharts doesn't subscribe to aisstream.io until you zoom in. The
-subscription opens when the map view's latitude and longitude spans are both at
-or below **Activate at viewport span (degrees)**, 50° by default. At start-up
-the map shows the whole world, so nothing streams until you zoom in. Then the
-subscription opens for the map view's bounding box and follows it as you pan
-and zoom. Once open, it stays open for the rest of the session, even if you
-zoom back out. Clear the field to subscribe as soon as SoundCharts starts. See
+subscription opens when the map view's latitude and longitude spans are both
+at or below **Activate at viewport span (degrees)**, 50° by default, for the
+map view's bounding box, and follows it as you pan and zoom. While you're
+zoomed out or the row is hidden, it stops following the view and the targets
+you have stay. Clear the field to subscribe as soon as AIS targets are added.
+A new threshold takes effect the next time SoundCharts starts. See
 [AIS zoom-gated subscription](../../docs/design/ais-zoom-gated-subscription.md).
+
+Select a target to see its name, MMSI, course, speed, heading and size in
+the **Pick report**, with a **Take helm** button (pirate mode).
 
 ### The Vessels panel
 

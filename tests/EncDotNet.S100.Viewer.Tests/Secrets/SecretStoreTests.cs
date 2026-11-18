@@ -77,23 +77,22 @@ public sealed class SecretStoreTests
     }
 
     [Fact]
-    public void AIS_starts_with_the_key_its_reference_names_and_not_without_it()
+    public async Task The_AIS_feed_starts_with_the_key_its_reference_names_and_not_without_it()
     {
-        var overlay = new AisOverlaySettings
-        {
-            Enabled = true,
-            ApiKey = Reference,
-            ApiKeyEnvironmentVariable = "AIS_SECRET_TEST_" + Guid.NewGuid().ToString("N"),
-            ActivationViewportSpanDegrees = 1,
-        };
-        var notifier = new IdleNotifier();
-        var empty = new InMemorySecretStore();
+        var settings = Settings(Reference);
+        settings.AisOverlay!.ApiKeyEnvironmentVariable = "AIS_SECRET_TEST_" + Guid.NewGuid().ToString("N");
+        var registration = AisSource.Registration(settings);
         var store = new InMemorySecretStore();
         store.Write(ViewerSettingsService.AisApiKeySecretName, "stored-key");
 
-        Assert.IsType<DisabledAisFeatureSource>(AisOverlayServiceCollectionExtensions.BuildSource(overlay, null, notifier, empty));
-        Assert.IsType<DisabledAisFeatureSource>(AisOverlayServiceCollectionExtensions.BuildSource(overlay, null, notifier, secrets: null));
-        Assert.IsType<DeferredAisFeatureSource>(AisOverlayServiceCollectionExtensions.BuildSource(overlay, null, notifier, store));
+        Assert.Throws<InvalidOperationException>(() => registration.Create(new SourceCreationContext { ReadSecret = new InMemorySecretStore().Read }));
+        Assert.Throws<InvalidOperationException>(() => registration.Create(new SourceCreationContext()));
+
+        // With the key it builds a hosted processor that hasn't subscribed: the activator starts it.
+        var processor = Assert.IsAssignableFrom<IHostedDatasetProcessor>(registration.Create(new SourceCreationContext { ReadSecret = store.Read }));
+        var source = AisSource.SourceOf(processor)!;
+        Assert.False(Assert.IsType<EncDotNet.S100.DynamicSources.Ais.AisDynamicFeatureSource>(source.Inner).IsStarted);
+        await processor.DisposeAsync();
     }
 
     [Fact]
@@ -199,17 +198,6 @@ public sealed class SecretStoreTests
         }
         Assert.Null(store.Read(name));
         store.Delete(name);
-    }
-
-    private sealed class IdleNotifier : IMapViewportNotifier
-    {
-        public MapViewportSnapshot? Current => null;
-
-        public event EventHandler<MapViewportSnapshot>? ViewportChanged
-        {
-            add { }
-            remove { }
-        }
     }
 
     private sealed class RecordingRunner : LibsecretToolSecretStore.ISecretToolRunner

@@ -87,9 +87,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                     PickActionRequested?.Invoke(this, new PickActionRequest(hit, action.Action));
             },
             action => action is not null && SelectedHit is not null);
-        TakeHelmCommand = new RelayCommand<DynamicPickHit>(
-            hit => { if (hit is not null && TryGetAisMmsi(hit, out var mmsi)) TakeHelmRequested?.Invoke(this, mmsi); },
-            hit => hit is not null && TryGetAisMmsi(hit, out _));
         OpenFeatureInExaminerCommand = new RelayCommand(
             () => _examinerLinks.OpenFeature(ProductSpec, FeatureType),
             () => IsExaminerAvailable && !string.IsNullOrWhiteSpace(FeatureType));
@@ -680,22 +677,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// </summary>
     public event EventHandler<string>? CopyIdentityRequested;
 
-    /// <summary>
-    /// "Take the helm of this vessel" (pirate mode). Parameter is the
-    /// <see cref="DynamicPickHit"/> to impersonate. Enabled only for AIS
-    /// hits (feature id <c>"ais:{mmsi}"</c>); raises
-    /// <see cref="TakeHelmRequested"/> with the parsed MMSI so the app
-    /// can engage <c>PirateModeController</c>. The view-model owns no
-    /// service references directly so unit tests can drive it without a
-    /// controller double.
-    /// </summary>
-    public ICommand TakeHelmCommand { get; }
-
-    /// <summary>
-    /// Raised when the user invokes <see cref="TakeHelmCommand"/> on an
-    /// AIS hit. The payload is the target's MMSI.
-    /// </summary>
-    public event EventHandler<uint>? TakeHelmRequested;
 
     /// <summary>
     /// Opens the selected hit's feature in the S-100 Feature Catalogue
@@ -730,23 +711,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
-    }
-
-    /// <summary>
-    /// Reads the MMSI of <paramref name="hit"/> when it represents an AIS
-    /// target. AIS feature ids follow the
-    /// <c>"ais:{mmsi}"</c> convention defined by
-    /// <c>AisDynamicFeatureSource.FeatureIdForMmsi</c>.
-    /// </summary>
-    internal static bool TryGetAisMmsi(DynamicPickHit hit, out uint mmsi)
-    {
-        mmsi = 0;
-        if (hit is null) return false;
-        const string prefix = "ais:";
-        var id = hit.FeatureId;
-        if (string.IsNullOrEmpty(id) || !id.StartsWith(prefix, StringComparison.Ordinal))
-            return false;
-        return uint.TryParse(id.AsSpan(prefix.Length), out mmsi) && mmsi != 0;
     }
 
     /// <summary>

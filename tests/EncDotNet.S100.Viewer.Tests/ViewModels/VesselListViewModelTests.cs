@@ -7,7 +7,6 @@ using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
-using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 using EncDotNet.S100.Viewer.Tests.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -515,17 +514,19 @@ public class VesselListViewModelTests
     }
 
     [Fact]
-    public void EmptyState_AisDisabled_ShowsEnableMessage()
+    public void Removing_the_AIS_entry_empties_the_list_and_says_how_to_add_it()
     {
-        // A DisabledAisFeatureSource models the overlay being switched off.
-        var disabled = new DisabledAisFeatureSource();
-        var accessor = new MapCapabilityAccessor<IMapViewportController> { Current = new FakeMapHost() };
+        // D8: the list follows the loaded AIS entry's source.
+        var (vm, ais, _, _) = Make(ownShipEnabled: false);
 
-        var vm = new VesselListViewModel(new IDynamicFeatureSource[] { disabled }, accessor);
+        vm.SetAisSource(null, null);
 
         Assert.True(vm.IsEmpty);
         Assert.Equal(Strings.Vessels_Empty_DisabledTitle, vm.EmptyTitle);
         Assert.Equal(Strings.Vessels_Empty_DisabledDescription, vm.EmptyDescription);
+
+        vm.SetAisSource(ais, ais);
+        Assert.Equal(Strings.Vessels_Empty_NoDataTitle, vm.EmptyTitle);
     }
 
     [Fact]

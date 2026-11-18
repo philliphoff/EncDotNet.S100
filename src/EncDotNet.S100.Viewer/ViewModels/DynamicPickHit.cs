@@ -57,14 +57,6 @@ internal sealed record DynamicPickHit
         = Array.Empty<DynamicPickAttributeRow>();
 
     /// <summary>
-    /// True when this hit represents an AIS target — i.e. its
-    /// <see cref="FeatureId"/> follows the <c>"ais:{mmsi}"</c> convention.
-    /// Gates the "take the helm" (pirate-mode) action in the pick report.
-    /// </summary>
-    public bool IsAisTarget =>
-        PickReportViewModel.TryGetAisMmsi(this, out _);
-
-    /// <summary>
     /// The feature's rich card, shown in place of <see cref="Attributes"/>,
     /// such as a predicted tide station's (tide predictions design D8); null
     /// for the generic list.
