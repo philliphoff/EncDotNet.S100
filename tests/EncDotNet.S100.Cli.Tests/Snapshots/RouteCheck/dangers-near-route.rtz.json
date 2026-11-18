@@ -86,6 +86,7 @@
           "danger": {
             "featureType": "Wreck",
             "depthMeters": 6.2,
+            "depthIsDefault": false,
             "waterLevelEffect": 3,
             "threshold": "keel",
             "thresholdMeters": 12,
@@ -122,6 +123,7 @@
           "danger": {
             "featureType": "Obstruction",
             "depthMeters": 11,
+            "depthIsDefault": false,
             "waterLevelEffect": 3,
             "threshold": "keel",
             "thresholdMeters": 12,
@@ -157,6 +159,7 @@
         "details": {
           "danger": {
             "featureType": "UnderwaterAwashRock",
+            "depthIsDefault": false,
             "waterLevelEffect": 5,
             "side": "starboard",
             "offsetMeters": 79.8
@@ -378,6 +381,7 @@
           "danger": {
             "featureType": "Obstruction",
             "depthMeters": 5,
+            "depthIsDefault": false,
             "waterLevelEffect": 3,
             "threshold": "keel",
             "thresholdMeters": 12,
@@ -452,6 +456,7 @@
         "details": {
           "danger": {
             "featureType": "Wreck",
+            "depthIsDefault": false,
             "waterLevelEffect": 3,
             "side": "port",
             "offsetMeters": 179.6

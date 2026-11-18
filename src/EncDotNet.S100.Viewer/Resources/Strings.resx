@@ -6020,6 +6020,24 @@
   <data name="RouteCheck_Floating" xml:space="preserve">
     <value>floating</value>
   </data>
+  <data name="RouteCheck_CrossesStructure" xml:space="preserve">
+    <value>Crosses a structure</value>
+  </data>
+  <data name="RouteCheck_StructureInsideLimits" xml:space="preserve">
+    <value>Structure inside the cross-track limits</value>
+  </data>
+  <data name="RouteCheck_SafetyContourAlert" xml:space="preserve">
+    <value>safety contour alert</value>
+  </data>
+  <data name="RouteCheck_DepartureBerthStructures" xml:space="preserve">
+    <value>Structures at the departure berth</value>
+  </data>
+  <data name="RouteCheck_ArrivalBerthStructures" xml:space="preserve">
+    <value>Structures at the arrival berth</value>
+  </data>
+  <data name="RouteCheck_BerthStructuresCountFormat" xml:space="preserve">
+    <value>{0} within {1:0} m</value>
+  </data>
   <data name="RouteCheck_CoversAndUncovers" xml:space="preserve">
     <value>covers and uncovers</value>
   </data>

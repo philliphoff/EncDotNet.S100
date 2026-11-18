@@ -59,6 +59,8 @@ public sealed partial class ChartCheck
         // curves. The track must not pass them, so each is its own crossing
         // or corridor finding: an area as the shallow areas are, a point or
         // curve on the track when it's within the track clearance of it.
+        // Structures near the departure and arrival are grouped later
+        // (FindingList.GroupBerthStructures).
         private void CheckSafetyContourFeatures(IReadOnlyList<RouteChartFeature> features)
         {
             foreach (var feature in features)
@@ -70,9 +72,10 @@ public sealed partial class ChartCheck
                 }
 
                 _cancellationToken.ThrowIfCancellationRequested();
+                var details = new SafetyContourFeatureDetails { FeatureType = feature.FeatureType, IsStructure = IsStructure(feature.FeatureType) };
                 if (feature.Surfaces.Count > 0)
                 {
-                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor);
+                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor, _ => details);
                     continue;
                 }
 
@@ -88,9 +91,16 @@ public sealed partial class ChartCheck
                     _legIndex,
                     projection.Distance,
                     RouteFindingLocation.Point(position, projection.Distance),
-                    feature);
+                    feature,
+                    details);
             }
         }
+
+        // Anything but water (an unsurveyed area) and land is a structure
+        // that stands in the water (#1548).
+        private static bool IsStructure(string featureType) =>
+            SkinOfTheEarth.Classify(featureType) == SkinOfTheEarthClass.None
+            && featureType is not (SkinOfTheEarth.Coastline or "LandRegion" or "LandElevation");
 
         // Soundings no deeper than the safety contour inside the cross-track
         // limits, from the finest cell where they are: the soundings the

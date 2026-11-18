@@ -45,6 +45,15 @@ namespace EncDotNet.S100.Navigation
         public required int AreaKind { get; init; }
         public required int Count { get; init; }
     }
+    public sealed class BerthStructuresDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public BerthStructuresDetails() { }
+        public int CrossingCount { get; init; }
+        public required EncDotNet.S100.Navigation.RouteEnd End { get; init; }
+        public System.Collections.Generic.IReadOnlyList<string> FeatureTypes { get; }
+        public required System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFindingFeature> Features { get; init; }
+        public required EncDotNet.S100.Quantities.Length Radius { get; init; }
+    }
     public sealed class ChartCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.ChartCheckResult>
     {
         public const string CheckName = "chart";
@@ -701,6 +710,7 @@ namespace EncDotNet.S100.Navigation
         public RouteCheckSettings() { }
         public System.Collections.Generic.IReadOnlyCollection<int> AreaKindsOff { get; init; }
         public required System.DateTimeOffset At { get; init; }
+        public EncDotNet.S100.Quantities.Length? BerthRadius { get; init; }
         public bool ChecksDepths { get; }
         public EncDotNet.S100.Quantities.Length? CorridorOverride { get; init; }
         public EncDotNet.S100.Navigation.DepartureRange? DepartureWindow { get; init; }
@@ -710,6 +720,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Quantities.Length? TrackClearance { get; init; }
         public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
         public EncDotNet.S100.Navigation.WeatherLimits? WeatherLimits { get; init; }
+        public static EncDotNet.S100.Quantities.Length DefaultBerthRadius { get; }
         public static EncDotNet.S100.Navigation.RouteCheckSettings FromMarinerSettings(EncDotNet.S100.Pipelines.MarinerSettings settings, System.DateTimeOffset at) { }
     }
     public sealed class RouteCheckSources
@@ -796,6 +807,11 @@ namespace EncDotNet.S100.Navigation
         public double SouthwestNauticalMiles { get; init; }
         public double ExtentToward(double bearingDegrees) { }
     }
+    public enum RouteEnd
+    {
+        Departure = 0,
+        Arrival = 1,
+    }
     public sealed class RouteFinding
     {
         public RouteFinding(string id, EncDotNet.S100.Navigation.RouteFindingCode code, EncDotNet.S100.Navigation.RouteFindingGroup? group = default) { }
@@ -849,6 +865,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode AreaKindOff { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode AreaNotInForce { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode BelowSetting { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode BerthStructures { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode CautionArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode ChartedDepthFromS101 { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode CrossesDrying { get; }
@@ -926,18 +943,21 @@ namespace EncDotNet.S100.Navigation
         protected virtual string AreaKindOffFormat { get; }
         protected virtual string AreaNotInForceAtFormat { get; }
         protected virtual string AreaNotInForceFormat { get; }
+        protected virtual string ArrivalBerthStructures { get; }
         protected virtual string Awash { get; }
         protected virtual string BelowDistanceFormat { get; }
         protected virtual string BelowKeelFormat { get; }
         protected virtual string BelowMinutesFormat { get; }
         protected virtual string BelowSafetyContourFormat { get; }
         protected virtual string BelowSafetyDepthFormat { get; }
+        protected virtual string BerthStructuresCountFormat { get; }
         protected virtual string ChartedDepthFromS101 { get; }
         protected virtual string CoversAndUncovers { get; }
         protected virtual string CrossesDrying { get; }
         protected virtual string CrossesLand { get; }
         protected virtual string CrossesS102Shoal { get; }
         protected virtual string CrossesSafetyContour { get; }
+        protected virtual string CrossesStructure { get; }
         public System.Globalization.CultureInfo Culture { get; }
         protected virtual string CycloneBestTrack { get; }
         protected virtual string CycloneBeyondFormat { get; }
@@ -952,6 +972,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string DatumMismatch { get; }
         protected virtual string DatumUnconfirmed { get; }
         protected virtual string DatumUnconfirmedMetaFormat { get; }
+        protected virtual string DepartureBerthStructures { get; }
         public EncDotNet.S100.Pipelines.DepthUnit DepthUnit { get; }
         protected virtual string DepthUnknown { get; }
         protected virtual string DryingInCorridor { get; }
@@ -991,12 +1012,14 @@ namespace EncDotNet.S100.Navigation
         protected virtual string S102CellFormat { get; }
         protected virtual string S102CellWithUncertaintyFormat { get; }
         protected virtual string S102ShoalInCorridor { get; }
+        protected virtual string SafetyContourAlert { get; }
         protected virtual string SafetyContourInCorridor { get; }
         protected virtual string Separator { get; }
         protected virtual string SoundingCountFormat { get; }
         protected virtual string SoundingsBelowSafetyContour { get; }
         protected virtual string StretchFromFormat { get; }
         protected virtual string StretchLengthFormat { get; }
+        protected virtual string StructureInsideLimits { get; }
         protected virtual string TideNotApplied { get; }
         protected virtual string TideNotAppliedForFormat { get; }
         protected virtual string TightOnPredictedFormat { get; }
@@ -1189,6 +1212,12 @@ namespace EncDotNet.S100.Navigation
         public string DatasetId { get; init; }
         public string? GridCell { get; init; }
         public System.DateTimeOffset? ModelRun { get; init; }
+    }
+    public sealed class SafetyContourFeatureDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public SafetyContourFeatureDetails() { }
+        public required string FeatureType { get; init; }
+        public bool IsStructure { get; init; }
     }
     public sealed class ShoalDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {

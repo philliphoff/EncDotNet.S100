@@ -82,11 +82,24 @@ public static class RouteFindingCodes
     /// </summary>
     public static RouteFindingCode OverheadOnRoute { get; } = new("route_check.overhead_on_route", RouteFindingCategory.Chart, RouteFindingGroup.Check);
 
-    /// <summary>The track crosses depth, dredged or drying areas shallower than the safety contour. MUST REVIEW.</summary>
+    /// <summary>
+    /// The track crosses depth, dredged or drying areas shallower than the
+    /// safety contour, or another feature that raises the <c>SafetyContour</c>
+    /// alert (<see cref="SafetyContourFeatureDetails"/>). MUST REVIEW.
+    /// </summary>
     public static RouteFindingCode CrossesSafetyContour { get; } = new("route_check.crosses_safety_contour", RouteFindingCategory.Depth, RouteFindingGroup.MustReview);
 
     /// <summary>Areas shallower than the safety contour reach into the corridor, but the track doesn't cross them. CHECK.</summary>
     public static RouteFindingCode SafetyContourInCorridor { get; } = new("route_check.safety_contour_in_corridor", RouteFindingCategory.Depth, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// The structures that raise the <c>SafetyContour</c> alert (pontoons,
+    /// floating docks, shoreline constructions and the like) within the
+    /// berth radius (<see cref="RouteCheckSettings.BerthRadius"/>) of the
+    /// departure or arrival, in one finding per end (#1548). INFO: a route
+    /// that starts or ends at a berth always touches them.
+    /// </summary>
+    public static RouteFindingCode BerthStructures { get; } = new("route_check.berth_structures", RouteFindingCategory.Chart, RouteFindingGroup.Info);
 
     /// <summary>
     /// Soundings no deeper than the safety contour inside the cross-track
@@ -255,7 +268,7 @@ public static class RouteFindingCodes
     [
         CrossesLand, LandInCorridor, CrossesDrying, DryingInCorridor,
         DangerInCorridor, DangerNearRoute, AidToNavigation, StructureOnTrack, StructureInCorridor, OverheadOnRoute,
-        CrossesSafetyContour, SafetyContourInCorridor,
+        CrossesSafetyContour, SafetyContourInCorridor, BerthStructures,
         SoundingsBelowSafetyContour, CrossesS102Shoal, S102ShoalInCorridor,
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
         TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce, AreaKindOff,

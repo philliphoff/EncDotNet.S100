@@ -61,6 +61,19 @@ public sealed class RouteCheckSettings
     public Length? NearbyDistance { get; init; }
 
     /// <summary>
+    /// How far from the departure and arrival waypoints a structure that
+    /// raises the <c>SafetyContour</c> alert (a pontoon, floating dock or
+    /// shoreline construction) is part of the berth (#1548), or <c>null</c>
+    /// for <see cref="DefaultBerthRadius"/>. Such structures are reported as
+    /// one <see cref="RouteFindingCodes.BerthStructures"/> finding (INFO) per
+    /// end instead of crossings; zero turns this off.
+    /// </summary>
+    public Length? BerthRadius { get; init; }
+
+    /// <summary>The default <see cref="BerthRadius"/>: 100 m, a marina's berths and fairway.</summary>
+    public static Length DefaultBerthRadius { get; } = Length.FromMetres(100);
+
+    /// <summary>
     /// The kinds of prohibited area and area with special conditions whose
     /// indication is off (<see cref="RouteAreaKinds"/>; S-164
     /// UserSelectionProhibited Areas). The areas of these kinds aren't
@@ -110,6 +123,9 @@ public sealed class RouteCheckSettings
 
     /// <summary>The track clearance, in metres.</summary>
     internal double TrackClearanceMeters => Math.Max(0, TrackClearance?.TotalMetres ?? 30);
+
+    /// <summary>The berth radius, in metres.</summary>
+    internal double BerthRadiusMeters => Math.Max(0, (BerthRadius ?? DefaultBerthRadius).TotalMetres);
 
     /// <summary>The near band beyond the limits, in metres: the setting, or <paramref name="defaultMeters"/>.</summary>
     internal double NearbyMeters(double defaultMeters) => Math.Max(0, NearbyDistance?.TotalMetres ?? defaultMeters);

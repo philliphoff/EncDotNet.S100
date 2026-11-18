@@ -328,6 +328,60 @@ public sealed class ClearanceDetails : RouteFindingDetails
 }
 
 /// <summary>
+/// A feature other than a depth area whose S-101 portrayal raises the
+/// <c>SafetyContour</c> alert (#1127): a pontoon, floating dock, hulk or
+/// shoreline construction, an unsurveyed area, or land charted as a point or
+/// curve, across the track (<see cref="RouteFindingCodes.CrossesSafetyContour"/>)
+/// or inside the cross-track limits (<see cref="RouteFindingCodes.SafetyContourInCorridor"/>).
+/// </summary>
+public sealed class SafetyContourFeatureDetails : RouteFindingDetails
+{
+    /// <summary>The feature type, such as <c>Pontoon</c> or <c>UnsurveyedArea</c>.</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>
+    /// <c>true</c> for a structure (#1548): anything but an unsurveyed area
+    /// or land. Its finding is titled for the structure, not for depth.
+    /// </summary>
+    public bool IsStructure { get; init; }
+}
+
+/// <summary>Which end of a route a finding is at.</summary>
+public enum RouteEnd
+{
+    /// <summary>The departure: the first waypoint.</summary>
+    Departure,
+
+    /// <summary>The arrival: the last waypoint.</summary>
+    Arrival,
+}
+
+/// <summary>
+/// The structures that raise the <c>SafetyContour</c> alert within the berth
+/// radius (<see cref="RouteCheckSettings.BerthRadius"/>) of the departure or
+/// arrival (<see cref="RouteFindingCodes.BerthStructures"/>, #1548): the
+/// pontoons, floating docks and piers a route that starts or ends at a berth
+/// always touches, in one finding.
+/// </summary>
+public sealed class BerthStructuresDetails : RouteFindingDetails
+{
+    /// <summary>The end of the route they are at.</summary>
+    public required RouteEnd End { get; init; }
+
+    /// <summary>The berth radius they are within.</summary>
+    public required Length Radius { get; init; }
+
+    /// <summary>The structures, in route order, each once.</summary>
+    public required IReadOnlyList<RouteFindingFeature> Features { get; init; }
+
+    /// <summary>How many crossing findings they stand for (<see cref="RouteFindingCodes.CrossesSafetyContour"/>).</summary>
+    public int CrossingCount { get; init; }
+
+    /// <summary>Their feature types, each once, in route order.</summary>
+    public IReadOnlyList<string> FeatureTypes => Features.Select(f => f.FeatureType).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+}
+
+/// <summary>
 /// Areas of a kind the settings turn off (<see cref="RouteCheckSettings.AreaKindsOff"/>)
 /// that the route meets (<see cref="RouteFindingCodes.AreaKindOff"/>, #1127):
 /// their indication is off, so the mariner is told so.
