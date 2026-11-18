@@ -544,6 +544,7 @@ internal static class S100McpServerToolFactory
                    [Description("With includeWindow and windowTo, the first swept departure (ISO-8601).")] DateTimeOffset? windowFrom = null,
                    [Description("With includeWindow and windowFrom, the last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
                    [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
+                   [Description("How far from the departure and arrival waypoints, in metres, pontoons, floating docks and shoreline constructions count as the berth: one info route_check.berth_structures finding per end instead of crossings (default 100; 0 turns it off).")] double? berthRadiusMeters = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -565,7 +566,8 @@ internal static class S100McpServerToolFactory
                         includeWindow,
                         windowFrom,
                         windowTo,
-                        windowStepMinutes),
+                        windowStepMinutes,
+                        BerthRadiusMeters: berthRadiusMeters),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
