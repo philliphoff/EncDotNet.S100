@@ -464,6 +464,15 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
     }
 
+    /// <summary>
+    /// Waits until every tile queued for the disk cache has reached the disk.
+    /// Disposing waits only briefly, so a caller that reads the cache folder
+    /// next (a test, say) waits here first.
+    /// </summary>
+    /// <param name="timeout">The longest time to wait.</param>
+    /// <returns><see langword="true"/> when there is no disk cache or its queue drained within <paramref name="timeout"/>.</returns>
+    internal bool WaitForDiskWrites(TimeSpan timeout) => _diskCache?.WaitForWrites(timeout) ?? true;
+
     public void Dispose()
     {
         _renderSlots.Dispose();

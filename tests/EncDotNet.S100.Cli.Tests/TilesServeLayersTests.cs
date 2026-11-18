@@ -309,7 +309,8 @@ public sealed class TilesServeLayersTests : IDisposable
 
         var errors = new StringWriter();
         string fingerprint;
-        await using (var source = new OverviewTileSource(OpenRendered(settings)))
+        var rendered = OpenRendered(settings);
+        await using (var source = new OverviewTileSource(rendered))
         {
             fingerprint = source.Revision!;
             await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, token: null, cancellationToken: ct, errors: errors);
@@ -331,6 +332,11 @@ public sealed class TilesServeLayersTests : IDisposable
             var (ox, oy) = TileAt(overviewZoom, -70.0, 41.3);
             using (var overview = await http.GetAsync(new Uri(server.BaseUri, $"wmts/1.0.0/chart/day/WebMercatorQuad/{overviewZoom}/{oy}/{ox}.png"), ct))
                 Assert.True(overview.StatusCode is HttpStatusCode.OK or HttpStatusCode.NoContent, $"{overview.StatusCode}");
+
+            // Tiles reach the disk on a background queue, and disposing waits
+            // only briefly for it: on a busy runner the write can land later.
+            await rendered.DrainAsync();
+            Assert.True(rendered.WaitForDiskWrites(TimeSpan.FromSeconds(30)));
         }
 
         Assert.Equal(string.Empty, errors.ToString());
