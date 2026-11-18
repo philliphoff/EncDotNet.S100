@@ -107,6 +107,7 @@ public sealed record NmeaWeatherSourceSettings
     /// <c>tcp://HOST:PORT</c>, or a recording's path, replayed in a loop
     /// (<see cref="NmeaInput.Parse"/>).
     /// </summary>
+    [SourceOption("NMEA input", Required = true, Description = "udp, udp:PORT, udp://ADDRESS:PORT, tcp://HOST:PORT, or a recording's path.")]
     public string Input { get; init; } = "";
 
     /// <summary>The source's own options.</summary>

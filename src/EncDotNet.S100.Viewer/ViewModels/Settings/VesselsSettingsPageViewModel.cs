@@ -1,10 +1,9 @@
-using System.Globalization;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-/// <summary>Settings → Vessels: own vessel and the AIS overlay (#845, #1398).</summary>
+/// <summary>Settings → Vessels: own vessel (#845), and where AIS targets' settings went (data source design note D8).</summary>
 internal sealed class VesselsSettingsPageViewModel(ViewerSettingsService settings) : SettingsPageViewModel(settings)
 {
     /// <inheritdoc />
@@ -52,41 +51,5 @@ internal sealed class VesselsSettingsPageViewModel(ViewerSettingsService setting
     {
         get => Settings.OwnShipPortOffsetMetres;
         set => Settings.OwnShipPortOffsetMetres = value;
-    }
-
-    /// <inheritdoc cref="ViewerSettingsService.AisApiKey" />
-    public string? AisApiKey
-    {
-        get => Settings.AisApiKey;
-        set => Settings.AisApiKey = value;
-    }
-
-    /// <inheritdoc cref="ViewerSettingsService.AisActivationViewportSpanDegrees" />
-    public double? AisActivationViewportSpanDegrees
-    {
-        get => Settings.AisActivationViewportSpanDegrees;
-        set => Settings.AisActivationViewportSpanDegrees = value;
-    }
-
-    /// <summary>
-    /// Localised hint shown beneath the API-key field. Renders the
-    /// "env var is set, will be used" copy when the env var resolves,
-    /// otherwise the "or set ENV" reminder.
-    /// </summary>
-    public string AisApiKeyHint
-    {
-        get
-        {
-            var envVar = Settings.AisApiKeyEnvironmentVariable;
-            var envVal = Environment.GetEnvironmentVariable(envVar);
-            if (!string.IsNullOrWhiteSpace(envVal))
-                return string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarPresent, envVar);
-            var envHint = string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarHint, envVar);
-            // Data source design note D7: say where the key is kept.
-            var where = Settings.SecretStoreName is { } store
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Settings_SecretSavedInStoreFormat, store)
-                : string.Format(CultureInfo.CurrentCulture, Strings.Settings_SecretNoStoreFormat, envVar);
-            return where + " " + envHint;
-        }
     }
 }

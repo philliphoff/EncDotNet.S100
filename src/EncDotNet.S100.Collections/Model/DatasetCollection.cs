@@ -290,4 +290,14 @@ public sealed record WeatherFeedSource(
 /// <param name="DisplayName">An optional user-facing label; the registration's name when null.</param>
 /// <param name="RegistrationId">The source registration's id, such as <c>ndbc.realtime</c>.</param>
 public sealed record LiveFeedSource(Guid Id, string? DisplayName, string RegistrationId)
-    : CollectionSource(Id, DisplayName);
+    : CollectionSource(Id, DisplayName)
+{
+    /// <summary>
+    /// The feed's options from its settings page, by option name, as
+    /// invariant text (<c>SourceOptionsForm</c>); a secret is a
+    /// <c>sc-secret:</c> reference. <see langword="null"/> for the
+    /// registration's defaults.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, string>? Options { get; init; }
+}

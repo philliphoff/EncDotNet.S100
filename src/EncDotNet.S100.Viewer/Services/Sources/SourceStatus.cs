@@ -40,12 +40,14 @@ internal sealed record SourceStatus(SourceStatusKind Kind, string Text, string? 
     /// <param name="lastUpdated">When it last delivered data.</param>
     /// <param name="lastError">Its last failure.</param>
     /// <param name="now">The current time.</param>
+    /// <param name="activation">When it runs with its options; <see langword="null"/> for the registration's.</param>
     public static SourceStatus Evaluate(
         SourceRunState state,
         SourceRegistration? registration,
         DateTimeOffset? lastUpdated,
         Exception? lastError,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        SourceActivation? activation = null)
     {
         var culture = CultureInfo.CurrentCulture;
         switch (state)
@@ -55,7 +57,7 @@ internal sealed record SourceStatus(SourceStatusKind Kind, string Text, string? 
             case SourceRunState.WaitingForZoom:
                 return new(
                     SourceStatusKind.WaitingForZoom,
-                    registration?.Activation.MaxViewportSpanDegrees is { } span
+                    (activation ?? registration?.Activation)?.MaxViewportSpanDegrees is { } span
                         ? string.Format(culture, Strings.SourceStatus_WaitingForZoomFormat, span)
                         : Strings.SourceStatus_WaitingForZoom);
         }

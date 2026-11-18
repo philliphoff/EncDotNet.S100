@@ -111,7 +111,7 @@ internal sealed class SourceDatasetService : IDisposable
         if (processor is IHostedDatasetProcessor hosted)
         {
             var registration = Find(sourceId);
-            var activation = registration?.Activation ?? SourceActivation.Always;
+            var activation = registration?.ActivationFor(entry.SourceOptions) ?? SourceActivation.Always;
             var running = activator = new HostedSourceActivator(
                 hosted, activation, _notifier, entry.IsVisible, logger: _logger);
             onChanged = (_, e) =>
@@ -124,7 +124,7 @@ internal sealed class SourceDatasetService : IDisposable
             // D8: the row says what the source is doing. Read again when it
             // pauses or resumes, when it delivers data, and every 30 s so its
             // age and staleness stay current.
-            void Refresh() => UpdateStatus(entry, running, registration, hosted);
+            void Refresh() => UpdateStatus(entry, running, registration, activation, hosted);
             running.StateChanged += (_, _) => Refresh();
             EventHandler<DatasetChangedEventArgs>? onData = null;
             if (processor is ILiveDatasetProcessor live)
@@ -169,13 +169,14 @@ internal sealed class SourceDatasetService : IDisposable
         DatasetEntry entry,
         HostedSourceActivator activator,
         SourceRegistration? registration,
+        SourceActivation activation,
         IHostedDatasetProcessor processor)
     {
         SourceStatus status;
         try
         {
             status = SourceStatus.Evaluate(
-                activator.State, registration, processor.LastUpdated, processor.LastError, _time.GetUtcNow());
+                activator.State, registration, processor.LastUpdated, processor.LastError, _time.GetUtcNow(), activation);
         }
         catch (ObjectDisposedException)
         {

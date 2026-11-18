@@ -1114,6 +1114,67 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <!-- A selected live feed with no dataset selected: its settings page (data source design note D8). -->
+                <ScrollViewer IsVisible="{Binding ShowsLiveFeedSettings}"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="10" Margin="8,0,8,8" DataContext="{Binding Tree.LiveFeedSettings}"
+                                x:DataType="vm:LiveFeedSettingsViewModel"
+                                AutomationProperties.AutomationId="Library.LiveFeedSettings"
+                                AutomationProperties.Name="{x:Static loc:Strings.LiveFeed_SettingsHeader}">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Description}" TextWrapping="Wrap"
+                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
+                                   FontSize="12" FontWeight="Medium"
+                                   Classes="secomToned" Classes.warning="{Binding NeedsSettings}" Classes.neutral="{Binding !NeedsSettings}"
+                                   AutomationProperties.AutomationId="Library.LiveFeedSettings.Message"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   AutomationProperties.Name="{Binding Message}" />
+                        <TextBlock Text="{x:Static loc:Strings.LiveFeed_NoOptions}" IsVisible="{Binding HasNoOptions}"
+                                   FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
+                        <StackPanel Spacing="8" IsVisible="{Binding HasOptions}">
+                            <TextBlock Text="{x:Static loc:Strings.LiveFeed_SettingsHeader}" Classes="libraryGroupHeader" />
+                            <ItemsControl ItemsSource="{Binding Options}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LiveFeedOptionViewModel">
+                                        <StackPanel Spacing="3" Margin="0,0,0,8">
+                                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.75"
+                                                       IsVisible="{Binding !IsBoolean}" />
+                                            <TextBox Text="{Binding Text, Mode=TwoWay}" IsVisible="{Binding IsText}"
+                                                     Classes.revealPasswordButton="{Binding IsSecret}"
+                                                     PasswordChar="{Binding IsSecret, Converter={x:Static views:LibraryPanelView.SecretMask}}"
+                                                     PlaceholderText="{Binding Description}"
+                                                     Classes.invalid="{Binding !IsValid}"
+                                                     AutomationProperties.AutomationId="{Binding Field.Name, StringFormat='Library.LiveFeedSettings.Option.{0}'}"
+                                                     AutomationProperties.Name="{Binding Field.Label}"
+                                                     AutomationProperties.HelpText="{Binding Description}" />
+                                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked, Mode=TwoWay}" IsVisible="{Binding IsBoolean}"
+                                                      AutomationProperties.AutomationId="{Binding Field.Name, StringFormat='Library.LiveFeedSettings.Option.{0}'}"
+                                                      AutomationProperties.Name="{Binding Field.Label}" />
+                                            <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Text, Mode=TwoWay}" IsVisible="{Binding IsChoice}"
+                                                      AutomationProperties.AutomationId="{Binding Field.Name, StringFormat='Library.LiveFeedSettings.Option.{0}'}"
+                                                      AutomationProperties.Name="{Binding Field.Label}" />
+                                            <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}" TextWrapping="Wrap"
+                                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Classes="Primary libraryCompact" Content="{x:Static loc:Strings.LiveFeed_Save}" Command="{Binding SaveCommand}"
+                                        AutomationProperties.AutomationId="Library.LiveFeedSettings.Save"
+                                        AutomationProperties.Name="{x:Static loc:Strings.LiveFeed_Save}" />
+                                <Button Classes="libraryCompact" Content="{x:Static loc:Strings.LiveFeed_Revert}" Command="{Binding RevertCommand}"
+                                        AutomationProperties.AutomationId="Library.LiveFeedSettings.Revert"
+                                        AutomationProperties.Name="{x:Static loc:Strings.LiveFeed_Revert}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
                 <ScrollViewer IsVisible="{Binding List.HasSelectedItem}"
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto">

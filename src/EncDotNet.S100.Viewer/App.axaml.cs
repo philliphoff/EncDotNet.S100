@@ -1644,7 +1644,14 @@ public partial class App : Application
             sp.GetRequiredService<TimeProvider>(),
             // SECOM rows name their identity; a selected source's details choose it (#883).
             sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>(),
-            sp.GetRequiredService<Services.Secom.KeysNavigator>().Open));
+            sp.GetRequiredService<Services.Secom.KeysNavigator>().Open)
+        {
+            // D8: a selected live feed's settings page.
+            LiveFeedSettings = new LiveFeedSettingsViewModel(
+                id => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>().Find(id),
+                (collectionId, source) => sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>().UpdateSource(collectionId, source),
+                sp.GetService<EncDotNet.S100.Viewer.Services.Secrets.ISecretStore>()),
+        });
         services.AddSingleton(sp => new LibraryDetailsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<Library.ILibraryDownloader>(),

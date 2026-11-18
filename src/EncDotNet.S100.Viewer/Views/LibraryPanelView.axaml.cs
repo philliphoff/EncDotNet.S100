@@ -16,6 +16,10 @@ public partial class LibraryPanelView : UserControl
     public static readonly IValueConverter BoolToWeight =
         new FuncValueConverter<bool, FontWeight>(isCollection => isCollection ? FontWeight.SemiBold : FontWeight.Normal);
 
+    /// <summary>A live feed's secret option is masked; other options aren't.</summary>
+    public static readonly IValueConverter SecretMask =
+        new FuncValueConverter<bool, char>(isSecret => isSecret ? '\u2022' : '\0');
+
     public LibraryPanelView()
     {
         InitializeComponent();

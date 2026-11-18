@@ -27,5 +27,17 @@ internal static partial class Strings
     public static string Ais_SourceDescription => Get(nameof(Ais_SourceDescription));
     public static string Library_LiveFeedsCollection => Get(nameof(Library_LiveFeedsCollection));
     public static string Library_AddMenu_LiveFeeds => Get(nameof(Library_AddMenu_LiveFeeds));
+    public static string LiveFeed_SecretFromEnvironmentFormat => Get(nameof(LiveFeed_SecretFromEnvironmentFormat));
+    public static string LiveFeed_SecretSaved => Get(nameof(LiveFeed_SecretSaved));
+    public static string LiveFeed_SecretOrEnvironmentFormat => Get(nameof(LiveFeed_SecretOrEnvironmentFormat));
+    public static string LiveFeed_UnknownFormat => Get(nameof(LiveFeed_UnknownFormat));
+    public static string LiveFeed_NeedsSettings => Get(nameof(LiveFeed_NeedsSettings));
+    public static string LiveFeed_InvalidFormat => Get(nameof(LiveFeed_InvalidFormat));
+    public static string LiveFeed_Saved => Get(nameof(LiveFeed_Saved));
+    public static string LiveFeed_SettingsHeader => Get(nameof(LiveFeed_SettingsHeader));
+    public static string LiveFeed_Save => Get(nameof(LiveFeed_Save));
+    public static string LiveFeed_Revert => Get(nameof(LiveFeed_Revert));
+    public static string LiveFeed_NoOptions => Get(nameof(LiveFeed_NoOptions));
+    public static string Settings_AisMovedToLibrary => Get(nameof(Settings_AisMovedToLibrary));
     public static string Ais_KeyNeededFormat => Get(nameof(Ais_KeyNeededFormat));
 }
