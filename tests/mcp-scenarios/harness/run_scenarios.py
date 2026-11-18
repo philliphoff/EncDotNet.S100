@@ -19,7 +19,7 @@ ROUTES = os.path.join(HERE, "..", "routes")
 S100 = os.environ.get("S100", "s100")
 ENC = os.environ["ENC"]
 TIDES = os.environ.get("TIDES", os.path.join(HERE, "../../datasets/Tides/Stations/noaa-currents.json"))
-VESSEL = dict(draftMeters=1.1, speedKnots=16, safetyContourMeters=3, safetyDepthMeters=3, corridorHalfWidthMeters=50)
+VESSEL = dict(draftMeters=1.1, speedKnots=16, safetyContourMeters=1.5, safetyDepthMeters=1.5, corridorHalfWidthMeters=50)
 results = []
 
 def server():
