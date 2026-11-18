@@ -1,5 +1,5 @@
 {
- "note": "Waypoints planned on an independent GDAL depth grid (harness/grid.py + plan.py) from NOAA ENCs fetched 2026-11-17, then validated with check_route. Not for navigation.",
+ "note": "Waypoints planned on an independent GDAL depth grid (harness/grid.py + plan.py) from NOAA ENCs fetched 2026-11-17, then validated with check_route. Not for navigation. The Cap Sante Marina ends of d1 and d7 were re-drawn by hand on 2026-11-18 to round the tip of the marina breakwater (US5SEARI ShorelineConstruction 336) and run down the middle of the Cap Sante Waterway; the planner's grid doesn't hold shoreline constructions, so its line cut the breakwater.",
  "days": [
   {
    "id": "d1",
@@ -8,6 +8,22 @@
     [
      48.51189,
      -122.60519
+    ],
+    [
+     48.5116,
+     -122.60525
+    ],
+    [
+     48.51166,
+     -122.6048
+    ],
+    [
+     48.5117,
+     -122.604
+    ],
+    [
+     48.5117,
+     -122.598
     ],
     [
      48.51189,
@@ -334,8 +350,20 @@
      -122.59635
     ],
     [
-     48.51189,
-     -122.60009
+     48.5117,
+     -122.598
+    ],
+    [
+     48.5117,
+     -122.604
+    ],
+    [
+     48.51166,
+     -122.6048
+    ],
+    [
+     48.5116,
+     -122.60525
     ],
     [
      48.51189,
