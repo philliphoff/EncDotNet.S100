@@ -29,7 +29,9 @@ public sealed class LiveFeedLibraryTests : IDisposable
             new CollectionLibraryOptions(Path.Combine(_root, "collections.json"), Path.Combine(_root, "index-cache")));
         _library.Initialize();
         _settings = new ViewerSettings { SettingsFilePath = Path.Combine(_root, "settings.json") };
-        _feeds = new LiveFeedLibrary(_library, _sources, _datasets, _settings, removedFromMap: _removedFromMap.Add);
+        // The Library raises Changed on its indexing thread; the app posts to
+        // the UI thread. Here the tests call Sync themselves, on theirs.
+        _feeds = new LiveFeedLibrary(_library, _sources, _datasets, _settings, post: static _ => { }, removedFromMap: _removedFromMap.Add);
     }
 
     public void Dispose()
@@ -97,7 +99,7 @@ public sealed class LiveFeedLibraryTests : IDisposable
         Assert.NotNull(_datasets.FindSource(S100Sources.NdbcObservationsId));
 
         // A new start puts it on the map too.
-        using var next = new LiveFeedLibrary(_library, _sources, new DatasetsViewModel(new FakeDatasetLoaderService()), _settings);
+        using var next = new LiveFeedLibrary(_library, _sources, new DatasetsViewModel(new FakeDatasetLoaderService()), _settings, post: static _ => { });
         next.Start();
         Assert.Single(FeedsInLibrary());
     }
@@ -110,6 +112,7 @@ public sealed class LiveFeedLibraryTests : IDisposable
         var collection = Assert.Single(_library.Collections, c => !c.IsSession);
 
         _library.RemoveSource(collection.Id, Assert.Single(FeedsInLibrary()).Id);
+        _feeds.Sync();
 
         Assert.Null(_datasets.FindSource(S100Sources.NdbcObservationsId));
         Assert.Empty(_removedFromMap);
