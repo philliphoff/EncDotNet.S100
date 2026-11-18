@@ -41,10 +41,13 @@ def s1(m):
     r = m.call("search_features", {"text": "Cap Sante Marina"})
     check("S1.1", "'Cap Sante Marina' isn't a charted name; the agent must resolve it another way",
           r["data"].get("totalCount", 0) == 0, f"{r['data'].get('totalCount')} matches")
-    r = m.call("search_features", {"text": "Friday Harbor Marina Entrance", "pageSize": 50})
-    ids = {(f["featureType"], f["matchedName"]) for f in r["data"]["features"]}
-    check("S1.2", "search_features returns one hit per scale band for the same real-world object (agent must de-duplicate)",
-          None, f"{r['data']['totalCount']} hits for {len(ids)} distinct objects")
+    # #1549: finestOnly keeps only the finest cell's copy. Objects are counted by position,
+    # because the two beacons at the entrance share a type and a name.
+    r = m.call("search_features", {"text": "Friday Harbor Marina Entrance", "pageSize": 50, "finestOnly": True})
+    pos = {(round((f["bounds"]["southLatitude"] + f["bounds"]["northLatitude"]) / 2, 5),
+            round((f["bounds"]["westLongitude"] + f["bounds"]["eastLongitude"]) / 2, 5)) for f in r["data"]["features"]}
+    check("S1.2", "search_features with finestOnly returns one hit per real-world object",
+          r["data"]["totalCount"] == len(pos), f"{r['data']['totalCount']} hits for {len(pos)} distinct objects")
     days = json.load(open(os.path.join(ROUTES, "san-juans-7day.json")))["days"]
     for d in days:
         if d["id"] == "d7b": continue
@@ -62,8 +65,14 @@ def s1(m):
         rna = [f for f in rep["findings"] if f["group"] == "must_review" and f["code"] == "route_check.enters_prohibited_area" and f["details"]["area"]["restrictions"] == [8]]
         check(f"S1.{d['id']}.rna", "a 'entry restricted' Regulated Navigation Area (33 CFR 165.1301, large vessels) doesn't headline a 40' boat's route as must-review",
               not rna, f"{len(rna)} must-review findings, verdict '{rep['verdict']['title']}'")
-        shore = [f for f in rep["findings"] if f["code"] == "route_check.crosses_safety_contour" and "ShorelineConstruction" in f.get("meta", "")]
-        check(f"S1.{d['id']}.shore", "piers and breakwaters aren't reported as 'Crosses the safety contour'", not shore, f"{len(shore)} findings")
+        # #1548: structures keep the SafetyContour alert (and its code) but are titled for the structure,
+        # so check the title. Structures at a berth are grouped into one Info finding per route end.
+        structures = ("ShorelineConstruction", "Pontoon", "FloatingDock", "Hulk")
+        shore = [f for f in rep["findings"] if f["title"] == "Crosses the safety contour" and any(s in f.get("meta", "") for s in structures)]
+        berth = [f for f in rep["findings"] if f["code"] == "route_check.berth_structures"]
+        ends = [f.get("details", {}).get("berthStructures", {}).get("end") for f in berth]
+        check(f"S1.{d['id']}.shore", "piers and breakwaters aren't titled 'Crosses the safety contour'; at most one berth finding per end",
+              not shore and len(ends) == len(set(ends)), f"{len(shore)} titled as safety-contour crossings, {len(berth)} berth findings")
         # Current timing (needs a current station near the route)
         cur = m.call("sample_coverage_along", {"spec": "S-111", "polyline": poly(d["vertices"]), "time": "2027-07-12T18:00:00Z"})["data"]["samples"]
         got = sum(1 for s in cur if "result" in s)
