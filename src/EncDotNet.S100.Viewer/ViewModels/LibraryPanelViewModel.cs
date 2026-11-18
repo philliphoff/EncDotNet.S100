@@ -59,8 +59,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>True when the details pane shows a SECOM source's Connection: one is selected and no dataset is.</summary>
     public bool ShowsSecomDetails => _tree.SecomDetails?.SourceId is not null && _list.SelectedItem is null;
 
+    /// <summary>True when the details pane shows a live feed's settings (D8): one is selected and no dataset is.</summary>
+    public bool ShowsLiveFeedSettings => _tree.LiveFeedSettings?.SourceId is not null && _list.SelectedItem is null;
+
     /// <summary>True when the details pane shows its "select a dataset" placeholder.</summary>
-    public bool ShowsItemPlaceholder => _list.SelectedItem is null && !ShowsSecomDetails;
+    public bool ShowsItemPlaceholder => _list.SelectedItem is null && !ShowsSecomDetails && !ShowsLiveFeedSettings;
 
     private void OnListPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -77,6 +80,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private void RaiseDetailsShown()
     {
         OnPropertyChanged(nameof(ShowsSecomDetails));
+        OnPropertyChanged(nameof(ShowsLiveFeedSettings));
         OnPropertyChanged(nameof(ShowsItemPlaceholder));
     }
 

@@ -134,10 +134,35 @@ public sealed class LiveFeedLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Only_feeds_that_need_no_settings_are_offered()
+    public void Every_feed_is_offered_including_ones_that_need_settings()
     {
         Assert.Contains(S100Sources.NdbcObservations, _feeds.Offered);
-        Assert.All(_feeds.Offered, r => Assert.True(r.OptionsType is null || r.DefaultOptions is not null));
+        Assert.Contains(S100Sources.NmeaWeather, _feeds.Offered);
+    }
+
+    [Fact]
+    public void New_settings_put_the_feed_back_with_them()
+    {
+        _feeds.Start();
+        _feeds.Subscribe(S100Sources.NmeaWeather);
+        var first = _datasets.FindSource(S100Sources.NmeaWeatherId)!;
+        Assert.Equal(string.Empty, Assert.IsType<NmeaWeatherSourceSettings>(first.SourceOptions).Input);
+        var collection = Assert.Single(_library.Collections, c => !c.IsSession);
+
+        _library.UpdateSource(collection.Id, Assert.Single(FeedsInLibrary()) with
+        {
+            Options = new Dictionary<string, string> { ["Input"] = "udp:10110" },
+        });
+        _feeds.Sync();
+
+        var second = _datasets.FindSource(S100Sources.NmeaWeatherId)!;
+        Assert.NotSame(first, second);
+        Assert.Equal("udp:10110", Assert.IsType<NmeaWeatherSourceSettings>(second.SourceOptions).Input);
+        Assert.Empty(_removedFromMap);
+
+        // The same settings again change nothing.
+        _feeds.Sync();
+        Assert.Same(second, _datasets.FindSource(S100Sources.NmeaWeatherId));
     }
 
     [Fact]

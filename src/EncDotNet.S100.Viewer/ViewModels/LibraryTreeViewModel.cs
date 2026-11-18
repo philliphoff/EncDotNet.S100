@@ -245,6 +245,9 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
     /// <summary>A selected SECOM source's Connection details (#883 D3); null without SECOM identities.</summary>
     public Secom.SecomSourceDetailsViewModel? SecomDetails { get; }
 
+    /// <summary>A selected live feed's settings page (data source design note D8); null where the host has none.</summary>
+    public LiveFeedSettingsViewModel? LiveFeedSettings { get; init; }
+
     /// <summary>
     /// The persisted collection new sources are added to by default: the
     /// selected node's collection, unless it is the session collection.
@@ -406,14 +409,15 @@ internal sealed class LibraryTreeViewModel : ViewModelBase, IDisposable
         ShowSecomDetails();
     }
 
-    /// <summary>Shows the selected node's SECOM source (if it is one) in the details pane.</summary>
+    /// <summary>Shows the selected node's SECOM source or live feed (if it is one) in the details pane.</summary>
     private void ShowSecomDetails()
     {
-        if (SecomDetails is null)
+        if (SecomDetails is null && LiveFeedSettings is null)
             return;
         var node = _selectedNode;
         var source = node is null || node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
-        SecomDetails.Show(node?.Collection, source);
+        SecomDetails?.Show(node?.Collection, source);
+        LiveFeedSettings?.Show(node?.Collection, source);
         SecomDetailsChanged?.Invoke(this, EventArgs.Empty);
     }
 

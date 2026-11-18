@@ -61,6 +61,18 @@ public sealed record SourceRegistration
     public SourceActivation Activation { get; init; } = SourceActivation.Always;
 
     /// <summary>
+    /// When a host runs the source with given options, for a source whose
+    /// options set it, such as an AIS feed's zoom threshold; <see langword="null"/>
+    /// for <see cref="Activation"/> whatever the options. Use <see cref="ActivationFor"/>.
+    /// </summary>
+    public Func<object?, SourceActivation>? ActivationFromOptions { get; init; }
+
+    /// <summary>When a host runs the source with <paramref name="options"/>.</summary>
+    /// <param name="options">The entry's options, or <see langword="null"/> for <see cref="DefaultOptions"/>.</param>
+    public SourceActivation ActivationFor(object? options) =>
+        ActivationFromOptions?.Invoke(options ?? DefaultOptions) ?? Activation;
+
+    /// <summary>
     /// The options record a host stores and passes to <see cref="Create"/>,
     /// or <see langword="null"/> for a source with no options. A host can
     /// build a settings page from its public properties.

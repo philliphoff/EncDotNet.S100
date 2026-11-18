@@ -9051,7 +9051,7 @@
     <value>Live AIS vessel targets from aisstream.io, for the area in view. Needs a free API key (Settings › Vessels). Not for navigation.</value>
   </data>
   <data name="Ais_KeyNeededFormat" xml:space="preserve">
-    <value>AIS targets need an aisstream.io API key. Enter it in Settings › Vessels, or set the {0} environment variable.</value>
+    <value>Key needed: enter an aisstream.io API key in the Library (Live feeds › AIS targets), or set the {0} environment variable.</value>
     <comment>{0} = environment variable name.</comment>
   </data>
   <data name="Library_LiveFeedsCollection" xml:space="preserve">
@@ -9061,5 +9061,45 @@
   <data name="Library_AddMenu_LiveFeeds" xml:space="preserve">
     <value>Live feeds</value>
     <comment>Library Add menu group header for live feeds (AIS, NDBC observations, ...).</comment>
+  </data>
+  <data name="LiveFeed_SecretFromEnvironmentFormat" xml:space="preserve">
+    <value>Supplied by the {0} environment variable, which comes first.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="LiveFeed_SecretSaved" xml:space="preserve">
+    <value>Saved. Type a new one to replace it.</value>
+  </data>
+  <data name="LiveFeed_SecretOrEnvironmentFormat" xml:space="preserve">
+    <value>Or set the {0} environment variable.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="LiveFeed_UnknownFormat" xml:space="preserve">
+    <value>This version of SoundCharts doesn't have the {0} feed.</value>
+    <comment>{0} = feed id, e.g. ais.aisstream.</comment>
+  </data>
+  <data name="LiveFeed_NeedsSettings" xml:space="preserve">
+    <value>Needs settings: fill in the options marked * to run it.</value>
+  </data>
+  <data name="LiveFeed_InvalidFormat" xml:space="preserve">
+    <value>{0} isn't valid.</value>
+    <comment>{0} = option label.</comment>
+  </data>
+  <data name="LiveFeed_Saved" xml:space="preserve">
+    <value>Saved. The feed restarts with these settings.</value>
+  </data>
+  <data name="LiveFeed_SettingsHeader" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="LiveFeed_Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="LiveFeed_Revert" xml:space="preserve">
+    <value>Revert</value>
+  </data>
+  <data name="LiveFeed_NoOptions" xml:space="preserve">
+    <value>This feed has nothing to set.</value>
+  </data>
+  <data name="Settings_AisMovedToLibrary" xml:space="preserve">
+    <value>AIS targets are a live feed: subscribe to them in the Library (Add › Live feeds), and set the aisstream.io key and when they run on their settings there.</value>
   </data>
 </root>

@@ -505,8 +505,10 @@ station's symbol turns grey when its observation is more than 3 hours old.
 
 SoundCharts reads wind, heading, motion and temperature sentences (`MWV`,
 `MWD`, `HDT`, `HDG`, `VHW`, `RMC`, `VTG`, `MTW`, `XDR`) from an NMEA 0183
-stream. Set the `SOUNDCHARTS_NMEA_INPUT` environment variable before you
-start SoundCharts:
+stream. In the **Library**, choose **Add** and then, under **Live feeds**,
+**Own-ship weather (NMEA)**, select it, and set its **NMEA input** (or set
+the `SOUNDCHARTS_NMEA_INPUT` environment variable before you start
+SoundCharts):
 
 | Value | Input |
 |---|---|

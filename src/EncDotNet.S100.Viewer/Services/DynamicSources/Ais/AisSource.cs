@@ -11,23 +11,46 @@ using EncDotNet.S100.Viewer.ViewModels;
 namespace EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 
 /// <summary>
+/// The options of AIS targets, on its Library settings page (design note D8,
+/// slice 9b): the aisstream.io key, kept in the secret store, and the widest
+/// view it runs in.
+/// </summary>
+public sealed record AisFeedOptions
+{
+    /// <summary>The environment variable that supplies the key ahead of the stored one.</summary>
+    public const string KeyEnvironmentVariable = "ENCDOTNET_AIS_STREAM_KEY";
+
+    /// <summary>The default widest view, in degrees, as Settings › Vessels had it.</summary>
+    public const double DefaultActivationSpanDegrees = 50;
+
+    /// <summary>The aisstream.io API key, or a <c>sc-secret:</c> reference to it.</summary>
+    [SourceOption("aisstream.io API key", Required = true, Description = "Get a free key at aisstream.io.")]
+    [Secret(EnvironmentVariable = KeyEnvironmentVariable)]
+    public string? ApiKey { get; init; }
+
+    /// <summary>The widest view, in degrees of latitude and longitude, it runs in; 0 or less for any view.</summary>
+    [SourceOption("Runs in views narrower than (degrees)", Description = "Wider views would subscribe to an ocean's worth of targets. 0 runs it in any view.")]
+    public double ActivationSpanDegrees { get; init; } = DefaultActivationSpanDegrees;
+}
+
+/// <summary>
 /// AIS targets from aisstream.io as a live feed (data source design note D8,
 /// slice 7c): a Datasets entry added like NDBC, run by the shared activator,
 /// and picked on the dataset path. SoundCharts builds it, so its source is
-/// wrapped for pirate mode, and its key and zoom threshold come from
-/// Settings › Vessels until each feed has its own settings (slice 9).
+/// wrapped for pirate mode. Its key and zoom threshold are
+/// <see cref="AisFeedOptions"/>, set on its Library settings page (slice 9b).
 /// </summary>
 internal static class AisSource
 {
     /// <summary>The registration id.</summary>
     public const string Id = "ais.aisstream";
 
-    /// <summary>The registration, reading the key and the zoom threshold from <paramref name="settings"/>.</summary>
+    /// <summary>The registration, with defaults from the key and threshold <paramref name="settings"/> held before slice 9b.</summary>
     /// <param name="settings">SoundCharts' settings.</param>
     public static SourceRegistration Registration(ViewerSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        var span = settings.AisOverlay?.ActivationViewportSpanDegrees;
+        var defaults = LegacyOptions(settings);
         return new SourceRegistration
         {
             Id = Id,
@@ -37,16 +60,38 @@ internal static class AisSource
             Group = SourceGroup.Vessels,
             // Targets report every few seconds to 3 minutes (ITU-R M.1371-5 §4.2.1).
             StaleAfter = TimeSpan.FromMinutes(5),
-            Activation = span is > 0 ? SourceActivation.BelowViewportSpan(span.Value) : SourceActivation.Always,
-            Create = context => Create(context, settings.AisOverlay ?? new AisOverlaySettings()),
+            Activation = ActivationOf(defaults),
+            ActivationFromOptions = options => ActivationOf(options as AisFeedOptions ?? defaults),
+            OptionsType = typeof(AisFeedOptions),
+            DefaultOptions = defaults,
+            Create = context => Create(context, context.GetOptions(defaults)),
         };
     }
 
-    private static IDatasetProcessor Create(SourceCreationContext context, AisOverlaySettings overlay)
+    /// <summary>The key and threshold Settings › Vessels held before slice 9b, as options.</summary>
+    /// <param name="settings">SoundCharts' settings.</param>
+    internal static AisFeedOptions LegacyOptions(ViewerSettings settings)
     {
-        var key = context.ResolveSecret(overlay.ApiKey, overlay.ApiKeyEnvironmentVariable)
+        var overlay = settings.AisOverlay;
+        return new AisFeedOptions
+        {
+            ApiKey = string.IsNullOrWhiteSpace(overlay?.ApiKey) ? null : overlay.ApiKey,
+            ActivationSpanDegrees = overlay is null
+                ? AisFeedOptions.DefaultActivationSpanDegrees
+                : overlay.ActivationViewportSpanDegrees ?? 0,
+        };
+    }
+
+    private static SourceActivation ActivationOf(AisFeedOptions options) =>
+        options.ActivationSpanDegrees is > 0 and var span && double.IsFinite(span)
+            ? SourceActivation.BelowViewportSpan(span)
+            : SourceActivation.Always;
+
+    private static IDatasetProcessor Create(SourceCreationContext context, AisFeedOptions options)
+    {
+        var key = context.ResolveSecret(options.ApiKey, AisFeedOptions.KeyEnvironmentVariable)
             ?? throw new InvalidOperationException(string.Format(
-                System.Globalization.CultureInfo.CurrentCulture, Strings.Ais_KeyNeededFormat, overlay.ApiKeyEnvironmentVariable));
+                System.Globalization.CultureInfo.CurrentCulture, Strings.Ais_KeyNeededFormat, AisFeedOptions.KeyEnvironmentVariable));
         var raw = new AisDynamicFeatureSource(
             id: "ais",
             messageSource: new AisStreamIoMessageSource(

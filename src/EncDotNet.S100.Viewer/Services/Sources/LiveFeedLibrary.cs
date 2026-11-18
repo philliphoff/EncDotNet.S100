@@ -22,7 +22,7 @@ internal sealed class LiveFeedLibrary : IDisposable
     private readonly ViewerSettings _settings;
     private readonly Action<Action> _post;
     private readonly Action<string>? _removedFromMap;
-    private readonly HashSet<string> _onMap = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyDictionary<string, string>?> _onMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _removedThisSession = new(StringComparer.OrdinalIgnoreCase);
     private bool _started;
 
@@ -56,18 +56,20 @@ internal sealed class LiveFeedLibrary : IDisposable
         _removedFromMap = removedFromMap;
     }
 
-    /// <summary>The feeds a user can subscribe to: those that need no options, or have defaults.</summary>
-    public IReadOnlyList<SourceRegistration> Offered =>
-        [.. _sources.Registrations.Where(r => r.OptionsType is null || r.DefaultOptions is not null)];
+    /// <summary>The feeds a user can subscribe to; one that needs settings asks for them in the Library (slice 9b).</summary>
+    public IReadOnlyList<SourceRegistration> Offered => _sources.Registrations;
 
     /// <summary>The registration ids of the feeds subscribed to in the Library.</summary>
-    public IReadOnlySet<string> Subscribed =>
-        _library.Collections
-            .SelectMany(c => c.Sources)
-            .Select(s => s.Definition)
-            .OfType<LiveFeedSource>()
-            .Select(f => f.RegistrationId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlySet<string> Subscribed => Feeds().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The subscribed feeds by registration id (the first, should one be subscribed twice).</summary>
+    private Dictionary<string, LiveFeedSource> Feeds()
+    {
+        var feeds = new Dictionary<string, LiveFeedSource>(StringComparer.OrdinalIgnoreCase);
+        foreach (var feed in _library.Collections.SelectMany(c => c.Sources).Select(s => s.Definition).OfType<LiveFeedSource>())
+            feeds.TryAdd(feed.RegistrationId, feed);
+        return feeds;
+    }
 
     /// <summary>
     /// Moves the feeds saved before the Library held them
@@ -148,26 +150,65 @@ internal sealed class LiveFeedLibrary : IDisposable
     private void OnLibraryChanged(object? sender, EventArgs e) => _post(Sync);
 
     /// <summary>
-    /// Puts every subscribed feed on the map, unless it was removed from the
-    /// map this session, and takes off the map the feeds no longer subscribed.
+    /// Puts every subscribed feed on the map with its options, unless it was
+    /// removed from the map this session; puts a feed whose options changed
+    /// back with the new ones; and takes off the map the feeds no longer subscribed.
     /// </summary>
     internal void Sync()
     {
-        var subscribed = Subscribed;
-        foreach (var id in subscribed)
+        var feeds = Feeds();
+        foreach (var (id, feed) in feeds)
         {
-            if (_onMap.Contains(id) || _removedThisSession.Contains(id) || _sources.Find(id) is not { } registration)
+            if (_removedThisSession.Contains(id) || _sources.Find(id) is not { } registration)
                 continue;
-            _onMap.Add(id);
-            if (_datasets.AddSource(registration) is { } entry)
+            if (_onMap.TryGetValue(id, out var shown))
+            {
+                if (SameOptions(shown, feed.Options))
+                    continue;
+                // New settings: put it back with them.
+                _onMap.Remove(id);
+                if (_datasets.FindSource(id) is { } old)
+                    _datasets.Entries.Remove(old);
+            }
+            _onMap[id] = feed.Options;
+            if (_datasets.AddSource(registration, OptionsOf(registration, feed)) is { } entry)
                 _datasets.RequestLoad(entry);
         }
-        foreach (var id in _onMap.Where(id => !subscribed.Contains(id)).ToArray())
+        foreach (var id in _onMap.Keys.Where(id => !feeds.ContainsKey(id)).ToArray())
         {
             _onMap.Remove(id);
             if (_datasets.FindSource(id) is { } entry)
                 _datasets.Entries.Remove(entry);
         }
+    }
+
+    /// <summary>The feed's options from its settings, or the defaults when they don't parse (its row then says why it fails).</summary>
+    private static object? OptionsOf(SourceRegistration registration, LiveFeedSource feed)
+    {
+        try
+        {
+            return SourceOptionsForm.Build(registration, feed.Options);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static bool SameOptions(IReadOnlyDictionary<string, string>? a, IReadOnlyDictionary<string, string>? b)
+    {
+        if (ReferenceEquals(a, b))
+            return true;
+        if ((a?.Count ?? 0) != (b?.Count ?? 0))
+            return false;
+        if (a is null || b is null)
+            return true; // Both empty.
+        foreach (var (key, value) in a)
+        {
+            if (!b.TryGetValue(key, out var other) || !string.Equals(value, other, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
     }
 
     private void OnEntriesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
