@@ -9,6 +9,7 @@ using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Specifications;
+using Microsoft.Extensions.AI;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -516,69 +517,122 @@ internal static class S100McpServerToolFactory
         var description =
             "Checks a route against the loaded data in one run and returns the whole report: the verdict (must_review, " +
             "water_level_ends_before_arrival, check or clear, with the finding that names it), whether each check ran (chart, areas, " +
-            "warnings, clearance, with a reason when skipped), every finding with its numbers in 'details', and the under-keel clearance. " +
+            "warnings, clearance, weather, with a reason when partial or skipped), every finding with its numbers in 'details', and the under-keel clearance. " +
             "The chart check reports where the track crosses land (LandArea, or a Coastline where no land area is charted) or drying ground " +
             "(must_review), where either reaches inside the corridor between the cross-track limits (check), and where the track leaves the " +
             "DataCoverage of every loaded cell; with safetyContourMeters and safetyDepthMeters, also charted dangers and areas, soundings and " +
-            "S-102 cells shallower than the safety contour or depth. Where cells overlap only the finest cell counts. The area check reports " +
+            "S-102 cells shallower than the safety contour or depth (without them the chart check is partial, " +
+            "reason safety_settings_missing, and no depth or danger is checked). Where cells overlap only the finest cell counts. The area check reports " +
             "S-101 restricted, military practice, caution, anchorage and traffic areas and S-122 protected areas the corridor meets; an area " +
             "whose dates or season don't cover the ETAs is info route_check.area_not_in_force. The warning check reports S-124 warnings on or " +
             "near the route at the ETAs. With a draft on every leg the clearance check computes UKC = charted depth (S-102, else S-101, low " +
             "confidence) + S-104 water level at each sample's ETA − draft − squat, against the required UKC (0 m when unset); datums must match " +
             "(a mismatch is a gap, never mixed). includeSamples adds per-leg results and samples; includeWindow adds a departure sweep " +
-            "(windowFrom/windowTo, or the S-104 range). Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
+            "(windowFrom/windowTo, or the S-104 range). With maxWindKnots or maxWaveHeightMeters (or the route's own limits) the " +
+            "weather check tests loaded GRIB2/NetCDF forecasts along the route, and loaded NHC advisories are tested as the cyclone* " +
+            "arguments say. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
             "uses each leg's XTDs, draft, speed and UKC. SOG is the entered speed (S-111 is not applied). Not for navigation.";
 
-        var del = ([Description("Id of a viewer route; omit with no polyline for the active route.")] string? routeId = null,
-                   [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]}; each pair of consecutive vertices is a leg. WGS-84 decimal degrees. Takes precedence over routeId.")] string? polyline = null,
-                   [Description("The corridor's HALF-width in metres: how far it reaches to port, and to starboard, of the track. Overrides every leg's cross-track limits; unset limits use 50 m.")] double? corridorHalfWidthMeters = null,
-                   [Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool greatCircle = false,
-                   [Description("Safety contour in metres; with safetyDepthMeters, turns on the depth checks (areas and S-102 shallower than it, charted dangers).")] double? safetyContourMeters = null,
-                   [Description("Safety depth in metres, for charted dangers and soundings.")] double? safetyDepthMeters = null,
-                   [Description("Draft in metres, for every leg (overrides a route's). With a draft on every leg the clearance check runs, and dangers are also judged against draft + squat + required UKC.")] double? draftMeters = null,
-                   [Description("Speed over ground in knots, for every leg (overrides a route's). Speeds give the ETAs.")] double? speedKnots = null,
-                   [Description("Fixed squat allowance in metres, for every leg (default 0).")] double? squatMeters = null,
-                   [Description("Required UKC in metres, for every leg; unset checks against 0 m.")] double? requiredUkcMeters = null,
-                   [Description("Departure time (ISO-8601): the ETAs count from it, and without speeds everything is judged at it. Default: the route's departure (the viewer's view time), else now.")] DateTimeOffset? departure = null,
-                   [Description("Longest stretch one clearance sample stands for, metres (default 50).")] double? sampleSpacingMeters = null,
-                   [Description("Include the clearance's per-leg results and per-sample values.")] bool includeSamples = false,
-                   [Description("Most samples to return (default 500).")] int maxSamples = 500,
-                   [Description("Sweep departures for the departure window: windowFrom to windowTo, else the whole S-104 range that covers the route (as SoundCharts' departure band does). Needs a draft.")] bool includeWindow = false,
-                   [Description("With includeWindow and windowTo, the first swept departure (ISO-8601).")] DateTimeOffset? windowFrom = null,
-                   [Description("With includeWindow and windowFrom, the last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
-                   [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
-                   [Description("How far from the departure and arrival waypoints, in metres, structures that raise the SafetyContour alert count as the berth (a breakwater, ruin or other non-berth structure the track line cuts stays a crossing; pontoons, floating docks, piers and wharves never do): one info route_check.berth_structures finding per end instead of crossings (default 100; 0 turns it off).")] double? berthRadiusMeters = null,
-                   CancellationToken ct = default) =>
-            DispatchAsync(() =>
-                inner.InvokeAsync(
-                    new CheckRouteRequest(
-                        routeId,
-                        string.IsNullOrWhiteSpace(polyline) ? null : ParsePolyline(polyline),
-                        corridorHalfWidthMeters,
-                        greatCircle,
-                        safetyContourMeters,
-                        safetyDepthMeters,
-                        draftMeters,
-                        speedKnots,
-                        squatMeters,
-                        requiredUkcMeters,
-                        departure,
-                        sampleSpacingMeters,
-                        includeSamples,
-                        maxSamples,
-                        includeWindow,
-                        windowFrom,
-                        windowTo,
-                        windowStepMinutes,
-                        BerthRadiusMeters: berthRadiusMeters),
-                    ct));
-
-        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        // The schema and the binding come from CheckRouteRequest itself, so
+        // every parameter the request takes reaches the tool.
+        return McpServerTool.Create(new CheckRouteFunction(inner), new McpServerToolCreateOptions
         {
             Name = CheckRouteTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });
+    }
+
+    /// <summary>
+    /// The wire name of <see cref="CheckRouteRequest.Polyline"/>: JSON text
+    /// (<c>{"vertices":[[lat,lon],...]}</c>) on the wire, as the other tools
+    /// take polylines, rather than the record's object shape.
+    /// </summary>
+    private const string CheckRoutePolylineArgument = "polyline";
+
+    /// <summary>
+    /// The <c>check_route</c> input schema: <see cref="CheckRouteRequest"/>'s
+    /// properties and descriptions, with <c>polyline</c> as JSON text.
+    /// </summary>
+    internal static JsonElement CheckRouteInputSchema { get; } = CreateCheckRouteInputSchema();
+
+    private static JsonElement CreateCheckRouteInputSchema()
+    {
+        var schema = AIJsonUtilities.CreateJsonSchema(
+            typeof(CheckRouteRequest),
+            serializerOptions: JsonOptions,
+            inferenceOptions: new AIJsonSchemaCreateOptions { IncludeSchemaKeyword = false });
+        var node = JsonNode.Parse(schema.GetRawText())!.AsObject();
+        var properties = node["properties"]!.AsObject();
+        properties[CheckRoutePolylineArgument] = new JsonObject
+        {
+            ["description"] =
+                "Polyline JSON: {\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w?}; each pair of consecutive vertices is a leg. " +
+                "WGS-84 decimal degrees. Takes precedence over routeId. corridorWidthMeters, when set, is the half-width either side of the track.",
+            ["type"] = "string",
+        };
+        node.Remove("required");
+        using var doc = JsonDocument.Parse(node.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Reads a <see cref="CheckRouteRequest"/> from <c>check_route</c>'s
+    /// arguments, by the request's own JSON names.
+    /// </summary>
+    /// <param name="arguments">The call's arguments, by name.</param>
+    /// <returns>The request.</returns>
+    /// <exception cref="ArgumentException">The polyline isn't a polyline.</exception>
+    /// <exception cref="JsonException">An argument has the wrong type.</exception>
+    internal static CheckRouteRequest ReadCheckRouteRequest(IEnumerable<KeyValuePair<string, object?>> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        var body = new JsonObject();
+        GeoPolyline? polyline = null;
+        foreach (var (name, value) in arguments)
+        {
+            var node = value switch
+            {
+                null => null,
+                JsonElement element => JsonNode.Parse(element.GetRawText()),
+                JsonNode n => n.DeepClone(),
+                _ => JsonSerializer.SerializeToNode(value, JsonOptions.GetTypeInfo(value.GetType())),
+            };
+            if (string.Equals(name, CheckRoutePolylineArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                // JSON text, as the schema says; an object is taken as is.
+                var text = node switch
+                {
+                    null => null,
+                    JsonValue v when v.TryGetValue<string>(out var str) => str,
+                    _ => node.ToJsonString(),
+                };
+                polyline = string.IsNullOrWhiteSpace(text) ? null : ParsePolyline(text);
+                continue;
+            }
+
+            body[name] = node;
+        }
+
+        var request = body.Deserialize(JsonOptions.GetTypeInfo(typeof(CheckRouteRequest))) as CheckRouteRequest
+            ?? throw new JsonException("check_route takes an object of arguments.");
+        return request with { Polyline = polyline };
+    }
+
+    /// <summary>
+    /// <c>check_route</c> as an <see cref="AIFunction"/> whose schema and
+    /// binding are <see cref="CheckRouteRequest"/>'s.
+    /// </summary>
+    private sealed class CheckRouteFunction(CheckRouteTool inner) : AIFunction
+    {
+        public override string Name => CheckRouteTool.Name;
+
+        public override JsonElement JsonSchema => CheckRouteInputSchema;
+
+        public override JsonSerializerOptions JsonSerializerOptions => JsonOptions;
+
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+            await DispatchAsync(() => inner.InvokeAsync(ReadCheckRouteRequest(arguments), cancellationToken)).ConfigureAwait(false);
     }
 
     private static McpServerTool CreateListSpecsTool(ListSpecsTool inner)
