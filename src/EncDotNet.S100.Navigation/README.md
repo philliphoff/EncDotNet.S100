@@ -243,10 +243,13 @@ the same samples, in `ClearanceCheckResult.Departures` (`report.Departures`):
   (default 2000). Without S-104 coverage there's no sweep.
 
 Where no water-level dataset covers part of the route, the sweep judges that
-stretch with the water level at chart datum (0 m). If the charted depth alone
-meets the setting there, the departure can still meet your settings, with
-`ConfidenceReasons.WaterLevelAtChartDatum`; otherwise the stretch is "no data"
-and the departure doesn't meet them. The passage check itself still reports
+stretch, per departure, with the lowest water level applied anywhere on the
+route during that departure's passage, capped at chart datum (0 m). If the
+charted depth at that level meets the setting there, the departure can still
+meet your settings, with `ConfidenceReasons.WaterLevelFromLowestLow` (or
+`WaterLevelAtChartDatum` when no water level was applied during the passage,
+so 0 m was used); otherwise the stretch is "no data" and the departure doesn't
+meet them. The passage check itself still reports
 the stretch as a `NoWaterLevelCoverage` gap.
 
 `DepartureSweep.Windows()` returns the runs of departures that meet the

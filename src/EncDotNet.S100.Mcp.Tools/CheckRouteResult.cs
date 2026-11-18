@@ -124,15 +124,16 @@ public sealed record CheckRouteResult(
     /// <summary>
     /// The wire codes for lower-confidence reasons, in a fixed order:
     /// <c>charted_depth_from_s101</c>, <c>datum_unconfirmed</c>, then
-    /// <c>water_level_predicted</c>, then <c>water_level_at_chart_datum</c>
-    /// (departure options only: no water level covers part of the route, and
-    /// the charted depth alone meets the setting there).
+    /// <c>water_level_predicted</c>, then <c>water_level_from_lowest_low</c>
+    /// and <c>water_level_at_chart_datum</c> (departure options only: no water
+    /// level covers part of the route, and the charted depth at the passage's
+    /// lowest low, capped at datum, or at datum without one, meets the setting).
     /// </summary>
     /// <param name="reasons">The reasons.</param>
     /// <returns>The codes; empty at full confidence.</returns>
     public static IReadOnlyList<string> ConfidenceCodes(ConfidenceReasons reasons)
     {
-        var codes = new List<string>(4);
+        var codes = new List<string>(5);
         if (reasons.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
         {
             codes.Add("charted_depth_from_s101");
@@ -146,6 +147,11 @@ public sealed record CheckRouteResult(
         if (reasons.HasFlag(ConfidenceReasons.WaterLevelPredicted))
         {
             codes.Add("water_level_predicted");
+        }
+
+        if (reasons.HasFlag(ConfidenceReasons.WaterLevelFromLowestLow))
+        {
+            codes.Add("water_level_from_lowest_low");
         }
 
         if (reasons.HasFlag(ConfidenceReasons.WaterLevelAtChartDatum))

@@ -219,18 +219,29 @@ public sealed partial class ClearanceCheck
             RequireDrafts(legs, nameof(legs));
 
             var options = new List<DepartureOption>();
+            var evals = new PointEvaluation[profile.Points.Count];
             for (var departure = from; departure <= to; departure += step)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var schedule = PassageSchedule.Compute(legs, departure);
+                double? lowest = null;
+                for (var i = 0; i < evals.Length; i++)
+                {
+                    var point = profile.Points[i];
+                    var eta = schedule.EtaAt(point.LegIndex, point.AlongLeg);
+                    evals[i] = EvaluatePoint(point, legs[point.LegIndex], eta ?? departure);
+                    if (evals[i].Status == WaterLevelStatus.Applied && evals[i].Height is { } h && (lowest is null || h < lowest))
+                    {
+                        lowest = h;
+                    }
+                }
+
                 var tally = new Tally();
-                for (var i = 0; i < profile.Points.Count; i++)
+                for (var i = 0; i < evals.Length; i++)
                 {
                     var point = profile.Points[i];
                     var leg = legs[point.LegIndex];
-                    var eta = schedule.EtaAt(point.LegIndex, point.AlongLeg);
-                    var eval = AtChartDatumInGap(EvaluatePoint(point, leg, eta ?? departure), point, leg);
-                    tally.Add(eval, MinutesFor(point, leg), i);
+                    tally.Add(AtLowestLowInGap(evals[i], point, leg, lowest), MinutesFor(point, leg), i);
                 }
 
                 options.Add(new DepartureOption(
@@ -473,34 +484,39 @@ public sealed partial class ClearanceCheck
 
         /// <summary>
         /// For the departure sweep (#1544): where no water-level dataset covers a
-        /// sample, judges it with the water level at chart datum (0 m). A sample
-        /// whose charted depth alone meets the setting then counts as meeting it,
-        /// with <see cref="ConfidenceReasons.WaterLevelAtChartDatum"/>; one that
-        /// doesn't stays "no data", since the real level is unknown. Gaps in time
-        /// (before or after the data), masked values and datum mismatches are left
-        /// as they are.
+        /// sample, judges it with the lower of chart datum (0 m) and
+        /// <paramref name="lowest"/>, the lowest water level applied anywhere on
+        /// the route during this departure's passage. A sample that meets the
+        /// setting at that level counts as meeting it, with
+        /// <see cref="ConfidenceReasons.WaterLevelFromLowestLow"/>, or with
+        /// <see cref="ConfidenceReasons.WaterLevelAtChartDatum"/> when no water
+        /// level was applied during the passage. One that doesn't stays "no data",
+        /// since the real level is unknown. Gaps in time (before or after the
+        /// data), masked values and datum mismatches are left as they are.
         /// </summary>
-        private PointEvaluation AtChartDatumInGap(PointEvaluation eval, ProfilePoint point, PassageLeg leg)
+        private PointEvaluation AtLowestLowInGap(PointEvaluation eval, ProfilePoint point, PassageLeg leg, double? lowest)
         {
             if (eval.Status != WaterLevelStatus.NoCoverage || point.Depth is not { } depth)
             {
                 return eval;
             }
 
+            var level = Math.Min(0, lowest ?? 0);
             var charted = depth.DepthMeters - (_options.SubtractDepthUncertainty ? depth.UncertaintyMeters ?? 0 : 0);
-            var clearance = charted - leg.Draft!.Value.TotalMetres - leg.Squat.TotalMetres;
+            var clearance = charted + level - leg.Draft!.Value.TotalMetres - leg.Squat.TotalMetres;
             if (clearance < eval.Required)
             {
                 return eval;
             }
 
             var band = clearance < eval.Required + _options.TightMarginMeters ? ClearanceBand.Tight : ClearanceBand.Meets;
+            var reason = lowest is null ? ConfidenceReasons.WaterLevelAtChartDatum : ConfidenceReasons.WaterLevelFromLowestLow;
             return eval with
             {
                 Clearance = clearance,
                 Band = band,
                 State = band == ClearanceBand.Tight ? UkcState.Tight : UkcState.MeetsSettings,
-                Confidence = eval.Confidence | ConfidenceReasons.WaterLevelAtChartDatum,
+                Confidence = eval.Confidence | reason,
             };
         }
 

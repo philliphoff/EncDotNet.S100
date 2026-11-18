@@ -8528,8 +8528,11 @@
   <data name="Check_WindowCaveatPredicted" xml:space="preserve">
     <value>water level partly predicted</value>
   </data>
+  <data name="Check_WindowCaveatLowestLow" xml:space="preserve">
+    <value>water level partly taken from the lowest nearby low</value>
+  </data>
   <data name="Check_WindowCaveatChartDatum" xml:space="preserve">
-    <value>water level partly taken at chart datum</value>
+    <value>water level partly taken at chart datum, with no nearby water level</value>
   </data>
   <data name="Findings_WaterLevelPredictedFormat" xml:space="preserve">
     <value>Water level predicted for {0:0.0} NM</value>
