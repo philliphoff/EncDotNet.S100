@@ -12,7 +12,7 @@ public sealed record CheckRouteDetails(
     [property: Description("A charted danger in or near the corridor (route_check.danger_in_corridor, route_check.danger_near_route).")] CheckRouteDangerDetails? Danger = null,
     [property: Description("Water shallower than a safety setting: depth areas, soundings and S-102 shoals.")] CheckRouteShoalDetails? Shoal = null,
     [property: Description("A feature other than a depth area whose S-101 portrayal raises the SafetyContour alert (route_check.crosses_safety_contour, route_check.safety_contour_in_corridor): a structure such as a pontoon, floating dock or shoreline construction, an unsurveyed area, or land charted as a point or curve.")] CheckRouteSafetyContourFeatureDetails? SafetyContourFeature = null,
-    [property: Description("The berthing structures (pontoons, floating docks, piers, wharves) that raise the SafetyContour alert within the berth radius of the departure or arrival, in one finding (route_check.berth_structures).")] CheckRouteBerthStructuresDetails? BerthStructures = null,
+    [property: Description("The structures that raise the SafetyContour alert within the berth radius (except a non-berth structure the track line cuts) of the departure or arrival, in one finding (route_check.berth_structures).")] CheckRouteBerthStructuresDetails? BerthStructures = null,
     [property: Description("A regulated area: what it is, what it restricts and when it's in force.")] CheckRouteAreaDetails? Area = null,
     [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null,
     [property: Description("Areas of a kind whose indication is off (route_check.area_kind_off): the kind and how many the route meets.")] CheckRouteAreaKindOffDetails? AreaKindOff = null,
@@ -68,7 +68,7 @@ public sealed record CheckRouteDetails(
             a.Until.ToUniversalTime(),
             a.AtEta,
             a.AreaKind is { } areaKind && RouteAreaKinds.Names.TryGetValue(areaKind, out var kindName) ? kindName : null)),
-        SafetyContourFeatureDetails f => new(SafetyContourFeature: new CheckRouteSafetyContourFeatureDetails(f.FeatureType, f.IsStructure, f.IsBerth)),
+        SafetyContourFeatureDetails f => new(SafetyContourFeature: new CheckRouteSafetyContourFeatureDetails(f.FeatureType, f.IsStructure, f.IsBerth, f.CutByTrack)),
         BerthStructuresDetails b => new(BerthStructures: new CheckRouteBerthStructuresDetails(
             Snake(b.End.ToString()),
             b.Radius.TotalMetres,
@@ -205,7 +205,8 @@ public sealed record CheckRouteAreaKindOffDetails(
 public sealed record CheckRouteSafetyContourFeatureDetails(
     [property: Description("Its feature type, such as Pontoon, ShorelineConstruction or UnsurveyedArea.")] string FeatureType,
     [property: Description("True for a structure (anything but an unsurveyed area or land): its finding is titled for the structure, not for depth.")] bool IsStructure,
-    [property: Description("True for a berthing structure (pontoon, floating dock, pier, wharf, landing steps or fender, not ruined, submerged or awash): only these are grouped as route_check.berth_structures near the departure and arrival.")] bool IsBerth);
+    [property: Description("True for a berthing structure (pontoon, floating dock, pier, wharf, landing steps or fender, not ruined, submerged or awash): grouped as route_check.berth_structures near the departure and arrival even when the track cuts it.")] bool IsBerth,
+    [property: Description("True when the track line itself cuts the feature (crosses the area, or passes within 1 m of the point or curve), not just passes within the track clearance. Near the departure and arrival, a structure that isn't a berth stays a crossing only when this is true.")] bool CutByTrack);
 
 /// <summary>The structures at a berth, behind a finding.</summary>
 public sealed record CheckRouteBerthStructuresDetails(

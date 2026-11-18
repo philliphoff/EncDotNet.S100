@@ -42,7 +42,7 @@ public sealed partial class ChartCheck
             if (shallow.Count > 0)
             {
                 CheckAreas(shallow, RouteChartFeatureKind.DepthArea, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor,
-                    f => new ShoalDetails
+                    (f, _) => new ShoalDetails
                     {
                         LeastDepth = Depth.FromMetres(f.DepthMeters!.Value),
                         ThresholdKind = RouteFindingThreshold.SafetyContour,
@@ -73,15 +73,17 @@ public sealed partial class ChartCheck
 
                 _cancellationToken.ThrowIfCancellationRequested();
                 var structure = IsStructure(feature.FeatureType);
-                var details = new SafetyContourFeatureDetails
+                SafetyContourFeatureDetails Details(bool cut) => new()
                 {
                     FeatureType = feature.FeatureType,
                     IsStructure = structure,
                     IsBerth = structure && IsBerth(feature),
+                    CutByTrack = cut,
                 };
+
                 if (feature.Surfaces.Count > 0)
                 {
-                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor, _ => details);
+                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor, (_, crosses) => Details(crosses));
                     continue;
                 }
 
@@ -98,9 +100,13 @@ public sealed partial class ChartCheck
                     projection.Distance,
                     RouteFindingLocation.Point(position, projection.Distance),
                     feature,
-                    details);
+                    Details(offset <= CutToleranceMeters));
             }
         }
+
+        // A point or curve this close to the track line is cut by it; a curve
+        // the track intersects is at 0.
+        private const double CutToleranceMeters = 1;
 
         // Anything but water (an unsurveyed area) and land is a structure
         // that stands in the water (#1548).
@@ -113,7 +119,7 @@ public sealed partial class ChartCheck
         // landing steps or fender. Breakwaters, moles, groynes, training and
         // sea walls guard a harbour rather than berth in it, and a ruined
         // structure or one that is under water, covers and uncovers or is
-        // awash is a hazard however close to the berth it is.
+        // awash is a hazard: the track must not cut those even at the berth.
         private static bool IsBerth(RouteChartFeature feature)
         {
             if (feature.Condition == RuinedCondition

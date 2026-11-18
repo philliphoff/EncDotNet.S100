@@ -61,12 +61,12 @@ public sealed class RouteCheckSettings
     public Length? NearbyDistance { get; init; }
 
     /// <summary>
-    /// How far from the departure and arrival waypoints a berthing structure
-    /// that raises the <c>SafetyContour</c> alert (a pontoon, floating dock,
-    /// pier, wharf, landing steps or fender; see
-    /// <see cref="SafetyContourFeatureDetails.IsBerth"/>) is part of the
-    /// berth (#1548), or <c>null</c>
-    /// for <see cref="DefaultBerthRadius"/>. Such structures are reported as
+    /// How far from the departure and arrival waypoints a structure that
+    /// raises the <c>SafetyContour</c> alert is part of the berth (#1548):
+    /// any such structure the track doesn't cut, and a pontoon, floating
+    /// dock, pier, wharf, landing steps or fender
+    /// (<see cref="SafetyContourFeatureDetails.IsBerth"/>) even when it does.
+    /// <c>null</c> for <see cref="DefaultBerthRadius"/>. Such structures are reported as
     /// one <see cref="RouteFindingCodes.BerthStructures"/> finding (INFO) per
     /// end instead of crossings; zero turns this off.
     /// </summary>

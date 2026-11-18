@@ -1218,6 +1218,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class SafetyContourFeatureDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
         public SafetyContourFeatureDetails() { }
+        public bool CutByTrack { get; init; }
         public required string FeatureType { get; init; }
         public bool IsBerth { get; init; }
         public bool IsStructure { get; init; }

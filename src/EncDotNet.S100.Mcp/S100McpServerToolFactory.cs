@@ -544,7 +544,7 @@ internal static class S100McpServerToolFactory
                    [Description("With includeWindow and windowTo, the first swept departure (ISO-8601).")] DateTimeOffset? windowFrom = null,
                    [Description("With includeWindow and windowFrom, the last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
                    [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
-                   [Description("How far from the departure and arrival waypoints, in metres, berthing structures (pontoons, floating docks, piers, wharves, landing steps, fenders; never breakwaters or ruined, submerged or awash structures) count as the berth: one info route_check.berth_structures finding per end instead of crossings (default 100; 0 turns it off).")] double? berthRadiusMeters = null,
+                   [Description("How far from the departure and arrival waypoints, in metres, structures that raise the SafetyContour alert count as the berth (a breakwater, ruin or other non-berth structure the track line cuts stays a crossing; pontoons, floating docks, piers and wharves never do): one info route_check.berth_structures finding per end instead of crossings (default 100; 0 turns it off).")] double? berthRadiusMeters = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(

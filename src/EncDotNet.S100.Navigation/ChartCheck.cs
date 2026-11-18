@@ -316,13 +316,14 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         // Finds the track's crossings of one kind of area, then the
         // cross-sections that touch it where the track doesn't; returns the
         // merged crossings. Details, when given, are a finding's details
-        // from the shoalest feature in it.
+        // from the shoalest feature in it, and whether the track crosses it
+        // (rather than its cross-sections only touching it).
         private List<Piece> CheckAreas(
             IReadOnlyList<RouteChartFeature> features,
             RouteChartFeatureKind kind,
             RouteFindingCode crossesCode,
             RouteFindingCode inCorridorCode,
-            Func<RouteChartFeature, RouteFindingDetails>? details = null)
+            Func<RouteChartFeature, bool, RouteFindingDetails>? details = null)
         {
             var pieces = new List<Piece>();
             var touched = new RouteChartFeature?[_stations.Count];
@@ -416,7 +417,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 }
 
                 _findings.Add(crossesCode, _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature,
-                    details?.Invoke(piece.Shoalest ?? piece.Feature));
+                    details?.Invoke(piece.Shoalest ?? piece.Feature, true));
             }
 
             // A run of touched cross-sections that reaches a crossing is the
@@ -449,7 +450,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 var end = _stations[k2 - 1].Distance;
                 var feature = touched[first]!;
                 _findings.Add(inCorridorCode, _legIndex, start, Location(start, end), feature,
-                    details?.Invoke(runShoalest ?? feature));
+                    details?.Invoke(runShoalest ?? feature, false));
             }
 
             return merged;
@@ -919,11 +920,14 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 details,
                 group));
 
-        // #1548: the berthing structures (SafetyContourFeatureDetails.IsBerth)
-        // that raise the SafetyContour alert within the berth radius of the
-        // departure or the arrival become one INFO finding per end. A route
-        // that starts or ends at a berth always touches its pontoons and
-        // piers; a breakwater it crosses stays a MUST REVIEW crossing.
+        // #1548: the structures that raise the SafetyContour alert within
+        // the berth radius of the departure or the arrival become one INFO
+        // finding per end. A route that starts or ends at a berth always
+        // touches its pontoons and piers, and a marina entrance is often
+        // narrower than the track clearance either side, so its breakwaters
+        // are close too. But a structure that isn't a berth
+        // (SafetyContourFeatureDetails.IsBerth) and that the track line
+        // itself cuts (CutByTrack) stays a MUST REVIEW crossing.
         public void GroupBerthStructures(GeoPosition departure, GeoPosition arrival, int lastLeg, double totalDistance, double radius)
         {
             if (!(radius > 0))
@@ -935,7 +939,8 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             var atArrival = new List<Entry>();
             _entries.RemoveAll(e =>
             {
-                if (e.Details is not SafetyContourFeatureDetails { IsBerth: true })
+                if (e.Details is not SafetyContourFeatureDetails { IsStructure: true } structure
+                    || (structure.CutByTrack && !structure.IsBerth))
                 {
                     return false;
                 }
