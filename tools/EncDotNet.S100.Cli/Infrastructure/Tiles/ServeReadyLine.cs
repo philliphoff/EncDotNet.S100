@@ -14,7 +14,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// address, or the loopback address when listening on all addresses
 /// (<c>0.0.0.0</c> or <c>::</c>). <c>healthz</c> is outside the token, as the
 /// route is. <c>preview</c> is <see langword="null"/> with <c>--no-viewer</c>,
-/// and <c>token</c> when there is none.
+/// <c>token</c> when there is none, and <c>tilesHighDpi</c> when the tiles
+/// aren't rendered here (a built tile set has no <c>@2x</c> tiles, issue #1563).
 /// </remarks>
 internal static class ServeReadyLine
 {
@@ -27,8 +28,9 @@ internal static class ServeReadyLine
     /// <param name="token">The access token, or <see langword="null"/>.</param>
     /// <param name="format">The tile image format.</param>
     /// <param name="viewer">Whether the preview page is served.</param>
+    /// <param name="highDpi">Whether the 512-pixel <c>@2x</c> tiles are served.</param>
     /// <returns>A compact JSON object on one line.</returns>
-    public static string Format(IPAddress address, int port, string? token, TileImageFormat format, bool viewer)
+    public static string Format(IPAddress address, int port, string? token, TileImageFormat format, bool viewer, bool highDpi)
     {
         ArgumentNullException.ThrowIfNull(address);
 
@@ -43,6 +45,7 @@ internal static class ServeReadyLine
             ["token"] = token,
             ["baseUrl"] = baseUri.AbsoluteUri,
             ["tiles"] = TileServer.TileUrlTemplate(baseUri, format),
+            ["tilesHighDpi"] = highDpi ? TileServer.TileUrlTemplate(baseUri, format, highDpi: true) : null,
             ["tileJson"] = new Uri(baseUri, XyzDirectoryTileSink.TileJsonFileName).AbsoluteUri,
             ["wmts"] = new Uri(baseUri, WmtsService.CapabilitiesPath).AbsoluteUri,
             ["wms"] = new Uri(baseUri, WmsService.Path).AbsoluteUri,

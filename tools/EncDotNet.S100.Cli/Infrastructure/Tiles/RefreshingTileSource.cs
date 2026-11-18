@@ -158,6 +158,21 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         }
     }
 
+    public bool CanReadPixelRatio(int pixelRatio) => RenderedTileSource.IsPixelRatio(pixelRatio);
+
+    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.ReadAsync(zoom, x, y, palette, time, pixelRatio, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
     public bool CanRenderViews => true;
 
     public async ValueTask<SkiaSharp.SKBitmap?> RenderViewAsync(
@@ -414,6 +429,23 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
             {
                 return generation.Source.Layer(id) is { } layer
                     ? await layer.ReadAsync(zoom, x, y, palette, time, cancellationToken).ConfigureAwait(false)
+                    : null;
+            }
+            finally
+            {
+                owner.Release(generation);
+            }
+        }
+
+        public bool CanReadPixelRatio(int pixelRatio) => RenderedTileSource.IsPixelRatio(pixelRatio);
+
+        public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken)
+        {
+            var generation = owner.Acquire();
+            try
+            {
+                return generation.Source.Layer(id) is { } layer
+                    ? await layer.ReadAsync(zoom, x, y, palette, time, pixelRatio, cancellationToken).ConfigureAwait(false)
                     : null;
             }
             finally

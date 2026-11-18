@@ -15,7 +15,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// rooted at the cache folder (map rendering slice 11), stored as
 /// <c>&lt;root&gt;/served/&lt;fingerprint&gt;/&lt;palette&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.&lt;ext&gt;</c>
 /// (<c>&lt;palette&gt;-&lt;yyyyMMddTHHmmssZ&gt;</c> for a time step asked for by
-/// URL; under <c>layers/&lt;layer&gt;/</c> first for a group layer's tile), where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>)
+/// URL, and a <c>2x/</c> folder after it for a tile drawn at another pixel
+/// ratio than the served tile size, issue #1563; under <c>layers/&lt;layer&gt;/</c> first for a group layer's tile), where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>)
 /// names the data and settings they were rendered from, so a tile is only
 /// reused for the same ones. A tile keyed by the datasets that reach it
 /// (<see cref="TileKey.Content"/>, <c>--manage-datasets</c>) goes under that
@@ -131,6 +132,8 @@ internal sealed partial class DiskTileCache : IDisposable
             ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
                 + (key.Variant is { } variant ? "-" + variant : string.Empty)
             : key.Palette + (key.Variant is { } untimed ? "-" + untimed : string.Empty),
+        // Not a zoom level, which is all digits.
+        key.PixelRatio is { } ratio ? ratio.ToString(CultureInfo.InvariantCulture) + "x" : null,
         key.Zoom.ToString(CultureInfo.InvariantCulture),
         key.X.ToString(CultureInfo.InvariantCulture),
         key.Y.ToString(CultureInfo.InvariantCulture) + _extension,

@@ -122,13 +122,32 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
         var data = Current();
         if (zoom >= data.ChartMinZoom)
             return await _inner.ReadAsync(zoom, x, y, palette, time, cancellationToken).ConfigureAwait(false);
+        return ReadOverview(data, zoom, x, y, palette, data.TilePixels);
+    }
+
+    public bool CanReadPixelRatio(int pixelRatio) => _inner.CanReadPixelRatio(pixelRatio);
+
+    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken)
+    {
+        if (!_inner.CanReadPixelRatio(pixelRatio))
+            return null;
+
+        var data = Current();
+        if (zoom >= data.ChartMinZoom)
+            return await _inner.ReadAsync(zoom, x, y, palette, time, pixelRatio, cancellationToken).ConfigureAwait(false);
+        return ReadOverview(data, zoom, x, y, palette, pixelRatio * XyzTileGrid.TileSize);
+    }
+
+    /// <summary>An overview tile <paramref name="pixels"/> wide, drawn on first use and cached.</summary>
+    private byte[]? ReadOverview(OverviewData data, int zoom, int x, int y, string? palette, int pixels)
+    {
         if (!TileSource.IsValid(zoom, x, y) || ResolvePalette(palette, data) is not { } name)
             return null;
 
-        var key = new TileKey(name, zoom, x, y, Variant: "overview-" + data.Revision);
+        var key = new TileKey(name, zoom, x, y, Variant: "overview-" + data.Revision, PixelRatio: pixels / XyzTileGrid.TileSize);
         if (!_cache.TryGet(key, out var tile))
         {
-            tile = RenderTile(data, name, zoom, x, y);
+            tile = RenderTile(data, name, zoom, x, y, pixels);
             _cache.Add(key, tile);
         }
 
@@ -220,9 +239,8 @@ internal sealed class OverviewTileSource : ITileSource, IAsyncDisposable
         return dash < 0 ? style : style[..dash];
     }
 
-    private byte[] RenderTile(OverviewData data, string palette, int zoom, int x, int y)
+    private byte[] RenderTile(OverviewData data, string palette, int zoom, int x, int y, int pixels)
     {
-        int pixels = data.TilePixels;
         double size = XyzTileGrid.TileWorldSize(zoom);
         double originX = (x * size) - XyzTileGrid.Extent;
         double originY = XyzTileGrid.Extent - (y * size);

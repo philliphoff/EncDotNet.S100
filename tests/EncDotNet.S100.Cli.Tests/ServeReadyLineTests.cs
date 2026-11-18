@@ -60,7 +60,7 @@ public sealed class ServeReadyLineTests : IDisposable
         var source = TileSet();
         await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, token, viewer, ct);
 
-        var line = ServeReadyLine.Format(IPAddress.Loopback, server.Port, token, source.Format, viewer);
+        var line = ServeReadyLine.Format(IPAddress.Loopback, server.Port, token, source.Format, viewer, highDpi: source.CanReadPixelRatio(2));
 
         Assert.DoesNotContain('\n', line);
         var json = JsonNode.Parse(line)!.AsObject();
@@ -72,6 +72,7 @@ public sealed class ServeReadyLineTests : IDisposable
         Assert.Equal(token, (string?)json["token"]);
         Assert.Equal(baseUrl, (string?)json["baseUrl"]);
         Assert.Equal(baseUrl + "{z}/{x}/{y}.png", (string?)json["tiles"]);
+        Assert.Equal(JsonValueKind.Null, json["tilesHighDpi"]?.GetValueKind() ?? JsonValueKind.Null);
         Assert.Equal(baseUrl + "tiles.json", (string?)json["tileJson"]);
         Assert.Equal(baseUrl + "wmts/1.0.0/WMTSCapabilities.xml", (string?)json["wmts"]);
         Assert.Equal(baseUrl + "wms", (string?)json["wms"]);
@@ -98,17 +99,18 @@ public sealed class ServeReadyLineTests : IDisposable
     [Fact]
     public void Listening_on_every_address_gives_loopback_urls()
     {
-        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.Any, 8200, "t0k", TileImageFormat.Webp, viewer: true))!;
+        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.Any, 8200, "t0k", TileImageFormat.Webp, viewer: true, highDpi: true))!;
 
         Assert.Equal("127.0.0.1", (string?)json["host"]);
         Assert.Equal("http://127.0.0.1:8200/t0k/{z}/{x}/{y}.webp", (string?)json["tiles"]);
+        Assert.Equal("http://127.0.0.1:8200/t0k/{z}/{x}/{y}@2x.webp", (string?)json["tilesHighDpi"]);
         Assert.Equal("http://127.0.0.1:8200/healthz", (string?)json["healthz"]);
     }
 
     [Fact]
     public void Listening_on_every_ipv6_address_gives_ipv6_loopback_urls()
     {
-        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.IPv6Any, 8200, token: null, TileImageFormat.Png, viewer: false))!;
+        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.IPv6Any, 8200, token: null, TileImageFormat.Png, viewer: false, highDpi: false))!;
 
         Assert.Equal("::1", (string?)json["host"]);
         Assert.Equal("http://[::1]:8200/wms", (string?)json["wms"]);

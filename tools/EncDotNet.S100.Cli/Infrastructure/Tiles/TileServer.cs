@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using EncDotNet.S100.Rendering.Scene;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -163,9 +164,15 @@ internal sealed class TileServer : IAsyncDisposable
         return new TileServer(app, ServeHost.BaseUri(address, bound.Port, token));
     }
 
-    /// <summary>The tile URL template under a base URL, e.g. <c>http://127.0.0.1:8200/{z}/{x}/{y}.png</c>.</summary>
-    public static string TileUrlTemplate(Uri baseUri, TileImageFormat format) =>
-        baseUri.AbsoluteUri + "{z}/{x}/{y}." + TileSetMetadata.FormatToken(format);
+    /// <summary>The suffix of a high-DPI tile's row in its URL (issue #1563): <c>{z}/{x}/{y}@2x.png</c>.</summary>
+    public const string HighDpiSuffix = "@2x";
+
+    /// <summary>
+    /// The tile URL template under a base URL, e.g. <c>http://127.0.0.1:8200/{z}/{x}/{y}.png</c>,
+    /// or with <paramref name="highDpi"/> its 512-pixel tiles', <c>…/{z}/{x}/{y}@2x.png</c>.
+    /// </summary>
+    public static string TileUrlTemplate(Uri baseUri, TileImageFormat format, bool highDpi = false) =>
+        baseUri.AbsoluteUri + "{z}/{x}/{y}" + (highDpi ? HighDpiSuffix : string.Empty) + "." + TileSetMetadata.FormatToken(format);
 
     /// <summary>
     /// Runs until the host shuts down — on Ctrl-C (SIGINT) or SIGTERM, which
@@ -254,7 +261,7 @@ internal sealed class TileServer : IAsyncDisposable
     /// <param name="layer">The layer (issue #1495), or <see langword="null"/> for every dataset.</param>
     private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette, string? layer = null)
     {
-        if (!TryTime(context, out var time))
+        if (!TryTime(context, out var time) || !TryScale(context, source, out bool highDpi))
             return;
 
         // The tile URL is absolute, built from the request, so it works from
@@ -263,7 +270,11 @@ internal sealed class TileServer : IAsyncDisposable
         var layerPath = layer is null ? string.Empty : LayersPath + "/" + Uri.EscapeDataString(layer) + "/";
         var baseUri = new Uri(root, layerPath + (palette is null ? string.Empty : palette + "/"));
         var json = source.ToTileJson(palette, time);
-        var tiles = TileUrlTemplate(baseUri, source.Format);
+        var tiles = TileUrlTemplate(baseUri, source.Format, highDpi);
+        if (highDpi)
+            json["tileSize"] = 2 * XyzTileGrid.TileSize;
+        if (source.CanReadPixelRatio(2) && json["s100"] is System.Text.Json.Nodes.JsonObject ratios)
+            ratios["pixelRatios"] = new System.Text.Json.Nodes.JsonArray(1, 2);
         if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
             tiles += "?t=" + Uri.EscapeDataString((string)step!);
         json["tiles"] = new System.Text.Json.Nodes.JsonArray(tiles);
@@ -293,12 +304,20 @@ internal sealed class TileServer : IAsyncDisposable
         var values = context.Request.RouteValues;
         var tile = (string)values["tile"]!;
         int dot = tile.IndexOf('.', StringComparison.Ordinal);
+        var row = dot < 0 ? tile : tile[..dot];
+
+        // {y}@2x: the 512-pixel tile, drawn at twice the pixel density
+        // (issue #1563), from a source that renders its tiles.
+        bool highDpi = row.EndsWith(HighDpiSuffix, StringComparison.Ordinal);
+        if (highDpi)
+            row = row[..^HighDpiSuffix.Length];
         if (dot < 0
             || !TryParse((string)values["z"]!, out int zoom)
             || !TryParse((string)values["x"]!, out int x)
-            || !TryParse(tile[..dot], out int y)
+            || !TryParse(row, out int y)
             || !TileSource.IsValid(zoom, x, y)
-            || !MatchesFormat(tile[(dot + 1)..], source.Format))
+            || !MatchesFormat(tile[(dot + 1)..], source.Format)
+            || (highDpi && !source.CanReadPixelRatio(2)))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -307,13 +326,46 @@ internal sealed class TileServer : IAsyncDisposable
         if (!TryTime(context, out var time))
             return;
 
-        await WriteTileAsync(context, source, zoom, x, y, palette, time).ConfigureAwait(false);
+        await WriteTileAsync(context, source, zoom, x, y, palette, time, highDpi ? 2 : null).ConfigureAwait(false);
     }
 
-    /// <summary>Writes tile <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>, 204 when empty, 304 when the ETag matches.</summary>
-    private static async Task WriteTileAsync(HttpContext context, ITileSource source, int zoom, int x, int y, string? palette, DateTime? time)
+    /// <summary>
+    /// Reads the optional <c>scale</c> query parameter of a TileJSON request:
+    /// <c>1</c>, or <c>2</c> for the 512-pixel <c>@2x</c> tiles. Answers 400
+    /// when it's neither, and 404 for <c>2</c> when the source can't draw them.
+    /// </summary>
+    private static bool TryScale(HttpContext context, ITileSource source, out bool highDpi)
     {
-        var data = await source.ReadAsync(zoom, x, y, palette, time, context.RequestAborted).ConfigureAwait(false);
+        highDpi = false;
+        if (!context.Request.Query.TryGetValue("scale", out var values) || string.IsNullOrWhiteSpace(values.ToString()))
+            return true;
+
+        switch (values.ToString().Trim())
+        {
+            case "1":
+                return true;
+            case "2" when source.CanReadPixelRatio(2):
+                highDpi = true;
+                return true;
+            case "2":
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return false;
+            default:
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes tile <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>,
+    /// at <paramref name="pixelRatio"/> when given (an <c>@2x</c> tile), 204
+    /// when empty, 304 when the ETag matches.
+    /// </summary>
+    private static async Task WriteTileAsync(HttpContext context, ITileSource source, int zoom, int x, int y, string? palette, DateTime? time, int? pixelRatio = null)
+    {
+        var data = pixelRatio is { } ratio
+            ? await source.ReadAsync(zoom, x, y, palette, time, ratio, context.RequestAborted).ConfigureAwait(false)
+            : await source.ReadAsync(zoom, x, y, palette, time, context.RequestAborted).ConfigureAwait(false);
         context.Response.Headers.CacheControl = "no-cache";
         if (data is null)
         {
@@ -465,6 +517,10 @@ internal sealed class TileServer : IAsyncDisposable
           status.textContent = (tileJson.name || "Tiles") + " · zoom " + tileJson.minzoom + "–" + tileJson.maxzoom;
           const palettes = (tileJson.s100 && tileJson.s100.palettes) || [];
           const times = (tileJson.s100 && tileJson.s100.times) || [];
+          // On a high-DPI screen, the 512-pixel @2x tiles when they're served.
+          const highDpi = window.devicePixelRatio > 1 && ((tileJson.s100 && tileJson.s100.pixelRatios) || []).includes(2);
+          const chartUrl = new URL(tileJsonUrl);
+          if (highDpi) chartUrl.searchParams.set("scale", "2");
           const map = new maplibregl.Map({
             container: "map",
             style: {
@@ -476,7 +532,7 @@ internal sealed class TileServer : IAsyncDisposable
                   tileSize: 256,
                   attribution: "© OpenStreetMap contributors",
                 },
-                chart: { type: "raster", url: tileJsonUrl, tileSize: 256 },
+                chart: { type: "raster", url: chartUrl.href, tileSize: 256 },
               },
               layers: [
                 { id: "osm", type: "raster", source: "osm" },
@@ -513,6 +569,7 @@ internal sealed class TileServer : IAsyncDisposable
             const time = document.getElementById("time");
             const url = new URL((palette ? palette.value + "/" : "") + "tiles.json", location.href);
             if (time) url.searchParams.set("t", time.value);
+            if (highDpi) url.searchParams.set("scale", "2");
             map.getSource("chart").setUrl(url.href);
           }
           if (tileJson.bounds) {
