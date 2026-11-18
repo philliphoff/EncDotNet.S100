@@ -64,17 +64,7 @@ public sealed class PickContributorRegistry
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(processor);
 
-        var context = new PickContext
-        {
-            Spec = processor.Spec,
-            FeatureRef = info.FeatureRef,
-            FeatureType = info.FeatureType,
-            Attributes = info.Attributes,
-            Processor = processor,
-            ResolveListedValueDefinition = processor is IListedValueDefinitions definitions
-                ? definitions.ResolveListedValueDefinition
-                : null,
-        };
+        var context = PickContext.For(info, processor);
         var sections = Contribute(context, info.Sections);
         return ReferenceEquals(sections, info.Sections) ? info : info.WithSections(sections);
     }

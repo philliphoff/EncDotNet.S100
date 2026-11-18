@@ -28,6 +28,30 @@ public sealed record PickContext
     /// <summary>The product or source the feature comes from.</summary>
     public required SpecRef Spec { get; init; }
 
+    /// <summary>The sections the feature has so far, such as a <see cref="VesselSection"/>.</summary>
+    public IReadOnlyList<PickSection> Sections { get; init; } = [];
+
+    /// <summary>The context of <paramref name="info"/>, picked from <paramref name="processor"/>.</summary>
+    /// <param name="info">The feature info.</param>
+    /// <param name="processor">The processor it came from.</param>
+    public static PickContext For(FeatureInfo info, IDatasetProcessor processor)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(processor);
+        return new PickContext
+        {
+            Spec = processor.Spec,
+            FeatureRef = info.FeatureRef,
+            FeatureType = info.FeatureType,
+            Attributes = info.Attributes,
+            Sections = info.Sections,
+            Processor = processor,
+            ResolveListedValueDefinition = processor is IListedValueDefinitions definitions
+                ? definitions.ResolveListedValueDefinition
+                : null,
+        };
+    }
+
     /// <summary>The feature's reference within its dataset.</summary>
     public required string FeatureRef { get; init; }
 

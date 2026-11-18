@@ -37,6 +37,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private bool _hasPick;
     private PickHit? _selectedHit;
     private IReadOnlyList<object> _sections = [];
+    private IReadOnlyList<PickActionViewModel> _actions = [];
     private PickLocation? _location;
     private DepthOverTimeViewModel? _locationDepth;
     private string _chartBasisLine = string.Empty;
@@ -79,6 +80,13 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) _picks.NavigateToReference(r); },
             r => r is not null);
+        InvokeActionCommand = new RelayCommand<PickActionViewModel>(
+            action =>
+            {
+                if (action is not null && SelectedHit is { } hit)
+                    PickActionRequested?.Invoke(this, new PickActionRequest(hit, action.Action));
+            },
+            action => action is not null && SelectedHit is not null);
         TakeHelmCommand = new RelayCommand<DynamicPickHit>(
             hit => { if (hit is not null && TryGetAisMmsi(hit, out var mmsi)) TakeHelmRequested?.Invoke(this, mmsi); },
             hit => hit is not null && TryGetAisMmsi(hit, out _));
@@ -853,6 +861,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ClearTextCards();
         References.Clear();
         _sections = [];
+        _actions = [];
         _stationChart = null;
         Location = null;
         LocationDepthSeries = null;
@@ -865,6 +874,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(ShowInlineAttributes));
         OnPropertyChanged(nameof(SelectedSections));
         OnPropertyChanged(nameof(HasSections));
+        OnPropertyChanged(nameof(SelectedActions));
+        OnPropertyChanged(nameof(HasActions));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
         OnPropertyChanged(nameof(HasMultipleHits));
@@ -888,6 +899,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             ClearTextCards();
             References.Clear();
             _sections = [];
+            _actions = [];
+            OnPropertyChanged(nameof(SelectedActions));
+            OnPropertyChanged(nameof(HasActions));
             OnPropertyChanged(nameof(HasAttributes));
             OnPropertyChanged(nameof(HasTextCards));
             OnPropertyChanged(nameof(HasReferences));
@@ -916,6 +930,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasReferences));
 
         _sections = [.. hit.Sections.Where(s => !ShownByOwnPanel(s)).Select(PickSectionPresenters.Default.Present)];
+        _actions = [.. hit.Actions.Select(a => new PickActionViewModel(a))];
+        OnPropertyChanged(nameof(SelectedActions));
+        OnPropertyChanged(nameof(HasActions));
 
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
@@ -1012,6 +1029,21 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// <summary>True when <see cref="SelectedSections"/> isn't empty.</summary>
     public bool HasSections => _sections.Count > 0;
 
+    /// <summary>The selected hit's pick actions (data source design note P4), as buttons.</summary>
+    public IReadOnlyList<PickActionViewModel> SelectedActions => _actions;
+
+    /// <summary>True when <see cref="SelectedActions"/> isn't empty.</summary>
+    public bool HasActions => _actions.Count > 0;
+
+    /// <summary>Carries out a pick action on the selected hit: raises <see cref="PickActionRequested"/>.</summary>
+    public ICommand InvokeActionCommand { get; }
+
+    /// <summary>
+    /// Raised when the user chooses a pick action on the selected hit. The host
+    /// carries it out by <see cref="PickAction.Id"/>.
+    /// </summary>
+    public event EventHandler<PickActionRequest>? PickActionRequested;
+
     /// <summary>
     /// The ice egg code among <see cref="SelectedSections"/>, or <c>null</c>
     /// when the selected hit has none.
@@ -1032,3 +1064,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             hit.Card?.Release();
     }
 }
+
+/// <summary>A pick action as a button in the pick report.</summary>
+/// <param name="Action">The action.</param>
+internal sealed record PickActionViewModel(PickAction Action)
+{
+    /// <summary>The button's label.</summary>
+    public string Label => Action.Label;
+
+    /// <summary>The button's automation id: <c>PickReport.Action.</c> and the action's id.</summary>
+    public string AutomationId => "PickReport.Action." + Action.Id;
+}
+
+/// <summary>A pick action the user chose, and the hit it's for.</summary>
+/// <param name="Hit">The picked feature.</param>
+/// <param name="Action">The action.</param>
+internal sealed record PickActionRequest(PickHit Hit, PickAction Action);

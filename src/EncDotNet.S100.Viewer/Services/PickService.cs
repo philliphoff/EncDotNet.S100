@@ -312,6 +312,7 @@ internal sealed class PickService : IPickService
             Geometry = info.Geometry,
             OwningProcessor = processor,
             Sections = info.Sections,
+            Actions = PickActionRegistry.Default.ActionsFor(PickContext.For(info, processor)),
             NotForNavigation = notForNavigation,
             Credit = credit,
             DatasetId = datasetId,

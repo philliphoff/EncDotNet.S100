@@ -368,6 +368,18 @@ public partial class App : Application
             if (pickReport is not null)
             {
                 pickReport.TakeHelmRequested += (_, mmsi) => pirateCoordinator.Engage(mmsi);
+                // P4: "Take helm" is a pick action on any picked vessel with an
+                // MMSI, whatever source it came from.
+                pickReport.PickActionRequested += (_, request) =>
+                {
+                    if (request.Action.Id == EncDotNet.S100.Viewer.Services.DynamicSources.TakeHelmPickAction.Id
+                        && EncDotNet.S100.Viewer.Services.DynamicSources.TakeHelmPickAction.MmsiOf(request.Hit.Sections) is { } mmsi)
+                    {
+                        pirateCoordinator.Engage(mmsi);
+                    }
+                };
+                EncDotNet.S100.Viewer.Services.DynamicSources.TakeHelmPickAction.Register(
+                    EncDotNet.S100.Datasets.Pipelines.PickActionRegistry.Default);
             }
 
             // Take/release the helm from the Vessels panel. Engage hides the

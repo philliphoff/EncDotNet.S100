@@ -1989,6 +1989,32 @@
                 </ItemsControl>
 
                 <!--
+                    The selected hit's pick actions (data source design note P4),
+                    such as "Take helm" on a vessel: one button each. Hidden
+                    when the hit has none.
+                -->
+                <ItemsControl ItemsSource="{Binding SelectedActions}"
+                              IsVisible="{Binding HasActions}"
+                              AutomationProperties.AutomationId="PickReport.Actions">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PickActionViewModel">
+                            <Button Content="{Binding Label}"
+                                    AutomationProperties.AutomationId="{Binding AutomationId}"
+                                    AutomationProperties.Name="{Binding Label}"
+                                    Margin="0,4,6,0"
+                                    FontSize="12"
+                                    Command="{Binding DataContext.InvokeActionCommand, ElementName=PickRoot}"
+                                    CommandParameter="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!--
                     Text (#932): resolved `fileReference` content and long text
                     values lifted out of the attribute table above into
                     long-text cards, so the mariner reads them whole rather

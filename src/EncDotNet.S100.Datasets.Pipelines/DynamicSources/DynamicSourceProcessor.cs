@@ -352,11 +352,14 @@ public sealed class DynamicSourceProcessor :
                     RawValue = p.Value,
                 })],
                 Geometry = view.GeometryType,
+                Sections = VesselSectionOf(feature) is { } described ? [described] : [],
             };
         }
 
+        // P5: a vessel's motion and size are a section, not rows.
+        var vessel = VesselSectionOf(feature);
         var rows = new List<PickAttribute>();
-        if (feature.Motion is { } motion)
+        if (vessel is null && feature.Motion is { } motion)
         {
             if (motion.CourseOverGround is { } cog)
                 rows.Add(Row("courseOverGround", "Course over ground", FormattableString.Invariant($"{cog.TotalDegrees:0.#}°")));
@@ -376,6 +379,7 @@ public sealed class DynamicSourceProcessor :
             FeatureTypeName = _source.Metadata.DisplayName,
             Attributes = rows,
             Geometry = view.GeometryType,
+            Sections = vessel is null ? [] : [vessel],
         };
 
         static PickAttribute Row(string code, string name, string value) =>
@@ -383,6 +387,31 @@ public sealed class DynamicSourceProcessor :
     }
 
     private string FeatureTypeOf(DynamicFeature feature) => feature.Kind ?? _source.Id;
+
+    /// <summary>
+    /// The vessel section of a feature that is a vessel: one with a hull
+    /// (<see cref="DynamicFeature.VesselGeometry"/>) or an MMSI. A feature that
+    /// only moves, such as a drifting buoy, isn't one.
+    /// </summary>
+    internal static VesselSection? VesselSectionOf(DynamicFeature feature)
+    {
+        var mmsi = feature.Attributes.TryGetValue("mmsi", out var m) && m is not null
+            ? Convert.ToString(m, CultureInfo.InvariantCulture)
+            : null;
+        if (feature.VesselGeometry is null && string.IsNullOrWhiteSpace(mmsi))
+            return null;
+        var name = feature.Attributes.TryGetValue("vesselName", out var n) && n is not null
+            ? Convert.ToString(n, CultureInfo.InvariantCulture)?.Trim()
+            : null;
+        return new VesselSection(
+            string.IsNullOrEmpty(name) ? null : name,
+            string.IsNullOrWhiteSpace(mmsi) ? null : mmsi,
+            feature.Motion?.CourseOverGround?.TotalDegrees,
+            feature.Motion?.Heading?.TotalDegrees,
+            feature.Motion?.SpeedOverGround?.TotalKnots,
+            feature.VesselGeometry is { LengthMetres: > 0 } g ? g.LengthMetres : null,
+            feature.VesselGeometry is { BeamMetres: > 0 } b ? b.BeamMetres : null);
+    }
 
     private static GeographicBounds? Extent(IReadOnlyList<DynamicFeature> features)
     {

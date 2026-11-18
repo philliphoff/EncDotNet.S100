@@ -47,6 +47,12 @@ internal sealed class PickHit
     public IReadOnlyList<PickSection> Sections { get; init; } = [];
 
     /// <summary>
+    /// What the user can do with the feature, such as "Take helm" on a vessel
+    /// (data source design note P4), from <see cref="PickActionRegistry.Default"/>.
+    /// </summary>
+    public IReadOnlyList<PickAction> Actions { get; init; } = [];
+
+    /// <summary>
     /// The warning message when the hit is part of a navigational warning
     /// (its <see cref="NavigationalWarningSection"/>); <c>null</c> for every
     /// other feature. When set, the pick panel shows a Warning card above the

@@ -217,6 +217,31 @@ public class PickSectionTests
 #pragma warning restore CS0618
     }
 
+    [Fact]
+    public void VesselSection_ToRows_ListsWhatsKnown_AndSerializes()
+    {
+        var vessel = new VesselSection("SEA STAR", "366000001", 90.4, null, 11.52, 180, null);
+
+        var rows = vessel.ToRows();
+
+        Assert.Equal(new[] { "vesselName", "mmsi", "courseOverGround", "speedOverGround", "length" }, rows.Select(r => r.Code));
+        Assert.Equal("11.5 kn", rows.Single(r => r.Code == "speedOverGround").RawValue);
+        var json = PickSectionKindRegistry.CreateDefault().Find(VesselSection.KindName)!.Serialize(vessel);
+        Assert.Equal("366000001", json.GetProperty("mmsi").GetString());
+    }
+
+    [Fact]
+    public void ActionRegistry_OffersWhatApplies_AndSkipsAThrowingTest()
+    {
+        var registry = new PickActionRegistry();
+        registry.Register(new PickAction("a.yes", "Yes", _ => true));
+        registry.Register(new PickAction("a.no", "No", _ => false));
+        registry.Register(new PickAction("a.broken", "Broken", _ => throw new InvalidOperationException()));
+
+        Assert.Equal(["a.yes"], registry.ActionsFor(Context("x")).Select(a => a.Id));
+        Assert.Throws<ArgumentException>(() => registry.Register(new PickAction("a.yes", "Again", _ => true)));
+    }
+
     private sealed record TestSection(string Note) : PickSection
     {
         public override string Kind => "test.note";
