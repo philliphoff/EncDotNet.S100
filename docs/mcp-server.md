@@ -323,14 +323,46 @@ A value from a loaded dataset has no `source`. A `series` query is predicted
 at each instant; a `range` query every 30 minutes, at most 2,000 heights.
 With predictions off, or no station in reach, the S-104 error stands.
 
-The same switch fills S-111 gaps: `sample_coverage` and
-`sample_coverage_along` for `S-111` fall back to the predicted tidal current
-at the current station nearest by water within 10 km, the shallowest bin
-where several share a place. The `datasetId` is `current-predictions`, the
-`value` is a `surface_current_station` sample (speed in m/s and knots, and the
-direction the current sets toward), and `source` names the station with
+The same switch fills S-111 gaps, with a much shorter reach.
+`sample_coverage` and `sample_coverage_along` for `S-111` fall back to the
+predicted tidal current at the current station nearest by water within
+**2 km**, the shallowest bin where several share a place. Tide heights change
+slowly over 10 km, but tidal currents don't: a station in a narrows such as
+Deception Pass says little about the open water either side of it, so a point
+farther than that from every current station keeps the S-111 error. Change the
+reach with `s100 mcp serve --current-station-reach <metres>` (or, in code,
+`RouteCheckSourceOptions.MaxCurrentStationDistanceMeters`). The tide-station
+reach stays 10 km.
+
+The `datasetId` is `current-predictions`, the `value` is a
+`surface_current_station` sample (speed in m/s and knots, and the direction
+the current sets toward), and `source` names the station with
 `type: "current"`, no `verticalDatum`, and the caveat "Astronomical tidal
-current only, not a forecast." `check_route` doesn't use predicted currents.
+current only, not a forecast." It also adds a `confidence` that falls with the
+station's distance, and a `note` to quote with the value:
+
+| `confidence` | Station distance |
+|---|---|
+| `high` | 500 m or less |
+| `medium` | 500 m to 1 km |
+| `low` | more than 1 km |
+
+```json
+"source": {
+  "kind": "prediction",
+  "station": { "id": "PUG1701_33", "name": "Deception Pass (Narrows)", "type": "current", "kind": "harmonic", "referenceStationId": null, "distanceMeters": 1480 },
+  "verticalDatum": null,
+  "caveat": "Astronomical tidal current only, not a forecast.",
+  "catalogueDate": "2026-11-12T00:00:00+00:00",
+  "confidence": "low",
+  "note": "Predicted at Deception Pass (Narrows), 1.5 km away by water. Tidal currents change over short distances, most of all either side of a narrows: the current here may differ a lot."
+}
+```
+
+A tide prediction's `source` has no `confidence` or `note`. The reach doesn't
+yet check that the way by water stays in the station's channel: a station just
+inside a narrows still reaches the open water at its mouth.
+`check_route` doesn't use predicted currents.
 
 ### Library tools
 

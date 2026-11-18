@@ -18,10 +18,13 @@ namespace EncDotNet.S100.Mcp.Tools.Tides;
 /// The stations come from the host's <see cref="RouteCheckSourceCache.TidePredictions"/>
 /// catalogue, so they follow the same switch as the S-104 fallback
 /// (<c>s100 mcp serve --tide-predictions</c>). A station reaches
-/// <see cref="WaterReach.DefaultReachMeters"/> through the loaded charts'
-/// water (design D19); of the depth bins at one place the shallowest is used,
-/// as the current nearest the surface. Predicted currents are for display
-/// and sampling only: route checks don't use them.
+/// <see cref="RouteCheckSourceOptions.MaxCurrentStationDistanceMeters"/>
+/// (2 km by default, much shorter than a tide station's 10 km: #1545) through
+/// the loaded charts' water (design D19); of the depth bins at one place the
+/// shallowest is used, as the current nearest the surface. The sample's
+/// source carries a confidence that falls with the station's distance, and a
+/// note to quote with it. Predicted currents are for display and sampling
+/// only: route checks don't use them.
 /// </remarks>
 internal sealed class PredictedCurrentSampler
 {
@@ -31,6 +34,12 @@ internal sealed class PredictedCurrentSampler
     // Straight-line candidates looked at for the nearest by water: NOAA has
     // several depth bins at one place, so more than for tide stations.
     private const int Candidates = 32;
+
+    /// <summary>A station this near (metres) gives a <c>high</c> confidence.</summary>
+    public const double HighConfidenceMeters = 500;
+
+    /// <summary>A station this near (metres) gives a <c>medium</c> confidence; farther is <c>low</c>.</summary>
+    public const double MediumConfidenceMeters = 1_000;
 
     private readonly IDatasetCatalog _catalog;
     private readonly RouteCheckSourceCache _sources;
@@ -50,7 +59,7 @@ internal sealed class PredictedCurrentSampler
             return null;
 
         var position = new GeoPosition(request.Latitude, request.Longitude);
-        var reach = new WaterReach(_sources.Get(_catalog.Datasets).WaterMask);
+        var reach = new WaterReach(_sources.Get(_catalog.Datasets).WaterMask, _sources.Options.MaxCurrentStationDistanceMeters);
         if (Locate(catalogue, reach, position) is not var (station, prediction, distance))
             return null;
 
@@ -66,7 +75,9 @@ internal sealed class PredictedCurrentSampler
                 Math.Round(distance)),
             null,
             TideToolText.CurrentCaveat,
-            catalogue.Retrieved?.ToUniversalTime());
+            catalogue.Retrieved?.ToUniversalTime(),
+            Confidence(distance),
+            Note(info.StationName ?? info.StationId, distance, reach.ByWater));
 
         var requested = request.Times is TimeQuery.Instant i ? i.Value : request.Time;
         if (request.Times is TimeQuery.Range or TimeQuery.Series)
@@ -137,6 +148,26 @@ internal sealed class PredictedCurrentSampler
         }
 
         return best;
+    }
+
+    /// <summary>The confidence of a current predicted at a station this far away.</summary>
+    /// <param name="distanceMeters">The station's distance from the point, in metres.</param>
+    /// <returns><c>high</c>, <c>medium</c> or <c>low</c>.</returns>
+    internal static string Confidence(double distanceMeters) =>
+        distanceMeters <= HighConfidenceMeters ? "high"
+        : distanceMeters <= MediumConfidenceMeters ? "medium"
+        : "low";
+
+    /// <summary>The note quoted with a current predicted at a station this far away.</summary>
+    internal static string Note(string station, double distanceMeters, bool byWater)
+    {
+        var distance = distanceMeters < 1_000
+            ? FormattableString.Invariant($"{Math.Round(distanceMeters):0} m")
+            : FormattableString.Invariant($"{distanceMeters / 1_000:0.0} km");
+        var where = $"Predicted at {station}, {distance} away{(byWater ? " by water" : string.Empty)}.";
+        return distanceMeters <= HighConfidenceMeters
+            ? where
+            : where + " Tidal currents change over short distances, most of all either side of a narrows: the current here may differ a lot.";
     }
 
     // Nearer wins; at one place (within a metre), the shallower bin.

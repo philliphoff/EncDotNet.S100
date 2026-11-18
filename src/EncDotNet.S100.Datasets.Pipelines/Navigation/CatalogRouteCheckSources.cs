@@ -157,6 +157,15 @@ public sealed record RouteCheckSourceOptions
     public double MaxStationDistanceMeters { get; init; } = 10_000;
 
     /// <summary>
+    /// How far a tidal current station's prediction applies, in metres, by
+    /// water where charts are loaded. Much shorter than
+    /// <see cref="MaxStationDistanceMeters"/>: tide heights change slowly over
+    /// kilometres, but tidal currents don't, and a station in a narrows says
+    /// little about the open water either side of it (#1545). Default 2 km.
+    /// </summary>
+    public double MaxCurrentStationDistanceMeters { get; init; } = 2_000;
+
+    /// <summary>
     /// Harmonic tide predictions to use for water level where no S-104
     /// covers a point and time, or <c>null</c> (the default) for none. A
     /// prediction is the astronomical tide only, not a forecast, and every
@@ -203,6 +212,9 @@ public sealed class RouteCheckSourceCache
         _options = options ?? RouteCheckSourceOptions.Default;
         _tidePredictions = _options.TidePredictions;
     }
+
+    /// <summary>The tuning the sources are built with (its <see cref="RouteCheckSourceOptions.TidePredictions"/> is the one given at construction; see <see cref="TidePredictions"/>).</summary>
+    public RouteCheckSourceOptions Options => _options;
 
     /// <summary>
     /// The tide predictions every check, the chart and the pick report use

@@ -58,6 +58,8 @@ public sealed class PredictedSampleCoverageTests
         Assert.Null(source.Station.ReferenceStationId);
         Assert.InRange(source.Station.DistanceMeters!.Value, 0, 1_000);
         Assert.Equal(12, source.VerticalDatum);
+        Assert.Null(source.Confidence);
+        Assert.Null(source.Note);
         Assert.Equal("Astronomical tide only, not a forecast.", source.Caveat);
         Assert.Equal(Catalogue.Value.Retrieved, source.CatalogueDate);
     }

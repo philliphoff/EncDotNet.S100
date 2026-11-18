@@ -110,8 +110,12 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         public string? TideCatalogue { get; init; }
 
         [CommandOption("--tide-predictions")]
-        [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample_coverage and sample_coverage_along the nearest current station where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
+        [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample_coverage and sample_coverage_along the nearest current station within --current-station-reach where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
         public bool TidePredictions { get; init; }
+
+        [CommandOption("--current-station-reach <METRES>")]
+        [Description("With --tide-predictions: how far, by water, a current station's prediction applies (default 2000). Much shorter than a tide station's 10 km: tidal currents change over short distances, most of all either side of a narrows.")]
+        public double? CurrentStationReach { get; init; }
 
         [CommandOption("--transport <TRANSPORT>")]
         [Description("How clients connect: stdio (the client starts s100 and talks over its standard input and output) or http (clients connect to a Streamable HTTP endpoint at /mcp).")]
@@ -171,6 +175,10 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             if (Collections.Any(string.IsNullOrWhiteSpace))
                 return ValidationResult.Error("--collection needs a path, known-source id or URL.");
 
+            if (CurrentStationReach is { } reach && !(reach > 0 && double.IsFinite(reach)))
+                return ValidationResult.Error("--current-station-reach must be a positive number of metres.");
+            if (CurrentStationReach is not null && !TidePredictions)
+                return ValidationResult.Error("--current-station-reach applies only with --tide-predictions.");
             if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
                 return luaEngineError;
 
@@ -309,10 +317,14 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 }
 
                 routeCheckSources = new RouteCheckSourceCache(
-                    new ProjNetCrsTransformFactory(), new RouteCheckSourceOptions { TidePredictions = stations });
+                    new ProjNetCrsTransformFactory(), new RouteCheckSourceOptions
+                    {
+                        TidePredictions = stations,
+                        MaxCurrentStationDistanceMeters = settings.CurrentStationReach ?? RouteCheckSourceOptions.Default.MaxCurrentStationDistanceMeters,
+                    });
                 Console.Error.WriteLine($"Tide predictions fill S-104 gaps: {stations.Stations.Count} stations from {tidePath}.");
                 if (stations.CurrentStations.Count > 0)
-                    Console.Error.WriteLine($"Current predictions fill S-111 gaps: {stations.CurrentStations.Count} current stations.");
+                    Console.Error.WriteLine($"Current predictions fill S-111 gaps: {stations.CurrentStations.Count} current stations, each within {routeCheckSources.Options.MaxCurrentStationDistanceMeters:0} m by water.");
             }
 
             if (settings.IsHttp)

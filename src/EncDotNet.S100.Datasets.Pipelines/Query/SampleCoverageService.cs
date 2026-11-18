@@ -109,13 +109,21 @@ public sealed record SampleCoverageResult(
 /// <param name="VerticalDatum">The S-100 vertical datum code of the heights (MLLW is 12); <c>null</c> for a current.</param>
 /// <param name="Caveat">The note to quote with the value.</param>
 /// <param name="CatalogueDate">When the station catalogue was retrieved.</param>
+/// <param name="Confidence">
+/// For a current, how far the value can be trusted at the point given the
+/// station's distance: <c>high</c>, <c>medium</c> or <c>low</c>; <c>null</c>
+/// for a tide.
+/// </param>
+/// <param name="Note">For a current, the station's distance and what it means for the value; <c>null</c> for a tide.</param>
 [Description("Where a sampled value came from when it isn't a loaded dataset's.")]
 public sealed record SampleSource(
     [property: Description("Always \"prediction\": the astronomical tide or tidal current, not S-104 or S-111 and not a forecast.")] string Kind,
     [property: Description("The station the value is predicted at.")] SampleSourceStation Station,
     [property: Description("The S-100 vertical datum code of the heights (MLLW is 12); null for a current.")] int? VerticalDatum,
     [property: Description("Quote this with the value: \"Astronomical tide only, not a forecast.\" or, for a current, \"Astronomical tidal current only, not a forecast.\"")] string Caveat,
-    [property: Description("When the station catalogue was retrieved (UTC).")] DateTimeOffset? CatalogueDate);
+    [property: Description("When the station catalogue was retrieved (UTC).")] DateTimeOffset? CatalogueDate,
+    [property: Description("Currents only: \"high\" (station within 500 m), \"medium\" (within 1 km) or \"low\" (farther). Tidal currents change over short distances, most of all either side of a narrows; null for a tide.")] string? Confidence = null,
+    [property: Description("Currents only: quote this with the value. Names the station's distance and, past 500 m, warns the current here may differ; null for a tide.")] string? Note = null);
 
 /// <summary>The station a predicted value comes from.</summary>
 /// <param name="Id">The station identifier.</param>
