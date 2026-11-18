@@ -899,7 +899,8 @@ Each slice ships on its own and leaves the tree working.
    half (#1485), NDBC (#1486) and NMEA weather (#1488) as source entries,
    and the `Vessels` plane stopgap (#1489). The rest is re-planned under D8
    as slices 7b–7d and 9.
-   - **7b. Source rows that say what they're doing** (D8). A status for each
+   - **7b. Source rows that say what they're doing** (D8). Built: see the
+     note below. A status for each
      source entry (Live, Waiting for zoom, Paused, Stale, Key needed,
      Failed) with the last update, from `HostedSourceActivator` and the
      processor; file details, Validation and reorder hidden on source rows;
@@ -908,15 +909,23 @@ Each slice ships on its own and leaves the tree working.
      meaning for "source" in strings and automation ids. Needs nothing
      else, and goes first so AIS lands in a list that can say "waiting for
      zoom".
+     As built: `SourceStatus.Evaluate` gives Paused, Waiting for zoom,
+     Waiting for data, Live, Stale or Failed from `HostedSourceActivator`'s
+     run state, `IHostedDatasetProcessor.LastUpdated` and `LastError`, and
+     the registration's new `StaleAfter`; `SourceDatasetService` re-reads it
+     on pause or resume, on new data and every 30 s. `SourceRegistration.Group`
+     labels the row (Observations, Own-ship sensor, Vessels). "Key needed"
+     comes with AIS (7c), and the settings link with slice 9. The plug
+     button's wording is now "Add a live feed".
    - **7c. AIS as a source entry.** Its registration, the old switch
      migrating to an added entry, no restart, the vessel list and pirate
      mode following the loaded entry (`ISourceHostExtension`), and
      `IDynamicFeatureRenderer` removed once nothing draws through it. Needs
      7b. "Take helm" and the AIS pick card find targets through the overlay
-     hit test, so they can't keep their path once AIS is a dataset. The
-     proposal is to ship 7c with slice 10; the alternative keeps AIS in the
-     overlay pick service, undrawn, until slice 10, at the cost of each AIS
-     pick showing twice. Not yet decided.
+     hit test, so they can't keep their path once AIS is a dataset. Decided
+     on 2026-11-18: 7c ships with slice 10, rather than keeping AIS in the
+     overlay pick service, undrawn, until slice 10 (each AIS pick would show
+     twice).
    - **7d. Predicted tide stations as a source entry** (D8), replacing their
      Layer stack toggle. Needs 7b.
 8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
@@ -931,7 +940,8 @@ Each slice ships on its own and leaves the tree working.
    plug button goes. Needs 7b; best after 7c, so AIS moves once.
 10. **Pick actions.** Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and
-    merge `DynamicPickHit` into `PickHit`. Proposed to ship with 7c.
+    merge `DynamicPickHit` into `PickHit`. Ships with 7c (decided
+    2026-11-18).
 
 Also left:
 
@@ -940,7 +950,7 @@ Also left:
 - **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
   `StationSeries`, `NavigationalWarning`) in the release after next.
 
-Order: 7b, then 7c (with 10, if that's decided), then 9 and 7d, with slice 3 whenever the IEC
+Order: 7b, then 7c with 10, then 9 and 7d, with slice 3 whenever the IEC
 62288 question (§6) is answered. Slice 3 is independent of the rest; live
 sources take their place in the derived order once it's in.
 

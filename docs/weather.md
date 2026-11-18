@@ -491,9 +491,11 @@ WPC issues the forecast fronts about every 12 hours, so they are stale after
 
 ## Show buoy observations
 
-In the **Datasets** panel, choose **Add a data source** (the plug button)
+In the **Datasets** panel, choose **Add a live feed** (the plug button)
 and then **NDBC observations**. It's listed with your datasets and added
-again each time SoundCharts starts, until you remove it. Observations are
+again each time SoundCharts starts, until you remove it. Its row says what
+it's doing, such as **Waiting for zoom (below 25°)** or **Live · updated
+3 min ago**. Observations are
 fetched only while it's shown and the view is less than 25° wide, and are
 refreshed every 10 minutes. A
 station's symbol turns grey when its observation is more than 3 hours old.

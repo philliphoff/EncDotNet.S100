@@ -463,7 +463,7 @@
     <value>Open a dataset</value>
   </data>
   <data name="Tooltip_AddDataSource" xml:space="preserve">
-    <value>Add a data source</value>
+    <value>Add a live feed</value>
   </data>
   <data name="Label_DataSourceAlreadyAddedFormat" xml:space="preserve">
     <value>{0} (added)</value>
@@ -2895,7 +2895,7 @@
     <comment>{0} = whole hours since the feature was updated.</comment>
   </data>
   <data name="PickReport_LastUpdatedJustNow" xml:space="preserve">
-    <value>just now</value>
+    <value>under a minute</value>
   </data>
   <data name="PickReport_Position" xml:space="preserve">
     <value>Position</value>
@@ -3371,7 +3371,7 @@
     <value>{0} minutes ago</value>
   </data>
   <data name="About_Time_HoursAgo" xml:space="preserve">
-    <value>{0} h ago</value>
+    <value>{0} h</value>
   </data>
   <data name="About_Time_DaysAgo" xml:space="preserve">
     <value>{0} days ago</value>
@@ -8981,5 +8981,67 @@
   <data name="Settings_SecretNoStoreFormat" xml:space="preserve">
     <value>This computer has no secret store, so the key is saved in settings.json. To keep it out of the file, use the {0} environment variable instead.</value>
     <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="SourceStatus_Paused" xml:space="preserve">
+    <value>Paused while hidden</value>
+  </data>
+  <data name="SourceStatus_WaitingForZoom" xml:space="preserve">
+    <value>Waiting for you to zoom in</value>
+  </data>
+  <data name="SourceStatus_WaitingForZoomFormat" xml:space="preserve">
+    <value>Waiting for zoom (below {0}°)</value>
+    <comment>{0} = the widest view span, in degrees, at which the feed runs.</comment>
+  </data>
+  <data name="SourceStatus_Failed" xml:space="preserve">
+    <value>Not connecting</value>
+  </data>
+  <data name="SourceStatus_FailedSinceFormat" xml:space="preserve">
+    <value>Not updating · last data {0} ago</value>
+    <comment>{0} = a short age, e.g. "14 min".</comment>
+  </data>
+  <data name="SourceStatus_Starting" xml:space="preserve">
+    <value>Waiting for data</value>
+  </data>
+  <data name="SourceStatus_StaleFormat" xml:space="preserve">
+    <value>No new data for {0}</value>
+    <comment>{0} = a short age, e.g. "42 min".</comment>
+  </data>
+  <data name="SourceStatus_LiveFormat" xml:space="preserve">
+    <value>Live · updated {0} ago</value>
+    <comment>{0} = a short age, e.g. "3 min".</comment>
+  </data>
+  <data name="SourceStatus_AgeJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
+  <data name="SourceStatus_AgeMinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+    <comment>{0} = whole minutes.</comment>
+  </data>
+  <data name="SourceStatus_AgeHoursFormat" xml:space="preserve">
+    <value>{0} h ago</value>
+    <comment>{0} = whole hours.</comment>
+  </data>
+  <data name="SourceStatus_AgeDaysFormat" xml:space="preserve">
+    <value>{0} d</value>
+    <comment>{0} = whole days.</comment>
+  </data>
+  <data name="SourceGroup_Observations" xml:space="preserve">
+    <value>Observations</value>
+  </data>
+  <data name="SourceGroup_OwnShipSensors" xml:space="preserve">
+    <value>Own-ship sensor</value>
+  </data>
+  <data name="SourceGroup_Vessels" xml:space="preserve">
+    <value>Vessels</value>
+  </data>
+  <data name="Toast_SourceRemovedFormat" xml:space="preserve">
+    <value>Removed {0}. It won't be added when SoundCharts starts; add it again with Add a live feed.</value>
+    <comment>{0} = the feed's name, e.g. "NDBC observations".</comment>
+  </data>
+  <data name="Button_AddLiveFeed" xml:space="preserve">
+    <value>Add a live feed</value>
+  </data>
+  <data name="SourceStatus_LiveJustNow" xml:space="preserve">
+    <value>Live · updated just now</value>
   </data>
 </root>

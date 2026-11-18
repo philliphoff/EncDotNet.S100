@@ -1835,6 +1835,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void MoveUp(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         if (i > 0) Entries.Move(i, i - 1);
@@ -1842,6 +1845,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void MoveDown(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         if (i >= 0 && i < Entries.Count - 1) Entries.Move(i, i + 1);
@@ -1849,6 +1855,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void BringToFront(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         if (i >= 0 && i != 0) Entries.Move(i, 0);
@@ -1856,6 +1865,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void SendToBack(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         var last = Entries.Count - 1;

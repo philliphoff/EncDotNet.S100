@@ -60,14 +60,13 @@ internal sealed class HostedSourceActivator : IDisposable
     }
 
     /// <summary>Whether the source is running: shown and within its activation range.</summary>
-    public bool IsRunning
-    {
-        get
-        {
-            lock (_lock)
-                return _started && _processor.IsActive;
-        }
-    }
+    public bool IsRunning => State == SourceRunState.Running;
+
+    /// <summary>Why the source is or isn't running.</summary>
+    public SourceRunState State { get; private set; } = SourceRunState.Hidden;
+
+    /// <summary>Raised after <see cref="State"/> changes, on the thread that changed it.</summary>
+    public event EventHandler? StateChanged;
 
     /// <summary>Shows or hides the dataset; a hidden source pauses.</summary>
     /// <param name="visible">Whether the dataset is shown.</param>
@@ -115,13 +114,15 @@ internal sealed class HostedSourceActivator : IDisposable
 
     private void Apply(bool updateArea)
     {
+        var changed = false;
         try
         {
             lock (_lock)
             {
                 if (_disposed)
                     return;
-                var active = _visible && _activation.IsActiveFor(_viewport);
+                var inRange = _activation.IsActiveFor(_viewport);
+                var active = _visible && inRange;
                 if (updateArea && active)
                     _processor.UpdateArea(_viewport);
                 _processor.IsActive = active;
@@ -130,6 +131,11 @@ internal sealed class HostedSourceActivator : IDisposable
                     _processor.Start();
                     _started = true;
                 }
+                var state = !_visible ? SourceRunState.Hidden
+                    : !inRange ? SourceRunState.WaitingForZoom
+                    : SourceRunState.Running;
+                changed = state != State;
+                State = state;
             }
         }
         catch (ObjectDisposedException)
@@ -140,6 +146,8 @@ internal sealed class HostedSourceActivator : IDisposable
         {
             _logger.LogWarning(ex, "Updating a data source for the view failed.");
         }
+        if (changed)
+            StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     internal static GeographicBounds ToBounds(MapViewportSnapshot snapshot) => new(
@@ -163,4 +171,17 @@ internal sealed class HostedSourceActivator : IDisposable
         if (_notifier is not null)
             _notifier.ViewportChanged -= OnViewportChanged;
     }
+}
+
+/// <summary>Why a hosted source is or isn't running.</summary>
+internal enum SourceRunState
+{
+    /// <summary>Its dataset is hidden, so it's paused.</summary>
+    Hidden,
+
+    /// <summary>The view is wider than its activation range, so it's paused.</summary>
+    WaitingForZoom,
+
+    /// <summary>It's running.</summary>
+    Running,
 }

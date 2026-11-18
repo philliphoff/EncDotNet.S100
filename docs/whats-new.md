@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Live feed rows say what they're doing.** In the Datasets panel, a live
+  feed such as NDBC observations shows its status instead of a product
+  name: waiting for zoom, paused while hidden, live with the time of its
+  last update, stale or not connecting (with the error in the tooltip). Its
+  row is labelled with what it shows, such as **Observations**, and has no
+  move buttons or Validation tab. **Add a live feed** is also offered when
+  the panel is empty, and removing a feed says it won't come back at the
+  next start. `IHostedDatasetProcessor` gains `LastUpdated` and `LastError`,
+  and `SourceRegistration` gains `Group` and `StaleAfter`; NDBC now waits
+  for a view narrower than 25° through its activation range.
 - **Faster `tiles serve` with S-102.** Tiles that include S-102 bathymetry
   now render in tens of milliseconds a block instead of around 14 seconds,
   and the first tile at each zoom level no longer lowers every chart again.

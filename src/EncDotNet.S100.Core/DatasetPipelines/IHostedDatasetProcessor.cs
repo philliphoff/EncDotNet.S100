@@ -26,4 +26,13 @@ public interface IHostedDatasetProcessor : IDatasetProcessor, IAsyncDisposable
     /// <summary>Sets the area in view, for sources that fetch only that area.</summary>
     /// <param name="area">The area, or <see langword="null"/> when there's no view yet.</param>
     void UpdateArea(GeographicBounds? area);
+
+    /// <summary>
+    /// When the source last delivered data, or <see langword="null"/> before it
+    /// has. A host compares it with <c>SourceRegistration.StaleAfter</c>.
+    /// </summary>
+    DateTimeOffset? LastUpdated => null;
+
+    /// <summary>The source's last failure, or <see langword="null"/> when there's none.</summary>
+    Exception? LastError => null;
 }

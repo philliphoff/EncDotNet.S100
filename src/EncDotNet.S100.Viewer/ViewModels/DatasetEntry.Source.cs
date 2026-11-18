@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.Services.Sources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -21,6 +22,45 @@ internal sealed partial class DatasetEntry
     public bool IsSource => SourceId is not null;
 
     /// <summary>
+    /// True for a file. Source rows hide what only makes sense for a file
+    /// (data source design note D8): reorder controls and the Validation tab.
+    /// </summary>
+    public bool IsFile => SourceId is null;
+
+    private SourceStatus? _sourceStatus;
+
+    /// <summary>What a loaded source is doing, such as "Live · updated 3 min ago"; <see langword="null"/> for a file or before it loads.</summary>
+    public SourceStatus? SourceStatus
+    {
+        get => _sourceStatus;
+        set
+        {
+            if (Equals(_sourceStatus, value))
+                return;
+            _sourceStatus = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Subtitle));
+            OnPropertyChanged(nameof(SubtitleTooltip));
+            OnPropertyChanged(nameof(NeedsAttention));
+        }
+    }
+
+    /// <summary>The row's second line: a source's status, or a file's product.</summary>
+    public string Subtitle => _sourceStatus?.Text ?? ProductSpec;
+
+    /// <summary>The second line's tooltip: a failing source's error, else the line itself.</summary>
+    public string SubtitleTooltip => _sourceStatus?.Detail ?? Subtitle;
+
+    /// <summary>True when a source is stale or failing, so its row's status stands out.</summary>
+    public bool NeedsAttention => _sourceStatus?.Kind is SourceStatusKind.Stale or SourceStatusKind.Failed;
+
+    /// <summary>A source's group, such as "Observations"; <see langword="null"/> for a file.</summary>
+    public string? SourceGroupLabel { get; private init; }
+
+    /// <summary>True when the row shows a group label.</summary>
+    public bool HasSourceGroup => SourceGroupLabel is not null;
+
+    /// <summary>
     /// Creates an entry for a source. Its id is <c>source:</c> and the
     /// registration's id, so a source is listed at most once.
     /// </summary>
@@ -39,6 +79,7 @@ internal sealed partial class DatasetEntry
         {
             SourceId = registration.Id,
             SourceOptions = options,
+            SourceGroupLabel = Services.Sources.SourceStatus.GroupLabel(registration.Group),
         };
     }
 

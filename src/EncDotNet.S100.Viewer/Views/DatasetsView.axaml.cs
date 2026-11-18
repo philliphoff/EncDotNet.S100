@@ -17,10 +17,9 @@ public partial class DatasetsView : UserControl
         EmptyAddButton.Click += OnAddClick;
         ToolbarAddButton.Click += OnAddClick;
         SourcesAddButton.Click += OnAddClick;
-        AddSourceFlyout.Opening += OnAddSourceFlyoutOpening;
+        ((MenuFlyout)ToolbarAddSourceButton.Flyout!).Opening += OnAddSourceFlyoutOpening;
+        ((MenuFlyout)EmptyAddSourceButton.Flyout!).Opening += OnAddSourceFlyoutOpening;
     }
-
-    private MenuFlyout AddSourceFlyout => (MenuFlyout)ToolbarAddSourceButton.Flyout!;
 
     /// <summary>
     /// Lists the data sources a user can add (design note D3): those that
@@ -29,10 +28,10 @@ public partial class DatasetsView : UserControl
     /// </summary>
     private void OnAddSourceFlyoutOpening(object? sender, EventArgs e)
     {
-        if (DataContext is not DatasetsViewModel vm)
+        if (DataContext is not DatasetsViewModel vm || sender is not MenuFlyout flyout)
             return;
         var sources = App.Services.GetService<Services.Sources.SourceDatasetService>();
-        AddSourceFlyout.Items.Clear();
+        flyout.Items.Clear();
         if (sources is null)
             return;
         foreach (var registration in sources.Registrations)
@@ -57,7 +56,7 @@ public partial class DatasetsView : UserControl
                     vm.RequestLoad(entry);
                 }
             };
-            AddSourceFlyout.Items.Add(item);
+            flyout.Items.Add(item);
         }
     }
 
