@@ -29,6 +29,7 @@ public sealed record CheckRouteDetails(
         DangerDetails d => new(Danger: new CheckRouteDangerDetails(
             d.FeatureType,
             d.Depth?.TotalMetres,
+            d.DepthIsDefault,
             d.WaterLevelEffect,
             d.ThresholdKind is { } kind ? Threshold(kind) : null,
             d.Threshold?.TotalMetres,
@@ -142,8 +143,9 @@ public sealed record CheckRouteDetails(
 /// <summary>A charted danger behind a finding.</summary>
 public sealed record CheckRouteDangerDetails(
     [property: Description("Its feature type: Wreck, Obstruction or UnderwaterAwashRock.")] string FeatureType,
-    [property: Description("Its charted depth (valueOfSounding) in metres, or null when unknown.")] double? DepthMeters,
-    [property: Description("Its waterLevelEffect code when its depth is unknown (1 or 2 above water, 4 covers and uncovers, 5 awash), or null.")] int? WaterLevelEffect,
+    [property: Description("Its charted depth (valueOfSounding) in metres, else the defaultClearanceDepth it was judged by (depthIsDefault), or null when unknown.")] double? DepthMeters,
+    [property: Description("True when depthMeters is the S-101 defaultClearanceDepth rather than a sounding: a stand-in for judging the danger (such as -15 for a floating obstruction), not a charted depth.")] bool DepthIsDefault,
+    [property: Description("Its waterLevelEffect code (1 or 2 above water, 3 always submerged, 4 covers and uncovers, 5 awash, 7 floating), or null.")] int? WaterLevelEffect,
     [property: Description("The threshold that made it a danger: safety_contour (its depth is no deeper than the safety contour) or keel (shallower than the leg's draft + squat + required UKC); null when its depth is unknown, which is always a danger.")] string? Threshold,
     [property: Description("The threshold in metres, or null.")] double? ThresholdMeters,
     [property: Description("Which side of the track it's on: on_track, port or starboard.")] string Side,

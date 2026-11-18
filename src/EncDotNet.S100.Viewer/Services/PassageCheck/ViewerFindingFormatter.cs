@@ -64,6 +64,7 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string S102CellFormat => Strings.RouteCheck_S102CellFormat;
     protected override string DepthUnknown => Strings.RouteCheck_DepthUnknown;
     protected override string Awash => Strings.RouteCheck_Awash;
+    protected override string Floating => Strings.RouteCheck_Floating;
     protected override string CoversAndUncovers => Strings.RouteCheck_CoversAndUncovers;
     protected override string AboveWater => Strings.RouteCheck_AboveWater;
     protected override string BelowSafetyDepthFormat => Strings.RouteCheck_BelowSafetyDepthFormat;

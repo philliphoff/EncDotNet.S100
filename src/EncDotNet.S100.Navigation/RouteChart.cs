@@ -163,6 +163,14 @@ public sealed record RouteChartFeature(
     public int? WaterLevelEffect { get; init; }
 
     /// <summary>
+    /// <c>true</c> when a danger's <see cref="DepthMeters"/> is the S-101
+    /// <c>defaultClearanceDepth</c> the producer gave it in place of a
+    /// <c>valueOfSounding</c> (#1547): a stand-in for judging it, not a
+    /// depth to show, such as -15 m for a floating obstruction.
+    /// </summary>
+    public bool DepthIsDefault { get; init; }
+
+    /// <summary>
     /// The alerts the feature's portrayal raises at the query's depths
     /// (#1127), in emission order; empty when it raises none or the source
     /// can't portray it.

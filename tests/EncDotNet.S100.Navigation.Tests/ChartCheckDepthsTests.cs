@@ -173,6 +173,37 @@ public class ChartCheckDepthsTests
         Assert.EndsWith(" · UnderwaterAwashRock · 20 m to starboard · " + reason, finding.Meta, StringComparison.Ordinal);
     }
 
+    [Theory]
+    // A default clearance depth (#1547) is judged by but not shown: the
+    // water level's effect is, as for a danger without a depth.
+    [InlineData(7, "floating")]
+    [InlineData(4, "covers and uncovers")]
+    [InlineData(3, "depth unknown")]
+    [InlineData(null, "depth unknown")]
+    public void A_danger_judged_by_its_default_clearance_depth_describes_its_water_level_instead(int? waterLevelEffect, string reason)
+    {
+        var obstruction = Danger("Obstruction", "1", 0.005, -39, -15, waterLevelEffect) with { DepthIsDefault = true };
+
+        var finding = Assert.Single(Check([obstruction], legs: EastWithKeel(2, 0.2, 0.3)).Findings);
+
+        Assert.Equal("Obstruction in the corridor", finding.Title);
+        Assert.EndsWith(" · Obstruction · 39 m to starboard · " + reason + " · shallower than draft + squat + UKC (2.5 m)", finding.Meta, StringComparison.Ordinal);
+        Assert.DoesNotContain("-15", finding.Meta, StringComparison.Ordinal);
+        var details = Assert.IsType<DangerDetails>(finding.Details);
+        Assert.True(details.DepthIsDefault);
+        Assert.Equal(-15, details.Depth!.Value.TotalMetres);
+        Assert.Equal(waterLevelEffect, details.WaterLevelEffect);
+    }
+
+    [Fact]
+    public void A_sounded_danger_shows_its_depth_whatever_its_water_level()
+    {
+        var finding = Assert.Single(Check([Danger("Obstruction", "1", 0.005, 0, 1.2, waterLevelEffect: 7)]).Findings);
+
+        Assert.False(Assert.IsType<DangerDetails>(finding.Details).DepthIsDefault);
+        Assert.EndsWith(" · on the track · 1.2 m · no deeper than safety contour 10 m", finding.Meta, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_danger_counts_in_water_already_shallower_than_the_safety_contour_too()
     {

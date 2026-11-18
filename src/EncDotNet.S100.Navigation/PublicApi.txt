@@ -176,6 +176,7 @@ namespace EncDotNet.S100.Navigation
     {
         public DangerDetails() { }
         public EncDotNet.S100.Quantities.Depth? Depth { get; init; }
+        public bool DepthIsDefault { get; init; }
         public required string FeatureType { get; init; }
         public EncDotNet.S100.Quantities.Length Offset { get; init; }
         public EncDotNet.S100.Navigation.RouteFindingSide Side { get; init; }
@@ -583,6 +584,7 @@ namespace EncDotNet.S100.Navigation
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartAlert> Alerts { get; init; }
         public EncDotNet.S100.Navigation.RouteChartCell Cell { get; init; }
         public System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves { get; init; }
+        public bool DepthIsDefault { get; init; }
         public double? DepthMeters { get; init; }
         public string FeatureId { get; init; }
         public string FeatureType { get; init; }
@@ -953,6 +955,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Pipelines.DepthUnit DepthUnit { get; }
         protected virtual string DepthUnknown { get; }
         protected virtual string DryingInCorridor { get; }
+        protected virtual string Floating { get; }
         protected virtual string ForecastEndsAtFormat { get; }
         protected virtual string ForecastStartsAtFormat { get; }
         protected virtual string FromFormat { get; }

@@ -6017,6 +6017,9 @@
   <data name="RouteCheck_Awash" xml:space="preserve">
     <value>awash</value>
   </data>
+  <data name="RouteCheck_Floating" xml:space="preserve">
+    <value>floating</value>
+  </data>
   <data name="RouteCheck_CoversAndUncovers" xml:space="preserve">
     <value>covers and uncovers</value>
   </data>

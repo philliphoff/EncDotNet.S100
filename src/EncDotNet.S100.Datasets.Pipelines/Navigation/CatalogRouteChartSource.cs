@@ -125,6 +125,7 @@ internal sealed partial class CatalogRouteChartSource : IRouteChartSource
 
                 IS100Feature geometry = feature;
                 var effect = kind == RouteChartFeatureKind.Danger ? ReadNumber(feature, WaterLevelEffectCodes) : null;
+                var (dangerDepth, depthIsDefault) = kind == RouteChartFeatureKind.Danger ? DangerDepth(feature, effect) : (null, false);
                 result.Add(new RouteChartFeature(
                     kind,
                     cell,
@@ -136,11 +137,12 @@ internal sealed partial class CatalogRouteChartSource : IRouteChartSource
                     Points = geometry.Points,
                     DepthMeters = kind switch
                     {
-                        RouteChartFeatureKind.Danger => DangerDepth(feature, effect),
+                        RouteChartFeatureKind.Danger => dangerDepth,
                         RouteChartFeatureKind.Alerted => null,
                         _ => MinimumDepth(feature),
                     },
                     WaterLevelEffect = effect is { } code ? (int)code : null,
+                    DepthIsDefault = depthIsDefault,
                     Alerts = featureAlerts,
                 });
             }
@@ -214,10 +216,19 @@ internal sealed partial class CatalogRouteChartSource : IRouteChartSource
     // A danger's depth, as OBSTRN07 and WRECKS05 take it: its valueOfSounding,
     // else the S-101 2.0 defaultClearanceDepth the producer gave it. A danger
     // that reaches the surface (waterLevelEffect 1, 2, 4 or 5) keeps no depth,
-    // so its finding says why rather than showing a placeholder depth.
-    private static double? DangerDepth(Feature feature, double? waterLevelEffect) =>
-        ReadNumber(feature, ValueOfSoundingCodes)
-        ?? (waterLevelEffect is 1 or 2 or 4 or 5 ? null : ReadNumber(feature, DefaultClearanceDepthCodes));
+    // so its finding says why rather than showing a placeholder depth; a
+    // default depth is flagged so its finding doesn't show it either (#1547).
+    private static (double? Depth, bool IsDefault) DangerDepth(Feature feature, double? waterLevelEffect)
+    {
+        if (ReadNumber(feature, ValueOfSoundingCodes) is { } sounding)
+        {
+            return (sounding, false);
+        }
+
+        return waterLevelEffect is 1 or 2 or 4 or 5 || ReadNumber(feature, DefaultClearanceDepthCodes) is not { } clearance
+            ? (null, false)
+            : (clearance, true);
+    }
 
     private static double? MinimumDepth(Feature feature) => ReadNumber(feature, ChartedDepthResolver.MinimumDepthAttributeCodes);
 

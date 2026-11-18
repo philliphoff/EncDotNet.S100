@@ -1994,6 +1994,7 @@ internal static partial class Strings
     public static string RouteCheck_S102CellFormat => Get(nameof(RouteCheck_S102CellFormat));
     public static string RouteCheck_DepthUnknown => Get(nameof(RouteCheck_DepthUnknown));
     public static string RouteCheck_Awash => Get(nameof(RouteCheck_Awash));
+    public static string RouteCheck_Floating => Get(nameof(RouteCheck_Floating));
     public static string RouteCheck_CoversAndUncovers => Get(nameof(RouteCheck_CoversAndUncovers));
     public static string RouteCheck_AboveWater => Get(nameof(RouteCheck_AboveWater));
     public static string RouteCheck_BelowSafetyDepthFormat => Get(nameof(RouteCheck_BelowSafetyDepthFormat));

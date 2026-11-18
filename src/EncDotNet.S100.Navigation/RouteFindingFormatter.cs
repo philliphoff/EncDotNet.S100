@@ -273,6 +273,9 @@ public class RouteFindingFormatter
     /// <summary>A danger that shows above water (<c>waterLevelEffect</c> 1 or 2).</summary>
     protected virtual string AboveWater => "above water";
 
+    /// <summary>A danger that floats (<c>waterLevelEffect</c> 7), such as a log boom.</summary>
+    protected virtual string Floating => "floating";
+
     /// <summary>The safety-depth threshold fired ({0}).</summary>
     protected virtual string BelowSafetyDepthFormat => "shallower than safety depth {0}";
 
@@ -361,25 +364,30 @@ public class RouteFindingFormatter
                 parts.Add(danger.Side == RouteFindingSide.OnTrack
                     ? OnTrack
                     : Format(danger.Side == RouteFindingSide.Port ? ToPortFormat : ToStarboardFormat, danger.Offset.TotalMetres));
-                if (danger.Depth is not { } depth)
+                if (danger.Depth is not { } depth || danger.DepthIsDefault)
                 {
+                    // A default clearance depth is a stand-in for judging the
+                    // danger, not a depth to show (#1547): say what the
+                    // water level does to it instead.
                     parts.Add(danger.WaterLevelEffect switch
                     {
                         1 or 2 => AboveWater,
                         4 => CoversAndUncovers,
                         5 => Awash,
+                        7 => Floating,
                         _ => DepthUnknown,
                     });
                 }
                 else
                 {
                     parts.Add(FormatDepth(depth));
-                    if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
-                    {
-                        parts.Add(kind == RouteFindingThreshold.SafetyContour
-                            ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
-                            : Below(kind, threshold));
-                    }
+                }
+
+                if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
+                {
+                    parts.Add(kind == RouteFindingThreshold.SafetyContour
+                        ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
+                        : Below(kind, threshold));
                 }
 
                 break;

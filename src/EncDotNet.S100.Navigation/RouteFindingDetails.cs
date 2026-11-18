@@ -113,12 +113,24 @@ public sealed class DangerDetails : RouteFindingDetails
     /// <summary>The danger's feature type: <c>Wreck</c>, <c>Obstruction</c> or <c>UnderwaterAwashRock</c>.</summary>
     public required string FeatureType { get; init; }
 
-    /// <summary>Its charted depth (<c>valueOfSounding</c>), or <c>null</c> when unknown.</summary>
+    /// <summary>
+    /// Its charted depth (<c>valueOfSounding</c>), else the
+    /// <c>defaultClearanceDepth</c> it was judged by (<see cref="DepthIsDefault"/>),
+    /// or <c>null</c> when unknown.
+    /// </summary>
     public Depth? Depth { get; init; }
 
     /// <summary>
+    /// <c>true</c> when <see cref="Depth"/> is the S-101
+    /// <c>defaultClearanceDepth</c> rather than a sounding (#1547): the
+    /// danger was judged by it, but it isn't a depth to show.
+    /// </summary>
+    public bool DepthIsDefault { get; init; }
+
+    /// <summary>
     /// Its <c>waterLevelEffect</c> code, which says why its depth is unknown
-    /// (1 or 2 above water, 4 covers and uncovers, 5 awash), or <c>null</c>.
+    /// or default (1 or 2 above water, 4 covers and uncovers, 5 awash, 7
+    /// floating), or <c>null</c>.
     /// </summary>
     public int? WaterLevelEffect { get; init; }
 
