@@ -69,7 +69,7 @@ and the copies have drifted:
 | Verdict and headline finding | `RouteCheckVerdict.Build`, `MustReviewRank` (matches area codes by substring) | `SummaryText` (an English copy of `NoDraftTitle`); `VerdictTitle` for clearance only |
 | Keel for the dangers check | deepest `draft + squat + UKC` over all legs | the same, but with a request draft it takes the maximum squat and the maximum UKC from different legs |
 | Time where a leg has no ETA | view time, even when the route has a departure | the departure, else `Time ?? now` |
-| Depth checks without safety settings | taken from the mariner settings | skipped silently (MCP); 30 m / 30 m (`s100`) |
+| Depth checks without safety settings | taken from the mariner settings | skipped (MCP; now reported: the chart check is `partial` with `safety_settings_missing`); 30 m / 30 m (`s100`) |
 | UKC when some legs have no draft | not run | error (MCP); skipped silently (`s100`) |
 | Warnings checked | the warnings panel's list and set | every S-124 dataset in the catalog |
 | Datasets used | bounding-box overlap | cells near the corridor plus the datasets behind findings |

@@ -91,6 +91,7 @@ public static class McpJson
 [JsonSerializable(typeof(ListSpecsResult))]
 [JsonSerializable(typeof(ListTimeStepsResult))]
 [JsonSerializable(typeof(CheckRouteResult))]
+[JsonSerializable(typeof(CheckRouteRequest))]
 // Mutating tool results.
 [JsonSerializable(typeof(OpenDatasetResult))]
 [JsonSerializable(typeof(CloseDatasetResult))]

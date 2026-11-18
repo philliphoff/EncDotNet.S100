@@ -185,33 +185,7 @@ public sealed class CheckRouteTool
         }
 
         var plan = new PassagePlan(legs, departure) { VesselLimits = vesselLimits };
-        var settings = new RouteCheckSettings
-        {
-            At = departure ?? _time.GetUtcNow(),
-            SafetyContour = request.SafetyContourMeters is { } contour ? Depth.FromMetres(contour) : null,
-            SafetyDepth = request.SafetyDepthMeters is { } safetyDepth ? Depth.FromMetres(safetyDepth) : null,
-            CorridorOverride = request.CorridorHalfWidthMeters is { } corridor ? Length.FromMetres(corridor) : null,
-            TrackClearance = request.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
-            NearbyDistance = request.NearbyDistanceMeters is { } nearby ? Length.FromMetres(nearby) : null,
-            BerthRadius = request.BerthRadiusMeters is { } berth ? Length.FromMetres(berth) : null,
-            AreaKindsOff = request.AreaKindsOff is { } off ? off.Select(name => RouteAreaKinds.Parse(name)!.Value).ToList() : [],
-            WeatherLimits = request.MaxWindKnots is null && request.MaxWaveHeightMeters is null ? null : new WeatherLimits
-            {
-                MaxWind = request.MaxWindKnots is { } wind ? Speed.FromKnots(wind) : null,
-                MaxWaveHeight = request.MaxWaveHeightMeters is { } wave ? Length.FromMetres(wave) : null,
-            },
-            TropicalCyclones = request.CycloneCheckAgainstKnots is null && request.CycloneReportClosestApproach is null && request.CycloneMustReviewInside is null
-                ? null
-                : new TropicalCycloneCheckSettings
-                {
-                    CheckAgainst = request.CycloneCheckAgainstKnots is { } against ? CycloneRadius(against)!.Value : TropicalCycloneRadius.Knots34,
-                    ReportClosestApproach = request.CycloneReportClosestApproach ?? true,
-                    MustReviewInside = request.CycloneMustReviewInside is { } inside ? MustReviewInside(inside) : TropicalCycloneRadius.Knots50,
-                },
-            DepartureWindow = !request.IncludeWindow ? null
-                : request.WindowFrom is { } from && request.WindowTo is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(request.WindowStepMinutes))
-                : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(request.WindowStepMinutes), MaxWindowDepartures),
-        };
+        var settings = BuildSettings(request, departure ?? _time.GetUtcNow());
 
         var options = request.SampleSpacingMeters is { } spacing
             ? RouteCheckOptions.Default with { Clearance = PassageCheckOptions.Default with { SampleSpacingMeters = spacing } }
@@ -229,6 +203,36 @@ public sealed class CheckRouteTool
 
         return ToolResult<CheckRouteResult>.Ok(CheckRouteResult.From(report, routeId, routeName, request.IncludeSamples, request.MaxSamples));
     }
+
+    // The one mapping from a request to the settings: every host's
+    // check_route reaches it through this tool.
+    private static RouteCheckSettings BuildSettings(CheckRouteRequest request, DateTimeOffset at) => new()
+    {
+        At = at,
+        SafetyContour = request.SafetyContourMeters is { } contour ? Depth.FromMetres(contour) : null,
+        SafetyDepth = request.SafetyDepthMeters is { } safetyDepth ? Depth.FromMetres(safetyDepth) : null,
+        CorridorOverride = request.CorridorHalfWidthMeters is { } corridor ? Length.FromMetres(corridor) : null,
+        TrackClearance = request.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
+        NearbyDistance = request.NearbyDistanceMeters is { } nearby ? Length.FromMetres(nearby) : null,
+        BerthRadius = request.BerthRadiusMeters is { } berth ? Length.FromMetres(berth) : null,
+        AreaKindsOff = request.AreaKindsOff is { } off ? off.Select(name => RouteAreaKinds.Parse(name)!.Value).ToList() : [],
+        WeatherLimits = request.MaxWindKnots is null && request.MaxWaveHeightMeters is null ? null : new WeatherLimits
+        {
+            MaxWind = request.MaxWindKnots is { } wind ? Speed.FromKnots(wind) : null,
+            MaxWaveHeight = request.MaxWaveHeightMeters is { } wave ? Length.FromMetres(wave) : null,
+        },
+        TropicalCyclones = request.CycloneCheckAgainstKnots is null && request.CycloneReportClosestApproach is null && request.CycloneMustReviewInside is null
+            ? null
+            : new TropicalCycloneCheckSettings
+            {
+                CheckAgainst = request.CycloneCheckAgainstKnots is { } against ? CycloneRadius(against)!.Value : TropicalCycloneRadius.Knots34,
+                ReportClosestApproach = request.CycloneReportClosestApproach ?? true,
+                MustReviewInside = request.CycloneMustReviewInside is { } inside ? MustReviewInside(inside) : TropicalCycloneRadius.Knots50,
+            },
+        DepartureWindow = !request.IncludeWindow ? null
+            : request.WindowFrom is { } from && request.WindowTo is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(request.WindowStepMinutes))
+            : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(request.WindowStepMinutes), MaxWindowDepartures),
+    };
 
     /// <summary>
     /// The checker for the loaded data. One is kept while the data and

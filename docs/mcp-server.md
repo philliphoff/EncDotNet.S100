@@ -588,8 +588,10 @@ corridor is twice as wide. Any side without a limit uses 50 m.
 
 Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
 depth and danger checks, as SoundCharts' findings list runs them with the
-mariner's settings. Without them the chart check is
-`partial`. Each leg's dangers are also judged against that leg's draft +
+mariner's settings. Without them no depth area, sounding, S-102 shoal or
+charted danger is checked: the chart check is `partial` with the reason
+`safety_settings_missing`, so check it before reading a `clear` verdict as
+clear water. Each leg's dangers are also judged against that leg's draft +
 squat + required UKC.
 
 These arguments override every leg's value:
@@ -614,6 +616,24 @@ the route against each storm within 600 NM, with or without limits:
 (`"64"`, `"50"`, `"34"` or `"never"`; default `"50"`). SoundCharts uses the
 mariner's settings (`get_route_weather_settings`). See
 [Tropical cyclones](route-checks.md#tropical-cyclones).
+
+These arguments tune the chart and area checks:
+
+- `trackClearanceMeters`: how close to the track line an aid to navigation,
+  structure or overhead feature counts as on the track (default 30 m).
+- `nearbyDistanceMeters`: how far beyond the cross-track limits a danger or
+  hazard counts as near the route (default 185.2 m, 0.1 NM).
+- `berthRadiusMeters`: how far from the departure and arrival waypoints
+  structures that raise the safety contour alert count as the berth (default
+  100 m; 0 turns it off). They're one info `route_check.berth_structures`
+  finding per end instead of crossings.
+- `areaKindsOff`: kinds of prohibited area and area with special conditions
+  to turn off, by name (such as `anchorage_area` or `marine_farm`). Their
+  areas aren't reported; one `route_check.area_kind_off` finding per kind
+  says the route meets them.
+
+SoundCharts and `s100 mcp serve` take the same arguments: the tool's schema
+is built from the request the check runs on.
 
 The legs' speeds give ETAs from `departure` (default: the route's departure,
 or SoundCharts' view time when it has none; for a polyline, now). Areas,
