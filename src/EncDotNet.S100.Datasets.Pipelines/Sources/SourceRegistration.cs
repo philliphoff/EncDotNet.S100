@@ -115,4 +115,7 @@ public enum SourceGroup
 
     /// <summary>Other vessels, such as AIS targets.</summary>
     Vessels,
+
+    /// <summary>Predictions computed for the view time, such as tide and current stations.</summary>
+    Predictions,
 }

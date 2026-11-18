@@ -47,13 +47,25 @@ internal sealed class TideDisplayTools
     private readonly TidePredictionSourceService _predictions;
     private readonly TideStationListService _list;
     private readonly IRouteEditInvoker _invoker;
+    private readonly Action<string, bool>? _setFeed;
 
+    /// <param name="overlay">The tide and current station sources.</param>
+    /// <param name="settings">The settings.</param>
+    /// <param name="predictions">The water-level predictions state.</param>
+    /// <param name="list">The station list.</param>
+    /// <param name="invoker">Runs a change on the UI thread.</param>
+    /// <param name="setFeed">
+    /// Subscribes to or unsubscribes from a live feed by registration id
+    /// (data source design note D8, slice 7d); <see langword="null"/> turns the
+    /// sources on and off directly.
+    /// </param>
     public TideDisplayTools(
         TideStationsOverlay overlay,
         Services.ViewerSettingsService settings,
         TidePredictionSourceService predictions,
         TideStationListService list,
-        IRouteEditInvoker invoker)
+        IRouteEditInvoker invoker,
+        Action<string, bool>? setFeed = null)
     {
         ArgumentNullException.ThrowIfNull(overlay);
         ArgumentNullException.ThrowIfNull(settings);
@@ -65,6 +77,7 @@ internal sealed class TideDisplayTools
         _predictions = predictions;
         _list = list;
         _invoker = invoker;
+        _setFeed = setFeed;
     }
 
     /// <summary>Returns the state.</summary>
@@ -87,12 +100,12 @@ internal sealed class TideDisplayTools
         {
             if (tideStations is { } stations)
             {
-                _overlay.SetVisible(stations);
+                SetFeed(TideFeeds.TideStationsId, _overlay.Source, stations);
             }
 
             if (currentStations is { } currents)
             {
-                _overlay.SetCurrentsVisible(currents);
+                SetFeed(TideFeeds.CurrentStationsId, _overlay.Currents, currents);
             }
 
             if (usePredictions is { } use)
@@ -107,6 +120,18 @@ internal sealed class TideDisplayTools
 
             return ToolResult<TideDisplayDto>.Ok(Dto());
         });
+    }
+
+    private void SetFeed(string feedId, EncDotNet.S100.DynamicSources.IPausableDynamicSource source, bool on)
+    {
+        if (_setFeed is { } setFeed)
+        {
+            setFeed(feedId, on);
+        }
+        else
+        {
+            source.IsActive = on;
+        }
     }
 
     internal TideDisplayDto Dto()

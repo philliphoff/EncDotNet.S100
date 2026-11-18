@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -824,6 +825,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         Attributes.Clear();
         ClearTextCards();
         References.Clear();
+        ReleaseSections();
         _sections = [];
         _actions = [];
         _stationChart = null;
@@ -862,6 +864,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             Attributes.Clear();
             ClearTextCards();
             References.Clear();
+            ReleaseSections();
             _sections = [];
             _actions = [];
             OnPropertyChanged(nameof(SelectedActions));
@@ -893,6 +896,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             References.Add(reference);
         OnPropertyChanged(nameof(HasReferences));
 
+        ReleaseSections();
         _sections = [.. hit.Sections.Where(s => !ShownByOwnPanel(s)).Select(PickSectionPresenters.Default.Present)];
         _actions = [.. hit.Actions.Select(a => new PickActionViewModel(a))];
         OnPropertyChanged(nameof(SelectedActions));
@@ -1017,8 +1021,22 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// <summary>True when <see cref="SelectedEggCode"/> is non-null.</summary>
     public bool HasEggCode => SelectedEggCode is not null;
 
+    // A presented section that follows the view time, such as a predicted tide
+    // station's card (slice 7d), stops when the selection moves on.
+    private void ReleaseSections()
+    {
+        foreach (var section in _sections)
+        {
+            if (section is IDynamicPickCard card)
+                card.Release();
+            else if (section is IDisposable disposable)
+                disposable.Dispose();
+        }
+    }
+
     private void DisposeHitResources()
     {
+        ReleaseSections();
         foreach (var chart in _stationCharts.Values)
             chart.Dispose();
         _stationCharts.Clear();

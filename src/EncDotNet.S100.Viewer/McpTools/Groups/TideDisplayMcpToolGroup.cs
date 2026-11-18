@@ -12,12 +12,14 @@ internal sealed class TideDisplayMcpToolGroup : IViewerMcpToolGroup
     private readonly ViewerSettingsService _settings;
     private readonly TidePredictionSourceService _predictions;
     private readonly TideStationListService _list;
+    private readonly Action<string, bool>? _setFeed;
 
     public TideDisplayMcpToolGroup(
         TideStationsOverlay overlay,
         ViewerSettingsService settings,
         TidePredictionSourceService predictions,
-        TideStationListService list)
+        TideStationListService list,
+        Action<string, bool>? setFeed = null)
     {
         ArgumentNullException.ThrowIfNull(overlay);
         ArgumentNullException.ThrowIfNull(settings);
@@ -27,11 +29,12 @@ internal sealed class TideDisplayMcpToolGroup : IViewerMcpToolGroup
         _settings = settings;
         _predictions = predictions;
         _list = list;
+        _setFeed = setFeed;
     }
 
     public IEnumerable<McpServerTool> CreateTools()
     {
-        var tools = new TideDisplayTools(_overlay, _settings, _predictions, _list, new DispatcherRouteEditInvoker());
+        var tools = new TideDisplayTools(_overlay, _settings, _predictions, _list, new DispatcherRouteEditInvoker(), _setFeed);
         yield return TideDisplayMcpAdapters.CreateGet(tools);
         yield return TideDisplayMcpAdapters.CreateSet(tools);
     }

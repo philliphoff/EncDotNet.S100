@@ -104,6 +104,7 @@ internal sealed record SourceStatus(SourceStatusKind Kind, string Text, string? 
         SourceGroup.Observations => Strings.SourceGroup_Observations,
         SourceGroup.OwnShipSensors => Strings.SourceGroup_OwnShipSensors,
         SourceGroup.Vessels => Strings.SourceGroup_Vessels,
+        SourceGroup.Predictions => Strings.SourceGroup_Predictions,
         _ => null,
     };
 }

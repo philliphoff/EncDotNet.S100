@@ -46,7 +46,7 @@ internal sealed record CurrentStationState(
 /// the view time isn't drawn: S-111 wins, as S-104 does for tides. Rotary
 /// stations draw the arrow at the predicted direction (D22).
 /// </remarks>
-internal sealed class CurrentStationSource : IDynamicFeatureSource, IDynamicFeatureDescriber
+internal sealed class CurrentStationSource : IPausableDynamicSource, IDynamicFeatureDescriber
 {
     /// <summary>The source id, and its key in <c>ViewerSettings.DynamicSourceVisibility</c>.</summary>
     public const string SourceId = "current-stations";
@@ -289,7 +289,10 @@ internal sealed class CurrentStationSource : IDynamicFeatureSource, IDynamicFeat
                 new(Strings.Tides_Currents_Pick_Current, state.IsSlack
                     ? state.Label
                     : string.Format(culture, Strings.Tides_Currents_SpeedDirectionFormat, state.SpeedKnots, state.DirectionDegrees)),
-            ]);
+            ])
+        {
+            Sections = [new PredictedStationSection(PredictedStationSection.CurrentKind, state.StationId, state.Name)],
+        };
     }
 
     private IReadOnlyList<CurrentStationState> Compute(TideStationCatalogue catalogue, MapViewportSnapshot view, DateTime time)

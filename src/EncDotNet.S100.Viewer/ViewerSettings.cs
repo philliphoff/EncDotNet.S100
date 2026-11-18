@@ -819,6 +819,7 @@ internal sealed partial class ViewerSettings
                 // panel. A user who had the overlay on gets the source added.
                 MigrateNdbcOverlay(settings);
                 MigrateAisOverlay(settings);
+                MigrateTideOverlays(settings);
 
                 // #883: round 1's identity in use becomes the default.
                 if (settings.SecomIdentityInUse is { } inUse)
@@ -898,6 +899,25 @@ internal sealed partial class ViewerSettings
             return;
         if (!settings.SourceDatasets.Contains(EncDotNet.S100.Datasets.Pipelines.S100Sources.NdbcObservationsId, StringComparer.OrdinalIgnoreCase))
             settings.SourceDatasets.Add(EncDotNet.S100.Datasets.Pipelines.S100Sources.NdbcObservationsId);
+    }
+
+    /// <summary>
+    /// Slice 7d (data source design note D8): the predicted tide and current
+    /// stations' Layer stack toggles become live feeds. One that was on
+    /// becomes a subscribed feed; the toggles are dropped either way.
+    /// </summary>
+    internal static void MigrateTideOverlays(ViewerSettings settings)
+    {
+        Move(EncDotNet.S100.Viewer.Services.Tides.TideStationSource.SourceId, EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStationsId);
+        Move(EncDotNet.S100.Viewer.Services.Tides.CurrentStationSource.SourceId, EncDotNet.S100.Viewer.Services.Tides.TideFeeds.CurrentStationsId);
+
+        void Move(string overlayId, string feedId)
+        {
+            if (!settings.DynamicSourceVisibility.Remove(overlayId, out var wasVisible) || !wasVisible)
+                return;
+            if (!settings.SourceDatasets.Contains(feedId, StringComparer.OrdinalIgnoreCase))
+                settings.SourceDatasets.Add(feedId);
+        }
     }
 
     /// <summary>Source-generated metadata for the settings file (issue #764).</summary>

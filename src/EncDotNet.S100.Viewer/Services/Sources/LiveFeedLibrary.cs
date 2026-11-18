@@ -111,6 +111,39 @@ internal sealed class LiveFeedLibrary : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Subscribes to or unsubscribes from the feed registered as
+    /// <paramref name="registrationId"/>, as MCP's tools do. Unsubscribing
+    /// removes it from the Library, which takes it off the map.
+    /// </summary>
+    /// <param name="registrationId">The feed's registration id.</param>
+    /// <param name="subscribed">Whether to subscribe.</param>
+    /// <returns><see langword="false"/> when no such feed is registered.</returns>
+    public bool SetSubscribed(string registrationId, bool subscribed)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationId);
+        if (_sources.Find(registrationId) is not { } registration)
+            return false;
+        if (subscribed)
+        {
+            Subscribe(registration);
+            return true;
+        }
+        foreach (var collection in _library.Collections)
+        {
+            foreach (var source in collection.Sources)
+            {
+                if (source.Definition is LiveFeedSource feed
+                    && string.Equals(feed.RegistrationId, registrationId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _library.RemoveSource(collection.Id, feed.Id);
+                }
+            }
+        }
+        Sync();
+        return true;
+    }
+
     private static bool IsLiveFeedsCollection(LibraryCollection collection) =>
         !collection.IsSession
         && collection.Sources.Count > 0

@@ -1,7 +1,4 @@
-using EncDotNet.S100.DynamicSources;
-using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Services.Depth;
-using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,8 +7,9 @@ namespace EncDotNet.S100.Viewer.Services.Tides;
 
 /// <summary>
 /// Registers tide predictions in SoundCharts (#1453): the station list, the
-/// <b>Tide stations · predicted</b> overlay with its renderer and pick card,
-/// and the Settings line.
+/// tide and current station sources (live feeds since data source design
+/// note slice 7d, <see cref="TideFeeds"/>), their pick cards, and the
+/// Settings line.
 /// </summary>
 internal static class TideStationsServiceCollectionExtensions
 {
@@ -43,30 +41,15 @@ internal static class TideStationsServiceCollectionExtensions
             () => sp.GetRequiredService<ITimeFormatProvider>().Current,
             () => sp.GetRequiredService<ViewerDatasetCatalog>().Datasets));
 
-        services.AddSingleton<IDynamicFeatureSource>(sp => sp.GetRequiredService<TideStationsOverlay>().Source);
-        // #1454 (D16): current stations, a row of their own just below.
-        services.AddSingleton<IDynamicFeatureSource>(sp => sp.GetRequiredService<TideStationsOverlay>().Currents);
-        services.AddKeyedSingleton<IDynamicFeatureRenderer>(
-            CurrentStationSource.FeatureKind,
-            (sp, _) =>
-            {
-                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
-                return new PortrayedDynamicFeatureRenderer(
-                    CurrentStationPortrayal.Instance,
-                    () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
-            });
+        // Data source design note D8, slice 7d: the stations are live feeds
+        // (TideFeeds, registered with the source registry); removing an entry
+        // turns its source off.
+        services.AddSingleton<Sources.ISourceHostExtension>(sp =>
+            new TideFeedHostExtension(TideFeeds.TideStationsId, sp.GetRequiredService<TideStationsOverlay>().Source));
+        services.AddSingleton<Sources.ISourceHostExtension>(sp =>
+            new TideFeedHostExtension(TideFeeds.CurrentStationsId, sp.GetRequiredService<TideStationsOverlay>().Currents));
 
-        services.AddKeyedSingleton<IDynamicFeatureRenderer>(
-            TideStationSource.FeatureKind,
-            (sp, _) =>
-            {
-                var settings = new Lazy<ViewerSettingsService?>(sp.GetService<ViewerSettingsService>);
-                return new PortrayedDynamicFeatureRenderer(
-                    TideStationPortrayal.Instance,
-                    () => settings.Value?.SelectedPalette ?? EncDotNet.S100.Pipelines.PaletteType.Day);
-            });
-
-        services.AddSingleton<IDynamicPickCardFactory>(sp => new TideStationCardFactory(
+        services.AddSingleton(sp => new TideStationCardFactory(
             sp.GetRequiredService<TideStationListService>(),
             sp.GetRequiredService<TideStationsOverlay>().Source,
             () =>
@@ -82,7 +65,7 @@ internal static class TideStationsServiceCollectionExtensions
                     UiThread.RunOrPost);
             }));
 
-        services.AddSingleton<IDynamicPickCardFactory>(sp => new CurrentStationCardFactory(
+        services.AddSingleton(sp => new CurrentStationCardFactory(
             sp.GetRequiredService<TideStationListService>(),
             sp.GetRequiredService<TideStationsOverlay>().Currents,
             () => new CurrentCardContext(

@@ -468,9 +468,6 @@ public partial class MainWindow : ShadUI.Window
         {
             _dynamicSourceOverlayHost.SetVisible(kv.Key, kv.Value);
         }
-        // #1453 (tide predictions D4): predicted tide stations start hidden too.
-        var tideStations = App.Services.GetService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>();
-        tideStations?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
         _dynamicSourceOverlayHost.SourcesChanged += () =>
         {
             foreach (var info in _dynamicSourceOverlayHost.Sources)
@@ -492,7 +489,9 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
         }
 
-        tideStations?.Attach(_dynamicSourceOverlayHost);
+        // Slice 7d: the predicted tide and current stations follow the view
+        // whenever their live feeds are on.
+        App.Services.GetService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>()?.Attach();
 
         // Pick highlight: keep a cursor-echo marker + selected-feature outline
         // on the overlay tier in sync with the current pick report, so the

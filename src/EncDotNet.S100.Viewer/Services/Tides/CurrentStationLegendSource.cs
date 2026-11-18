@@ -91,7 +91,7 @@ internal sealed class CurrentStationLegendSource : ILegendSectionSource, IDispos
             Spec = Strings.Tides_Currents_LegendSpec,
             Title = Strings.Tides_CurrentsLayer,
             Source = string.Format(CultureInfo.CurrentCulture, Strings.Tides_LegendSourceFormat, _overlay.Currents.StationsInView.Count),
-            DatasetIds = [],
+            DatasetIds = [ViewModels.DatasetEntry.SourceIdPrefix + TideFeeds.CurrentStationsId],
             TimeSummary = string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.Tides_LegendTimeFormat,

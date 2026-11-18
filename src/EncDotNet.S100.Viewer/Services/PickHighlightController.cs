@@ -122,7 +122,8 @@ internal sealed class PickHighlightController : IDisposable
             or nameof(PickReportViewModel.SelectedHit)
             or nameof(PickReportViewModel.PreviewHit)
             or nameof(PickReportViewModel.HasPick)
-            or nameof(PickReportViewModel.HasDynamicHits))
+            or nameof(PickReportViewModel.HasDynamicHits)
+            or nameof(PickReportViewModel.SelectedSections))
         {
             _marshal(Rebuild);
         }
@@ -154,8 +155,19 @@ internal sealed class PickHighlightController : IDisposable
         PickHighlightGeometry? geometry =
             !hidden && hit is not null ? TryResolveGeometry(hit) : null;
 
-        // A picked live feature with an area of its own: a tide station's cell (D13).
-        if (geometry is null && hit is null
+        // A picked live feature with an area of its own: a tide station's cell
+        // (D13), from its card among the selected hit's sections (slice 7d).
+        if (!hidden && hit is not null
+            && _pickReport.SelectedSections.OfType<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicPickCard>()
+                .Select(c => c.Outline).FirstOrDefault(o => o is { Count: > 2 }) is { } cell)
+        {
+            geometry = new PickHighlightGeometry(
+                ExteriorRing: cell,
+                InteriorRings: Array.Empty<IReadOnlyList<GeoPosition>>(),
+                Curves: Array.Empty<IReadOnlyList<GeoPosition>>(),
+                Points: Array.Empty<GeoPosition>());
+        }
+        else if (geometry is null && hit is null
             && _pickReport.DynamicHits.Select(d => d.Card?.Outline).FirstOrDefault(o => o is { Count: > 2 }) is { } outline)
         {
             geometry = new PickHighlightGeometry(

@@ -415,6 +415,15 @@ public partial class App : Application
             pirateCoordinator.RestoreFromSettings();
         }
 
+        // Slice 7d: a picked predicted tide or current station shows its card,
+        // presented from its pick section.
+        var tideCards = _services.GetService<EncDotNet.S100.Viewer.Services.Tides.TideStationCardFactory>();
+        var currentCards = _services.GetService<EncDotNet.S100.Viewer.Services.Tides.CurrentStationCardFactory>();
+        if (tideCards is not null)
+            PickSectionPresenters.Default.Register(EncDotNet.S100.Viewer.Services.Tides.PredictedStationSection.TideKind, tideCards.Present);
+        if (currentCards is not null)
+            PickSectionPresenters.Default.Register(EncDotNet.S100.Viewer.Services.Tides.PredictedStationSection.CurrentKind, currentCards.Present);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Load persisted routes before the main window (and its route
@@ -600,7 +609,9 @@ public partial class App : Application
                 sp.GetRequiredService<Services.Tides.TideStationsOverlay>(),
                 sp.GetRequiredService<ViewerSettingsService>(),
                 sp.GetRequiredService<Services.Depth.TidePredictionSourceService>(),
-                sp.GetRequiredService<Services.Tides.TideStationListService>()),
+                sp.GetRequiredService<Services.Tides.TideStationListService>(),
+                // Slice 7d: the stations are live feeds, subscribed to in the Library.
+                (feedId, on) => sp.GetRequiredService<Services.Sources.LiveFeedLibrary>().SetSubscribed(feedId, on)),
             // Only with --mcp-test-hooks: set_test_clock and the ui_* tools are for scripted testing.
             new McpTools.Groups.TestHooksMcpToolGroup(
                 settings,
@@ -1323,6 +1334,14 @@ public partial class App : Application
                 registry.Register(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Registration(
                     sp.GetRequiredService<ViewerSettings>()));
             }
+            // Slice 7d: predicted tide and current stations, in place of their Layer stack toggles.
+            if (!registry.TryResolve(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStationsId, out _))
+            {
+                var tides = new Lazy<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>(
+                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>);
+                registry.Register(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStations(() => tides.Value));
+                registry.Register(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.CurrentStations(() => tides.Value));
+            }
             return registry;
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService(
@@ -1862,7 +1881,7 @@ public partial class App : Application
                 sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 () => legend.Palette));
             // #1453 (tide predictions D4): the predicted tide stations' key,
-            // linked from their Layer stack row while it's on.
+            // shown while their live feed is on.
             var tideStations = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>();
             var viewTime = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>();
             var timeFormat = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ITimeFormatProvider>();
@@ -1871,18 +1890,12 @@ public partial class App : Application
                 () => legend.Palette,
                 () => timeFormat.Current,
                 () => viewTime.Current.UtcDateTime));
-            legend.SetDynamicSourceSection(
-                EncDotNet.S100.Viewer.Services.Tides.TideStationSource.SourceId,
-                EncDotNet.S100.Viewer.Services.Tides.TideStationLegendSource.SectionId);
             // #1454 (D16): the current stations' key.
             legend.AddSource(new EncDotNet.S100.Viewer.Services.Tides.CurrentStationLegendSource(
                 tideStations,
                 () => legend.Palette,
                 () => timeFormat.Current,
                 () => viewTime.Current.UtcDateTime));
-            legend.SetDynamicSourceSection(
-                EncDotNet.S100.Viewer.Services.Tides.CurrentStationSource.SourceId,
-                EncDotNet.S100.Viewer.Services.Tides.CurrentStationLegendSource.SectionId);
             return legend;
         });
         // Hover to find (#1412, legends D19): a hovered Legend row rings its features.
