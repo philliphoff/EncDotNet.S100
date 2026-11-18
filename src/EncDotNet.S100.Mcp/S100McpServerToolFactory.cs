@@ -438,7 +438,8 @@ internal static class S100McpServerToolFactory
             "specs S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421). Matching " +
             "is case-insensitive substring containment by default; set exact for whole-name " +
             "equality or caseSensitive for an exact-case match. Optionally scope by spec, a single " +
-            "dataset, and/or a spatial envelope. Results are paginated and read-only.";
+            "dataset, and/or a spatial envelope. Overlapping chart cells of different usage bands each chart " +
+            "the same object, so set finestOnly to keep only the finest cell's copy. Results are paginated and read-only.";
 
         var del = ([Description("The text to search for in feature names (OBJNAM / NOBJNM / objectName / featureName). Required.")] string text,
                    [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
@@ -448,6 +449,7 @@ internal static class S100McpServerToolFactory
                    [Description("When true a name must equal the search text exactly; when false (default) any name containing the text matches.")] bool exact = false,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   [Description("When true, a hit in a chart cell (S-101, S-401 or S-57) is kept only where its cell is in the finest scale band of the loaded chart cells at the feature's position (the route check's ranking), so an object charted in several overlapping cells is returned once. Default false.")] bool finestOnly = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -459,7 +461,8 @@ internal static class S100McpServerToolFactory
                         caseSensitive,
                         exact,
                         page,
-                        pageSize),
+                        pageSize,
+                        finestOnly),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

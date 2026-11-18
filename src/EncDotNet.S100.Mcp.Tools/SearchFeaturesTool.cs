@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Query;
@@ -19,6 +20,10 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="Exact">When true, a name must equal <paramref name="Text"/>; when false (default), substring containment matches.</param>
 /// <param name="Page">Zero-based page index.</param>
 /// <param name="PageSize">Page size; clamped to 1..500.</param>
+/// <param name="FinestOnly">
+/// When true, a chart-cell hit is kept only where its cell is in the finest
+/// scale band of the loaded chart cells at the feature's position (default false).
+/// </param>
 public sealed record SearchFeaturesRequest(
     [property: Description("The text to search for in feature names (OBJNAM / NOBJNM / objectName / featureName, etc.). Required.")] string Text,
     [property: Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec. A default edition matches every edition of the same spec name.")] SpecRef? Spec = null,
@@ -27,7 +32,8 @@ public sealed record SearchFeaturesRequest(
     [property: Description("When true the match is case-sensitive; default false.")] bool CaseSensitive = false,
     [property: Description("When true a name must equal the search text exactly; when false (default) any name containing the text matches.")] bool Exact = false,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
-    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
+    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50,
+    [property: Description("When true, a hit in a chart cell (S-101, S-401 or S-57) is kept only where its cell is in the finest scale band of the loaded chart cells at the feature's position, so an object charted in several overlapping cells is returned once. Default false.")] bool FinestOnly = false);
 
 /// <summary>
 /// A single name match returned by <see cref="SearchFeaturesTool"/>.
@@ -84,6 +90,17 @@ public sealed record SearchFeaturesResult(
 /// reported. Coverage products (S-102 / S-104 / S-111) carry no searchable
 /// features and never contribute matches.
 /// </para>
+/// <para>
+/// Overlapping chart cells of different usage bands chart the same
+/// real-world object once each, so a name search returns one hit per cell.
+/// With <see cref="SearchFeaturesRequest.FinestOnly"/> a chart-cell hit is
+/// kept only where its cell is in the finest band at the feature's position
+/// (the centre of its bounding box): the cells whose <c>DataCoverage</c>
+/// contains that point, plus the hit's own cell, ranked with
+/// <see cref="CellScaleRanking.FinestBand{T}"/> as the route check ranks them.
+/// Cells of the same rank are peers, so both of their copies are kept. Hits
+/// in other products, and features without geometry, are always kept.
+/// </para>
 /// </remarks>
 public sealed class SearchFeaturesTool
 {
@@ -125,6 +142,7 @@ public sealed class SearchFeaturesTool
         var comparison = request.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
         var matched = new List<FeatureNameMatch>();
+        var chartCells = request.FinestOnly ? ChartCells() : null;
 
         foreach (var dataset in _catalog.Datasets)
         {
@@ -175,6 +193,12 @@ public sealed class SearchFeaturesTool
                     continue;
                 }
 
+                var bounds = FeatureGeometryQuery.TryGetBoundingBox(feature);
+                if (chartCells is not null && !InFinestBand(dataset, bounds, chartCells))
+                {
+                    continue;
+                }
+
                 matched.Add(new FeatureNameMatch(
                     dataset.Id,
                     dataset.Spec,
@@ -182,7 +206,7 @@ public sealed class SearchFeaturesTool
                     feature.FeatureType,
                     name.Value,
                     name.Source,
-                    FeatureGeometryQuery.TryGetBoundingBox(feature)));
+                    bounds));
             }
         }
 
@@ -204,6 +228,39 @@ public sealed class SearchFeaturesTool
                 pageSize,
                 totalCount,
                 hasMore)));
+    }
+
+    // The loaded chart cells; their extents are built only where a hit needs them.
+    private List<LoadedDataset> ChartCells() =>
+        _catalog.Datasets.Where(d => d.Data is S101DatasetData).ToList();
+
+    private static bool InFinestBand(LoadedDataset dataset, BoundingBox? bounds, List<LoadedDataset> chartCells)
+    {
+        if (bounds is null || ChartCellExtent.Of(dataset) is not { } own)
+        {
+            return true;
+        }
+
+        var latitude = (bounds.SouthLatitude + bounds.NorthLatitude) / 2;
+        var longitude = (bounds.WestLongitude + bounds.EastLongitude) / 2;
+
+        // The hit's own cell charts the feature here even when the centre of
+        // a curve or area falls outside its coverage.
+        var covering = new List<ChartCellExtent> { own };
+        foreach (var other in chartCells)
+        {
+            var box = other.Bounds;
+            if (!ReferenceEquals(other, dataset)
+                && latitude >= box.SouthLatitude && latitude <= box.NorthLatitude
+                && longitude >= box.WestLongitude && longitude <= box.EastLongitude
+                && ChartCellExtent.Of(other) is { } extent
+                && extent.Covers(latitude, longitude))
+            {
+                covering.Add(extent);
+            }
+        }
+
+        return CellScaleRanking.FinestBand(covering, c => c.Rank).Contains(own);
     }
 
     private static bool IsMatch(string value, string text, bool exact, StringComparison comparison)
