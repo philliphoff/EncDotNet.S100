@@ -33,9 +33,12 @@ namespace EncDotNet.S100.Navigation;
 /// S-124 warnings that aren't in force are (#957).
 /// </para>
 /// <para>
-/// Severity: an S-101 area whose restriction is entry prohibited or entry
-/// restricted is MUST REVIEW when the track enters it, which the verdict
-/// ranks just after land and drying ground. Other areas are CHECK, or INFO
+/// Severity: an S-101 area whose restriction is entry prohibited is MUST
+/// REVIEW when the track enters it, which the verdict ranks just after land
+/// and drying ground. Entry restricted ranks below it: such an area is
+/// CHECK, since the restriction often applies only to some vessels, such as
+/// the large-vessel Regulated Navigation Areas NOAA charts cell-wide (#1546).
+/// Other areas are CHECK, or INFO
 /// when their restrictions don't bear on a passage (fishing, anchoring,
 /// dredging and the like) or for an inshore traffic zone. An area that only
 /// reaches inside the cross-track limits is one group lighter. S-122 areas
@@ -366,8 +369,10 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
     // The code and group of an area the track enters, while it is in force.
     private static (RouteFindingCode Code, RouteFindingGroup Group) Classify(RouteArea area)
     {
-        var entry = area.Restrictions.Any(r => r is 7 or 8);
-        var bears = area.Restrictions.Count == 0 || area.Restrictions.Any(PassageRestrictions.Contains) || entry;
+        // Entry prohibited (7) is the mariner's decision; entry restricted (8)
+        // often applies only to some vessels, so it is worth checking (#1546).
+        var entry = area.Restrictions.Contains(7);
+        var bears = area.Restrictions.Count == 0 || area.Restrictions.Any(r => r is 7 or 8 || PassageRestrictions.Contains(r));
         if (area.Product == RouteAreaProduct.S122)
         {
             return (RouteFindingCodes.ProtectedArea, bears ? RouteFindingGroup.Check : RouteFindingGroup.Info);

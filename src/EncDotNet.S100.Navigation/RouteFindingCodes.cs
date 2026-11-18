@@ -103,8 +103,8 @@ public static class RouteFindingCodes
 
     /// <summary>
     /// The track enters an S-101 area whose <c>restriction</c> is entry
-    /// prohibited (7) or entry restricted (8), in force while the vessel is
-    /// there. MUST REVIEW.
+    /// prohibited (7), in force while the vessel is there. MUST REVIEW. An
+    /// area that is only entry restricted (8) is <see cref="RestrictedArea"/>.
     /// </summary>
     public static RouteFindingCode EntersProhibitedArea { get; } = new("route_check.enters_prohibited_area", RouteFindingCategory.Area, RouteFindingGroup.MustReview, 2);
 
@@ -113,7 +113,7 @@ public static class RouteFindingCodes
 
     /// <summary>
     /// An S-101 <c>RestrictedArea</c> or <c>MilitaryPracticeArea</c> with
-    /// other restrictions. CHECK, or INFO when its restrictions don't bear on
+    /// other restrictions, entry restricted (8) among them. CHECK, or INFO when its restrictions don't bear on
     /// a passage (such as fishing or anchoring prohibited) or it only
     /// reaches inside the cross-track limits.
     /// </summary>
