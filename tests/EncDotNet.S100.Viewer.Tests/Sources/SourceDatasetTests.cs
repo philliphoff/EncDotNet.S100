@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Sources;
 using EncDotNet.S100.Viewer.ViewModels;
+using Microsoft.Extensions.Time.Testing;
 
 namespace EncDotNet.S100.Viewer.Tests.Sources;
 
@@ -166,6 +167,94 @@ public sealed class SourceDatasetTests
         Assert.Equal(1, mine.Detached);
     }
 
+    private static readonly DateTimeOffset Noon = new(2026, 11, 18, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void Status_says_why_a_source_shows_nothing_or_how_fresh_it_is()
+    {
+        var registration = Registration(SourceActivation.BelowViewportSpan(25)) with { StaleAfter = TimeSpan.FromMinutes(30) };
+
+        Assert.Equal(SourceStatusKind.Paused, SourceStatus.Evaluate(SourceRunState.Hidden, registration, null, null, Noon).Kind);
+        var zoom = SourceStatus.Evaluate(SourceRunState.WaitingForZoom, registration, null, null, Noon);
+        Assert.Equal(SourceStatusKind.WaitingForZoom, zoom.Kind);
+        Assert.Contains("25", zoom.Text, StringComparison.Ordinal);
+        Assert.Equal(SourceStatusKind.Starting, SourceStatus.Evaluate(SourceRunState.Running, registration, null, null, Noon).Kind);
+
+        var live = SourceStatus.Evaluate(SourceRunState.Running, registration, Noon.AddMinutes(-3), null, Noon);
+        Assert.Equal(SourceStatusKind.Live, live.Kind);
+        Assert.Contains("3 min", live.Text, StringComparison.Ordinal);
+
+        var stale = SourceStatus.Evaluate(SourceRunState.Running, registration, Noon.AddMinutes(-42), null, Noon);
+        Assert.Equal(SourceStatusKind.Stale, stale.Kind);
+        Assert.Contains("42 min", stale.Text, StringComparison.Ordinal);
+
+        // An error with fresh data isn't a failure; one with no data, or stale data, is.
+        var error = new HttpRequestException("503 Service Unavailable");
+        Assert.Equal(SourceStatusKind.Live, SourceStatus.Evaluate(SourceRunState.Running, registration, Noon.AddMinutes(-3), error, Noon).Kind);
+        var failed = SourceStatus.Evaluate(SourceRunState.Running, registration, null, error, Noon);
+        Assert.Equal(SourceStatusKind.Failed, failed.Kind);
+        Assert.Equal("503 Service Unavailable", failed.Detail);
+        Assert.Equal(SourceStatusKind.Failed, SourceStatus.Evaluate(SourceRunState.Running, registration, Noon.AddMinutes(-42), error, Noon).Kind);
+    }
+
+    [Fact]
+    public void The_service_keeps_a_source_rows_status_current()
+    {
+        var time = new FakeTimeProvider(Noon);
+        var processor = new FakeHostedProcessor();
+        var registry = new SourceRegistry();
+        registry.Register(Registration() with { StaleAfter = TimeSpan.FromMinutes(5), Create = _ => processor, Group = SourceGroup.Observations });
+        using var service = new SourceDatasetService(registry, Settings(), new FakeNotifier { Current = Harbour }, timeProvider: time);
+        var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
+
+        service.Attach(entry, service.CreateProcessor("test.feed", options: null));
+        Assert.Equal(SourceStatusKind.Starting, entry.SourceStatus!.Kind);
+        Assert.Equal(entry.SourceStatus.Text, entry.Subtitle);
+        Assert.Equal("Observations", entry.SourceGroupLabel);
+
+        processor.LastUpdated = time.GetUtcNow();
+        processor.RaiseChanged();
+        Assert.Equal(SourceStatusKind.Live, entry.SourceStatus.Kind);
+
+        time.Advance(TimeSpan.FromMinutes(6));
+        Assert.Equal(SourceStatusKind.Stale, entry.SourceStatus.Kind);
+        Assert.True(entry.NeedsAttention);
+
+        entry.IsVisible = false;
+        Assert.Equal(SourceStatusKind.Paused, entry.SourceStatus.Kind);
+
+        service.Detach(entry.Id);
+        entry.IsVisible = true;
+        time.Advance(TimeSpan.FromMinutes(1));
+        Assert.Equal(SourceStatusKind.Paused, entry.SourceStatus.Kind);
+    }
+
+    [Fact]
+    public void A_file_row_shows_its_product_and_keeps_its_reorder_controls()
+    {
+        var file = new DatasetEntry("/charts/101AA00DS0019.000", "S-101");
+        var source = DatasetEntry.ForSource(S100Sources.NdbcObservations);
+
+        Assert.Equal("S-101", file.Subtitle);
+        Assert.True(file.IsFile);
+        Assert.False(file.HasSourceGroup);
+        Assert.False(source.IsFile);
+        Assert.Equal("NDBC", source.Subtitle); // Until it loads and has a status.
+    }
+
+    [Fact]
+    public void Reordering_skips_a_source_row()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var file = datasets.Add("/charts/a.000", "S-101");
+        var source = datasets.AddSource(S100Sources.NdbcObservations)!;
+
+        datasets.MoveDownCommand.Execute(source);
+
+        Assert.Same(source, datasets.Entries[0]);
+        Assert.Same(file, datasets.Entries[1]);
+    }
+
     [Fact]
     public void Added_sources_are_saved_and_restored_in_order()
     {
@@ -239,8 +328,16 @@ public sealed class SourceDatasetTests
         }
     }
 
-    private sealed class FakeHostedProcessor : IHostedDatasetProcessor
+    private sealed class FakeHostedProcessor : IHostedDatasetProcessor, ILiveDatasetProcessor
     {
+        public DateTimeOffset? LastUpdated { get; set; }
+
+        public Exception? LastError { get; set; }
+
+        public event EventHandler<DatasetChangedEventArgs>? Changed;
+
+        public void RaiseChanged() => Changed?.Invoke(this, DatasetChangedEventArgs.Empty);
+
         private volatile bool _isActive;
 
         private int _starts;

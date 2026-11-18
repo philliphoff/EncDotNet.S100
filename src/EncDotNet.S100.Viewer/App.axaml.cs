@@ -1303,7 +1303,16 @@ public partial class App : Application
 
         services.AddSingleton<DatasetProcessorOwner>();
         services.AddSingleton(EncDotNet.S100.Datasets.Pipelines.SourceRegistry.Default);
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>();
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService(
+            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.SourceRegistry>(),
+            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetService<IMapViewportNotifier>(),
+            sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.Secrets.ISecretStore>(),
+            sp.GetServices<EncDotNet.S100.Viewer.Services.Sources.ISourceHostExtension>(),
+            TimeProvider.System,
+            // D8: a source's row status changes off the UI thread.
+            UiThread.RunOrPost));
         services.AddSingleton<DatasetLoaderService>();
         services.AddSingleton<IDatasetLoaderService>(sp =>
             sp.GetRequiredService<DatasetLoaderService>());

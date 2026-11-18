@@ -27,6 +27,11 @@ public static class S100Sources
         DisplayName = "NDBC observations",
         Description = "Latest wind, wave and weather observations from NOAA NDBC buoys and C-MAN stations. Not for navigation.",
         Spec = SpecName.Ndbc,
+        Group = SourceGroup.Observations,
+        // Polled every 10 minutes, so three missed polls in a row is stale.
+        StaleAfter = TimeSpan.FromMinutes(30),
+        // The source fetches nothing wider than this (NdbcObservationSourceOptions.MaxViewportSpanDegrees).
+        Activation = SourceActivation.BelowViewportSpan(25),
         OptionsType = typeof(NdbcObservationSourceOptions),
         DefaultOptions = new NdbcObservationSourceOptions(),
         Create = context =>
@@ -45,7 +50,8 @@ public static class S100Sources
                     NdbcStationPortrayal.Instance,
                     new SpecRef(SpecName.Ndbc, default),
                     ownsSource: true,
-                    ownedResources: [http]);
+                    ownedResources: [http],
+                    timeProvider: context.TimeProvider);
             }
             catch
             {
@@ -67,6 +73,9 @@ public static class S100Sources
         DisplayName = "Own-ship weather (NMEA)",
         Description = "Wind, temperature, pressure and humidity from the vessel's own instruments over NMEA 0183.",
         Spec = SpecName.Nmea,
+        Group = SourceGroup.OwnShipSensors,
+        // Instruments send several sentences a second.
+        StaleAfter = TimeSpan.FromMinutes(1),
         OptionsType = typeof(NmeaWeatherSourceSettings),
         Create = context =>
         {
@@ -84,7 +93,8 @@ public static class S100Sources
                 source,
                 OwnShipWeatherPortrayal.Instance,
                 new SpecRef(SpecName.Nmea, default),
-                ownsSource: true);
+                ownsSource: true,
+                timeProvider: context.TimeProvider);
         },
     };
 }

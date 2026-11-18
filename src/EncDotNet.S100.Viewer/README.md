@@ -1418,12 +1418,26 @@ holds.
 ## Show buoy observations
 
 **NDBC observations** shows the latest observations from NOAA National
-Data Buoy Center buoys and C-MAN stations. It's a data source: add it with
-**Add a data source** (the plug button) in the **Datasets** panel's toolbar,
-and choose **NDBC observations**. It's listed with your datasets, and you
-show, hide, reorder and remove it the same way. SoundCharts adds it again
-the next time it starts, until you remove it. If you had the old **NDBC buoy
+Data Buoy Center buoys and C-MAN stations. It's a live feed: add it with
+**Add a live feed** (the plug button) in the **Datasets** panel's toolbar,
+or the button of the same name when the panel is empty, and choose **NDBC
+observations**. It's listed with your datasets, and you show, hide and
+remove it the same way; its place in the drawing order comes from the
+layer order, so it has no move buttons. SoundCharts adds it again the next
+time it starts, until you remove it. If you had the old **NDBC buoy
 observations** Layer stack row turned on, it's added for you.
+
+A live feed's row is labelled with what it shows (**Observations**) and says
+what it's doing in place of a file's product name:
+
+- **Waiting for zoom (below 25°)**: the view is too wide, so nothing is
+  fetched.
+- **Paused while hidden**: the row is hidden.
+- **Waiting for data**, then **Live · updated 3 min ago**.
+- **No new data for 42 min**: nothing new for longer than the feed expects
+  (30 minutes for NDBC), shown in the warning colour.
+- **Not connecting**, or **Not updating · last data 2 h ago**: its last
+  attempts failed; the tooltip has the error.
 
 - Each station is a ring with a wind barb pointing into the wind (pennants
   50 kn, full barbs 10 kn, half barbs 5 kn) and, for buoys, the significant

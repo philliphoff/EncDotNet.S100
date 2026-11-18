@@ -51,6 +51,24 @@ public sealed class DynamicSourceProcessorTests
     }
 
     [Fact]
+    public void LastUpdated_is_the_last_change_and_LastError_comes_from_the_source()
+    {
+        var time = new ManualClock(new DateTimeOffset(2026, 11, 18, 12, 0, 0, TimeSpan.Zero));
+        var source = new TrackerSource();
+        using var processor = new DynamicSourceProcessor(source, new StubPortrayal(), Spec, timeProvider: time);
+        IHostedDatasetProcessor hosted = processor;
+
+        Assert.Null(hosted.LastUpdated);
+        time.Advance(TimeSpan.FromMinutes(2));
+        source.Publish(Point("t1", 42, -70));
+
+        Assert.Equal(time.GetUtcNow(), hosted.LastUpdated);
+        Assert.Null(hosted.LastError);
+        source.Error = new InvalidOperationException("down");
+        Assert.Same(source.Error, hosted.LastError);
+    }
+
+    [Fact]
     public async Task The_map_session_draws_the_source_again_when_it_changes()
     {
         var source = new TrackerSource();
@@ -91,8 +109,21 @@ public sealed class DynamicSourceProcessorTests
         LastUpdated = new DateTimeOffset(2026, 11, 13, 12, 0, 0, TimeSpan.Zero),
     };
 
-    private sealed class TrackerSource : IDynamicFeatureSource
+    private sealed class ManualClock(DateTimeOffset now) : TimeProvider
     {
+        private DateTimeOffset _now = now;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan by) => _now += by;
+    }
+
+    private sealed class TrackerSource : IDynamicSourceHealth
+    {
+        public Exception? Error { get; set; }
+
+        public Exception? LastError => Error;
+
         private readonly DynamicFeatureTracker<DynamicFeature> _tracker = new(f => f);
 
         public string Id => "test";

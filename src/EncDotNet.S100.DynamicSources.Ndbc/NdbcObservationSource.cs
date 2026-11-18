@@ -56,6 +56,7 @@ public sealed class NdbcObservationSource :
     IStartableDynamicSource,
     IPausableDynamicSource,
     IAreaFilteredDynamicSource,
+    IDynamicSourceHealth,
     IDynamicFeatureDescriber,
     IAsyncDisposable
 {

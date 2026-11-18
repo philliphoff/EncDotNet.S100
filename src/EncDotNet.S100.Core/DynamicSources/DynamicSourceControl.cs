@@ -32,3 +32,13 @@ public interface IAreaFilteredDynamicSource : IDynamicFeatureSource
     /// <param name="area">The area.</param>
     void UpdateArea(BoundingBox? area);
 }
+
+/// <summary>
+/// A source that reports its last failure, such as a feed whose last fetch
+/// failed, so a host can say it's failing rather than only quiet.
+/// </summary>
+public interface IDynamicSourceHealth : IDynamicFeatureSource
+{
+    /// <summary>The last failure, or <see langword="null"/> when the last attempt succeeded.</summary>
+    Exception? LastError { get; }
+}

@@ -46,6 +46,11 @@
         <Style Selector="Button.LayerTime.drawing">
             <Setter Property="Opacity" Value="0.55" />
         </Style>
+        <!-- A stale or failing live feed's status line (data source design D8). -->
+        <Style Selector="TextBlock.attention">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
         <Style Selector="Border.HiddenTag">
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Padding" Value="5,0" />
@@ -346,6 +351,17 @@
                     Content="{x:Static loc:Strings.Button_OpenDataset}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
                     HorizontalAlignment="Center" />
+            <Button x:Name="EmptyAddSourceButton"
+                    AutomationProperties.AutomationId="Datasets.Empty.AddSource"
+                    AutomationProperties.Name="{x:Static loc:Strings.Button_AddLiveFeed}"
+                    Classes="Outline"
+                    Content="{x:Static loc:Strings.Button_AddLiveFeed}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataSource}"
+                    HorizontalAlignment="Center">
+                <Button.Flyout>
+                    <MenuFlyout Placement="Bottom" />
+                </Button.Flyout>
+            </Button>
         </StackPanel>
 
         <!-- Populated state: two tabs (Exchange sets / Datasets) above a
@@ -704,21 +720,25 @@
                                 <ContextMenu>
                                     <MenuItem Header="{x:Static loc:Strings.Menu_BringDatasetToFront}"
                                               AutomationProperties.AutomationId="Datasets.RowMenu.BringToFront"
+                                              IsVisible="{Binding IsFile}"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).BringToFrontCommand}"
                                               CommandParameter="{Binding}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetUp}"
                                               AutomationProperties.AutomationId="Datasets.RowMenu.MoveUp"
+                                              IsVisible="{Binding IsFile}"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
                                               CommandParameter="{Binding}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetDown}"
                                               AutomationProperties.AutomationId="Datasets.RowMenu.MoveDown"
+                                              IsVisible="{Binding IsFile}"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
                                               CommandParameter="{Binding}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_SendDatasetToBack}"
                                               AutomationProperties.AutomationId="Datasets.RowMenu.SendToBack"
+                                              IsVisible="{Binding IsFile}"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).SendToBackCommand}"
                                               CommandParameter="{Binding}" />
-                                    <Separator />
+                                    <Separator IsVisible="{Binding IsFile}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_IsolateDataset}"
                                               AutomationProperties.AutomationId="Datasets.RowMenu.Isolate"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
@@ -759,9 +779,26 @@
                                                Classes="accentListTitle"
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding ProductSpec}"
-                                               FontSize="11"
-                                               Opacity="0.6" />
+                                    <!-- A file's product, or a live feed's status (data source design D8):
+                                         "Live · updated 3 min ago", "Waiting for zoom (below 25°)". -->
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Border Classes="HiddenTag"
+                                                IsVisible="{Binding HasSourceGroup}"
+                                                AutomationProperties.AutomationId="Datasets.Row.SourceGroup"
+                                                AutomationProperties.Name="{Binding SourceGroupLabel}">
+                                            <TextBlock Text="{Binding SourceGroupLabel}"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Subtitle}"
+                                                   FontSize="11"
+                                                   Opacity="0.6"
+                                                   Classes.attention="{Binding NeedsAttention}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding SubtitleTooltip}"
+                                                   AutomationProperties.AutomationId="Datasets.Row.Subtitle"
+                                                   AutomationProperties.Name="{Binding Subtitle}" />
+                                    </StackPanel>
                                     <!-- Made inactive by the active display combination (#1192):
                                          "Not in Pilotage". The layer stack's Active toggle turns it back on. -->
                                     <Border Classes="HiddenTag"
@@ -823,6 +860,7 @@
                                         CommandParameter="{Binding}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
                                         AutomationProperties.AutomationId="Datasets.Row.MoveUp"
+                                        IsVisible="{Binding IsFile}"
                                         VerticalAlignment="Center"
                                         Margin="6,0,0,0">
                                     <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
@@ -835,6 +873,7 @@
                                         CommandParameter="{Binding}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
                                         AutomationProperties.AutomationId="Datasets.Row.MoveDown"
+                                        IsVisible="{Binding IsFile}"
                                         VerticalAlignment="Center"
                                         Margin="2,0,0,0">
                                     <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14" />
@@ -1105,7 +1144,8 @@
                              view model. -->
                         <TabItem HeaderTemplate="{x:Null}"
                                  AutomationProperties.Name="{x:Static loc:Strings.Label_Tab_Validation}"
-                                 AutomationProperties.AutomationId="Datasets.Inspector.ValidationTab">
+                                 AutomationProperties.AutomationId="Datasets.Inspector.ValidationTab"
+                                 IsVisible="{Binding SelectedEntry.IsFile, FallbackValue=True}">
                             <TabItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">

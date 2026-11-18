@@ -58,6 +58,8 @@ public sealed class DynamicSourceProcessor :
     private readonly IDynamicFeaturePortrayal _portrayal;
     private readonly IFormatProvider? _formatProvider;
     private readonly bool _ownsSource;
+    private readonly TimeProvider _time;
+    private long _lastUpdatedTicks;
     private readonly IReadOnlyList<IDisposable> _ownedResources;
     private bool _isActive = true;
     private bool _disposed;
@@ -74,6 +76,7 @@ public sealed class DynamicSourceProcessor :
     /// Whether disposing the processor disposes the source too, as it does
     /// for a processor built from a <see cref="SourceRegistration"/>.
     /// </param>
+    /// <param name="timeProvider">The clock <see cref="LastUpdated"/> is read from; <see cref="TimeProvider.System"/> when <see langword="null"/>.</param>
     /// <param name="ownedResources">
     /// Other objects the processor disposes after the source, such as the
     /// <see cref="HttpClient"/> the source fetches with.
@@ -84,7 +87,8 @@ public sealed class DynamicSourceProcessor :
         SpecRef spec,
         IFormatProvider? formatProvider = null,
         bool ownsSource = false,
-        IReadOnlyList<IDisposable>? ownedResources = null)
+        IReadOnlyList<IDisposable>? ownedResources = null,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(portrayal);
@@ -94,6 +98,9 @@ public sealed class DynamicSourceProcessor :
         _formatProvider = formatProvider;
         _ownsSource = ownsSource;
         _ownedResources = ownedResources ?? [];
+        _time = timeProvider ?? TimeProvider.System;
+        if (source.CurrentFeatures.Count > 0)
+            _lastUpdatedTicks = _time.GetUtcNow().UtcTicks;
         Spec = spec;
         _source.Changed += OnSourceChanged;
     }
@@ -307,7 +314,22 @@ public sealed class DynamicSourceProcessor :
         }
     }
 
-    private void OnSourceChanged(object? sender, DynamicFeaturesChanged e) =>
+    /// <inheritdoc />
+    /// <remarks>When the source last raised a change, or had features when the processor was created.</remarks>
+    public DateTimeOffset? LastUpdated => Volatile.Read(ref _lastUpdatedTicks) is var ticks and not 0
+        ? new DateTimeOffset(ticks, TimeSpan.Zero)
+        : null;
+
+    /// <inheritdoc />
+    public Exception? LastError => (_source as IDynamicSourceHealth)?.LastError;
+
+    private void OnSourceChanged(object? sender, DynamicFeaturesChanged e)
+    {
+        Volatile.Write(ref _lastUpdatedTicks, _time.GetUtcNow().UtcTicks);
+        RaiseChanged(e);
+    }
+
+    private void RaiseChanged(DynamicFeaturesChanged e) =>
         Changed?.Invoke(this, e.Kind == DynamicSourceChangeKind.Reset || e.ChangedIds.Count == 0
             ? DatasetChangedEventArgs.Empty
             : new DatasetChangedEventArgs { FeatureRefs = e.ChangedIds });

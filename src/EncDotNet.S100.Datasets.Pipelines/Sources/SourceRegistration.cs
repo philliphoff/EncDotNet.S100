@@ -47,6 +47,16 @@ public sealed record SourceRegistration
     /// <summary>Whether the source's data is an S-100 product. <see langword="false"/> for every built-in source.</summary>
     public bool IsS100 { get; init; }
 
+    /// <summary>What kind of data the source shows, for grouping its rows in a host. Defaults to <see cref="SourceGroup.Other"/>.</summary>
+    public SourceGroup Group { get; init; } = SourceGroup.Other;
+
+    /// <summary>
+    /// How long the source may go without new data before a host calls it
+    /// stale, or <see langword="null"/> for never. Compared with
+    /// <see cref="IHostedDatasetProcessor.LastUpdated"/>.
+    /// </summary>
+    public TimeSpan? StaleAfter { get; init; }
+
     /// <summary>When a host runs the source. Defaults to <see cref="SourceActivation.Always"/>.</summary>
     public SourceActivation Activation { get; init; } = SourceActivation.Always;
 
@@ -77,4 +87,20 @@ public sealed record SourceRegistration
     /// before the global ones in <see cref="PickContributorRegistry"/>.
     /// </summary>
     public IReadOnlyList<IPickContributor> PickContributors { get; init; } = [];
+}
+
+/// <summary>What kind of data a source shows (data source design note D8).</summary>
+public enum SourceGroup
+{
+    /// <summary>None of the others.</summary>
+    Other,
+
+    /// <summary>Observations from stations or buoys, such as NDBC.</summary>
+    Observations,
+
+    /// <summary>The vessel's own instruments, such as wind and temperature over NMEA.</summary>
+    OwnShipSensors,
+
+    /// <summary>Other vessels, such as AIS targets.</summary>
+    Vessels,
 }

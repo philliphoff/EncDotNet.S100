@@ -21,6 +21,11 @@ internal sealed class SourceDatasetService : IDisposable
     private readonly IMapViewportNotifier? _notifier;
     private readonly Secrets.ISecretStore? _secrets;
     private readonly ISourceHostExtension[] _extensions;
+    private readonly TimeProvider _time;
+    private readonly Action<Action> _post;
+
+    /// <summary>How often a source's status is read again, so its age stays current.</summary>
+    internal static readonly TimeSpan StatusRefreshInterval = TimeSpan.FromSeconds(30);
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
     private readonly object _lock = new();
@@ -37,7 +42,9 @@ internal sealed class SourceDatasetService : IDisposable
         IMapViewportNotifier? notifier = null,
         ILoggerFactory? loggerFactory = null,
         Secrets.ISecretStore? secrets = null,
-        IEnumerable<ISourceHostExtension>? extensions = null)
+        IEnumerable<ISourceHostExtension>? extensions = null,
+        TimeProvider? timeProvider = null,
+        Action<Action>? post = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(settings);
@@ -46,6 +53,8 @@ internal sealed class SourceDatasetService : IDisposable
         _notifier = notifier;
         _secrets = secrets;
         _extensions = extensions?.ToArray() ?? [];
+        _time = timeProvider ?? TimeProvider.System;
+        _post = post ?? (static action => action());
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger<SourceDatasetService>();
     }
@@ -139,7 +148,8 @@ internal sealed class SourceDatasetService : IDisposable
         PropertyChangedEventHandler? onChanged = null;
         if (processor is IHostedDatasetProcessor hosted)
         {
-            var activation = Find(sourceId)?.Activation ?? SourceActivation.Always;
+            var registration = Find(sourceId);
+            var activation = registration?.Activation ?? SourceActivation.Always;
             var running = activator = new HostedSourceActivator(
                 hosted, activation, _notifier, entry.IsVisible, logger: _logger);
             onChanged = (_, e) =>
@@ -148,6 +158,21 @@ internal sealed class SourceDatasetService : IDisposable
                     running.SetVisible(entry.IsVisible);
             };
             entry.PropertyChanged += onChanged;
+
+            // D8: the row says what the source is doing. Read again when it
+            // pauses or resumes, when it delivers data, and every 30 s so its
+            // age and staleness stay current.
+            void Refresh() => UpdateStatus(entry, running, registration, hosted);
+            running.StateChanged += (_, _) => Refresh();
+            EventHandler<DatasetChangedEventArgs>? onData = null;
+            if (processor is ILiveDatasetProcessor live)
+            {
+                onData = (_, _) => Refresh();
+                live.Changed += onData;
+                attached.Add(new Callback(() => live.Changed -= onData));
+            }
+            attached.Add(_time.CreateTimer(_ => Refresh(), null, StatusRefreshInterval, StatusRefreshInterval));
+            Refresh();
         }
         lock (_lock)
             _running[entry.Id] = new Running(entry, activator, onChanged, attached);
@@ -176,6 +201,30 @@ internal sealed class SourceDatasetService : IDisposable
         running.Activator?.Dispose();
         foreach (var attachment in running.Attached)
             attachment.Dispose();
+    }
+
+    private void UpdateStatus(
+        DatasetEntry entry,
+        HostedSourceActivator activator,
+        SourceRegistration? registration,
+        IHostedDatasetProcessor processor)
+    {
+        SourceStatus status;
+        try
+        {
+            status = SourceStatus.Evaluate(
+                activator.State, registration, processor.LastUpdated, processor.LastError, _time.GetUtcNow());
+        }
+        catch (ObjectDisposedException)
+        {
+            return; // Removed meanwhile.
+        }
+        _post(() => entry.SourceStatus = status);
+    }
+
+    private sealed class Callback(Action onDispose) : IDisposable
+    {
+        public void Dispose() => onDispose();
     }
 
     private static HttpClient CreateHttpClient()
