@@ -65,10 +65,16 @@ public static partial class SpecName
     public const string Nmea = "NMEA";
 
     /// <summary>
+    /// The format name of AIS vessel targets (ITU-R M.1371), such as from
+    /// aisstream.io: a live source, not an S-100 product.
+    /// </summary>
+    public const string Ais = "AIS";
+
+    /// <summary>
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml, Ndbc, Nmea];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml, Ndbc, Nmea, Ais];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the

@@ -36,7 +36,10 @@ namespace EncDotNet.S100.DynamicSources.Ais;
 /// AIS event arrived on.
 /// </para>
 /// </remarks>
-public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDisposable
+public sealed class AisDynamicFeatureSource :
+    IStartableDynamicSource,
+    IAreaFilteredDynamicSource,
+    IAsyncDisposable
 {
     /// <summary>
     /// Default retention window for stale targets — 6 minutes.
@@ -47,7 +50,9 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
     public static readonly TimeSpan DefaultRetainWindow = TimeSpan.FromMinutes(6);
 
     private readonly IAisMessageSource _messageSource;
-    private readonly IAisSubscription _subscription;
+    private readonly object _subscriptionLock = new();
+    private AisSubscriptionRequest _request;
+    private IAisSubscription? _subscription;
     private readonly DynamicFeatureTracker<AisPositionReport> _tracker;
     private readonly object _staticLock = new();
     private readonly Dictionary<uint, AisStaticVoyageData> _staticByMmsi = new();
@@ -66,11 +71,19 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
     /// Stale-target retention window. <see langword="null"/> uses
     /// <see cref="DefaultRetainWindow"/>.
     /// </param>
+    /// <param name="deferSubscription">
+    /// When <see langword="true"/>, nothing is subscribed until
+    /// <see cref="Start"/>, and <see cref="UpdateArea"/> before then only sets
+    /// the area to subscribe to. A host that starts sources once the view is
+    /// narrow enough (data source design note D4) uses it so AIS never
+    /// streams for the whole world.
+    /// </param>
     public AisDynamicFeatureSource(
         string id,
         IAisMessageSource messageSource,
         AisSubscriptionRequest? request = null,
-        TimeSpan? retain = null)
+        TimeSpan? retain = null,
+        bool deferSubscription = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentNullException.ThrowIfNull(messageSource);
@@ -94,10 +107,38 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
             Plane = EncDotNet.S100.Interoperability.S98DisplayPlane.Vessels,
         };
 
-        _subscription = messageSource.Subscribe(resolved);
-        _subscription.PositionReportReceived += OnPositionReportReceived;
-        _subscription.StaticVoyageDataReceived += OnStaticVoyageDataReceived;
-        _subscription.TargetLost += OnTargetLost;
+        _request = resolved;
+        if (!deferSubscription)
+            Start();
+    }
+
+    /// <summary>
+    /// Subscribes to the driver with the current request, if it hasn't yet.
+    /// Called by the constructor unless the subscription is deferred.
+    /// </summary>
+    public void Start()
+    {
+        lock (_subscriptionLock)
+        {
+            ThrowIfDisposed();
+            if (_subscription is not null)
+                return;
+            var subscription = _messageSource.Subscribe(_request);
+            subscription.PositionReportReceived += OnPositionReportReceived;
+            subscription.StaticVoyageDataReceived += OnStaticVoyageDataReceived;
+            subscription.TargetLost += OnTargetLost;
+            _subscription = subscription;
+        }
+    }
+
+    /// <summary>Whether <see cref="Start"/> has subscribed.</summary>
+    public bool IsStarted
+    {
+        get
+        {
+            lock (_subscriptionLock)
+                return _subscription is not null;
+        }
     }
 
     /// <inheritdoc />
@@ -123,8 +164,41 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
     /// </returns>
     public bool UpdateArea(BoundingBox? area)
     {
-        ThrowIfDisposed();
-        return _subscription.TryUpdateArea(area);
+        lock (_subscriptionLock)
+        {
+            ThrowIfDisposed();
+            _request = _request with { Area = area };
+            return _subscription?.TryUpdateArea(area) ?? true;
+        }
+    }
+
+    /// <summary>
+    /// Follows the area a host shows. A driver that can't change its filter in
+    /// place is subscribed to again with the new area.
+    /// </summary>
+    void IAreaFilteredDynamicSource.UpdateArea(BoundingBox? area)
+    {
+        if (UpdateArea(area))
+            return;
+        IAisSubscription? old;
+        lock (_subscriptionLock)
+        {
+            old = _subscription;
+            _subscription = null;
+        }
+        if (old is not null)
+        {
+            Detach(old);
+            _ = old.DisposeAsync().AsTask();
+        }
+        Start();
+    }
+
+    private void Detach(IAisSubscription subscription)
+    {
+        subscription.PositionReportReceived -= OnPositionReportReceived;
+        subscription.StaticVoyageDataReceived -= OnStaticVoyageDataReceived;
+        subscription.TargetLost -= OnTargetLost;
     }
 
     /// <summary>
@@ -350,11 +424,17 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
-        _disposed = true;
-        _subscription.PositionReportReceived -= OnPositionReportReceived;
-        _subscription.StaticVoyageDataReceived -= OnStaticVoyageDataReceived;
-        _subscription.TargetLost -= OnTargetLost;
-        await _subscription.DisposeAsync().ConfigureAwait(false);
+        IAisSubscription? subscription;
+        lock (_subscriptionLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            subscription = _subscription;
+            _subscription = null;
+        }
+        if (subscription is null)
+            return;
+        Detach(subscription);
+        await subscription.DisposeAsync().ConfigureAwait(false);
     }
 }

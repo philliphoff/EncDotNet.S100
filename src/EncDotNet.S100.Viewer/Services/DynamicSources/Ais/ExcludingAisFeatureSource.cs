@@ -45,7 +45,11 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 /// mutation), matching the <see cref="IDynamicFeatureSource"/> contract.
 /// </para>
 /// </remarks>
-internal sealed class ExcludingAisFeatureSource : IDynamicFeatureSource, IAsyncDisposable
+internal sealed class ExcludingAisFeatureSource :
+    IStartableDynamicSource,
+    IAreaFilteredDynamicSource,
+    IDynamicSourceHealth,
+    IAsyncDisposable
 {
     private readonly IDynamicFeatureSource _inner;
     private readonly object _gate = new();
@@ -131,6 +135,16 @@ internal sealed class ExcludingAisFeatureSource : IDynamicFeatureSource, IAsyncD
 
     /// <inheritdoc />
     public event EventHandler<DynamicFeaturesChanged>? Changed;
+
+    /// <summary>Starts the wrapped source, when it waits to be started.</summary>
+    public void Start() => (_inner as IStartableDynamicSource)?.Start();
+
+    /// <summary>Passes the area in view to the wrapped source, when it fetches by area.</summary>
+    public void UpdateArea(EncDotNet.S100.Pipelines.BoundingBox? area) =>
+        (_inner as IAreaFilteredDynamicSource)?.UpdateArea(area);
+
+    /// <summary>The wrapped source's last failure, when it reports one.</summary>
+    public Exception? LastError => (_inner as IDynamicSourceHealth)?.LastError;
 
     private void OnInnerChanged(object? sender, DynamicFeaturesChanged e)
     {

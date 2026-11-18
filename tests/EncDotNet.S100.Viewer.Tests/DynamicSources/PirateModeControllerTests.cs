@@ -86,6 +86,25 @@ public sealed class PirateModeControllerTests
     }
 
     [Fact]
+    public void Removing_the_AIS_entry_stops_following_and_a_new_one_can_be_followed()
+    {
+        var raw = Raw(Target());
+        var (controller, _, _, exclusion) = Build(raw);
+        controller.Follow(123);
+
+        controller.AttachAis(null);
+
+        Assert.False(controller.IsActive);
+        Assert.False(controller.HasAis);
+        Assert.Null(exclusion.ExcludedId);
+
+        var other = new ExcludingAisFeatureSource(Raw(Target()));
+        controller.AttachAis(other);
+        Assert.Equal(PirateFollowOutcome.AppliedFix, controller.Follow(123));
+        Assert.Equal("ais:123", other.ExcludedId);
+    }
+
+    [Fact]
     public void Follow_KnownTarget_AppliesFixAndExcludes()
     {
         var geometry = new DynamicVesselGeometry { LengthMetres = 200, BeamMetres = 30, BowOffsetMetres = 100, PortOffsetMetres = 15 };

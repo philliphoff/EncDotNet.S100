@@ -274,6 +274,54 @@ public sealed class SourceDatasetTests
     [Theory]
     [InlineData(true, true)]
     [InlineData(false, false)]
+    public void The_AIS_switch_becomes_an_added_feed(bool wasOn, bool added)
+    {
+        var settings = Settings();
+        settings.AisOverlay = new AisOverlaySettings { Enabled = wasOn };
+
+        ViewerSettings.MigrateAisOverlay(settings);
+
+        Assert.False(settings.AisOverlay.Enabled);
+        Assert.Equal(added, settings.SourceDatasets.Contains(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id));
+    }
+
+    [Fact]
+    public void The_AIS_extension_follows_the_loaded_entry()
+    {
+        var presence = new EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisPresence();
+        var extension = new EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisHostExtension(
+            pirateMode: null, vesselList: () => null, aisLoadedChanged: presence.Set);
+        var excluding = new EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource(new EmptySource());
+        using var processor = new EncDotNet.S100.Datasets.Pipelines.DynamicSources.DynamicSourceProcessor(
+            excluding, EncDotNet.S100.Portrayals.Application.VesselPortrayal.Ais, new SpecRef(SpecName.Ais, default));
+        var entry = DatasetEntry.ForSource(Registration());
+
+        Assert.Null(extension.Attach(entry, new FakeHostedProcessor()));
+        var attachment = extension.Attach(entry, processor);
+        Assert.NotNull(attachment);
+        Assert.True(presence.IsLoaded);
+        attachment!.Dispose();
+        Assert.False(presence.IsLoaded);
+    }
+
+    private sealed class EmptySource : EncDotNet.S100.DynamicSources.IDynamicFeatureSource
+    {
+        public string Id => "ais";
+
+        public EncDotNet.S100.DynamicSources.DynamicSourceMetadata Metadata { get; } = new() { DisplayName = "AIS" };
+
+        public IReadOnlyList<EncDotNet.S100.DynamicSources.DynamicFeature> CurrentFeatures => [];
+
+        public event EventHandler<EncDotNet.S100.DynamicSources.DynamicFeaturesChanged>? Changed
+        {
+            add { }
+            remove { }
+        }
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
     public void The_NDBC_overlay_toggle_becomes_an_added_source(bool wasVisible, bool added)
     {
         var settings = Settings();

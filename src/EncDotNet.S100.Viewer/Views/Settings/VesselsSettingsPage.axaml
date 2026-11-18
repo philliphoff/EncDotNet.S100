@@ -76,11 +76,6 @@
             <Separator Margin="0,8,0,0" />
             <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_AisSection}" />
             <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_AisSection_Help}" />
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Settings_AisEnabledTooltip}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_AisEnabled}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding AisEnabled}"  AutomationProperties.AutomationId="Settings.AisEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_AisEnabled}"/>
-            </Grid>
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_AisApiKey}"
                            FontSize="12"

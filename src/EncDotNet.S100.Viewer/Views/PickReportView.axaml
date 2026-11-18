@@ -1151,15 +1151,6 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                        <Button Content="{x:Static loc:Strings.PickReport_TakeHelm}"
-                                                AutomationProperties.AutomationId="PickReport.TakeHelm"
-                                                HorizontalAlignment="Left"
-                                                Margin="0,4,0,0"
-                                                FontSize="12"
-                                                IsVisible="{Binding IsAisTarget}"
-                                                Command="{Binding DataContext.TakeHelmCommand, ElementName=PickRoot}"
-                                                CommandParameter="{Binding}"
-                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TakeHelm}" />
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

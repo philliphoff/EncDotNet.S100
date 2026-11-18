@@ -23,4 +23,7 @@ internal static partial class Strings
     public static string Toast_SourceRemovedFormat => Get(nameof(Toast_SourceRemovedFormat));
     public static string SourceStatus_LiveJustNow => Get(nameof(SourceStatus_LiveJustNow));
     public static string Button_AddLiveFeed => Get(nameof(Button_AddLiveFeed));
+    public static string Ais_SourceName => Get(nameof(Ais_SourceName));
+    public static string Ais_SourceDescription => Get(nameof(Ais_SourceDescription));
+    public static string Ais_KeyNeededFormat => Get(nameof(Ais_KeyNeededFormat));
 }

@@ -118,43 +118,31 @@ public sealed class OwnShipTrackingVisibilitySourceTests
 public sealed class AisOverlayVisibilitySourceTests
 {
     [Fact]
-    public void IsVisible_ReflectsAisEnabled()
+    public void The_Vessels_tab_follows_the_loaded_AIS_entry()
     {
-        var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = true } };
-        var svm = new ViewerSettingsService(settings);
-        using var source = new AisOverlayVisibilitySource(svm);
-
-        Assert.True(source.IsVisible);
-    }
-
-    [Fact]
-    public void VisibilityChanged_RaisedOnAisToggle()
-    {
-        var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = false } };
-        var svm = new ViewerSettingsService(settings);
-        using var source = new AisOverlayVisibilitySource(svm);
-
+        var presence = new EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisPresence();
+        using var source = new AisOverlayVisibilitySource(presence);
         bool? last = null;
         source.VisibilityChanged += v => last = v;
 
-        svm.AisEnabled = true;
-
+        Assert.False(source.IsVisible);
+        presence.Set(true);
         Assert.True(source.IsVisible);
         Assert.Equal(true, last);
+        presence.Set(false);
+        Assert.Equal(false, last);
     }
 
     [Fact]
-    public void Dispose_UnsubscribesFromSettings()
+    public void Dispose_UnsubscribesFromPresence()
     {
-        var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = false } };
-        var svm = new ViewerSettingsService(settings);
-        var source = new AisOverlayVisibilitySource(svm);
+        var presence = new EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisPresence();
+        var source = new AisOverlayVisibilitySource(presence);
         source.Dispose();
-
         var raised = 0;
         source.VisibilityChanged += _ => raised++;
 
-        svm.AisEnabled = true;
+        presence.Set(true);
 
         Assert.Equal(0, raised);
     }

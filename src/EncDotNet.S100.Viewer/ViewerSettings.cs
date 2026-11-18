@@ -818,6 +818,7 @@ internal sealed partial class ViewerSettings
                 // from a Layer Stack overlay to a data source in the Datasets
                 // panel. A user who had the overlay on gets the source added.
                 MigrateNdbcOverlay(settings);
+                MigrateAisOverlay(settings);
 
                 // #883: round 1's identity in use becomes the default.
                 if (settings.SecomIdentityInUse is { } inUse)
@@ -868,6 +869,20 @@ internal sealed partial class ViewerSettings
     /// migration / mirror logic.
     /// </summary>
     internal const string OwnShipVisibilityKey = "ownship";
+
+    /// <summary>
+    /// Slice 7c (data source design note D8): AIS targets moved from the
+    /// Settings switch to a live feed in the Datasets panel. A user who had the
+    /// switch on gets the feed added; the switch is cleared either way.
+    /// </summary>
+    internal static void MigrateAisOverlay(ViewerSettings settings)
+    {
+        if (settings.AisOverlay is not { Enabled: true } overlay)
+            return;
+        overlay.Enabled = false;
+        if (!settings.SourceDatasets.Contains(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id, StringComparer.OrdinalIgnoreCase))
+            settings.SourceDatasets.Add(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id);
+    }
 
     /// <summary>The visibility key of the NDBC overlay before NDBC became a data source.</summary>
     internal const string LegacyNdbcVisibilityKey = "ndbc";

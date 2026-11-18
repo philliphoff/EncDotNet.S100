@@ -84,8 +84,8 @@ internal enum PirateFollowOutcome
 /// </remarks>
 internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
 {
-    private readonly IDynamicFeatureSource _rawAis;
-    private readonly ExcludingAisFeatureSource _exclusion;
+    private IDynamicFeatureSource? _rawAis;
+    private ExcludingAisFeatureSource? _exclusion;
     private readonly IOwnShipHelm _helm;
     private readonly IOwnShipVesselGeometryOverride _geometryOverride;
     private readonly object _gate = new();
@@ -97,20 +97,61 @@ internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
     private bool _disposed;
 
     public PirateModeController(
-        ExcludingAisFeatureSource exclusion,
+        ExcludingAisFeatureSource? exclusion,
         IOwnShipHelm helm,
         IOwnShipVesselGeometryOverride geometryOverride)
     {
-        ArgumentNullException.ThrowIfNull(exclusion);
         ArgumentNullException.ThrowIfNull(helm);
         ArgumentNullException.ThrowIfNull(geometryOverride);
 
-        _exclusion = exclusion;
-        _rawAis = exclusion.Inner;
         _helm = helm;
         _geometryOverride = geometryOverride;
+        AttachAis(exclusion);
+    }
 
-        _rawAis.Changed += OnRawChanged;
+    /// <summary>Whether an AIS source is attached, so a target can be followed.</summary>
+    public bool HasAis
+    {
+        get { lock (_gate) return _exclusion is not null; }
+    }
+
+    /// <summary>
+    /// Follows the AIS source of the loaded AIS entry (data source design note
+    /// D8), or none when it's removed. Removing AIS while a target is followed
+    /// stops following it.
+    /// </summary>
+    /// <param name="exclusion">The loaded entry's AIS source, or <see langword="null"/>.</param>
+    public void AttachAis(ExcludingAisFeatureSource? exclusion)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (ReferenceEquals(_exclusion, exclusion))
+                return;
+            if (_rawAis is not null)
+                _rawAis.Changed -= OnRawChanged;
+            if (_exclusion is not null)
+                _exclusion.ExcludedId = null;
+            _exclusion = exclusion;
+            _rawAis = exclusion?.Inner;
+            if (_rawAis is not null)
+                _rawAis.Changed += OnRawChanged;
+            if (_active)
+            {
+                if (_exclusion is null)
+                {
+                    _active = false;
+                    _followedFeatureId = null;
+                    _lastFixUtc = null;
+                    _geometryOverride.ClearOverride();
+                }
+                else
+                {
+                    _exclusion.ExcludedId = _followedFeatureId;
+                    ApplyFixLocked();
+                }
+            }
+        }
     }
 
     /// <summary><see langword="true"/> while a target is being followed.</summary>
@@ -160,7 +201,8 @@ internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
             _lastFixUtc = null;
 
             // Hide the impersonated target from the overlay/list/pick.
-            _exclusion.ExcludedId = featureId;
+            if (_exclusion is not null)
+                _exclusion.ExcludedId = featureId;
 
             // Adopt the target's current state right away if it is already
             // known, so own-ship jumps to it without waiting for a report.
@@ -184,7 +226,8 @@ internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
             _followedFeatureId = null;
             _lastFixUtc = null;
 
-            _exclusion.ExcludedId = null;
+            if (_exclusion is not null)
+                _exclusion.ExcludedId = null;
             _geometryOverride.ClearOverride();
         }
     }
@@ -231,6 +274,7 @@ internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
         if (followedId is null) return false;
 
         DynamicFeature? feature = null;
+        if (_rawAis is null) return false;
         foreach (var candidate in _rawAis.CurrentFeatures)
         {
             if (string.Equals(candidate.Id, followedId, StringComparison.Ordinal))
@@ -282,6 +326,7 @@ internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
             _active = false;
             _followedFeatureId = null;
         }
-        _rawAis.Changed -= OnRawChanged;
+        if (_rawAis is not null)
+            _rawAis.Changed -= OnRawChanged;
     }
 }

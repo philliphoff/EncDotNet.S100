@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **AIS targets are a live feed.** Add **AIS targets** with **Add a live
+  feed** in the Datasets panel instead of turning on a Settings switch, and
+  without restarting; if the switch was on, they're added for you. The key
+  and zoom threshold stay in Settings › Vessels. Selecting a target shows a
+  vessel section and a **Take helm** action in the Pick report, the Vessels
+  tab appears while AIS targets are added, and removing them stops pirate
+  mode. `AisDynamicFeatureSource` can defer its subscription until it's
+  started (`deferSubscription`), and follows the area through
+  `IAreaFilteredDynamicSource`.
 - **Pick actions and a vessel section.** A host can offer actions on a
   picked feature, such as "Take helm", through `PickActionRegistry`; each
   `PickAction` decides from the pick's `PickContext`, which now carries the
