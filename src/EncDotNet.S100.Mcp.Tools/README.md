@@ -103,7 +103,7 @@ These read an `IDatasetCatalog` and never change it.
 | `NearestFeaturesTool` | `nearest_features` | Ranks features by true distance to a point, including the nearest point on a segment, with the bearing. An area that contains the point has distance 0. |
 | `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. |
 | `CountFeaturesTool` | `count_features` | Counts features by type, for each dataset. |
-| `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. |
+| `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. `FinestOnly` keeps a chart-cell hit only where its cell is in the finest band at the feature (`CellScaleRanking.FinestBand`). |
 | `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. |
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
 | `SampleCoverageTool` | `sample_coverage` | Samples a coverage at a point, at one time or over a time window: S-102, S-104, S-111, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). |
