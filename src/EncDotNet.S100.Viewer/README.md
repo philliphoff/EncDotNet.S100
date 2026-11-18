@@ -1460,9 +1460,9 @@ Not for navigation. See the
 ## Show own-ship wind from NMEA instruments
 
 **Own-ship wind and weather (NMEA)** shows the ship's own wind and water
-temperature from its NMEA 0183 instruments. Set the
-`SOUNDCHARTS_NMEA_INPUT` environment variable before starting SoundCharts
-to the input:
+temperature from its NMEA 0183 instruments. In the **Library**, choose
+**Add** and then, under **Live feeds**, **Own-ship weather (NMEA)**; select
+it in the **Live feeds** collection and set its **NMEA input**:
 
 | Value | Input |
 | --- | --- |
@@ -1471,10 +1471,10 @@ to the input:
 | `tcp://plotter.local:10110` | A TCP NMEA server; reconnects when the connection drops |
 | A file path | A recording, replayed at 10 lines a second, over and over |
 
-SoundCharts then adds **Own-ship weather (NMEA)** to the **Datasets** panel
-at each start, where you show, hide or remove it like a dataset (removed, it
-comes back at the next start while the variable is set). Without the
-variable it isn't added.
+It's then listed in the **Datasets** panel, where you show, hide or remove
+it like a dataset. Setting the `SOUNDCHARTS_NMEA_INPUT` environment variable
+to an input before starting SoundCharts also adds it for that run, as
+before.
 
 - A small ring with a wind barb sits up and to the right of the own-ship
   symbol, with the true wind (such as **200° 14 kn**) and the water
@@ -1544,19 +1544,19 @@ heading.
 **AIS targets** shows live vessels from [aisstream.io](https://aisstream.io),
 which needs a free API key. It's a live feed, like NDBC observations.
 
-1. Enter your **API key** in **Settings** > **Vessels** > **AIS Overlay**,
-   or set the `ENCDOTNET_AIS_STREAM_KEY` environment variable. The
-   environment variable takes precedence. A key entered in Settings is saved
-   in the computer's secret store: Credential Manager on Windows, the
-   Keychain on macOS, or the Secret Service (libsecret, through
-   `secret-tool`) on Linux. `settings.json` keeps only a reference to it, and
-   a key already in `settings.json` moves to the store the next time
-   SoundCharts starts. On a computer with no secret store, such as Linux
-   without `secret-tool`, the key stays in `settings.json` and Settings says
-   so; use the environment variable to keep it out of the file.
-2. In the **Library**, choose **Add** and then, under **Live feeds**,
-   **AIS targets**. There's no restart. Without a key, adding it
-   says where to enter one.
+1. In the **Library**, choose **Add** and then, under **Live feeds**,
+   **AIS targets**. There's no restart.
+2. Select **AIS targets** in the Library's **Live feeds** collection, enter
+   your **aisstream.io API key** in its settings, and choose **Save**. Or set
+   the `ENCDOTNET_AIS_STREAM_KEY` environment variable, which takes
+   precedence. A key entered in the Library is saved in the computer's
+   secret store: Credential Manager on Windows, the Keychain on macOS, or
+   the Secret Service (libsecret, through `secret-tool`) on Linux; the
+   Library keeps only a reference to it. On a computer with no secret
+   store, such as Linux without `secret-tool`, the key is kept with the
+   Library's settings; use the environment variable to keep it out of the
+   file. A key you'd entered in Settings › Vessels carries over. Until
+   there's a key, the row says where to enter one.
 
 AIS targets are listed with your datasets under **Vessels**, and added again
 the next time SoundCharts starts, until you remove them from the Library. If you had the old
@@ -1566,11 +1566,12 @@ chart (the **Vessels** plane), and their row says what they're doing, such as
 
 SoundCharts doesn't subscribe to aisstream.io until you zoom in. The
 subscription opens when the map view's latitude and longitude spans are both
-at or below **Activate at viewport span (degrees)**, 50° by default, for the
-map view's bounding box, and follows it as you pan and zoom. While you're
-zoomed out or the row is hidden, it stops following the view and the targets
-you have stay. Clear the field to subscribe as soon as AIS targets are added.
-A new threshold takes effect the next time SoundCharts starts. See
+at or below **Runs in views narrower than (degrees)** in its Library
+settings, 50° by default, and follows the view as you pan and zoom. While
+you're zoomed out or the row is hidden, it stops following the view and the
+targets you have stay. Set it to 0 to subscribe as soon as AIS targets are
+added. Saving new settings restarts the feed; there's no restart of
+SoundCharts. See
 [AIS zoom-gated subscription](../../docs/design/ais-zoom-gated-subscription.md).
 
 Select a target to see its name, MMSI, course, speed, heading and size in

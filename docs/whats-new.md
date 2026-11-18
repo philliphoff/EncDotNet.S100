@@ -8,8 +8,7 @@ month. For package versions and release assets, see
 
 - **AIS targets are a live feed.** Add **AIS targets** with **Add a live
   feed** in the Datasets panel instead of turning on a Settings switch, and
-  without restarting; if the switch was on, they're added for you. The key
-  and zoom threshold stay in Settings › Vessels. Selecting a target shows a
+  without restarting; if the switch was on, they're added for you. Selecting a target shows a
   vessel section and a **Take helm** action in the Pick report, the Vessels
   tab appears while AIS targets are added, and removing them stops pirate
   mode. `AisDynamicFeatureSource` can defer its subscription until it's
@@ -23,6 +22,15 @@ month. For package versions and release assets, see
   `identify_features` and `describe_feature` include. SoundCharts shows a
   pick's actions as buttons, and offers "Take helm" on any picked vessel
   with an MMSI.
+- **Live feed settings in the Library.** Select a live feed in the Library's
+  **Live feeds** collection to set it up: the aisstream.io key and zoom
+  threshold for AIS targets (moved from Settings › Vessels, with a key you'd
+  entered carried over), or the input for own-ship weather (NMEA), which no
+  longer needs an environment variable. Keys go to the computer's secret
+  store. Saving restarts the feed. For developers, `[SourceOption]` marks
+  the options a host shows, `SourceOptionsForm` reads and builds them, and
+  `SourceRegistration.ActivationFromOptions` lets the options set when a
+  source runs.
 - **Live feeds live in the Library.** The Library's **Add** menu lists live
   feeds such as NDBC observations and AIS targets under **Live feeds**;
   choosing one subscribes to it, in a **Live feeds** collection, and puts it

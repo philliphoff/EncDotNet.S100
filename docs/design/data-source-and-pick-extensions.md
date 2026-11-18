@@ -995,6 +995,24 @@ Each slice ships on its own and leaves the tree working.
      store and the options saved on the `LiveFeedSource`; "Key needed" as
      a row and node status; the AIS key and zoom threshold and NMEA
      weather's input move there.
+
+     9b as built: `[SourceOption(label)]` (with `Description`, `Required`,
+     `Order`) marks the options a host shows; others keep their defaults,
+     so NDBC's tuning knobs stay off the page. `SourceOptionsForm` turns a
+     registration's options into `SourceOptionField`s (text, secret,
+     boolean, integer, number, duration, URL, choice), reads values as
+     invariant text and builds the options back from the defaults.
+     `LiveFeedSource.Options` keeps the text; a secret is saved as an
+     `sc-secret:<feed id>.<option>` reference (`ais.aisstream.apiKey`, the
+     name slice 8 already used). The Library shows a selected feed's
+     settings in its details pane (`LiveFeedSettingsViewModel`), and saving
+     puts the feed back on the map with them. `SourceRegistration.
+     ActivationFromOptions` lets AIS's `AisFeedOptions` set its zoom
+     threshold. Settings › Vessels points to the Library; the key and
+     threshold it held are AIS's defaults, so nothing is lost. NMEA
+     weather is offered once it has a page; `SOUNDCHARTS_NMEA_INPUT` still
+     adds it for a run. A row and node status for "Key needed" is left:
+     the row says so when it fails to start, and the page says so.
 10. **Pick actions.** Part 1 is built (P4, P5 as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and
     merge `DynamicPickHit` into `PickHit`. Ships with 7c (decided
