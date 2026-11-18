@@ -94,6 +94,7 @@ These checks run when the safety contour and safety depth are both set.
 |---|---|---|
 | `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
 | `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
+| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, one finding per end; a breakwater or other non-berth structure the track line cuts stays a crossing. |
 | `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
@@ -105,7 +106,31 @@ Besides depth areas, every feature whose S-101 portrayal raises the
 pontoons, shoreline constructions, unsurveyed areas, and land charted as
 points or curves. An area is crossed or in the corridor as the depth areas
 are; a point or curve is crossed when the track passes within the track
-clearance (30 m) of it.
+clearance (30 m) of it. A structure (anything but an unsurveyed area or
+land) is titled for itself, "Crosses a structure" or "Structure inside the
+cross-track limits", with the safety contour alert as its reason.
+
+A route that starts or ends at a marina berth always touches its pontoons and
+piers, and a marina entrance is often narrower than the track clearance either
+side, so its breakwaters are close too. Structures within the berth radius of
+the departure or arrival waypoint are grouped into one Info finding per end,
+"Structures at the departure berth" or "Structures at the arrival berth",
+which lists them. The radius is a setting (`--berth-radius` in
+`s100 route check`, `berthRadiusMeters` in `check_route`); 0 turns the
+grouping off.
+
+The one exception is a structure that isn't a berth and that the track line
+itself cuts: it crosses the area, or passes within 1 m of the point or curve.
+Being inside the track clearance isn't enough. Such a structure stays "Crosses
+a structure" (Must review) however close to the berth it is. A berth is a
+structure a vessel lies against, so it's grouped even when the track touches
+it: a `Pontoon`, a `FloatingDock`, or a `ShorelineConstruction` whose
+`categoryOfShorelineConstruction` (S-57 `CATSLC`) is 4 pier (jetty), 5
+promenade pier, 6 wharf (quay), 11 landing steps, 14 fender, 15 solid face
+wharf or 16 open face wharf. A ruined structure (`condition` 2) or one that
+is always under water, covers and uncovers or is awash (`waterLevelEffect` 3,
+4 or 5) isn't a berth, and neither are breakwaters, moles, groynes, training
+walls, sea walls or a shoreline construction without a category.
 
 Soundings follow the portrayal's `SOUNDG03`: a sounding counts when it's no
 deeper than the safety contour. The safety depth only decides how the chart
@@ -120,6 +145,10 @@ A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
   The S-57 translation fills that attribute in for hazards without VALSOU.
 - One without a charted depth (above water, covering and uncovering, awash,
   or of unknown depth) always counts.
+- A danger judged by its `defaultClearanceDepth` (such as -15 m for a
+  floating obstruction) doesn't show that depth: its meta line says what the
+  water level does to it instead ("floating", "covers and uncovers",
+  "awash"), or "depth unknown".
 - One with a depth counts when it's no deeper than the safety contour, as
   the portrayal's `UDWHAZ05` judges it, or, on a leg with a draft, when
   it's shallower than that leg's draft + squat + required UKC.

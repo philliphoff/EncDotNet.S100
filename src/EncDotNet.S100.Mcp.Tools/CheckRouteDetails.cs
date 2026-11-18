@@ -11,6 +11,8 @@ namespace EncDotNet.S100.Mcp.Tools;
 public sealed record CheckRouteDetails(
     [property: Description("A charted danger in or near the corridor (route_check.danger_in_corridor, route_check.danger_near_route).")] CheckRouteDangerDetails? Danger = null,
     [property: Description("Water shallower than a safety setting: depth areas, soundings and S-102 shoals.")] CheckRouteShoalDetails? Shoal = null,
+    [property: Description("A feature other than a depth area whose S-101 portrayal raises the SafetyContour alert (route_check.crosses_safety_contour, route_check.safety_contour_in_corridor): a structure such as a pontoon, floating dock or shoreline construction, an unsurveyed area, or land charted as a point or curve.")] CheckRouteSafetyContourFeatureDetails? SafetyContourFeature = null,
+    [property: Description("The structures that raise the SafetyContour alert within the berth radius (except a non-berth structure the track line cuts) of the departure or arrival, in one finding (route_check.berth_structures).")] CheckRouteBerthStructuresDetails? BerthStructures = null,
     [property: Description("A regulated area: what it is, what it restricts and when it's in force.")] CheckRouteAreaDetails? Area = null,
     [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null,
     [property: Description("Areas of a kind whose indication is off (route_check.area_kind_off): the kind and how many the route meets.")] CheckRouteAreaKindOffDetails? AreaKindOff = null,
@@ -29,6 +31,7 @@ public sealed record CheckRouteDetails(
         DangerDetails d => new(Danger: new CheckRouteDangerDetails(
             d.FeatureType,
             d.Depth?.TotalMetres,
+            d.DepthIsDefault,
             d.WaterLevelEffect,
             d.ThresholdKind is { } kind ? Threshold(kind) : null,
             d.Threshold?.TotalMetres,
@@ -65,6 +68,12 @@ public sealed record CheckRouteDetails(
             a.Until.ToUniversalTime(),
             a.AtEta,
             a.AreaKind is { } areaKind && RouteAreaKinds.Names.TryGetValue(areaKind, out var kindName) ? kindName : null)),
+        SafetyContourFeatureDetails f => new(SafetyContourFeature: new CheckRouteSafetyContourFeatureDetails(f.FeatureType, f.IsStructure, f.IsBerth, f.CutByTrack)),
+        BerthStructuresDetails b => new(BerthStructures: new CheckRouteBerthStructuresDetails(
+            Snake(b.End.ToString()),
+            b.Radius.TotalMetres,
+            b.Features.Select(f => new CheckRouteBerthStructure(f.DatasetId, f.FeatureId, f.FeatureType)).ToList(),
+            b.CrossingCount)),
         AreaKindOffDetails o => new(AreaKindOff: new CheckRouteAreaKindOffDetails(
             RouteAreaKinds.Names.TryGetValue(o.AreaKind, out var offName) ? offName : o.AreaKind.ToString(System.Globalization.CultureInfo.InvariantCulture),
             o.Count)),
@@ -142,8 +151,9 @@ public sealed record CheckRouteDetails(
 /// <summary>A charted danger behind a finding.</summary>
 public sealed record CheckRouteDangerDetails(
     [property: Description("Its feature type: Wreck, Obstruction or UnderwaterAwashRock.")] string FeatureType,
-    [property: Description("Its charted depth (valueOfSounding) in metres, or null when unknown.")] double? DepthMeters,
-    [property: Description("Its waterLevelEffect code when its depth is unknown (1 or 2 above water, 4 covers and uncovers, 5 awash), or null.")] int? WaterLevelEffect,
+    [property: Description("Its charted depth (valueOfSounding) in metres, else the defaultClearanceDepth it was judged by (depthIsDefault), or null when unknown.")] double? DepthMeters,
+    [property: Description("True when depthMeters is the S-101 defaultClearanceDepth rather than a sounding: a stand-in for judging the danger (such as -15 for a floating obstruction), not a charted depth.")] bool DepthIsDefault,
+    [property: Description("Its waterLevelEffect code (1 or 2 above water, 3 always submerged, 4 covers and uncovers, 5 awash, 7 floating), or null.")] int? WaterLevelEffect,
     [property: Description("The threshold that made it a danger: safety_contour (its depth is no deeper than the safety contour) or keel (shallower than the leg's draft + squat + required UKC); null when its depth is unknown, which is always a danger.")] string? Threshold,
     [property: Description("The threshold in metres, or null.")] double? ThresholdMeters,
     [property: Description("Which side of the track it's on: on_track, port or starboard.")] string Side,
@@ -190,6 +200,26 @@ public sealed record CheckRouteAreaDetails(
 public sealed record CheckRouteAreaKindOffDetails(
     [property: Description("The kind, as areaKindsOff names it.")] string AreaKind,
     [property: Description("How many areas of the kind the route meets.")] int Count);
+
+/// <summary>A feature that raises the SafetyContour alert, behind a finding.</summary>
+public sealed record CheckRouteSafetyContourFeatureDetails(
+    [property: Description("Its feature type, such as Pontoon, ShorelineConstruction or UnsurveyedArea.")] string FeatureType,
+    [property: Description("True for a structure (anything but an unsurveyed area or land): its finding is titled for the structure, not for depth.")] bool IsStructure,
+    [property: Description("True for a berthing structure (pontoon, floating dock, pier, wharf, landing steps or fender, not ruined, submerged or awash): grouped as route_check.berth_structures near the departure and arrival even when the track cuts it.")] bool IsBerth,
+    [property: Description("True when the track line itself cuts the feature (crosses the area, or passes within 1 m of the point or curve), not just passes within the track clearance. Near the departure and arrival, a structure that isn't a berth stays a crossing only when this is true.")] bool CutByTrack);
+
+/// <summary>The structures at a berth, behind a finding.</summary>
+public sealed record CheckRouteBerthStructuresDetails(
+    [property: Description("Which end of the route: departure or arrival.")] string End,
+    [property: Description("The berth radius they are within, metres.")] double RadiusMeters,
+    [property: Description("The structures, in route order.")] IReadOnlyList<CheckRouteBerthStructure> Features,
+    [property: Description("How many of their findings crossed the track (would have been route_check.crosses_safety_contour).")] int CrossingCount);
+
+/// <summary>One structure at a berth.</summary>
+public sealed record CheckRouteBerthStructure(
+    [property: Description("The dataset that holds it.")] string DatasetId,
+    [property: Description("Its feature id in the dataset.")] string FeatureId,
+    [property: Description("Its feature type.")] string? FeatureType);
 
 /// <summary>An S-100 date range, as the dataset writes it.</summary>
 public sealed record CheckRouteDateRange(

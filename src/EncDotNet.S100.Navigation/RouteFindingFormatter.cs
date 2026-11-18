@@ -231,6 +231,24 @@ public class RouteFindingFormatter
     /// <summary>The title of <see cref="RouteFindingCodes.SafetyContourInCorridor"/>.</summary>
     protected virtual string SafetyContourInCorridor => "Shallower than the safety contour inside the cross-track limits";
 
+    /// <summary>The title of <see cref="RouteFindingCodes.CrossesSafetyContour"/> for a structure (<see cref="SafetyContourFeatureDetails.IsStructure"/>, #1548).</summary>
+    protected virtual string CrossesStructure => "Crosses a structure";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.SafetyContourInCorridor"/> for a structure (#1548).</summary>
+    protected virtual string StructureInsideLimits => "Structure inside the cross-track limits";
+
+    /// <summary>Why a structure's or another feature's finding fires: its portrayal raises the <c>SafetyContour</c> alert (#1548).</summary>
+    protected virtual string SafetyContourAlert => "safety contour alert";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.BerthStructures"/> at the departure.</summary>
+    protected virtual string DepartureBerthStructures => "Structures at the departure berth";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.BerthStructures"/> at the arrival.</summary>
+    protected virtual string ArrivalBerthStructures => "Structures at the arrival berth";
+
+    /// <summary>How many structures are at a berth ({0}) and the berth radius ({1}, metres).</summary>
+    protected virtual string BerthStructuresCountFormat => "{0} within {1:0} m";
+
     /// <summary>The title of <see cref="RouteFindingCodes.SoundingsBelowSafetyContour"/>.</summary>
     protected virtual string SoundingsBelowSafetyContour => "Soundings no deeper than the safety contour";
 
@@ -273,6 +291,9 @@ public class RouteFindingFormatter
     /// <summary>A danger that shows above water (<c>waterLevelEffect</c> 1 or 2).</summary>
     protected virtual string AboveWater => "above water";
 
+    /// <summary>A danger that floats (<c>waterLevelEffect</c> 7), such as a log boom.</summary>
+    protected virtual string Floating => "floating";
+
     /// <summary>The safety-depth threshold fired ({0}).</summary>
     protected virtual string BelowSafetyDepthFormat => "shallower than safety depth {0}";
 
@@ -295,6 +316,14 @@ public class RouteFindingFormatter
         {
             var type = (finding.Details as DangerDetails)?.FeatureType ?? finding.Feature?.FeatureType ?? string.Empty;
             return Format(code == RouteFindingCodes.DangerInCorridor ? DangerInCorridorFormat : DangerNearRouteFormat, DangerKind(type));
+        }
+
+        switch (finding.Details)
+        {
+            case SafetyContourFeatureDetails { IsStructure: true }:
+                return code == RouteFindingCodes.CrossesSafetyContour ? CrossesStructure : StructureInsideLimits;
+            case BerthStructuresDetails berth:
+                return berth.End == RouteEnd.Departure ? DepartureBerthStructures : ArrivalBerthStructures;
         }
 
         if (finding.Details is HazardDetails hazard)
@@ -345,6 +374,13 @@ public class RouteFindingFormatter
             parts.Add(Format(LengthFormat, length / PassageGeodesy.MetersPerNauticalMile));
         }
 
+        if (finding.Details is BerthStructuresDetails berth)
+        {
+            parts.Add(Format(BerthStructuresCountFormat, berth.Features.Count, berth.Radius.TotalMetres));
+            parts.Add(string.Join(", ", berth.FeatureTypes));
+            return string.Join(Separator, parts);
+        }
+
         if (finding.Feature?.FeatureType is { } featureType)
         {
             parts.Add(featureType);
@@ -352,6 +388,9 @@ public class RouteFindingFormatter
 
         switch (finding.Details)
         {
+            case SafetyContourFeatureDetails:
+                parts.Add(SafetyContourAlert);
+                break;
             case HazardDetails hazard:
                 parts.Add(hazard.Side == RouteFindingSide.OnTrack
                     ? OnTrack
@@ -361,25 +400,30 @@ public class RouteFindingFormatter
                 parts.Add(danger.Side == RouteFindingSide.OnTrack
                     ? OnTrack
                     : Format(danger.Side == RouteFindingSide.Port ? ToPortFormat : ToStarboardFormat, danger.Offset.TotalMetres));
-                if (danger.Depth is not { } depth)
+                if (danger.Depth is not { } depth || danger.DepthIsDefault)
                 {
+                    // A default clearance depth is a stand-in for judging the
+                    // danger, not a depth to show (#1547): say what the
+                    // water level does to it instead.
                     parts.Add(danger.WaterLevelEffect switch
                     {
                         1 or 2 => AboveWater,
                         4 => CoversAndUncovers,
                         5 => Awash,
+                        7 => Floating,
                         _ => DepthUnknown,
                     });
                 }
                 else
                 {
                     parts.Add(FormatDepth(depth));
-                    if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
-                    {
-                        parts.Add(kind == RouteFindingThreshold.SafetyContour
-                            ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
-                            : Below(kind, threshold));
-                    }
+                }
+
+                if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
+                {
+                    parts.Add(kind == RouteFindingThreshold.SafetyContour
+                        ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
+                        : Below(kind, threshold));
                 }
 
                 break;

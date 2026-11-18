@@ -113,12 +113,24 @@ public sealed class DangerDetails : RouteFindingDetails
     /// <summary>The danger's feature type: <c>Wreck</c>, <c>Obstruction</c> or <c>UnderwaterAwashRock</c>.</summary>
     public required string FeatureType { get; init; }
 
-    /// <summary>Its charted depth (<c>valueOfSounding</c>), or <c>null</c> when unknown.</summary>
+    /// <summary>
+    /// Its charted depth (<c>valueOfSounding</c>), else the
+    /// <c>defaultClearanceDepth</c> it was judged by (<see cref="DepthIsDefault"/>),
+    /// or <c>null</c> when unknown.
+    /// </summary>
     public Depth? Depth { get; init; }
 
     /// <summary>
+    /// <c>true</c> when <see cref="Depth"/> is the S-101
+    /// <c>defaultClearanceDepth</c> rather than a sounding (#1547): the
+    /// danger was judged by it, but it isn't a depth to show.
+    /// </summary>
+    public bool DepthIsDefault { get; init; }
+
+    /// <summary>
     /// Its <c>waterLevelEffect</c> code, which says why its depth is unknown
-    /// (1 or 2 above water, 4 covers and uncovers, 5 awash), or <c>null</c>.
+    /// or default (1 or 2 above water, 4 covers and uncovers, 5 awash, 7
+    /// floating), or <c>null</c>.
     /// </summary>
     public int? WaterLevelEffect { get; init; }
 
@@ -313,6 +325,79 @@ public sealed class ClearanceDetails : RouteFindingDetails
     /// Each has no <see cref="WaterLevelSourceInfo.DistanceMeters"/>.
     /// </summary>
     public IReadOnlyList<WaterLevelSourceInfo> WaterLevelSources { get; init; } = [];
+}
+
+/// <summary>
+/// A feature other than a depth area whose S-101 portrayal raises the
+/// <c>SafetyContour</c> alert (#1127): a pontoon, floating dock, hulk or
+/// shoreline construction, an unsurveyed area, or land charted as a point or
+/// curve, across the track (<see cref="RouteFindingCodes.CrossesSafetyContour"/>)
+/// or inside the cross-track limits (<see cref="RouteFindingCodes.SafetyContourInCorridor"/>).
+/// </summary>
+public sealed class SafetyContourFeatureDetails : RouteFindingDetails
+{
+    /// <summary>The feature type, such as <c>Pontoon</c> or <c>UnsurveyedArea</c>.</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>
+    /// <c>true</c> for a structure (#1548): anything but an unsurveyed area
+    /// or land. Its finding is titled for the structure, not for depth.
+    /// </summary>
+    public bool IsStructure { get; init; }
+
+    /// <summary>
+    /// <c>true</c> for a structure a vessel lies against at a berth (#1548):
+    /// a pontoon, a floating dock, or a pier, wharf, landing steps or fender
+    /// that isn't ruined, under water, covering and uncovering or awash. Near
+    /// the departure and arrival, these are grouped into
+    /// <see cref="RouteFindingCodes.BerthStructures"/> even when the track
+    /// cuts them; any other structure only when it doesn't
+    /// (<see cref="CutByTrack"/>).
+    /// </summary>
+    public bool IsBerth { get; init; }
+
+    /// <summary>
+    /// <c>true</c> when the track line itself cuts the feature: it crosses
+    /// the area, or passes within 1 m of the point or curve. <c>false</c>
+    /// when the track only passes within the track clearance or the
+    /// cross-track limits of it.
+    /// </summary>
+    public bool CutByTrack { get; init; }
+}
+
+/// <summary>Which end of a route a finding is at.</summary>
+public enum RouteEnd
+{
+    /// <summary>The departure: the first waypoint.</summary>
+    Departure,
+
+    /// <summary>The arrival: the last waypoint.</summary>
+    Arrival,
+}
+
+/// <summary>
+/// The structures that raise the <c>SafetyContour</c> alert within the berth
+/// radius (<see cref="RouteCheckSettings.BerthRadius"/>) of the departure or
+/// arrival (<see cref="RouteFindingCodes.BerthStructures"/>, #1548): the
+/// pontoons, floating docks and piers a route that starts or ends at a berth
+/// always touches, in one finding.
+/// </summary>
+public sealed class BerthStructuresDetails : RouteFindingDetails
+{
+    /// <summary>The end of the route they are at.</summary>
+    public required RouteEnd End { get; init; }
+
+    /// <summary>The berth radius they are within.</summary>
+    public required Length Radius { get; init; }
+
+    /// <summary>The structures, in route order, each once.</summary>
+    public required IReadOnlyList<RouteFindingFeature> Features { get; init; }
+
+    /// <summary>How many crossing findings they stand for (<see cref="RouteFindingCodes.CrossesSafetyContour"/>).</summary>
+    public int CrossingCount { get; init; }
+
+    /// <summary>Their feature types, each once, in route order.</summary>
+    public IReadOnlyList<string> FeatureTypes => Features.Select(f => f.FeatureType).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
 }
 
 /// <summary>

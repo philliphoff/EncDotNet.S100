@@ -117,6 +117,7 @@ public sealed partial class ChartCheck
                 {
                     FeatureType = feature.FeatureType,
                     Depth = feature.DepthMeters is { } depth ? Quantities.Depth.FromMetres(depth) : null,
+                    DepthIsDefault = feature.DepthMeters is not null && feature.DepthIsDefault,
                     WaterLevelEffect = feature.WaterLevelEffect,
                     ThresholdKind = threshold.Kind,
                     Threshold = threshold.Value is { } value ? Quantities.Depth.FromMetres(value) : null,

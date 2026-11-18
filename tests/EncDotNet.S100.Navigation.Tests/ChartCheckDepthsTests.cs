@@ -173,6 +173,37 @@ public class ChartCheckDepthsTests
         Assert.EndsWith(" · UnderwaterAwashRock · 20 m to starboard · " + reason, finding.Meta, StringComparison.Ordinal);
     }
 
+    [Theory]
+    // A default clearance depth (#1547) is judged by but not shown: the
+    // water level's effect is, as for a danger without a depth.
+    [InlineData(7, "floating")]
+    [InlineData(4, "covers and uncovers")]
+    [InlineData(3, "depth unknown")]
+    [InlineData(null, "depth unknown")]
+    public void A_danger_judged_by_its_default_clearance_depth_describes_its_water_level_instead(int? waterLevelEffect, string reason)
+    {
+        var obstruction = Danger("Obstruction", "1", 0.005, -39, -15, waterLevelEffect) with { DepthIsDefault = true };
+
+        var finding = Assert.Single(Check([obstruction], legs: EastWithKeel(2, 0.2, 0.3)).Findings);
+
+        Assert.Equal("Obstruction in the corridor", finding.Title);
+        Assert.EndsWith(" · Obstruction · 39 m to starboard · " + reason + " · shallower than draft + squat + UKC (2.5 m)", finding.Meta, StringComparison.Ordinal);
+        Assert.DoesNotContain("-15", finding.Meta, StringComparison.Ordinal);
+        var details = Assert.IsType<DangerDetails>(finding.Details);
+        Assert.True(details.DepthIsDefault);
+        Assert.Equal(-15, details.Depth!.Value.TotalMetres);
+        Assert.Equal(waterLevelEffect, details.WaterLevelEffect);
+    }
+
+    [Fact]
+    public void A_sounded_danger_shows_its_depth_whatever_its_water_level()
+    {
+        var finding = Assert.Single(Check([Danger("Obstruction", "1", 0.005, 0, 1.2, waterLevelEffect: 7)]).Findings);
+
+        Assert.False(Assert.IsType<DangerDetails>(finding.Details).DepthIsDefault);
+        Assert.EndsWith(" · on the track · 1.2 m · no deeper than safety contour 10 m", finding.Meta, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_danger_counts_in_water_already_shallower_than_the_safety_contour_too()
     {
@@ -250,9 +281,10 @@ public class ChartCheckDepthsTests
         Assert.Empty(Check([Area(RouteChartFeatureKind.DepthArea, "1", 10, 0, 0.01)]).Findings);
     }
 
-    // A feature whose portrayal raises the SafetyContour alert (#1127).
+    // A feature whose portrayal raises the SafetyContour alert (#1127), with
+    // no water level unless a test gives one.
     private static RouteChartFeature SafetyContourFeature(RouteChartFeature feature) =>
-        feature with { Kind = RouteChartFeatureKind.Alerted, Alerts = [new RouteChartAlert(RouteFindingAlert.SafetyContour)] };
+        feature with { Kind = RouteChartFeatureKind.Alerted, WaterLevelEffect = null, Alerts = [new RouteChartAlert(RouteFindingAlert.SafetyContour)] };
 
     [Fact]
     public void An_area_that_raises_the_SafetyContour_alert_is_safety_contour_ground()
@@ -264,6 +296,218 @@ public class ChartCheckDepthsTests
         Assert.Equal(RouteFindingCodes.CrossesSafetyContour, finding.Code);
         Assert.Equal("Pontoon", finding.Feature!.FeatureType);
         Assert.Equal(0.004 * E, finding.Location!.StartDistanceMeters, 1);
+    }
+
+    [Fact]
+    public void A_structure_that_raises_the_SafetyContour_alert_is_titled_for_the_structure()
+    {
+        // #1548: a pontoon mid-route is still a crossing to review, but not a depth.
+        var pontoon = SafetyContourFeature(Area(RouteChartFeatureKind.Land, "9", 0, 0.004, 0.005) with { FeatureType = "Pontoon", DepthMeters = null });
+        var shore = SafetyContourFeature(Danger("ShorelineConstruction", "10", 0.007, 40, null));
+
+        var findings = Check([pontoon, shore]).Findings;
+
+        Assert.Equal(2, findings.Count);
+        Assert.Equal(RouteFindingGroup.MustReview, findings[0].Group);
+        Assert.Equal("Crosses a structure", findings[0].Title);
+        Assert.Equal("Leg 1 → 2 · 0.06 NM · Pontoon · safety contour alert", findings[0].Meta);
+        var details = Assert.IsType<SafetyContourFeatureDetails>(findings[0].Details);
+        Assert.Equal("Pontoon", details.FeatureType);
+        Assert.True(details.IsStructure);
+        Assert.Equal(RouteFindingCodes.SafetyContourInCorridor, findings[1].Code);
+        Assert.Equal("Structure inside the cross-track limits", findings[1].Title);
+        Assert.Equal("Leg 1 → 2 · ShorelineConstruction · safety contour alert", findings[1].Meta);
+    }
+
+    [Fact]
+    public void Unsurveyed_areas_and_land_keep_the_safety_contour_title()
+    {
+        var unsurveyed = SafetyContourFeature(Area(RouteChartFeatureKind.Land, "9", 0, 0, 0.0005) with { FeatureType = "UnsurveyedArea", DepthMeters = null });
+        var land = SafetyContourFeature(Danger("LandArea", "14", 0.0099, 0, null));
+
+        var findings = Check([unsurveyed, land]).Findings;
+
+        // Even at the departure and arrival: they aren't berth structures.
+        Assert.Equal(2, findings.Count);
+        Assert.All(findings, f => Assert.Equal(RouteFindingCodes.CrossesSafetyContour, f.Code));
+        Assert.All(findings, f => Assert.Equal("Crosses the safety contour", f.Title));
+        Assert.All(findings, f => Assert.False(Assert.IsType<SafetyContourFeatureDetails>(f.Details).IsStructure));
+    }
+
+    [Fact]
+    public void Structures_at_the_departure_and_arrival_berths_are_one_info_finding_per_end()
+    {
+        // #1548: the departure is at 0°, the arrival at 0,01° E (about 1 112 m).
+        // A floating dock 40 m to port of the departure, a pontoon across the
+        // track 50 m from the arrival and a shoreline construction on it.
+        var dock = SafetyContourFeature(Danger("FloatingDock", "1", 0, 40, null));
+        var pontoon = SafetyContourFeature(Area(RouteChartFeatureKind.Land, "2", 0, 0.0095, 0.0097) with { FeatureType = "Pontoon", DepthMeters = null });
+        var shore = SafetyContourFeature(Danger("ShorelineConstruction", "3", 0.01, 0, null)) with { ShorelineConstructionCategory = Pier };
+        var midRoute = SafetyContourFeature(Danger("Pontoon", "4", 0.005, 0, null));
+
+        var findings = Check([dock, pontoon, shore, midRoute]).Findings;
+
+        var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
+        Assert.Equal("4", crossing.Feature!.FeatureId);
+        var berths = findings.Where(f => f.Code == RouteFindingCodes.BerthStructures).ToList();
+        Assert.Equal(2, berths.Count);
+        Assert.DoesNotContain(findings, f => f.Code == RouteFindingCodes.SafetyContourInCorridor);
+
+        var departure = berths.Single(f => ((BerthStructuresDetails)f.Details!).End == RouteEnd.Departure);
+        Assert.Equal(RouteFindingGroup.Info, departure.Group);
+        Assert.Equal(RouteFindingCategory.Chart, departure.Category);
+        Assert.Equal("Structures at the departure berth", departure.Title);
+        Assert.Equal("Leg 1 → 2 · 1 within 100 m · FloatingDock", departure.Meta);
+        Assert.Equal(0, departure.Distance!.Value.TotalMetres);
+        Assert.Equal(new GeoPosition(0, 0), departure.Location!.Path[0]);
+
+        var arrival = berths.Single(f => ((BerthStructuresDetails)f.Details!).End == RouteEnd.Arrival);
+        var details = (BerthStructuresDetails)arrival.Details!;
+        Assert.Equal("Structures at the arrival berth", arrival.Title);
+        Assert.Equal("Leg 1 → 2 · 2 within 100 m · Pontoon, ShorelineConstruction", arrival.Meta);
+        Assert.Equal(["2", "3"], details.Features.Select(f => f.FeatureId));
+        Assert.Equal(2, details.CrossingCount);
+        Assert.Equal(0.01 * E, arrival.Distance!.Value.TotalMetres, 1);
+        Assert.Equal("2", arrival.Feature!.FeatureId);
+    }
+
+    private const int Pier = 4;
+
+    [Theory]
+    // #1548: a breakwater, mole or training wall guards the harbour, and a
+    // ruined pier or one that covers and uncovers is a hazard, however close
+    // to the berth, when the track cuts it; so is a shoreline construction
+    // of unknown category.
+    [InlineData(1, null, null)]
+    [InlineData(3, null, null)]
+    [InlineData(7, null, null)]
+    [InlineData(null, null, null)]
+    [InlineData(Pier, 2, null)]
+    [InlineData(Pier, null, 4)]
+    [InlineData(Pier, null, 3)]
+    public void A_structure_that_is_not_a_berth_stays_a_crossing_at_the_berth(int? category, int? condition, int? waterLevel)
+    {
+        // Departure at 0°: the structure across the track 20 m from it, and a
+        // pontoon 40 m to port of it, which is a berth.
+        var structure = SafetyContourFeature(Danger("ShorelineConstruction", "1", 0.00018, 0, null)) with
+        {
+            ShorelineConstructionCategory = category,
+            Condition = condition,
+            WaterLevelEffect = waterLevel,
+        };
+        var pontoon = SafetyContourFeature(Danger("Pontoon", "2", 0, 40, null));
+
+        var findings = Check([structure, pontoon]).Findings;
+
+        var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
+        Assert.Equal("1", crossing.Feature!.FeatureId);
+        Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
+        Assert.Equal("Crosses a structure", crossing.Title);
+        Assert.False(Assert.IsType<SafetyContourFeatureDetails>(crossing.Details).IsBerth);
+        var berth = Assert.Single(findings, f => f.Code == RouteFindingCodes.BerthStructures);
+        Assert.Equal(["2"], ((BerthStructuresDetails)berth.Details!).Features.Select(f => f.FeatureId));
+    }
+
+    [Theory]
+    // #1548: a marina entrance can be narrower than the track clearance
+    // either side, so a breakwater the track only passes near is part of
+    // the berth; one the track line cuts is not.
+    [InlineData(20.0, false)]
+    [InlineData(-10.0, false)]
+    [InlineData(0.0, true)]
+    public void A_breakwater_at_the_berth_stays_a_crossing_only_when_the_track_cuts_it(double northMeters, bool crossing)
+    {
+        // A breakwater running east from 15 m to 45 m from the departure,
+        // northMeters off the track, so on or within the 30 m track clearance.
+        var breakwater = SafetyContourFeature(new RouteChartFeature(
+            RouteChartFeatureKind.Alerted,
+            Harbour,
+            "1",
+            "ShorelineConstruction",
+            [],
+            [[new GeoPosition(northMeters / N, 0.000135), new GeoPosition(northMeters / N, 0.000405)]])) with
+        { ShorelineConstructionCategory = 1 };
+
+        var findings = Check([breakwater]).Findings;
+
+        var finding = Assert.Single(findings);
+        Assert.Equal(crossing ? RouteFindingCodes.CrossesSafetyContour : RouteFindingCodes.BerthStructures, finding.Code);
+        if (crossing)
+        {
+            Assert.Equal("Crosses a structure", finding.Title);
+            Assert.True(Assert.IsType<SafetyContourFeatureDetails>(finding.Details).CutByTrack);
+        }
+    }
+
+    [Fact]
+    public void A_breakwater_the_track_crosses_is_cut_by_the_track()
+    {
+        // Across the track, north to south, 30 m from the departure.
+        var breakwater = SafetyContourFeature(new RouteChartFeature(
+            RouteChartFeatureKind.Alerted,
+            Harbour,
+            "1",
+            "ShorelineConstruction",
+            [],
+            [[new GeoPosition(20 / N, 0.00027), new GeoPosition(-20 / N, 0.00027)]])) with
+        { ShorelineConstructionCategory = 1 };
+        var pontoon = SafetyContourFeature(new RouteChartFeature(
+            RouteChartFeatureKind.Alerted,
+            Harbour,
+            "2",
+            "Pontoon",
+            [],
+            [[new GeoPosition(20 / N, 0.00054), new GeoPosition(-20 / N, 0.00054)]]));
+
+        var findings = Check([breakwater, pontoon]).Findings;
+
+        var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
+        Assert.Equal("1", crossing.Feature!.FeatureId);
+        Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
+        // The pontoon the track crosses is a berth: grouped all the same.
+        var berth = Assert.Single(findings, f => f.Code == RouteFindingCodes.BerthStructures);
+        Assert.Equal(["2"], ((BerthStructuresDetails)berth.Details!).Features.Select(f => f.FeatureId));
+    }
+
+    [Theory]
+    [InlineData("Pontoon", null)]
+    [InlineData("FloatingDock", null)]
+    [InlineData("ShorelineConstruction", Pier)]
+    [InlineData("ShorelineConstruction", 6)]
+    [InlineData("ShorelineConstruction", 14)]
+    [InlineData("ShorelineConstruction", 16)]
+    public void A_berthing_structure_at_the_berth_is_grouped(string featureType, int? category)
+    {
+        var structure = SafetyContourFeature(Danger(featureType, "1", 0.00018, 0, null)) with { ShorelineConstructionCategory = category };
+
+        var findings = Check([structure]).Findings;
+
+        var berth = Assert.Single(findings);
+        Assert.Equal(RouteFindingCodes.BerthStructures, berth.Code);
+        Assert.Equal(1, ((BerthStructuresDetails)berth.Details!).CrossingCount);
+    }
+
+    [Theory]
+    [InlineData(0.0, 2)]
+    [InlineData(30.0, 2)]
+    [InlineData(60.0, 0)]
+    public void The_berth_radius_is_a_setting_and_zero_turns_it_off(double radius, int crossings)
+    {
+        // A pontoon across the track 50 m from the arrival.
+        var pontoon = SafetyContourFeature(Area(RouteChartFeatureKind.Land, "2", 0, 0.0095, 0.0097) with { FeatureType = "Pontoon", DepthMeters = null });
+        var shore = SafetyContourFeature(Danger("ShorelineConstruction", "3", 0.0096, 0, null)) with { ShorelineConstructionCategory = Pier };
+        var settings = new RouteCheckSettings
+        {
+            At = Fixture.Departure,
+            SafetyContour = Depth.FromMetres(10),
+            SafetyDepth = Depth.FromMetres(10),
+            BerthRadius = Length.FromMetres(radius),
+        };
+
+        var findings = Checks.Chart(new FakeCharts([Harbour], [pontoon, shore]), new PassagePlan([East]), settings).Findings;
+
+        Assert.Equal(crossings, findings.Count(f => f.Code == RouteFindingCodes.CrossesSafetyContour));
+        Assert.Equal(crossings == 0 ? 1 : 0, findings.Count(f => f.Code == RouteFindingCodes.BerthStructures));
     }
 
     [Theory]

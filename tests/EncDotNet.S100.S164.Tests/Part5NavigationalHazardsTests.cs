@@ -47,6 +47,25 @@ public sealed class Part5NavigationalHazardsTests
         Assert.Empty(dangers.Intersect(["105", "106", "116", "118", "64", "93"]));
     }
 
+    [Fact]
+    public async Task NavigationalHazards_DefaultClearanceDepthsAreNotShownAsDepths()
+    {
+        // The wrecks and obstructions of unknown depth are judged by their
+        // defaultClearanceDepth (-15 m, 0 m, 0.1 m), which their findings
+        // don't print (#1547); the sounded ones print theirs.
+        var ct = TestContext.Current.CancellationToken;
+        var datasets = await S164RouteCheck.LoadAsync(ct, "NavigationalHazards");
+        var plan = S164RouteCheck.Plan(S164RouteCheck.NamedWaypoints(datasets.Single()).Values);
+
+        var report = S164RouteCheck.Checker(datasets).Check(plan, S164RouteCheck.Settings(10, 10, S164RouteCheck.TenthOfAMile), ct);
+
+        var dangers = report.Findings.Where(f => f.Details is DangerDetails { Depth: not null }).ToList();
+        var defaults = dangers.Where(f => ((DangerDetails)f.Details!).DepthIsDefault).ToList();
+        Assert.NotEmpty(defaults);
+        Assert.Contains(dangers, f => !((DangerDetails)f.Details!).DepthIsDefault);
+        Assert.All(defaults, f => Assert.DoesNotMatch(@"· -?\d+\.\d m ·", f.Meta));
+    }
+
     public static TheoryData<double, string[], string[]> ContourCases() => new()
     {
         // Safety contour, dangers the plot indicates, dangers it doesn't.

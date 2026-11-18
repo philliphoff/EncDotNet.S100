@@ -87,6 +87,10 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         [Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route. Default 185.2 (0.1 NM).")]
         public double? NearbyMeters { get; init; }
 
+        [CommandOption("--berth-radius <METERS>")]
+        [Description("How far from the departure and arrival, in metres, structures that raise the SafetyContour alert count as the berth (a breakwater, ruin or other non-berth structure the track line cuts stays a crossing; pontoons, floating docks, piers and wharves never do): one berth-structures finding (info) per end instead of crossings. Default 100; 0 turns it off.")]
+        public double? BerthRadiusMeters { get; init; }
+
         [CommandOption("--areas-off <KINDS>")]
         [Description("Comma-separated kinds of prohibited area and area with special conditions to turn off, e.g. anchorage_area,marine_farm (the S-101 alert catalogue's ProhAre kinds). One finding per kind says the route meets them.")]
         public string? AreasOff { get; init; }
@@ -164,6 +168,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 ("--safety-depth", SafetyDepthMeters, true),
                 ("--track-clearance", TrackClearanceMeters, true),
                 ("--nearby", NearbyMeters, true),
+                ("--berth-radius", BerthRadiusMeters, true),
                 ("--max-wind", MaxWindKnots, false),
                 ("--max-wave", MaxWaveMeters, false),
             })
@@ -245,6 +250,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 CorridorOverride = settings.CorridorMeters is { } corridor ? Length.FromMetres(corridor) : null,
                 TrackClearance = settings.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
                 NearbyDistance = settings.NearbyMeters is { } nearby ? Length.FromMetres(nearby) : null,
+                BerthRadius = settings.BerthRadiusMeters is { } berth ? Length.FromMetres(berth) : null,
                 AreaKindsOff = Settings.AreaKindsOff(settings.AreasOff).Select(k => k.Kind!.Value).ToList(),
                 DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
                 WeatherLimits = settings.MaxWindKnots is null && settings.MaxWaveMeters is null ? null : new WeatherLimits
@@ -427,6 +433,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         Add("corridorHalfWidthMeters", settings.CorridorMeters);
         Add("trackClearanceMeters", settings.TrackClearanceMeters);
         Add("nearbyDistanceMeters", settings.NearbyMeters);
+        Add("berthRadiusMeters", settings.BerthRadiusMeters);
         if (settings.AreasOff is { Length: > 0 } areasOff)
             settingsNode["areaKindsOff"] = new JsonArray(Settings.AreaKindsOff(areasOff).Select(k => (JsonNode?)k.Name).ToArray());
         Add("draftMeters", settings.DraftMeters);

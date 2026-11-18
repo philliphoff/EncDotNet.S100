@@ -329,6 +329,7 @@ leg's limits with one half-width.
 | `route_check.overhead_on_route` | Check | A bridge, span, overhead cable or pipeline, or conveyor inside the limits (Info in the near band) |
 | `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert |
 | `route_check.safety_contour_in_corridor` | Check | Such areas reach inside the limits, but the track doesn't cross them |
+| `route_check.berth_structures` | Info | Structures that raise `SafetyContour` (except a breakwater or other non-berth structure the track line cuts) within `RouteCheckSettings.BerthRadius` (default 100 m) of the departure or arrival, one finding per end |
 | `route_check.soundings_below_safety_contour` | Check | Soundings inside the limits, in deeper areas, are no deeper than the safety contour (S-101 `SOUNDG03`) |
 | `route_check.crosses_s102_shoal` | MustReview | The track crosses S-102 cells shallower than the safety contour |
 | `route_check.s102_shoal_in_corridor` | Check | S-102 cells shallower than the safety contour inside the limits, off the track |
@@ -347,6 +348,11 @@ names the threshold that fired. A danger counts wherever it lies, also inside
 water already shallower than the safety contour. Aids to navigation, structures and
 overhead features (`HazardDetails`, classed by `RouteHazardClasses`) come from
 the alerts the chart source tags them with, and need no depth settings.
+A structure that raises `SafetyContour` (`SafetyContourFeatureDetails`) is
+titled for the structure ("Crosses a structure"), not for depth. A danger
+without a `valueOfSounding` is judged by its `defaultClearanceDepth`
+(`DangerDetails.DepthIsDefault`), but its meta line describes its water level
+("floating", "awash") rather than showing that stand-in as a depth.
 Adjacent shallow areas, soundings and S-102 cells merge into one span, so a
 long bank is one finding. `ChartCheck.Dangers.cs` writes out the rules.
 
