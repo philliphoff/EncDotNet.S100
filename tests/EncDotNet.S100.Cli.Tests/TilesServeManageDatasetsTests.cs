@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Xml.Linq;
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
+using EncDotNet.S100.Cli.Web;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Cli.Tests;
@@ -147,13 +149,13 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         await using var _ = source;
         var ct = TestContext.Current.CancellationToken;
 
-        var before = source.Current;
+        var before = source.Current!;
         var (x, y, tile) = await InnerTileAsync(before);
         Assert.Equal(1, before.BlocksRendered);
 
         var added = await datasets.AddAsync([atons]);
         Assert.True(added.Succeeded, added.Error);
-        var after = source.Current;
+        var after = source.Current!;
         Assert.NotSame(before, after);
         Assert.Equal([cell, atons], datasets.Datasets.Select(d => d.Path));
         Assert.Equal(before.Layout.ReferenceLatitude, after.Layout.ReferenceLatitude);
@@ -183,7 +185,7 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         Assert.True(removed.Succeeded, removed.Error);
         Assert.True(datasets.Changes.IsEmpty);
         Assert.Equal(tile, await source.ReadAsync(14, x, y, null, null, ct));
-        Assert.Equal(0, source.Current.BlocksRendered);
+        Assert.Equal(0, source.Current!.BlocksRendered);
         Assert.Null(await source.ReadAsync(14, ax, ay, null, null, ct));
     }
 
@@ -198,11 +200,11 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         var (source, datasets) = Managed(SettingsFor(cell));
         await using var _ = source;
 
-        var (x, y, _) = await InnerTileAsync(source.Current);
+        var (x, y, _) = await InnerTileAsync(source.Current!);
         Assert.True((await datasets.AddAsync([overlapping])).Succeeded);
 
         Assert.NotNull(await source.ReadAsync(14, x, y, null, null, TestContext.Current.CancellationToken));
-        Assert.Equal(1, source.Current.BlocksRendered);
+        Assert.Equal(1, source.Current!.BlocksRendered);
     }
 
     [Fact]
@@ -219,7 +221,7 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         var (first, _) = Managed(SettingsFor(cell, cache));
         await using (first)
         {
-            (x, y, tile) = await InnerTileAsync(first.Current);
+            (x, y, tile) = await InnerTileAsync(first.Current!);
         }
 
         // …and another, its memory empty, with the aids to navigation added, reads it from disk.
@@ -228,7 +230,7 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         {
             Assert.True((await datasets.AddAsync([atons])).Succeeded);
             Assert.Equal(tile, await second.ReadAsync(14, x, y, null, null, TestContext.Current.CancellationToken));
-            Assert.Equal(0, second.Current.BlocksRendered);
+            Assert.Equal(0, second.Current!.BlocksRendered);
         }
     }
 
@@ -239,14 +241,13 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         var cell = Copy(S57);
         var (source, datasets) = Managed(SettingsFor(cell));
         await using var _ = source;
-        var before = source.Current;
+        var before = source.Current!;
 
         var text = Path.Combine(_root, "notes.txt");
         await File.WriteAllTextAsync(text, "not a dataset", TestContext.Current.CancellationToken);
         Assert.Equal(400, (await datasets.AddAsync([text])).Status);
         Assert.Equal(400, (await datasets.AddAsync([Path.Combine(_root, "missing.000")])).Status);
         Assert.Equal(404, (await datasets.RemoveAsync([text])).Status);
-        Assert.Equal(409, (await datasets.RemoveAsync([cell])).Status);
 
         // Adding what is served already changes nothing.
         Assert.Equal(200, (await datasets.AddAsync([cell])).Status);
@@ -404,6 +405,120 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         // An unchanged set keeps its revision.
         Assert.Equal(200, (await datasets.AddAsync([cell])).Status);
         Assert.Equal(before, await RevisionsAsync());
+    }
+
+    [Fact]
+    public async Task Removing_the_last_dataset_serves_none_until_one_is_added()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+        var cell = Copy(S57);
+        var (source, datasets) = Managed(SettingsFor(cell));
+        await using var _ = source;
+        var ct = TestContext.Current.CancellationToken;
+        await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, "tok", cancellationToken: ct, datasets: datasets);
+        using var http = new HttpClient();
+        var uri = new Uri(server.BaseUri, ServedDatasets.Path);
+        var healthz = new Uri($"http://127.0.0.1:{server.Port}{ServeHost.HealthPath}");
+
+        var (x, y, tile) = await InnerTileAsync(source.Current!);
+        var latitude = source.Current!.Layout.ReferenceLatitude;
+        var revision = source.Revision;
+
+        // The last dataset goes: the server keeps running and lists none.
+        using (var remove = new HttpRequestMessage(HttpMethod.Delete, uri) { Content = JsonContent.Create(new { path = cell }) })
+        using (var response = await http.SendAsync(remove, ct))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Empty(JsonNode.Parse(await response.Content.ReadAsStringAsync(ct))!["datasets"]!.AsArray());
+        }
+
+        Assert.Null(source.Current);
+        Assert.Empty(datasets.Datasets);
+        Assert.Equal([cell], datasets.Changes.Removed);
+
+        // A new revision, published by TileJSON and the health check alike.
+        var tileJson = JsonNode.Parse(await http.GetStringAsync(new Uri(server.BaseUri, "tiles.json"), ct))!;
+        var empty = (string?)tileJson["s100"]!["revision"];
+        Assert.NotNull(empty);
+        Assert.NotEqual(revision, empty);
+        using (var health = await http.GetAsync(healthz, ct))
+            Assert.Equal(empty, health.Headers.GetValues(ServeHost.RevisionHeader).Single());
+
+        // TileJSON says nothing is served, without bounds, keeping the zoom range and palettes.
+        Assert.Equal(NoDatasetsTileSource.Description, (string?)tileJson["description"]);
+        Assert.Null(tileJson["bounds"]);
+        Assert.Equal(14, (int?)tileJson["minzoom"]);
+        Assert.Equal(14, (int?)tileJson["maxzoom"]);
+        Assert.NotNull(tileJson["tiles"]);
+        Assert.Equal(RenderedTileSource.AllPalettes, tileJson["s100"]!["palettes"]!.AsArray().Select(p => (string?)p));
+
+        // Tiles are empty, as outside the datasets' coverage.
+        using (var empties = await http.GetAsync(new Uri(server.BaseUri, $"14/{x}/{y}.png"), ct))
+            Assert.Equal(HttpStatusCode.NoContent, empties.StatusCode);
+        using (var night = await http.GetAsync(new Uri(server.BaseUri, $"night/14/{x}/{y}.png"), ct))
+            Assert.Equal(HttpStatusCode.NoContent, night.StatusCode);
+        using (var highDpi = await http.GetAsync(new Uri(server.BaseUri, $"14/{x}/{y}@2x.png"), ct))
+            Assert.Equal(HttpStatusCode.NoContent, highDpi.StatusCode);
+
+        // The datasets document lists none.
+        var document = JsonNode.Parse(await http.GetStringAsync(uri, ct))!;
+        Assert.Empty(document["datasets"]!.AsArray());
+
+        // WMTS and WMS capabilities stay valid documents that say nothing is served.
+        XNamespace ows = "http://www.opengis.net/ows/1.1";
+        var wmts = XDocument.Parse(await http.GetStringAsync(new Uri(server.BaseUri, WmtsService.CapabilitiesPath), ct));
+        Assert.Contains(wmts.Descendants(ows + "Abstract"), a => a.Value == NoDatasetsTileSource.Description);
+        XNamespace wms = "http://www.opengis.net/wms";
+        var capabilities = XDocument.Parse(await http.GetStringAsync(new Uri(server.BaseUri, "wms?SERVICE=WMS&REQUEST=GetCapabilities"), ct));
+        Assert.Contains(capabilities.Descendants(wms + "Abstract"), a => a.Value == NoDatasetsTileSource.Description);
+        using (var map = await http.GetAsync(new Uri(server.BaseUri,
+            "wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=s100&STYLES=&CRS=CRS:84&BBOX=-71,42,-70,43&WIDTH=64&HEIGHT=64&FORMAT=image/png&TRANSPARENT=TRUE"), ct))
+        {
+            Assert.Equal(HttpStatusCode.OK, map.StatusCode);
+            Assert.Equal("image/png", map.Content.Headers.ContentType?.MediaType);
+        }
+
+        // The page shows its empty state (handoff D32).
+        var page = new TileSourcePageData(source);
+        Assert.Empty(page.Datasets);
+        Assert.Equal("No datasets", ServeSummary.Describe(page));
+
+        // Adding the dataset back serves it as at start-up: same scale latitude, revision and tiles.
+        using (var add = await http.PostAsJsonAsync(uri, new { paths = new[] { cell } }, ct))
+        {
+            Assert.Equal(HttpStatusCode.OK, add.StatusCode);
+            Assert.Single(JsonNode.Parse(await add.Content.ReadAsStringAsync(ct))!["datasets"]!.AsArray());
+        }
+
+        Assert.NotNull(source.Current);
+        Assert.True(datasets.Changes.IsEmpty);
+        Assert.Equal(latitude, source.Current.Layout.ReferenceLatitude);
+        Assert.Equal(revision, source.Revision);
+        Assert.Equal(tile, await source.ReadAsync(14, x, y, null, null, ct));
+        Assert.Equal(0, source.Current!.BlocksRendered);
+        Assert.Contains("S-57", (string?)JsonNode.Parse(await http.GetStringAsync(new Uri(server.BaseUri, "tiles.json"), ct))!["description"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_dataset_other_than_the_start_up_ones_can_be_served_after_none()
+    {
+        Assert.SkipUnless(File.Exists(S57) && File.Exists(S125), "Fixtures not present.");
+        var cell = Copy(S57);
+        var atons = Copy(S125);
+        var (source, datasets) = Managed(SettingsFor(cell));
+        await using var _ = source;
+        var latitude = source.Current!.Layout.ReferenceLatitude;
+
+        Assert.True((await datasets.RemoveAsync([cell])).Succeeded);
+        Assert.Null(source.Current);
+
+        // Removing from none: nothing is served to remove.
+        Assert.Equal(404, (await datasets.RemoveAsync([cell])).Status);
+
+        var added = await datasets.AddAsync([atons]);
+        Assert.True(added.Succeeded, added.Error);
+        Assert.Equal([atons], datasets.Datasets.Select(d => d.Path));
+        Assert.Equal(latitude, source.Current!.Layout.ReferenceLatitude);
     }
 
     [Fact]

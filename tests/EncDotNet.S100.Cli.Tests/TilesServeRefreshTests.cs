@@ -109,7 +109,7 @@ public sealed class TilesServeRefreshTests : IDisposable
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
         var cell = CopyOfCell();
         await using var source = Refreshing(SettingsFor(cell));
-        var before = source.Current;
+        var before = source.Current!;
         var (x, y, tile) = await DrawnTileAsync(source, before.Layout);
         Assert.Equal(1, before.BlocksRendered);
 
@@ -120,7 +120,7 @@ public sealed class TilesServeRefreshTests : IDisposable
         Assert.Same(before, source.Current);
         Assert.True(await source.CheckAsync());
 
-        var after = source.Current;
+        var after = source.Current!;
         Assert.NotSame(before, after);
         Assert.Equal(1, source.Reloads);
         Assert.Equal(1, _opens);
@@ -160,7 +160,7 @@ public sealed class TilesServeRefreshTests : IDisposable
         var cell = CopyOfCell();
         bool canOpen = false;
         await using var source = Refreshing(SettingsFor(cell), () => canOpen);
-        var before = source.Current;
+        var before = source.Current!;
 
         Touch(cell);
         Assert.False(await source.CheckAsync());
@@ -189,15 +189,15 @@ public sealed class TilesServeRefreshTests : IDisposable
         var cell = CopyOfCell();
         var cache = Path.Combine(_root, "cache");
         await using var source = Refreshing(SettingsFor(cell, cache));
-        await DrawnTileAsync(source, source.Current.Layout);
+        await DrawnTileAsync(source, source.Current!.Layout);
 
         Touch(cell);
         await source.CheckAsync();
         Assert.True(await source.CheckAsync());
-        await DrawnTileAsync(source, source.Current.Layout);
+        await DrawnTileAsync(source, source.Current!.Layout);
 
         // The old tiles weren't reused; both fingerprints' tiles are on disk.
-        Assert.Equal(1, source.Current.BlocksRendered);
+        Assert.Equal(1, source.Current!.BlocksRendered);
         Assert.Equal(2, DiskTileCache.FingerprintFolders(cache).Count());
     }
 

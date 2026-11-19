@@ -201,6 +201,13 @@ internal sealed class TileRenderSession : IDisposable
             if (changes is { IsEmpty: false } && !changes.TryApply(ref inputs, applyUpdates))
                 return 2;
 
+            if (inputs.Count == 0 && changes is { IsEmpty: false })
+            {
+                // Every dataset was removed while serving (issue #1601).
+                AnsiConsole.MarkupLine("[grey]Every dataset has been removed; there is nothing to open.[/]");
+                return 2;
+            }
+
             if (inputs.Count == 0)
             {
                 AnsiConsole.MarkupLineInterpolated($"[red]No renderable datasets were found in:[/] {folder ?? settings.ExchangeSetSource}");
