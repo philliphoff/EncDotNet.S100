@@ -56,7 +56,7 @@ public class PickServiceTests
         }
 
         public event EventHandler<PickResult>? Picked;
-        public Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null) => Inner.HandlePickAsync(worldPosition, resolution, dynamicHits);
+        public Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? dynamicHits = null) => Inner.HandlePickAsync(worldPosition, resolution, dynamicHits);
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) => Inner.PresentGeographicPick(latitude, longitude, features);
         public bool NavigateToReference(FeatureReference reference) => Inner.NavigateToReference(reference);
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => Inner.OpenFeature(processor, featureRef, datasetFileName);

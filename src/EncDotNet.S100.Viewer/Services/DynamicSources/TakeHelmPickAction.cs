@@ -21,7 +21,11 @@ internal static class TakeHelmPickAction
         ArgumentNullException.ThrowIfNull(registry);
         if (registry.Actions.Any(a => a.Id == Id))
             return;
-        registry.Register(new PickAction(Id, Strings.PickReport_TakeHelm, context => MmsiOf(context.Sections) is not null));
+        // Own-ship is picked like any vessel now (P5); it can't follow itself.
+        registry.Register(new PickAction(
+            Id,
+            Strings.PickReport_TakeHelm,
+            context => context.FeatureType != OwnShip.OwnShipSource.FeatureKind && MmsiOf(context.Sections) is not null));
     }
 
     /// <summary>The MMSI of the vessel among <paramref name="sections"/>, or <see langword="null"/>.</summary>

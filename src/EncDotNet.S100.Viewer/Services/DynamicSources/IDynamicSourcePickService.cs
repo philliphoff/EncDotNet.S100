@@ -4,9 +4,10 @@ using Mapsui;
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
 /// <summary>
-/// Resolves a click location to one or more dynamic-feature hits.
-/// Sibling to <see cref="IPickService"/>: the click handler queries
-/// both, then forwards the merged result to the pick report panel.
+/// Resolves a click location to the overlay sources' features under it, such
+/// as own-ship, as ordinary <see cref="PickHit"/>s with no dataset (data source
+/// design note P5). The click handler passes them to <see cref="IPickService"/>,
+/// which puts them ahead of the datasets' hits.
 /// </summary>
 /// <remarks>
 /// Returns an empty list when no dynamic source is registered, when
@@ -22,5 +23,5 @@ internal interface IDynamicSourcePickService
     /// <param name="mapPoint">Click position in Spherical Mercator world units.</param>
     /// <param name="resolution">Map units per device pixel at the current zoom.</param>
     /// <returns>Hits ordered by ascending distance from the click.</returns>
-    IReadOnlyList<DynamicPickHit> Pick(MPoint mapPoint, double resolution);
+    IReadOnlyList<PickHit> Pick(MPoint mapPoint, double resolution);
 }

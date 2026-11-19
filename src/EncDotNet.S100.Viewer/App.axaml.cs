@@ -1378,8 +1378,7 @@ public partial class App : Application
                 () => sp.GetService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>()?.Current?.MercatorResolution));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>(),
-                sp.GetServices<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicPickCardFactory>()));
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();

@@ -334,16 +334,31 @@ public sealed class DynamicSourceProcessor :
             ? DatasetChangedEventArgs.Empty
             : new DatasetChangedEventArgs { FeatureRefs = e.ChangedIds });
 
-    private FeatureInfo Describe(DynamicFeature feature)
+    private FeatureInfo Describe(DynamicFeature feature) => Describe(_source, feature, _formatProvider);
+
+    /// <summary>
+    /// The pick report description of one of <paramref name="source"/>'s
+    /// features, as its processor gives it: the source's own description when
+    /// it is an <see cref="IDynamicFeatureDescriber"/>, else its motion and
+    /// attributes; a vessel gets a <see cref="VesselSection"/>. For a host that
+    /// draws a source without a processor, such as SoundCharts' own-ship.
+    /// </summary>
+    /// <param name="source">The source.</param>
+    /// <param name="feature">One of its features.</param>
+    /// <param name="formatProvider">The culture to format with; <see langword="null"/> for the current culture.</param>
+    public static FeatureInfo Describe(IDynamicFeatureSource source, DynamicFeature feature, IFormatProvider? formatProvider = null)
     {
-        var view = new FeatureView(feature, FeatureTypeOf(feature));
-        if (_source is IDynamicFeatureDescriber describer
-            && describer.Describe(feature, _formatProvider ?? CultureInfo.CurrentCulture) is { } description)
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(feature);
+        var featureType = feature.Kind ?? source.Id;
+        var view = new FeatureView(feature, featureType);
+        if (source is IDynamicFeatureDescriber describer
+            && describer.Describe(feature, formatProvider ?? CultureInfo.CurrentCulture) is { } description)
         {
             return new FeatureInfo
             {
                 FeatureRef = feature.Id,
-                FeatureType = FeatureTypeOf(feature),
+                FeatureType = featureType,
                 FeatureTypeName = description.Title,
                 Attributes = [.. description.Properties.Select((p, i) => new PickAttribute
                 {
@@ -375,8 +390,8 @@ public sealed class DynamicSourceProcessor :
         return new FeatureInfo
         {
             FeatureRef = feature.Id,
-            FeatureType = FeatureTypeOf(feature),
-            FeatureTypeName = _source.Metadata.DisplayName,
+            FeatureType = featureType,
+            FeatureTypeName = source.Metadata.DisplayName,
             Attributes = rows,
             Geometry = view.GeometryType,
             Sections = vessel is null ? [] : [vessel],

@@ -22,6 +22,11 @@ month. For package versions and release assets, see
   `identify_features` and `describe_feature` include. SoundCharts shows a
   pick's actions as buttons, and offers "Take helm" on any picked vessel
   with an MMSI.
+- **Own ship is picked like any feature.** Picking own ship shows it in
+  Object information like a chart feature or an AIS target, first in the
+  list (it's drawn on top), with its size and motion in a vessel section,
+  rather than in a separate "live" block above the list. The separate block
+  is gone, since every live feed is now a dataset.
 - **Tide and current stations are live feeds.** **Tide stations ·
   predicted** and **Current stations · predicted** move from their Layer
   stack rows to the Library's **Live feeds**, and show as Datasets rows

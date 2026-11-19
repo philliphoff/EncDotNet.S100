@@ -77,17 +77,17 @@ internal sealed class PickService : IPickService
 
     private void Publish(PickResult result) => Picked?.Invoke(this, result);
 
-    public async Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null)
+    public async Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null)
     {
         using var __cmd = ViewerObservability.BeginCommand("pick");
 
-        var dynamic = dynamicHits ?? Array.Empty<DynamicPickHit>();
+        var overlay = overlayHits ?? [];
 
         if (worldPosition is null)
         {
-            // Even without a position a pick may still carry dynamic hits;
+            // Even without a position a pick may still carry overlay hits;
             // honour them if present, otherwise clear.
-            Publish(new PickResult([], dynamic));
+            Publish(new PickResult(overlay));
             return;
         }
 
@@ -107,7 +107,7 @@ internal sealed class PickService : IPickService
         }).ConfigureAwait(true);
 
         var hits = ResolveHits(picks, out var coverageHit);
-        if (hits.Count == 0 && dynamic.Count == 0)
+        if (hits.Count == 0 && overlay.Count == 0)
         {
             // No vector hit. Try a coverage pick before clearing — S-102,
             // S-104 and S-111 processors sample their grid at the point
@@ -118,7 +118,7 @@ internal sealed class PickService : IPickService
             if (coverageHit is not null)
             {
                 PickHit[] coverageHits = [coverageHit];
-                Publish(new PickResult(coverageHits, [], location, BuildLocationDepth(coverageHits, lat, lon)));
+                Publish(new PickResult(coverageHits, location, BuildLocationDepth(coverageHits, lat, lon)));
                 return;
             }
 
@@ -128,7 +128,9 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        Publish(new PickResult(hits, dynamic, location, BuildLocationDepth(hits, lat, lon)));
+        // Data source design note P5: an overlay source's hit (own-ship) is
+        // drawn on top, so it comes first.
+        Publish(new PickResult([.. overlay, .. hits], location, BuildLocationDepth(hits, lat, lon)));
     }
 
     /// <summary>The on-screen pick tolerance, in DIP, around the click.</summary>
@@ -152,10 +154,10 @@ internal sealed class PickService : IPickService
         double latitude,
         double longitude,
         IReadOnlyList<GeographicPickFeature> features,
-        IReadOnlyList<DynamicPickHit> dynamicHits)
+        IReadOnlyList<PickHit> overlayHits)
     {
         ArgumentNullException.ThrowIfNull(features);
-        ArgumentNullException.ThrowIfNull(dynamicHits);
+        ArgumentNullException.ThrowIfNull(overlayHits);
 
         using var __cmd = ViewerObservability.BeginCommand("pick.geographic");
 
@@ -177,13 +179,13 @@ internal sealed class PickService : IPickService
             hits.Add(BuildHit(PickContributorRegistry.Default.Apply(info, processor), entry, processor));
         }
 
-        if (hits.Count == 0 && dynamicHits.Count == 0)
+        if (hits.Count == 0 && overlayHits.Count == 0)
         {
             Publish(PickResult.Empty);
             return;
         }
 
-        Publish(new PickResult(hits, dynamicHits, new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude)));
+        Publish(new PickResult([.. overlayHits, .. hits], new PickLocation(latitude, longitude), BuildLocationDepth(hits, latitude, longitude)));
     }
 
     private bool TryResolveProcessorByDisplayName(
@@ -384,7 +386,7 @@ internal sealed class PickService : IPickService
             return false;
         info = PickContributorRegistry.Default.Apply(info, processor);
 
-        Publish(new PickResult([BuildHit(info, datasetFileName, processor)], []));
+        Publish(new PickResult([BuildHit(info, datasetFileName, processor)]));
         return true;
     }
 

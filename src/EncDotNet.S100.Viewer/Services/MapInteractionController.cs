@@ -750,11 +750,11 @@ internal sealed class MapInteractionController
     /// <paramref name="world"/>. Returns an empty list when the service is
     /// unavailable (legacy ctor / test stubs) or there is no position.
     /// </summary>
-    private IReadOnlyList<ViewModels.DynamicPickHit> CollectDynamicHits(MPoint? world, double resolution)
+    private IReadOnlyList<PickHit> CollectDynamicHits(MPoint? world, double resolution)
     {
         if (_dynamicPickService is null || world is null)
         {
-            return Array.Empty<ViewModels.DynamicPickHit>();
+            return [];
         }
 
         return _dynamicPickService.Pick(world, resolution);
