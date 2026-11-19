@@ -1,0 +1,28 @@
+html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; color: #1b1f24; background: #fff; }
+.loading { padding: 16px; }
+.shell { display: flex; flex-direction: column; height: 100vh; }
+header { display: flex; gap: 16px; align-items: center; padding: 8px 16px; border-bottom: 1px solid #d0d7de; }
+header nav { display: flex; gap: 12px; }
+header nav a { color: #0969da; text-decoration: none; }
+header nav a.active { font-weight: 600; text-decoration: underline; }
+main { flex: 1; min-height: 0; }
+.served { display: flex; height: 100%; }
+.served aside { width: 320px; overflow: auto; padding: 12px; border-right: 1px solid #d0d7de; display: flex; flex-direction: column; gap: 8px; }
+.served aside label { display: flex; flex-direction: column; gap: 4px; }
+.served aside form { display: flex; flex-direction: column; gap: 6px; }
+.map { flex: 1; }
+.muted { color: #656d76; }
+.error { color: #cf222e; }
+.datasets { list-style: none; padding: 0; margin: 0; }
+.datasets li { padding: 6px 4px; border-bottom: 1px solid #eaeef2; display: flex; flex-wrap: wrap; gap: 6px; }
+.datasets li.clickable { cursor: pointer; }
+.datasets li.clickable:hover { background: #f6f8fa; }
+.product { font-weight: 600; }
+.file { font-family: ui-monospace, monospace; }
+.local { padding: 16px; max-width: 720px; overflow: auto; height: 100%; box-sizing: border-box; }
+.local dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+.local dt { color: #656d76; }
+.local dd { margin: 0; }
+.local table { border-collapse: collapse; }
+.local td, .local th { padding: 2px 12px 2px 0; text-align: left; }
+@media (max-width: 700px) { .served { flex-direction: column; } .served aside { width: auto; max-height: 40%; border-right: 0; } }

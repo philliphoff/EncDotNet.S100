@@ -1,0 +1,134 @@
+@page "/local"
+@using System.Diagnostics
+@using EncDotNet.S100.Datasets.S101
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<div class="local">
+    <h2>Open an S-101 cell in the browser</h2>
+    <p class="muted">
+        The cell is parsed here, in WebAssembly, by <code>EncDotNet.S100.Datasets.S101</code> —
+        nothing is sent to the server.
+    </p>
+    <InputFile OnChange="OpenAsync" accept=".000" />
+
+    @if (busy)
+    {
+        <p>Reading…</p>
+    }
+    @if (error is not null)
+    {
+        <p class="error">@error</p>
+    }
+    @if (result is not null)
+    {
+        <dl>
+            <dt>Dataset</dt><dd>@result.Name</dd>
+            <dt>Title</dt><dd>@result.Title</dd>
+            <dt>Product</dt><dd>@result.Spec</dd>
+            <dt>Extent</dt><dd>@result.Extent</dd>
+            <dt>Features</dt><dd>@result.FeatureCount</dd>
+            <dt>Size</dt><dd>@($"{result.Bytes / 1024.0:N0} KiB")</dd>
+            <dt>Read</dt><dd>@result.ReadMs ms (copy into memory)</dd>
+            <dt>Parse</dt><dd>@result.ParseMs ms</dd>
+            <dt>Metadata</dt><dd>@result.MetadataMs ms</dd>
+        </dl>
+        <h3>Feature types</h3>
+        <table>
+            <thead><tr><th>Type</th><th>Count</th></tr></thead>
+            <tbody>
+                @foreach (var (type, count) in result.Types)
+                {
+                    <tr><td>@type</td><td>@count</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private const long MaxBytes = 64 * 1024 * 1024;
+    private bool busy;
+    private string? error;
+    private LocalResult? result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ?url=… fetches a cell over HTTP instead of a picked file (the same parse).
+        var url = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["url"];
+        if (url is not null)
+            await ParseAsync(async () => await Http.GetStreamAsync(new Uri(new Uri(Nav.BaseUri), url)));
+    }
+
+    private Task OpenAsync(InputFileChangeEventArgs e) =>
+        ParseAsync(() => Task.FromResult(e.File.OpenReadStream(MaxBytes)));
+
+    private async Task ParseAsync(Func<Task<Stream>> open)
+    {
+        busy = true;
+        error = null;
+        result = null;
+        StateHasChanged();
+        try
+        {
+            var watch = Stopwatch.StartNew();
+            var memory = new MemoryStream();
+            await using (var stream = await open())
+                await stream.CopyToAsync(memory);
+            memory.Position = 0;
+            var readMs = watch.ElapsedMilliseconds;
+
+            // Yield so "Reading…" paints: WebAssembly is single-threaded, the parse blocks the UI.
+            await Task.Yield();
+            watch.Restart();
+            var dataset = S101Dataset.Open(memory);
+            var parseMs = watch.ElapsedMilliseconds;
+
+            watch.Restart();
+            var metadata = dataset.ReadMetadata();
+            var metadataMs = watch.ElapsedMilliseconds;
+
+            var catalogue = dataset.Document.FeatureTypeCatalogue;
+            var types = dataset.Document.Features
+                .GroupBy(f => catalogue.TryGetValue(f.FeatureTypeCode, out var name) ? name : $"#{f.FeatureTypeCode}")
+                .Select(g => (g.Key, g.Count()))
+                .OrderByDescending(t => t.Item2)
+                .ToList();
+
+            var extent = metadata.Extent is { } x
+                ? $"{x.SouthLatitude:F4}…{x.NorthLatitude:F4} N, {x.WestLongitude:F4}…{x.EastLongitude:F4} E"
+                : "—";
+            result = new LocalResult(
+                dataset.DatasetName,
+                dataset.Document.Identification.DatasetTitle,
+                $"{metadata.Spec.Name} {metadata.Spec.Edition}",
+                extent,
+                dataset.FeatureCount,
+                memory.Length,
+                readMs,
+                parseMs,
+                metadataMs,
+                types);
+        }
+        catch (Exception ex)
+        {
+            error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private sealed record LocalResult(
+        string Name,
+        string Title,
+        string Spec,
+        string Extent,
+        int FeatureCount,
+        long Bytes,
+        long ReadMs,
+        long ParseMs,
+        long MetadataMs,
+        List<(string Type, int Count)> Types);
+}

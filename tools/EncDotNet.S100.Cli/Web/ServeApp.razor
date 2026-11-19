@@ -1,0 +1,21 @@
+@page "/ui"
+@* The document of the serve UI (spike): server-rendered, with interactive islands over a SignalR circuit. *@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="/" />
+    <title>s100 serve</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <style>@((MarkupString)ServeWeb.Css)</style>
+    <HeadOutlet />
+</head>
+<body>
+    @* One page, so no Router: the endpoint renders this document directly. *@
+    <ServePage @rendermode="InteractiveServer" />
+    <script>@((MarkupString)ServeWeb.MapScript)</script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

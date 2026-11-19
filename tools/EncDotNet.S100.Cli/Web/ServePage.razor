@@ -1,0 +1,165 @@
+@implements IDisposable
+@inject ITileSource Source
+@inject IJSRuntime JS
+
+<div class="served">
+    <aside>
+        <h2>@System.IO.Path.GetFileName(Source.Path)</h2>
+        <p class="muted">@Source.Format · rendered in this process</p>
+
+        @if (Source.Palettes.Count > 0)
+        {
+            <label>
+                Palette
+                <select @bind="palette" @bind:after="ApplyAsync">
+                    @foreach (var p in Source.Palettes)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </label>
+        }
+
+        @if (Source.Times.Count > 0)
+        {
+            <label>
+                Time
+                <input type="range" min="0" max="@(Source.Times.Count - 1)" @bind="timeIndex" @bind:event="oninput" @bind:after="ApplyAsync" />
+                <span>@Time?.ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture)</span>
+            </label>
+        }
+
+        <h3>Datasets (@datasets.Count)</h3>
+        <ul class="datasets">
+            @foreach (var d in datasets)
+            {
+                <li class="clickable" @onclick="() => FitAsync(d.Bounds)">
+                    <span class="product">@d.Product</span>
+                    <span class="file">@d.File</span>
+                    <span class="muted">@d.Producer</span>
+                </li>
+            }
+        </ul>
+
+        <h3>Pick</h3>
+        @if (Source.FeatureQuery is null)
+        {
+            <p class="muted">A built tile set: no datasets to query.</p>
+        }
+        else if (picking)
+        {
+            <p>Querying…</p>
+        }
+        else if (pick is null)
+        {
+            <p class="muted">Click the map to see the features there.</p>
+        }
+        else
+        {
+            <p class="muted">@pick.Latitude.ToString("F5", CultureInfo.InvariantCulture), @pick.Longitude.ToString("F5", CultureInfo.InvariantCulture) · @pick.Features.Count features · @pickMs ms</p>
+            <ul class="features">
+                @foreach (var f in pick.Features)
+                {
+                    <li>
+                        <strong>@f.Match.FeatureType</strong>
+                        <span class="muted">@f.Match.Geometry, @f.Match.Containment · @f.Match.DatasetId</span>
+                        @if (f.Attributes is { ValueKind: System.Text.Json.JsonValueKind.Object } attributes)
+                        {
+                            <dl>
+                                @foreach (var a in attributes.EnumerateObject().Take(8))
+                                {
+                                    <dt>@a.Name</dt><dd>@Short(a.Value)</dd>
+                                }
+                            </dl>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </aside>
+    <div id="map" class="map"></div>
+</div>
+
+@code {
+    private readonly List<DatasetRow> datasets = [];
+    private string? palette;
+    private int timeIndex;
+    private FeatureQueryResult? pick;
+    private bool picking;
+    private long pickMs;
+    private DotNetObjectReference<ServePage>? self;
+
+    private DateTime? Time => Source.Times.Count > 0 ? Source.Times[timeIndex] : null;
+
+    protected override void OnInitialized()
+    {
+        palette = Source.Palettes.FirstOrDefault();
+        // The same document /datasets serves; a richer page would read the session directly.
+        if (Source.ToDatasetsJson()?["datasets"] is System.Text.Json.Nodes.JsonArray array)
+        {
+            foreach (var d in array)
+            {
+                var bounds = d?["bounds"] is System.Text.Json.Nodes.JsonArray b ? b.Select(v => (double)v!).ToArray() : null;
+                datasets.Add(new DatasetRow((string?)d?["product"], (string?)d?["file"], (string?)d?["producer"], bounds));
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        self = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("s100Map.show", "map", TileJsonUrl(), self);
+        var all = datasets.Where(d => d.Bounds is { Length: 4 }).Select(d => d.Bounds!).ToList();
+        if (all.Count > 0)
+            await FitAsync([all.Min(b => b[0]), all.Min(b => b[1]), all.Max(b => b[2]), all.Max(b => b[3])]);
+    }
+
+    private string TileJsonUrl()
+    {
+        var path = (palette is null ? "" : palette + "/") + "tiles.json";
+        var query = new List<string>();
+        if (Time is { } t)
+            query.Add("t=" + Uri.EscapeDataString(t.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)));
+        if (Source.CanReadPixelRatio(2))
+            query.Add("scale=2");
+        return query.Count == 0 ? path : path + "?" + string.Join('&', query);
+    }
+
+    private Task ApplyAsync() => JS.InvokeVoidAsync("s100Map.setChart", TileJsonUrl()).AsTask();
+
+    private Task FitAsync(double[]? bounds) =>
+        bounds is { Length: 4 } ? JS.InvokeVoidAsync("s100Map.fit", bounds).AsTask() : Task.CompletedTask;
+
+    /// <summary>A map click: the features there, from the datasets in this process.</summary>
+    [JSInvokable]
+    public async Task PickAsync(double latitude, double longitude, double metresPerPixel)
+    {
+        if (Source.FeatureQuery is not { } query)
+            return;
+        picking = true;
+        StateHasChanged();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            pick = await query.QueryAsync(latitude, longitude, metresPerPixel * 8, 20, Time, CancellationToken.None);
+        }
+        finally
+        {
+            pickMs = watch.ElapsedMilliseconds;
+            picking = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string Short(System.Text.Json.JsonElement value)
+    {
+        var text = value.ValueKind == System.Text.Json.JsonValueKind.String ? value.GetString() ?? "" : value.GetRawText();
+        return text.Length > 80 ? text[..80] + "…" : text;
+    }
+
+    public void Dispose() => self?.Dispose();
+
+    private sealed record DatasetRow(string? Product, string? File, string? Producer, double[]? Bounds);
+}

@@ -76,6 +76,10 @@ internal sealed class TileServer : IAsyncDisposable
             o.Providers.Add<GzipCompressionProvider>();
             o.MimeTypes = ["application/json", "application/xml", "text/html"];
         });
+        // Spike: the Razor components UI at /ui, without a token prefix only.
+        var webUi = viewer && token is null;
+        if (webUi)
+            Web.ServeWeb.AddServices(builder, source);
 
         var app = builder.Build();
         errors ??= Console.Error;
@@ -157,6 +161,9 @@ internal sealed class TileServer : IAsyncDisposable
         // Adding and removing datasets, with --manage-datasets (issue #1494).
         if (datasets is not null)
             ServedDatasets.Map(app, prefix, datasets);
+
+        if (webUi)
+            Web.ServeWeb.Map(app);
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 

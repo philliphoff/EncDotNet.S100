@@ -1,0 +1,152 @@
+@page "/"
+@implements IAsyncDisposable
+@inject ServeClient Serve
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="served">
+    <aside>
+        <form @onsubmit="LoadAsync">
+            <label>
+                Server
+                <input @bind="serverText" placeholder="http://localhost:8080/" aria-label="Server URL" />
+            </label>
+            <button type="submit">Connect</button>
+        </form>
+
+        @if (error is not null)
+        {
+            <p class="error">@error</p>
+        }
+        else if (tileJson is not null)
+        {
+            <h2>@(tileJson.Name ?? "Tiles")</h2>
+            <p class="muted">zoom @tileJson.Minzoom–@tileJson.Maxzoom</p>
+
+            @if (tileJson.S100?.Palettes is { Length: > 0 } palettes)
+            {
+                <label>
+                    Palette
+                    <select @bind="palette" @bind:after="ApplyAsync">
+                        @foreach (var p in palettes)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </label>
+            }
+
+            @if (tileJson.S100?.Times is { Length: > 0 } times)
+            {
+                <label>
+                    Time
+                    <input type="range" min="0" max="@(times.Length - 1)" @bind="timeIndex" @bind:event="oninput" @bind:after="ApplyAsync" />
+                    <span>@times[timeIndex]</span>
+                </label>
+            }
+
+            <h3>Datasets (@(datasets?.Datasets.Length ?? 0))</h3>
+            @if (datasets is null)
+            {
+                <p class="muted">A built tile set: no datasets document.</p>
+            }
+            else
+            {
+                <ul class="datasets">
+                    @foreach (var d in datasets.Datasets)
+                    {
+                        <li @onclick="() => FitAsync(d.Bounds)" class="@(d.Bounds is null ? "" : "clickable")">
+                            <span class="product">@d.Product</span>
+                            <span class="file">@d.File</span>
+                            @if (d.Producer is not null)
+                            {
+                                <span class="muted">@d.Producer</span>
+                            }
+                            @if (d.Times is { Length: > 0 })
+                            {
+                                <span class="muted">@d.Times.Length steps</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </aside>
+    <div id="map" class="map"></div>
+</div>
+
+@code {
+    private string serverText = "";
+    private Uri? server;
+    private TileJson? tileJson;
+    private DatasetsDoc? datasets;
+    private string? palette;
+    private int timeIndex;
+    private string? error;
+    private IJSObjectReference? module;
+
+    protected override void OnInitialized()
+    {
+        // ?server=… when the app is hosted apart from the server; else the page's own origin.
+        var uri = new Uri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        serverText = query["server"] ?? Nav.BaseUri;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/map.js");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        try
+        {
+            server = new Uri(serverText.EndsWith('/') ? serverText : serverText + "/");
+            tileJson = await Serve.GetTileJsonAsync(server);
+            datasets = await Serve.GetDatasetsAsync(server);
+            palette = tileJson.S100?.Palette ?? tileJson.S100?.Palettes?.FirstOrDefault();
+            timeIndex = 0;
+            await ApplyAsync();
+            if (tileJson.Bounds is { Length: 4 } b)
+                await FitAsync(b);
+        }
+        catch (Exception e)
+        {
+            error = $"Couldn't reach {serverText}: {e.Message}";
+            tileJson = null;
+            datasets = null;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (module is null || server is null || tileJson is null)
+            return;
+        var url = new UriBuilder(new Uri(server, (palette is null || tileJson.S100?.Palettes is not { Length: > 0 } ? "" : palette + "/") + "tiles.json"));
+        var query = new List<string>();
+        if (tileJson.S100?.Times is { Length: > 0 } times)
+            query.Add("t=" + Uri.EscapeDataString(times[timeIndex]));
+        if (tileJson.S100?.PixelRatios?.Contains(2) == true)
+            query.Add("scale=2");
+        url.Query = string.Join('&', query);
+        await module.InvokeVoidAsync("showChart", "map", url.Uri.ToString());
+    }
+
+    private async Task FitAsync(double[]? bounds)
+    {
+        if (module is not null && bounds is { Length: 4 })
+            await module.InvokeVoidAsync("fitBounds", bounds);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null)
+            await module.DisposeAsync();
+    }
+}
