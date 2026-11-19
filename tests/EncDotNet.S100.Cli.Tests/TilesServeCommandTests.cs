@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
@@ -208,13 +209,49 @@ public sealed class TilesServeCommandTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound,
             (await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/2/1/3.png"), ct)).StatusCode);
 
-        // The preview page, reached with or without the trailing slash.
+        // The web page, reached with or without the trailing slash, with its
+        // links under the token (issue #1575).
         using (var page = await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/secret-token"), ct))
         {
             page.EnsureSuccessStatusCode();
             Assert.Equal(server.BaseUri, page.RequestMessage!.RequestUri);
             Assert.Equal("text/html", page.Content.Headers.ContentType?.MediaType);
-            Assert.Contains("tiles.json", await page.Content.ReadAsStringAsync(ct), StringComparison.Ordinal);
+            var html = await page.Content.ReadAsStringAsync(ct);
+            Assert.Contains("<base href=\"/secret-token/\"", html, StringComparison.Ordinal);
+            Assert.Contains("_framework/blazor.web.js", html, StringComparison.Ordinal);
+            Assert.Contains("lib/maplibre-gl/maplibre-gl", html, StringComparison.Ordinal);
+        }
+
+        // Under any other path, or the wrong token, there's nothing, but the health check.
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/"), ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/wrong-token/"), ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/_framework/blazor.web.js"), ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/healthz"), ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_web_page_loads_its_scripts_and_styles_from_the_server()
+    {
+        var source = TileSource.Open(Write(TileContainer.PmTiles));
+        var ct = TestContext.Current.CancellationToken;
+        await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, "secret-token", cancellationToken: ct);
+        using var http = new HttpClient();
+
+        var html = await http.GetStringAsync(server.BaseUri, ct);
+        var assets = Regex.Matches(html, "(?:src|href)=\"([^\"]+\\.(?:js|css))\"").Select(m => m.Groups[1].Value).ToList();
+
+        // MapLibre (bundled, not from a CDN), the page's own script and style, and Blazor.
+        Assert.Contains(assets, a => a.StartsWith("lib/maplibre-gl/maplibre-gl", StringComparison.Ordinal) && a.EndsWith(".js", StringComparison.Ordinal));
+        Assert.Contains(assets, a => a.StartsWith("lib/maplibre-gl/maplibre-gl", StringComparison.Ordinal) && a.EndsWith(".css", StringComparison.Ordinal));
+        Assert.Contains(assets, a => a.StartsWith("js/serve-map", StringComparison.Ordinal));
+        Assert.Contains(assets, a => a.StartsWith("css/serve", StringComparison.Ordinal));
+        Assert.Contains("_framework/blazor.web.js", assets);
+        Assert.DoesNotContain(assets, a => a.Contains("://", StringComparison.Ordinal));
+        foreach (var asset in assets)
+        {
+            using var response = await http.GetAsync(new Uri(server.BaseUri, asset), ct);
+            response.EnsureSuccessStatusCode();
+            Assert.True((await response.Content.ReadAsByteArrayAsync(ct)).Length > 0, asset + " is empty.");
         }
     }
 
@@ -226,6 +263,7 @@ public sealed class TilesServeCommandTests : IDisposable
         using var http = new HttpClient();
 
         Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(server.BaseUri, TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri(server.BaseUri, "_framework/blazor.web.js"), TestContext.Current.CancellationToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(new Uri(server.BaseUri, "1/0/0.png"), TestContext.Current.CancellationToken)).StatusCode);
     }
 

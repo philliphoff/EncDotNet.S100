@@ -1,0 +1,28 @@
+@page "/"
+@* The tiles serve web page (issue #1573): rendered here, with the map's controls interactive over a circuit. *@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    @* The token, when there is one, is the request's path base (TileServer), so links stay under it. *@
+    <base href="@BaseHref" />
+    <title>s100 serve</title>
+    <link rel="stylesheet" href="@Assets["lib/maplibre-gl/maplibre-gl.css"]">
+    <link rel="stylesheet" href="@Assets["css/serve.css"]">
+    <script src="@Assets["lib/maplibre-gl/maplibre-gl.js"]"></script>
+    <script src="@Assets["js/serve-map.js"]"></script>
+</head>
+<body>
+    @* One page, so no Router (its generated code isn't trim-safe): the endpoint renders this document directly. *@
+    <ServePage @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string BaseHref => (HttpContext?.Request.PathBase.Value ?? "") + "/";
+}

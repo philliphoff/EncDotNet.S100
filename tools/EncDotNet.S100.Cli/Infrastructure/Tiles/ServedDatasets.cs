@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <summary>
 /// Adds datasets to and removes them from a running <c>tiles serve</c>
 /// (<c>--manage-datasets</c>, issue #1494), through <c>POST</c> and
-/// <c>DELETE</c> <c>{prefix}/datasets</c>. A <c>GET</c> there is the dataset
+/// <c>DELETE</c> <c>datasets</c>. A <c>GET</c> there is the dataset
 /// metadata document (issue #1504), which describes whichever set serves.
 /// Thread-safe: changes are made one at a time. Datasets can be added to a
 /// WMTS layer named in the request (issue #1495).
@@ -194,19 +194,18 @@ internal sealed class ServedDatasets
     }
 
     /// <summary>
-    /// Maps <c>POST</c> (add) and <c>DELETE</c> (remove) <c>{prefix}/datasets</c>
+    /// Maps <c>POST</c> (add) and <c>DELETE</c> (remove) <c>datasets</c>
     /// on <paramref name="app"/>. A change's body is JSON,
     /// <c>{"paths": ["…"]}</c> (or <c>{"path": "…"}</c>), sent as
     /// <c>application/json</c>; an addition may name the WMTS layer to put the
     /// datasets in, <c>"layer": "…"</c>. Every response lists the datasets then served.
     /// </summary>
     /// <param name="app">The web application.</param>
-    /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
     /// <param name="datasets">The datasets served.</param>
-    public static void Map(WebApplication app, string prefix, ServedDatasets datasets)
+    public static void Map(WebApplication app, ServedDatasets datasets)
     {
-        app.MapPost(prefix + "/" + Path, context => ChangeAsync(context, datasets, datasets.AddAsync));
-        app.MapDelete(prefix + "/" + Path, context => ChangeAsync(context, datasets, RemoveAsync));
+        app.MapPost("/" + Path, context => ChangeAsync(context, datasets, datasets.AddAsync));
+        app.MapDelete("/" + Path, context => ChangeAsync(context, datasets, RemoveAsync));
 
         // A removal names no layer.
         Task<Result> RemoveAsync(IReadOnlyList<string> paths, string? layer) => datasets.RemoveAsync(paths);

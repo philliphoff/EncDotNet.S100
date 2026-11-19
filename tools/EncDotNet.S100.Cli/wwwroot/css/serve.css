@@ -1,0 +1,4 @@
+/* The tiles serve web page (issue #1575): today's page, ported. SW1 (#1585) brings the design's shell. */
+html, body, #map { margin: 0; height: 100%; }
+.status { position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: #fffc; font: 13px system-ui, sans-serif; border-radius: 4px; }
+.status select { margin-left: 6px; font: inherit; }
