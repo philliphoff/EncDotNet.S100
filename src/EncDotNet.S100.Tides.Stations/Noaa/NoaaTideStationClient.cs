@@ -257,16 +257,9 @@ public sealed partial class NoaaTideStationClient
         var currents = new List<CurrentStationEntry>(currentListing.Count);
         foreach (var listed in currentListing)
         {
-            if (listed.Kind == TideStationKind.Subordinate)
+            if (ToCurrentEntry(listed, currentHarmonics.GetValueOrDefault(listed.NoaaId)) is { } entry)
             {
-                if (listed.Entry is { } subordinate)
-                {
-                    currents.Add(subordinate);
-                }
-            }
-            else if (currentHarmonics.TryGetValue(listed.NoaaId, out var rows) && ToHarmonicEntry(listed, rows) is { } harmonic)
-            {
-                currents.Add(harmonic);
+                currents.Add(entry);
             }
         }
 
@@ -285,10 +278,13 @@ public sealed partial class NoaaTideStationClient
     /// whose datums NOAA has accepted again. When the catalogue has current
     /// stations, it reads the current station list too (one more request)
     /// and finds current stations added, removed, moved or with changed
-    /// directions or offsets. A harmonic bin NOAA lists without constants
-    /// isn't counted as added while the catalogue has another bin of that
-    /// station, since the download can't keep it. A change to one station's constituents alone
-    /// isn't seen: NOAA revises those with its datums.
+    /// directions or offsets. A listed current bin the catalogue doesn't
+    /// have counts as added only when <see cref="DownloadCatalogueAsync"/>
+    /// would keep it: for a harmonic bin that means reading its station's
+    /// constituents (one request per such station), since NOAA lists some
+    /// bins it has no constants for and the download leaves those out. A
+    /// change to one station's constituents alone isn't seen: NOAA revises
+    /// those with its datums.
     /// </remarks>
     /// <param name="catalogue">The catalogue to check, as downloaded by <see cref="DownloadCatalogueAsync"/>.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
@@ -322,28 +318,38 @@ public sealed partial class NoaaTideStationClient
         {
             var currentListing = await GetCurrentListingAsync(cancellationToken).ConfigureAwait(false);
             var listedCurrents = new HashSet<string>(StringComparer.Ordinal);
-            var cachedNoaaIds = new HashSet<string>(
-                catalogue.CurrentStations.Select(s => NoaaIdOf(s.Id)), StringComparer.Ordinal);
+            var missing = new List<CurrentListing>();
             foreach (var station in currentListing)
             {
                 listedCurrents.Add(station.Id);
                 if (catalogue.FindCurrentStation(station.Id) is not { } cached)
                 {
-                    // NOAA lists some bins it has no constants for, and the
-                    // download leaves them out: a missing bin of a station
-                    // the catalogue has isn't new data, or the list would
-                    // never stop being stale. A new station, or a
-                    // subordinate bin the download would keep, is.
-                    if (station.Kind == TideStationKind.Subordinate
-                        ? station.Entry is not null
-                        : !cachedNoaaIds.Contains(station.NoaaId))
-                    {
-                        added.Add(station.Id);
-                    }
+                    missing.Add(station);
                 }
                 else if (HasChanged(cached, station))
                 {
                     changed.Add(station.Id);
+                }
+            }
+
+            // NOAA lists some bins it has no constants for, and the download
+            // leaves them out: a missing bin is new data only when the
+            // download would keep it, or a fresh list would never stop being
+            // stale. A harmonic bin needs its station's constants to tell.
+            var harmonics = new Dictionary<string, IReadOnlyList<CurrentHarconRowDto>>(StringComparer.Ordinal);
+            foreach (var station in missing)
+            {
+                IReadOnlyList<CurrentHarconRowDto>? rows = null;
+                if (station.Kind == TideStationKind.Harmonic && !harmonics.TryGetValue(station.NoaaId, out rows))
+                {
+                    rows = await GetCurrentHarmonicsAsync(station.NoaaId, cancellationToken).ConfigureAwait(false);
+                    await PauseAsync(cancellationToken).ConfigureAwait(false);
+                    harmonics[station.NoaaId] = rows;
+                }
+
+                if (ToCurrentEntry(station, rows) is not null)
+                {
+                    added.Add(station.Id);
                 }
             }
 
@@ -381,12 +387,19 @@ public sealed partial class NoaaTideStationClient
         };
     }
 
-    // "PUG1701_33" → "PUG1701": the catalogue id is NOAA's station and bin.
-    private static string NoaaIdOf(string catalogueId)
-    {
-        var bin = catalogueId.LastIndexOf('_');
-        return bin > 0 ? catalogueId[..bin] : catalogueId;
-    }
+    /// <summary>
+    /// The catalogue entry for a listed current bin, or <c>null</c> when the
+    /// catalogue leaves it out: the one rule <see cref="DownloadCatalogueAsync"/>
+    /// keeps bins by and <see cref="CheckForUpdatesAsync"/> finds added
+    /// bins by. A subordinate bin is kept with its offsets; a harmonic bin
+    /// only when its station's constants have some for that bin.
+    /// </summary>
+    /// <param name="listed">The bin from NOAA's current station list.</param>
+    /// <param name="harmonics">Its station's constants for all bins; <c>null</c> for a subordinate bin, or when they weren't read.</param>
+    private static CurrentStationEntry? ToCurrentEntry(CurrentListing listed, IReadOnlyList<CurrentHarconRowDto>? harmonics) =>
+        listed.Kind == TideStationKind.Subordinate
+            ? listed.Entry
+            : harmonics is null ? null : ToHarmonicEntry(listed, harmonics);
 
     private static bool HasChanged(CurrentStationEntry cached, CurrentListing listed) =>
         cached.Kind != listed.Kind

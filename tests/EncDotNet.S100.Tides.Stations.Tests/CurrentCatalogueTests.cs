@@ -216,11 +216,42 @@ public sealed class CurrentCatalogueTests
 
         var check = await client.CheckForUpdatesAsync(catalogue, Token);
         Assert.False(check.HasNewerData);
+    }
 
-        // A station the catalogue has no bin of is new.
-        handler.CurrentStationList = Fixtures.CurrentStationList([.. Fixtures.CurrentStations, "ACT1616_1"]);
-        var added = await client.CheckForUpdatesAsync(catalogue, Token);
-        Assert.Equal(["ACT1616_1"], added.AddedStationIds);
+    [Fact]
+    public async Task CheckForUpdates_StraightAfterADownloadThatSkippedStations_FindsNoNewerData()
+    {
+        // ACT1616 is a harmonic station NOAA lists but has no constants
+        // for, so the download leaves out all of it (as g06010_5, kb0201_8
+        // and kb0401_6 in #1469). The check must skip it by the same rule.
+        var handler = new FixtureHandler
+        {
+            CurrentStationList = Fixtures.CurrentStationList([.. Fixtures.CurrentStations, "ACT1616_1", "PUG1701_24"]),
+            EmptyCurrentHarmonics = true,
+        };
+        var client = Fixtures.Client(handler, Fixtures.CurrentOptions());
+        var catalogue = await client.DownloadCatalogueAsync(cancellationToken: Token);
+        Assert.Null(catalogue.FindCurrentStation("ACT1616_1"));
+        Assert.Null(catalogue.FindCurrentStation("PUG1701_24"));
+
+        var check = await client.CheckForUpdatesAsync(catalogue, Token);
+        Assert.False(check.HasNewerData);
+        Assert.Empty(check.AddedStationIds);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_AListedBinTheDownloadWouldKeep_IsAdded()
+    {
+        var handler = new FixtureHandler
+        {
+            CurrentStationList = Fixtures.CurrentStationList([.. Fixtures.CurrentStations.Where(id => id != "LIS1001_13")]),
+        };
+        var client = Fixtures.Client(handler, Fixtures.CurrentOptions());
+        var catalogue = await client.DownloadCatalogueAsync(cancellationToken: Token);
+
+        handler.CurrentStationList = Fixtures.CurrentStationList(Fixtures.CurrentStations);
+        var check = await client.CheckForUpdatesAsync(catalogue, Token);
+        Assert.Equal(["LIS1001_13"], check.AddedStationIds);
     }
 
     [Fact]
