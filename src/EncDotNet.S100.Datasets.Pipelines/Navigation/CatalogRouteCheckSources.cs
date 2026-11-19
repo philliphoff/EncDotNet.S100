@@ -111,6 +111,8 @@ public static class CatalogRouteCheckSources
         public ChartedDepth? Sample(GeoPosition position) => _source.Value.Sample(position);
 
         public ChartedDepth? SampleBathymetry(GeoPosition position) => _source.Value.SampleBathymetry(position);
+
+        public void Sample(WaterMaskGrid grid, Span<float> depthMeters) => _source.Value.Sample(grid, depthMeters);
     }
 
     private sealed class LazyWaterLevel(Func<IWaterLevelSource> create) : IWaterLevelSource
