@@ -1,2 +1,192 @@
-@* The Use in GIS panel's slot. SW6 (#1582) fills it with the layer and palette pickers, the links and the per-client steps. *@
-<p class="panel-note">Use these charts in QGIS, ArcGIS, MapLibre or Leaflet from the server's <a href="tiles.json" target="_blank" rel="noopener">TileJSON</a>.</p>
+@* The Use in GIS panel (issue #1582, handoff D26, D27): layer and palette pickers that rewrite every link,
+   the four links with Copy, a note on @2x and ?t=, and steps or a snippet per client.
+   With a token, the links are masked for show (Show token reveals it) and Copy copies the full link. *@
+@inject IServePageData Data
+@inject IJSRuntime JS
+
+<p class="panel-note">Paste one of these into your GIS or web map. They follow what you pick here.</p>
+
+@if (Data.Layers.Count > 0 || Data.Palettes.Count > 0)
+{
+    <div class="gis-pickers">
+        @if (Data.Layers.Count > 0)
+        {
+            <label class="field">
+                <span class="field-label">Layer</span>
+                <select data-gis-layer @onchange="e => layer = e.Value as string is { Length: > 0 } v ? v : null">
+                    <option value="" selected="@(layer is null)">All datasets</option>
+                    @foreach (var l in Data.Layers)
+                    {
+                        <option value="@l" selected="@(l == layer)">@l</option>
+                    }
+                </select>
+            </label>
+        }
+        @if (Data.Palettes.Count > 0)
+        {
+            <label class="field">
+                <span class="field-label">Palette</span>
+                <select data-gis-palette @onchange="e => palette = e.Value as string">
+                    @foreach (var p in Data.Palettes)
+                    {
+                        <option value="@p" selected="@(p == palette)">@Title(p)</option>
+                    }
+                </select>
+            </label>
+        }
+    </div>
+}
+
+@if (Data.HasToken)
+{
+    <div class="gis-warning" role="note">
+        <Icon Name="lock" Size="16" />
+        <div>
+            <p class="strong">These links contain the access token.</p>
+            <p>Anyone who has one can see these charts.</p>
+            <button type="button" class="link-button" aria-pressed="@(showToken ? "true" : "false")" @onclick="() => showToken = !showToken">@(showToken ? "Hide token" : "Show token")</button>
+        </div>
+    </div>
+}
+
+@foreach (var link in Links)
+{
+    <div class="gis-link" data-link="@link.Kind.ToString().ToLowerInvariant()">
+        <div class="gis-link-head"><span class="strong">@link.Name</span> <span class="gis-link-clients">@link.Clients</span></div>
+        <div class="gis-link-row">
+            <code class="gis-link-url mono" title="@link.Shown">@link.Shown</code>
+            <button type="button" class="button gis-copy" aria-label="@("Copy the " + link.Name + " link")" @onclick="() => CopyAsync(link.Url)">
+                <Icon Name="copy" Size="15" />
+                <span>Copy</span>
+            </button>
+        </div>
+        @if (link.Hint is { } hint)
+        {
+            <div class="gis-link-hint">@hint</div>
+        }
+    </div>
+}
+
+<p class="gis-note">
+    @if (tileSet.HighDpi)
+    {
+        <span>High-DPI: add <code class="mono">@@2x</code> before <code class="mono">.@tileSet.Format</code> for 512-pixel tiles.</span>
+    }
+    @if (Data.Times.Count > 0)
+    {
+        <span>Times: add <code class="mono">?t=@TimeExample</code> (UTC) for a time step; without it, the server's default step.</span>
+    }
+</p>
+
+<div class="gis-tabs" role="tablist" aria-label="Clients">
+    @foreach (var client in clients)
+    {
+        <button type="button" role="tab" class="gis-tab" aria-selected="@(client == tab ? "true" : "false")" @onclick="() => tab = client">@client</button>
+    }
+</div>
+<div class="gis-client" role="tabpanel" aria-label="@tab">
+    @switch (tab)
+    {
+        case "QGIS":
+            <ol class="gis-steps">
+                <li>In the Browser panel, right-click <b>XYZ Tiles</b> and choose <b>New Connection…</b></li>
+                <li>Paste the <b>XYZ tiles</b> link as the URL, and set the zoom levels to @tileSet.MinZoom–@tileSet.MaxZoom.</li>
+                <li>Double-click the new connection to add it to the map. For times and styles, add the <b>WMTS</b> link as a WMS/WMTS connection instead.</li>
+            </ol>
+            break;
+        case "ArcGIS":
+            <ol class="gis-steps">
+                <li>In ArcGIS Pro, choose <b>Insert › Connections › Server › New WMTS Server</b>.</li>
+                <li>Paste the <b>WMTS</b> link as the server URL.</li>
+                <li>In Catalog, under <b>Servers</b>, expand the connection and add layer <b>@(layer ?? ServeLinks.AllLayer)</b> to the map.</li>
+            </ol>
+            break;
+        default:
+            <div class="gis-snippet">
+                <pre class="mono">@Snippet(shown: true)</pre>
+                <button type="button" class="button gis-copy" aria-label="@("Copy the " + tab + " snippet")" @onclick="() => CopyAsync(Snippet(shown: false))">
+                    <Icon Name="copy" Size="15" />
+                    <span>Copy</span>
+                </button>
+            </div>
+            break;
+    }
+</div>
+
+@code {
+    private static readonly string[] clients = ["QGIS", "ArcGIS", "MapLibre", "Leaflet"];
+
+    private ServedTileSet tileSet = null!;
+    private string? layer;
+    private string? palette;
+    private bool showToken;
+    private string tab = clients[0];
+
+    /// <summary>The server's public base URL, with the token when there is one, ending in <c>/</c>.</summary>
+    [Parameter, EditorRequired]
+    public string BaseUrl { get; set; } = "";
+
+    /// <summary>The palette the map shows, the pickers' first choice.</summary>
+    [Parameter]
+    public string? Palette { get; set; }
+
+    /// <summary>The time step the map shows, the note's example.</summary>
+    [Parameter]
+    public DateTime? Time { get; set; }
+
+    /// <summary>A link was copied (<see langword="true"/>), or copying failed.</summary>
+    [Parameter]
+    public EventCallback<bool> OnCopied { get; set; }
+
+    protected override void OnInitialized()
+    {
+        tileSet = Data.TileSet;
+        palette = Palette ?? tileSet.DefaultPalette;
+    }
+
+    private IReadOnlyList<ServeLink> Links =>
+        ServeLinks.Build(BaseUrl, Data.HasToken, showToken, tileSet.Format, layer, palette, tileSet.DefaultPalette);
+
+    private string TimeExample =>
+        TileRenderSession.FormatTime(Time ?? (Data.Times.Count > 0 ? Data.Times[0] : DateTime.UnixEpoch));
+
+    /// <summary>The MapLibre or Leaflet snippet, with the links as shown or in full.</summary>
+    private string Snippet(bool shown)
+    {
+        var links = Links;
+        string Url(ServeLinkKind kind) => links.First(l => l.Kind == kind) is var link && shown ? link.Shown : link.Url;
+        var min = tileSet.MinZoom.ToString(CultureInfo.InvariantCulture);
+        var max = tileSet.MaxZoom.ToString(CultureInfo.InvariantCulture);
+        return tab == "Leaflet"
+            ? $$"""
+                L.tileLayer("{{Url(ServeLinkKind.Xyz)}}", {
+                  minZoom: {{min}}, maxZoom: {{max}},
+                  attribution: "s100 serve · Not for navigation" }).addTo(map);
+                """
+            : $$"""
+                map.addSource("s100", {
+                  type: "raster",
+                  url: "{{Url(ServeLinkKind.TileJson)}}",
+                  tileSize: 256 });
+                map.addLayer({ id: "s100", type: "raster", source: "s100" });
+                """;
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        bool copied;
+        try
+        {
+            copied = await JS.InvokeAsync<bool>("s100Map.copyText", text);
+        }
+        catch (JSException)
+        {
+            copied = false;
+        }
+
+        await OnCopied.InvokeAsync(copied);
+    }
+
+    private static string Title(string palette) =>
+        palette.Length == 0 ? palette : char.ToUpperInvariant(palette[0]) + palette[1..];
+}

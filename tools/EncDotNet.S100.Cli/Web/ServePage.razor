@@ -9,6 +9,7 @@
                  State="ServerState.Live"
                  StateDetail="@(Data.Revision is { } revision ? "revision " + revision : null)"
                  LinkCopied="linkCopied"
+                 HasToken="Data.HasToken"
                  GisOpen="activePanel == ServePanel.UseInGis"
                  OnSummary="() => OpenPanel(railItems[0].Panel)"
                  OnCopyLink="CopyLinkAsync"
@@ -50,7 +51,7 @@
                                               Page="page" PageChanged="SetPageAsync" />
                                 break;
                             case ServePanel.UseInGis:
-                                <UseInGisPanel />
+                                <UseInGisPanel BaseUrl="@BaseUrl" Palette="@palette" Time="@(times.Count > 0 ? times[timeIndex] : null)" OnCopied="ShowCopiedAsync" />
                                 break;
                         }
                     </Panel>
@@ -86,6 +87,10 @@
             {
                 <PickCard>@PickBody</PickCard>
             }
+            @if (toast is { } t)
+            {
+                <Toast Title="@t.Title" Detail="@t.Detail" IconName="@t.Icon" OnClose="() => toast = null" />
+            }
         </main>
     </div>
 </div>
@@ -112,6 +117,10 @@
     private bool noPickToast;
     private int noPickGeneration;
 
+    /// <summary>The server's public base URL, with the token when there is one (issue #1582): the request's, from ServeApp.</summary>
+    [Parameter]
+    public string BaseUrl { get; set; } = "";
+
     private ServedTileSet tileSet = null!;
     private IReadOnlyList<DateTime> times = [];
     private string summary = "";
@@ -128,6 +137,8 @@
     private bool isPhone;
     private ZoomLimit zoomLimit;
     private bool linkCopied;
+    private CopiedToast? toast;
+    private int toastGeneration;
 
     // The hash's name=value pairs, kept as read (D36): later slices add theirs.
     private readonly Dictionary<string, string> hashParameters = new(StringComparer.Ordinal);
@@ -406,12 +417,32 @@
 
     private async Task CopyLinkAsync()
     {
-        if (!shown || !await JS.InvokeAsync<bool>("s100Map.copyLink"))
+        if (!shown)
             return;
-        linkCopied = true;
+        var copied = await JS.InvokeAsync<bool>("s100Map.copyLink");
+        if (copied && !Data.HasToken)
+        {
+            linkCopied = true;
+            StateHasChanged();
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            linkCopied = false;
+            return;
+        }
+
+        // With the token, or when copying failed, say so (D27).
+        await ShowCopiedAsync(copied);
+    }
+
+    /// <summary>A link was copied, or copying failed: a toast that says so, and whether the token went with it (D27).</summary>
+    private async Task ShowCopiedAsync(bool copied)
+    {
+        noPickToast = false;
+        toast = CopiedToast.For(copied, Data.HasToken);
+        var generation = ++toastGeneration;
         StateHasChanged();
-        await Task.Delay(TimeSpan.FromSeconds(2));
-        linkCopied = false;
+        await Task.Delay(TimeSpan.FromSeconds(6));
+        if (generation == toastGeneration)
+            toast = null;
     }
 
     // Datasets (SW2, handoff D10, D15, D36).

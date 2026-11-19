@@ -85,7 +85,7 @@ internal sealed class TileServer : IAsyncDisposable
             o.MimeTypes = ["application/json", "application/xml", "text/html"];
         });
         if (viewer)
-            Web.ServeWeb.AddServices(builder, source);
+            Web.ServeWeb.AddServices(builder, source, hasToken: token is not null);
 
         var app = builder.Build();
         errors ??= Console.Error;
@@ -127,7 +127,7 @@ internal sealed class TileServer : IAsyncDisposable
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
         ServeHost.MapHealth(app, () => source.Revision);
 
-        app.MapGet("/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix, palette: null));
+        app.MapGet("/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, palette: null));
         app.MapGet("/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
         if (PmTilesArchive(source) is { } archive)
         {
@@ -140,7 +140,7 @@ internal sealed class TileServer : IAsyncDisposable
         {
             // The same tiles in each palette, under /{palette}/.
             app.MapGet("/{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
-                TryPalette(context, source, out var palette) ? ServeTileJsonAsync(context, source, prefix, palette) : Task.CompletedTask);
+                TryPalette(context, source, out var palette) ? ServeTileJsonAsync(context, source, palette) : Task.CompletedTask);
             app.MapGet("/{palette}/{z}/{x}/{tile}", context =>
                 TryPalette(context, source, out var palette) ? ServeTileAsync(context, source, palette) : Task.CompletedTask);
         }
@@ -152,12 +152,12 @@ internal sealed class TileServer : IAsyncDisposable
             // go with --manage-datasets, so they are looked up at each request.
             var layers = "/" + LayersPath + "/{layer}/";
             app.MapGet(layers + XyzDirectoryTileSink.TileJsonFileName, context =>
-                TryLayer(context, source, out var layer) ? ServeTileJsonAsync(context, layer, prefix, palette: null, LayerOf(context)) : Task.CompletedTask);
+                TryLayer(context, source, out var layer) ? ServeTileJsonAsync(context, layer, palette: null, LayerOf(context)) : Task.CompletedTask);
             app.MapGet(layers + "{z}/{x}/{tile}", context =>
                 TryLayer(context, source, out var layer) ? ServeTileAsync(context, layer, palette: null) : Task.CompletedTask);
             app.MapGet(layers + "{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
                 TryLayer(context, source, out var layer) && TryPalette(context, layer, out var palette)
-                    ? ServeTileJsonAsync(context, layer, prefix, palette, LayerOf(context))
+                    ? ServeTileJsonAsync(context, layer, palette, LayerOf(context))
                     : Task.CompletedTask);
             app.MapGet(layers + "{palette}/{z}/{x}/{tile}", context =>
                 TryLayer(context, source, out var layer) && TryPalette(context, layer, out var palette)
@@ -167,8 +167,8 @@ internal sealed class TileServer : IAsyncDisposable
 
         // OGC WMTS 1.0.0: the capabilities document, the KVP endpoint and the
         // RESTful tile URLs, with and without the Time dimension.
-        app.MapGet("/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source, prefix));
-        app.MapGet("/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source, prefix));
+        app.MapGet("/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source));
+        app.MapGet("/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source));
         app.MapGet("/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
         app.MapGet("/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
 
@@ -179,7 +179,7 @@ internal sealed class TileServer : IAsyncDisposable
         MarinerStyleRegistry.Map(app, () => source.MarinerStyles, () => source.Palettes);
 
         // OGC WMS 1.3.0: GetCapabilities, GetMap and GetFeatureInfo.
-        app.MapGet("/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context, prefix)));
+        app.MapGet("/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context.Request)));
 
         // Adding and removing datasets, with --manage-datasets (issue #1494).
         if (datasets is not null)
@@ -329,17 +329,16 @@ internal sealed class TileServer : IAsyncDisposable
 
     /// <param name="context">The request.</param>
     /// <param name="source">The tiles: of every dataset, or of <paramref name="layer"/>.</param>
-    /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
     /// <param name="palette">The palette, or <see langword="null"/> for the default.</param>
     /// <param name="layer">The layer (issue #1495), or <see langword="null"/> for every dataset.</param>
-    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette, string? layer = null)
+    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string? palette, string? layer = null)
     {
         if (!TryTime(context, out var time) || !TryScale(context, source, out bool highDpi))
             return;
 
         // The tile URL is absolute, built from the request, so it works from
         // whichever address the client reached this server on.
-        var root = RequestBaseUri(context, prefix);
+        var root = RequestBaseUri(context.Request);
         var layerPath = layer is null ? string.Empty : LayersPath + "/" + Uri.EscapeDataString(layer) + "/";
         var baseUri = new Uri(root, layerPath + (palette is null ? string.Empty : palette + "/"));
         var json = source.ToTileJson(palette, time);
@@ -497,19 +496,26 @@ internal sealed class TileServer : IAsyncDisposable
             .ExecuteAsync(context);
     }
 
-    /// <summary>The base URL a client reached this server on, ending in <c>/</c>, so documents carry URLs that work from there.</summary>
-    private static Uri RequestBaseUri(HttpContext context, string prefix) =>
-        new($"{context.Request.Scheme}://{context.Request.Host}{prefix}/");
+    /// <summary>
+    /// The base URL a client reached this server on, ending in <c>/</c> and
+    /// with the token when there is one, so documents carry URLs that work
+    /// from there. It's the request's scheme, host and path base, so it
+    /// follows whatever the host's forwarded-headers handling makes of
+    /// <c>X-Forwarded-*</c>. The TileJSON, WMTS and WMS documents and the web
+    /// page all build their links on it (issue #1582).
+    /// </summary>
+    internal static Uri RequestBaseUri(HttpRequest request) =>
+        new($"{request.Scheme}://{request.Host.ToUriComponent()}{request.PathBase.ToUriComponent()}/");
 
-    private static Task ServeWmtsCapabilitiesAsync(HttpContext context, ITileSource source, string prefix)
+    private static Task ServeWmtsCapabilitiesAsync(HttpContext context, ITileSource source)
     {
         context.Response.ContentType = "application/xml; charset=utf-8";
         context.Response.Headers.CacheControl = "no-cache";
-        return context.Response.WriteAsync(WmtsService.BuildCapabilities(source, RequestBaseUri(context, prefix)), context.RequestAborted);
+        return context.Response.WriteAsync(WmtsService.BuildCapabilities(source, RequestBaseUri(context.Request)), context.RequestAborted);
     }
 
     /// <summary>The WMTS KVP endpoint: <c>REQUEST=GetCapabilities</c> or <c>REQUEST=GetTile</c>. Parameter names are case-insensitive.</summary>
-    private static Task ServeWmtsKvpAsync(HttpContext context, ITileSource source, string prefix)
+    private static Task ServeWmtsKvpAsync(HttpContext context, ITileSource source)
     {
         var query = context.Request.Query;
         string? Get(string name) => query.TryGetValue(name, out var values) ? values.ToString() : null;
@@ -522,7 +528,7 @@ internal sealed class TileServer : IAsyncDisposable
 
         var request = Get("REQUEST");
         if (string.Equals(request, "GetCapabilities", StringComparison.OrdinalIgnoreCase))
-            return ServeWmtsCapabilitiesAsync(context, source, prefix);
+            return ServeWmtsCapabilitiesAsync(context, source);
         if (!string.Equals(request, "GetTile", StringComparison.OrdinalIgnoreCase))
         {
             return string.IsNullOrEmpty(request)

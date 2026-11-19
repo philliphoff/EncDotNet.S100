@@ -16,7 +16,8 @@
 </head>
 <body>
     @* One page, so no Router (its generated code isn't trim-safe): the endpoint renders this document directly. *@
-    <ServePage @rendermode="InteractiveServer" />
+    @* The public base URL is the request's (issue #1582): the circuit has no request, so it's handed over. *@
+    <ServePage @rendermode="InteractiveServer" BaseUrl="@BaseUrl" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>
@@ -27,6 +28,8 @@
 
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
+
+    private string BaseUrl => HttpContext is { } context ? Data.PublicBaseUri(context.Request).AbsoluteUri : "";
 
     private string BaseHref => (HttpContext?.Request.PathBase.Value ?? "") + "/";
 }
