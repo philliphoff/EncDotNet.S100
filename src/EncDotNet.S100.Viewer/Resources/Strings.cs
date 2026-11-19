@@ -980,6 +980,8 @@ internal static partial class Strings
     public static string Settings_McpPortTooltip => Get(nameof(Settings_McpPortTooltip));
     public static string Settings_McpPort_ResetToAuto => Get(nameof(Settings_McpPort_ResetToAuto));
     public static string Settings_McpPort_ResetToAutoTooltip => Get(nameof(Settings_McpPort_ResetToAutoTooltip));
+    public static string Settings_McpToolsets => Get(nameof(Settings_McpToolsets));
+    public static string Settings_McpToolsets_Help => Get(nameof(Settings_McpToolsets_Help));
     public static string Toast_McpPortConflictTitle => Get(nameof(Toast_McpPortConflictTitle));
     public static string Toast_McpPortConflictBody => Get(nameof(Toast_McpPortConflictBody));
     public static string Toast_McpPortFindAnother => Get(nameof(Toast_McpPortFindAnother));

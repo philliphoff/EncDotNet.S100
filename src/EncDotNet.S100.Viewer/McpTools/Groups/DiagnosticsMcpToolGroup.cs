@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -35,7 +36,13 @@ internal sealed class DiagnosticsMcpToolGroup : IViewerMcpToolGroup
         _logBuffer = logBuffer;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Diagnostics;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         yield return AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivity));
         yield return GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivity));

@@ -1187,6 +1187,7 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
 
         _mcpEnabled = settings.McpEnabled;
         _mcpPort = settings.McpPort;
+        _mcpToolsets = settings.McpToolsets is { } toolsets ? [.. toolsets] : null;
 
         _examinerLinksEnabled = settings.S100ExaminerLinksEnabled;
         _examinerBaseUrl = settings.S100ExaminerBaseUrl ?? ViewerSettings.DefaultS100ExaminerBaseUrl;
@@ -1247,6 +1248,29 @@ internal sealed class ViewerSettingsService : ObservableObject, Depth.IWaterLeve
                 _settings.Save();
                 McpSettingsChanged?.Invoke();
             }
+        }
+    }
+
+    private IReadOnlyList<string>? _mcpToolsets;
+    /// <summary>
+    /// The MCP toolsets the server exposes (#1608); <see langword="null"/> for
+    /// every toolset. Persisted to <see cref="ViewerSettings.McpToolsets"/>;
+    /// a change restarts a running server.
+    /// </summary>
+    public IReadOnlyList<string>? McpToolsets
+    {
+        get => _mcpToolsets;
+        set
+        {
+            if (_mcpToolsets is null && value is null)
+                return;
+            if (_mcpToolsets is not null && value is not null && _mcpToolsets.SequenceEqual(value))
+                return;
+            _mcpToolsets = value is null ? null : [.. value];
+            OnPropertyChanged();
+            _settings.McpToolsets = value is null ? null : [.. value];
+            _settings.Save();
+            McpSettingsChanged?.Invoke();
         }
     }
 

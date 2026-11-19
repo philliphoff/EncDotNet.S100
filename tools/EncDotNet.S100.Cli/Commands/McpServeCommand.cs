@@ -150,6 +150,14 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [Description("HTTP only: also serve the tools that open and close datasets by path and change the Library (add, refresh and remove sources, download and open items, set a SECOM identity). Over stdio they're always served.")]
         public bool AllowChanges { get; init; }
 
+        [CommandOption("--toolsets <NAMES>")]
+        [Description("Serve only these toolsets, comma-separated, so a client's context holds only the tools its task needs: query, datasets, presentation, routes, tides, library (passage, warnings, display, map, ui and diagnostics are SoundCharts' own), or a profile: route-planning, visual-check. Default: all.")]
+        public string? Toolsets { get; init; }
+
+        /// <summary>The toolsets <see cref="Toolsets"/> selects; <c>null</c> for all. Valid after <see cref="Validate"/>.</summary>
+        public IReadOnlyList<string>? SelectedToolsets =>
+            McpToolsets.TryParse(Toolsets ?? McpToolsets.AllName, out var toolsets, out _) ? toolsets : null;
+
         [CommandOption(LuaEngineOption.Template)]
         [Description(LuaEngineOption.Description)]
         [DefaultValue(LuaEngineOption.Default)]
@@ -189,6 +197,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 return ValidationResult.Error("--current-station-reach applies only with --tide-predictions.");
             if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
                 return luaEngineError;
+            if (Toolsets is not null && !McpToolsets.TryParse(Toolsets, out _, out var toolsetError))
+                return ValidationResult.Error($"--toolsets: {toolsetError}");
 
             if (!IsHttp && !string.Equals(Transport, "stdio", StringComparison.OrdinalIgnoreCase))
                 return ValidationResult.Error("--transport must be stdio or http.");
@@ -337,6 +347,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             var changes = allowChanges ? "changes allowed" : "no dataset or Library changes; --allow-changes allows them";
             Console.Error.WriteLine(
                 $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) and a Library of {collections} collection(s) {mode} ({changes}). Ctrl-C to stop.");
+            if (settings.SelectedToolsets is { } selectedToolsets)
+                Console.Error.WriteLine($"Toolsets: {string.Join(", ", selectedToolsets)}.");
             Console.Error.WriteLine(temporaryDataDir is null
                 ? $"Library data: {root}"
                 : $"Library data: {root} (temporary; pass --data-dir to keep it)");
@@ -367,7 +379,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             if (settings.IsHttp)
                 return await ServeHttpAsync(settings, catalog, additionalTools, routeCheckSources, cancellationToken).ConfigureAwait(false);
 
-            await S100McpStdioHost.RunAsync(catalog, additionalTools, routeCheckSources, cancellationToken);
+            await S100McpStdioHost.RunAsync(catalog, additionalTools, routeCheckSources, settings.SelectedToolsets, cancellationToken);
             return 0;
         }
         catch (Exception ex)
@@ -398,7 +410,9 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
     {
         var address = System.Net.IPAddress.Parse(settings.HttpHost);
         var token = ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
-        var tools = S100McpTools.Create(catalog, routeCheckSources: routeCheckSources).Concat(additionalTools).ToList();
+        var tools = McpToolsets.Select(
+            S100McpTools.Create(catalog, routeCheckSources: routeCheckSources).Concat(additionalTools),
+            settings.SelectedToolsets);
 
         await using var server = await McpHttpServer.StartAsync(tools, address, settings.HttpPort, token, cancellationToken).ConfigureAwait(false);
         var shownAddresses = ServeHost.DisplayAddresses(address);

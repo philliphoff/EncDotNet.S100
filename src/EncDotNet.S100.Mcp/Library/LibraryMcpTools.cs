@@ -43,6 +43,6 @@ public static class LibraryMcpTools
                 tools.Add(LibraryMcpAdapters.Create(new SetSecomIdentityTool(secomTrust, TimeProvider.System, secomIdentities)));
         }
 
-        return tools;
+        return McpToolsets.Assign(McpToolsets.Library, tools);
     }
 }

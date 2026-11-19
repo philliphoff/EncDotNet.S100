@@ -2710,6 +2710,12 @@
   <data name="Settings_McpEnabledTooltip" xml:space="preserve">
     <value>Host a Streamable HTTP MCP server on the loopback address so external agents can query loaded datasets. Off by default.</value>
   </data>
+  <data name="Settings_McpToolsets" xml:space="preserve">
+    <value>Toolsets</value>
+  </data>
+  <data name="Settings_McpToolsets_Help" xml:space="preserve">
+    <value>The groups of tools agents see. Every tool's description takes room in an agent's context, so turn off what its tasks don't need. A change restarts the server.</value>
+  </data>
   <data name="Settings_McpPort" xml:space="preserve">
     <value>Port</value>
   </data>

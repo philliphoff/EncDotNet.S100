@@ -116,7 +116,7 @@ public sealed class S100McpServer : IAsyncDisposable
         builder.Services
             .AddMcpServer()
             .WithHttpTransport()
-            .WithTools(tools);
+            .WithTools(McpToolsets.Select(tools, _options.Toolsets));
 
         // Surface connection lifecycle to consumers (status bar).
         builder.Services.AddSingleton<IConnectionCountReporter>(_ => new ConnectionCountReporter(this));

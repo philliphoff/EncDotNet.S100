@@ -56,20 +56,20 @@ internal static class S100McpServerToolFactory
         ListTimeStepsTool listTimeSteps,
         CheckRouteTool checkRoute)
     {
-        yield return CreateListDatasetsTool(listDatasets);
-        yield return CreateDescribeFeatureTool(describeFeature);
-        yield return CreateDescribeFeatureTypeTool(describeFeatureType);
-        yield return CreateSampleCoverageTool(sampleCoverage);
-        yield return CreateFindAtTool(findAt);
-        yield return CreateIdentifyFeaturesTool(identifyFeatures);
-        yield return CreateNearestFeaturesTool(nearestFeatures);
-        yield return CreateQueryFeaturesTool(queryFeatures);
-        yield return CreateCountFeaturesTool(countFeatures);
-        yield return CreateSearchFeaturesTool(searchFeatures);
-        yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
-        yield return CreateListSpecsTool(listSpecs);
-        yield return CreateListTimeStepsTool(listTimeSteps);
-        yield return CreateCheckRouteTool(checkRoute);
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateListDatasetsTool(listDatasets));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTool(describeFeature));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTypeTool(describeFeatureType));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateSampleCoverageTool(sampleCoverage));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateFindAtTool(findAt));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateIdentifyFeaturesTool(identifyFeatures));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateNearestFeaturesTool(nearestFeatures));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateQueryFeaturesTool(queryFeatures));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateCountFeaturesTool(countFeatures));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateSearchFeaturesTool(searchFeatures));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateSampleCoverageAlongTool(sampleCoverageAlong));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateListSpecsTool(listSpecs));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateListTimeStepsTool(listTimeSteps));
+        yield return McpToolsets.Assign(McpToolsets.Routes, CreateCheckRouteTool(checkRoute));
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)

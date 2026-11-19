@@ -75,4 +75,12 @@ public sealed class S100McpServerOptions
     /// no map, and the tool then identifies every drawable feature.
     /// </summary>
     public EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState? MapDrawState { get; init; }
+
+    /// <summary>
+    /// The toolsets to serve (<see cref="McpToolsets"/>), or
+    /// <see langword="null"/> for every toolset. Every tool, built-in or
+    /// additional, must declare its toolset with
+    /// <see cref="McpToolsets.Assign(string, IEnumerable{McpServerTool})"/>.
+    /// </summary>
+    public IReadOnlyCollection<string>? Toolsets { get; init; }
 }

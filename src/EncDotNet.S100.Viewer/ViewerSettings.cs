@@ -56,6 +56,14 @@ internal sealed partial class ViewerSettings
     [JsonIgnore]
     public bool McpTestHooks { get; set; }
 
+    /// <summary>
+    /// The MCP toolsets to serve for this run only (set from
+    /// <c>--mcp-toolsets</c>), overriding <see cref="McpToolsets"/>;
+    /// <see langword="null"/> to use the persisted choice. Never persisted.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string>? McpToolsetsOverride { get; set; }
+
     /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
     public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -668,6 +676,24 @@ internal sealed partial class ViewerSettings
     /// pin to a specific loopback variant.
     /// </summary>
     public string McpBindAddress { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// The MCP toolsets the server exposes (#1608), by name
+    /// (<see cref="EncDotNet.S100.Mcp.McpToolsets"/>); <see langword="null"/>
+    /// for every toolset. Unknown names are ignored.
+    /// </summary>
+    public List<string>? McpToolsets { get; set; }
+
+    /// <summary>
+    /// The MCP toolsets to serve: <see cref="McpToolsetsOverride"/>, else
+    /// <see cref="McpToolsets"/> without unknown names; <see langword="null"/>
+    /// for every toolset.
+    /// </summary>
+    public IReadOnlyList<string>? ResolveMcpToolsets() =>
+        McpToolsetsOverride
+        ?? (McpToolsets is { } names
+            ? [.. EncDotNet.S100.Mcp.McpToolsets.All.Select(t => t.Name).Where(names.Contains)]
+            : null);
 
     /// <summary>
     /// Whether "open in S-100 Feature Catalogue eXaminer" deep-links are

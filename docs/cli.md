@@ -2118,6 +2118,7 @@ lists them all.
 | `--source <source>` | none | Adds a live data source at startup, as `add_data_source` does. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options, such as `nmea.weather:Input=udp:10110`; keys come from environment variables. An unknown source or option exits with code 2. It runs once `set_viewport` narrows the view to its range. See [`sources`](#sources). |
 | `--live-feeds` | off | With `--collections` on SoundCharts' `collections.json`, also adds the live feeds subscribed to in its Library, such as NDBC observations or AIS targets, with their saved settings; keys come from environment variables. They run once `set_viewport` narrows the view to their range. |
 | `--allow-changes` | off | HTTP only. Also serves the tools that open datasets by path and change the Library. |
+| `--toolsets <names>` | all | Serves only these toolsets, comma-separated: `query`, `datasets`, `presentation`, `routes`, `tides` and `library`, or a profile such as `route-planning`. See [Choose toolsets](mcp-server.md#choose-toolsets). An unknown name exits with code 2. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
@@ -2126,6 +2127,7 @@ s100 mcp serve dataset.h5
 s100 mcp serve --layer enc.000 --layer bathy.h5
 s100 mcp serve --from exchange-set.zip --only S101,S102
 s100 mcp serve --layer enc.000 --source ndbc.realtime
+s100 mcp serve charts/ --toolsets route-planning
 ```
 
 Standard output carries the MCP protocol. Startup messages, load warnings and

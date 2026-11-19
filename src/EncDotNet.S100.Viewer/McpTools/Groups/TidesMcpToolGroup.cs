@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Tides;
 using EncDotNet.S100.Mcp.Tools.Tides;
 using ModelContextProtocol.Server;
@@ -28,5 +29,11 @@ internal sealed class TidesMcpToolGroup : IViewerMcpToolGroup
             $"SoundCharts reads the tide station list from {path}. Download NOAA's stations there with 's100 tides update --catalogue \"{path}\"' (about 10 minutes).");
     }
 
-    public IEnumerable<McpServerTool> CreateTools() => TideMcpTools.Create(_catalogue, _time);
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Tides;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools() => TideMcpTools.Create(_catalogue, _time);
 }

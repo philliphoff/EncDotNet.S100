@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -38,7 +39,13 @@ internal sealed class MapViewMcpToolGroup : IViewerMcpToolGroup
         _settle = settle;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Map;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         // set_viewport marks the settle trigger, so await_settled measures from it.
         yield return SetViewportMcpAdapter.Create(new SetViewportTool(_viewport, _settle.MarkTrigger));

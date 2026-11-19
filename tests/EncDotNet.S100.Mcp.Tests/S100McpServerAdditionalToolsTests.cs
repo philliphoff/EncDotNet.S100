@@ -10,9 +10,9 @@ public class S100McpServerAdditionalToolsTests
     public async Task AdditionalTools_are_advertised_alongside_built_ins()
     {
         var catalog = McpTestHelpers.NewCatalog();
-        var extra = McpServerTool.Create(
+        var extra = McpToolsets.Assign(McpToolsets.Query, McpServerTool.Create(
             ([Description("Anything")] string echo) => echo,
-            new McpServerToolCreateOptions { Name = "extra_echo", Description = "test-only tool" });
+            new McpServerToolCreateOptions { Name = "extra_echo", Description = "test-only tool" }));
 
         await using var server = new S100McpServer(catalog, new S100McpServerOptions
         {

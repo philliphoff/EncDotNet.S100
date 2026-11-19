@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -16,6 +17,18 @@ internal sealed class IntegrationsSettingsPageViewModel : SettingsPageViewModel
         ResetMcpPortCommand = new RelayCommand(() => Settings.McpPort = 0);
         ResetExaminerBaseUrlCommand = new RelayCommand(
             () => Settings.ExaminerBaseUrl = ViewerSettings.DefaultS100ExaminerBaseUrl);
+        Toolsets = [.. McpToolsets.All.Select(info => new McpToolsetOptionViewModel(info, IsServed(info.Name), OnToolsetToggled))];
+    }
+
+    /// <summary>One switch per MCP toolset (#1608): on when the server exposes its tools.</summary>
+    public IReadOnlyList<McpToolsetOptionViewModel> Toolsets { get; }
+
+    private bool IsServed(string toolset) => Settings.McpToolsets is not { } served || served.Contains(toolset);
+
+    private void OnToolsetToggled()
+    {
+        var on = Toolsets.Where(o => o.IsEnabled).Select(o => o.Name).ToList();
+        Settings.McpToolsets = on.Count == Toolsets.Count ? null : on;
     }
 
     /// <inheritdoc />

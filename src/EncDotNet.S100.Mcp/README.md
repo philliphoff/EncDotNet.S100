@@ -67,6 +67,7 @@ A host with its own live set of datasets, such as a viewer, implements
 | `IdleTimeout` | 10 minutes | How long an idle session is kept. |
 | `AdditionalTools` | `null` | Host tools to serve alongside the built-in tools. See [Add host tools](#add-host-tools). |
 | `PassageRoutes` | `null` | The host's routes, so `check_route` can check a route as well as a polyline. |
+| `Toolsets` | `null` (all) | The toolsets to serve. See [Toolsets](#toolsets). |
 
 ### Server members
 
@@ -99,7 +100,7 @@ error. Don't write to `Console.Out` from your own code while it runs.
 ## Built-in tools
 
 `S100McpTools.Create(catalog)` returns the built-in tools, which
-`S100McpServer` and `S100McpStdioHost` always serve. They only read the catalog:
+`S100McpServer` and `S100McpStdioHost` serve unless the selected toolsets leave them out. They only read the catalog:
 
 `list_datasets`, `describe_feature`, `describe_feature_type`,
 `sample_coverage`, `find_at`, `identify_features`, `nearest_features`,
@@ -110,11 +111,34 @@ error. Don't write to `Console.Out` from your own code while it runs.
 [Query tools](../../docs/mcp-server.md#query-tools) in the MCP server guide
 describes each one.
 
+## Toolsets
+
+Every tool belongs to one toolset, so a host can serve only the tools a task
+needs: each tool's description takes room in an agent's context. The names are
+constants on `McpToolsets`, such as `McpToolsets.Query` and `McpToolsets.Routes`;
+`McpToolsets.All` lists them with a summary, and `McpToolsets.Profiles` names
+sets of them, such as `route-planning`.
+
+- Declare a tool's toolset where you create it:
+  `McpToolsets.Assign(McpToolsets.Routes, tool)`, or for a list,
+  `McpToolsets.Assign(McpToolsets.Routes, tools)`. The built-in, session,
+  Library and tide tools already declare theirs. The toolset is kept in the
+  tool's in-process metadata, so it adds nothing to `tools/list`.
+- Select toolsets with `S100McpServerOptions.Toolsets`, or the `toolsets`
+  argument of `S100McpStdioHost.RunAsync`; `null` serves them all.
+  `McpToolsets.TryParse` reads a comma-separated list of names and profiles.
+- `McpToolsets.Select(tools, toolsets)` does the selecting, and throws if a tool
+  declares no toolset. Call it yourself when you host the tools another way.
+
+[Choose toolsets](../../docs/mcp-server.md#choose-toolsets) lists the toolsets
+and their sizes.
+
 ## Add host tools
 
 Pass extra `McpServerTool` instances in `S100McpServerOptions.AdditionalTools`,
 or as the `additionalTools` argument of `S100McpStdioHost.RunAsync`. Their names
-must not match a built-in tool.
+must not match a built-in tool, and each must declare its toolset (see
+[Toolsets](#toolsets)), or the server refuses to start.
 
 `S100MutableTools.Create` (namespace `EncDotNet.S100.Mcp.MutableTools`) builds
 the tools that change a session. Each group of tools needs a capability from

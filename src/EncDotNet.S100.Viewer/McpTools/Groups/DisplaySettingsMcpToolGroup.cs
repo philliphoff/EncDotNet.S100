@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -28,7 +29,13 @@ internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
         _depthBasis = depthBasis;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Display;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var weatherDisplay = new WeatherDisplayTools(_ecdisDisplay, new DispatcherRouteEditInvoker());
         yield return WeatherDisplayMcpAdapters.CreateGet(weatherDisplay);
@@ -45,8 +52,8 @@ internal sealed class DisplaySettingsMcpToolGroup : IViewerMcpToolGroup
         }
 
         var routeWeather = new RouteWeatherSettingsTools(_settings, new DispatcherRouteEditInvoker());
-        yield return RouteWeatherSettingsMcpAdapters.CreateGet(routeWeather);
-        yield return RouteWeatherSettingsMcpAdapters.CreateSet(routeWeather);
+        yield return McpToolsets.Assign(McpToolsets.Passage, RouteWeatherSettingsMcpAdapters.CreateGet(routeWeather));
+        yield return McpToolsets.Assign(McpToolsets.Passage, RouteWeatherSettingsMcpAdapters.CreateSet(routeWeather));
 
         yield return DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations, UiThread.InvokeAsync));
         yield return DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations, UiThread.InvokeAsync));

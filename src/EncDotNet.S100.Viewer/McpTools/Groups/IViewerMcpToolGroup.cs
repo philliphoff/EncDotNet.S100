@@ -9,6 +9,12 @@ namespace EncDotNet.S100.Viewer.McpTools.Groups;
 /// </summary>
 internal interface IViewerMcpToolGroup
 {
-    /// <summary>Creates this group's tools.</summary>
+    /// <summary>
+    /// The MCP toolset (<see cref="EncDotNet.S100.Mcp.McpToolsets"/>) this
+    /// group's tools belong to, unless a tool declares another itself.
+    /// </summary>
+    string Toolset { get; }
+
+    /// <summary>Creates this group's tools, each declaring its toolset.</summary>
     IEnumerable<McpServerTool> CreateTools();
 }

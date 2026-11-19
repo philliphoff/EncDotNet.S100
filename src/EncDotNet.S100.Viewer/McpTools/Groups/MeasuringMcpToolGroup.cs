@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -28,7 +29,13 @@ internal sealed class MeasuringMcpToolGroup : IViewerMcpToolGroup
         _settings = settings;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Map;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var measureInvoker = new DispatcherRouteEditInvoker();
         yield return MeasureMcpAdapters.Create(new GetMeasureTool(_measure, _measureCard, measureInvoker));

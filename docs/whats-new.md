@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **MCP toolsets.** Every MCP tool now belongs to a toolset, such as `query`,
+  `routes`, `tides` or `library`, and a server can offer only some of them, so
+  an agent's context holds only the tools its task needs.
+  `s100 mcp serve --toolsets` and SoundCharts' `--mcp-toolsets` take toolset
+  names or a profile (`route-planning`, `visual-check`), and SoundCharts has a
+  switch per toolset under **Settings > Integrations**. Hosts that compose
+  their own tools declare each one's toolset with `McpToolsets.Assign`;
+  `S100McpServerOptions.Toolsets` selects them. See
+  [Choose toolsets](mcp-server.md#choose-toolsets).
+
 - **`check_route` takes grouped arguments.** Its 25 flat arguments are now
   nine: `routeId`, `polyline`, `greatCircle`, `departure`, and the groups
   `vessel` (draft, squat, required UKC, safety contour and depth, speed),
