@@ -154,6 +154,34 @@ public static class SourceOptionsForm
         return options;
     }
 
+    /// <summary>
+    /// The first required option of <paramref name="registration"/> that
+    /// <paramref name="values"/> leaves unset, or <see langword="null"/> when
+    /// the source can start. A secret counts as set when its environment
+    /// variable is (D7).
+    /// </summary>
+    /// <param name="registration">The source.</param>
+    /// <param name="values">Its option values; <see langword="null"/> for its defaults.</param>
+    /// <param name="environment">Reads an environment variable; <see langword="null"/> for the process's.</param>
+    public static SourceOptionField? MissingRequired(
+        SourceRegistration registration,
+        IReadOnlyDictionary<string, string>? values,
+        Func<string, string?>? environment = null)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        environment ??= Environment.GetEnvironmentVariable;
+        values ??= Read(registration, null);
+        foreach (var field in Fields(registration))
+        {
+            if (!field.Required || (values.TryGetValue(field.Name, out var text) && !string.IsNullOrWhiteSpace(text)))
+                continue;
+            if (field.EnvironmentVariable is { } variable && !string.IsNullOrWhiteSpace(environment(variable)))
+                continue;
+            return field;
+        }
+        return null;
+    }
+
     /// <summary>Whether <paramref name="text"/> is a valid value of <paramref name="field"/>; empty is valid unless it's required.</summary>
     /// <param name="field">The option.</param>
     /// <param name="text">Its text.</param>

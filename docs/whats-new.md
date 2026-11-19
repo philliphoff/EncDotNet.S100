@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **AIS targets are a library source.** `S100Sources.AisStream`
+  (`ais.aisstream`, with `AisFeedOptions`) joins NDBC observations and NMEA
+  weather in `SourceRegistry.CreateDefault()`, so any host can add it.
+  `SourceRegistry.AddDataSource(registration, replace: true)` lets a host
+  put its own wrapper in place of a built-in source, and
+  `SourceOptionsForm.MissingRequired` says which required option, such as a
+  key, is unset.
 - **AIS targets are a live feed.** Add **AIS targets** with **Add a live
   feed** in the Datasets panel instead of turning on a Settings switch, and
   without restarting; if the switch was on, they're added for you. Selecting a target shows a

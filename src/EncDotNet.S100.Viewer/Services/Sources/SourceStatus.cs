@@ -62,21 +62,8 @@ internal sealed record SourceStatus(SourceStatusKind Kind, string Text, string? 
     public static SourceOptionField? MissingOption(
         SourceRegistration registration,
         IReadOnlyDictionary<string, string>? values,
-        Func<string, string?> environment)
-    {
-        ArgumentNullException.ThrowIfNull(registration);
-        ArgumentNullException.ThrowIfNull(environment);
-        values ??= SourceOptionsForm.Read(registration, null);
-        foreach (var field in SourceOptionsForm.Fields(registration))
-        {
-            if (!field.Required || (values.TryGetValue(field.Name, out var text) && !string.IsNullOrWhiteSpace(text)))
-                continue;
-            if (field.EnvironmentVariable is { } variable && !string.IsNullOrWhiteSpace(environment(variable)))
-                continue;
-            return field;
-        }
-        return null;
-    }
+        Func<string, string?> environment) =>
+        SourceOptionsForm.MissingRequired(registration, values, environment);
 
     /// <summary>
     /// The status of a loaded source.

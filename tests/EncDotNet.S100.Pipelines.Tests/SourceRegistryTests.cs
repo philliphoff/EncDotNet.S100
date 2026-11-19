@@ -19,11 +19,52 @@ public sealed class SourceRegistryTests
     };
 
     [Fact]
+    public void A_host_can_add_a_source_and_replace_a_built_in_one_in_place()
+    {
+        var registry = SourceRegistry.CreateDefault()
+            .AddDataSource(Registration("acme.ice-feed"));
+        var wrapped = S100Sources.AisStream with { DisplayName = "Vessels (wrapped)" };
+
+        registry.AddDataSource(wrapped, replace: true);
+
+        Assert.Equal(
+            [S100Sources.NdbcObservationsId, S100Sources.NmeaWeatherId, S100Sources.AisStreamId, "acme.ice-feed"],
+            registry.Registrations.Select(r => r.Id));
+        Assert.Same(wrapped, registry.Resolve(S100Sources.AisStreamId));
+        Assert.Throws<ArgumentException>(() => registry.AddDataSource(Registration("acme.ice-feed")));
+        Assert.Same(registry, registry.AddDataSource(Registration("acme.new"), replace: true));
+        Assert.Equal("acme.new", registry.Registrations[^1].Id);
+    }
+
+    [Fact]
+    public void AIS_needs_a_key_and_runs_where_its_options_say()
+    {
+        var ais = S100Sources.AisStream;
+
+        Assert.Equal(SpecName.Ais, ais.Spec);
+        Assert.Equal(SourceGroup.Vessels, ais.Group);
+        Assert.Equal(50, ais.ActivationFor(null).MaxViewportSpanDegrees);
+        Assert.Same(SourceActivation.Always, ais.ActivationFor(new AisFeedOptions { ActivationSpanDegrees = 0 }));
+        var key = Assert.Single(SourceOptionsForm.Fields(ais), f => f.Kind == SourceOptionKind.Secret);
+        Assert.Equal(AisFeedOptions.KeyEnvironmentVariable, key.EnvironmentVariable);
+
+        Assert.Equal(key.Name, SourceOptionsForm.MissingRequired(ais, null, _ => null)?.Name);
+        Assert.Null(SourceOptionsForm.MissingRequired(ais, null, _ => "from-env"));
+        Assert.Null(SourceOptionsForm.MissingRequired(ais, new Dictionary<string, string> { ["ApiKey"] = "k" }, _ => null));
+
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AisFeedOptions.KeyEnvironmentVariable)))
+            return; // A real key on this machine would start a subscription.
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            ais.Create(new SourceCreationContext { Options = new AisFeedOptions() }));
+        Assert.Contains(AisFeedOptions.KeyEnvironmentVariable, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_default_registry_has_the_built_in_sources()
     {
         var ids = SourceRegistry.Default.Registrations.Select(r => r.Id).ToList();
 
-        Assert.Equal([S100Sources.NdbcObservationsId, S100Sources.NmeaWeatherId], ids);
+        Assert.Equal([S100Sources.NdbcObservationsId, S100Sources.NmeaWeatherId, S100Sources.AisStreamId], ids);
         Assert.All(SourceRegistry.Default.Registrations, r => Assert.False(r.IsS100));
     }
 

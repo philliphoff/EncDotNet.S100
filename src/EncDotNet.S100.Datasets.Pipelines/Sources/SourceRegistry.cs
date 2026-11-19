@@ -26,6 +26,7 @@ public sealed class SourceRegistry
         var registry = new SourceRegistry();
         registry.Register(S100Sources.NdbcObservations);
         registry.Register(S100Sources.NmeaWeather);
+        registry.Register(S100Sources.AisStream);
         return registry;
     }
 
@@ -35,8 +36,34 @@ public sealed class SourceRegistry
     /// <summary>Registers a source.</summary>
     /// <param name="registration">The source.</param>
     /// <exception cref="ArgumentException">The source's id is empty or already registered.</exception>
-    public void Register(SourceRegistration registration)
+    public void Register(SourceRegistration registration) => Register(registration, replace: false);
+
+    /// <summary>
+    /// Registers <paramref name="registration"/>, or with
+    /// <paramref name="replace"/> puts it in place of the one with its id,
+    /// keeping its position, as a host does to wrap a built-in source.
+    /// </summary>
+    /// <param name="registration">The source.</param>
+    /// <param name="replace">Whether to replace a source with the same id instead of refusing it.</param>
+    /// <exception cref="ArgumentException">A source with the same id is registered and <paramref name="replace"/> is <see langword="false"/>.</exception>
+    public void Register(SourceRegistration registration, bool replace)
     {
+        if (replace)
+        {
+            ArgumentNullException.ThrowIfNull(registration);
+            ArgumentException.ThrowIfNullOrWhiteSpace(registration.Id);
+            ArgumentException.ThrowIfNullOrWhiteSpace(registration.Spec);
+            lock (_gate)
+            {
+                if (_byId.TryGetValue(registration.Id, out var existing))
+                {
+                    _byId[registration.Id] = registration;
+                    _snapshot = [.. _snapshot.Select(r => ReferenceEquals(r, existing) ? registration : r)];
+                    return;
+                }
+            }
+        }
+
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentException.ThrowIfNullOrWhiteSpace(registration.Id);
         ArgumentException.ThrowIfNullOrWhiteSpace(registration.Spec);
