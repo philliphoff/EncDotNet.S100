@@ -1,5 +1,10 @@
-@* The Datasets panel's slot. SW2 (#1578) fills it with rows, groups, search, filters and details; until then, a plain list. *@
+@* The Datasets panel (issue #1578): what's served, in rows like the Library's (handoff D7–D11, D15, D33).
+   The list groups by layer, product and purpose; a search or a filter makes it flat with a count. A row opens
+   its details. The page (ServePage) owns the selection, the outlines and the hash; this tells it what changed.
+   Hovering a row outlines it through serve-map.js, which watches [data-dataset-row] itself (no round trip). *@
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 @inject IServePageData Data
+@inject NavigationManager Navigation
 
 @if (!Data.HasDatasets)
 {
@@ -9,21 +14,398 @@ else if (datasets.Count == 0)
 {
     <p class="panel-note">No datasets are being served.</p>
 }
+else if (Selected is { } id && datasets.FirstOrDefault(d => d.Id == id) is { } selected)
+{
+    @Details(selected)
+}
 else
 {
-    <ul class="plain-list">
-        @foreach (var dataset in datasets)
+    <div class="dataset-tools">
+        <label class="search-box">
+            <Icon Name="search" />
+            <input type="search" placeholder="Search datasets" aria-label="Search datasets by id or file name"
+                   value="@search" @oninput="OnSearch" autocomplete="off" spellcheck="false" />
+        </label>
+        @if (products.Count > 1 || purposes.Count > 0 || problemCount > 0)
         {
-            <li>
-                <span class="tag">@dataset.Product</span>
-                <span class="mono strong">@dataset.Id</span>
-            </li>
+            <div class="filter-chips" role="group" aria-label="Filters">
+                @if (products.Count > 1)
+                {
+                    @Chip("product", "Product", products, productFilter)
+                }
+                @if (purposes.Count > 0)
+                {
+                    @Chip("purpose", "Purpose", purposes, purposeFilter)
+                }
+                <button type="button" class="chip" aria-pressed="@(problemsOnly ? "true" : "false")" disabled="@(problemCount == 0)"
+                        title="@(problemCount == 0 ? "No dataset has a problem" : "Only the datasets with problems")" @onclick="ToggleProblems">
+                    Problems@(problemCount > 0 ? " · " + ServeDatasetInfo.Number(problemCount) : "")
+                </button>
+            </div>
         }
-    </ul>
+        @if (filter.IsActive)
+        {
+            <p class="list-summary" role="status">
+                <span class="strong">@ServeDatasetInfo.Number(items.Count)</span> of @ServeDatasetInfo.Number(datasets.Count)
+                @if (items.Count == 0)
+                {
+                    <span> · nothing matches</span>
+                }
+                <button type="button" class="link-button" @onclick="ClearFilters">Clear</button>
+            </p>
+        }
+        else if (Data.Layers.Count == 1)
+        {
+            <p class="list-summary">@DatasetCount(datasets.Count) · layer <span class="strong">@Data.Layers[0]</span></p>
+        }
+    </div>
+
+    <div class="dataset-list" role="list" aria-label="Datasets">
+        @if (items.Count > ServeDatasetList.VirtualizeAbove)
+        {
+            <Virtualize Items="items" ItemSize="52" OverscanCount="12" Context="item">
+                @Item(item)
+            </Virtualize>
+        }
+        else
+        {
+            @foreach (var item in items)
+            {
+                @Item(item)
+            }
+        }
+    </div>
 }
 
 @code {
-    private IReadOnlyList<ServedDataset> datasets = [];
+    /// <summary>The selected dataset's id, whose details show; <see langword="null"/> for the list.</summary>
+    [Parameter]
+    public string? Selected { get; set; }
 
-    protected override void OnInitialized() => datasets = Data.Datasets;
+    /// <summary>A row was chosen (its id), or Back left the details (<see langword="null"/>).</summary>
+    [Parameter]
+    public EventCallback<string?> OnSelect { get; set; }
+
+    /// <summary>The search and filters changed: the ids that match, or <see langword="null"/> when nothing narrows the list (D9).</summary>
+    [Parameter]
+    public EventCallback<string[]?> OnMatches { get; set; }
+
+    /// <summary>Zoom to a dataset (its id).</summary>
+    [Parameter]
+    public EventCallback<string> OnZoomTo { get; set; }
+
+    /// <summary>Copy a link to the page as it is (with <c>dataset=</c>); whether it was copied.</summary>
+    [Parameter]
+    public Func<Task<bool>>? CopyLink { get; set; }
+
+    /// <summary>Copy some text; whether it was copied.</summary>
+    [Parameter]
+    public Func<string, Task<bool>>? CopyText { get; set; }
+
+    private IReadOnlyList<ServedDataset> datasets = [];
+    private IReadOnlyList<DatasetGroup> groups = [];
+    private HashSet<string> expanded = new(StringComparer.Ordinal);
+    private List<DatasetListItem> items = [];
+    private IReadOnlyList<(string Value, int Count)> products = [];
+    private IReadOnlyList<(string Value, int Count)> purposes = [];
+    private int problemCount;
+
+    private string search = "";
+    private readonly HashSet<string> productFilter = new(StringComparer.Ordinal);
+    private readonly HashSet<string> purposeFilter = new(StringComparer.Ordinal);
+    private bool problemsOnly;
+    private DatasetFilter filter = DatasetFilter.None;
+    private string? openChip;
+    private string? copied;
+
+    protected override void OnInitialized()
+    {
+        datasets = Data.Datasets;
+        groups = ServeDatasetList.Group(datasets, Data.Layers);
+        expanded = [.. ServeDatasetList.InitiallyExpanded(groups, datasets.Count)];
+        products = [.. datasets.GroupBy(d => d.Product).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => (g.Key, g.Count()))];
+        purposes = [.. datasets
+            .Select(ServeDatasetInfo.PurposeGroup)
+            .OfType<string>()
+            .GroupBy(p => p)
+            .OrderBy(g => g.Key == ServeDatasetInfo.OtherPurpose ? 99 : ServeDatasetInfo.Purposes.ToList().IndexOf(g.Key))
+            .Select(g => (g.Key, g.Count()))];
+        problemCount = datasets.Count(ServeDatasetInfo.IsProblem);
+        Refresh();
+    }
+
+    private void Refresh() =>
+        items = ServeDatasetList.Items(datasets, groups, expanded, filter, layerHeadings: Data.Layers.Count > 1);
+
+    private async Task FilterChangedAsync()
+    {
+        var wasActive = filter.IsActive;
+        filter = new DatasetFilter(search, productFilter.ToHashSet(StringComparer.Ordinal), purposeFilter.ToHashSet(StringComparer.Ordinal), problemsOnly);
+        Refresh();
+        if (filter.IsActive || wasActive)
+            await OnMatches.InvokeAsync(filter.IsActive ? [.. items.Select(i => i.Dataset!.Id)] : null);
+    }
+
+    private Task OnSearch(ChangeEventArgs e)
+    {
+        search = e.Value as string ?? "";
+        return FilterChangedAsync();
+    }
+
+    private Task ToggleProblems()
+    {
+        problemsOnly = !problemsOnly;
+        return FilterChangedAsync();
+    }
+
+    private Task ToggleFilter(HashSet<string> set, string value)
+    {
+        if (!set.Remove(value))
+            set.Add(value);
+        return FilterChangedAsync();
+    }
+
+    private Task ClearFilters()
+    {
+        search = "";
+        productFilter.Clear();
+        purposeFilter.Clear();
+        problemsOnly = false;
+        openChip = null;
+        return FilterChangedAsync();
+    }
+
+    private void ToggleGroup(string key)
+    {
+        if (!expanded.Remove(key))
+            expanded.Add(key);
+        Refresh();
+    }
+
+    private async Task CopyAsync(string what, Func<Task<bool>>? copy)
+    {
+        if (copy is null || !await copy())
+            return;
+        copied = what;
+        StateHasChanged();
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        if (copied == what)
+            copied = null;
+    }
+
+    private static string DatasetCount(int count) => count == 1 ? "1 dataset" : ServeDatasetInfo.Number(count) + " datasets";
+
+    private static string ChipLabel(string label, HashSet<string> chosen) => chosen.Count switch
+    {
+        0 => label,
+        1 => label + ": " + chosen.First(),
+        _ => label + " · " + ServeDatasetInfo.Number(chosen.Count),
+    };
+
+    // A filter chip: a button that opens a menu of the values, each with its count, any number checked.
+    private RenderFragment Chip(string key, string label, IReadOnlyList<(string Value, int Count)> values, HashSet<string> chosen) => __builder =>
+    {
+        var open = openChip == key;
+        <div class="chip-wrap">
+            <button type="button" class="chip" aria-haspopup="true" aria-expanded="@(open ? "true" : "false")"
+                    aria-pressed="@(chosen.Count > 0 ? "true" : "false")" @onclick="() => openChip = open ? null : key">
+                @ChipLabel(label, chosen)
+                <Icon Name="chevron-down" Size="14" />
+            </button>
+            @if (open)
+            {
+                <div class="chip-backdrop" @onclick="() => openChip = null"></div>
+                <div class="chip-menu" role="group" aria-label="@label">
+                    @foreach (var (value, count) in values)
+                    {
+                        var on = chosen.Contains(value);
+                        <button type="button" class="chip-option" role="menuitemcheckbox" aria-checked="@(on ? "true" : "false")"
+                                @onclick="() => ToggleFilter(chosen, value)">
+                            <span class="chip-check">@if (on) { <Icon Name="check" Size="14" /> }</span>
+                            <span class="chip-option-label">@value</span>
+                            <span class="chip-option-count">@ServeDatasetInfo.Number(count)</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment Item(DatasetListItem item) => __builder =>
+    {
+        if (item.LayerHeading is { } layer)
+        {
+            <div class="layer-heading" role="presentation">Layer <span class="strong">@layer</span></div>
+        }
+        else if (item.Group is { } group)
+        {
+            var open = expanded.Contains(group.Key);
+            <button type="button" class="group-header" aria-expanded="@(open ? "true" : "false")" @onclick="() => ToggleGroup(group.Key)">
+                <Icon Name="@(open ? "chevron-down" : "chevron-right")" Size="14" />
+                <span class="group-label">@group.Label</span>
+                <span class="group-count">@ServeDatasetInfo.Number(group.Datasets.Count)</span>
+            </button>
+        }
+        else if (item.Dataset is { } dataset)
+        {
+            @Row(dataset)
+        }
+    };
+
+    // A row (D7): product tag, id, state tags, edition and producer; the file; the times of time-varying data.
+    private RenderFragment Row(ServedDataset dataset) => __builder =>
+    {
+        var meta = ServeDatasetInfo.RowMeta(dataset);
+        var times = ServeDatasetInfo.TimeLine(dataset);
+        <button type="button" class="dataset-row" role="listitem" data-dataset-row data-dataset-id="@dataset.Id"
+                @onclick="() => OnSelect.InvokeAsync(dataset.Id)">
+            <span class="row-line">
+                <span class="tag">@dataset.Product</span>
+                <span class="row-id mono">@dataset.Id</span>
+                @if (!ServeDatasetInfo.HasPlace(dataset))
+                {
+                    <span class="tag tag-warn">No coverage</span>
+                }
+                <span class="row-meta">@meta</span>
+            </span>
+            <span class="row-file mono">@dataset.File</span>
+            @if (times is not null)
+            {
+                <span class="row-times">@times</span>
+            }
+        </button>
+    };
+
+    // Details (D10, D33): tags, Zoom to and Copy link, every field, and the layer's links.
+    private RenderFragment Details(ServedDataset dataset) => __builder =>
+    {
+        var hasPlace = ServeDatasetInfo.HasPlace(dataset);
+        var productName = EncDotNet.S100.Collections.Library.LibraryText.SpecDisplayName(dataset.Product);
+        var edition = ServeDatasetInfo.EditionLong(dataset);
+        var bounds = ServeDatasetInfo.Bounds(dataset);
+        var coverage = ServeDatasetInfo.CoverageText(dataset);
+        var scale = ServeDatasetInfo.DisplayScale(dataset);
+        var purpose = ServeDatasetInfo.PurposeGroup(dataset);
+        <div class="details">
+            <div class="details-head">
+                <span class="tag">@dataset.Product</span>
+                <h3 class="details-id mono">@dataset.Id</h3>
+            </div>
+            <div class="details-tags">
+                @if (ServeDatasetInfo.EditionShort(dataset) is { } ed)
+                {
+                    <span class="tag tag-neutral">@ed</span>
+                }
+                @if (!string.IsNullOrEmpty(dataset.Producer))
+                {
+                    <span class="tag tag-neutral">@dataset.Producer</span>
+                }
+                @if (dataset.UpdateNumber is int update and > 0)
+                {
+                    <span class="tag tag-outline">@(update == 1 ? "Update 1 applied" : "Updates to " + ServeDatasetInfo.Number(update) + " applied")</span>
+                }
+                @if (!hasPlace)
+                {
+                    <span class="tag tag-warn">No coverage</span>
+                }
+            </div>
+            <div class="details-actions">
+                <button type="button" class="button" disabled="@(!hasPlace)" title="@(hasPlace ? "Zoom the map to this dataset" : "This dataset has no coverage to zoom to")"
+                        @onclick="() => OnZoomTo.InvokeAsync(dataset.Id)">
+                    <Icon Name="fit" Size="16" /> Zoom to
+                </button>
+                <button type="button" class="button" title="Copy a link to this dataset on the map" @onclick='() => CopyAsync("link", CopyLink)'>
+                    <Icon Name="@(copied == "link" ? "check" : "link")" Size="16" /> @(copied == "link" ? "Link copied" : "Copy link")
+                </button>
+            </div>
+            @if (!hasPlace)
+            {
+                <p class="details-note">The dataset declares no coverage and no bounds, so it can't be outlined on the map or framed.</p>
+            }
+            <dl class="details-fields">
+                <dt>File</dt>
+                <dd class="mono">@dataset.File</dd>
+                <dt>Product</dt>
+                <dd>
+                    @(productName is null ? dataset.Product : dataset.Product + " · " + productName)
+                    @if (!string.IsNullOrEmpty(dataset.Edition))
+                    {
+                        <span class="details-sub">Specification edition @dataset.Edition</span>
+                    }
+                </dd>
+                @if (edition is not null)
+                {
+                    <dt>Edition</dt>
+                    <dd>@edition</dd>
+                }
+                <dt>Producer</dt>
+                <dd class="mono">@(string.IsNullOrEmpty(dataset.Producer) ? "—" : dataset.Producer)</dd>
+                <dt>Layer</dt>
+                <dd>@(dataset.Layer ?? "—")</dd>
+                @if (purpose is not null)
+                {
+                    <dt>Purpose</dt>
+                    <dd>@purpose</dd>
+                }
+                <dt>Bounds</dt>
+                <dd class="mono">
+                    @if (bounds is { } b)
+                    {
+                        <span class="details-line">@b.Latitudes</span>
+                        <span class="details-line">@b.Longitudes</span>
+                    }
+                    else
+                    {
+                        <span>—</span>
+                    }
+                </dd>
+                <dt>Coverage</dt>
+                <dd>@(coverage ?? "None")</dd>
+                @if (scale is not null)
+                {
+                    <dt>Display scale</dt>
+                    <dd>@scale</dd>
+                }
+                @if (!string.IsNullOrEmpty(dataset.Dynamicity))
+                {
+                    <dt>Dynamicity</dt>
+                    <dd>@dataset.Dynamicity</dd>
+                }
+                @if (dataset.IssueTime is { } issued)
+                {
+                    <dt>Issued</dt>
+                    <dd>@issued.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) UTC</dd>
+                }
+                @if (dataset.Times.Count > 0)
+                {
+                    <dt>Time steps</dt>
+                    <dd>
+                        @ServeDatasetInfo.Steps(dataset.Times.Count)
+                        <span class="details-sub">@ServeDatasetInfo.TimeRange(dataset.Times)</span>
+                    </dd>
+                }
+            </dl>
+            @if (dataset.Layer is { } layer)
+            {
+                var root = Navigation.BaseUri + "layers/" + Uri.EscapeDataString(layer) + "/";
+                <div class="details-links">
+                    <h4 class="field-label">Layer @layer</h4>
+                    @LinkField("tilejson", "TileJSON", root + "tiles.json")
+                    @LinkField("xyz", "XYZ tiles", root + "{z}/{x}/{y}." + Data.TileSet.Format)
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment LinkField(string key, string label, string url) => __builder =>
+    {
+        <div class="link-field">
+            <span class="link-label">@label</span>
+            <code class="link-url" title="@url">@url</code>
+            <button type="button" class="icon-button" aria-label="@("Copy the " + label + " link")" title="Copy"
+                    @onclick="() => CopyAsync(key, CopyText is null ? null : () => CopyText(url))">
+                <Icon Name="@(copied == key ? "check" : "copy")" Size="16" />
+            </button>
+        </div>
+    };
 }

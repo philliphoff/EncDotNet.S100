@@ -18,7 +18,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// Per dataset: an id and the file name, the product and its edition, the
 /// producer code, the WGS-84 bounds and a coverage polygon (GeoJSON), the time
 /// steps, the issue time and data dynamicity of time-varying data, and the
-/// not-for-navigation flag. Bounds are per dataset, not only their union: the
+/// not-for-navigation flag. Chart cells (S-101, S-57) add their edition,
+/// update and issue date; S-101 cells their <c>DataCoverage</c> display scale
+/// range (issue #1578). Bounds are per dataset, not only their union: the
 /// union of a harbour cell and a distant water-level grid frames empty ocean.
 /// </remarks>
 internal static partial class DatasetsDocument
@@ -83,6 +85,20 @@ internal static partial class DatasetsDocument
                 ["dataDynamicity"] = timeAware?.DataDynamicity is { } kind ? Dynamicity(kind) : null,
                 ["notForNavigation"] = true,
             });
+
+            // The chart cell's own edition and update, updates applied (issue #1578), and
+            // its DataCoverage display scale range: only when known, so other products'
+            // entries are as before.
+            if ((processor as IChartDepthCell)?.Edition is { } edition)
+            {
+                datasets[^1]!["editionNumber"] = edition.Number;
+                datasets[^1]!["updateNumber"] = edition.Update;
+                if (edition.IssueDate is { } issueDate)
+                    datasets[^1]!["issueDate"] = issueDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            if (DisplayScaleOf(processor) is { } scale)
+                datasets[^1]!["displayScale"] = scale;
 
             // Only when there are layers, so the document is otherwise as before.
             if (layers is not null)
@@ -171,6 +187,32 @@ internal static partial class DatasetsDocument
         if (ring.Count > 0 && ring[0] != ring[^1])
             positions.Add((JsonNode)new JsonArray(Round(ring[0].Longitude), Round(ring[0].Latitude)));
         return positions;
+    }
+
+    /// <summary>
+    /// The display scale range an S-101 cell's <c>DataCoverage</c> declares, as
+    /// <c>{"minimum": 45000, "maximum": 22000}</c> (scale denominators, the
+    /// coarsest first); <see langword="null"/> for other products or a cell
+    /// that declares none. S-57 cells are left out: their purpose comes from
+    /// the cell name, and their scale from DSPM.
+    /// </summary>
+    private static JsonObject? DisplayScaleOf(IDatasetProcessor processor)
+    {
+        if (!string.Equals(processor.Spec.Name, "S-101", StringComparison.OrdinalIgnoreCase))
+            return null;
+        EncDotNet.S100.Core.DisplayScaleRange? range;
+        try
+        {
+            range = processor.Metadata.DisplayScale;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return null;
+        }
+
+        return range is { } r && (r.Minimum is not null || r.Maximum is not null)
+            ? new JsonObject { ["minimum"] = r.Minimum, ["maximum"] = r.Maximum }
+            : null;
     }
 
     private static BoundingBox? GeographicExtent(IDatasetProcessor processor)

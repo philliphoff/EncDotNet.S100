@@ -82,7 +82,26 @@ internal sealed record ServedDataset(
     IReadOnlyList<DateTime> Times,
     DateTime? IssueTime,
     string? Dynamicity,
-    string? Layer);
+    string? Layer)
+{
+    /// <summary>A chart cell's edition number (S-101 DSED, S-57 EDTN), when known.</summary>
+    public int? EditionNumber { get; init; }
+
+    /// <summary>A chart cell's update number, the last update applied (S-57 UPDN), when known.</summary>
+    public int? UpdateNumber { get; init; }
+
+    /// <summary>A chart cell's issue date, when known.</summary>
+    public DateOnly? IssueDate { get; init; }
+
+    /// <summary>The coarsest scale denominator an S-101 cell's DataCoverage declares, when known.</summary>
+    public int? MinimumDisplayScale { get; init; }
+
+    /// <summary>The finest scale denominator an S-101 cell's DataCoverage declares, when known: its purpose band (handoff D8).</summary>
+    public int? MaximumDisplayScale { get; init; }
+
+    /// <summary>Whether <see cref="Coverage"/> is the declared data coverage (<see langword="true"/>) or only the bounds.</summary>
+    public bool HasDataCoverage { get; init; }
+}
 
 /// <summary>The page's data, read from the <see cref="ITileSource"/> being served.</summary>
 internal sealed class TileSourcePageData(ITileSource source) : IServePageData
@@ -135,7 +154,15 @@ internal sealed class TileSourcePageData(ITileSource source) : IServePageData
         d["times"] is JsonArray times ? [.. times.Select(t => Time((string?)t)).OfType<DateTime>()] : [],
         Time((string?)d["issueTime"]),
         (string?)d["dataDynamicity"]?["label"],
-        (string?)d["layer"]);
+        (string?)d["layer"])
+    {
+        EditionNumber = (int?)d["editionNumber"],
+        UpdateNumber = (int?)d["updateNumber"],
+        IssueDate = DateOnly.TryParseExact((string?)d["issueDate"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var issued) ? issued : null,
+        MinimumDisplayScale = (int?)d["displayScale"]?["minimum"],
+        MaximumDisplayScale = (int?)d["displayScale"]?["maximum"],
+        HasDataCoverage = (string?)d["coverageSource"] == "dataCoverage",
+    };
 
     // TileJSON numbers are doubles or ints (a centre's zoom), as the source built them.
     private static double[]? Numbers(JsonNode? node) =>
