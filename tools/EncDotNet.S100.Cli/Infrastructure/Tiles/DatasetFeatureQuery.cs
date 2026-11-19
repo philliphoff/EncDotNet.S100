@@ -20,6 +20,7 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 internal sealed class DatasetFeatureQuery : IDisposable
 {
     private readonly Lazy<Opened> _opened;
+    private readonly FeatureInformationReader _information = new();
 
     /// <param name="settings">The inputs the tiles are rendered from.</param>
     public DatasetFeatureQuery(TilesRenderSettings settings)
@@ -47,6 +48,7 @@ internal sealed class DatasetFeatureQuery : IDisposable
     {
         if (_opened.IsValueCreated)
             _opened.Value.Resolution?.Dispose();
+        _information.Dispose();
     }
 
     private FeatureQueryResult Query(double latitude, double longitude, double radiusMeters, int maxResults, DateTime? time)
@@ -68,8 +70,12 @@ internal sealed class DatasetFeatureQuery : IDisposable
         }
 
         var describer = new DescribeFeatureService(catalog);
+        var datasets = catalog.Datasets.ToDictionary(d => d.Id);
         var matches = features.Features
-            .Select(f => new FeatureQueryMatch(f, IdentifyCommand.TryDescribeAttributes(describer, f.DatasetId, f.FeatureId)))
+            .Select(f => new FeatureQueryMatch(f, IdentifyCommand.TryDescribeAttributes(describer, f.DatasetId, f.FeatureId))
+            {
+                Information = datasets.TryGetValue(f.DatasetId, out var dataset) ? _information.Read(dataset, f.FeatureId, f.Bounds) : null,
+            })
             .ToList();
         var samples = IdentifyCommand.SampleCoverages(catalog, latitude, longitude, at, specFilter: null);
         return new FeatureQueryResult(
@@ -103,7 +109,14 @@ internal sealed class DatasetFeatureQuery : IDisposable
 }
 
 /// <summary>A feature found by <see cref="DatasetFeatureQuery"/>, with its attributes when the product describes them.</summary>
-internal sealed record FeatureQueryMatch(IdentifyMatch Match, JsonElement? Attributes);
+internal sealed record FeatureQueryMatch(IdentifyMatch Match, JsonElement? Attributes)
+{
+    /// <summary>
+    /// The feature's Object Information decoded with its feature catalogue,
+    /// and its geometry; <see langword="null"/> when it couldn't be read.
+    /// </summary>
+    public FeatureInformation? Information { get; init; }
+}
 
 /// <summary>What <see cref="DatasetFeatureQuery"/> found at a point.</summary>
 internal sealed record FeatureQueryResult(

@@ -1,0 +1,12 @@
+@* The pick card on a desktop (issue #1581, D22): floats over the map beside the marker, with a pointer;
+   js/serve-pick.js places it and flips it to the side with room. *@
+
+<div class="pick-card" data-pick-card tabindex="-1" role="dialog" aria-label="Object information" data-side="right" data-placed="false">
+    @ChildContent
+</div>
+
+@code {
+    /// <summary>The card's body.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

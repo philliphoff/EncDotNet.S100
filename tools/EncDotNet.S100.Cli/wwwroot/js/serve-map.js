@@ -126,6 +126,7 @@ window.s100Map = (() => {
     map.setPaintProperty("coverage-line", "line-color", token("--outline-served") || "#3D8A5A");
     applyDatasetTheme();
     applyTileSetTheme();
+    window.s100Pick?.applyTheme();
   }
 
   // Hovered and selected outlines are 2 px in the accent with a 6% fill (8%
@@ -331,6 +332,7 @@ window.s100Map = (() => {
       });
       // A built tile set has nothing to pick: a click says so (D35). A drag isn't a click.
       if (opts.noPick) map.on("click", () => dotnet?.invokeMethodAsync("OnNoPick"));
+      else window.s100Pick?.attach(map, dotnetRef, token);
       document.addEventListener("pointerover", onRowHover);
       document.addEventListener("focusin", onRowHover);
       map.on("sourcedata", onBasemapData);
@@ -420,6 +422,7 @@ window.s100Map = (() => {
       document.removeEventListener("focusin", onRowHover);
       clearTimeout(basemapFailTimer);
       basemapFailTimer = undefined;
+      window.s100Pick?.detach();
       map?.remove();
       map = undefined;
       loaded = false;

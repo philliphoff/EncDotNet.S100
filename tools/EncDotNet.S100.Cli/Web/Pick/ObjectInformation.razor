@@ -1,0 +1,162 @@
+@* The pick card's body (issue #1581, D23), shared by the floating card (desktop) and the sheet (phone):
+   the position and feature count, coverage values first, then the features with only the first expanded,
+   and the meta and area types behind "Show N more…". *@
+
+<section class="pick-info" data-pick-root aria-label="Object information">
+    <div class="pick-head">
+        <h2 class="pick-title">Object information</h2>
+        <button type="button" class="icon-button pick-close" aria-label="Close" title="Close (Esc)" @onclick="OnClose"><Icon Name="x" Size="16" /></button>
+    </div>
+    <div class="pick-position">
+        <span class="mono strong" data-pick-position>@Position</span>
+        @if (Report is { } report)
+        {
+            <span class="pick-count">@report.CountText</span>
+        }
+    </div>
+    <div class="pick-body">
+        @if (Error is { } error)
+        {
+            <p class="pick-note pick-error">@error</p>
+        }
+        else if (Report is not { } r)
+        {
+            <p class="pick-note">Looking…</p>
+        }
+        else
+        {
+            @foreach (var coverage in r.Coverages)
+            {
+                <div class="pick-coverage">
+                    <div class="pick-coverage-title"><span class="tag">@coverage.Product</span><span>@coverage.Title</span></div>
+                    <div class="pick-coverage-value">
+                        <span class="mono strong pick-value">@coverage.Value</span>
+                        @if (coverage.Direction is { } direction)
+                        {
+                            <span class="pick-direction" style="transform: rotate(@(direction.ToString("0", CultureInfo.InvariantCulture))deg)"><Icon Name="arrow-up" Size="16" /></span>
+                            <span class="mono strong">@direction.ToString("000", CultureInfo.InvariantCulture)° T</span>
+                        }
+                        @if (coverage.Detail is { } detail)
+                        {
+                            <span class="pick-muted">@detail</span>
+                        }
+                    </div>
+                </div>
+            }
+            @foreach (var feature in r.Major)
+            {
+                @FeatureRow(feature)
+            }
+            @if (r.Minor.Count > 0)
+            {
+                @if (ShowMinor || r.Major.Count == 0)
+                {
+                    @foreach (var feature in r.Minor)
+                    {
+                        @FeatureRow(feature)
+                    }
+                }
+                else
+                {
+                    <button type="button" class="pick-more" @onclick="() => OnShowMinor.InvokeAsync()">@MoreText(r.Minor)</button>
+                }
+            }
+            @if (r.Features.Count == 0 && r.Coverages.Count == 0)
+            {
+                <p class="pick-note">Nothing here. Click on a feature or inside an area.</p>
+            }
+            @foreach (var notice in r.Notices)
+            {
+                <p class="pick-note">@notice</p>
+            }
+        }
+    </div>
+</section>
+
+@code {
+    /// <summary>The point picked, in degrees and minutes.</summary>
+    [Parameter, EditorRequired]
+    public string Position { get; set; } = "";
+
+    /// <summary>What the query found; <see langword="null"/> while it's running.</summary>
+    [Parameter]
+    public PickReport? Report { get; set; }
+
+    /// <summary>Why the query failed, if it did.</summary>
+    [Parameter]
+    public string? Error { get; set; }
+
+    /// <summary>The expanded feature's index, or -1.</summary>
+    [Parameter]
+    public int Expanded { get; set; }
+
+    /// <summary>Whether the minor features are shown.</summary>
+    [Parameter]
+    public bool ShowMinor { get; set; }
+
+    /// <summary>A feature's head was pressed: expand or collapse it.</summary>
+    [Parameter]
+    public EventCallback<int> OnToggle { get; set; }
+
+    /// <summary>"Show N more…" was pressed.</summary>
+    [Parameter]
+    public EventCallback OnShowMinor { get; set; }
+
+    /// <summary>Close the card and clear the pick.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private RenderFragment FeatureRow(PickFeature feature) => __builder =>
+    {
+        var open = feature.Index == Expanded;
+        <div class="pick-feature" data-pick-index="@feature.Index" data-expanded="@(open ? "true" : "false")">
+            <button type="button" class="pick-feature-head" aria-expanded="@(open ? "true" : "false")" @onclick="() => OnToggle.InvokeAsync(feature.Index)">
+                <span class="pick-feature-text">
+                    <span class="pick-feature-title">@feature.Title</span>
+                    @if (feature.Identity is { } identity)
+                    {
+                        <span class="pick-feature-identity">@identity</span>
+                    }
+                </span>
+                <Icon Name="chevron-down" Size="16" Class="pick-chevron" />
+            </button>
+            @if (open)
+            {
+                <div class="pick-feature-body">
+                    @if (feature.Rows.Count > 0)
+                    {
+                        <dl class="pick-rows">@Rows(feature.Rows, 0)</dl>
+                    }
+                    <div class="pick-provenance"><span class="tag">@feature.Product</span><span class="mono">@feature.DatasetId</span><span>· @feature.Geometry</span></div>
+                </div>
+            }
+        </div>
+    };
+
+    private static RenderFragment Rows(IReadOnlyList<PickRow> rows, int depth) => __builder =>
+    {
+        foreach (var row in rows)
+        {
+            if (row.Children.Count > 0)
+            {
+                <dt class="pick-group" style="--depth: @depth">@row.Name</dt>
+                <dd class="pick-group-body">@Rows(row.Children, depth + 1)</dd>
+            }
+            else
+            {
+                <div class="pick-row" style="--depth: @depth"><dt>@row.Name</dt><dd>@row.Value</dd></div>
+            }
+        }
+    };
+
+    // "Caution Area" reads "caution area" in the sentence; a code ("M_COVR") stays as it is.
+    private static string Lower(string title) => title.Contains(' ', StringComparison.Ordinal) ? title.ToLowerInvariant() : title;
+
+    /// <summary>"Show 9 more: caution areas, quality of survey…".</summary>
+    internal static string MoreText(IReadOnlyList<PickFeature> minor)
+    {
+        var titles = minor.Select(f => f.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var listed = string.Join(", ", titles.Take(3).Select(Lower));
+        return $"Show {minor.Count.ToString(CultureInfo.InvariantCulture)} more: {listed}{(titles.Count > 3 ? "…" : "")}";
+    }
+}
