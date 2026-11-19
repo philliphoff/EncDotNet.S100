@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using EncDotNet.S100.Rendering.Scene;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -20,8 +19,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (issue #865): <c>{z}/{x}/{y}.{ext}</c> tiles, a <c>tiles.json</c> TileJSON
 /// document whose tile URL is absolute, an OGC WMTS 1.0.0 service under
 /// <c>wmts</c> (<see cref="WmtsService"/>), an OGC WMS 1.3.0 service at
-/// <c>wms</c> (<see cref="WmsService"/>), and optionally a preview page at
-/// the root. With a token, every route lives under <c>/&lt;token&gt;/</c>,
+/// <c>wms</c> (<see cref="WmsService"/>), and optionally the web page at
+/// the root (<see cref="Web.ServeWeb"/>, issue #1573). With a token, every
+/// route lives under <c>/&lt;token&gt;/</c>, as the request's path base,
 /// except the <c>/healthz</c> health check. Rendered datasets grouped into
 /// layers (issue #1495) also serve each layer's tiles and TileJSON under
 /// <c>layers/{layer}/</c>.
@@ -76,6 +76,8 @@ internal sealed class TileServer : IAsyncDisposable
             o.Providers.Add<GzipCompressionProvider>();
             o.MimeTypes = ["application/json", "application/xml", "text/html"];
         });
+        if (viewer)
+            Web.ServeWeb.AddServices(builder, source);
 
         var app = builder.Build();
         errors ??= Console.Error;
@@ -102,19 +104,24 @@ internal sealed class TileServer : IAsyncDisposable
         app.UseResponseCompression();
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
+        if (token is not null)
+            UseTokenPathBase(app, PathString.FromUriComponent(prefix), viewer);
+
+        // Routing runs after the token's path base is taken off the path, so
+        // the routes below are the same with a token and without (issue #1575).
+        app.UseRouting();
+
         // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
         ServeHost.MapHealth(app, () => source.Revision);
-        if (viewer)
-            app.MapGet(prefix + "/", ServeViewerAsync);
 
-        app.MapGet(prefix + "/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix, palette: null));
-        app.MapGet(prefix + "/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
+        app.MapGet("/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix, palette: null));
+        app.MapGet("/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
         if (source.Palettes.Count > 0)
         {
             // The same tiles in each palette, under /{palette}/.
-            app.MapGet(prefix + "/{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
+            app.MapGet("/{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
                 TryPalette(context, source, out var palette) ? ServeTileJsonAsync(context, source, prefix, palette) : Task.CompletedTask);
-            app.MapGet(prefix + "/{palette}/{z}/{x}/{tile}", context =>
+            app.MapGet("/{palette}/{z}/{x}/{tile}", context =>
                 TryPalette(context, source, out var palette) ? ServeTileAsync(context, source, palette) : Task.CompletedTask);
         }
 
@@ -123,7 +130,7 @@ internal sealed class TileServer : IAsyncDisposable
             // Each layer's tiles (issue #1495), under /layers/{layer}/, as the
             // tiles of every dataset are under the root. Layers can come and
             // go with --manage-datasets, so they are looked up at each request.
-            var layers = prefix + "/" + LayersPath + "/{layer}/";
+            var layers = "/" + LayersPath + "/{layer}/";
             app.MapGet(layers + XyzDirectoryTileSink.TileJsonFileName, context =>
                 TryLayer(context, source, out var layer) ? ServeTileJsonAsync(context, layer, prefix, palette: null, LayerOf(context)) : Task.CompletedTask);
             app.MapGet(layers + "{z}/{x}/{tile}", context =>
@@ -140,28 +147,66 @@ internal sealed class TileServer : IAsyncDisposable
 
         // OGC WMTS 1.0.0: the capabilities document, the KVP endpoint and the
         // RESTful tile URLs, with and without the Time dimension.
-        app.MapGet(prefix + "/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source, prefix));
-        app.MapGet(prefix + "/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source, prefix));
-        app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
-        app.MapGet(prefix + "/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+        app.MapGet("/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source, prefix));
+        app.MapGet("/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source, prefix));
+        app.MapGet("/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+        app.MapGet("/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
 
         // Each dataset's metadata (issue #1504).
-        app.MapGet(prefix + "/" + DatasetsDocument.Path, context => DatasetsDocument.ServeAsync(context, source));
+        app.MapGet("/" + DatasetsDocument.Path, context => DatasetsDocument.ServeAsync(context, source));
 
         // Mariner settings sets, served as {palette}-{hash} styles (issue #1493).
-        MarinerStyleRegistry.Map(app, prefix, () => source.MarinerStyles, () => source.Palettes);
+        MarinerStyleRegistry.Map(app, () => source.MarinerStyles, () => source.Palettes);
 
         // OGC WMS 1.3.0: GetCapabilities, GetMap and GetFeatureInfo.
-        app.MapGet(prefix + "/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context, prefix)));
+        app.MapGet("/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context, prefix)));
 
         // Adding and removing datasets, with --manage-datasets (issue #1494).
         if (datasets is not null)
-            ServedDatasets.Map(app, prefix, datasets);
+            ServedDatasets.Map(app, datasets);
+
+        // The web page (issue #1573), at the root.
+        if (viewer)
+            Web.ServeWeb.Map(app);
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
         var bound = new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First());
         return new TileServer(app, ServeHost.BaseUri(address, bound.Port, token));
+    }
+
+    /// <summary>
+    /// Serves every route under <paramref name="prefix"/>, <c>/{token}</c>: a
+    /// request under it continues with the token moved to its path base, so
+    /// links the page builds keep it; any other request but the health check
+    /// is not found. The prefix alone redirects to the page's slashed URL.
+    /// </summary>
+    private static void UseTokenPathBase(WebApplication app, PathString prefix, bool viewer)
+    {
+        app.Use((context, next) =>
+        {
+            var request = context.Request;
+            if (request.Path.StartsWithSegments(prefix, out var matched, out var rest))
+            {
+                if (!rest.HasValue && viewer)
+                {
+                    // The page loads its files relative to itself, so it's
+                    // served from the slashed URL.
+                    context.Response.Redirect(request.PathBase + prefix + "/" + request.QueryString);
+                    return Task.CompletedTask;
+                }
+
+                request.PathBase = request.PathBase.Add(matched);
+                request.Path = rest.HasValue ? rest : "/";
+                return next(context);
+            }
+
+            if (request.Path == ServeHost.HealthPath)
+                return next(context);
+
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>The suffix of a high-DPI tile's row in its URL (issue #1563): <c>{z}/{x}/{y}@2x.png</c>.</summary>
@@ -461,124 +506,10 @@ internal sealed class TileServer : IAsyncDisposable
         return context.Response.WriteAsync(WmtsService.ExceptionReport(code, locator, message), context.RequestAborted);
     }
 
-    private static Task ServeViewerAsync(HttpContext context)
-    {
-        // Routing ignores a trailing slash, but the page loads tiles.json
-        // relative to itself, so it must be served from the slashed URL.
-        var path = context.Request.PathBase + context.Request.Path;
-        if (!path.Value!.EndsWith('/'))
-        {
-            context.Response.Redirect(path + "/");
-            return Task.CompletedTask;
-        }
-
-        context.Response.ContentType = "text/html; charset=utf-8";
-        context.Response.Headers.CacheControl = "no-cache";
-        return context.Response.Body.WriteAsync(ViewerPage, context.RequestAborted).AsTask();
-    }
-
     private static bool TryParse(string text, out int value) =>
         int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
 
     private static bool MatchesFormat(string extension, TileImageFormat format) =>
         string.Equals(extension, TileSetMetadata.FormatToken(format), StringComparison.OrdinalIgnoreCase)
         || (format == TileImageFormat.Jpeg && string.Equals(extension, "jpeg", StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>
-    /// A MapLibre GL JS page showing the tiles over OpenStreetMap, framed on
-    /// the set's bounds. It loads MapLibre and the basemap from the internet;
-    /// the chart tiles come from this server.
-    /// </summary>
-    private static readonly byte[] ViewerPage = Encoding.UTF8.GetBytes("""
-        <!doctype html>
-        <html lang="en">
-        <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>s100 tiles</title>
-        <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-        <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-        <style>html, body, #map { margin: 0; height: 100%; } #status { position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: #fffc; font: 13px system-ui, sans-serif; border-radius: 4px; } #status select { margin-left: 6px; font: inherit; }</style>
-        </head>
-        <body>
-        <div id="map"></div>
-        <div id="status"></div>
-        <script>
-        (async () => {
-          const status = document.getElementById("status");
-          const tileJsonUrl = new URL("tiles.json", location.href).href;
-          let tileJson;
-          try {
-            tileJson = await (await fetch(tileJsonUrl)).json();
-          } catch (e) {
-            status.textContent = "Couldn't load tiles.json: " + e;
-            return;
-          }
-          status.textContent = (tileJson.name || "Tiles") + " · zoom " + tileJson.minzoom + "–" + tileJson.maxzoom;
-          const palettes = (tileJson.s100 && tileJson.s100.palettes) || [];
-          const times = (tileJson.s100 && tileJson.s100.times) || [];
-          // On a high-DPI screen, the 512-pixel @2x tiles when they're served.
-          const highDpi = window.devicePixelRatio > 1 && ((tileJson.s100 && tileJson.s100.pixelRatios) || []).includes(2);
-          const chartUrl = new URL(tileJsonUrl);
-          if (highDpi) chartUrl.searchParams.set("scale", "2");
-          const map = new maplibregl.Map({
-            container: "map",
-            style: {
-              version: 8,
-              sources: {
-                osm: {
-                  type: "raster",
-                  tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-                  tileSize: 256,
-                  attribution: "© OpenStreetMap contributors",
-                },
-                chart: { type: "raster", url: chartUrl.href, tileSize: 256 },
-              },
-              layers: [
-                { id: "osm", type: "raster", source: "osm" },
-                { id: "chart", type: "raster", source: "chart" },
-              ],
-            },
-            center: tileJson.center ? [tileJson.center[0], tileJson.center[1]] : [0, 0],
-            zoom: tileJson.center ? tileJson.center[2] : 1,
-          });
-          map.addControl(new maplibregl.NavigationControl());
-          if (palettes.length > 0) {
-            // Each palette has its own TileJSON under /{palette}/.
-            const select = document.createElement("select");
-            select.setAttribute("aria-label", "Palette");
-            for (const palette of palettes) {
-              const option = new Option(palette, palette, false, palette === tileJson.s100.palette);
-              select.add(option);
-            }
-            select.addEventListener("change", update);
-            status.append(select);
-          }
-          if (times.length > 0) {
-            // Each time step is a t query parameter on the same URLs.
-            const time = document.createElement("select");
-            time.id = "time";
-            time.setAttribute("aria-label", "Time");
-            for (const t of times)
-              time.add(new Option(t.replace("T", " ").replace(":00Z", "Z"), t));
-            time.addEventListener("change", update);
-            status.append(time);
-          }
-          function update() {
-            const palette = document.querySelector("#status select[aria-label=Palette]");
-            const time = document.getElementById("time");
-            const url = new URL((palette ? palette.value + "/" : "") + "tiles.json", location.href);
-            if (time) url.searchParams.set("t", time.value);
-            if (highDpi) url.searchParams.set("scale", "2");
-            map.getSource("chart").setUrl(url.href);
-          }
-          if (tileJson.bounds) {
-            const [w, s, e, n] = tileJson.bounds;
-            map.fitBounds([[w, s], [e, n]], { padding: 20, animate: false });
-          }
-        })();
-        </script>
-        </body>
-        </html>
-        """);
 }

@@ -132,18 +132,17 @@ internal sealed class MarinerStyleRegistry
         Hashes.SelectMany(hash => palettes.Select(palette => palette + "-" + hash));
 
     /// <summary>
-    /// Maps <c>PUT</c> and <c>GET</c> <c>{prefix}/settings/{hash}</c> on
+    /// Maps <c>PUT</c> and <c>GET</c> <c>settings/{hash}</c> on
     /// <paramref name="app"/>, registering and reading the settings sets of
     /// the source <paramref name="registry"/> returns (none: 404).
     /// </summary>
     /// <param name="app">The web application.</param>
-    /// <param name="prefix">The token prefix, <c>/{token}</c>, or empty.</param>
     /// <param name="registry">The registry of the source being served, read at each request.</param>
     /// <param name="palettes">The palettes of the source being served, read at each request.</param>
-    public static void Map(WebApplication app, string prefix, Func<MarinerStyleRegistry?> registry, Func<IReadOnlyList<string>> palettes)
+    public static void Map(WebApplication app, Func<MarinerStyleRegistry?> registry, Func<IReadOnlyList<string>> palettes)
     {
-        app.MapPut(prefix + "/" + Path + "/{hash}", context => PutAsync(context, registry(), palettes()));
-        app.MapGet(prefix + "/" + Path + "/{hash}", context => GetAsync(context, registry(), palettes()));
+        app.MapPut("/" + Path + "/{hash}", context => PutAsync(context, registry(), palettes()));
+        app.MapGet("/" + Path + "/{hash}", context => GetAsync(context, registry(), palettes()));
     }
 
     private static async Task PutAsync(HttpContext context, MarinerStyleRegistry? registry, IReadOnlyList<string> palettes)

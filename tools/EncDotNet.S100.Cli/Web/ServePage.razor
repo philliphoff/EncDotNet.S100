@@ -1,0 +1,72 @@
+@implements IAsyncDisposable
+@inject IServePageData Data
+@inject IJSRuntime JS
+
+<div id="map" class="map"></div>
+<div class="status">
+    <span>@tileSet.Name · zoom @tileSet.MinZoom–@tileSet.MaxZoom</span>
+    @if (Data.Palettes.Count > 0)
+    {
+        <select aria-label="Palette" @bind="palette" @bind:after="ApplyAsync">
+            @foreach (var p in Data.Palettes)
+            {
+                <option value="@p">@p</option>
+            }
+        </select>
+    }
+    @if (times.Count > 0)
+    {
+        <select aria-label="Time" @bind="timeIndex" @bind:after="ApplyAsync">
+            @for (int i = 0; i < times.Count; i++)
+            {
+                <option value="@i">@times[i].ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture)</option>
+            }
+        </select>
+    }
+</div>
+
+@code {
+    private ServedTileSet tileSet = null!;
+    private IReadOnlyList<DateTime> times = [];
+    private string? palette;
+    private int timeIndex;
+    private bool shown;
+
+    protected override void OnInitialized()
+    {
+        tileSet = Data.TileSet;
+        times = Data.Times;
+        palette = tileSet.DefaultPalette;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        await JS.InvokeVoidAsync("s100Map.show", "map", TileJsonUrl(), tileSet.HighDpi, tileSet.Bounds, tileSet.Center);
+        shown = true;
+    }
+
+    /// <summary>The TileJSON of the palette and time chosen, relative to the page.</summary>
+    private string TileJsonUrl()
+    {
+        var url = (palette is null || palette == tileSet.DefaultPalette ? "" : Uri.EscapeDataString(palette) + "/") + "tiles.json";
+        return times.Count > 0 ? url + "?t=" + Uri.EscapeDataString(TileRenderSession.FormatTime(times[timeIndex])) : url;
+    }
+
+    private Task ApplyAsync() =>
+        shown ? JS.InvokeVoidAsync("s100Map.setChart", TileJsonUrl()).AsTask() : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (shown)
+                await JS.InvokeVoidAsync("s100Map.dispose");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone, and the map with it.
+        }
+    }
+}
