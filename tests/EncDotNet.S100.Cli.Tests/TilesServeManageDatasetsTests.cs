@@ -479,7 +479,7 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         }
 
         // The page shows its empty state (handoff D32).
-        var page = new TileSourcePageData(source);
+        var page = new TileSourcePageData(source, hasToken: false);
         Assert.Empty(page.Datasets);
         Assert.Equal("No datasets", ServeSummary.Describe(page));
 
