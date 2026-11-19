@@ -25,7 +25,11 @@
                 <Rail Items="railItems" Active="activePanel" OnSelect="SelectPanel" />
             </RailContent>
             <ChildContent>
-                @if (activePanel is { } panel)
+                @if (isPhone && pickPoint is not null)
+                {
+                    <div class="panel pick-sheet">@PickBody</div>
+                }
+                else if (activePanel is { } panel)
                 {
                     <Panel Title="@(panel == ServePanel.Datasets && selectedDataset is not null ? "Dataset" : PanelTitle(panel))" OnClose="() => activePanel = null"
                            OnBack="@(panel == ServePanel.Datasets && selectedDataset is not null ? EventCallback.Factory.Create(this, () => SelectDatasetAsync(null)) : default)">
@@ -78,6 +82,10 @@
             {
                 <Toast Title="@ServeTileSetInfo.NoPickTitle" Detail="@ServeTileSetInfo.NoPickDetail" IconName="info" OnClose="() => noPickToast = false" />
             }
+            @if (!isPhone && pickPoint is not null)
+            {
+                <PickCard>@PickBody</PickCard>
+            }
         </main>
     </div>
 </div>
@@ -127,6 +135,15 @@
     // The Datasets panel (SW2): the selected dataset (dataset= in the hash) and the datasets with a place (D15).
     private string? selectedDataset;
     private IReadOnlyList<ServedDataset> servedDatasets = [];
+    // Features at a point (#1581): the point, what the query found, and the card's state.
+    private (double Latitude, double Longitude)? pickPoint;
+    private PickReport? pick;
+    private string? pickError;
+    private int pickExpanded;
+    private bool pickShowMinor;
+    private double pickMetresPerPixel = 10;
+    private CancellationTokenSource? pickQuery;
+    private bool pickMoved;
 
     private DotNetObjectReference<ServePage>? self;
     private bool shown;
@@ -173,7 +190,10 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
+        {
+            await AfterPickRenderAsync();
             return;
+        }
         self = DotNetObjectReference.Create(this);
         var (view, parameters) = ServeHash.Parse(await JS.InvokeAsync<string>("s100Map.readHash"));
         foreach (var (name, value) in parameters)
@@ -210,6 +230,7 @@
             await SetDatasetOutlinesAsync();
         }
 
+        await ReadPickHashAsync();
         StateHasChanged();
     }
 
@@ -234,9 +255,15 @@
 
     // Rail and sheet (D1, D2).
 
-    private void SelectPanel(ServePanel panel)
+    private async Task SelectPanel(ServePanel panel)
     {
-        if (isPhone)
+        if (isPhone && pickPoint is not null)
+        {
+            // A tab takes the sheet back from the pick.
+            await ClearPickAsync();
+            activePanel = panel;
+        }
+        else if (isPhone)
         {
             // A tab raises the sheet; the open tab lowers it again.
             if (activePanel == panel && sheet != SheetHeight.Lowered)
@@ -284,6 +311,14 @@
     public void OnPhoneChanged(bool phone)
     {
         isPhone = phone;
+        if (phone && pickPoint is not null)
+        {
+            // A pick opens the sheet at half height with the marker in view (D22).
+            if (sheet == SheetHeight.Lowered)
+                sheet = SheetHeight.Half;
+            pickMoved = true;
+        }
+
         StateHasChanged();
     }
 
@@ -335,6 +370,7 @@
             await SetDatasetOutlinesAsync();
             StateHasChanged();
         }
+        await ReadPickHashAsync();
     }
 
     /// <summary>From the JS module: a click on a built tile set's map, which has nothing to pick (D35).</summary>
@@ -520,6 +556,7 @@
         WriteTimeHash();
         await MapAsync("s100Map.setChart", TileJsonUrl());
         await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        await RepickAsync();
     }
 
     private void SetTimesUtc(bool utc) => timesUtc = utc;
@@ -589,9 +626,153 @@
             await JS.InvokeVoidAsync(identifier, args);
     }
 
+    // Features at a point (#1581, D21–D24).
+
+    private RenderFragment PickBody => __builder =>
+    {
+        <ObjectInformation Position="@ServePick.Position(pickPoint!.Value.Latitude, pickPoint.Value.Longitude)"
+                           Report="pick" Error="@pickError" Expanded="pickExpanded" ShowMinor="pickShowMinor"
+                           OnToggle="TogglePickFeatureAsync" OnShowMinor="() => pickShowMinor = true" OnClose="ClearPickAsync" />
+    };
+
+    /// <summary>From the JS module: a click on the map (not a drag) at a point, with the map's scale there.</summary>
+    [JSInvokable]
+    public async Task OnMapClick(double latitude, double longitude, double metresPerPixel)
+    {
+        if (!Data.HasDatasets)
+            return;
+        pickMetresPerPixel = metresPerPixel;
+        await PickAsync(latitude, longitude, writeHash: true);
+    }
+
+    /// <summary>From the JS module: Esc clears the pick.</summary>
+    [JSInvokable]
+    public async Task OnPickEscape()
+    {
+        await ClearPickAsync();
+        StateHasChanged();
+    }
+
+    private async Task PickAsync(double latitude, double longitude, bool writeHash)
+    {
+        pickQuery?.Cancel();
+        var query = pickQuery = new CancellationTokenSource();
+        pickPoint = (latitude, longitude);
+        pick = null;
+        pickError = null;
+        pickExpanded = 0;
+        pickShowMinor = false;
+        pickMoved = true;
+        if (isPhone && sheet == SheetHeight.Lowered)
+            sheet = SheetHeight.Half;
+        if (writeHash)
+        {
+            hashParameters["pick"] = ServePick.FormatHash(latitude, longitude);
+            await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        }
+
+        await MapAsync("s100Pick.setPoint", latitude, longitude);
+        StateHasChanged();
+
+        try
+        {
+            var radius = Math.Clamp(pickMetresPerPixel * ServePick.RadiusPixels, 1, 5000);
+            DateTime? time = times.Count > 0 ? times[timeIndex] : null;
+            var result = await Data.QueryFeaturesAsync(latitude, longitude, radius, ServePick.MaxResults, time, query.Token);
+            if (query.IsCancellationRequested)
+                return;
+            if (result is null)
+            {
+                pickError = "There's no feature information in a tile set.";
+            }
+            else
+            {
+                pick = ServePick.Report(result, Data.Datasets);
+                pickExpanded = pick.Features.Count > 0 ? 0 : -1;
+                await MapAsync("s100Pick.setFeatures", ServePick.Geometries(result).ToJsonString(), pickExpanded);
+            }
+        }
+        catch (OperationCanceledException) when (query.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            pickError = "The datasets couldn't be queried: " + ex.Message;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>The time changed: the coverage values at the pick change with it.</summary>
+    private async Task RepickAsync()
+    {
+        if (pickPoint is { } point)
+            await PickAsync(point.Latitude, point.Longitude, writeHash: false);
+    }
+
+    private async Task ClearPickAsync()
+    {
+        if (pickPoint is null)
+            return;
+        pickQuery?.Cancel();
+        pickPoint = null;
+        pick = null;
+        pickError = null;
+        hashParameters.Remove("pick");
+        await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        await MapAsync("s100Pick.setPoint", null, null);
+    }
+
+    private async Task TogglePickFeatureAsync(int index)
+    {
+        pickExpanded = pickExpanded == index ? -1 : index;
+        await MapAsync("s100Pick.setExpanded", pickExpanded);
+    }
+
+    /// <summary>The hash's <c>pick=</c>: picks there, or clears the pick when it's gone.</summary>
+    private async Task ReadPickHashAsync()
+    {
+        var point = ServePick.ParseHash(hashParameters.GetValueOrDefault("pick"));
+        if (point is { } p && Data.HasDatasets)
+        {
+            if (pickPoint is { } current && Math.Abs(current.Latitude - p.Latitude) < 1e-7 && Math.Abs(current.Longitude - p.Longitude) < 1e-7)
+                return;
+            pickMetresPerPixel = await JS.InvokeAsync<double>("s100Pick.metresPerPixel", p.Latitude);
+            await PickAsync(p.Latitude, p.Longitude, writeHash: false);
+        }
+        else
+        {
+            hashParameters.Remove("pick");
+            await ClearPickAsync();
+        }
+    }
+
+    // After a render with the pick: place the card beside the marker, or on a
+    // phone keep the marker above the sheet.
+    private async Task AfterPickRenderAsync()
+    {
+        if (!shown || pickPoint is null)
+            return;
+        if (isPhone)
+        {
+            if (pickMoved)
+                await JS.InvokeVoidAsync("s100Pick.keepInView");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("s100Pick.place", pickMoved && pick is not null);
+        }
+
+        if (pick is not null || pickError is not null)
+            pickMoved = false;
+    }
+
     public async ValueTask DisposeAsync()
     {
         StopPlaying();
+        pickQuery?.Cancel();
+        pickQuery?.Dispose();
         try
         {
             if (shown)

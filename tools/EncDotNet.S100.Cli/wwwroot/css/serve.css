@@ -932,3 +932,121 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
   .serve-body[data-time-bar="floating"] .map-readout { display: none; }
   .serve-body[data-time-bar="floating"] .maplibregl-ctrl-bottom-right { bottom: calc(114px + var(--time-bar-height, 80px)); }
 }
+
+/* Features at a point (issue #1581, D21–D24): the card beside the marker on a desktop, the sheet on a phone. */
+
+.pick-card {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  width: 340px;
+  max-height: calc(100% - 24px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  visibility: hidden;
+}
+.pick-card[data-placed="true"] { visibility: visible; }
+.pick-card:focus { outline: none; }
+.pick-card::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--pointer-y, 40px) - 7px);
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  transform: rotate(45deg);
+}
+.pick-card[data-side="right"]::before { left: -7px; border-top-color: transparent; border-right-color: transparent; }
+.pick-card[data-side="left"]::before { right: -7px; border-bottom-color: transparent; border-left-color: transparent; }
+.pick-card[data-pointer="false"]::before { display: none; }
+
+.pick-info { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; width: 100%; }
+.pick-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 2px 14px; }
+.pick-title {
+  flex: 1;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pick-close { width: 28px; height: 28px; }
+.pick-position {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.pick-position .mono { flex: 1; }
+.pick-count { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+.pick-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.pick-note { margin: 0; padding: 12px 14px; color: var(--muted-foreground); }
+.pick-error { color: var(--destructive-text); }
+.pick-muted { color: var(--muted-foreground); font-size: 12px; }
+
+.pick-coverage { display: grid; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.pick-coverage-title { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.pick-coverage-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pick-value { font-size: 17px; }
+.pick-direction { display: inline-flex; color: var(--foreground); }
+
+.pick-feature { border-bottom: 1px solid var(--border); }
+.pick-feature-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px 9px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pick-feature-head:hover { background: var(--muted); }
+.pick-feature-text { display: grid; flex: 1; min-width: 0; }
+.pick-feature-title { font-weight: 600; }
+.pick-feature-identity { overflow: hidden; color: var(--muted-foreground); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pick-chevron { color: var(--muted-foreground); transition: transform 0.15s ease; }
+.pick-feature[data-expanded="true"] .pick-chevron { transform: rotate(180deg); }
+.pick-feature-body { padding: 0 14px 10px; }
+
+.pick-rows { margin: 0; }
+.pick-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 4px 0 4px calc(var(--depth, 0) * 12px);
+}
+.pick-row dt { color: var(--muted-foreground); }
+.pick-row dd { margin: 0; overflow-wrap: anywhere; }
+.pick-group { padding: 6px 0 2px calc(var(--depth, 0) * 12px); color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.pick-group-body { margin: 0; }
+.pick-provenance { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; color: var(--muted-foreground); font-size: 12px; }
+.pick-provenance .tag { color: var(--muted-foreground); border-color: var(--border); }
+
+.pick-more {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--selected);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.pick-more:hover { background: var(--muted); }
+
+@media (max-width: 767px) {
+  .pick-sheet { display: flex; min-height: 0; }
+  .pick-sheet .pick-head { padding-top: 2px; }
+}
