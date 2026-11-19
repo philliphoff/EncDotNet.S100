@@ -15,7 +15,7 @@
         <span>Not for navigation</span>
     </span>
     <StatePill State="State" Detail="@StateDetail" />
-    <button type="button" class="icon-button header-link" title="@(LinkCopied ? "Link copied" : "Copy a link to this view")" aria-label="Copy a link to this view" @onclick="OnCopyLink">
+    <button type="button" class="icon-button header-link" title="@(LinkCopied ? "Link copied" : HasToken ? "Copy a link to this view. It contains the access token." : "Copy a link to this view")" aria-label="Copy a link to this view" @onclick="OnCopyLink">
         <Icon Name="@(LinkCopied ? "check" : "link")" />
     </button>
     <button type="button" class="button header-gis" aria-pressed="@(GisOpen ? "true" : "false")" @onclick="OnUseInGis">
@@ -40,6 +40,10 @@
     /// <summary>Whether the link was just copied.</summary>
     [Parameter]
     public bool LinkCopied { get; set; }
+
+    /// <summary>Whether the page's URL carries the access token, so a copied link does too (D27).</summary>
+    [Parameter]
+    public bool HasToken { get; set; }
 
     /// <summary>Whether the Use in GIS panel is open.</summary>
     [Parameter]

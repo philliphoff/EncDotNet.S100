@@ -48,7 +48,7 @@ public sealed class ServePageDataTests : IDisposable
         Assert.True(settings.Validate().Successful);
         Assert.Equal(0, TilesServeCommand.OpenRendered(settings, out var source));
         using var _ = source!;
-        var data = new TileSourcePageData(source!);
+        var data = new TileSourcePageData(source!, hasToken: false);
 
         var tileSet = data.TileSet;
         Assert.Equal(11, tileSet.MinZoom);
@@ -81,7 +81,7 @@ public sealed class ServePageDataTests : IDisposable
         var folder = Path.Combine(_root, "harbour");
         Directory.CreateDirectory(Path.Combine(folder, "3", "4"));
         await File.WriteAllBytesAsync(Path.Combine(folder, "3", "4", "2.png"), [0x89, (byte)'P', (byte)'N', (byte)'G'], TestContext.Current.CancellationToken);
-        var data = new TileSourcePageData(TileSource.Open(folder));
+        var data = new TileSourcePageData(TileSource.Open(folder), hasToken: true);
 
         Assert.False(data.HasDatasets);
         Assert.Empty(data.Datasets);

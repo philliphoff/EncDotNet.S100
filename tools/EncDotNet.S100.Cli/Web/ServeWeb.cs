@@ -14,9 +14,9 @@ namespace EncDotNet.S100.Cli.Web;
 /// </summary>
 internal static class ServeWeb
 {
-    /// <summary>Registers the components and the data they show.</summary>
+    /// <summary>Registers the components and the data they show; <paramref name="hasToken"/> when the URLs carry an access token.</summary>
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "The CLI isn't published trimmed; Razor Components aren't trim-safe.")]
-    public static void AddServices(WebApplicationBuilder builder, ITileSource source)
+    public static void AddServices(WebApplicationBuilder builder, ITileSource source, bool hasToken)
     {
         // Run from a build (not a publish), the page's files and the
         // framework's are found through the build's static web assets
@@ -30,7 +30,7 @@ internal static class ServeWeb
             builder.WebHost.UseStaticWebAssets();
         }
 
-        builder.Services.AddSingleton<IServePageData>(new TileSourcePageData(source));
+        builder.Services.AddSingleton<IServePageData>(new TileSourcePageData(source, hasToken));
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
     }
 

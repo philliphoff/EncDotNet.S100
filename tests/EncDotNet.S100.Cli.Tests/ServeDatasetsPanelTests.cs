@@ -26,7 +26,7 @@ public sealed class ServeDatasetsPanelTests
     {
         Assert.SkipUnless(File.Exists(S57) && File.Exists(S111), "S-57 or S-111 fixture not present.");
         using var source = Open(S57, S111);
-        var data = new TileSourcePageData(source);
+        var data = new TileSourcePageData(source, hasToken: false);
 
         var chart = Assert.Single(data.Datasets, d => d.Product == "S-57");
         Assert.NotNull(chart.EditionNumber);
@@ -51,7 +51,7 @@ public sealed class ServeDatasetsPanelTests
         var cells = Directory.Exists(S101Folder) ? Directory.GetFiles(S101Folder, "*.000") : [];
         Assert.SkipWhen(cells.Length == 0, "S-101 fixtures not present.");
         using var source = Open(cells);
-        var data = new TileSourcePageData(source);
+        var data = new TileSourcePageData(source, hasToken: false);
 
         Assert.All(data.Datasets, d => Assert.NotNull(d.EditionNumber));
         var scaled = data.Datasets.Where(d => d.MaximumDisplayScale is not null).ToList();

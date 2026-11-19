@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
+using Microsoft.AspNetCore.Http;
 
 namespace EncDotNet.S100.Cli.Web;
 
@@ -44,6 +45,21 @@ internal interface IServePageData
     /// of a point, or <see langword="null"/> for a built tile set.
     /// </summary>
     Task<FeatureQueryResult?> QueryFeaturesAsync(double latitude, double longitude, double radiusMeters, int maxResults, DateTime? time, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether every URL carries an access token (<c>--token</c>, or one made
+    /// up when serving beyond this machine), as the last segment of
+    /// <see cref="PublicBaseUri"/>. The page masks it (issue #1582, D27).
+    /// </summary>
+    bool HasToken => false;
+
+    /// <summary>
+    /// The base URL <paramref name="request"/> reached the server on, ending
+    /// in <c>/</c> and with the token when there is one: the root the
+    /// TileJSON's tile URLs and the WMTS and WMS documents are built on, so
+    /// the page's links agree with them, <c>X-Forwarded-*</c> included.
+    /// </summary>
+    Uri PublicBaseUri(HttpRequest request) => TileServer.RequestBaseUri(request);
 }
 
 /// <summary>The tile set as a whole, from its TileJSON.</summary>
@@ -125,8 +141,12 @@ internal sealed record ServedDataset(
 }
 
 /// <summary>The page's data, read from the <see cref="ITileSource"/> being served.</summary>
-internal sealed class TileSourcePageData(ITileSource source) : IServePageData
+/// <param name="source">The tiles served.</param>
+/// <param name="hasToken">Whether the server's URLs carry an access token.</param>
+internal sealed class TileSourcePageData(ITileSource source, bool hasToken) : IServePageData
 {
+    public bool HasToken => hasToken;
+
     public ServedTileSet TileSet
     {
         get

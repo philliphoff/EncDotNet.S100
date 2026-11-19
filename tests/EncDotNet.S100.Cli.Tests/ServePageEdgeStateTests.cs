@@ -120,7 +120,7 @@ public sealed class ServePageEdgeStateTests : IDisposable
     [Fact]
     public void A_built_tile_sets_panel_data_comes_from_its_tilejson()
     {
-        var data = new TileSourcePageData(TileSource.Open(WritePmTiles()));
+        var data = new TileSourcePageData(TileSource.Open(WritePmTiles()), hasToken: false);
 
         var built = Assert.IsType<BuiltTileSet>(data.Built);
         Assert.Equal("solent-approaches.pmtiles", built.File);

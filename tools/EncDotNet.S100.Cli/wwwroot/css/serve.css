@@ -679,6 +679,86 @@ body { background: var(--background); }
 .tile-set-note { display: flex; gap: 8px; margin: 0; color: var(--foreground); }
 .tile-set-note > .icon { flex: none; margin-top: 2px; color: var(--muted-foreground); }
 
+/* Use in GIS (issue #1582, D26, D27) and the toast after Copy (G2). */
+
+.gis-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.gis-pickers .field { margin-bottom: 12px; }
+.gis-pickers .field select { min-width: 0; width: 100%; }
+
+.gis-warning {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-surface);
+}
+.gis-warning > .icon { margin-top: 1px; color: var(--warning-text); }
+.gis-warning p { margin: 0; }
+.gis-warning .strong { color: var(--warning-text); }
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--warning-text);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.gis-link { margin: 0 0 12px; }
+.gis-link-head { margin-bottom: 5px; }
+.gis-link-clients, .gis-link-hint { color: var(--muted-foreground); }
+.gis-link-hint { margin-top: 4px; font-size: 12px; }
+.gis-link-row { display: flex; gap: 6px; }
+.gis-link-url {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 12px;
+  line-height: 32px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+.gis-copy { flex: none; padding: 0 10px; }
+
+.gis-note { display: grid; gap: 4px; margin: 0 0 14px; color: var(--muted-foreground); }
+.gis-note:empty { display: none; }
+.gis-note code { color: var(--foreground); }
+
+.gis-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.gis-tab {
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  cursor: pointer;
+}
+.gis-tab:hover { color: var(--foreground); }
+.gis-tab[aria-selected="true"] { border-bottom-color: var(--selected); color: var(--foreground); font-weight: 600; }
+.gis-client { padding-top: 10px; }
+.gis-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.gis-snippet { position: relative; }
+.gis-snippet pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 12px;
+  white-space: pre;
+}
+.gis-snippet .gis-copy { position: absolute; top: 6px; right: 6px; height: 26px; }
+
 .toast {
   position: absolute;
   bottom: 40px;
