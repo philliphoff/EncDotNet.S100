@@ -12,7 +12,9 @@ month. For package versions and release assets, see
   `--source-timeout`. `s100 mcp serve --source` adds sources at startup, and
   `s100 sources` lists them with their options and what each still needs.
   Options follow the id (`nmea.weather:Input=udp:10110`); keys come from
-  environment variables only.
+  environment variables only. `s100 render --layer … --bbox … --source` draws
+  live sources over a composite, through a new
+  `PngS100DatasetRenderer.RenderAsync(layers, overlays, …)` overload.
 
 - **Live sources in `s100 mcp serve`.** `list_data_sources` and
   `add_data_source` add NDBC observations, own-ship weather from NMEA or AIS

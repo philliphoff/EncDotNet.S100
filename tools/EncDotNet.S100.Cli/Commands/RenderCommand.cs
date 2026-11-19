@@ -72,6 +72,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [Description("Exchange-set form only: restrict compositing to a comma-separated list of product specifications (e.g. --only S101,S128; hyphenation and case are ignored). Datasets of other specs discovered in the set are omitted.")]
         public string? Only { get; init; }
 
+        [CommandOption("--source <SOURCE>")]
+        [Description("Composite form only: also draw a live data source above the datasets (repeatable): an id from 's100 sources', optionally with options as id:name=value,name=value. Needs --bbox or --center/--scale, the area it's started for; it's given --source-timeout for its first data and left out with a warning if it has none. Keys come from environment variables, never this option.")]
+        public string[] Sources { get; init; } = [];
+
+        [CommandOption("--source-timeout <SECONDS>")]
+        [Description("How long to wait for a --source's first data. Default 30.")]
+        [DefaultValue(30.0)]
+        public double SourceTimeoutSeconds { get; init; } = 30.0;
+
         [CommandOption("-o|--output <PATH>")]
         [Description("Output image path. Required (or given positionally) for the composite form; optional alternative to the positional <output> for the single-dataset form.")]
         public string? OutputOption { get; init; }
@@ -355,6 +364,16 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             var viewportResult = ValidateViewport(outputKind);
             if (!viewportResult.Successful)
                 return viewportResult;
+
+            if (Sources.Length > 0)
+            {
+                if (!IsComposite && !IsExchangeSetComposite)
+                    return ValidationResult.Error("--source works with the composite forms (--layer or an exchange set).");
+                if (string.IsNullOrWhiteSpace(BoundingBox) && string.IsNullOrWhiteSpace(Center))
+                    return ValidationResult.Error("--source needs --bbox or --center/--scale: the area it's started for.");
+            }
+            if (!double.IsFinite(SourceTimeoutSeconds) || SourceTimeoutSeconds < 0)
+                return ValidationResult.Error("--source-timeout must be a number of seconds, 0 or more.");
 
             var dir = Path.GetDirectoryName(Path.GetFullPath(output));
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -661,8 +680,20 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                     : null,
             };
 
+            // Data source design note D9: live sources, started for the
+            // viewport and drawn above the datasets if they've data in time.
+            using var sources = StartSources(settings, options.Viewport, out var sourceError);
+            if (sourceError is not null)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{sourceError}[/]");
+                return 2;
+            }
+            var overlays = sources?.Processors ?? [];
+            foreach (var processor in overlays)
+                specNames.Add(processor.Spec.Name);
+
             using var renderer = new PngS100DatasetRenderer(LuaEngineOption.Resolve(settings.LuaEngine));
-            byte[] png = renderer.RenderAsync(layers, options).GetAwaiter().GetResult();
+            byte[] png = renderer.RenderAsync(layers, overlays, options).GetAwaiter().GetResult();
 
             TryResolveFormat(settings.Format, outputPath, out var format, out _);
             using var bitmap = SKBitmap.Decode(png)
@@ -670,7 +701,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             WriteImage(bitmap, outputPath, format, settings.Quality);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Wrote[/] {outputPath} ([grey]{label} of {layers.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
+                $"[green]Wrote[/] {outputPath} ([grey]{label} of {layers.Count + overlays.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
             return 0;
         }
         catch (Exception ex)
@@ -682,6 +713,25 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             foreach (var dataset in datasets)
                 dataset.Dispose();
         }
+    }
+
+    private static OneShotSources? StartSources(Settings settings, Viewport? viewport, out string? error)
+    {
+        error = null;
+        if (settings.Sources.Length == 0 || viewport is null)
+            return null;
+        var area = new GeographicBounds(viewport.MinLongitude, viewport.MinLatitude, viewport.MaxLongitude, viewport.MaxLatitude);
+        var (sources, problem) = OneShotSources.StartAsync(
+                settings.Sources, SourceRegistry.CreateDefault(), area, TimeSpan.FromSeconds(settings.SourceTimeoutSeconds))
+            .GetAwaiter().GetResult();
+        if (problem is not null)
+        {
+            error = problem;
+            return null;
+        }
+        foreach (var warning in sources!.Warnings)
+            Console.Error.WriteLine(warning);
+        return sources;
     }
 
     // The sub-layer keys of --show-layer, trimmed, without empty entries.
