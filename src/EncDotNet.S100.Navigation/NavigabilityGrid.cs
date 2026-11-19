@@ -47,7 +47,7 @@ public sealed record NavigabilityGridRequest(
     bool IncludeHazards = true)
 {
     /// <summary>The most cells a grid may have.</summary>
-    public const int MaxCells = 4_000_000;
+    public const int MaxCells = 6_000_000;
 
     /// <summary>The number of rows and columns the request gives.</summary>
     /// <returns>The rows and columns.</returns>

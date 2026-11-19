@@ -416,7 +416,7 @@ namespace EncDotNet.S100.Navigation
     }
     public sealed class NavigabilityGridRequest : System.IEquatable<EncDotNet.S100.Navigation.NavigabilityGridRequest>
     {
-        public const int MaxCells = 4000000;
+        public const int MaxCells = 6000000;
         public NavigabilityGridRequest(EncDotNet.S100.Pipelines.BoundingBox Extent, double CellMeters, double MinimumDepthMeters, double? HazardDepthMeters = default, bool IncludeHazards = true) { }
         public double CellMeters { get; init; }
         public EncDotNet.S100.Pipelines.BoundingBox Extent { get; init; }
