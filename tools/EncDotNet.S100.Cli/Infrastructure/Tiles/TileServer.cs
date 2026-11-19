@@ -24,7 +24,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// route lives under <c>/&lt;token&gt;/</c>, as the request's path base,
 /// except the <c>/healthz</c> health check. Rendered datasets grouped into
 /// layers (issue #1495) also serve each layer's tiles and TileJSON under
-/// <c>layers/{layer}/</c>.
+/// <c>layers/{layer}/</c>. A PMTiles archive is also served whole at
+/// <c>archive.pmtiles</c>, with range requests (issue #1590), so PMTiles
+/// clients read it as they would from a static host.
 /// </summary>
 /// <remarks>
 /// Every response allows any origin (CORS), so a web map on another local
@@ -37,6 +39,12 @@ internal sealed class TileServer : IAsyncDisposable
 {
     /// <summary>The path, under the server's base URL, of the layers' tiles: <c>layers/{layer}/…</c>.</summary>
     public const string LayersPath = "layers";
+
+    /// <summary>The path, under the server's base URL, of a served PMTiles archive's whole file (issue #1590).</summary>
+    public const string PmTilesArchivePath = "archive.pmtiles";
+
+    /// <summary>The media type of a PMTiles archive.</summary>
+    public const string PmTilesContentType = "application/vnd.pmtiles";
 
     private readonly WebApplication _app;
 
@@ -116,6 +124,13 @@ internal sealed class TileServer : IAsyncDisposable
 
         app.MapGet("/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix, palette: null));
         app.MapGet("/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
+        if (PmTilesArchive(source) is { } archive)
+        {
+            // The archive itself, with range requests (issue #1590), for
+            // clients that read PMTiles directly (MapLibre's pmtiles:// protocol).
+            app.MapMethods("/" + PmTilesArchivePath, [HttpMethods.Get, HttpMethods.Head], context => ServePmTilesArchiveAsync(context, archive));
+        }
+
         if (source.Palettes.Count > 0)
         {
             // The same tiles in each palette, under /{palette}/.
@@ -218,6 +233,14 @@ internal sealed class TileServer : IAsyncDisposable
     /// </summary>
     public static string TileUrlTemplate(Uri baseUri, TileImageFormat format, bool highDpi = false) =>
         baseUri.AbsoluteUri + "{z}/{x}/{y}" + (highDpi ? HighDpiSuffix : string.Empty) + "." + TileSetMetadata.FormatToken(format);
+
+    /// <summary>
+    /// The file of the PMTiles archive <paramref name="source"/> reads, which
+    /// is served whole at <see cref="PmTilesArchivePath"/>; <see langword="null"/>
+    /// for any other source.
+    /// </summary>
+    public static string? PmTilesArchive(ITileSource source) =>
+        source is ITileSetSource { Container: TileContainer.PmTiles } set ? set.Path : null;
 
     /// <summary>
     /// Runs until the host shuts down — on Ctrl-C (SIGINT) or SIGTERM, which
@@ -323,6 +346,12 @@ internal sealed class TileServer : IAsyncDisposable
         if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
             tiles += "?t=" + Uri.EscapeDataString((string)step!);
         json["tiles"] = new System.Text.Json.Nodes.JsonArray(tiles);
+        if (layer is null && palette is null && PmTilesArchive(source) is not null)
+        {
+            if (json["s100"] is not System.Text.Json.Nodes.JsonObject archiveS100)
+                json["s100"] = archiveS100 = [];
+            archiveS100["pmtilesUrl"] = root.AbsoluteUri + PmTilesArchivePath;
+        }
         if (source.HasDatasets && json["s100"] is System.Text.Json.Nodes.JsonObject s100)
             s100["datasetsUrl"] = root.AbsoluteUri + DatasetsDocument.Path;
         if (layer is not null && json["s100"] is System.Text.Json.Nodes.JsonObject layerS100)
@@ -429,6 +458,38 @@ internal sealed class TileServer : IAsyncDisposable
         context.Response.ContentType = TileSource.ContentType(source.Format);
         context.Response.ContentLength = data.Length;
         await context.Response.Body.WriteAsync(data, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Serves the PMTiles archive at <paramref name="path"/> whole, with range
+    /// requests (issue #1590). The file is opened once per request, so every
+    /// byte of a response comes from one version of it even when an export
+    /// replaces it meanwhile; its ETag (length and write time) and
+    /// <c>Last-Modified</c> change when it's replaced, so a client's
+    /// <c>If-Range</c> or ETag check notices a new archive.
+    /// </summary>
+    private static Task ServePmTilesArchiveAsync(HttpContext context, string path)
+    {
+        FileStream stream;
+        try
+        {
+            stream = new FileStream(
+                File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete),
+                FileAccess.Read,
+                bufferSize: 0);
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }
+
+        var lastModified = new DateTimeOffset(File.GetLastWriteTimeUtc(stream.SafeFileHandle), TimeSpan.Zero);
+        var etag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue(
+            string.Create(CultureInfo.InvariantCulture, $"\"{stream.Length:x}-{lastModified.UtcTicks:x}\""));
+        context.Response.Headers.CacheControl = "no-cache";
+        return TypedResults.Stream(stream, PmTilesContentType, lastModified: lastModified, entityTag: etag, enableRangeProcessing: true)
+            .ExecuteAsync(context);
     }
 
     /// <summary>The base URL a client reached this server on, ending in <c>/</c>, so documents carry URLs that work from there.</summary>

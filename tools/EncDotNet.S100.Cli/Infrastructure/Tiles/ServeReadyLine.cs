@@ -15,7 +15,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (<c>0.0.0.0</c> or <c>::</c>). <c>healthz</c> is outside the token, as the
 /// route is. <c>preview</c> is <see langword="null"/> with <c>--no-viewer</c>,
 /// <c>token</c> when there is none, and <c>tilesHighDpi</c> when the tiles
-/// aren't rendered here (a built tile set has no <c>@2x</c> tiles, issue #1563).
+/// aren't rendered here (a built tile set has no <c>@2x</c> tiles, issue #1563),
+/// and <c>pmtiles</c> unless a PMTiles archive is served (issue #1590).
 /// </remarks>
 internal static class ServeReadyLine
 {
@@ -29,8 +30,9 @@ internal static class ServeReadyLine
     /// <param name="format">The tile image format.</param>
     /// <param name="viewer">Whether the preview page is served.</param>
     /// <param name="highDpi">Whether the 512-pixel <c>@2x</c> tiles are served.</param>
+    /// <param name="pmTilesArchive">Whether a PMTiles archive is served whole at <see cref="TileServer.PmTilesArchivePath"/>.</param>
     /// <returns>A compact JSON object on one line.</returns>
-    public static string Format(IPAddress address, int port, string? token, TileImageFormat format, bool viewer, bool highDpi)
+    public static string Format(IPAddress address, int port, string? token, TileImageFormat format, bool viewer, bool highDpi, bool pmTilesArchive)
     {
         ArgumentNullException.ThrowIfNull(address);
 
@@ -49,6 +51,7 @@ internal static class ServeReadyLine
             ["tileJson"] = new Uri(baseUri, XyzDirectoryTileSink.TileJsonFileName).AbsoluteUri,
             ["wmts"] = new Uri(baseUri, WmtsService.CapabilitiesPath).AbsoluteUri,
             ["wms"] = new Uri(baseUri, WmsService.Path).AbsoluteUri,
+            ["pmtiles"] = pmTilesArchive ? new Uri(baseUri, TileServer.PmTilesArchivePath).AbsoluteUri : null,
             ["healthz"] = new Uri(root, ServeHost.HealthPath).AbsoluteUri,
             ["preview"] = viewer ? baseUri.AbsoluteUri : null,
         };

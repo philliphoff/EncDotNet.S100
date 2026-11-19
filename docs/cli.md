@@ -618,7 +618,9 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 Declare `tileSize: 256` for 512-pixel tiles too: they cover the same grid at
 twice the pixel density. A folder of tiles is added the same way, with
 `tiles: ["https://example.com/tiles/{z}/{x}/{y}.png"]` in place of `url`. The
-host must answer HTTP range requests for PMTiles; most static hosts do.
+host must answer HTTP range requests for PMTiles; most static hosts do. To try
+an archive before you publish it, [`tiles serve`](#tiles-serve) it and use its
+`archive.pmtiles` URL in place of the host's.
 
 ### Zoom levels
 
@@ -782,6 +784,13 @@ The server has these routes:
 - With `--overview`, tiles below the datasets' minimum zoom show where the
   datasets are instead of answering `204`. See
   [Overview below the minimum zoom](#overview-below-the-minimum-zoom).
+- When serving a `.pmtiles` archive, `archive.pmtiles`, the archive itself,
+  with HTTP range requests, so a PMTiles client such as MapLibre's
+  `pmtiles://` protocol reads it as it would from a static host. Use it to
+  check an archive before you publish it. Its `ETag` and `Last-Modified`
+  change when the archive is exported again, so a client notices the new file
+  rather than mixing parts of the two. The TileJSON names it in
+  `s100.pmtilesUrl`.
 - `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
   document, and `wmts`, the same service in the KVP encoding, so GIS desktops
   such as QGIS and ArcGIS Pro can add the tiles.
@@ -1079,6 +1088,7 @@ while datasets are portrayed can come before it. The members are:
 | `tiles` | The XYZ tile URL template. |
 | `tilesHighDpi` | The URL template of the 512-pixel [`@2x` tiles](#high-dpi-tiles), or `null` when serving a built tile set. |
 | `tileJson`, `wmts`, `wms` | The TileJSON, WMTS capabilities and WMS URLs. |
+| `pmtiles` | The URL of the served PMTiles archive's file, or `null` when not serving a `.pmtiles` archive. |
 | `healthz` | The [health check](#health) URL, which has no token. |
 | `preview` | The preview page URL, or `null` with `--no-viewer`. |
 

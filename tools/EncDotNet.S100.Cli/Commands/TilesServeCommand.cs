@@ -213,7 +213,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
             if (settings.ReadyJson)
             {
                 // Written directly, not through the console renderer, so it's never wrapped (issue #1496).
-                Console.Out.WriteLine(ServeReadyLine.Format(address, server.Port, token, source.Format, viewer: !settings.NoViewer, highDpi: source.CanReadPixelRatio(2)));
+                Console.Out.WriteLine(ServeReadyLine.Format(address, server.Port, token, source.Format, viewer: !settings.NoViewer, highDpi: source.CanReadPixelRatio(2), pmTilesArchive: TileServer.PmTilesArchive(source) is not null));
                 Console.Out.Flush();
             }
 
@@ -238,6 +238,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                     AnsiConsole.MarkupLine(
                         $"  Layers:   [link]{Markup.Escape(baseUri.AbsoluteUri + TileServer.LayersPath + "/{layer}/" + XyzDirectoryTileSink.TileJsonFileName)}[/] ({Markup.Escape(string.Join(", ", source.Layers))})");
                 }
+                if (TileServer.PmTilesArchive(source) is not null)
+                    AnsiConsole.MarkupLine($"  PMTiles:  [link]{Markup.Escape(new Uri(baseUri, TileServer.PmTilesArchivePath).AbsoluteUri)}[/] (the archive, for pmtiles:// clients)");
                 AnsiConsole.MarkupLine($"  WMS:      [link]{Markup.Escape(new Uri(baseUri, WmsService.Path).AbsoluteUri)}[/]");
                 if (datasets is not null)
                     AnsiConsole.MarkupLine($"  Datasets: [link]{Markup.Escape(new Uri(baseUri, ServedDatasets.Path).AbsoluteUri)}[/]");
