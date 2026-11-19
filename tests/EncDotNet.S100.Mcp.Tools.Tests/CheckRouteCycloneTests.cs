@@ -49,7 +49,7 @@ public class CheckRouteCycloneTests
     {
         var (polyline, departure) = Route();
 
-        var value = await Ok(new CheckRouteRequest(Polyline: polyline, SpeedKnots: 10, Departure: departure));
+        var value = await Ok(new CheckRouteRequest(Polyline: polyline, Departure: departure, Vessel: new VesselArguments(SpeedKnots: 10)));
 
         var check = value.Checks.Single(c => c.Name == "weather");
         Assert.Equal("ran", check.State);
@@ -86,8 +86,7 @@ public class CheckRouteCycloneTests
         var (polyline, departure) = Route();
 
         var value = await Ok(new CheckRouteRequest(
-            Polyline: polyline, SpeedKnots: 10, Departure: departure,
-            CycloneCheckAgainstKnots: 50, CycloneReportClosestApproach: false, CycloneMustReviewInside: "never"));
+            Polyline: polyline, Departure: departure, Vessel: new VesselArguments(SpeedKnots: 10), Weather: new WeatherCheckArguments(Cyclones: new CycloneCheckArguments(CheckAgainstKnots: 50, ReportClosestApproach: false, MustReviewInside: "never"))));
 
         Assert.Equal(new CheckRouteCycloneSettings(50, false, null), value.Weather!.CycloneSettings);
         var codes = value.Findings.Where(f => f.Category == "weather").Select(f => (f.Code, f.Group)).OrderBy(c => c.Code, StringComparer.Ordinal);
@@ -100,8 +99,7 @@ public class CheckRouteCycloneTests
         var (polyline, departure) = Route();
 
         var value = await Ok(new CheckRouteRequest(
-            Polyline: polyline, SpeedKnots: 10, Departure: departure,
-            IncludeWindow: true, WindowFrom: departure, WindowTo: departure.AddHours(2), WindowStepMinutes: 60));
+            Polyline: polyline, Departure: departure, Vessel: new VesselArguments(SpeedKnots: 10), Window: new DepartureWindowArguments(From: departure, To: departure.AddHours(2), StepMinutes: 60)));
 
         var sweep = value.Weather!.Window!;
         Assert.Equal(3, sweep.Departures.Count);
@@ -111,14 +109,14 @@ public class CheckRouteCycloneTests
     }
 
     [Theory]
-    [InlineData(40, null, "cycloneCheckAgainstKnots")]
-    [InlineData(null, "gale", "cycloneMustReviewInside")]
-    [InlineData(null, "40", "cycloneMustReviewInside")]
+    [InlineData(40, null, "weather.cyclones.checkAgainstKnots")]
+    [InlineData(null, "gale", "weather.cyclones.mustReviewInside")]
+    [InlineData(null, "40", "weather.cyclones.mustReviewInside")]
     public async Task Bad_cyclone_settings_are_refused(int? against, string? inside, string parameter)
     {
         var (polyline, _) = Route();
         var result = await CheckRouteTools.Create(Catalog()).InvokeAsync(
-            new CheckRouteRequest(Polyline: polyline, CycloneCheckAgainstKnots: against, CycloneMustReviewInside: inside),
+            new CheckRouteRequest(Polyline: polyline, Weather: new WeatherCheckArguments(Cyclones: new CycloneCheckArguments(CheckAgainstKnots: against, MustReviewInside: inside))),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));

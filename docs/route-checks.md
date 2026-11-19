@@ -116,7 +116,7 @@ side, so its breakwaters are close too. Structures within the berth radius of
 the departure or arrival waypoint are grouped into one Info finding per end,
 "Structures at the departure berth" or "Structures at the arrival berth",
 which lists them. The radius is a setting (`--berth-radius` in
-`s100 route check`, `berthRadiusMeters` in `check_route`); 0 turns the
+`s100 route check`, `limits.berthRadiusMeters` in `check_route`); 0 turns the
 grouping off.
 
 The one exception is a structure that isn't a berth and that the track line
@@ -181,7 +181,7 @@ hazard counts exactly when an ECDIS would raise the alert for it. Wrecks,
 obstructions and rocks are the dangers above. A feature type the check
 doesn't know is treated as a structure. The track clearance and the 0.1 NM
 near band are settings (`--track-clearance` and `--nearby` in
-`s100 route check`, `trackClearanceMeters` and `nearbyDistanceMeters` in
+`s100 route check`, `limits.trackClearanceMeters` and `limits.nearbyDistanceMeters` in
 `check_route`). Overhead features aren't judged against an air draft yet.
 
 ## Regulated and protected areas
@@ -204,7 +204,7 @@ ETAs where it meets the route.
 The S-101 areas are the ones whose portrayal raises the `ProhAre` alert, in
 the 13 kinds of the S-101 alert catalogue, plus precautionary areas. Areas
 charted as points count too. Each kind can be turned off (`--areas-off` in
-`s100 route check`, `areaKindsOff` in `check_route`; S-164 calls this the
+`s100 route check`, `limits.areaKindsOff` in `check_route`; S-164 calls this the
 user selection of prohibited areas). The areas of a kind that's off aren't
 reported; instead one finding, worded as the catalogue words it, says the
 indication of some areas is off, with the kind and how many the route meets.

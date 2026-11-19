@@ -520,17 +520,17 @@ internal static class S100McpServerToolFactory
             "warnings, clearance, weather, with a reason when partial or skipped), every finding with its numbers in 'details', and the under-keel clearance. " +
             "The chart check reports where the track crosses land (LandArea, or a Coastline where no land area is charted) or drying ground " +
             "(must_review), where either reaches inside the corridor between the cross-track limits (check), and where the track leaves the " +
-            "DataCoverage of every loaded cell; with safetyContourMeters and safetyDepthMeters, also charted dangers and areas, soundings and " +
+            "DataCoverage of every loaded cell; with vessel.safetyContourMeters and vessel.safetyDepthMeters, also charted dangers and areas, soundings and " +
             "S-102 cells shallower than the safety contour or depth (without them the chart check is partial, " +
             "reason safety_settings_missing, and no depth or danger is checked). Where cells overlap only the finest cell counts. The area check reports " +
             "S-101 restricted, military practice, caution, anchorage and traffic areas and S-122 protected areas the corridor meets; an area " +
             "whose dates or season don't cover the ETAs is info route_check.area_not_in_force. The warning check reports S-124 warnings on or " +
-            "near the route at the ETAs. With a draft on every leg the clearance check computes UKC = charted depth (S-102, else S-101, low " +
+            "near the route at the ETAs. With a draft on every leg (vessel.draftMeters, or the route's own) the clearance check computes UKC = charted depth (S-102, else S-101, low " +
             "confidence) + S-104 water level at each sample's ETA − draft − squat, against the required UKC (0 m when unset); datums must match " +
-            "(a mismatch is a gap, never mixed). includeSamples adds per-leg results and samples; includeWindow adds a departure sweep " +
-            "(windowFrom/windowTo, or the S-104 range). With maxWindKnots or maxWaveHeightMeters (or the route's own limits) the " +
-            "weather check tests loaded GRIB2/NetCDF forecasts along the route, and loaded NHC advisories are tested as the cyclone* " +
-            "arguments say. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
+            "(a mismatch is a gap, never mixed). samples.include adds per-leg results and samples; window adds a departure sweep " +
+            "(window.from/to, or the S-104 range). With weather.maxWindKnots or weather.maxWaveHeightMeters (or the route's own limits) the " +
+            "weather check tests loaded GRIB2/NetCDF forecasts along the route, and loaded NHC advisories are tested as weather.cyclones " +
+            "says. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
             "uses each leg's XTDs, draft, speed and UKC. SOG is the entered speed (S-111 is not applied). Not for navigation.";
 
         // The schema and the binding come from CheckRouteRequest itself, so
@@ -572,8 +572,34 @@ internal static class S100McpServerToolFactory
             ["type"] = "string",
         };
         node.Remove("required");
+        RemoveNullDefaults(node);
         using var doc = JsonDocument.Parse(node.ToJsonString());
         return doc.RootElement.Clone();
+    }
+
+    // "default": null says nothing an optional property doesn't; dropping
+    // it keeps the schema (and every client's context) smaller.
+    private static void RemoveNullDefaults(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            if (obj.TryGetPropertyValue("default", out var value) && value is null)
+            {
+                obj.Remove("default");
+            }
+
+            foreach (var (_, child) in obj.ToList())
+            {
+                RemoveNullDefaults(child);
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (var child in array)
+            {
+                RemoveNullDefaults(child);
+            }
+        }
     }
 
     /// <summary>
@@ -598,6 +624,13 @@ internal static class S100McpServerToolFactory
                 JsonNode n => n.DeepClone(),
                 _ => JsonSerializer.SerializeToNode(value, JsonOptions.GetTypeInfo(value.GetType())),
             };
+            // A group (vessel, window, ...) sent as JSON text is read as its object.
+            if (node is JsonValue groupText && groupText.TryGetValue<string>(out var json) && json.TrimStart().StartsWith('{')
+                && !string.Equals(name, CheckRoutePolylineArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                node = JsonNode.Parse(json);
+            }
+
             if (string.Equals(name, CheckRoutePolylineArgument, StringComparison.OrdinalIgnoreCase))
             {
                 // JSON text, as the schema says; an object is taken as is.

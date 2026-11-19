@@ -46,7 +46,7 @@ public class CheckRouteWeatherTests
     public async Task Limits_check_the_forecast_along_the_route()
     {
         var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
-            Polyline: Polyline, SpeedKnots: 6, Departure: RunTime.AddHours(3), MaxWindKnots: 15, MaxWaveHeightMeters: 2));
+            Polyline: Polyline, Departure: RunTime.AddHours(3), Vessel: new VesselArguments(SpeedKnots: 6), Weather: new WeatherCheckArguments(MaxWindKnots: 15, MaxWaveHeightMeters: 2)));
 
         var check = value.Checks.Single(c => c.Name == "weather");
         Assert.Equal("ran", check.State);
@@ -82,7 +82,7 @@ public class CheckRouteWeatherTests
     [Fact]
     public async Task Without_limits_the_weather_check_is_skipped()
     {
-        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(Polyline: Polyline, SpeedKnots: 6, Departure: RunTime));
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(Polyline: Polyline, Departure: RunTime, Vessel: new VesselArguments(SpeedKnots: 6)));
 
         var check = value.Checks.Single(c => c.Name == "weather");
         Assert.Equal("skipped", check.State);
@@ -94,7 +94,7 @@ public class CheckRouteWeatherTests
     public async Task A_departure_after_the_forecast_is_not_checked()
     {
         var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
-            Polyline: Polyline, SpeedKnots: 6, Departure: RunTime.AddDays(2), MaxWindKnots: 40));
+            Polyline: Polyline, Departure: RunTime.AddDays(2), Vessel: new VesselArguments(SpeedKnots: 6), Weather: new WeatherCheckArguments(MaxWindKnots: 40)));
 
         Assert.Equal("forecast_ends_before_arrival", value.Weather!.Verdict);
         var gap = value.Findings.Single(f => f.Code == RouteFindingCodes.WeatherForecastEnds.Value);
@@ -107,7 +107,7 @@ public class CheckRouteWeatherTests
     public async Task The_window_sweeps_departures_across_the_forecast()
     {
         var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
-            Polyline: Polyline, SpeedKnots: 6, Departure: RunTime, MaxWaveHeightMeters: 2.6, IncludeWindow: true, WindowStepMinutes: 60));
+            Polyline: Polyline, Departure: RunTime, Vessel: new VesselArguments(SpeedKnots: 6), Window: new DepartureWindowArguments(StepMinutes: 60), Weather: new WeatherCheckArguments(MaxWaveHeightMeters: 2.6)));
 
         var window = value.Weather!.Window!;
         Assert.Equal(60, window.StepMinutes);
@@ -134,19 +134,19 @@ public class CheckRouteWeatherTests
         Assert.Equal(["route", "route"], own.Weather!.Limits.Select(l => l.Origin));
         Assert.Equal([RouteFindingCodes.WavesAboveLimit.Value], own.Findings.Where(f => f.Category == "weather").Select(f => f.Code));
 
-        var replaced = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(MaxWindKnots: 15));
+        var replaced = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(Weather: new WeatherCheckArguments(MaxWindKnots: 15)));
         Assert.Equal(["settings", "route"], replaced.Weather!.Limits.Select(l => l.Origin));
         Assert.Equal(2, replaced.Findings.Count(f => f.Category == "weather"));
     }
 
     [Theory]
-    [InlineData(0.0, null, "maxWindKnots")]
-    [InlineData(-5.0, null, "maxWindKnots")]
-    [InlineData(null, 0.0, "maxWaveHeightMeters")]
+    [InlineData(0.0, null, "weather.maxWindKnots")]
+    [InlineData(-5.0, null, "weather.maxWindKnots")]
+    [InlineData(null, 0.0, "weather.maxWaveHeightMeters")]
     public async Task Limits_must_be_positive(double? wind, double? wave, string parameter)
     {
         var result = await CheckRouteTools.Create(Catalog()).InvokeAsync(
-            new CheckRouteRequest(Polyline: Polyline, MaxWindKnots: wind, MaxWaveHeightMeters: wave),
+            new CheckRouteRequest(Polyline: Polyline, Weather: new WeatherCheckArguments(MaxWindKnots: wind, MaxWaveHeightMeters: wave)),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));

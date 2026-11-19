@@ -946,11 +946,9 @@ public class S100McpServerRoundTripTests
         var result = await client.CallToolAsync("check_route", new Dictionary<string, object?>
         {
             ["polyline"] = """{"vertices":[[0.005,0.005],[0.005,0.025]]}""",
-            ["draftMeters"] = 10.0,
-            ["speedKnots"] = 6.0,
-            ["requiredUkcMeters"] = 2.0,
+            ["vessel"] = new Dictionary<string, object?> { ["draftMeters"] = 10.0, ["speedKnots"] = 6.0, ["requiredUkcMeters"] = 2.0 },
             ["departure"] = "2024-01-01T00:00:00Z",
-            ["includeSamples"] = true,
+            ["samples"] = new Dictionary<string, object?> { ["include"] = true },
         }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"check_route returned an error: {DumpText(result)}");
@@ -984,7 +982,7 @@ public class S100McpServerRoundTripTests
 
         var result = await client.CallToolAsync("check_route", new Dictionary<string, object?>
         {
-            ["draftMeters"] = 10.0,
+            ["vessel"] = new Dictionary<string, object?> { ["draftMeters"] = 10.0 },
         }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError);
