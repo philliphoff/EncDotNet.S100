@@ -41,13 +41,13 @@ internal sealed record PickFeaturesResult(
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated,
     [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false,
-    [property: Description("With select=true, the live overlay features at the point that Object information shows too, such as a predicted tide station or an AIS target; empty otherwise.")] IReadOnlyList<PickDynamicFeature>? DynamicFeatures = null);
+    [property: Description("With select=true, the overlay features at the point that Object information shows too, such as own-ship; empty otherwise. Live feeds such as AIS targets, NDBC observations and predicted tide stations are datasets, so they come back as features.")] IReadOnlyList<PickDynamicFeature>? DynamicFeatures = null);
 
 /// <summary>A live overlay feature a <c>pick_features</c> select showed.</summary>
 [Description("A live overlay feature at the pick: its overlay and its label.")]
 internal sealed record PickDynamicFeature(
-    [property: Description("The overlay's id, such as 'tide-stations' or 'ndbc'.")] string SourceId,
-    [property: Description("The feature's id in the overlay, such as 'tide:9447130'.")] string FeatureId,
+    [property: Description("The overlay feature's kind, such as 'ownship'.")] string SourceId,
+    [property: Description("The feature's id in the overlay, such as 'ownship'.")] string FeatureId,
     [property: Description("The feature's label, such as the station name.")] string Label);
 
 /// <summary>
@@ -187,7 +187,7 @@ internal sealed class PickFeaturesTool
             }
 
             var dynamicHits = _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
-            dynamicFeatures = [.. dynamicHits.Select(h => new PickDynamicFeature(h.SourceId, h.FeatureId, h.DisplayLabel))];
+            dynamicFeatures = [.. dynamicHits.Select(h => new PickDynamicFeature(h.FeatureType, h.FeatureRef, h.FeatureTypeName ?? h.FeatureType))];
             selected = refs.Length > 0 || dynamicHits.Count > 0;
         }
 

@@ -380,10 +380,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     }
 
     /// <summary>
-    /// True when the current pick includes at least one dataset-owned
-    /// feature. Drives visibility of the identity / references /
-    /// attributes sections in the panel; dynamic-only picks set this
-    /// to false and only render the dynamic-hits section.
+    /// True when the current pick has a hit, a dataset's or an overlay
+    /// source's (own-ship). Drives visibility of the identity / references /
+    /// attributes sections in the panel.
     /// </summary>
     public bool HasDatasetPick => Hits.Count > 0;
 
@@ -715,23 +714,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     }
 
     /// <summary>
-    /// Dynamic-source hits collected by
-    /// <see cref="Services.DynamicSources.IDynamicSourcePickService"/>.
-    /// Rendered in a sibling section beneath the dataset hit list. The
-    /// section is hidden when empty.
-    /// </summary>
-    public ObservableCollection<DynamicPickHit> DynamicHits { get; } = new();
-
-    /// <summary>True when at least one dynamic-source hit was returned by the most recent pick.</summary>
-    public bool HasDynamicHits => DynamicHits.Count > 0;
-
-    /// <summary>
-    /// Shows a pick result: its dataset hits AND dynamic-source hits. Either
-    /// list may be empty; both being empty is equivalent to
-    /// <see cref="Clear"/>. When dataset hits are non-empty the first hit (or
-    /// the first Warning card's) drives the detail view; when only dynamic hits
-    /// are present the detail view is left empty and only the dynamic section
-    /// is shown. The pick's location is surfaced in the panel and copyable to
+    /// Shows a pick result: its hits, an overlay source's (own-ship) first,
+    /// as ordinary hits (data source design note P5). An empty result is
+    /// equivalent to <see cref="Clear"/>. The first hit (or the first Warning
+    /// card's) drives the detail view. The pick's location is surfaced in the panel and copyable to
     /// the clipboard, with the depth card when the result has a depth there.
     /// </summary>
     /// <param name="result">What the pick found.</param>
@@ -739,17 +725,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     {
         ArgumentNullException.ThrowIfNull(result);
         var hits = result.Hits;
-        var dynamicHits = result.DynamicHits;
 
         DisposeHitResources();
         Hits.Clear();
         foreach (var hit in hits)
             Hits.Add(hit);
         Warnings.Show(hits);
-
-        DynamicHits.Clear();
-        foreach (var dh in dynamicHits)
-            DynamicHits.Add(dh);
 
         if (result.IsEmpty)
         {
@@ -768,7 +749,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(ShowHitList));
         OnPropertyChanged(nameof(SelectedOtherHit));
-        OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
         SelectedHit = Warnings.Cards.Count > 0 ? Warnings.Cards[0].Hit : hits.Count > 0 ? hits[0] : null;
         RefreshLegendKey();
@@ -807,7 +787,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(ShowHitList));
         OnPropertyChanged(nameof(SelectedOtherHit));
         Hits.Clear();
-        DynamicHits.Clear();
         // SelectedHit setter rejects identical references; clear the backing
         // field directly so we always raise PropertyChanged when something
         // was selected.
@@ -845,7 +824,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
         OnPropertyChanged(nameof(HasMultipleHits));
-        OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
         RefreshLegendKey();
     }
@@ -1040,10 +1018,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         foreach (var chart in _stationCharts.Values)
             chart.Dispose();
         _stationCharts.Clear();
-        // A dynamic hit's rich card (a predicted tide station's) follows the
-        // view time until the pick is replaced.
-        foreach (var hit in DynamicHits)
-            hit.Card?.Release();
     }
 }
 

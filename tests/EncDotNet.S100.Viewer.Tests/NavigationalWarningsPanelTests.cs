@@ -47,7 +47,7 @@ public sealed class NavigationalWarningsPanelTests : IDisposable
         public event EventHandler<PickResult>? Picked { add { } remove { } }
 
         public List<(IDatasetProcessor Processor, int Ordinal, string Dataset)> Opened { get; } = [];
-        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
         public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;

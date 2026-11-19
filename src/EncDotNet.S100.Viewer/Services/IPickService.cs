@@ -27,15 +27,13 @@ internal interface IPickService
     /// </summary>
     /// <param name="worldPosition">The clicked point in EPSG:3857 metres, or null.</param>
     /// <param name="resolution">The map resolution, metres per DIP, which sizes the click tolerance.</param>
-    /// <param name="dynamicHits">
-    /// Dynamic-source hits collected in parallel by
-    /// <see cref="DynamicSources.IDynamicSourcePickService"/>. When non-empty
-    /// they are published into the pick report's dynamic section; an empty
-    /// list is equivalent to none. Either list (or both) being non-empty
-    /// opens the panel.
+    /// <param name="overlayHits">
+    /// The overlay sources' hits (own-ship) collected by
+    /// <see cref="DynamicSources.IDynamicSourcePickService"/>, published ahead
+    /// of the datasets' hits; an empty list is equivalent to none.
     /// </param>
     /// <returns>A task that completes once the pick report is updated.</returns>
-    Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null);
+    Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null);
 
     /// <summary>
     /// Publishes a pick at a geographic location whose features have already
@@ -57,19 +55,18 @@ internal interface IPickService
 
     /// <summary>
     /// As <see cref="PresentGeographicPick(double, double, IReadOnlyList{GeographicPickFeature})"/>,
-    /// with the dynamic-source features at the point too (a predicted tide
-    /// station, an AIS target), as a click shows them. Must be called on the
-    /// UI thread.
+    /// with the overlay sources' features at the point too (own-ship), as a
+    /// click shows them. Must be called on the UI thread.
     /// </summary>
     /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
     /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
     /// <param name="features">Resolved features under the pick, most-specific first.</param>
-    /// <param name="dynamicHits">The dynamic-source features at the point.</param>
+    /// <param name="overlayHits">The overlay sources' features at the point.</param>
     void PresentGeographicPick(
         double latitude,
         double longitude,
         IReadOnlyList<GeographicPickFeature> features,
-        IReadOnlyList<ViewModels.DynamicPickHit> dynamicHits) =>
+        IReadOnlyList<PickHit> overlayHits) =>
         PresentGeographicPick(latitude, longitude, features);
 
     /// <summary>

@@ -135,13 +135,13 @@ public sealed class PickReportSingleNoticeTests : IDisposable
         Assert.Equal(notice, host.Find<TextBlock>("PickReport.NavigationNotice").Text);
     }
 
-    private static void AssertDynamicNoticeOnce(DynamicPickHit hit, string sourceRow)
+    private static void AssertDynamicNoticeOnce(PickHit hit, string sourceRow)
     {
         var vm = TestPickReport.Create();
         vm.SetPicks([], [hit]);
 
         Assert.Null(vm.NavigationNotice);
-        Assert.Single(hit.Attributes, a => a.Value.Contains("not for navigation", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(hit.Attributes, a => a.DisplayText.Contains("not for navigation", StringComparison.OrdinalIgnoreCase));
 
         using var host = ViewHost.Show(new PickReportView { DataContext = vm }, width: 420, height: 900);
         Assert.Equal(sourceRow, Assert.Single(NoticeTexts(host)));
@@ -155,7 +155,7 @@ public sealed class PickReportSingleNoticeTests : IDisposable
             .Select(t => t.Text!)
             .ToList();
 
-    private static DynamicPickHit DynamicHit(Func<DynamicFeature, DynamicFeatureDescription> describe)
+    private static PickHit DynamicHit(Func<DynamicFeature, DynamicFeatureDescription> describe)
     {
         const double latitude = 42.35, longitude = -70.65;
         var source = new DescribedSource(describe)
@@ -172,7 +172,7 @@ public sealed class PickReportSingleNoticeTests : IDisposable
                 },
             ],
         };
-        var service = new DynamicSourcePickService(new SingleSourceRegistry(source), []);
+        var service = new DynamicSourcePickService(new SingleSourceRegistry(source));
         var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(longitude, latitude);
         return Assert.Single(service.Pick(new MPoint(x, y), resolution: 10.0));
     }

@@ -66,10 +66,10 @@ internal static class TestPickReport
     public static void SetPicks(
         this PickReportViewModel report,
         IReadOnlyList<PickHit> hits,
-        IReadOnlyList<DynamicPickHit>? dynamicHits = null,
+        IReadOnlyList<PickHit>? overlayHits = null,
         PickLocation? location = null,
         LocationDepthResult? locationDepth = null) =>
-        report.SetPicks(new PickResult(hits, dynamicHits ?? [], location, locationDepth));
+        report.SetPicks(new PickResult([.. overlayHits ?? [], .. hits], location, locationDepth));
 
     /// <summary>A warnings panel with no warnings.</summary>
     private sealed class NoWarnings : INavigationalWarningNavigator

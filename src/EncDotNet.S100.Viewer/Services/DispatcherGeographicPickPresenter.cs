@@ -39,16 +39,16 @@ internal sealed class DispatcherGeographicPickPresenter : IGeographicPickPresent
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<DynamicPickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features)
+    public IReadOnlyList<PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features)
     {
         ArgumentNullException.ThrowIfNull(features);
-        IReadOnlyList<DynamicPickHit> dynamicHits = [];
+        IReadOnlyList<PickHit> dynamicHits = [];
         if (_dynamicPicks is not null && _resolution() is { } resolution and > 0)
         {
             var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(longitude, latitude);
             var point = new Mapsui.MPoint(x, y);
             var picks = _dynamicPicks;
-            // Hit-test and build the cards on the UI thread, as a click does.
+            // Hit-test on the UI thread, as a click does.
             dynamicHits = Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
                 ? picks.Pick(point, resolution)
                 : Avalonia.Threading.Dispatcher.UIThread.Invoke(() => picks.Pick(point, resolution));

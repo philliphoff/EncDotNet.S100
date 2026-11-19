@@ -19,7 +19,7 @@ internal sealed class StubPickService : IPickService
     /// <summary>Publishes <paramref name="result"/> as a pick would.</summary>
     public void Publish(PickResult result) => Picked?.Invoke(this, result);
 
-    public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
+    public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
 
     public void PresentGeographicPick(
         double latitude,

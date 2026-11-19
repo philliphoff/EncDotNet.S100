@@ -213,7 +213,7 @@ public class PickReportViewModelTests
             {
                 new PickHit { FeatureType = "DepthArea", FeatureRef = "42" },
             },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(47.601234, -122.334567));
 
         Assert.True(vm.HasLocation);
@@ -244,7 +244,7 @@ public class PickReportViewModelTests
 
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(51.9035, 4.395),
             depth);
 
@@ -259,7 +259,7 @@ public class PickReportViewModelTests
 
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "1" } },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(51.9, 4.4),
             MakeDepthResult());
         var first = vm.LocationDepthSeries!;
@@ -267,7 +267,7 @@ public class PickReportViewModelTests
         var second = MakeDepthResult();
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "2" } },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(51.9, 4.4),
             second);
 
@@ -282,7 +282,7 @@ public class PickReportViewModelTests
 
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(51.9, 4.4),
             MakeDepthResult());
         var depth = vm.LocationDepthSeries!;
@@ -308,7 +308,7 @@ public class PickReportViewModelTests
 
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(10.0, 20.0));
 
         vm.Clear();
@@ -411,7 +411,7 @@ public class PickReportViewModelTests
         var vm = TestPickReport.Create();
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
-            System.Array.Empty<DynamicPickHit>(),
+            System.Array.Empty<PickHit>(),
             new PickLocation(47.601234, -122.334567));
 
         string? copied = null;
@@ -662,7 +662,7 @@ public class PickReportViewModelTests
     {
         public event Action<FeatureReference>? Navigated;
         public event EventHandler<PickResult>? Picked { add { } remove { } }
-        public Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null) => Task.CompletedTask;
+        public Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? dynamicHits = null) => Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
         public bool NavigateToReference(FeatureReference reference)
         {
@@ -746,40 +746,35 @@ public class PickReportViewModelTests
         Assert.Contains("ft", vm.Attributes[0].DisplayValue!);
     }
 
-    // PR-D4: dynamic-source pick coverage.
+    // Data source design note P5: an overlay source's hit (own-ship) is an
+    // ordinary hit with no dataset, ahead of the datasets' hits.
 
-    private static DynamicPickHit DynamicHit(string id = "ais.test", string label = "MV ALPHA") => new()
+    private static PickHit OverlayHit(string label = "Own ship") => new()
     {
-        SourceId = "ais",
-        SourceDisplayName = "AIS",
-        FeatureId = id,
-        Kind = "vessel.ais.cargo",
-        DisplayLabel = label,
-        LastUpdated = DateTimeOffset.UtcNow,
-        Latitude = 47.6,
-        Longitude = -122.3,
+        FeatureType = "ownship",
+        FeatureTypeName = label,
+        FeatureRef = "ownship",
+        Attributes = [new PickAttribute { Code = "lastUpdated", Name = "Last updated", RawValue = "2026-11-19 00:00:00Z" }],
     };
 
     [Fact]
-    public void SetPicks_WithOnlyDynamicHits_MarksHasPickAndPopulatesDynamicSection()
+    public void SetPicks_WithOnlyAnOverlayHit_SelectsIt()
     {
         var vm = TestPickReport.Create();
+        var overlay = OverlayHit();
 
-        vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
+        vm.SetPicks(Array.Empty<PickHit>(), new[] { overlay });
 
         Assert.True(vm.HasPick);
-        Assert.True(vm.HasDynamicHits);
-        Assert.False(vm.HasDatasetPick);
-        Assert.Single(vm.DynamicHits);
-        Assert.Equal("MV ALPHA", vm.DynamicHits[0].DisplayLabel);
-        Assert.Null(vm.SelectedHit);
-        // Dataset detail fields stay clear when no dataset hit is present.
-        Assert.Null(vm.FeatureType);
-        Assert.Empty(vm.Attributes);
+        Assert.True(vm.HasDatasetPick);
+        Assert.Same(overlay, vm.SelectedHit);
+        Assert.Equal("ownship", vm.FeatureType);
+        Assert.Equal("ID ownship", vm.IdentityCaption);
+        Assert.Single(vm.Attributes);
     }
 
     [Fact]
-    public void SetPicks_WithBoth_KeepsDatasetSelectionAndDynamicList()
+    public void SetPicks_WithBoth_PutsTheOverlayHitFirst()
     {
         var vm = TestPickReport.Create();
         var datasetHit = new PickHit
@@ -788,53 +783,26 @@ public class PickReportViewModelTests
             FeatureRef = "42",
             Attributes = Array.Empty<PickAttribute>(),
         };
+        var overlay = OverlayHit();
 
-        vm.SetPicks(new[] { datasetHit }, new[] { DynamicHit() });
+        vm.SetPicks(new[] { datasetHit }, new[] { overlay });
 
-        Assert.True(vm.HasPick);
-        Assert.True(vm.HasDatasetPick);
-        Assert.True(vm.HasDynamicHits);
-        Assert.Same(datasetHit, vm.SelectedHit);
-        Assert.Equal("DepthArea", vm.FeatureType);
-        Assert.Single(vm.DynamicHits);
-    }
-
-    [Fact]
-    public void Clear_AlsoClearsDynamicHits()
-    {
-        var vm = TestPickReport.Create();
-        vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
-        Assert.True(vm.HasDynamicHits);
-
-        vm.Clear();
-
-        Assert.False(vm.HasPick);
-        Assert.False(vm.HasDynamicHits);
-        Assert.Empty(vm.DynamicHits);
+        Assert.Equal([overlay, datasetHit], vm.Hits);
+        Assert.Same(overlay, vm.SelectedHit);
+        Assert.True(vm.HasMultipleHits);
     }
 
     [Fact]
     public void SetPicks_WithBothEmpty_ClearsState()
     {
         var vm = TestPickReport.Create();
-        vm.SetPicks(new[] { new PickHit { FeatureType = "X", FeatureRef = "1" } }, Array.Empty<DynamicPickHit>());
+        vm.SetPicks(new[] { new PickHit { FeatureType = "X", FeatureRef = "1" } }, Array.Empty<PickHit>());
         Assert.True(vm.HasPick);
 
-        vm.SetPicks(Array.Empty<PickHit>(), Array.Empty<DynamicPickHit>());
+        vm.SetPicks(Array.Empty<PickHit>(), Array.Empty<PickHit>());
 
         Assert.False(vm.HasPick);
     }
-
-    private static DynamicPickHit Hit(string featureId) => new()
-    {
-        SourceId = "ais.aisstream",
-        SourceDisplayName = "AIS",
-        FeatureId = featureId,
-        DisplayLabel = featureId,
-        LastUpdated = DateTimeOffset.UtcNow,
-        Latitude = 50.0,
-        Longitude = -1.0,
-    };
 
     [Fact]
     public void Identity_WithNamedFeature_LeadsWithNameAndClassPill()

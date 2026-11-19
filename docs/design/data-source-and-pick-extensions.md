@@ -988,10 +988,18 @@ Each slice ships on its own and leaves the tree working.
      factories are presenters now, and their `IDynamicPickCardFactory`
      registrations and keyed renderers are gone.
 
-     Left: own-ship is the last overlay source. `DynamicPickHit`,
-     `IDynamicFeatureRenderer` and the overlay pick path stay for it, and
-     merging `DynamicPickHit` into `PickHit` waits on how own-ship is picked
-     (D8 keeps it built in and in the overlay band).
+     Own-ship is the last overlay source. Decided on 2026-11-19 (option
+     A): it stays built in and drawn by the overlay host through
+     `IDynamicFeatureRenderer`, and its picks become ordinary `PickHit`s.
+     As built: `DynamicSourceProcessor.Describe(source, feature)` is public,
+     so `DynamicSourcePickService` describes an overlay hit as a processor
+     would (title, rows, `VesselSection`, pick actions) and returns a
+     `PickHit` with no dataset; `PickService` puts it ahead of the datasets'
+     hits in `PickResult.Hits`, so own-ship is selected first, as it's drawn
+     on top. `DynamicPickHit`, `PickResult.DynamicHits`, the pick report's
+     dynamic section and `IDynamicPickCardFactory` are gone (`IDynamicPickCard`
+     stays for the station cards). "Take helm" doesn't apply to own-ship.
+     MCP's `pick_features` keeps `dynamicFeatures` for overlay hits.
 8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
    and the AIS key migration.
 9. **Live feeds in the Library** (D8). `SourceRegistry` feeds the Library's
@@ -1038,7 +1046,8 @@ Each slice ships on its own and leaves the tree working.
      weather is offered once it has a page; `SOUNDCHARTS_NMEA_INPUT` still
      adds it for a run. A row and node status for "Key needed" is left:
      the row says so when it fails to start, and the page says so.
-10. **Pick actions.** Part 1 is built (P4, P5 as built). Move "Take helm" to a contributed action, make the
+10. **Pick actions.** Built (P4, P5 as built; `DynamicPickHit` merged into
+    `PickHit` after 7d, see 7d as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and
     merge `DynamicPickHit` into `PickHit`. Ships with 7c (decided
     2026-11-18).

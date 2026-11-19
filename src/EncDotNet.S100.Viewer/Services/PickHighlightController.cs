@@ -122,7 +122,6 @@ internal sealed class PickHighlightController : IDisposable
             or nameof(PickReportViewModel.SelectedHit)
             or nameof(PickReportViewModel.PreviewHit)
             or nameof(PickReportViewModel.HasPick)
-            or nameof(PickReportViewModel.HasDynamicHits)
             or nameof(PickReportViewModel.SelectedSections))
         {
             _marshal(Rebuild);
@@ -167,15 +166,6 @@ internal sealed class PickHighlightController : IDisposable
                 Curves: Array.Empty<IReadOnlyList<GeoPosition>>(),
                 Points: Array.Empty<GeoPosition>());
         }
-        else if (geometry is null && hit is null
-            && _pickReport.DynamicHits.Select(d => d.Card?.Outline).FirstOrDefault(o => o is { Count: > 2 }) is { } outline)
-        {
-            geometry = new PickHighlightGeometry(
-                ExteriorRing: outline,
-                InteriorRings: Array.Empty<IReadOnlyList<GeoPosition>>(),
-                Curves: Array.Empty<IReadOnlyList<GeoPosition>>(),
-                Points: Array.Empty<GeoPosition>());
-        }
 
         var state = new PickHighlightState(location, geometry);
 
@@ -197,6 +187,9 @@ internal sealed class PickHighlightController : IDisposable
     {
         var featureRef = hit.FeatureRef;
         if (string.IsNullOrEmpty(featureRef)) return null;
+        // An overlay source's hit (own-ship) has no dataset to find it in;
+        // the location marker shows where it is.
+        if (hit.OwningProcessor is null && hit.DatasetFileName is null) return null;
 
         var datasets = _catalog.Datasets;
         foreach (var dataset in datasets)

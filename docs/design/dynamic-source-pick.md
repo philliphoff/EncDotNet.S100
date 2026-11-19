@@ -1,7 +1,10 @@
 # Dynamic Source Pick — Design Note (PR-D4)
 
-> Status: **In progress** — describes the click-to-identify support
-> for dynamic feature sources shipped by PR-D4. See
+> Status: **Superseded** — `DynamicPickHit` and the separate dynamic
+> section are gone. Live feeds are datasets, and an overlay source's hit
+> (own-ship) is an ordinary `PickHit`; see the data source design note
+> (`data-source-and-pick-extensions.md`, P5 and slice 7d as built). The
+> rest of this note describes the click-to-identify support shipped by PR-D4. See
 > [Dynamic feature sources](dynamic-feature-source.md) for the
 > underlying push-driven abstraction (PR-D1) and
 > [AIS dynamic feature source](ais-source.md) for the motivating
