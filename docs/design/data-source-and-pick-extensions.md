@@ -1184,6 +1184,22 @@ Also left:
   - **11c. MCP tools.** `list_data_sources`, `add_data_source`, status in
     `list_datasets`, `set_viewport` and query areas driving `UpdateArea`,
     `--collections` live feeds with `--live-feeds`. Gated like `open_dataset`.
+
+    11c as built: `ILiveSourceHost` with `list_data_sources` and
+    `add_data_source` (options as an object of text values; a `[Secret]`
+    option is refused as an argument and names its environment variable)
+    in the MCP tools, served by `s100 mcp serve` with the other tools that
+    open datasets. `HeadlessLiveSources` adds a source to the headless
+    catalog and drives it from the session's viewport
+    (`HeadlessS100Session.ViewportChanged` and `ViewArea`, at the reference
+    render size): it runs within the registration's range for the options
+    and pauses outside it, starting on first activation, as SoundCharts'
+    activator does; `close_dataset` ends it. `--live-feeds` adds the
+    Library's subscribed feeds, dropping saved secrets. Two changes from
+    the plan: a source's status is in `list_data_sources` rather than
+    `list_datasets`, whose shape is unchanged; and a query's own area
+    doesn't drive a source yet, only `set_viewport` (set it before
+    querying).
   - **11d. The command line.** `--source` on `render`, `identify` and `mcp
     serve`, `--source-timeout`, `s100 sources`.
   - **11e. Tiles** (deferred). `tiles serve --source` with `--bbox`, live

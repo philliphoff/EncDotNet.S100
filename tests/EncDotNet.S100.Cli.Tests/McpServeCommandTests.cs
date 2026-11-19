@@ -18,6 +18,7 @@ public sealed class McpServeCommandTests
 {
     private static readonly string[] ExpectedTools =
     [
+        "add_data_source",
         "add_library_source",
         "await_library_idle",
         "check_route",
@@ -31,6 +32,7 @@ public sealed class McpServeCommandTests
         "identify_features",
         "library_action",
         "list_current_stations",
+        "list_data_sources",
         "list_datasets",
         "list_known_sources",
         "list_library_sources",

@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Live sources in `s100 mcp serve`.** `list_data_sources` and
+  `add_data_source` add NDBC observations, own-ship weather from NMEA or AIS
+  targets to the session's catalog, where they answer the query tools and
+  render like datasets. A source runs for the area set with `set_viewport`,
+  within its range. Keys come from environment variables, never arguments.
+  `--live-feeds` with `--collections` adds the live feeds subscribed to in
+  SoundCharts' Library.
 - **Live sources are queryable in a catalog.** A `DynamicSourceProcessor`
   now projects to a `LoadedDataset` (`LiveSourceDatasetData`) whose features
   the query tools read as they are when asked, so a live source added to a

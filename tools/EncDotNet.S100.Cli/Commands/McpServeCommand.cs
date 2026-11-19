@@ -138,6 +138,10 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [Description("HTTP only: serve without a token even on a non-loopback address.")]
         public bool NoToken { get; init; }
 
+        [CommandOption("--live-feeds")]
+        [Description("Also add the live feeds subscribed to in the Library (--collections on SoundCharts' collections.json), such as NDBC observations or AIS targets, with their saved settings. Keys come from environment variables. Off by default: the server then fetches from the network or opens an NMEA port only when an add_data_source call asks it to.")]
+        public bool LiveFeeds { get; init; }
+
         [CommandOption("--allow-changes")]
         [Description("HTTP only: also serve the tools that open and close datasets by path and change the Library (add, refresh and remove sources, download and open items, set a SECOM identity). Over stdio they're always served.")]
         public bool AllowChanges { get; init; }
@@ -280,12 +284,27 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // download), are left out.
             var allowChanges = !settings.IsHttp || settings.AllowChanges;
             using var session = new HeadlessS100Session(catalog);
+            // Data source design note D9: live sources, run for the session's viewport.
+            using var liveSources = new HeadlessLiveSources(
+                EncDotNet.S100.Datasets.Pipelines.SourceRegistry.CreateDefault(), catalog, session);
+            if (settings.LiveFeeds)
+            {
+                var feeds = services.Library.Collections
+                    .SelectMany(c => c.Sources)
+                    .Select(s => s.Definition)
+                    .OfType<EncDotNet.S100.Collections.LiveFeedSource>()
+                    .Select(f => (f.RegistrationId, f.Options));
+                var added = liveSources.AddFeeds(feeds, message => Console.Error.WriteLine(message));
+                Console.Error.WriteLine($"Added {added} live feed(s) from the Library; they run once set_viewport narrows the view to their range.");
+            }
             var additionalTools = S100MutableTools.Create(
                 presentation: new StaticCapabilityAccessor<IPresentationController>(session),
                 time: new StaticCapabilityAccessor<ITimeController>(session),
                 renderer: new StaticCapabilityAccessor<IImageRenderer>(session),
                 catalog: allowChanges ? catalog : null,
-                viewport: new StaticCapabilityAccessor<IViewportController>(session))
+                viewport: new StaticCapabilityAccessor<IViewportController>(session),
+                // Adding a source fetches from the network or opens a port, like opening a path.
+                liveSources: allowChanges ? liveSources : null)
                 .Concat(LibraryMcpTools.Create(
                     library,
                     allowChanges ? library : null,
