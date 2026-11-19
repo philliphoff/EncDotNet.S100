@@ -42,6 +42,7 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
     private string? _pendingFingerprint;
     private string? _failedFingerprint;
     private int _reloads;
+    private volatile bool _updating;
 
     /// <param name="initial">The datasets as first opened.</param>
     /// <param name="fingerprint">The fingerprint <paramref name="initial"/> was opened at.</param>
@@ -62,6 +63,7 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         _fingerprint = computeFingerprint;
         _open = open;
         _log = log;
+        Interval = interval;
         _loop = interval == Timeout.InfiniteTimeSpan ? Task.CompletedTask : RunAsync(interval, _stopping.Token);
     }
 
@@ -84,6 +86,19 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
                 return _current.Source;
         }
     }
+
+    /// <summary>How often the files are checked; <see cref="Timeout.InfiniteTimeSpan"/> when only on request.</summary>
+    public TimeSpan Interval { get; }
+
+    /// <summary>
+    /// The datasets are changing or have changed (issue #1583): a reload
+    /// started or ended, or a dataset was added or removed. Raised on the
+    /// thread making the change; a handler that throws is reported and skipped.
+    /// </summary>
+    public event Action<DatasetsUpdate>? Updated;
+
+    /// <summary>Whether the datasets are being opened again now.</summary>
+    public bool IsUpdating => _updating;
 
     /// <summary>How many times the datasets have been reopened.</summary>
     public int Reloads => Volatile.Read(ref _reloads);
@@ -244,8 +259,11 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
     public async Task<bool> ReplaceAsync(Func<RenderedTileSource?> open, string fingerprint, Action? replaced = null)
     {
         await _changing.WaitAsync().ConfigureAwait(false);
+        bool served = false;
         try
         {
+            var before = Current?.Session;
+            Raise(new DatasetsUpdate(true, Revision, []));
             var opened = await Task.Run(open).ConfigureAwait(false);
             if (opened is null)
                 return false;
@@ -253,10 +271,15 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
             Serve(opened, fingerprint, $"Now serving {opened.Path}, zoom {opened.Layout.MinZoom}–{opened.Layout.MaxZoom}.");
             _pendingFingerprint = null;
             replaced?.Invoke();
+            served = true;
+            Raise(DatasetsUpdate.Between(before, opened.Session, opened.Revision));
             return true;
         }
         finally
         {
+            // Not replaced (or the open threw): nothing changed, and nothing's changing now.
+            if (!served)
+                Raise(new DatasetsUpdate(false, Revision, []));
             _changing.Release();
         }
     }
@@ -278,9 +301,11 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
             if (Current is not { } rendered)
                 return false;
 
+            Raise(new DatasetsUpdate(true, Revision, []));
             Serve(new NoDatasetsTileSource(rendered, fingerprint), fingerprint, "No datasets are served now.");
             _pendingFingerprint = null;
             replaced?.Invoke();
+            Raise(DatasetsUpdate.Between(rendered.Session, null, Revision));
             return true;
         }
         finally
@@ -317,7 +342,11 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         }
 
         _pendingFingerprint = null;
+        var before = Current?.Session;
+        var reloading = DatasetsUpdate.Reloading(before, Revision);
+        Raise(reloading);
         RenderedTileSource? reopened;
+        string reason = "They couldn't be opened; the server's console says why";
         try
         {
             reopened = await Task.Run(_open).ConfigureAwait(false);
@@ -325,17 +354,39 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         catch (Exception e)
         {
             _log($"The datasets changed but couldn't be reopened ({e.Message}); still serving the previous version.");
+            reason = e.Message;
             reopened = null;
         }
 
         if (reopened is null)
         {
             _failedFingerprint = fingerprint;
+            Raise(DatasetsUpdate.Failed(reloading, Revision, reason));
             return false;
         }
 
         Serve(reopened, fingerprint, $"The datasets changed; now serving {reopened.Path}, zoom {reopened.Layout.MinZoom}–{reopened.Layout.MaxZoom}.");
+        Raise(DatasetsUpdate.Between(before, reopened.Session, reopened.Revision));
         return true;
+    }
+
+    /// <summary>Tells the <see cref="Updated"/> handlers, each on its own: one that throws doesn't stop the others or the change.</summary>
+    private void Raise(DatasetsUpdate update)
+    {
+        _updating = update.InProgress;
+        if (Updated is not { } handlers)
+            return;
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<DatasetsUpdate>>())
+        {
+            try
+            {
+                handler(update);
+            }
+            catch (Exception e)
+            {
+                _log($"Telling a listener about a change to the datasets failed: {e.Message}");
+            }
+        }
     }
 
     /// <summary>Switches new requests to <paramref name="opened"/>, and retires the datasets they replace.</summary>

@@ -62,7 +62,9 @@ QGIS shows the chart, portrayed with the S-101 portrayal catalogue (S-57 cells
 are translated to S-101 first), and the WMS layer answers identify requests
 from the datasets. `tiles serve` keeps running until you press Ctrl+C. It
 checks the folder every 10 seconds, so a new edition or a new cell you copy in
-is served without a restart.
+is served without a restart. The web page follows along: a cell being reloaded is
+tagged **Reloading**, a new one **New**, and cells that couldn't be served are
+listed under **Not served** with the reason.
 
 ## Use the tiles in a web page
 

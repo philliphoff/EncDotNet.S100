@@ -227,6 +227,13 @@ internal static partial class DatasetsDocument
         }
     }
 
+    /// <summary>The <c>id</c> the document gives each dataset of <paramref name="names"/> (file names, in input order).</summary>
+    internal static IReadOnlyList<string> Ids(IReadOnlyList<string> names)
+    {
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return [.. names.Select(name => UniqueId(taken, name))];
+    }
+
     /// <summary>The file name without its extension, with <c>-2</c>, <c>-3</c>, … after names already taken.</summary>
     private static string UniqueId(HashSet<string> taken, string file)
     {

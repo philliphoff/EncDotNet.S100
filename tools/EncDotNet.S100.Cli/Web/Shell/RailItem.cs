@@ -4,4 +4,5 @@ namespace EncDotNet.S100.Cli.Web.Shell;
 /// <param name="Panel">The panel it opens.</param>
 /// <param name="Label">The label under the icon, and the panel's title.</param>
 /// <param name="Icon">The <see cref="Icon"/> name.</param>
-public sealed record RailItem(ServePanel Panel, string Label, string Icon);
+/// <param name="Badge">A red count on the icon (the datasets not served, D31); 0 for none.</param>
+public sealed record RailItem(ServePanel Panel, string Label, string Icon, int Badge = 0);

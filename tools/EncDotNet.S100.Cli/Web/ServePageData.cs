@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
 using Microsoft.AspNetCore.Http;
 
@@ -60,6 +61,43 @@ internal interface IServePageData
     /// the page's links agree with them, <c>X-Forwarded-*</c> included.
     /// </summary>
     Uri PublicBaseUri(HttpRequest request) => TileServer.RequestBaseUri(request);
+
+    /// <summary>
+    /// The datasets found but not served (issue #1583, handoff D31): unreadable,
+    /// protected, unsupported or missing, each with why. Empty for a built tile set.
+    /// </summary>
+    IReadOnlyList<SkippedDataset> NotServed => [];
+
+    /// <summary>How often the server checks the datasets' files for changes; <see langword="null"/> when it doesn't.</summary>
+    TimeSpan? RefreshInterval => null;
+
+    /// <summary>Whether the datasets are being opened again now (D28's Updating).</summary>
+    bool IsUpdating => false;
+
+    /// <summary>
+    /// Calls <paramref name="handler"/> as the datasets change (D29): a reload
+    /// starting and ending, a dataset added or removed. It's called on the
+    /// server's thread, not the component's. Dispose the result to stop.
+    /// </summary>
+    IDisposable OnDatasetsUpdated(Action<DatasetsUpdate> handler) => NoSubscription.Instance;
+
+    /// <summary>
+    /// Calls <paramref name="handler"/> when the server stops cleanly (D28's
+    /// Server stopped), and holds the shutdown briefly while it tells the
+    /// browser. Dispose the result to stop.
+    /// </summary>
+    IDisposable OnStopping(Func<Task> handler) => NoSubscription.Instance;
+}
+
+/// <summary>A subscription to nothing.</summary>
+internal sealed class NoSubscription : IDisposable
+{
+    /// <summary>The one instance.</summary>
+    public static NoSubscription Instance { get; } = new();
+
+    public void Dispose()
+    {
+    }
 }
 
 /// <summary>The tile set as a whole, from its TileJSON.</summary>
@@ -141,10 +179,18 @@ internal sealed record ServedDataset(
 }
 
 /// <summary>The page's data, read from the <see cref="ITileSource"/> being served.</summary>
-/// <param name="source">The tiles served.</param>
+/// <param name="source">What's served.</param>
 /// <param name="hasToken">Whether the server's URLs carry an access token.</param>
-internal sealed class TileSourcePageData(ITileSource source, bool hasToken) : IServePageData
+/// <param name="stopping">Cancelled when the server stops cleanly; the <see cref="OnStopping"/> handlers run then.</param>
+internal sealed class TileSourcePageData(ITileSource source, bool hasToken, CancellationToken stopping = default) : IServePageData
 {
+    /// <summary>How long a clean shutdown waits for the pages to hear of it.</summary>
+    internal static readonly TimeSpan StoppingGrace = TimeSpan.FromSeconds(2);
+
+    private readonly Lock _gate = new();
+    private readonly List<Func<Task>> _stopping = [];
+    private bool _watchingStop;
+
     public bool HasToken => hasToken;
 
     public ServedTileSet TileSet
@@ -200,6 +246,74 @@ internal sealed class TileSourcePageData(ITileSource source, bool hasToken) : IS
             : [];
 
     public IReadOnlyList<string> Layers => source.Layers;
+
+    // Under --overview the refreshing source is wrapped; without --refresh or --manage-datasets there's none.
+    private RefreshingTileSource? Refreshing => ((source as OverviewTileSource)?.Inner ?? source) as RefreshingTileSource;
+
+    private RenderedTileSource? Rendered => Refreshing?.Current ?? ((source as OverviewTileSource)?.Inner ?? source) as RenderedTileSource;
+
+    public IReadOnlyList<SkippedDataset> NotServed => Rendered?.Session.Skipped ?? [];
+
+    public TimeSpan? RefreshInterval => Refreshing is { Interval: var interval } && interval != Timeout.InfiniteTimeSpan ? interval : null;
+
+    public bool IsUpdating => Refreshing?.IsUpdating ?? false;
+
+    public IDisposable OnDatasetsUpdated(Action<DatasetsUpdate> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        if (Refreshing is not { } refreshing)
+            return NoSubscription.Instance;
+        refreshing.Updated += handler;
+        return new Subscription(() => refreshing.Updated -= handler);
+    }
+
+    public IDisposable OnStopping(Func<Task> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        lock (_gate)
+        {
+            _stopping.Add(handler);
+            if (!_watchingStop)
+            {
+                // Once, for the server's life: the registration lasts as long as this.
+                _watchingStop = true;
+                stopping.Register(TellStopping);
+            }
+        }
+
+        return new Subscription(() =>
+        {
+            lock (_gate)
+                _stopping.Remove(handler);
+        });
+    }
+
+    // Runs on the thread stopping the host: hold it until every page has been told, or the grace is up.
+    private void TellStopping()
+    {
+        Func<Task>[] handlers;
+        lock (_gate)
+            handlers = [.. _stopping];
+        var told = Task.WhenAll(handlers.Select(async h =>
+        {
+            try
+            {
+                await h().ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // A page that's gone has nothing to be told.
+            }
+        }));
+        told.Wait(StoppingGrace);
+    }
+
+    private sealed class Subscription(Action dispose) : IDisposable
+    {
+        private Action? _dispose = dispose;
+
+        public void Dispose() => Interlocked.Exchange(ref _dispose, null)?.Invoke();
+    }
 
     public string? Revision => source.Revision;
 

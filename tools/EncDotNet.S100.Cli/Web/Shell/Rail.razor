@@ -4,6 +4,10 @@
     {
         <button type="button" class="rail-item" aria-pressed="@(item.Panel == Active ? "true" : "false")" title="@item.Label" @onclick="() => OnSelect.InvokeAsync(item.Panel)">
             <Icon Name="@item.Icon" Size="22" />
+            @if (item.Badge > 0)
+            {
+                <span class="rail-badge" aria-label="@(item.Badge + " not served")">@(item.Badge > 99 ? "99+" : item.Badge.ToString(CultureInfo.InvariantCulture))</span>
+            }
             <span class="rail-label">@item.Label</span>
         </button>
     }

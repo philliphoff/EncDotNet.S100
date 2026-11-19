@@ -92,9 +92,11 @@ internal sealed class TileRenderSession : IDisposable
         IReadOnlyList<string> specs,
         IReadOnlyList<string>? names = null,
         IReadOnlyList<string>? paths = null,
-        DatasetChanges? changes = null)
+        DatasetChanges? changes = null,
+        IReadOnlyList<SkippedDataset>? skipped = null)
     {
         _settings = settings;
+        Skipped = skipped ?? [];
         _changes = changes;
         _catalogueManager = catalogueManager;
         _resolution = resolution;
@@ -112,10 +114,25 @@ internal sealed class TileRenderSession : IDisposable
             .Order()
             .ToArray();
         _warnings = new Lazy<SessionWarnings?>(ReadWarnings);
+        DatasetFingerprints = [.. Paths.Select(DatasetFingerprint)];
     }
+
+    /// <summary>
+    /// Each dataset's <see cref="DatasetFingerprint"/> as it was opened, in
+    /// input order: a reload compares them to tell which datasets changed (issue #1583).
+    /// </summary>
+    public IReadOnlyList<string> DatasetFingerprints { get; }
 
     /// <summary>The product specification of each dataset, in input order.</summary>
     public IReadOnlyList<string> Specs { get; }
+
+    /// <summary>
+    /// The datasets found but not opened (issue #1583): unreadable,
+    /// protected, unsupported or missing, with why. Only a folder or an
+    /// exchange set skips a dataset; a dataset named on its own that can't be
+    /// opened fails the session instead.
+    /// </summary>
+    public IReadOnlyList<SkippedDataset> Skipped { get; }
 
     /// <summary>The changes to the start-up datasets opened (issue #1494); <see langword="null"/> for none.</summary>
     public DatasetChanges? Changes => _changes;
@@ -149,6 +166,7 @@ internal sealed class TileRenderSession : IDisposable
         var specsOpened = new List<string>();
         var namesOpened = new List<string>();
         var pathsOpened = new List<string>();
+        var skipped = new List<SkippedDataset>();
         bool opened = false;
         try
         {
@@ -159,10 +177,9 @@ internal sealed class TileRenderSession : IDisposable
             {
                 // A folder of datasets, as s100 mcp serve reads one: loose cells keep
                 // their sibling S-101 updates; cells in an S-100 exchange set don't.
-                var warnings = new List<string>();
-                var resolved = DatasetInputResolver.Resolve(folder, [], null, settings.Only, warnings, out resolution);
-                foreach (var warning in warnings)
-                    Console.Error.WriteLine(warning);
+                var resolved = DatasetInputResolver.Resolve(folder, [], null, settings.Only, skipped, out resolution);
+                foreach (var skip in skipped)
+                    Console.Error.WriteLine(skip.Warning);
                 inputs = resolved
                     .Select(i => (i.Path, i.Spec, applyUpdates && !IsInsideExchangeSet(i.Path, folder)))
                     .ToList();
@@ -177,6 +194,7 @@ internal sealed class TileRenderSession : IDisposable
                 resolution = exchangeSet;
                 foreach (var warning in exchangeSet.Warnings)
                     Console.Error.WriteLine(warning);
+                skipped.AddRange(exchangeSet.Skipped);
                 inputs = exchangeSet.Layers.Select(l => (l.Path, l.Spec, false)).ToList();
             }
             else
@@ -239,7 +257,9 @@ internal sealed class TileRenderSession : IDisposable
                 catch (Exception e) when (folder is not null && e is not OperationCanceledException)
                 {
                     // In a folder, one unreadable dataset doesn't stop the rest.
-                    Console.Error.WriteLine($"Skipped {spec} dataset that could not be opened: {path} ({e.Message})");
+                    var failed = SkippedDataset.FailedToOpen(Path.GetFullPath(path), spec, e.Message);
+                    Console.Error.WriteLine(failed.Warning);
+                    skipped.Add(failed);
                     continue;
                 }
 
@@ -250,7 +270,9 @@ internal sealed class TileRenderSession : IDisposable
                     (processor as IDisposable)?.Dispose();
                     if (folder is not null)
                     {
-                        Console.Error.WriteLine($"Skipped {spec} dataset, which can't be tiled: {path}");
+                        var untiled = SkippedDataset.NotTileable(Path.GetFullPath(path), spec);
+                        Console.Error.WriteLine(untiled.Warning);
+                        skipped.Add(untiled);
                         continue;
                     }
 
@@ -298,7 +320,7 @@ internal sealed class TileRenderSession : IDisposable
                 return 2;
             }
 
-            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened, namesOpened, pathsOpened, changes);
+            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened, namesOpened, pathsOpened, changes, skipped);
             opened = true;
             return 0;
         }
