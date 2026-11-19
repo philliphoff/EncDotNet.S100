@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Legends;
 using EncDotNet.S100.Viewer.ViewModels.Legends;
@@ -28,7 +29,13 @@ internal sealed class LegendMcpToolGroup : IViewerMcpToolGroup
         _ui = ui;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Display;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var invoker = new DispatcherRouteEditInvoker();
         yield return LegendMcpAdapter.Create(new GetLegendTool(_legend, _position, invoker));

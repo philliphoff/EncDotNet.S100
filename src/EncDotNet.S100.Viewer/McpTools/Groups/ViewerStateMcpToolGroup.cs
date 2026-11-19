@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -30,7 +31,13 @@ internal sealed class ViewerStateMcpToolGroup : IViewerMcpToolGroup
         _ownShipHelm = ownShipHelm;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Map;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         yield return ViewerStateMcpAdapters.Create(new GetTimelineStateTool(_timeline));
         yield return ViewerStateMcpAdapters.Create(new SetViewTimeTool(_timeline));

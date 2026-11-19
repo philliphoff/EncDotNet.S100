@@ -64,6 +64,9 @@ internal static class StartupSettingsFactory
             if (options.McpPortFile is { } portFile && !string.IsNullOrWhiteSpace(portFile))
                 settings.McpPortFilePath = portFile;
             settings.McpTestHooks = options.McpTestHooks;
+            if (options.McpToolsets is { } toolsets
+                && EncDotNet.S100.Mcp.McpToolsets.TryParse(toolsets, out var selected, out _))
+                settings.McpToolsetsOverride = selected;
         }
 
         // ── Render state ─────────────────────────────────────────────

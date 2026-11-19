@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.McpCapabilities;
 using ModelContextProtocol.Server;
@@ -42,7 +43,13 @@ internal sealed class PresentationMcpToolGroup : IViewerMcpToolGroup
         _catalog = catalog;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Presentation;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var presentation = new DelegatingCapabilityAccessor<IPresentationController>(() =>
             _renderState.Current is { } controller

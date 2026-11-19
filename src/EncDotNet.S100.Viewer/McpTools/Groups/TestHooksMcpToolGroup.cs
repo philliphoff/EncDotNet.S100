@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -24,7 +25,13 @@ internal sealed class TestHooksMcpToolGroup : IViewerMcpToolGroup
         _uiAutomation = uiAutomation;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Ui;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         if (!_settings.McpTestHooks)
             yield break;

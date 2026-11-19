@@ -1900,6 +1900,7 @@ a run, stop the process from the operating system; SoundCharts ignores
 | `--mcp-bind <ADDRESS>` | MCP bind address. Use a loopback address. Implies `--mcp`. |
 | `--mcp-port-file <PATH>` | Write the MCP endpoint URI to this file once the server is listening. Implies `--mcp`. |
 | `--mcp-test-hooks` | Add test-only MCP tools, such as `set_test_clock`, which moves or freezes the app's current time. Implies `--mcp`. |
+| `--mcp-toolsets <names>` | Serve only these MCP toolsets for this run, such as `route-planning` or `query,routes,map`, overriding Settings. See [Choose toolsets](../../docs/mcp-server.md#choose-toolsets). Implies `--mcp`. |
 | `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12, or PEM with its key) to SECOM services for this run, instead of the identity chosen in **Settings** > **Keys & certificates**. The password, if any, comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD`. |
 | `--settings <PATH>` | Use this settings file instead of the per-user one. |
 | `--data-dir <PATH>` | Put the settings file and all caches under this folder. You can also set `S100_DATA_DIR`. |

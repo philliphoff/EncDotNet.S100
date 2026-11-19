@@ -41,6 +41,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only, overriding the identity chosen in Settings > Keys & certificates. The password, if any, is read from the SOUNDCHARTS_SECOM_IDENTITY_PASSWORD environment variable.")]
     public string? SecomIdentity { get; set; }
 
+    [CommandOption("--mcp-toolsets <NAMES>")]
+    [Description("Serve only these MCP toolsets for this run, comma-separated, overriding Settings > Integrations: query, datasets, presentation, routes, passage, tides, library, warnings, display, map, ui, diagnostics; or a profile: route-planning, visual-check; or all. Implies --mcp.")]
+    public string? McpToolsets { get; set; }
+
     [CommandOption("--mcp-test-hooks")]
     [Description("Register test-only MCP tools such as set_test_clock, which moves or freezes the viewer's notion of now. For scripted testing only. Implies --mcp.")]
     public bool McpTestHooks { get; set; }
@@ -139,7 +143,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
     /// bound port back to the user's settings file.
     /// </summary>
     public bool McpRequested =>
-        Mcp || McpPort.HasValue || McpBind is not null || McpPortFile is not null || McpTestHooks;
+        Mcp || McpPort.HasValue || McpBind is not null || McpPortFile is not null || McpTestHooks || McpToolsets is not null;
 
     /// <summary>
     /// True when the user supplied an explicit viewport (center+zoom or
@@ -186,6 +190,8 @@ internal sealed class ViewerCommandSettings : CommandSettings
         if (McpPort is { } port && (port < 0 || port > 65535))
             return Spectre.Console.ValidationResult.Error("--mcp-port must be between 0 and 65535.");
 
+        if (McpToolsets is not null && !EncDotNet.S100.Mcp.McpToolsets.TryParse(McpToolsets, out _, out var toolsetError))
+            return Spectre.Console.ValidationResult.Error($"--mcp-toolsets: {toolsetError}");
         if (McpBind is not null && !System.Net.IPAddress.TryParse(McpBind, out _))
             return Spectre.Console.ValidationResult.Error(
                 $"--mcp-bind must be a valid IP address (got '{McpBind}').");

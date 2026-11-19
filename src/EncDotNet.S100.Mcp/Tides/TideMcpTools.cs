@@ -23,13 +23,13 @@ public static class TideMcpTools
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(time);
-        return
+        return McpToolsets.Assign(McpToolsets.Tides,
         [
             CreateListTideStations(new ListTideStationsTool(source, time)),
             CreatePredictTide(new PredictTideTool(source, time)),
             CreateListCurrentStations(new ListCurrentStationsTool(source, time)),
             CreatePredictCurrent(new PredictCurrentTool(source, time)),
-        ];
+        ]);
     }
 
     private static McpServerTool CreateListTideStations(ListTideStationsTool inner)

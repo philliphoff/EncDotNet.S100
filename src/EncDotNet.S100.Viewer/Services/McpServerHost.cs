@@ -26,6 +26,7 @@ internal sealed class McpServerHost : IAsyncDisposable
 {
     private readonly IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
+    private IReadOnlyList<string>? _servedToolsets;
     private readonly IPassageRouteProvider _passageRoutes;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache _routeCheckSources;
     private readonly IMapDrawState _mapDrawState;
@@ -118,6 +119,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         var enabled = _settings.McpEnabled;
         var port = _settings.McpPort < 0 ? 0 : _settings.McpPort;
         var bindAddress = ParseBindAddress(_settings.McpBindAddress);
+        var toolsets = _settings.ResolveMcpToolsets();
 
         if (!enabled)
         {
@@ -129,7 +131,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             var matches = running.Endpoint is { } ep
                 && Equals(ep.Port, port == 0 ? ep.Port : port)
-                && Equals(bindAddress, IPAddress.Parse(ep.Host.Trim('[', ']')));
+                && Equals(bindAddress, IPAddress.Parse(ep.Host.Trim('[', ']')))
+                && SameToolsets(_servedToolsets, toolsets);
             if (matches) return;
             await StopCurrentAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -143,6 +146,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             PassageRoutes = _passageRoutes,
             RouteCheckSources = _routeCheckSources,
             MapDrawState = _mapDrawState,
+            Toolsets = toolsets,
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try
@@ -171,6 +175,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
 
         _server = next;
+        _servedToolsets = toolsets;
         _logger.LogInformation("MCP server listening on {Endpoint}", next.Endpoint);
 
         // Persist the bound port so subsequent launches reuse it. When
@@ -269,6 +274,9 @@ internal sealed class McpServerHost : IAsyncDisposable
             // Console may be redirected/closed; ignore.
         }
     }
+
+    private static bool SameToolsets(IReadOnlyList<string>? a, IReadOnlyList<string>? b) =>
+        a is null ? b is null : b is not null && a.SequenceEqual(b);
 
     /// <summary>The viewer's own tools: every group's, in group order.</summary>
     internal IReadOnlyList<McpServerTool> BuildAdditionalTools() =>

@@ -76,38 +76,38 @@ public static class S100MutableTools
 
         if (catalog is not null)
         {
-            tools.Add(CreateOpenDataset(new OpenDatasetTool(catalog)));
-            tools.Add(CreateCloseDataset(new CloseDatasetTool(catalog)));
-            tools.Add(CreateCloseAllDatasets(new CloseAllDatasetsTool(catalog)));
+            tools.Add(McpToolsets.Assign(McpToolsets.Datasets, CreateOpenDataset(new OpenDatasetTool(catalog))));
+            tools.Add(McpToolsets.Assign(McpToolsets.Datasets, CreateCloseDataset(new CloseDatasetTool(catalog))));
+            tools.Add(McpToolsets.Assign(McpToolsets.Datasets, CreateCloseAllDatasets(new CloseAllDatasetsTool(catalog))));
         }
 
         // Data source design note D9: live sources, added like datasets.
         if (liveSources is not null)
         {
-            tools.Add(CreateListDataSources(new ListDataSourcesTool(liveSources)));
-            tools.Add(CreateAddDataSource(new AddDataSourceTool(liveSources)));
+            tools.Add(McpToolsets.Assign(McpToolsets.Datasets, CreateListDataSources(new ListDataSourcesTool(liveSources))));
+            tools.Add(McpToolsets.Assign(McpToolsets.Datasets, CreateAddDataSource(new AddDataSourceTool(liveSources))));
         }
 
         if (presentation is not null)
         {
-            tools.Add(CreateSetPalette(new SetPaletteTool(presentation)));
-            tools.Add(CreateSetDisplayCategory(new SetDisplayCategoryTool(presentation)));
-            tools.Add(CreateSetDisplayMode(new SetDisplayModeTool(presentation)));
+            tools.Add(McpToolsets.Assign(McpToolsets.Presentation, CreateSetPalette(new SetPaletteTool(presentation))));
+            tools.Add(McpToolsets.Assign(McpToolsets.Presentation, CreateSetDisplayCategory(new SetDisplayCategoryTool(presentation))));
+            tools.Add(McpToolsets.Assign(McpToolsets.Presentation, CreateSetDisplayMode(new SetDisplayModeTool(presentation))));
         }
 
         if (time is not null)
         {
-            tools.Add(CreateSetTimeStep(new SetTimeStepTool(time)));
+            tools.Add(McpToolsets.Assign(McpToolsets.Presentation, CreateSetTimeStep(new SetTimeStepTool(time))));
         }
 
         if (viewport is not null)
         {
-            tools.Add(CreateSetViewport(new SetViewportTool(viewport)));
+            tools.Add(McpToolsets.Assign(McpToolsets.Presentation, CreateSetViewport(new SetViewportTool(viewport))));
         }
 
         if (renderer is not null)
         {
-            tools.Add(CreateRenderToImage(new RenderToImageTool(renderer)));
+            tools.Add(McpToolsets.Assign(McpToolsets.Presentation, CreateRenderToImage(new RenderToImageTool(renderer))));
         }
 
         return tools;

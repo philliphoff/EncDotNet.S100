@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Library;
 using EncDotNet.S100.Mcp.Tools.Library;
 using ModelContextProtocol.Server;
@@ -33,7 +34,13 @@ internal sealed class LibraryMcpToolGroup : IViewerMcpToolGroup
         _secomIdentities = secomIdentities;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Library;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         return LibraryMcpTools.Create(_library, _libraryEditor, _secomServices, _secomServerTrust, _secomIdentities);
     }

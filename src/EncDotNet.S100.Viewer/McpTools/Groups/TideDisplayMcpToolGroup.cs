@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.Services.Tides;
@@ -32,7 +33,13 @@ internal sealed class TideDisplayMcpToolGroup : IViewerMcpToolGroup
         _setFeed = setFeed;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Display;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var tools = new TideDisplayTools(_overlay, _settings, _predictions, _list, new DispatcherRouteEditInvoker(), _setFeed);
         yield return TideDisplayMcpAdapters.CreateGet(tools);

@@ -42,11 +42,16 @@ public static class S100McpStdioHost
     /// predictions, the S-104 fallback of <c>sample_coverage</c>; <c>null</c>
     /// for the tools' own, without predictions.
     /// </param>
+    /// <param name="toolsets">
+    /// The toolsets to serve (<see cref="McpToolsets"/>), or <see langword="null"/>
+    /// for every toolset.
+    /// </param>
     /// <param name="cancellationToken">Stops the host when signalled.</param>
     public static async Task RunAsync(
         IDatasetCatalog catalog,
         IReadOnlyList<McpServerTool>? additionalTools = null,
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
+        IReadOnlyCollection<string>? toolsets = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(catalog);
@@ -71,7 +76,7 @@ public static class S100McpStdioHost
         builder.Services
             .AddMcpServer()
             .WithStdioServerTransport()
-            .WithTools(tools);
+            .WithTools(McpToolsets.Select(tools, toolsets));
 
         using var host = builder.Build();
         await host.RunAsync(cancellationToken).ConfigureAwait(false);

@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -25,7 +26,13 @@ internal sealed class RouteMcpToolGroup : IViewerMcpToolGroup
         _clearance = clearance;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Routes;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var routes = _routes;
         var invoker = new DispatcherRouteEditInvoker();
@@ -40,8 +47,8 @@ internal sealed class RouteMcpToolGroup : IViewerMcpToolGroup
         yield return SetLegAttributesMcpAdapter.Create(new SetLegAttributesTool(routes, invoker));
         yield return SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(routes, invoker));
         var clearanceTools = new ClearanceTools(_clearance, invoker);
-        yield return clearanceTools.CreateGet();
-        yield return clearanceTools.CreateSet();
+        yield return McpToolsets.Assign(McpToolsets.Passage, clearanceTools.CreateGet());
+        yield return McpToolsets.Assign(McpToolsets.Passage, clearanceTools.CreateSet());
         yield return UndoRouteEditMcpAdapter.Create(new UndoRouteEditTool(routes, invoker));
         yield return RedoRouteEditMcpAdapter.Create(new RedoRouteEditTool(routes, invoker));
         yield return SetRouteEditModeMcpAdapter.Create(new SetRouteEditModeTool(routes, invoker));

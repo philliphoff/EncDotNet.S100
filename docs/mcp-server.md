@@ -52,6 +52,7 @@ dotnet run --project src/EncDotNet.S100.Viewer -- --ephemeral --mcp --mcp-port-f
 | `--mcp-bind <address>` | The address to listen on. Keep the loopback address unless you have a reason to change it; see [Security](#security). Implies `--mcp`. |
 | `--mcp-port-file <path>` | Writes the endpoint URI to this file once the server is listening, so an agent can find a port the system picked. Implies `--mcp`. |
 | `--mcp-test-hooks` | Also registers the [test tools](#test-tools). Implies `--mcp`. It's never saved, so turning on the server in Settings never adds these tools. |
+| `--mcp-toolsets <names>` | Serves only these [toolsets](#choose-toolsets) for this run, comma-separated, such as `route-planning` or `query,routes,tides`. Implies `--mcp`. It's never saved, and overrides the toolsets chosen in Settings. |
 
 SoundCharts also prints the endpoint to standard output as
 `[MCP] listening on <uri>`.
@@ -104,6 +105,52 @@ The inspector lists the tools described below. If no datasets show up, load
 some in SoundCharts first: the server only sees what's loaded. If the agent
 can't connect, check the endpoint again. With port `0`, the port changes each
 time the server restarts.
+
+## Choose toolsets
+
+Every tool's name, description and arguments sit in an agent's context before
+it does anything, so a server that offers every tool leaves less room for the
+task. Each tool belongs to one toolset; serve only the toolsets the task needs.
+
+- **SoundCharts:** choose **Settings**, then **Integrations**, and turn the
+  toolsets on or off under **Toolsets**. A change restarts a running server,
+  so connected agents reconnect. For one run, start SoundCharts with
+  `--mcp-toolsets`.
+- **`s100 mcp serve`:** pass `--toolsets`, such as
+  `s100 mcp serve charts/ --toolsets route-planning`.
+
+Both take toolset names and profiles, comma-separated, or `all` (the default).
+
+The sizes are the `tools/list` reply each toolset adds, measured in November
+2026, at about four characters to a token. They change as tools are added and
+edited.
+
+| Toolset | What its tools do | SoundCharts | `s100 mcp serve` |
+|---|---|---|---|
+| `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 13 tools, ~6,200 tokens | 13 tools, ~6,200 tokens |
+| `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
+| `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
+| `routes` | Check routes; in SoundCharts, also create, edit, import and export them | 22 tools, ~8,000 tokens | 1 tool, ~2,400 tokens |
+| `passage` | Check mode, departure, findings, clearance and route weather settings | 12 tools, ~2,900 tokens | none |
+| `tides` | Tide and current stations and their predictions | 4 tools, ~2,100 tokens | 4 tools, ~2,100 tokens |
+| `library` | The Library: sources, items, downloads and SECOM services | 12 tools, ~4,300 tokens | 12 tools, ~4,300 tokens |
+| `warnings` | The navigational warnings panel and display | 9 tools, ~2,300 tokens | none |
+| `display` | Weather, bathymetry, AML and tide display, depth basis, display combinations and the legend | 13 tools, ~3,100 tokens | none |
+| `map` | Viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing | 15 tools, ~5,200 tokens | none |
+| `ui` | Panels and app screenshots; with `--mcp-test-hooks`, the [test tools](#test-tools) too | 13 tools with test hooks, ~4,200 tokens | none |
+| `diagnostics` | Render and performance diagnostics and recent logs | 7 tools, ~1,700 tokens | none |
+| `all` | Every toolset | 128 tools with test hooks, ~41,500 tokens | 41 tools, ~17,600 tokens |
+
+Profiles name a set of toolsets for a kind of task:
+
+| Profile | Toolsets | SoundCharts | `s100 mcp serve` |
+|---|---|---|---|
+| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 54 tools, ~19,600 tokens | 23 tools, ~11,500 tokens |
+| `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 62 tools, ~20,200 tokens | 24 tools, ~8,800 tokens |
+
+Over HTTP, `s100 mcp serve` still leaves out the tools that open datasets by
+path and change the Library unless you pass `--allow-changes`, whatever the
+toolsets.
 
 ## Field conventions
 

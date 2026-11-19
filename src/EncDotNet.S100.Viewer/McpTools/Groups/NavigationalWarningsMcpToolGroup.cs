@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -24,7 +25,13 @@ internal sealed class NavigationalWarningsMcpToolGroup : IViewerMcpToolGroup
         _pickReport = pickReport;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Warnings;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         var invoker = new DispatcherRouteEditInvoker();
         yield return NavigationalWarningsMcpAdapters.Create(new ListNavigationalWarningsTool(_panel, _service, invoker));

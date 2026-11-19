@@ -1,3 +1,4 @@
+using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Server;
 
@@ -24,7 +25,13 @@ internal sealed class ShellMcpToolGroup : IViewerMcpToolGroup
         _displayCombinations = displayCombinations;
     }
 
-    public IEnumerable<McpServerTool> CreateTools()
+    /// <inheritdoc />
+    public string Toolset => McpToolsets.Ui;
+
+    /// <inheritdoc />
+    public IEnumerable<McpServerTool> CreateTools() => McpToolsets.AssignDefault(Toolset, CreateGroupTools());
+
+    private IEnumerable<McpServerTool> CreateGroupTools()
     {
         yield return ListPanelsMcpAdapter.Create(new ListPanelsTool(_uiController));
         yield return SetPanelMcpAdapter.Create(new SetPanelTool(_uiController));
