@@ -62,6 +62,15 @@ public sealed record ChartedDepth(
     /// surveyed surface, so the check marks it low confidence.
     /// </summary>
     public bool IsLowConfidence => Kind != ChartedDepthKind.Bathymetry;
+
+    /// <summary>
+    /// For a <see cref="ChartedDepthKind.DepthArea"/> or
+    /// <see cref="ChartedDepthKind.DredgedArea"/>, the area's maximum depth
+    /// (<c>depthRangeMaximumValue</c>, DRVAL2) in metres; <c>null</c> when the
+    /// area doesn't carry one, and for other kinds. <see cref="DepthMeters"/>
+    /// is the area's minimum depth.
+    /// </summary>
+    public double? DepthRangeMaximumMeters { get; init; }
 }
 
 /// <summary>
@@ -150,6 +159,16 @@ public static class ChartedDepthResolver
     [
         "depthRangeMinimumValue",
         "DRVAL1",
+    ];
+
+    /// <summary>
+    /// Attribute codes that carry an S-101 area's maximum depth
+    /// (<c>depthRangeMaximumValue</c>, and its S-57 acronym DRVAL2).
+    /// </summary>
+    public static IReadOnlyList<string> MaximumDepthAttributeCodes { get; } =
+    [
+        "depthRangeMaximumValue",
+        "DRVAL2",
     ];
 
     /// <summary>Picks the highest-priority candidate that is present.</summary>

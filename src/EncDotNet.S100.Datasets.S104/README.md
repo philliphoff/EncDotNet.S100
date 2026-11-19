@@ -152,7 +152,7 @@ application but not under NativeAOT. Reading works under both.
   trend, in time order and optionally limited to a `from`/`to` range. It finds
   the nearest cell in the coverage's geographic coordinates (EPSG:4326 in
   S-104 Ed 2.0.0) without reprojecting. Cells with the fill value report a
-  `null` height. The MCP server's `sample_coverage` tool uses it for time
+  `null` height. The MCP server's `sample` tool uses it for time
   windows.
 - **`S104CoverageSource`**: the `ICoverageSource` for the coverage pipeline.
 - **`S104CoverageStyle`**: the SoundCharts portrayal of water level: the

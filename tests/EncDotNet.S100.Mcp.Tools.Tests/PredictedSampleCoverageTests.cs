@@ -11,7 +11,7 @@ using EncDotNet.S100.Tides.Stations;
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 /// <summary>
-/// sample_coverage and sample_coverage_along fall back to tide predictions
+/// sample falls back to tide predictions
 /// for S-104 where no S-104 covers the point and time (#1452), over NOAA's
 /// Puget Sound stations, with no charts loaded (straight-line reach).
 /// </summary>
@@ -23,12 +23,12 @@ public sealed class PredictedSampleCoverageTests
     private static readonly Lazy<TideStationCatalogue> Catalogue = new(() =>
         TideStationCatalogueFile.LoadAsync(Path.Combine(AppContext.BaseDirectory, "TestData", "Tides", "puget-sound.json")).GetAwaiter().GetResult());
 
-    private static (SampleCoverageTool Tool, IDatasetCatalog Catalog) Create(bool predictions)
+    private static (SampleTool Tool, IDatasetCatalog Catalog) Create(bool predictions)
     {
         var transforms = new ProjNetCrsTransformFactory();
         var cache = new RouteCheckSourceCache(transforms, new RouteCheckSourceOptions { TidePredictions = predictions ? Catalogue.Value : null });
         var catalog = new EmptyCatalog();
-        return (new SampleCoverageTool(catalog, transforms, cache, new FixedTime(At)), catalog);
+        return (new SampleTool(catalog, transforms, cache, new FixedTime(At)), catalog);
     }
 
     private static SampleCoverageRequest S104(double latitude, double longitude, DateTimeOffset? time = null, TimeQuery? times = null) =>
@@ -39,7 +39,7 @@ public sealed class PredictedSampleCoverageTests
     {
         var (tool, _) = Create(predictions: true);
 
-        var result = Ok(await tool.InvokeAsync(S104(47.605, -122.34, At), TestContext.Current.CancellationToken));
+        var result = Ok(await tool.SampleCoverageAsync(S104(47.605, -122.34, At), TestContext.Current.CancellationToken));
 
         var expected = Catalogue.Value.TryCreatePrediction(Seattle, VerticalDatum.MeanLowerLowWater)!.Predictor.HeightAt(At.UtcDateTime);
         var value = Assert.IsType<WaterLevelStationSample>(result.Value);
@@ -69,7 +69,7 @@ public sealed class PredictedSampleCoverageTests
     {
         var (tool, _) = Create(predictions: true);
 
-        var result = Ok(await tool.InvokeAsync(S104(47.27, -122.55, At), TestContext.Current.CancellationToken));
+        var result = Ok(await tool.SampleCoverageAsync(S104(47.27, -122.55, At), TestContext.Current.CancellationToken));
 
         Assert.Equal("subordinate", result.Source!.Station.Kind);
         Assert.Equal(Seattle, result.Source.Station.ReferenceStationId);
@@ -81,7 +81,7 @@ public sealed class PredictedSampleCoverageTests
         var (tool, _) = Create(predictions: true);
         var window = new TimeQuery.Series(At, At.AddHours(6), TimeSpan.FromMinutes(10));
 
-        var result = Ok(await tool.InvokeAsync(S104(47.605, -122.34, times: window), TestContext.Current.CancellationToken));
+        var result = Ok(await tool.SampleCoverageAsync(S104(47.605, -122.34, times: window), TestContext.Current.CancellationToken));
 
         Assert.Equal(37, result.Series!.Count);
         Assert.All(result.Series, s => Assert.IsType<WaterLevelStationSample>(s.Value));
@@ -95,9 +95,9 @@ public sealed class PredictedSampleCoverageTests
         var (off, _) = Create(predictions: false);
         var (on, _) = Create(predictions: true);
 
-        var offResult = await off.InvokeAsync(S104(47.605, -122.34, At), TestContext.Current.CancellationToken);
-        var farResult = await on.InvokeAsync(S104(10, 10, At), TestContext.Current.CancellationToken);
-        var s102 = await on.InvokeAsync(new SampleCoverageRequest(new SpecRef("S-102", default), 47.605, -122.34), TestContext.Current.CancellationToken);
+        var offResult = await off.SampleCoverageAsync(S104(47.605, -122.34, At), TestContext.Current.CancellationToken);
+        var farResult = await on.SampleCoverageAsync(S104(10, 10, At), TestContext.Current.CancellationToken);
+        var s102 = await on.SampleCoverageAsync(new SampleCoverageRequest(new SpecRef("S-102", default), 47.605, -122.34), TestContext.Current.CancellationToken);
 
         Assert.IsType<NoDatasetCoversPoint>(Error(offResult));
         Assert.IsType<NoDatasetCoversPoint>(Error(farResult));
@@ -109,10 +109,10 @@ public sealed class PredictedSampleCoverageTests
     {
         var transforms = new ProjNetCrsTransformFactory();
         var cache = new RouteCheckSourceCache(transforms, new RouteCheckSourceOptions { TidePredictions = Catalogue.Value });
-        var tool = new SampleCoverageAlongTool(new EmptyCatalog(), transforms, cache, new FixedTime(At));
+        var tool = new SampleTool(new EmptyCatalog(), transforms, cache, new FixedTime(At));
         var line = new GeoPolyline([new GeoPoint(47.605, -122.34), new GeoPoint(10, 10)]);
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(new SpecRef("S-104", default), line, At), TestContext.Current.CancellationToken);
+        var result = await tool.ProfileAsync(TestSampleTool.Along(new SpecRef("S-104", default), line, At), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var along));
         Assert.Equal("prediction", along!.Samples[0].Result!.Source!.Kind);

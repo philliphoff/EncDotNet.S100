@@ -127,7 +127,7 @@ edited.
 
 | Toolset | What its tools do | SoundCharts | `s100 mcp serve` |
 |---|---|---|---|
-| `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 13 tools, ~6,200 tokens | 13 tools, ~6,200 tokens |
+| `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 12 tools, ~5,900 tokens | 12 tools, ~5,900 tokens |
 | `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
 | `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
 | `routes` | Check routes and map where a boat can go; in SoundCharts, also create, edit, import and export them | 23 tools, ~8,700 tokens | 2 tools, ~3,100 tokens |
@@ -139,14 +139,14 @@ edited.
 | `map` | Viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing | 15 tools, ~5,200 tokens | none |
 | `ui` | Panels and app screenshots; with `--mcp-test-hooks`, the [test tools](#test-tools) too | 13 tools with test hooks, ~4,200 tokens | none |
 | `diagnostics` | Render and performance diagnostics and recent logs | 7 tools, ~1,700 tokens | none |
-| `all` | Every toolset | 129 tools with test hooks, ~42,200 tokens | 42 tools, ~18,300 tokens |
+| `all` | Every toolset | 128 tools with test hooks, ~41,900 tokens | 41 tools, ~18,800 tokens |
 
 Profiles name a set of toolsets for a kind of task:
 
 | Profile | Toolsets | SoundCharts | `s100 mcp serve` |
 |---|---|---|---|
-| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 55 tools, ~20,300 tokens | 24 tools, ~12,200 tokens |
-| `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 62 tools, ~20,200 tokens | 24 tools, ~8,800 tokens |
+| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 54 tools, ~20,000 tokens | 23 tools, ~12,700 tokens |
+| `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 61 tools, ~19,900 tokens | 23 tools, ~8,400 tokens |
 
 Over HTTP, `s100 mcp serve` still leaves out the tools that open datasets by
 path and change the Library unless you pass `--allow-changes`, whatever the
@@ -209,8 +209,7 @@ Both hosts provide these tools.
 | `count_features` | No | Lists the feature types in the loaded vector datasets and how many features of each there are, to answer "what's in this cell?" before you have any ids. Works for every vector product, including S-101. Filters: `spec`, `datasetId` and a spatial `query`. Each count reports `count` and `withGeometry` (how many have geometry). |
 | `nearest_features` | No | Ranks vector features by true distance from a point, for questions such as "nearest light to my position?" or "is this point inside a restricted area?". An area that contains the point is returned at `distanceMeters` 0 with `containment` `inside`. Every other feature reports the distance to the nearest point on its geometry (on a segment, not only a vertex) and `bearingDegrees` toward it. Works for every vector product, including S-101. Filters: `spec`, `datasetId`, `featureType` and `maxDistanceMeters`. `limit` (default 10) caps the list and sets `truncated`. |
 | `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Overlapping chart cells of different usage bands each chart the same object, so a search returns one hit per cell. Set `finestOnly` to keep a chart-cell hit (S-101, S-401 or S-57) only where its cell is in the finest band at the feature's position, ranked as `check_route` ranks cells; cells of the same scale are peers and both copies stay. Each match reports `matchedName` and `matchedAttribute`. Paged. |
-| `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset, or wind and waves from a GRIB2 or NetCDF grid (`spec` `"GRIB2"` or `"NetCDF"`). For S-104, S-111 and the grids, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
-| `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
+| `sample` | No | Samples a `quantity` at a point (`latitude`, `longitude`) or along a `polyline`. `depth` is charted depth by the route check's rule: S-102 first, otherwise the finest overlapping S-101, S-401 or translated S-57 cell's dredged area, depth area or nearest sounding (within 250 m). The result has `waterMask` (`water`, `land` or `uncharted`) and `depth` with its `kind` (`bathymetry`, `dredged_area`, `depth_area` or `sounding`), `datasetId`, `featureId` (for `describe_feature`) or S-102 `gridCell`, an area's `depthRangeMinimumMeters` and `depthRangeMaximumMeters`, `verticalDatum` and `lowConfidence`; `depth` is `null` where nothing charts one. With a `time`, it adds `waterLevel` (S-104, otherwise a tide prediction where the host has them on; `status` `applied`, `datum_mismatch`, `no_coverage`, `before_start`, `after_end` or `no_data`) and `availableDepthMeters`, the depth plus the water level where it applies, as `check_route` computes clearance. `water_level` (S-104), `current` (S-111) and `weather` (a GRIB2 or NetCDF grid) sample the nearest grid cell or station: `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it, and a time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. `spec` pins one product (`S-102` for depth reads the bathymetry only); with a `spec`, `quantity` can be left out. A `polyline` returns `samples` in order, each with `legIndex`, `vertexIndex` (`null` between vertices), `distanceMeters` and its `result` (or `depth`), or an `error` (`code`, `message`) where that point has no value; `spacingMeters` adds points between the vertices along each rhumb-line leg, up to 2,000 samples. For depth, `shoalest` names the shallowest sample, by available depth when a time is given. When no point has a value because of the requested time, the call returns `time_out_of_range`. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
 | `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers; with a draft, the under-keel clearance; with wind or wave limits, the weather forecast along the route at the ETAs. Returns the verdict, each check's status, the findings, the clearance and the weather. See [Check a route](#check-a-route). |
 | `get_navigability_grid` | No | Returns water, land and charted depth over a box on a regular grid, with overlapping chart cells resolved as `check_route` resolves them. The reply is a summary: cell counts by class, the shoalest navigable cell, the largest connected navigable area, and, with `connect`, whether two positions join through navigable water. The grid itself goes to a file for code to read; `includeImage` adds a PNG. See [Navigability over an area](#navigability-over-an-area). |
 
@@ -352,7 +351,7 @@ aren't for navigation and aren't used in route checks.
 
 Where the host has tide predictions on (SoundCharts' **Use tide predictions
 where there's no S-104**, or `s100 mcp serve --tide-predictions`),
-`sample_coverage` and `sample_coverage_along` for `S-104` fall back to a
+`sample` for water level (`S-104`) falls back to a
 prediction where no S-104 dataset covers the point and time: the station
 nearest by water within 10 km, as the route check uses. The result's
 `datasetId` is `tide-predictions`, its `value` is a `water_level_station`
@@ -374,7 +373,7 @@ at each instant; a `range` query every 30 minutes, at most 2,000 heights.
 With predictions off, or no station in reach, the S-104 error stands.
 
 The same switch fills S-111 gaps, with a much shorter reach.
-`sample_coverage` and `sample_coverage_along` for `S-111` fall back to the
+`sample` for current (`S-111`) falls back to the
 predicted tidal current at the current station nearest by water within
 **2 km**, the shallowest bin where several share a place. Tide heights change
 slowly over 10 km, but tidal currents don't: a station in a narrows such as
@@ -575,7 +574,7 @@ A typical sequence:
 
 1. `create_route` makes a new active route.
 2. `append_waypoint` and `insert_waypoint` lay down the geometry. Use the query
-   tools, such as `sample_coverage`, `nearest_features` and `find_at`, to check
+   tools, such as `sample`, `nearest_features` and `find_at`, to check
    each leg.
 3. `move_waypoint` and `delete_waypoint` refine it, and `undo_route_edit`
    steps back.
@@ -958,7 +957,7 @@ second once the cells are loaded.
 
 ## Times outside the data
 
-`sample_coverage` and `sample_coverage_along` don't return a value for a time
+`sample` doesn't return a water level, current or weather value for a time
 the data doesn't cover unless you ask for one. This matches the Timeline, which
 shows that there's no data at that time instead of a stale frame.
 

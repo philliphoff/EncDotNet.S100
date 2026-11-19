@@ -3,7 +3,7 @@ using System.ComponentModel;
 namespace EncDotNet.S100.Datasets.Pipelines.Query;
 
 // The typed S-102, S-104 and S-111 sample shapes. Their JSON is the
-// sample_coverage contract for those products; GetFields describes the same
+// sample tool contract for those products; GetFields describes the same
 // values generically, so a caller can treat them like any product's
 // CoverageFieldsSample.
 

@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Sampling;
 /// the wind, the air temperature and a sea (or skin) temperature, the freezing
 /// spray predictor and class are added (<see cref="FreezingSpray"/>). Shared by
 /// <see cref="WeatherGridProcessorBase"/> (picks) and its catalog payload
-/// (<c>sample_coverage</c>).
+/// (<c>sample</c>).
 /// </summary>
 /// <remarks>
 /// The grid is regular latitude/longitude, so the nearest node is found

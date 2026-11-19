@@ -87,6 +87,7 @@ namespace EncDotNet.S100.Navigation
         public ChartedDepth(double DepthMeters, EncDotNet.S100.Navigation.ChartedDepthKind Kind, double? UncertaintyMeters = default, int? VerticalDatum = default, string? DatasetId = null, string? Reference = null, double? SoundingDistanceMeters = default) { }
         public string? DatasetId { get; init; }
         public double DepthMeters { get; init; }
+        public double? DepthRangeMaximumMeters { get; init; }
         public bool IsLowConfidence { get; }
         public EncDotNet.S100.Navigation.ChartedDepthKind Kind { get; init; }
         public string? Reference { get; init; }
@@ -103,6 +104,7 @@ namespace EncDotNet.S100.Navigation
     }
     public static class ChartedDepthResolver
     {
+        public static System.Collections.Generic.IReadOnlyList<string> MaximumDepthAttributeCodes { get; }
         public static System.Collections.Generic.IReadOnlyList<string> MinimumDepthAttributeCodes { get; }
         public static EncDotNet.S100.Navigation.ChartedDepth? Resolve(EncDotNet.S100.Navigation.ChartedDepth? bathymetry, EncDotNet.S100.Navigation.ChartedDepth? dredgedArea, EncDotNet.S100.Navigation.ChartedDepth? depthArea, EncDotNet.S100.Navigation.ChartedDepth? sounding) { }
         public static EncDotNet.S100.Navigation.ChartedDepth? Shoaler(EncDotNet.S100.Navigation.ChartedDepth? a, EncDotNet.S100.Navigation.ChartedDepth? b) { }

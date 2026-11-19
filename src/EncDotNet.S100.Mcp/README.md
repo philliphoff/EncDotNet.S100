@@ -102,10 +102,9 @@ error. Don't write to `Console.Out` from your own code while it runs.
 `S100McpTools.Create(catalog)` returns the built-in tools, which
 `S100McpServer` and `S100McpStdioHost` serve unless the selected toolsets leave them out. They only read the catalog:
 
-`list_datasets`, `describe_feature`, `describe_feature_type`,
-`sample_coverage`, `find_at`, `identify_features`, `nearest_features`,
-`query_features`, `count_features`, `search_features`,
-`sample_coverage_along`, `list_specs`, `list_time_steps` and
+`list_datasets`, `describe_feature`, `describe_feature_type`, `sample`,
+`find_at`, `identify_features`, `nearest_features`, `query_features`,
+`count_features`, `search_features`, `list_specs`, `list_time_steps` and
 `check_route`.
 
 [Query tools](../../docs/mcp-server.md#query-tools) in the MCP server guide

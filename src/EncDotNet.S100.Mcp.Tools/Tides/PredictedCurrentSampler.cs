@@ -10,7 +10,7 @@ using EncDotNet.S100.Tides.Stations;
 namespace EncDotNet.S100.Mcp.Tools.Tides;
 
 /// <summary>
-/// sample_coverage's S-111 fallback (#1454): the predicted tidal current at
+/// sample's S-111 fallback (#1454): the predicted tidal current at
 /// the nearest current station by water, used where no S-111 covers the
 /// point and time.
 /// </summary>

@@ -6,6 +6,20 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **One MCP `sample` tool, with charted depth.** `sample` replaces
+  `sample_coverage` and `sample_coverage_along`: it takes a `quantity`
+  (`depth`, `water_level`, `current` or `weather`, or a `spec` to pin one
+  product) at a point or along a polyline, with `spacingMeters` to add points
+  between the vertices. `depth` is the charted depth the route check reads:
+  S-102 first, otherwise the finest S-101, S-401 or translated S-57 cell, with
+  its kind, source feature, an area's depth range and the water mask; with a
+  time, also the water level and the available depth, as `check_route`
+  computes clearance. A polyline's depth profile names its shoalest sample.
+  Breaking changes: the two old tools are gone, and `SampleCoverageTool` and
+  `SampleCoverageAlongTool` are replaced by `SampleTool`, which needs the
+  host's `RouteCheckSourceCache`. `ChartedDepth` gains
+  `DepthRangeMaximumMeters`. See the [MCP server](mcp-server.md).
+
 - **Navigability over an area.** The MCP tool `get_navigability_grid` says
   where a boat can go over a whole box: each cell is navigable, shoal,
   hazard, land, uncharted or without depth, from the finest chart cell and

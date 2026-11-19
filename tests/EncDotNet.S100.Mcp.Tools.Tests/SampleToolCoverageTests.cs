@@ -7,7 +7,7 @@ using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
-public class SampleCoverageToolTests
+public class SampleToolCoverageTests
 {
     [Fact]
     public async Task Returns_depth_sample_inside_bounds()
@@ -19,9 +19,9 @@ public class SampleCoverageToolTests
             "s102-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -36,9 +36,9 @@ public class SampleCoverageToolTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S102("s102-1", bounds: LoadedDatasetFactory.Box(0, 0, 1, 1)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 50, Longitude: 50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -82,7 +82,7 @@ public class SampleCoverageToolTests
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S102("s102-utm", bounds: bounds,
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         // Aim at the interior of cell (row 2, col 3) in native metres — offset
         // half a cell past the node so the floor-based indexing shared with the
@@ -91,7 +91,7 @@ public class SampleCoverageToolTests
         var (lon, lat) = toWgs84.Transform(
             originEasting + 3.5 * spacing, originNorthing + 2.5 * spacing);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -126,9 +126,9 @@ public class SampleCoverageToolTests
             bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
             source: new S102CoverageSource(tileB)));
 
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -150,9 +150,9 @@ public class SampleCoverageToolTests
             "s102-badcrs",
             bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
             source: new S102CoverageSource(badCrs)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -178,9 +178,9 @@ public class SampleCoverageToolTests
             "s102-good",
             bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
             source: new S102CoverageSource(good)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -194,9 +194,9 @@ public class SampleCoverageToolTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S124("vector-only"));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 0, Longitude: 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -218,9 +218,9 @@ public class SampleCoverageToolTests
             "wl-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S104CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -246,10 +246,10 @@ public class SampleCoverageToolTests
             "wl-clamp-late",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S104CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var requested = new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero);
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -273,10 +273,10 @@ public class SampleCoverageToolTests
             "wl-clamp-early",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S104CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var requested = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -294,9 +294,9 @@ public class SampleCoverageToolTests
             "wl-oob",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S104CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 50, Longitude: 50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -309,9 +309,9 @@ public class SampleCoverageToolTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S124("v"));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0, Longitude: 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -327,15 +327,15 @@ public class SampleCoverageToolTests
             "wl-dcf8",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S104CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var nsy = Assert.IsType<NotSupportedYet>(error);
         Assert.Equal("S-104", nsy.Spec.Name);
-        Assert.Equal(SampleCoverageTool.Name, nsy.Tool);
+        Assert.Equal(SampleTool.Name, nsy.Tool);
     }
 
     [Fact]
@@ -347,9 +347,9 @@ public class SampleCoverageToolTests
             "wl-nodata",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S104CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -365,9 +365,9 @@ public class SampleCoverageToolTests
             "sc-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S111CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -392,17 +392,17 @@ public class SampleCoverageToolTests
             "sc-clamp",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S111CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var before = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var beforeResult = await tool.InvokeAsync(new SampleCoverageRequest(
+        var beforeResult = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: before, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
         Assert.True(beforeResult.TryGetValue(out var bv));
         Assert.Equal(SampleTimeStatus.BeforeStart, bv.TimeStatus);
         Assert.Equal(times[0], Assert.IsType<SurfaceCurrentSample>(bv.Value).SampleTime);
 
         var after = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var afterResult = await tool.InvokeAsync(new SampleCoverageRequest(
+        var afterResult = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: after, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
         Assert.True(afterResult.TryGetValue(out var av));
         Assert.Equal(SampleTimeStatus.AfterEnd, av.TimeStatus);
@@ -418,9 +418,9 @@ public class SampleCoverageToolTests
             "sc-dcf3",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S111CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -437,9 +437,9 @@ public class SampleCoverageToolTests
             "sc-oob",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S111CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: -50, Longitude: -50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -453,10 +453,10 @@ public class SampleCoverageToolTests
         var dataset = S102Synth.Dataset();
         var source = new DisposableS102CoverageSource(dataset);
         catalog.Add(LoadedDatasetFactory.S102("ds", bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04), source: source));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
         source.Dispose();
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
@@ -474,9 +474,9 @@ public class SampleCoverageToolTests
             "edge",
             bounds: LoadedDatasetFactory.Box(10, 20, 10.04, 20.04),
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: 10.0, Longitude: 20.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));

@@ -208,7 +208,7 @@ public sealed record TimedSampledValue(
 public sealed class SampleCoverageService
 {
     /// <summary>Tool name used in <see cref="SpecNotSupportedForTool"/> errors.</summary>
-    public const string Name = "sample_coverage";
+    public const string Name = "sample";
 
     private readonly IDatasetCatalog _catalog;
     private readonly ICrsTransformFactory _transforms;

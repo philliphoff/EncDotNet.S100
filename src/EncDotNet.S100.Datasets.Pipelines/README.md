@@ -250,8 +250,8 @@ from it and only open the file. It implements:
 - **Sampling.** `ICoverageSampler` returns `CoverageFieldsSample`s whose fields
   carry their quantity and unit (`wave.hs` in `m`, `wind.speed` in `m/s` and
   `wind.speed.kn` in `kn`, directions in `deg`), and the catalog payload
-  (`WeatherGridDatasetData`) does the same, so `sample_coverage` and
-  `sample_coverage_along` work with no MCP change.
+  (`WeatherGridDatasetData`) does the same, so the MCP `sample` tool works
+  with no MCP change.
 - **Headless rendering.** `IHeadlessImageRenderer`, framed on the grid,
   with the sub-layers in S-98 order.
 - **Metadata.** The cells' WGS-84 extent, EPSG:4326 and the time coverage.
@@ -618,15 +618,15 @@ use `LoadedDatasetProjector`, so a pick from `s100` produces the same catalog
 entries as one in SoundCharts. The exception is S-57: SoundCharts projects S-57
 cells from their loaded `S57DatasetProcessor`, so its entries include any
 exchange-set updates the processor applied. The MCP `identify_features`,
-`sample_coverage` and `describe_feature` tools map `ToolResult<T>` onto the MCP
+`sample` and `describe_feature` tools map `ToolResult<T>` onto the MCP
 protocol.
 
 ### Coverage sampling
 
-`SampleCoverageService` (the `sample_coverage` and `sample_coverage_along`
-tools, and `s100 identify`) doesn't know any product. It samples the catalog
-entries of the requested spec whose payload implements `ICoverageSampler`, a
-processor capability in `EncDotNet.S100.Core`:
+`SampleCoverageService` (the MCP `sample` tool, and `s100 identify`)
+doesn't know any product. It samples the catalog entries of the requested spec
+whose payload implements `ICoverageSampler`, a processor capability in
+`EncDotNet.S100.Core`:
 
 - `ICoverageSampler.FindSites(query)` says where the dataset can answer a
   point: the grid node nearest it, or every station of a station series. Each

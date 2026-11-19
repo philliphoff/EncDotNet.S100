@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Mcp.Tools.Tests;
 /// dataset selection, strict-by-default single instants, the opt-in
 /// nearest-step policy, one-step tolerance, and truncated windows.
 /// </summary>
-public class SampleCoverageToolTimeRangeTests
+public class SampleToolTimeRangeTests
 {
     private static readonly DateTime Day = new(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
 
@@ -45,7 +45,7 @@ public class SampleCoverageToolTimeRangeTests
     private static Task<ToolResult<SampleCoverageResult>> SampleS111(
         FakeDatasetCatalog catalog, DateTimeOffset? time = null, TimeQuery? times = null,
         TimeOutOfRangePolicy outOfRange = TimeOutOfRangePolicy.Error) =>
-        new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()).InvokeAsync(new SampleCoverageRequest(
+        TestSampleTool.Create(catalog).SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, time, times, outOfRange),
             TestContext.Current.CancellationToken);
 
@@ -244,9 +244,9 @@ public class SampleCoverageToolTimeRangeTests
         var catalog = new FakeDatasetCatalog();
         catalog.Add(S104Run("early", Hourly(0, 4)));
         catalog.Add(S104Run("late", Hourly(24, 4)));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: At(25)),
             TestContext.Current.CancellationToken);
 
@@ -254,7 +254,7 @@ public class SampleCoverageToolTimeRangeTests
         Assert.Equal(new DatasetId("late"), v.DatasetId);
         Assert.Equal(SampleTimeStatus.InRange, v.TimeStatus);
 
-        var outside = await tool.InvokeAsync(new SampleCoverageRequest(
+        var outside = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: At(60)),
             TestContext.Current.CancellationToken);
         Assert.True(outside.TryGetError(out var err));
@@ -385,9 +385,9 @@ public class SampleCoverageToolTimeRangeTests
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("early", StationRun(Day, 1.0f, "20261005")));
         catalog.Add(LoadedDatasetFactory.S111Stations("late", StationRun(Day.AddHours(24), 2.0f, "20261006")));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 37.82, Longitude: -122.48, Time: At(25)),
             TestContext.Current.CancellationToken);
 
@@ -402,9 +402,9 @@ public class SampleCoverageToolTimeRangeTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("run", StationRun(Day, 1.0f, "20261005")));
-        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+        var result = await tool.SampleCoverageAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 37.82, Longitude: -122.48, Time: At(50)),
             TestContext.Current.CancellationToken);
 
@@ -422,9 +422,9 @@ public class SampleCoverageToolTimeRangeTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(S111Run("run", Hourly(0, 4)));
-        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var result = await tool.ProfileAsync(TestSampleTool.Along(
             LoadedDatasetFactory.S111Spec, Route((0.01, 0.01), (0.02, 0.02)), Time: At(50)),
             TestContext.Current.CancellationToken);
 
@@ -441,9 +441,9 @@ public class SampleCoverageToolTimeRangeTests
         catalog.Add(S111Run("here", Hourly(0, 48)));
         var elsewhere = S111Synth.Dataset(originLat: 1.0, originLon: 1.0, times: Hourly(0, 4));
         catalog.Add(LoadedDatasetFactory.S111("there", LoadedDatasetFactory.Box(1, 1, 1.04, 1.04), new S111CoverageSource(elsewhere)));
-        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var result = await tool.ProfileAsync(TestSampleTool.Along(
             LoadedDatasetFactory.S111Spec, Route((0.02, 0.02), (1.02, 1.02)), Time: At(30)),
             TestContext.Current.CancellationToken);
 
@@ -453,7 +453,7 @@ public class SampleCoverageToolTimeRangeTests
         Assert.Null(v.Samples[1].Result);
         Assert.Equal("time_out_of_range", v.Samples[1].Error?.Code);
 
-        var nearest = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var nearest = await tool.ProfileAsync(TestSampleTool.Along(
             LoadedDatasetFactory.S111Spec, Route((0.02, 0.02), (1.02, 1.02)), Time: At(30),
             OutOfRange: TimeOutOfRangePolicy.Nearest),
             TestContext.Current.CancellationToken);

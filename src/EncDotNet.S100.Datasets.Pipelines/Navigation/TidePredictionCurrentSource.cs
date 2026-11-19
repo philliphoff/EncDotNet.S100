@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// A prediction is the astronomical tidal current only: wind and river flow
 /// aren't in it, and the strongest stream in a pass can be away from the
 /// station. Of the depth bins at one place the shallowest is used, as the
-/// current nearest the surface, as <c>sample_coverage</c>'s fallback does.
+/// current nearest the surface, as the <c>sample</c> tool's fallback does.
 /// </para>
 /// <para>Safe to call from several threads at once.</para>
 /// </remarks>

@@ -6,7 +6,7 @@ using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
-public class SampleCoverageAlongToolTests
+public class SampleToolAlongTests
 {
     [Fact]
     public async Task Samples_every_vertex_inside_bounds_returns_depth_at_each()
@@ -18,14 +18,14 @@ public class SampleCoverageAlongToolTests
             "s102-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var polyline = new GeoPolyline([
             new GeoPoint(0.01, 0.01),
             new GeoPoint(0.02, 0.02),
             new GeoPoint(0.03, 0.03)]);
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var result = await tool.ProfileAsync(TestSampleTool.Along(
             LoadedDatasetFactory.S102Spec, polyline), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -49,14 +49,14 @@ public class SampleCoverageAlongToolTests
             "s102-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var polyline = new GeoPolyline([
             new GeoPoint(0.02, 0.02),       // inside
             new GeoPoint(50, 50),           // outside — NoDatasetCoversPoint
             new GeoPoint(0.03, 0.03)]);     // inside
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var result = await tool.ProfileAsync(TestSampleTool.Along(
             LoadedDatasetFactory.S102Spec, polyline), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
@@ -70,13 +70,13 @@ public class SampleCoverageAlongToolTests
     public async Task Unsupported_spec_propagates_as_request_level_error()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var polyline = new GeoPolyline([
             new GeoPoint(0, 0),
             new GeoPoint(1, 1)]);
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var result = await tool.ProfileAsync(TestSampleTool.Along(
             new SpecRef("S-101", new SpecVersion(1, 0, 0)),
             polyline), TestContext.Current.CancellationToken);
 
@@ -89,11 +89,11 @@ public class SampleCoverageAlongToolTests
     public async Task Empty_polyline_returns_geometry_invalid()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        var tool = TestSampleTool.Create(catalog);
 
         var polyline = new GeoPolyline([]);
 
-        var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
+        var result = await tool.ProfileAsync(TestSampleTool.Along(
             LoadedDatasetFactory.S102Spec, polyline), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));

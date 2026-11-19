@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <remarks>
 /// <para>
 /// S-102 cells are found the same way as the pick report and
-/// <c>sample_coverage</c> (<see cref="CoveragePickHelper"/>): reproject into
+/// <c>sample</c> (<see cref="CoveragePickHelper"/>): reproject into
 /// the grid CRS and floor to the containing cell. Swapped axis order, other
 /// geographic CRSs and the 0…360° longitude frame are absorbed at lookup by
 /// <see cref="PassageGrid"/>. NoData cells (S-102 fill
@@ -298,7 +298,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException or ArgumentException or ObjectDisposedException)
             {
                 // An unsupported or malformed CRS can't be sampled; the
-                // pick report and sample_coverage skip such tiles too.
+                // pick report and sample skip such tiles too.
                 return null;
             }
         }
@@ -481,7 +481,10 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
             return shoalest is null
                 ? null
-                : new ChartedDepth(shoalest.Value, kind, null, datum, _datasetId, shoalest.FeatureId);
+                : new ChartedDepth(shoalest.Value, kind, null, datum, _datasetId, shoalest.FeatureId)
+                {
+                    DepthRangeMaximumMeters = shoalest.Maximum,
+                };
         }
 
         private Built Index
@@ -515,14 +518,14 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
                 switch (feature.FeatureType)
                 {
-                    case "DredgedArea" when MinimumDepth(feature) is { } d:
-                        dredged.Add(Area.From(feature, d));
+                    case "DredgedArea" when ReadDepth(feature, ChartedDepthResolver.MinimumDepthAttributeCodes) is { } d:
+                        dredged.Add(Area.From(feature, d, ReadDepth(feature, ChartedDepthResolver.MaximumDepthAttributeCodes)));
                         break;
-                    case "DepthArea" when MinimumDepth(feature) is { } d:
-                        depth.Add(Area.From(feature, d));
+                    case "DepthArea" when ReadDepth(feature, ChartedDepthResolver.MinimumDepthAttributeCodes) is { } d:
+                        depth.Add(Area.From(feature, d, ReadDepth(feature, ChartedDepthResolver.MaximumDepthAttributeCodes)));
                         break;
                     case SoundingDatumResolver.FeatureType when SoundingDatumResolver.TryReadCode(feature, out var code):
-                        datums.Add(Area.From(feature, code));
+                        datums.Add(Area.From(feature, code, maximum: null));
                         break;
                 }
             }
@@ -539,9 +542,9 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                 ReadSoundings(_dataset.Document));
         }
 
-        private static double? MinimumDepth(Feature feature)
+        private static double? ReadDepth(Feature feature, IReadOnlyList<string> codes)
         {
-            foreach (var code in ChartedDepthResolver.MinimumDepthAttributeCodes)
+            foreach (var code in codes)
             {
                 if (feature.Attributes.TryGetValue(code, out var raw) && ChartedDepthResolver.TryReadMeters(raw, out var metres))
                 {
@@ -656,10 +659,11 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         {
             private readonly IReadOnlyList<SurfacePart> _surfaces;
 
-            private Area(IReadOnlyList<SurfacePart> surfaces, double value, string featureId)
+            private Area(IReadOnlyList<SurfacePart> surfaces, double value, double? maximum, string featureId)
             {
                 _surfaces = surfaces;
                 Value = value;
+                Maximum = maximum;
                 FeatureId = featureId;
                 South = West = double.MaxValue;
                 North = East = double.MinValue;
@@ -679,6 +683,9 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
             public IReadOnlyList<SurfacePart> Surfaces => _surfaces;
 
+            /// <summary>For a depth area, its maximum depth (DRVAL2), when it carries one.</summary>
+            public double? Maximum { get; }
+
             public string FeatureId { get; }
 
             public double South { get; }
@@ -689,8 +696,8 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
             public double East { get; }
 
-            public static Area From(Feature feature, double value) =>
-                new(((IS100Feature)feature).Surfaces, value, feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            public static Area From(Feature feature, double value, double? maximum) =>
+                new(((IS100Feature)feature).Surfaces, value, maximum, feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
             public bool Contains(double lat, double lon)
             {

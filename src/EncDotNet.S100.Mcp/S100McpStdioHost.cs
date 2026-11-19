@@ -39,7 +39,7 @@ public static class S100McpStdioHost
     /// </param>
     /// <param name="routeCheckSources">
     /// The route-check sources for <c>check_route</c> and, through their tide
-    /// predictions, the S-104 fallback of <c>sample_coverage</c>; <c>null</c>
+    /// predictions, the S-104 fallback of <c>sample</c>; <c>null</c>
     /// for the tools' own, without predictions.
     /// </param>
     /// <param name="toolsets">

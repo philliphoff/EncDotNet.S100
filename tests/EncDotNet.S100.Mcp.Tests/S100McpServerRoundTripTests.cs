@@ -39,8 +39,7 @@ public class S100McpServerRoundTripTests
                 "list_time_steps",
                 "nearest_features",
                 "query_features",
-                "sample_coverage",
-                "sample_coverage_along",
+                "sample",
                 "search_features",
             },
             names);
@@ -121,14 +120,14 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-102/2.1.0",
             ["latitude"] = 0.01,
             ["longitude"] = 0.01,
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"sample returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
         var depth = payload["value"]!["depthMeters"]!.GetValue<double>();
         Assert.InRange(depth, 17.49, 17.51);
@@ -152,7 +151,7 @@ public class S100McpServerRoundTripTests
             ["time"] = "2024-01-03T22:00:00Z",
         };
 
-        var strict = await client.CallToolAsync("sample_coverage", args, cancellationToken: TestContext.Current.CancellationToken);
+        var strict = await client.CallToolAsync("sample", args, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(strict.IsError ?? false, "Expected time_out_of_range by default.");
         var error = ParseSingleJson(strict);
         Assert.Equal("time_out_of_range", error["code"]!.GetValue<string>());
@@ -165,14 +164,14 @@ public class S100McpServerRoundTripTests
         Assert.Single(details["candidates"]!.AsArray());
 
         args["outOfRange"] = "nearest";
-        var nearest = await client.CallToolAsync("sample_coverage", args, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.False(nearest.IsError ?? false, $"sample_coverage returned an error: {DumpText(nearest)}");
+        var nearest = await client.CallToolAsync("sample", args, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(nearest.IsError ?? false, $"sample returned an error: {DumpText(nearest)}");
         var payload = ParseSingleJson(nearest);
         Assert.Equal("after_end", payload["timeStatus"]!.GetValue<string>());
         Assert.StartsWith("2024-01-01T02:00:00", payload["value"]!["sampleTime"]!.GetValue<string>());
 
         args["outOfRange"] = "clamp";
-        var invalid = await client.CallToolAsync("sample_coverage", args, cancellationToken: TestContext.Current.CancellationToken);
+        var invalid = await client.CallToolAsync("sample", args, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(invalid.IsError ?? false);
         Assert.Equal("invalid_argument", ParseSingleJson(invalid)["code"]!.GetValue<string>());
     }
@@ -609,7 +608,7 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = 42,
             ["latitude"] = 0.0,
@@ -905,7 +904,7 @@ public class S100McpServerRoundTripTests
 
 
     [Fact]
-    public async Task SampleCoverageAlong_round_trip_returns_per_vertex_results()
+    public async Task Sample_along_a_polyline_round_trip_returns_per_vertex_results()
     {
         var catalog = McpTestHelpers.NewCatalog(
             LoadedDatasetFactory.S102("synth-bathy-1",
@@ -915,13 +914,13 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-102/2.1.0",
             ["polyline"] = """{"vertices":[[0.01,0.01],[0.02,0.02],[50.0,50.0]]}""",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"sample_coverage_along returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"sample returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
         var samples = payload["samples"]!.AsArray();
         Assert.Equal(3, samples.Count);
@@ -930,6 +929,46 @@ public class S100McpServerRoundTripTests
         Assert.NotNull(samples[1]!["result"]);
         // Last vertex is far outside any coverage — per-vertex miss -> null.
         Assert.Null(samples[2]!["result"]);
+    }
+
+    // #1557: charted depth by quantity, with the polyline as a JSON object.
+    [Fact]
+    public async Task Sample_depth_round_trip_takes_a_polyline_object_and_names_the_source()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S102("synth-bathy-1",
+                bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+                source: S102Synth.Source(S102Synth.Dataset(depth: 17.5f, uncertainty: 0.5f))));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
+
+        var point = await client.CallToolAsync("sample", new Dictionary<string, object?>
+        {
+            ["quantity"] = "depth",
+            ["latitude"] = 0.015,
+            ["longitude"] = 0.015,
+        }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(point.IsError ?? false, $"sample returned an error: {DumpText(point)}");
+        var depth = ParseSingleJson(point);
+        Assert.Equal("uncharted", depth["waterMask"]!.GetValue<string>());
+        Assert.Equal("bathymetry", depth["depth"]!["kind"]!.GetValue<string>());
+        Assert.Equal(17.5, depth["depth"]!["depthMeters"]!.GetValue<double>());
+        Assert.Equal("synth-bathy-1", depth["depth"]!["datasetId"]!.GetValue<string>());
+
+        var line = await client.CallToolAsync("sample", new Dictionary<string, object?>
+        {
+            ["quantity"] = "depth",
+            ["polyline"] = System.Text.Json.Nodes.JsonNode.Parse("""{"vertices":[[0.01,0.01],[0.01,0.02]]}"""),
+            ["spacingMeters"] = 500,
+        }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(line.IsError ?? false, $"sample returned an error: {DumpText(line)}");
+        var profile = ParseSingleJson(line);
+        Assert.Equal("depth", profile["quantity"]!.GetValue<string>());
+        Assert.Equal(4, profile["samples"]!.AsArray().Count);
+        Assert.Equal(17.5, profile["shoalest"]!["depthMeters"]!.GetValue<double>());
     }
 
     [Fact]
@@ -1051,7 +1090,7 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-104/2.0.0",
             ["latitude"] = 0.01,
@@ -1059,7 +1098,7 @@ public class S100McpServerRoundTripTests
             ["times"] = """{"kind":"range","from":"2024-01-01T00:00:00Z","to":"2024-01-01T02:00:00Z"}""",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"sample returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
         var series = payload["series"]!.AsArray();
         Assert.Equal(3, series.Count);

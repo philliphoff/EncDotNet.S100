@@ -268,14 +268,14 @@ public sealed class QuirkScenarioTests : IDisposable
 
     public static TheoryData<string> GridQuirkNames() => new("quirk-swapped-axis-order", "quirk-unusual-crs", "quirk-longitude-0-360");
 
-    // The pick report (CoveragePickHelper) and sample_coverage read S-102,
+    // The pick report (CoveragePickHelper) and sample read S-102,
     // S-104 and S-111 grids with each georeferencing quirk exactly as the same
     // grids without it: same value, same cell. The quirk scenarios have no
     // S-111, so an S-111 grid is added here, and the S-102 surface's quirks
     // are put on every grid.
     [Theory]
     [MemberData(nameof(GridQuirkNames))]
-    public async Task Pick_and_sample_coverage_read_quirky_grids_as_without_quirks(string name)
+    public async Task Pick_and_sample_read_quirky_grids_as_without_quirks(string name)
     {
         var quirky = Generate(WithCurrentGrid(QuirkScenarios.All().Single(d => d.Name == name)));
         var plain = Generate(WithCurrentGrid(SyntheticScenarios.SpitAcrossScales()) with { Name = "spit-across-scales-with-currents" });
@@ -301,7 +301,7 @@ public sealed class QuirkScenarioTests : IDisposable
             Assert.Equal((expectedPick.Row, expectedPick.Col), (actualPick.Row, actualPick.Col));
             Assert.Equal(expectedPick.Values, actualPick.Values);
 
-            // sample_coverage, at the place and on a time window.
+            // sample, at the place and on a time window.
             var request = new SampleCoverageRequest(new SpecRef(spec, default), position.Latitude, position.Longitude, spec == "S-102" ? null : new DateTimeOffset(Morning));
             AssertSameSample(await Sample(expectedCatalog, request, transforms), await Sample(actualCatalog, request, transforms));
             if (spec != "S-102")

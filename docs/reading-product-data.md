@@ -298,7 +298,7 @@ the S-102, S-104 and S-111 readers only report a grid whose footprint fits
 its bounding box swapped, because a producer that swaps the origin may also
 have swapped the spacing and counts. The check runs on a grid in any
 geographic CRS (WGS 84, ETRS89, NAD83 and so on), but not in a projected CRS,
-such as UTM. Passage checks, the pick report and `sample_coverage` still read
+such as UTM. Passage checks, the pick report and the MCP `sample` tool still read
 a swapped grid: they exchange the origin, spacing and counts back when they
 look up a cell.
 

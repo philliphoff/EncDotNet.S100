@@ -16,8 +16,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <remarks>
 /// <para>
 /// A position is on a grid when it's within half a cell of a node, as the
-/// picks and <c>sample_coverage</c> find it. Datasets are ranked as
-/// <c>sample_coverage</c> ranks them: the finest grid first, then the newest
+/// picks and <c>sample</c> find it. Datasets are ranked as
+/// <c>sample</c> ranks them: the finest grid first, then the newest
 /// model run, then the latest last step, then catalog order. So a regional
 /// model wins over a global one where both cover the route.
 /// </para>
