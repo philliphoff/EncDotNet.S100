@@ -34,10 +34,12 @@ public sealed record CheckRouteRequest(
 /// <param name="From">With <paramref name="To"/>, the first departure of the sweep.</param>
 /// <param name="To">The last departure of the sweep.</param>
 /// <param name="StepMinutes">Minutes between swept departures.</param>
+/// <param name="Constraints">Passage timing constraints: with them the timing check judges every swept departure.</param>
 public sealed record DepartureWindowArguments(
     [property: Description("With to, the first departure of the sweep. Without from and to, the sweep covers the S-104 range that covers the route (over a long forecast the step widens to keep it under 2000 departures).")] DateTimeOffset? From = null,
     [property: Description("With from, the last departure of the sweep (inclusive).")] DateTimeOffset? To = null,
-    [property: Description("Minutes between swept departures (default 5).")] int StepMinutes = 5);
+    [property: Description("Minutes between swept departures (default 5).")] int StepMinutes = 5,
+    [property: Description("Passage timing (the timing check): currents applied to the ETAs, tidal gates, leg current limits and arrival constraints, judged at the planned departure and every swept departure, with the windows that meet them all (result: timing). Without from and to the timing sweep covers the 24 hours from departure.")] WindowConstraintsArguments? Constraints = null);
 
 /// <summary>The weather check settings of a <see cref="CheckRouteRequest"/>.</summary>
 /// <param name="MaxWindKnots">The wind limit, in knots; replaces a route's own.</param>
@@ -104,7 +106,7 @@ public sealed class CheckRouteTool
     private readonly RouteCheckSourceCache _sources;
     private readonly TimeProvider _time;
     private readonly object _gate = new();
-    private (RouteCheckSources Sources, RouteCheckOptions Options, RouteChecker Checker)? _checker;
+    private (RouteCheckSources Sources, RouteCheckOptions Options, bool Timing, RouteChecker Checker)? _checker;
 
     /// <summary>Creates the tool.</summary>
     /// <param name="catalog">The loaded datasets.</param>
@@ -204,7 +206,7 @@ public sealed class CheckRouteTool
         var options = request.Samples?.SpacingMeters is { } spacing
             ? RouteCheckOptions.Default with { Clearance = PassageCheckOptions.Default with { SampleSpacingMeters = spacing } }
             : RouteCheckOptions.Default;
-        var checker = Checker(_sources.Get(_catalog.Datasets), options);
+        var checker = Checker(_sources.Get(_catalog.Datasets), options, settings.Timing is not null);
         RouteCheckReport report;
         try
         {
@@ -250,27 +252,48 @@ public sealed class CheckRouteTool
                     ReportClosestApproach = cyclones.ReportClosestApproach ?? true,
                     MustReviewInside = cyclones.MustReviewInside is { } inside ? MustReviewInside(inside) : TropicalCycloneRadius.Knots50,
                 },
+            Timing = window?.Constraints is { } constraints ? Timing(constraints) : null,
             DepartureWindow = window is null ? null
                 : window.From is { } from && window.To is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(window.StepMinutes))
                 : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(window.StepMinutes), MaxWindowDepartures),
         };
     }
 
+    private static PassageTimingSettings Timing(WindowConstraintsArguments constraints) => new()
+    {
+        ApplyCurrents = constraints.ApplyCurrents,
+        Gates = [.. (constraints.Gates ?? []).Select(g => new TimingGate
+        {
+            Name = g.Name,
+            WaypointIndex = g.Waypoint,
+            Position = g.Latitude is { } lat && g.Longitude is { } lon ? new GeoPosition(lat, lon) : null,
+            Station = g.Station,
+            SlackWithin = g.SlackWithinMinutes is { } minutes ? TimeSpan.FromMinutes(minutes) : null,
+            MaxCurrent = g.MaxCurrentKnots is { } max ? Speed.FromKnots(max) : null,
+            FairOnly = g.FairOnly,
+        })],
+        LegLimits = [.. (constraints.LegLimits ?? []).Select(l => new LegCurrentLimit { LegIndex = l.Leg, MaxOpposing = Speed.FromKnots(l.MaxOpposingKnots) })],
+        ArriveBy = constraints.ArriveBy,
+        ArriveNotBefore = constraints.ArriveNotBefore,
+        ArrivalTide = constraints.ArrivalTide is { } tide ? new ArrivalTideRange { MinMeters = tide.MinMeters, MaxMeters = tide.MaxMeters } : null,
+    };
+
     /// <summary>
     /// The checker for the loaded data. One is kept while the data and
     /// options stay the same, so its checks reuse what the last run sampled.
     /// </summary>
-    private RouteChecker Checker(RouteCheckSources sources, RouteCheckOptions options)
+    private RouteChecker Checker(RouteCheckSources sources, RouteCheckOptions options, bool timing)
     {
         lock (_gate)
         {
-            if (_checker is { } last && ReferenceEquals(last.Sources, sources) && last.Options == options)
+            if (_checker is { } last && ReferenceEquals(last.Sources, sources) && last.Options == options && last.Timing == timing)
             {
                 return last.Checker;
             }
 
-            var checker = new RouteChecker(sources, options);
-            _checker = (sources, options, checker);
+            // The timing check runs only when asked for, so other reports keep their five checks.
+            var checker = new RouteChecker(sources, options, timing ? [new TimingCheck()] : null);
+            _checker = (sources, options, timing, checker);
             return checker;
         }
     }
@@ -328,11 +351,50 @@ public sealed class CheckRouteTool
         {
             if ((window.From is null) != (window.To is null)) return new InvalidArgument("window.to", "from and to go together");
             if (window.StepMinutes < 1) return new InvalidArgument("window.stepMinutes", "must be at least 1");
+            if (window.Constraints is { } constraints && ValidateConstraints(constraints) is { } constraintError) return constraintError;
             if (window.From is { } f && window.To is { } t)
             {
                 if (t < f) return new InvalidArgument("window.to", "must not be before from");
                 if ((t - f).TotalMinutes / window.StepMinutes > MaxWindowDepartures) return new InvalidArgument("window.stepMinutes", "the sweep would exceed 2000 departures");
             }
+        }
+
+        return null;
+    }
+
+    private static InvalidArgument? ValidateConstraints(WindowConstraintsArguments constraints)
+    {
+        const string prefix = "window.constraints.";
+        var gates = constraints.Gates ?? [];
+        for (var i = 0; i < gates.Count; i++)
+        {
+            var g = gates[i];
+            var at = $"{prefix}gates[{i}].";
+            if (g is null) return new InvalidArgument($"{prefix}gates", $"gate {i} is null");
+            var hasPosition = g.Latitude is not null && g.Longitude is not null;
+            if ((g.Waypoint is not null) == hasPosition) return new InvalidArgument(at + "waypoint", "give a waypoint, or a latitude and longitude");
+            if (g.Waypoint is < 0) return new InvalidArgument(at + "waypoint", "must be zero or more");
+            if (g.Latitude is { } lat && (!double.IsFinite(lat) || Math.Abs(lat) > 90)) return new InvalidArgument(at + "latitude", "must be in [-90, 90]");
+            if (g.Longitude is { } lon && (!double.IsFinite(lon) || Math.Abs(lon) > 180)) return new InvalidArgument(at + "longitude", "must be in [-180, 180]");
+            if (Arguments.NotPositive(g.SlackWithinMinutes)) return new InvalidArgument(at + "slackWithinMinutes", "must be a positive number of minutes");
+            if (Arguments.Negative(g.MaxCurrentKnots)) return new InvalidArgument(at + "maxCurrentKnots", "must be zero or more knots");
+            if (g.SlackWithinMinutes is null && g.MaxCurrentKnots is null && !g.FairOnly) return new InvalidArgument(at + "slackWithinMinutes", "a gate needs slackWithinMinutes, maxCurrentKnots or fairOnly");
+        }
+
+        var limits = constraints.LegLimits ?? [];
+        for (var i = 0; i < limits.Count; i++)
+        {
+            if (limits[i] is null) return new InvalidArgument($"{prefix}legLimits", $"limit {i} is null");
+            if (limits[i].Leg is < 0) return new InvalidArgument($"{prefix}legLimits[{i}].leg", "must be zero or more");
+            if (Arguments.Negative(limits[i].MaxOpposingKnots)) return new InvalidArgument($"{prefix}legLimits[{i}].maxOpposingKnots", "must be zero or more knots");
+        }
+
+        if (constraints.ArriveBy is { } by && constraints.ArriveNotBefore is { } notBefore && by < notBefore)
+            return new InvalidArgument(prefix + "arriveBy", "must not be before arriveNotBefore");
+        if (constraints.ArrivalTide is { } tide)
+        {
+            if (tide.MinMeters is null && tide.MaxMeters is null) return new InvalidArgument(prefix + "arrivalTide", "give minMeters, maxMeters or both");
+            if (tide.MinMeters is { } min && tide.MaxMeters is { } max && max < min) return new InvalidArgument(prefix + "arrivalTide.maxMeters", "must not be below minMeters");
         }
 
         return null;

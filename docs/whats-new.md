@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Departure windows from tidal gates and currents.** `check_route`'s
+  `window.constraints` adds a timing check: tidal gates (slack within N
+  minutes at a current station, a current limit, or fair only), limits on
+  the current against each leg, the latest and earliest arrival, and the
+  water level at the arrival. With `applyCurrents`, speeds are through the
+  water and the check's ETAs and running times include the predicted
+  current along the track. It returns each departure's running time and
+  constraints, and the windows that meet them all with the best departure
+  in each. Currents come from current-station predictions
+  (`--tide-predictions`). In Navigation: `TimingCheck`,
+  `PassageTimingSettings` and `IRouteCurrentSource`
+  (`RouteCheckSources.Currents`).
+
 - **MCP toolsets.** Every MCP tool now belongs to a toolset, such as `query`,
   `routes`, `tides` or `library`, and a server can offer only some of them, so
   an agent's context holds only the tools its task needs.
