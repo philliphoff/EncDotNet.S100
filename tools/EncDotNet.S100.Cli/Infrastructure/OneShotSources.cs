@@ -21,6 +21,9 @@ internal sealed class OneShotSources : IDisposable
     /// <summary>The sources that delivered data in time, as catalog entries.</summary>
     public List<LoadedDataset> Datasets { get; } = [];
 
+    /// <summary>The processors of <see cref="Datasets"/>, in the same order, for drawing.</summary>
+    public List<IDatasetProcessor> Processors { get; } = [];
+
     /// <summary>Sources left out, and why.</summary>
     public List<string> Warnings { get; } = [];
 
@@ -86,7 +89,10 @@ internal sealed class OneShotSources : IDisposable
                 for (var n = 2; !ids.Add(id); n++)
                     id = $"{created.Registration.Id}-{n}";
                 if (LoadedDatasetProjector.Project(new DatasetId(id), created.Processor) is { } dataset)
+                {
                     sources.Datasets.Add(dataset);
+                    sources.Processors.Add(created.Processor);
+                }
             }
             return (sources, null);
         }

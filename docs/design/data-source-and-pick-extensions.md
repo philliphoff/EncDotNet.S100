@@ -1211,8 +1211,11 @@ Also left:
     `OneShotSources` for the pick's area (at least 5 km around it), waits up
     to `--source-timeout` for its first data and leaves out, with a warning,
     one that has none or whose range is narrower than the area. `render
-    --source` isn't built: render draws through the file composite, which
-    has no place for a processor yet, so it waits for that path.
+    --source` followed in its own change: `PngS100DatasetRenderer` gained a
+    `RenderAsync(layers, overlays, …)` overload that draws caller-owned
+    processors above the parsed layers, and the composite and exchange-set
+    forms pass the live sources as overlays, started for the `--bbox` or
+    `--center`/`--scale` area, which `--source` requires.
   - **11e. Tiles** (deferred). `tiles serve --source` with `--bbox`, live
     layers uncached; only if wanted. `tiles export --source` is refused
     from 11d.

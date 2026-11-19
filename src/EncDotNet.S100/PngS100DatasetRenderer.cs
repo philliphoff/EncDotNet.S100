@@ -128,7 +128,41 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         }
 
         options ??= new S100CompositeOptions();
-        return RenderCompositeCoreAsync(layers, options, cancellationToken);
+        return RenderCompositeCoreAsync(layers, [], options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Composites a stack of datasets with already-built processors painted
+    /// above them, such as live data sources (data source design note D9): the
+    /// layers are parsed as by the <see cref="S100Layer"/> overload, and the
+    /// overlays are the caller's, used as they are and not disposed.
+    /// </summary>
+    /// <param name="layers">The datasets, painted bottom-first; may be empty when there are overlays.</param>
+    /// <param name="overlays">Processors painted above the layers, bottom-first.</param>
+    /// <param name="options">Composite render options; defaults when null.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The PNG.</returns>
+    public Task<byte[]> RenderAsync(
+        IReadOnlyList<S100Layer> layers,
+        IReadOnlyList<IDatasetProcessor> overlays,
+        S100CompositeOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(layers);
+        ArgumentNullException.ThrowIfNull(overlays);
+        if (layers.Count + overlays.Count == 0)
+            throw new ArgumentException("At least one layer or overlay is required to composite.", nameof(layers));
+        foreach (var layer in layers)
+        {
+            ArgumentNullException.ThrowIfNull(layer);
+            ArgumentNullException.ThrowIfNull(layer.Dataset);
+        }
+        foreach (var overlay in overlays)
+            ArgumentNullException.ThrowIfNull(overlay);
+
+        options ??= new S100CompositeOptions();
+        return RenderCompositeCoreAsync(layers, overlays, options, cancellationToken);
     }
 
     /// <summary>
@@ -165,6 +199,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
 
     private async Task<byte[]> RenderCompositeCoreAsync(
         IReadOnlyList<S100Layer> layers,
+        IReadOnlyList<IDatasetProcessor> overlays,
         S100CompositeOptions options,
         CancellationToken cancellationToken)
     {
@@ -197,7 +232,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             }
 
             var processors = await Task.WhenAll(parses).ConfigureAwait(false);
-            return await CompositeAsync(processors, options, cancellationToken).ConfigureAwait(false);
+            return await CompositeAsync([.. processors, .. overlays], options, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

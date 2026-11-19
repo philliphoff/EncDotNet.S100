@@ -200,6 +200,8 @@ other extension writes PNG, unless you set `--format`.
 | `--exchange-set`, `--from <path>` | none | Composites an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
 | `--only <specs>` | all | Exchange-set form only. Composites only these product specifications, comma-separated, for example `--only S101,S128`. Hyphens and case are ignored. |
 | `-o`, `--output <path>` | positional | The output path. Use it instead of the positional output argument. |
+| `--source <source>` | none | Composite and exchange-set forms only. Also draws a live data source above the datasets, such as NDBC observations or AIS targets. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options. Needs `--bbox` or `--center` and `--scale`: the source is started for that area. See [Live sources in a render](#live-sources-in-a-render). |
+| `--source-timeout <seconds>` | `30` | How long to wait for each `--source`'s first data. |
 | `-w`, `--width <pixels>` | `1024` | Image width. |
 | `-h`, `--height <pixels>` | `768` | Image height. |
 | `--format <format>` | from the extension, else `png` | `png`, `jpeg` (or `jpg`), `webp` or `json`. A `--format` that contradicts a recognised output extension is an error. `json` works in the single-dataset form only. |
@@ -223,6 +225,21 @@ other extension writes PNG, unless you set `--format`.
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
 `--hide`, `--no-text` and `--basemap` apply to every layer of a composite.
+
+### Live sources in a render
+
+`--source` draws a live data source over a composite, as SoundCharts draws a
+live feed over the chart. Each source is started for the `--bbox` or
+`--center` and `--scale` area and given `--source-timeout` for its first data.
+A source with nothing by then, or whose range is narrower than the area, is
+left out with a warning on standard error, and the image is written without
+it. An unknown source or option exits with code `2`. A source that needs a key
+reads it from its environment variable, never from `--source`.
+[`sources`](#sources) lists them.
+
+```bash
+s100 render --layer chart.000 -o buoys.png --bbox -70.9,42.2,-70.5,42.5 --source ndbc.realtime
+```
 
 ### Render examples
 
