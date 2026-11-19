@@ -29,6 +29,7 @@ public sealed class McpServeCommandTests
         "describe_feature_type",
         "describe_library_item",
         "find_at",
+        "get_navigability_grid",
         "identify_features",
         "library_action",
         "list_current_stations",

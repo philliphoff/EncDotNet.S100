@@ -37,6 +37,7 @@ public class McpToolsetsTests
         ["list_specs"] = McpToolsets.Query,
         ["list_time_steps"] = McpToolsets.Query,
         ["check_route"] = McpToolsets.Routes,
+        ["get_navigability_grid"] = McpToolsets.Routes,
         ["open_dataset"] = McpToolsets.Datasets,
         ["close_dataset"] = McpToolsets.Datasets,
         ["close_all_datasets"] = McpToolsets.Datasets,
@@ -164,7 +165,7 @@ public class McpToolsetsTests
 
         var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(["check_route", "extra_echo"], tools.Select(t => t.Name).Order());
+        Assert.Equal(["check_route", "extra_echo", "get_navigability_grid"], tools.Select(t => t.Name).Order());
     }
 
     private static McpServerTool Echo(string name) =>

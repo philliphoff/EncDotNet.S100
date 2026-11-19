@@ -130,7 +130,7 @@ edited.
 | `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 13 tools, ~6,200 tokens | 13 tools, ~6,200 tokens |
 | `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
 | `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
-| `routes` | Check routes; in SoundCharts, also create, edit, import and export them | 22 tools, ~8,000 tokens | 1 tool, ~2,400 tokens |
+| `routes` | Check routes and map where a boat can go; in SoundCharts, also create, edit, import and export them | 23 tools, ~8,700 tokens | 2 tools, ~3,100 tokens |
 | `passage` | Check mode, departure, findings, clearance and route weather settings | 12 tools, ~2,900 tokens | none |
 | `tides` | Tide and current stations and their predictions | 4 tools, ~2,100 tokens | 4 tools, ~2,100 tokens |
 | `library` | The Library: sources, items, downloads and SECOM services | 12 tools, ~4,300 tokens | 12 tools, ~4,300 tokens |
@@ -139,13 +139,13 @@ edited.
 | `map` | Viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing | 15 tools, ~5,200 tokens | none |
 | `ui` | Panels and app screenshots; with `--mcp-test-hooks`, the [test tools](#test-tools) too | 13 tools with test hooks, ~4,200 tokens | none |
 | `diagnostics` | Render and performance diagnostics and recent logs | 7 tools, ~1,700 tokens | none |
-| `all` | Every toolset | 128 tools with test hooks, ~41,500 tokens | 41 tools, ~17,600 tokens |
+| `all` | Every toolset | 129 tools with test hooks, ~42,200 tokens | 42 tools, ~18,300 tokens |
 
 Profiles name a set of toolsets for a kind of task:
 
 | Profile | Toolsets | SoundCharts | `s100 mcp serve` |
 |---|---|---|---|
-| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 54 tools, ~19,600 tokens | 23 tools, ~11,500 tokens |
+| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 55 tools, ~20,300 tokens | 24 tools, ~12,200 tokens |
 | `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 62 tools, ~20,200 tokens | 24 tools, ~8,800 tokens |
 
 Over HTTP, `s100 mcp serve` still leaves out the tools that open datasets by
@@ -212,6 +212,7 @@ Both hosts provide these tools.
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset, or wind and waves from a GRIB2 or NetCDF grid (`spec` `"GRIB2"` or `"NetCDF"`). For S-104, S-111 and the grids, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
 | `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers; with a draft, the under-keel clearance; with wind or wave limits, the weather forecast along the route at the ETAs. Returns the verdict, each check's status, the findings, the clearance and the weather. See [Check a route](#check-a-route). |
+| `get_navigability_grid` | No | Returns water, land and charted depth over a box on a regular grid, with overlapping chart cells resolved as `check_route` resolves them. The reply is a summary: cell counts by class, the shoalest navigable cell, the largest connected navigable area, and, with `connect`, whether two positions join through navigable water. The grid itself goes to a file for code to read; `includeImage` adds a PNG. See [Navigability over an area](#navigability-over-an-area). |
 
 ### Session tools
 
@@ -898,6 +899,62 @@ settings, the meeting departure nearest `departure`, `windowConfidence`, and
 which never meet your settings. A departure that meets your settings with
 lower confidence still counts as meeting them; `windowConfidence` lists the
 reasons among the meeting departures, as the caveat on the window.
+
+## Navigability over an area
+
+`get_navigability_grid` answers "where can this boat go?" for a whole area at
+once, for planning a route or explaining one. Give the box (`south`, `west`,
+`north`, `east`), a `cellMeters` (default 50 m), and `draftMeters`,
+`safetyContourMeters` or both. Each cell is one of:
+
+- **navigable**: charted water at least the larger of the draft and the
+  safety contour deep, with no danger in it.
+- **shoal**: charted water shallower than that, drying ground included.
+- **hazard**: charted water with a wreck, obstruction or rock in the cell at
+  or shallower than `hazardDepthMeters` (default the minimum depth), or of
+  unknown depth. `includeHazards: false` leaves dangers out.
+- **land**, **uncharted** (no loaded chart covers it), or **no_depth**
+  (charted water without a charted depth).
+
+A cell's class comes from the finest chart cell at its centre, as the route
+check's water mask does. Its depth is the least charted depth at its centre and
+four corners: S-102 where a surface has a value, otherwise the finest S-101
+or S-57 cell's dredged or depth area. Depths are charted, with no water
+level, and aren't reduced to a common vertical datum.
+
+The reply is a summary, not the grid:
+
+- `grid`: the edges, `rows`, `columns`, `cellMeters` and the degrees per row
+  and column. Row 0 is the southernmost row and column 0 the westernmost.
+- `counts` per class and `navigableAreaKm2`.
+- `shoalestNavigable`: the navigable cell with the least depth, with the kind
+  and dataset of its centre's depth.
+- `largestNavigableArea`: its cells and area, how many separate navigable
+  areas there are, and its most open cell. Cells join through their sides.
+- `connection`, with `connect: [[lat,lon],[lat,lon]]`: whether a navigable way
+  joins the two positions. If not, `reason` says why (`from_not_navigable`,
+  `to_not_navigable`, `no_navigable_way`, or off the grid). If so,
+  `narrowest` is where the widest way between them is narrowest, with its
+  `clearanceMeters` to the nearest cell that isn't navigable. A position at a
+  berth is often in a shoal or land cell, so test from the water outside it.
+- `datasets`: the chart and S-102 datasets overlapping the box.
+- `file`: the grid, written on the server under the system's temporary
+  directory, with its `path` and `layout`. `format: "npy"` (the default) is a
+  NumPy structured array with fields `depth_dm` (int16, decimetres, −32768
+  for none) and `class` (uint8: 0 uncharted, 1 land, 2 navigable, 3 shoal,
+  4 hazard, 5 no_depth); `numpy.load(path)` reads it. `"raw"` is the int16
+  depths then the class bytes, both row-major from the south-west. `"none"`
+  writes nothing.
+
+The path is on the server's machine, so a client on another machine (the HTTP
+transport) can't open it. `includeImage: true` adds a PNG of the grid, north
+up, at most 1024 pixels a side: tan land, grey uncharted, pale blue shoal,
+blue navigable water (darker deeper) and red hazards.
+
+A grid has at most 6,000,000 cells. A bigger one returns `grid_too_large` with
+`suggestedCellMeters`, a cell size that fits the box. A 25 m grid of the San
+Juan Islands (about 4.9 million cells over 45 NOAA cells) takes about a
+second once the cells are loaded.
 
 ## Times outside the data
 

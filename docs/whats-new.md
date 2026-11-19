@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Navigability over an area.** The MCP tool `get_navigability_grid` says
+  where a boat can go over a whole box: each cell is navigable, shoal,
+  hazard, land, uncharted or without depth, from the finest chart cell and
+  S-102, as `check_route` resolves them. The reply is a summary (counts, the
+  shoalest navigable cell, the largest connected area, and whether two
+  positions join); the grid goes to a NumPy or raw file, with an optional
+  PNG. The engine is `NavigabilityGrid` in `EncDotNet.S100.Navigation`, and
+  `IChartedDepthSource` can now fill a whole grid at once.
+
 - **Departure windows from tidal gates and currents.** `check_route`'s
   `window.constraints` adds a timing check: tidal gates (slack within N
   minutes at a current station, a current limit, or fair only), limits on
@@ -39,6 +48,7 @@ month. For package versions and release assets, see
   `max`). Errors name the argument by its path, such as
   `vessel.draftMeters`. This is a breaking change for MCP clients. The
   `VesselArguments` type is meant for the route tools to share.
+
 - **`--source` and `s100 sources`.** `s100 identify --source ndbc.realtime`
   picks from a live data source, alone or with datasets: it's started for the
   area around the point, and left out with a warning if it has no data within
