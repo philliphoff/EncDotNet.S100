@@ -1130,3 +1130,170 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
   .pick-sheet { display: flex; min-height: 0; }
   .pick-sheet .pick-head { padding-top: 2px; }
 }
+
+/* Server state and live changes (SW7, #1583, handoff D28–D31). js/serve-live.js marks
+   <html data-link="reconnecting|disconnected|stopped"> while the live link is down. */
+
+.serve-header { grid-row: 1; }
+.serve-body { grid-row: 3; }
+.serve { grid-template-rows: 52px auto minmax(0, 1fr); }
+
+/* The pill: a spinner while updating; the link's label in place of the server's while the link is down. */
+.state-link { display: none; }
+html[data-link] .state-pill > .state-own { display: none; }
+html[data-link="reconnecting"] .state-link[data-link-state="reconnecting"],
+html[data-link="disconnected"] .state-link[data-link-state="disconnected"],
+html[data-link="stopped"] .state-link[data-link-state="stopped"] { display: inline; }
+html[data-link="reconnecting"] .state-pill { color: var(--warning-text); }
+html[data-link="reconnecting"] .state-pill .state-dot { background: var(--warning); animation: none; border: 0; }
+html[data-link="disconnected"] .state-pill, html[data-link="stopped"] .state-pill { color: var(--destructive-text); }
+html[data-link="disconnected"] .state-pill .state-dot,
+html[data-link="stopped"] .state-pill .state-dot { background: var(--destructive); animation: none; border: 0; }
+.state-pill[data-state="updating"] .state-dot {
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--warning);
+  border-right-color: transparent;
+  background: transparent;
+  animation: serve-spin 0.8s linear infinite;
+}
+
+@keyframes serve-spin { to { transform: rotate(360deg); } }
+.spin { animation: serve-spin 1s linear infinite; }
+
+/* The banners under the header (D30). */
+.link-banner {
+  grid-row: 2;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 12px 6px 14px;
+  box-sizing: border-box;
+  border-bottom: 1px solid color-mix(in srgb, var(--destructive) 35%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 10%, var(--card));
+  color: var(--destructive-text);
+}
+.link-banner > .icon { color: var(--destructive-text); }
+.link-banner-text { flex: 1; min-width: 0; }
+.link-banner-text .strong { margin-right: 2px; }
+.link-banner-warn { border-bottom-color: var(--warning-border); background: var(--warning-surface); color: var(--warning-text); }
+.link-banner-warn > .icon { color: var(--warning-text); }
+.link-retry { flex: none; color: var(--foreground); }
+html[data-link="disconnected"] .link-banner[data-link-banner="disconnected"],
+html[data-link="reconnecting"] .link-banner[data-link-banner="reconnecting"],
+html[data-link="stopped"] .link-banner[data-link-banner="stopped"] { display: flex; }
+
+/* The map dims while the server can't be reached; it keeps what it has. */
+.map { transition: opacity 0.3s ease; }
+html[data-link="disconnected"] .map, html[data-link="stopped"] .map { opacity: 0.55; filter: saturate(0.6); }
+
+/* Toasts (D29), above the map's foot: the live ones and the page's own (G2's Toast), stacked. */
+.toasts {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 40px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.toasts > * { pointer-events: auto; }
+.toasts > .toast { position: static; margin: 0; }
+.live-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(460px, calc(100% - 32px));
+  padding: 8px 6px 8px 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  animation: serve-toast-in 0.18s ease-out;
+}
+.live-toast .live-toast-icon { color: var(--success-text); }
+.live-toast[data-tone="error"] { border-color: color-mix(in srgb, var(--destructive) 40%, var(--border)); }
+.live-toast[data-tone="error"] .live-toast-icon { color: var(--destructive-text); }
+.live-toast .toast-text { min-width: 0; overflow-wrap: anywhere; }
+.toast-action { flex: none; margin-left: 4px; }
+.live-toast .toast-close { flex: none; }
+@keyframes serve-toast-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* Row tags (D29). */
+.tag-new { flex: none; border-color: var(--selected); background: color-mix(in srgb, var(--selected) 12%, var(--card)); color: var(--selected); font-family: inherit; }
+.tag-busy { display: inline-flex; align-items: center; gap: 3px; }
+.tag-busy .icon { flex: none; }
+
+/* Not served, pinned above the list (D31). */
+.not-served {
+  margin: 4px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 45%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--destructive) 7%, var(--card));
+}
+.not-served-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--destructive-text);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.not-served-list { margin: 0; padding: 0 10px 10px; list-style: none; display: grid; gap: 10px; }
+.not-served-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 1px;
+}
+.not-served-icon { grid-row: 1 / span 2; margin-top: 1px; color: var(--warning-text); }
+.not-served-icon.error { color: var(--destructive-text); }
+.not-served-name { font-weight: 600; overflow-wrap: anywhere; }
+.not-served-reason { color: var(--muted-foreground); }
+
+/* The rail's count of datasets not served (D31). */
+.rail-badge {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 4px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 2px solid var(--card);
+  border-radius: 999px;
+  background: var(--destructive);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+}
+
+.panel-foot-text { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+
+@media (max-width: 767px) {
+  .toasts { top: 60px; bottom: auto; }
+  .link-banner { font-size: 12px; }
+  .link-retry { height: 28px; padding: 0 8px; }
+  .rail-badge { top: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin, .state-pill[data-state="updating"] .state-dot { animation-duration: 3s; }
+  .live-toast { animation: none; }
+}

@@ -6,14 +6,15 @@
 
 <div class="serve" data-theme="@Theme">
     <ServeHeader Summary="@summary"
-                 State="ServerState.Live"
-                 StateDetail="@(Data.Revision is { } revision ? "revision " + revision : null)"
+                 State="_serverState"
+                 StateDetail="@StateDetail"
                  LinkCopied="linkCopied"
                  HasToken="Data.HasToken"
                  GisOpen="activePanel == ServePanel.UseInGis"
                  OnSummary="() => OpenPanel(railItems[0].Panel)"
                  OnCopyLink="CopyLinkAsync"
                  OnUseInGis="() => OpenPanel(ServePanel.UseInGis)" />
+    <LinkBanner />
     <div class="serve-body" data-time-bar="@(times.Count == 0 ? "none" : TimeBarDocked ? "docked" : "floating")">
         <Sheet Height="sheet" PanelOpen="activePanel is not null" Summary="@summary" OnGesture="SheetGesture">
             <TopContent>
@@ -23,7 +24,7 @@
                 }
             </TopContent>
             <RailContent>
-                <Rail Items="railItems" Active="activePanel" OnSelect="SelectPanel" />
+                <Rail Items="RailItems" Active="activePanel" OnSelect="SelectPanel" />
             </RailContent>
             <ChildContent>
                 @if (isPhone && pickPoint is not null)
@@ -33,12 +34,14 @@
                 else if (activePanel is { } panel)
                 {
                     <Panel Title="@(panel == ServePanel.Datasets && selectedDataset is not null ? "Dataset" : PanelTitle(panel))" OnClose="() => activePanel = null"
-                           OnBack="@(panel == ServePanel.Datasets && selectedDataset is not null ? EventCallback.Factory.Create(this, () => SelectDatasetAsync(null)) : default)">
+                           OnBack="@(panel == ServePanel.Datasets && selectedDataset is not null ? EventCallback.Factory.Create(this, () => SelectDatasetAsync(null)) : default)"
+                           Footer="@(panel == ServePanel.Datasets ? DatasetsFooterContent : null)">
                         @switch (panel)
                         {
                             case ServePanel.Datasets:
                                 <DatasetsPanel Selected="@selectedDataset" OnSelect="SelectDatasetAsync" OnMatches="SetDatasetMatchesAsync"
-                                               OnZoomTo="ZoomToDatasetAsync" CopyLink="CopyDatasetLinkAsync" CopyText="CopyTextAsync" />
+                                               OnZoomTo="ZoomToDatasetAsync" CopyLink="CopyDatasetLinkAsync" CopyText="CopyTextAsync"
+                                               Version="_datasetsVersion" RowTags="_rowTags" />
                                 break;
                             case ServePanel.TileSet:
                                 <TileSetPanel OnZoomTo="ZoomToDataAsync" />
@@ -79,18 +82,20 @@
             {
                 @TimeBarFragment(false)
             }
-            @if (noPickToast)
-            {
-                <Toast Title="@ServeTileSetInfo.NoPickTitle" Detail="@ServeTileSetInfo.NoPickDetail" IconName="info" OnClose="() => noPickToast = false" />
-            }
             @if (!isPhone && pickPoint is not null)
             {
                 <PickCard>@PickBody</PickCard>
             }
-            @if (toast is { } t)
-            {
-                <Toast Title="@t.Title" Detail="@t.Detail" IconName="@t.Icon" OnClose="() => toast = null" />
-            }
+            <Toasts Items="_toasts" OnAction="ToastActionAsync" OnDismiss="DismissToast">
+                @if (noPickToast)
+                {
+                    <Toast Title="@ServeTileSetInfo.NoPickTitle" Detail="@ServeTileSetInfo.NoPickDetail" IconName="info" OnClose="() => noPickToast = false" />
+                }
+                @if (toast is { } t)
+                {
+                    <Toast Title="@t.Title" Detail="@t.Detail" IconName="@t.Icon" OnClose="() => toast = null" />
+                }
+            </Toasts>
         </main>
     </div>
 </div>
@@ -235,6 +240,7 @@
         }, self);
         await JS.InvokeVoidAsync("s100Shell.watchPhone", self);
         shown = true;
+        await StartLiveAsync();
         if (selectedDataset is not null)
         {
             activePanel = ServePanel.Datasets;
@@ -809,6 +815,7 @@
         StopPlaying();
         pickQuery?.Cancel();
         pickQuery?.Dispose();
+        StopLive();
         try
         {
             if (shown)

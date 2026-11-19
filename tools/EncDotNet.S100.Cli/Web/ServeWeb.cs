@@ -3,6 +3,7 @@ using EncDotNet.S100.Cli.Infrastructure.Tiles;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace EncDotNet.S100.Cli.Web;
 
@@ -30,7 +31,8 @@ internal static class ServeWeb
             builder.WebHost.UseStaticWebAssets();
         }
 
-        builder.Services.AddSingleton<IServePageData>(new TileSourcePageData(source, hasToken));
+        builder.Services.AddSingleton<IServePageData>(services =>
+            new TileSourcePageData(source, hasToken, services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping));
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
     }
 

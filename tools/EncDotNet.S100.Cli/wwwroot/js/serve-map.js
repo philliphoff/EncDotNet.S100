@@ -24,7 +24,7 @@ window.s100Map = (() => {
 
   // The Datasets panel's outlines (SW2, D9, D15): the row under the pointer,
   // the selected dataset, and the matches of a search or filter (null for none).
-  const outlines = { hover: null, selected: null, matches: null };
+  const outlines = { hover: null, selected: null, matches: null, flash: null };
 
   // muted, osm or none (D17, Q4); OpenStreetMap falls back to none when its tiles don't load.
   let basemap = "muted";
@@ -152,7 +152,7 @@ window.s100Map = (() => {
   // is selected, the others fade to 50%.
   function applyDatasetOutlines() {
     if (!map?.getLayer("coverage-focus-line")) return;
-    const focus = [...new Set([outlines.hover, outlines.selected].filter(Boolean))];
+    const focus = [...new Set([outlines.hover, outlines.selected, outlines.flash].filter(Boolean))];
     const inFocus = ["in", ["get", "id"], ["literal", focus]];
     for (const id of ["coverage-focus-fill", "coverage-focus-casing", "coverage-focus-line"]) map.setFilter(id, inFocus);
     map.setPaintProperty("coverage-focus-fill", "fill-opacity", ["case", ["==", ["get", "id"], outlines.selected ?? ""], 0.08, 0.06]);
@@ -413,6 +413,24 @@ window.s100Map = (() => {
     },
 
     copyText,
+
+    // What's served changed (SW7, D29): every dataset's outline again.
+    setOutlines(text) {
+      const apply = () => map.getSource("coverage").setData(JSON.parse(text));
+      loaded ? apply() : map.once("load", apply);
+    },
+
+    // A dataset just added: its outline shows in the accent, blinking twice, then goes back to the rest (D29).
+    flashDataset(id) {
+      let blinks = 0;
+      const step = () => {
+        outlines.flash = blinks % 2 === 0 ? id : null;
+        applyDatasetOutlines();
+        if (++blinks < 4) setTimeout(step, 450);
+        else { outlines.flash = null; applyDatasetOutlines(); }
+      };
+      loaded ? step() : map.once("load", step);
+    },
 
     dispose() {
       resizeObserver?.disconnect();

@@ -13,11 +13,14 @@
     <script src="@Assets["lib/maplibre-gl/maplibre-gl.js"]"></script>
     <script src="@Assets["js/serve-map.js"]"></script>
     <script src="@Assets["js/serve-pick.js"]"></script>
+    <script src="@Assets["js/serve-live.js"]"></script>
 </head>
 <body>
     @* One page, so no Router (its generated code isn't trim-safe): the endpoint renders this document directly. *@
     @* The public base URL is the request's (issue #1582): the circuit has no request, so it's handed over. *@
     <ServePage @rendermode="InteractiveServer" BaseUrl="@BaseUrl" />
+    @* Present, so Blazor reports its reconnection states as events rather than drawing its own dialog (D30, js/serve-live.js). *@
+    <div id="components-reconnect-modal" hidden></div>
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>

@@ -51,11 +51,12 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
 
     private ExchangeSetLayerResolution(
         IReadOnlyList<ResolvedExchangeSetLayer> layers,
-        IReadOnlyList<string> warnings,
+        IReadOnlyList<SkippedDataset> skipped,
         string? tempDirectory)
     {
         Layers = layers;
-        Warnings = warnings;
+        Skipped = skipped;
+        Warnings = [.. skipped.Select(s => s.Warning)];
         _tempDirectory = tempDirectory;
     }
 
@@ -67,6 +68,9 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
     /// (unsupported spec, missing file, orphan update, or data-protected).
     /// </summary>
     public IReadOnlyList<string> Warnings { get; }
+
+    /// <summary>The datasets that were discovered but skipped, with why (issue #1583); <see cref="Warnings"/> are their warnings.</summary>
+    public IReadOnlyList<SkippedDataset> Skipped { get; }
 
     /// <summary>
     /// Resolves the renderable datasets in the exchange set at
@@ -94,7 +98,7 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
             var catalogue = ExchangeCatalogueReader.Read(cataloguePath);
 
             var layers = new List<ResolvedExchangeSetLayer>();
-            var warnings = new List<string>();
+            var skipped = new List<SkippedDataset>();
             var plan = S101ExchangeSetUpdatePlan.Build(catalogue.CurrentDatasets);
 
             foreach (var item in plan)
@@ -106,7 +110,11 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
                 // no base in this set has nothing to attach to and is dropped.
                 if (item.Kind == S101LoadItemKind.OrphanUpdate)
                 {
-                    warnings.Add($"Skipped orphan S-101 update (no base cell in set): {relativePath}");
+                    skipped.Add(new SkippedDataset(
+                        Path.GetFullPath(Path.Combine(root, relativePath)),
+                        SkippedDatasetKind.Unsupported,
+                        "Skipped: an S-101 update with no base cell in the exchange set.",
+                        $"Skipped orphan S-101 update (no base cell in set): {relativePath}"));
                     continue;
                 }
 
@@ -114,14 +122,14 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
                 // cannot be opened; skip it visibly rather than failing the set.
                 if (metadata.DataProtection)
                 {
-                    warnings.Add($"Skipped data-protected (encrypted) dataset: {relativePath}");
+                    skipped.Add(SkippedDataset.Protected(Path.GetFullPath(Path.Combine(root, relativePath)), relativePath));
                     continue;
                 }
 
                 var absolutePath = Path.GetFullPath(Path.Combine(root, relativePath));
                 if (!File.Exists(absolutePath))
                 {
-                    warnings.Add($"Skipped missing dataset file: {relativePath}");
+                    skipped.Add(SkippedDataset.Missing(absolutePath, relativePath));
                     continue;
                 }
 
@@ -133,7 +141,7 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
                     ?? DatasetPipelineFactory.DetectProductSpec(absolutePath);
                 if (spec is null)
                 {
-                    warnings.Add(UnrecognizedDatasetMessage.Skipped(absolutePath, relativePath));
+                    skipped.Add(SkippedDataset.Unrecognized(absolutePath, relativePath));
                     continue;
                 }
 
@@ -143,7 +151,7 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
                 layers.Add(new ResolvedExchangeSetLayer(absolutePath, spec, relativePath));
             }
 
-            var resolution = new ExchangeSetLayerResolution(layers, warnings, tempDirectory);
+            var resolution = new ExchangeSetLayerResolution(layers, skipped, tempDirectory);
             tempDirectory = null; // ownership transferred to the resolution
             return resolution;
         }

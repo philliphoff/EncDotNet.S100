@@ -12,6 +12,7 @@
 }
 else if (datasets.Count == 0)
 {
+    @NotServedBlock()
     @* No datasets left (D32): the page stays up, and says how to add one. *@
     var add = ServeEmptyState.AddCommand(Navigation.BaseUri);
     <div class="empty-state">
@@ -37,7 +38,7 @@ else
             <input type="search" placeholder="Search datasets" aria-label="Search datasets by id or file name"
                    value="@search" @oninput="OnSearch" autocomplete="off" spellcheck="false" />
         </label>
-        @if (products.Count > 1 || purposes.Count > 0 || problemCount > 0)
+        @if (products.Count > 1 || purposes.Count > 0 || problemCount + notServed.Count > 0)
         {
             <div class="filter-chips" role="group" aria-label="Filters">
                 @if (products.Count > 1)
@@ -48,9 +49,9 @@ else
                 {
                     @Chip("purpose", "Purpose", purposes, purposeFilter)
                 }
-                <button type="button" class="chip" aria-pressed="@(problemsOnly ? "true" : "false")" disabled="@(problemCount == 0)"
-                        title="@(problemCount == 0 ? "No dataset has a problem" : "Only the datasets with problems")" @onclick="ToggleProblems">
-                    Problems@(problemCount > 0 ? " · " + ServeDatasetInfo.Number(problemCount) : "")
+                <button type="button" class="chip" aria-pressed="@(problemsOnly ? "true" : "false")" disabled="@(problemCount + notServed.Count == 0)"
+                        title="@(problemCount + notServed.Count == 0 ? "No dataset has a problem" : "Only the datasets with problems, and those not served")" @onclick="ToggleProblems">
+                    Problems@(problemCount + notServed.Count > 0 ? " · " + ServeDatasetInfo.Number(problemCount + notServed.Count) : "")
                 </button>
             </div>
         }
@@ -58,7 +59,7 @@ else
         {
             <p class="list-summary" role="status">
                 <span class="strong">@ServeDatasetInfo.Number(items.Count)</span> of @ServeDatasetInfo.Number(datasets.Count)
-                @if (items.Count == 0)
+                @if (items.Count == 0 && !(problemsOnly && notServed.Count > 0))
                 {
                     <span> · nothing matches</span>
                 }
@@ -70,6 +71,8 @@ else
             <p class="list-summary">@DatasetCount(datasets.Count) · layer <span class="strong">@Data.Layers[0]</span></p>
         }
     </div>
+
+    @NotServedBlock()
 
     <div class="dataset-list" role="list" aria-label="Datasets">
         @if (items.Count > ServeDatasetList.VirtualizeAbove)
@@ -113,6 +116,18 @@ else
     [Parameter]
     public Func<string, Task<bool>>? CopyText { get; set; }
 
+    /// <summary>Bumped when what's served changes (SW7, D29), so the list reads the datasets again.</summary>
+    [Parameter]
+    public int Version { get; set; }
+
+    /// <summary>A tag for a dataset's row, by id: New, Reloading (D29).</summary>
+    [Parameter]
+    public IReadOnlyDictionary<string, string>? RowTags { get; set; }
+
+    private IReadOnlyList<EncDotNet.S100.Cli.Infrastructure.SkippedDataset> notServed = [];
+    private bool notServedOpen = true;
+    private int version = -1;
+
     private IReadOnlyList<ServedDataset> datasets = [];
     private IReadOnlyList<DatasetGroup> groups = [];
     private HashSet<string> expanded = new(StringComparer.Ordinal);
@@ -129,11 +144,29 @@ else
     private string? openChip;
     private string? copied;
 
-    protected override void OnInitialized()
+    protected override async Task OnParametersSetAsync()
     {
+        if (Version == version)
+            return;
+        var first = version == -1;
+        version = Version;
+        Load(first);
+        // The matches outlined on the map follow the list.
+        if (!first && filter.IsActive)
+            await OnMatches.InvokeAsync([.. items.Select(i => i.Dataset!.Id)]);
+    }
+
+    // Reads what's served: on opening, and again when it changes (the groups opened and the filters stay).
+    private void Load(bool first)
+    {
+        var known = groups.Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
         datasets = Data.Datasets;
+        notServed = Data.NotServed;
         groups = ServeDatasetList.Group(datasets, Data.Layers);
-        expanded = [.. ServeDatasetList.InitiallyExpanded(groups, datasets.Count)];
+        if (first)
+            expanded = [.. ServeDatasetList.InitiallyExpanded(groups, datasets.Count)];
+        else
+            expanded.UnionWith(ServeDatasetList.InitiallyExpanded(groups, datasets.Count).Where(k => !known.Contains(k)));
         products = [.. datasets.GroupBy(d => d.Product).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => (g.Key, g.Count()))];
         purposes = [.. datasets
             .Select(ServeDatasetInfo.PurposeGroup)
@@ -242,6 +275,33 @@ else
         </div>
     };
 
+    // The datasets found but not served, pinned above the list with why (D31).
+    private RenderFragment NotServedBlock() => __builder =>
+    {
+        if (notServed.Count == 0)
+            return;
+        <section class="not-served" aria-label="Not served">
+            <button type="button" class="not-served-head" aria-expanded="@(notServedOpen ? "true" : "false")" @onclick="() => notServedOpen = !notServedOpen">
+                <Icon Name="@(notServedOpen ? "chevron-down" : "chevron-right")" Size="14" />
+                <span>Not served · @ServeDatasetInfo.Number(notServed.Count)</span>
+            </button>
+            @if (notServedOpen)
+            {
+                <ul class="not-served-list">
+                    @foreach (var skipped in notServed)
+                    {
+                        <li class="not-served-item" title="@skipped.Path">
+                            <Icon Name="@(skipped.Kind == EncDotNet.S100.Cli.Infrastructure.SkippedDatasetKind.Protected ? "lock" : "warn")" Size="15"
+                                  Class="@(skipped.Kind == EncDotNet.S100.Cli.Infrastructure.SkippedDatasetKind.Failed ? "not-served-icon error" : "not-served-icon")" />
+                            <span class="not-served-name mono">@skipped.Name</span>
+                            <span class="not-served-reason">@skipped.Reason</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    };
+
     private RenderFragment Item(DatasetListItem item) => __builder =>
     {
         if (item.LayerHeading is { } layer)
@@ -273,6 +333,16 @@ else
             <span class="row-line">
                 <span class="tag">@dataset.Product</span>
                 <span class="row-id mono">@dataset.Id</span>
+                @if (RowTags?.GetValueOrDefault(dataset.Id) is { } rowTag)
+                {
+                    <span class="tag @(rowTag == ServeLive.NewTag ? "tag-new" : "tag-warn tag-busy")">
+                        @if (rowTag == ServeLive.ReloadingTag)
+                        {
+                            <Icon Name="refresh" Size="11" Class="spin" />
+                        }
+                        @rowTag
+                    </span>
+                }
                 @if (!ServeDatasetInfo.HasPlace(dataset))
                 {
                     <span class="tag tag-warn">No coverage</span>
