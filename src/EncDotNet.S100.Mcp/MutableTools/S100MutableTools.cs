@@ -63,12 +63,14 @@ public static class S100MutableTools
     /// <see langword="null"/>, that tool is not created.
     /// </param>
     /// <returns>The mutating tools in a stable order.</returns>
+    /// <param name="liveSources">The host's live sources (data source design note D9); <see langword="null"/> leaves out list_data_sources and add_data_source.</param>
     public static IReadOnlyList<McpServerTool> Create(
         ICapabilityAccessor<IPresentationController>? presentation = null,
         ICapabilityAccessor<ITimeController>? time = null,
         ICapabilityAccessor<IImageRenderer>? renderer = null,
         IMutableDatasetCatalog? catalog = null,
-        ICapabilityAccessor<IViewportController>? viewport = null)
+        ICapabilityAccessor<IViewportController>? viewport = null,
+        ILiveSourceHost? liveSources = null)
     {
         var tools = new List<McpServerTool>();
 
@@ -77,6 +79,13 @@ public static class S100MutableTools
             tools.Add(CreateOpenDataset(new OpenDatasetTool(catalog)));
             tools.Add(CreateCloseDataset(new CloseDatasetTool(catalog)));
             tools.Add(CreateCloseAllDatasets(new CloseAllDatasetsTool(catalog)));
+        }
+
+        // Data source design note D9: live sources, added like datasets.
+        if (liveSources is not null)
+        {
+            tools.Add(CreateListDataSources(new ListDataSourcesTool(liveSources)));
+            tools.Add(CreateAddDataSource(new AddDataSourceTool(liveSources)));
         }
 
         if (presentation is not null)
@@ -353,6 +362,71 @@ public static class S100MutableTools
         + "aspect-matching; for a pixel pick, feed pick_features the rendered image's width/height "
         + "instead, which match viewportWidth/Height only when the capture defaulted to the live size. "
         + "Side-effect free. MUTATING session, but this call mutates nothing.";
+
+    private const string ListDataSourcesDescription =
+        "Lists the live data sources this server can add to the catalog, such as NDBC buoy observations ('ndbc.realtime'), "
+        + "own-ship weather from NMEA ('nmea.weather') or AIS targets ('ais.aisstream'): each one's id, what it shows, the widest "
+        + "viewport it runs in, its options, what it still needs (such as a key's environment variable), and the copies already "
+        + "added with their status. Add one with add_data_source.";
+
+    private static McpServerTool CreateListDataSources(ListDataSourcesTool inner) =>
+        McpServerTool.Create(
+            (CancellationToken ct = default) =>
+                DispatchAsync(
+                    () => inner.InvokeAsync(ct),
+                    v => JsonSerializer.SerializeToNode(v, McpToolsJsonContext.Default.ListDataSourcesResult)!.AsObject()),
+            new McpServerToolCreateOptions
+            {
+                Name = ListDataSourcesTool.Name,
+                Description = ListDataSourcesDescription,
+                SerializerOptions = JsonOptions,
+                ReadOnly = true,
+            });
+
+    private const string AddDataSourceDescription =
+        "Adds a live data source to the catalog (data that changes, not a file), such as 'ndbc.realtime'. Its features then answer "
+        + "identify_features and the other query tools as they are when asked, and render_to_image draws them. A source runs for "
+        + "the area set with set_viewport, and only while the viewport is narrower than its range (list_data_sources says), so set "
+        + "the viewport first and allow a moment for its first data. Options are text by name, such as {\"Input\": \"udp:10110\"}; "
+        + "keys are never arguments: set the environment variable list_data_sources names before starting the server. "
+        + "Remove it with close_dataset. MUTATING.";
+
+    private static McpServerTool CreateAddDataSource(AddDataSourceTool inner) =>
+        McpServerTool.Create(
+            ([Description("The source's id, from list_data_sources, such as 'ndbc.realtime'.")] string id,
+             [Description("Optional option values by name, as an object of strings, such as {\"Input\": \"udp:10110\"}. Keys (secrets) aren't accepted.")] JsonElement? options = null,
+             CancellationToken ct = default) =>
+                DispatchAsync(
+                    () => inner.InvokeAsync(new AddDataSourceRequest(id, ReadOptions(options)), ct),
+                    v => JsonSerializer.SerializeToNode(v, McpToolsJsonContext.Default.AddDataSourceResult)!.AsObject()),
+            new McpServerToolCreateOptions
+            {
+                Name = AddDataSourceTool.Name,
+                Description = AddDataSourceDescription,
+                SerializerOptions = JsonOptions,
+            });
+
+    // An object of option values: strings, or numbers and booleans as written.
+    private static Dictionary<string, string>? ReadOptions(JsonElement? options)
+    {
+        if (options is not { ValueKind: JsonValueKind.Object } value)
+        {
+            return options is { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) }
+                ? throw new ArgumentException("options must be an object of option values by name.", nameof(options))
+                : null;
+        }
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in value.EnumerateObject())
+        {
+            result[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+                JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => property.Value.GetRawText(),
+                _ => throw new ArgumentException($"Option '{property.Name}' must be a string, number or boolean.", nameof(options)),
+            };
+        }
+        return result;
+    }
 
     private static McpServerTool CreateRenderToImage(RenderToImageTool inner) =>
         McpServerTool.Create(

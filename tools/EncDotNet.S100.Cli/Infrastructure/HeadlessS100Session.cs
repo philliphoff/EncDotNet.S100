@@ -142,6 +142,19 @@ internal sealed class HeadlessS100Session
         }
     }
 
+    /// <summary>Raised after <see cref="Set"/> or <see cref="SetToBounds"/> changed the viewport.</summary>
+    public event EventHandler? ViewportChanged;
+
+    /// <summary>
+    /// The area the viewport shows at the reference render size, or
+    /// <see langword="null"/> while it auto-fits the datasets: the area a live
+    /// source runs for (data source design note D9).
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Portrayal.GeographicBounds? ViewArea =>
+        ResolveViewport(ReferenceWidthPx, ReferenceHeightPx) is { } v
+            ? new EncDotNet.S100.Datasets.Pipelines.Portrayal.GeographicBounds(v.MinLongitude, v.MinLatitude, v.MaxLongitude, v.MaxLatitude)
+            : null;
+
     public void Set(MapViewport viewport)
     {
         ArgumentNullException.ThrowIfNull(viewport);
@@ -171,6 +184,7 @@ internal sealed class HeadlessS100Session
             _viewport = viewport;
             _bounds = null;
         }
+        ViewportChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetToBounds(BoundingBox bounds)
@@ -203,6 +217,7 @@ internal sealed class HeadlessS100Session
             _bounds = bounds;
             _viewport = null;
         }
+        ViewportChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private const double MaxLongitude = 180.0;

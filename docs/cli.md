@@ -2062,6 +2062,7 @@ lists them all.
 | `--port <port>` | `8300` | HTTP only. The port. `0` picks a free one. |
 | `--token <token>` | generated for a non-loopback host | HTTP only. The bearer token clients must send. Letters, digits, `-` and `_`. |
 | `--no-token` | off | HTTP only. Serves without a token, even on a non-loopback address. |
+| `--live-feeds` | off | With `--collections` on SoundCharts' `collections.json`, also adds the live feeds subscribed to in its Library, such as NDBC observations or AIS targets, with their saved settings; keys come from environment variables. They run once `set_viewport` narrows the view to their range. |
 | `--allow-changes` | off | HTTP only. Also serves the tools that open datasets by path and change the Library. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |

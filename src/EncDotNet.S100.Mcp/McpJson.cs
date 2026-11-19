@@ -94,6 +94,8 @@ public static class McpJson
 [JsonSerializable(typeof(CheckRouteRequest))]
 // Mutating tool results.
 [JsonSerializable(typeof(OpenDatasetResult))]
+[JsonSerializable(typeof(ListDataSourcesResult))]
+[JsonSerializable(typeof(AddDataSourceResult))]
 [JsonSerializable(typeof(CloseDatasetResult))]
 [JsonSerializable(typeof(CloseAllDatasetsResult))]
 [JsonSerializable(typeof(SetPaletteResult))]

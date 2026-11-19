@@ -20,11 +20,13 @@ public sealed class McpServeHttpTests
     /// <summary>The tools left out over HTTP unless --allow-changes is given.</summary>
     private static readonly string[] ChangeTools =
     [
+        "add_data_source",
         "add_library_source",
         "await_library_idle",
         "close_all_datasets",
         "close_dataset",
         "library_action",
+        "list_data_sources",
         "open_dataset",
         "refresh_library_source",
         "remove_library_source",
