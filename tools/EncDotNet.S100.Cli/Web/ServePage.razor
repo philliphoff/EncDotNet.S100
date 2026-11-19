@@ -344,6 +344,7 @@
         foreach (var (name, value) in parameters)
             hashParameters[name] = value;
         var (oldPalette, oldLayer, oldTime) = (palette, layer, timeIndex);
+        var oldPick = pickPoint;
         ReadDisplayHash();
         ReadTimeHash();
         await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
@@ -371,6 +372,10 @@
             StateHasChanged();
         }
         await ReadPickHashAsync();
+
+        // A new t= changes the coverage values at an unchanged pick.
+        if (timeIndex != oldTime && pickPoint is not null && pickPoint == oldPick)
+            await RepickAsync();
     }
 
     /// <summary>From the JS module: a click on a built tile set's map, which has nothing to pick (D35).</summary>

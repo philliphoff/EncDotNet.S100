@@ -80,7 +80,12 @@ window.s100Pick = (() => {
     if (!element || !map || !point) return;
     const area = map.getContainer();
     const width = area.clientWidth;
-    const height = area.clientHeight;
+    // Above the time bar when there is one (SW4), which sits over the map's bottom.
+    const timeBar = area.parentElement?.querySelector(".time-bar");
+    const height = timeBar
+      ? Math.min(area.clientHeight, timeBar.getBoundingClientRect().top - area.getBoundingClientRect().top)
+      : area.clientHeight;
+    element.style.maxHeight = `${Math.max(160, height - 2 * MARGIN)}px`;
     const at = map.project(point);
     const w = element.offsetWidth;
     const h = element.offsetHeight;
