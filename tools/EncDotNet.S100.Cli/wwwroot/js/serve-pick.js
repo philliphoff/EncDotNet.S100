@@ -191,14 +191,15 @@ window.s100Pick = (() => {
 
     // After the card renders or changes size; fit after a new pick.
     place(fit) {
-      requestAnimationFrame(() => {
-        place(fit);
-        const element = card();
-        if (element && element.dataset.focused !== "true") {
-          element.dataset.focused = "true";
-          element.focus({ preventScroll: true });
-        }
-      });
+      // Now, which the render has laid out, and again on the next frame in
+      // case the card's size settles later.
+      place(fit);
+      requestAnimationFrame(() => place());
+      const element = card();
+      if (element && element.dataset.focused !== "true") {
+        element.dataset.focused = "true";
+        element.focus({ preventScroll: true });
+      }
     },
 
     // On a phone the sheet covers the map's lower part: bring the marker
