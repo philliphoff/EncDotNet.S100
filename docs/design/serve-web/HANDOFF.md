@@ -52,7 +52,7 @@ Captures are in the `screenshots/` folder, named `10-<frame>-….png`. Frames wi
 |---|---|
 | **Q1** | **"s100 serve"** (decided by the user, 2026-11-18): the command people ran, with the map glyph the viewer's title bar uses. The header puts what's served next to it ("3 datasets · S-101", or the tile set's TileJSON name). The browser tab reads "3 datasets · S-101 — s100 serve". |
 | **Q2** | **The viewer's rail with one docked panel.** Datasets, Display and Use in GIS, one panel at a time, collapsible, and the rail has room for Legend, Search and Mariner settings later. At phone width the rail becomes the tab bar of a bottom sheet with three heights. |
-| **Q3** | **Day follows the browser; Dusk forces dark chrome; Night forces a new night chrome** (darker than dark, dimmed text, no white). A Page setting (Auto, Light, Dark) overrides Auto for Day only. |
+| **Q3** | **Day follows the browser; Dusk forces dark chrome; Night forces a new night chrome** (darker than dark, dimmed text, no white). A Page setting (Auto, Light, Dark) overrides Auto for Day, and Page: Light also overrides Dusk; nothing overrides Night (decided, 2026-11-18). |
 | **Q4** | **A muted OpenStreetMap by default** (decided by the user, 2026-11-18), greyed in the browser with MapLibre raster paint, with OpenStreetMap and None as choices. With Night it's inverted and dimmed. The tiles come from `tile.openstreetmap.org`, with its attribution. |
 | **Q5** | **Yes.** The view, palette, time, layer, selected dataset and pick go in the URL hash. A link opens what you saw. The header's link button copies it and warns when it contains the token. |
 | **Q6** | **Behind one button.** "Use in GIS" in the header and in the rail opens a panel. The main screen stays a map. |
@@ -72,10 +72,10 @@ Captures are in the `screenshots/` folder, named `10-<frame>-….png`. Frames wi
 ### What's served (B2)
 
 7. **Dataset rows** follow the Library rows: a product tag, the dataset id in mono, then edition and producer to the right, with the file name below in mono caption. Time-varying data adds a third line: dynamicity, time range and step count (E1). State tags (New, Reloading, No coverage) go before the edition.
-8. **Grouping.** By layer when there are layers (`--layers-by product`). Within a layer, or with no layers: by product, and for S-57 by navigational purpose (Overview … Berthing, from the cell name). With one layer, that layer is a summary line ("279 datasets · layer chart") rather than a group. Groups start collapsed when there are more than 30 datasets, except the first non-empty one (C1).
+8. **Grouping.** By layer when there are layers (`--layers-by product`). Within a layer, or with no layers: by product, and for S-57 by navigational purpose (Overview … Berthing, from the cell name). S-101 cells get the same purpose groups, derived from the maximum display scale of their DataCoverage (the server's display scale range, SW2), using the S-57 compilation-scale bands; a cell without one goes in an "Other" group. With one layer, that layer is a summary line ("279 datasets · layer chart") rather than a group. Groups start collapsed when there are more than 30 datasets, except the first non-empty one (C1).
 9. **Search and filters.** One search box over id and file name. Typing turns the groups into a flat list with "11 of 279". Filters are chips: Product, Purpose, Problems. While searching or filtering, only the matches are outlined on the map (C2).
 10. **Details.** Selecting a row opens its details in the panel (a back arrow returns): tags, **Zoom to**, **Copy link**, then File, Product (with its name), Edition and update, Producer, Layer, Bounds (degrees and minutes), Coverage (data coverage with the area count, or "Bounds only"), Display scale for S-101, Dynamicity, Issued, Time steps. When the dataset is in a layer, the layer's TileJSON and XYZ links follow with Copy (A2 shows a dataset without layers, so the links are absent there).
-11. **Large lists** render the visible rows only. At 300 rows the server-side component can render them all, but a folder of 7,000 NOAA cells can't.
+11. **Large lists** render only the visible rows once a list has more than 200 rows (Blazor `Virtualize`). At 300 rows the server-side component could render them all, but a folder of 7,000 NOAA cells can't. The 30-dataset threshold for starting groups collapsed (decision 8) counts all datasets, whatever their products.
 
 ### Map (B3)
 
@@ -88,7 +88,7 @@ Captures are in the `screenshots/` folder, named `10-<frame>-….png`. Frames wi
 ### Display (B4)
 
 17. **One Display panel**: Chart palette (Day, Dusk, Night, with icons), Layers (All layers, or one, with counts), Basemap (Muted, OpenStreetMap, None), Times (Local, UTC) when anything has times, Page (Auto, Light, Dark), and a dashed **Mariner settings · Later** row as a placeholder (E1). A built tile set keeps Basemap and Page only.
-18. **Chrome and palette (Q3).** Day plus Auto follows `prefers-color-scheme`. Dusk forces dark. Night forces night chrome: background `#000`, text `#A1A1AA`, dimmed accent, the basemap inverted and dimmed (E2). The Page setting applies with Day (see open question 3 for Dusk) and never overrides Night.
+18. **Chrome and palette (Q3).** Day plus Auto follows `prefers-color-scheme`. Dusk forces dark. Night forces night chrome: background `#000`, text `#A1A1AA`, dimmed accent, the basemap inverted and dimmed (E2). Page: Light and Dark apply with Day, Page: Light also overrides Dusk, and nothing overrides Night.
 19. **Time bar.** It appears only when something served has time steps. It floats at the bottom centre of the map: step back, play, step forward, the date and time (time in mono, large), a track with day ticks, and Local/UTC. A second line reads "S-111 · Forecast · issued … · step 41 of 288, every 15 min" (E1). On a phone it's two rows above the lowered sheet, and it docks into the sheet's top when the sheet rises (E3). Play advances one step a second and stops at the end.
 20. **Times.** Always in the browser's time zone with its abbreviation ("11:00 BST"), or in UTC. Never in the data area's zone. The Times row says which zone Local is ("Europe/London (BST)"). When every step is in the past or the future, the bar says so and offers **Go to latest** or the first step, and the tiles keep the server's first-step default (B8d).
 
@@ -103,7 +103,7 @@ Captures are in the `screenshots/` folder, named `10-<frame>-….png`. Frames wi
 ### Use in your GIS (B6)
 
 26. **Use in GIS panel** (G1). An intro line, **Layer** and **Palette** pickers that rewrite every link, then four links with **Copy**: XYZ tiles (QGIS, Leaflet), TileJSON (MapLibre), WMTS (QGIS, ArcGIS), WMS (GetFeatureInfo too). A note covers `@2x` and, when there are times, `?t=`. Below that, tabs for QGIS, ArcGIS, MapLibre and Leaflet with three steps or a snippet each.
-27. **Token.** With `--token` the panel masks it (`…/••••••••/tiles.json`) and shows a warning: "These links contain the access token. Anyone who has one can see these charts." with **Show token**. Copy always copies the full link, and its toast says "Link copied, with the token" (G2). The header's link button warns the same way.
+27. **Token.** With `--token` the panel masks it by default (`…/••••••••/tiles.json`) and shows a warning: "These links contain the access token. Anyone who has one can see these charts." with **Show token**. Copy always copies the full link, and its toast says "Link copied, with the token" (G2). The header's link button warns the same way.
 
 ### Server state and live changes (B7)
 
@@ -196,13 +196,14 @@ Each slice assumes #1575 (hosting, the token prefix, the data interface, bundled
 
 - **Name (Q1):** "s100 serve" (2026-11-18).
 - **Basemap (Q4):** keep OpenStreetMap from `tile.openstreetmap.org`, muted by default, with OpenStreetMap and None as choices (2026-11-18). A `--basemap-url` option is not part of the basics.
+- **Dusk (Q3):** Dusk forces dark chrome; Page: Light overrides it for Dusk, never for Night (decision 18).
+- **Token:** masked in the page by default, with Show token; Copy copies the full link (decision 27).
+- **S-101 grouping:** by the purpose band derived from the DataCoverage maximum display scale, else "Other" (decision 8).
+- **List thresholds:** groups start collapsed above 30 datasets; the list virtualises above 200 rows (decisions 8 and 11).
 
 ## Open questions
 
-1. **Dusk forcing dark chrome.** The viewer darkens on Night only. Forcing dark on Dusk too avoids a white panel beside a dim chart, but someone at a bright desk can't get light chrome with Dusk. Recommendation: force it, and let Page: Light override it for Dusk (never for Night). **For the user.**
-2. **Mask the token by default?** Masked is recommended; someone who started the server with a token on their own machine may find it fussy.
-3. **Navigational purpose for S-101 cells.** The mock groups S-57 by the cell name's purpose digit. S-101 has no such digit; group S-101 by display scale band instead, or not at all?
-4. **How many datasets before the list virtualises,** and is the 30-dataset "start collapsed" threshold right for exchange sets with mixed products?
+None. All of Q1–Q7 and the follow-up questions are settled.
 
 ## Not done in this round
 
