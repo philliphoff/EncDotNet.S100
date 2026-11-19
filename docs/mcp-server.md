@@ -130,7 +130,7 @@ edited.
 | `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 13 tools, ~6,200 tokens | 13 tools, ~6,200 tokens |
 | `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
 | `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
-| `routes` | Check routes; in SoundCharts, also create, edit, import and export them | 22 tools, ~8,000 tokens | 1 tool, ~2,400 tokens |
+| `routes` | Check routes and map where a boat can go; in SoundCharts, also create, edit, import and export them | 23 tools, ~8,700 tokens | 2 tools, ~3,100 tokens |
 | `passage` | Check mode, departure, findings, clearance and route weather settings | 12 tools, ~2,900 tokens | none |
 | `tides` | Tide and current stations and their predictions | 4 tools, ~2,100 tokens | 4 tools, ~2,100 tokens |
 | `library` | The Library: sources, items, downloads and SECOM services | 12 tools, ~4,300 tokens | 12 tools, ~4,300 tokens |
@@ -139,13 +139,13 @@ edited.
 | `map` | Viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing | 15 tools, ~5,200 tokens | none |
 | `ui` | Panels and app screenshots; with `--mcp-test-hooks`, the [test tools](#test-tools) too | 13 tools with test hooks, ~4,200 tokens | none |
 | `diagnostics` | Render and performance diagnostics and recent logs | 7 tools, ~1,700 tokens | none |
-| `all` | Every toolset | 128 tools with test hooks, ~41,500 tokens | 41 tools, ~17,600 tokens |
+| `all` | Every toolset | 129 tools with test hooks, ~42,200 tokens | 42 tools, ~18,300 tokens |
 
 Profiles name a set of toolsets for a kind of task:
 
 | Profile | Toolsets | SoundCharts | `s100 mcp serve` |
 |---|---|---|---|
-| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 54 tools, ~19,600 tokens | 23 tools, ~11,500 tokens |
+| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 55 tools, ~20,300 tokens | 24 tools, ~12,200 tokens |
 | `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 62 tools, ~20,200 tokens | 24 tools, ~8,800 tokens |
 
 Over HTTP, `s100 mcp serve` still leaves out the tools that open datasets by

@@ -72,7 +72,7 @@ public static class S100McpTools
             new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
             new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))
-            .Append(NavigabilityGridMcpTool.Create(new NavigabilityGridTool(catalog, routeCheckSources, NavigabilityGridDirectory)))
+            .Append(McpToolsets.Assign(McpToolsets.Routes, NavigabilityGridMcpTool.Create(new NavigabilityGridTool(catalog, routeCheckSources, NavigabilityGridDirectory))))
             .ToList();
     }
 }
