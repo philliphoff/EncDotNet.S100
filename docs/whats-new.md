@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`check_route` takes grouped arguments.** Its 25 flat arguments are now
+  nine: `routeId`, `polyline`, `greatCircle`, `departure`, and the groups
+  `vessel` (draft, squat, required UKC, safety contour and depth, speed),
+  `window` (the departure sweep: `from`, `to`, `stepMinutes`; `{}` sweeps the
+  S-104 range, replacing `includeWindow`), `weather` (wind and wave limits,
+  and `cyclones`), `limits` (corridor, track clearance, nearby distance,
+  berth radius, area kinds off) and `samples` (`spacingMeters`, `include`,
+  `max`). Errors name the argument by its path, such as
+  `vessel.draftMeters`. This is a breaking change for MCP clients. The
+  `VesselArguments` type is meant for the route tools to share.
 - **`--source` and `s100 sources`.** `s100 identify --source ndbc.realtime`
   picks from a live data source, alone or with datasets: it's started for the
   area around the point, and left out with a warning if it has no data within

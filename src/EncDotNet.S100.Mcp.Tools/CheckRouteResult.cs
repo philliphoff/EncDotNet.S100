@@ -14,10 +14,10 @@ public sealed record CheckRouteResult(
     [property: Description("Whether each check ran, in the order they ran: chart, areas, warnings, clearance and weather.")] IReadOnlyList<CheckRouteCheck> Checks,
     [property: Description("Every check's findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.berth_structures (info), route_check.soundings_below_safety_contour, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage; the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force; the S-124 warnings' s124.on_route, s124.near_route, s124.not_in_force and s124.cancelled; and the clearance check's clearance.below_setting, confidence.charted_depth_from_s101, confidence.datum_unconfirmed, data.water_level_ends, data.water_level_starts_late, data.no_water_level_coverage, data.water_level_no_data, data.datum_mismatch and data.no_charted_depth; and the weather check's weather.wind_above_limit, weather.waves_above_limit, weather.forecast_ends, weather.forecast_starts_late, weather.no_coverage and weather.no_data (all check: advisory, from weather model data).")] IReadOnlyList<CheckRouteFinding> Findings,
     [property: Description("The corridor swept along each leg, in route order.")] IReadOnlyList<CheckRouteLeg> Legs,
-    [property: Description("The under-keel clearance: verdict, minimum, sources and, with includeSamples or includeWindow, the detail. Null when the clearance check didn't run (see checks: no draft, no charted depth or no water level).")] CheckRouteClearance? Clearance,
+    [property: Description("The under-keel clearance: verdict, minimum, sources and, with samples.include or window, the detail. Null when the clearance check didn't run (see checks: no draft, no charted depth or no water level).")] CheckRouteClearance? Clearance,
     [property: Description("The datasets behind the result: S-101 (and S-401, and translated S-57) cells near the route, the S-122 and S-124 datasets behind area and warning findings, the S-102, S-101 and S-104 datasets the clearance read, and the weather datasets the weather check read.")] IReadOnlyList<string> Datasets,
     [property: Description("Disclaimer to show once with the findings.")] string Disclaimer,
-    [property: Description("The weather check: the limits it used, its verdict, the highest wind and waves along the route and, with includeWindow, its departure sweep. Null when it didn't run (see checks: no weather loaded, or no wind or wave limit).")] CheckRouteWeather? Weather = null)
+    [property: Description("The weather check: the limits it used, its verdict, the highest wind and waves along the route and, with window, its departure sweep. Null when it didn't run (see checks: no weather loaded, or no wind or wave limit).")] CheckRouteWeather? Weather = null)
 {
     /// <summary>The disclaimer shown once with the findings, before the clearance's sources.</summary>
     public const string DisclaimerText = "Not for navigation · checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only";
@@ -335,10 +335,10 @@ public sealed record CheckRouteClearance(
     [property: Description("Stretches with no data: no charted depth, no S-104 coverage, before/after the S-104 time range, masked S-104 values, or a datum mismatch.")] IReadOnlyList<CheckRouteStretch> Gaps,
     [property: Description("Lower-confidence stretches: charted depth from S-101, or datums that can't be confirmed to agree. The samples in them keep their own state (meets_settings, tight or below_setting).")] IReadOnlyList<CheckRouteStretch> LowConfidence,
     [property: Description("Datasets, stations and datums behind the clearance.")] CheckRouteClearanceSources Sources,
-    [property: Description("Per-leg results in route order; present only when includeSamples is set.")] IReadOnlyList<CheckRouteClearanceLeg>? Legs,
-    [property: Description("Per-sample values; present only when includeSamples is set.")] IReadOnlyList<CheckRouteSample>? Samples,
-    [property: Description("True when samples were thinned to maxSamples; present only when includeSamples is set.")] bool? SamplesThinned,
-    [property: Description("The departure sweep; present only when includeWindow is set (and, without windowFrom and windowTo, some S-104 covers the passage).")] CheckRouteWindow? Window,
+    [property: Description("Per-leg results in route order; present only when samples.include is set.")] IReadOnlyList<CheckRouteClearanceLeg>? Legs,
+    [property: Description("Per-sample values; present only when samples.include is set.")] IReadOnlyList<CheckRouteSample>? Samples,
+    [property: Description("True when samples were thinned to samples.max; present only when samples.include is set.")] bool? SamplesThinned,
+    [property: Description("The departure sweep; present only with window (and, without window.from and window.to, some S-104 covers the passage).")] CheckRouteWindow? Window,
     [property: Description("The data the clearance was computed from, e.g. \"computed from S-102, S-104 for your settings\".")] string Disclaimer)
 {
     /// <summary>Projects a report's clearance result.</summary>
@@ -705,7 +705,7 @@ public sealed record CheckRouteWeather(
     [property: Description("Number of places along the track the forecast was read (one per nautical mile).")] int SampleCount,
     [property: Description("Number of those where a limited quantity, or a nearby tropical cyclone, wasn't checked (the forecast ends or starts later, no coverage, or no value).")] int NotCheckedCount,
     [property: Description("The weather datasets read.")] IReadOnlyList<string> Datasets,
-    [property: Description("The departure sweep, with includeWindow: across windowFrom..windowTo, or across the forecast that covers the route. Null without includeWindow.")] CheckRouteWeatherWindow? Window,
+    [property: Description("The departure sweep, with window: across window.from..window.to, or across the forecast that covers the route. Null without window.")] CheckRouteWeatherWindow? Window,
     [property: Description("Disclaimer for the weather findings.")] string Disclaimer)
 {
     /// <summary>The disclaimer of the weather check.</summary>

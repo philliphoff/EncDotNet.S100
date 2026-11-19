@@ -584,11 +584,28 @@ Pass the route in one of two ways:
   `set_passage`, `set_leg_attributes`). `s100 mcp serve` has no routes and
   returns `invalid_argument` for this form.
 
-`corridorHalfWidthMeters` overrides every leg's limits. It's a **half-width**:
-how far the corridor reaches to port, and to starboard, of the track, so the
-corridor is twice as wide. Any side without a limit uses 50 m.
+The other arguments come in groups, each an object:
 
-Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
+- `vessel`: the boat and its safety settings. The same object is meant for
+  every tool that judges water against a boat.
+- `window`: the departure sweep.
+- `weather`: forecast limits and tropical cyclones.
+- `limits`: distances and kinds that tune the chart and area checks.
+- `samples`: clearance sampling, and whether the samples are returned.
+
+For example:
+
+```json
+{
+  "polyline": "{\"vertices\":[[48.40,-122.66],[48.41,-122.64]]}",
+  "departure": "2026-11-20T15:00:00Z",
+  "vessel": { "draftMeters": 2.0, "requiredUkcMeters": 0.5, "speedKnots": 6,
+              "safetyContourMeters": 5, "safetyDepthMeters": 5 },
+  "window": { "from": "2026-11-20T12:00:00Z", "to": "2026-11-20T20:00:00Z", "stepMinutes": 15 }
+}
+```
+
+`vessel.safetyContourMeters` and `vessel.safetyDepthMeters` (together) add the
 depth and danger checks, as SoundCharts' findings list runs them with the
 mariner's settings. Without them no depth area, sounding, S-102 shoal or
 charted danger is checked: the chart check is `partial` with the reason
@@ -596,7 +613,7 @@ charted danger is checked: the chart check is `partial` with the reason
 clear water. Each leg's dangers are also judged against that leg's draft +
 squat + required UKC.
 
-These arguments override every leg's value:
+These `vessel` values override every leg's value:
 
 - `draftMeters`. With a draft on every leg, the clearance check runs.
 - `speedKnots`: the speed over ground. S-111 currents aren't applied.
@@ -604,23 +621,31 @@ These arguments override every leg's value:
 - `requiredUkcMeters`: when unset, the clearance check uses 0 m and sets
   `noMarginSet`.
 
-Pass `maxWindKnots` or `maxWaveHeightMeters` to run the weather check. Each
-replaces the route's own limit (RTZ `vesselMaxWind` and `vesselMaxWave`);
-SoundCharts' Check route uses the mariner's limits instead
+`window` sweeps departures for the departure window: from `from` to `to`
+every `stepMinutes` (default 5), or, as `{}`, across the S-104 range that
+covers the route. It needs a draft.
+
+`weather.maxWindKnots` or `weather.maxWaveHeightMeters` runs the weather
+check. Each replaces the route's own limit (RTZ `vesselMaxWind` and
+`vesselMaxWave`); SoundCharts' Check route uses the mariner's limits instead
 (`get_route_weather_settings`). Without a limit from either, the weather check
 is `skipped` with `weather_limits_missing`, and without a weather dataset with
 `weather_missing`.
 
 With an NHC tropical cyclone advisory loaded, the weather check also tests
-the route against each storm within 600 NM, with or without limits:
-`cycloneCheckAgainstKnots` (34, 50 or 64; default 34),
-`cycloneReportClosestApproach` (default true) and `cycloneMustReviewInside`
+the route against each storm within 600 NM, with or without limits, as
+`weather.cyclones` says: `checkAgainstKnots` (34, 50 or 64; default 34),
+`reportClosestApproach` (default true) and `mustReviewInside`
 (`"64"`, `"50"`, `"34"` or `"never"`; default `"50"`). SoundCharts uses the
 mariner's settings (`get_route_weather_settings`). See
 [Tropical cyclones](route-checks.md#tropical-cyclones).
 
-These arguments tune the chart and area checks:
+`limits` tunes the chart and area checks:
 
+- `corridorHalfWidthMeters` overrides every leg's limits. It's a
+  **half-width**: how far the corridor reaches to port, and to starboard, of
+  the track, so the corridor is twice as wide. Any side without a limit uses
+  50 m.
 - `trackClearanceMeters`: how close to the track line an aid to navigation,
   structure or overhead feature counts as on the track (default 30 m).
 - `nearbyDistanceMeters`: how far beyond the cross-track limits a danger or
@@ -633,6 +658,14 @@ These arguments tune the chart and area checks:
   to turn off, by name (such as `anchorage_area` or `marine_farm`). Their
   areas aren't reported; one `route_check.area_kind_off` finding per kind
   says the route meets them.
+
+`samples` sets the clearance sampling: `spacingMeters` (default 50; each
+sample keeps the shoalest depth of its stretch), `include` to return the
+per-leg results and samples, and `max` (default 500; extra samples are
+thinned, keeping the tightest of each run).
+
+An invalid value is `invalid_argument` with its path as the parameter, such
+as `vessel.draftMeters`.
 
 SoundCharts and `s100 mcp serve` take the same arguments: the tool's schema
 is built from the request the check runs on.
@@ -674,7 +707,7 @@ The result has:
   (`inside_cyclone_radius`, `above_limits`, `forecast_ends_before_arrival`,
   `incomplete` or `within_limits`), the `limits` it used with their `origin` (`settings` or
   `route`), `maxWind` and `maxWaveHeight` with where and when, `sampleCount`
-  and `notCheckedCount`, the `datasets` it read, and with `includeWindow` the
+  and `notCheckedCount`, the `datasets` it read, and with `window` the
   departure sweep across the forecast (`window`), each departure with the
   `cycloneRadiusKnots` it meets and its `cycloneClosestNm`. With a storm near
   the route, `cyclones` lists each one's `strongestRadiusKnots`, `inCone`,
@@ -703,7 +736,7 @@ How it samples and classifies:
   `DepthArea` (DRVAL1), then a `Sounding` within 250 m. S-101 depths are
   lower confidence (`charted_depth_from_s101`).
 - **Spacing.** Along S-102, the check steps at half the finest grid cell so no
-  cell is skipped. Each sample stands for at most `sampleSpacingMeters`
+  cell is skipped. Each sample stands for at most `samples.spacingMeters`
   (default 50) and keeps the shallowest depth in its stretch.
 - **Water level** comes from S-104 at the ETA, interpolated between time
   steps. Grids are used first, then the nearest station within 10 km
@@ -759,19 +792,19 @@ How it samples and classifies:
 - `sources`: the S-102 and S-101 datasets, the S-104 datasets and stations,
   the datums and the largest S-102 uncertainty.
 
-Set `includeSamples` to add `legs` and `samples`. Each leg has the values
+Set `samples.include` to add `legs` and `samples`. Each leg has the values
 used, the minimum, the `worstState`, the minutes below the setting,
 `lowConfidence`, its `confidence` reasons and `noWaterLevel`. Each sample has
 its depth source, dataset and cell, uncertainty, water level, station, time
-step and datum agreement. `maxSamples` (default 500) caps the list, and the
+step and datum agreement. `samples.max` (default 500) caps the list, and the
 samples with the least clearance are kept.
 
-To find a departure window, set `includeWindow`. It sweeps the whole S-104
+To find a departure window, pass `window`. It sweeps the whole S-104
 time range that covers the passage, as SoundCharts' departure band does, or
-from `windowFrom` to `windowTo` when you give them (`windowStepMinutes`,
+from `window.from` to `window.to` when you give them (`window.stepMinutes`,
 default 5, between departures). The S-104 sweep starts at the first whole
 step after the data starts and ends where it ends; over a long forecast the
-step widens to stay under 2000 departures. `window` then lists every
+step widens to stay under 2000 departures. The result's `window` lists every
 departure's verdict and confidence, the runs of departures that meet your
 settings, the meeting departure nearest `departure`, `windowConfidence`, and
 `arrivalAfterDataEnds`: the departures that arrive after the S-104 data ends,
