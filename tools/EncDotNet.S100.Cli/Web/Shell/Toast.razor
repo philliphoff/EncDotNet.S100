@@ -1,0 +1,30 @@
+@* A toast at the bottom of the map (issue #1582, G2): "Link copied, with the token" and the like. *@
+<div class="toast" role="status" aria-live="polite" data-icon="@IconName">
+    <Icon Name="@IconName" Size="18" />
+    <div class="toast-text">
+        <p class="strong">@Title</p>
+        @if (Detail is not null)
+        {
+            <p class="toast-detail">@Detail</p>
+        }
+    </div>
+    <button type="button" class="icon-button toast-close" aria-label="Dismiss" @onclick="OnClose"><Icon Name="x" Size="16" /></button>
+</div>
+
+@code {
+    /// <summary>What happened.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>A second line, when there's more to say.</summary>
+    [Parameter]
+    public string? Detail { get; set; }
+
+    /// <summary>The icon: <c>check</c>, <c>lock</c>….</summary>
+    [Parameter]
+    public string IconName { get; set; } = "check";
+
+    /// <summary>Dismiss the toast.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+}

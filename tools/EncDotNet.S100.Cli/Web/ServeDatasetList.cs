@@ -176,8 +176,8 @@ internal static partial class ServeDatasetInfo
     /// <summary>"12", "1,234".</summary>
     public static string Number(int value) => value.ToString("#,0", CultureInfo.InvariantCulture);
 
-    // 50°46.5′N
-    private static string DegreesMinutes(double value, char positive, char negative, int width)
+    /// <summary>A latitude (<paramref name="width"/> 2) or longitude (3) in degrees and minutes: 50°46.5′N.</summary>
+    public static string DegreesMinutes(double value, char positive, char negative, int width)
     {
         var hemisphere = value < 0 ? negative : positive;
         var v = Math.Abs(value);

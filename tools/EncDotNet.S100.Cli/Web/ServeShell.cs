@@ -14,6 +14,9 @@ public enum ServePanel
 
     /// <summary>Links for other map clients (SW6 fills it).</summary>
     UseInGis,
+
+    /// <summary>A built tile set's metadata, in place of Datasets (issue #1584, D35).</summary>
+    TileSet,
 }
 
 /// <summary>The phone sheet's three heights (handoff D2).</summary>
@@ -80,12 +83,12 @@ internal static class ServeSummary
     /// <summary>The page's name.</summary>
     public const string Name = "s100 serve";
 
-    /// <summary>"3 datasets · S-101", "No datasets", or a built tile set's name.</summary>
+    /// <summary>"3 datasets · S-101", "No datasets", or a built tile set's name and container, "Solent approaches · PMTiles" (D35).</summary>
     public static string Describe(IServePageData data)
     {
         ArgumentNullException.ThrowIfNull(data);
         if (!data.HasDatasets)
-            return data.TileSet.Name;
+            return data.Built is { } built ? data.TileSet.Name + " · " + built.Container : data.TileSet.Name;
         var datasets = data.Datasets;
         if (datasets.Count == 0)
             return "No datasets";

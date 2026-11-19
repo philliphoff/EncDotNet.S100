@@ -24,6 +24,12 @@ internal interface IServePageData
     /// <summary>Whether the tiles are rendered from datasets, rather than a built tile set.</summary>
     bool HasDatasets { get; }
 
+    /// <summary>
+    /// A built tile set's file and how it was made (issue #1584, D35);
+    /// <see langword="null"/> when the tiles are rendered from datasets.
+    /// </summary>
+    BuiltTileSet? Built => null;
+
     /// <summary>The datasets the tiles are rendered from, in input order; empty for a built tile set.</summary>
     IReadOnlyList<ServedDataset> Datasets { get; }
 
@@ -58,6 +64,21 @@ internal sealed record ServedTileSet(
     double[]? Center,
     string? DefaultPalette,
     bool HighDpi);
+
+/// <summary>A built tile set's file and its TileJSON's <c>s100</c> block (issue #1584, D35).</summary>
+/// <param name="File">The file (or folder) name.</param>
+/// <param name="Container">The container: <c>PMTiles</c>, <c>MBTiles</c>, <c>GeoPackage</c> or <c>XYZ folder</c>.</param>
+/// <param name="TileSize">The tiles' size in pixels, 256 or 512.</param>
+/// <param name="Generator">What made it, <c>s100 1.2.0</c>, from the <c>s100</c> block; <see langword="null"/> without one.</param>
+/// <param name="Palette">The palette it was built in, from the <c>s100</c> block.</param>
+/// <param name="Time">The time step it was built at (UTC), from the <c>s100</c> block.</param>
+internal sealed record BuiltTileSet(
+    string File,
+    string Container,
+    int TileSize,
+    string? Generator,
+    string? Palette,
+    DateTime? Time);
 
 /// <summary>One dataset the tiles are rendered from, as the <c>/datasets</c> document describes it.</summary>
 /// <param name="Id">The dataset's id, unique among those served.</param>
@@ -129,6 +150,30 @@ internal sealed class TileSourcePageData(ITileSource source) : IServePageData
 
     public bool HasDatasets => source.HasDatasets;
 
+    public BuiltTileSet? Built
+    {
+        get
+        {
+            if (source is not ITileSetSource set)
+                return null;
+            var json = set.ToTileJson();
+            var s100 = json["s100"] as JsonObject;
+            return new BuiltTileSet(
+                System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(set.Path)),
+                set.Container switch
+                {
+                    TileContainer.PmTiles => "PMTiles",
+                    TileContainer.MbTiles => "MBTiles",
+                    TileContainer.GeoPackage => "GeoPackage",
+                    _ => "XYZ folder",
+                },
+                json["tileSize"] is JsonValue size && size.TryGetValue(out int pixels) ? pixels : 256,
+                Text(s100?["generator"]),
+                Text(s100?["palette"]),
+                Time(Text(s100?["time"])));
+        }
+    }
+
     public IReadOnlyList<ServedDataset> Datasets =>
         source.ToDatasetsJson()?["datasets"] is JsonArray datasets
             ? [.. datasets.OfType<JsonObject>().Select(Dataset)]
@@ -169,6 +214,10 @@ internal sealed class TileSourcePageData(ITileSource source) : IServePageData
         node is JsonArray array && array.All(n => n is JsonValue v && (v.TryGetValue(out double _) || v.TryGetValue(out int _)))
             ? [.. array.Select(n => n!.AsValue().TryGetValue(out double d) ? d : n.GetValue<int>())]
             : null;
+
+    // A string value, or null for anything else (other tools write other metadata).
+    private static string? Text(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text) ? text : null;
 
     private static DateTime? Time(string? text) =>
         DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var time)

@@ -1,0 +1,70 @@
+@* The Tile set panel (issue #1584, D35): a built tile set's name, tags and metadata, with Zoom to and a note
+   that there's nothing to list or pick. It takes the Datasets panel's place as the rail's first item. *@
+@inject IServePageData Data
+
+@if (built is not null)
+{
+    var bounds = ServeTileSetInfo.Bounds(tileSet);
+    var centre = ServeTileSetInfo.Centre(tileSet);
+    var madeBy = ServeTileSetInfo.MadeBy(built);
+    <div class="details tile-set">
+        <div class="details-head">
+            <h3 class="tile-set-name">@tileSet.Name</h3>
+        </div>
+        <div class="details-tags">
+            @foreach (var tag in ServeTileSetInfo.Tags(tileSet, built))
+            {
+                <span class="tag @(tag.StartsWith('@') ? "tag-outline" : "tag-neutral")">@tag</span>
+            }
+        </div>
+        <dl class="details-fields">
+            <dt>File</dt>
+            <dd class="mono">@built.File</dd>
+            <dt>Format</dt>
+            <dd>@ServeTileSetInfo.Format(tileSet, built)</dd>
+            <dt>High-DPI</dt>
+            <dd>@ServeTileSetInfo.HighDpi(tileSet)</dd>
+            <dt>Zoom</dt>
+            <dd>@ServeTileSetInfo.Zoom(tileSet)</dd>
+            @if (bounds is var (latitudes, longitudes))
+            {
+                <dt>Bounds</dt>
+                <dd class="mono"><span class="details-line">@latitudes</span><span class="details-line">@longitudes</span></dd>
+            }
+            @if (centre is not null)
+            {
+                <dt>Centre</dt>
+                <dd class="mono">@centre</dd>
+            }
+            @if (madeBy is not null)
+            {
+                <dt>Made by</dt>
+                <dd>@madeBy</dd>
+            }
+        </dl>
+        <div class="details-actions tile-set-actions">
+            <button type="button" class="button" title="Zoom the map to the tile set" @onclick="OnZoomTo">
+                <Icon Name="fit" Size="16" /> Zoom to
+            </button>
+        </div>
+        <p class="tile-set-note">
+            <Icon Name="info" Size="16" />
+            <span>A built tile set has no datasets, so there's nothing to list or pick. Its palette and times were fixed when it was built.</span>
+        </p>
+    </div>
+}
+
+@code {
+    /// <summary>Zoom the map to the tile set's bounds.</summary>
+    [Parameter]
+    public EventCallback OnZoomTo { get; set; }
+
+    private ServedTileSet tileSet = null!;
+    private BuiltTileSet? built;
+
+    protected override void OnInitialized()
+    {
+        tileSet = Data.TileSet;
+        built = Data.Built;
+    }
+}

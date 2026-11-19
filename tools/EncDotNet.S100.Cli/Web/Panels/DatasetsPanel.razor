@@ -12,7 +12,18 @@
 }
 else if (datasets.Count == 0)
 {
-    <p class="panel-note">No datasets are being served.</p>
+    @* No datasets left (D32): the page stays up, and says how to add one. *@
+    var add = ServeEmptyState.AddCommand(Navigation.BaseUri);
+    <div class="empty-state">
+        <Icon Name="layers" Size="28" />
+        <h3>No datasets are being served</h3>
+        <p>The server keeps running. To serve a dataset, post its path to the server's datasets, which it takes when started with <span class="mono">--manage-datasets</span>:</p>
+        <pre class="empty-command mono">@add</pre>
+        <button type="button" class="button" title="Copy the command" @onclick='() => CopyAsync("add", CopyText is null ? null : () => CopyText(add))'>
+            <Icon Name="@(copied == "add" ? "check" : "copy")" Size="16" /> @(copied == "add" ? "Copied" : "Copy")
+        </button>
+        <p class="empty-hint">The map keeps its view, and the dataset appears here when it's added.</p>
+    </div>
 }
 else if (Selected is { } id && datasets.FirstOrDefault(d => d.Id == id) is { } selected)
 {

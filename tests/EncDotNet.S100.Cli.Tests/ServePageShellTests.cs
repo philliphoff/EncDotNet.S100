@@ -73,7 +73,7 @@ public sealed class ServePageShellTests
 
             var html = WebUtility.HtmlDecode(await http.GetStringAsync(server.BaseUri, ct));
 
-            Assert.Contains("<title>harbour — s100 serve</title>", html, StringComparison.Ordinal);
+            Assert.Contains("<title>harbour · XYZ folder — s100 serve</title>", html, StringComparison.Ordinal);
             Assert.Contains("Not for navigation", html, StringComparison.Ordinal);
             Assert.Contains("A built tile set", html, StringComparison.Ordinal);
         }

@@ -103,6 +103,11 @@ internal sealed class TileServer : IAsyncDisposable
         });
         app.UseResponseCompression();
 
+        // With the page, a path nothing answers (or a wrong token) gets a
+        // small static 404 page (issue #1584); the API's own 404s stay empty.
+        if (viewer)
+            Web.ServeNotFound.Use(app);
+
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
         if (token is not null)
             UseTokenPathBase(app, PathString.FromUriComponent(prefix), viewer);
