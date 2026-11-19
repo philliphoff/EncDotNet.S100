@@ -8,6 +8,7 @@
         <span aria-hidden="true"></span>
     </button>
     <div class="sheet-summary">@Summary</div>
+    @TopContent
     @RailContent
     @ChildContent
 </div>
@@ -27,6 +28,10 @@
     /// <summary>What's served, shown when the sheet is lowered.</summary>
     [Parameter]
     public string? Summary { get; set; }
+
+    /// <summary>What docks into the sheet's top on a phone (the time bar when the sheet rises).</summary>
+    [Parameter]
+    public RenderFragment? TopContent { get; set; }
 
     /// <summary>The rail.</summary>
     [Parameter]

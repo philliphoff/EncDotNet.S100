@@ -466,3 +466,60 @@ window.s100Shell = (() => {
     },
   };
 })();
+
+// The browser's time zone (D20). The server can't know it, so the page asks
+// for its id and, at each instant it shows, the offset and abbreviation.
+window.s100Time = (() => {
+  const zoneId = () => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+  };
+
+  let barObserver;
+
+  return {
+    // The floating bar's height, so the phone layout can lift the attribution above it.
+    observeBar(element) {
+      barObserver ??= new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const body = entry.target.closest(".serve-body");
+          if (body && entry.target.dataset.docked !== "true")
+            body.style.setProperty("--time-bar-height", `${Math.ceil(entry.target.getBoundingClientRect().height) + 8}px`);
+        }
+      });
+      barObserver.observe(element);
+    },
+
+    unobserveBar(element) {
+      barObserver?.unobserve(element);
+    },
+
+    // instants: ISO 8601 UTC strings. Returns { id, offsets: [minutes], abbreviations: [text] }.
+    zone(instants) {
+      const id = zoneId();
+      const wall = new Intl.DateTimeFormat("en-US", {
+        timeZone: id, hourCycle: "h23",
+        year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric",
+      });
+      // The browser's own language first; English as a fallback, where "BST" or "PDT" beats "GMT+1".
+      const names = [navigator.language, "en-US", "en-GB"].flatMap(locale => {
+        try { return [new Intl.DateTimeFormat(locale, { timeZone: id, timeZoneName: "short" })]; } catch { return []; }
+      });
+      const offsets = [];
+      const abbreviations = [];
+      for (const text of instants) {
+        const date = new Date(text);
+        const parts = Object.fromEntries(wall.formatToParts(date).map(p => [p.type, p.value]));
+        const local = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second);
+        offsets.push(Math.round((local - Math.floor(date.getTime() / 1000) * 1000) / 60000));
+        let abbreviation = "";
+        for (const format of names) {
+          const name = format.formatToParts(date).find(p => p.type === "timeZoneName")?.value ?? "";
+          if (name && !/\d/.test(name)) { abbreviation = name; break; }
+          if (!abbreviation) abbreviation = name;
+        }
+        abbreviations.push(abbreviation);
+      }
+      return { id, offsets, abbreviations };
+    },
+  };
+})();
