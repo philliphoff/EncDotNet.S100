@@ -210,13 +210,13 @@ public sealed class TilesServeFolderTests : IDisposable
         Assert.False(await source.CheckAsync());
         Assert.True(await source.CheckAsync());
         Assert.Equal(1, opens);
-        Assert.StartsWith("2 dataset(s)", source.Current.Path, StringComparison.Ordinal);
+        Assert.StartsWith("2 dataset(s)", source.Current!.Path, StringComparison.Ordinal);
 
         // And removed again.
         File.Delete(added);
         Assert.False(await source.CheckAsync());
         Assert.True(await source.CheckAsync());
         Assert.Equal(2, opens);
-        Assert.StartsWith("1 dataset(s)", source.Current.Path, StringComparison.Ordinal);
+        Assert.StartsWith("1 dataset(s)", source.Current!.Path, StringComparison.Ordinal);
     }
 }

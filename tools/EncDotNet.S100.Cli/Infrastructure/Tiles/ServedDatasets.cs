@@ -21,6 +21,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// so the request that made it returns once the new set serves. If the new
 /// set can't be opened, the current one keeps serving. The TileJSON, WMTS and
 /// WMS documents describe whichever set serves when they are asked for.
+/// Every dataset can be removed: the server then serves none
+/// (<see cref="NoDatasetsTileSource"/>, issue #1601) until one is added again.
 /// </para>
 /// <para>
 /// Tiles are keyed by the datasets that reach them (<see cref="DatasetTileKeys"/>)
@@ -60,7 +62,8 @@ internal sealed class ServedDatasets
     {
         get
         {
-            var session = _source.Current.Session;
+            if (_source.Current?.Session is not { } session)
+                return [];
             return [.. session.Paths.Select((path, i) => (path, session.Names[i], session.Specs[i]))];
         }
     }
@@ -115,11 +118,14 @@ internal sealed class ServedDatasets
                     changes = changes.WithLayer(path, layer);
             }
 
-            return (changes, null);
+            return (changes, null, false);
         }).ConfigureAwait(false);
     }
 
-    /// <summary>Stops serving <paramref name="paths"/>, which must be served now; at least one dataset must remain.</summary>
+    /// <summary>
+    /// Stops serving <paramref name="paths"/>, which must be served now. With
+    /// every dataset removed the server keeps running and serves none (issue #1601).
+    /// </summary>
     public async Task<Result> RemoveAsync(IReadOnlyList<string> paths)
     {
         return await ChangeAsync(changes =>
@@ -135,34 +141,32 @@ internal sealed class ServedDatasets
                 }
                 catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
                 {
-                    return (changes, new Result(StatusCodes.Status400BadRequest, $"'{path}' is not a valid path."));
+                    return (changes, new Result(StatusCodes.Status400BadRequest, $"'{path}' is not a valid path."), false);
                 }
 
                 if (!served.Contains(full))
-                    return (changes, new Result(StatusCodes.Status404NotFound, $"'{path}' is not served."));
+                    return (changes, new Result(StatusCodes.Status404NotFound, $"'{path}' is not served."), false);
                 removing.Add(full);
             }
 
-            if (removing.Count >= served.Count)
-                return (changes, new Result(StatusCodes.Status409Conflict, "At least one dataset must remain served."));
-
             foreach (var path in removing)
                 changes = changes.WithRemoved(path);
-            return (changes, null);
+            return (changes, null, removing.Count >= served.Count);
         }).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Works out new changes from the current ones, then opens the datasets
-    /// with them and serves those; nothing changes on failure.
+    /// with them and serves those, or serves none when they leave none
+    /// (<c>ServesNone</c>); nothing changes on failure.
     /// </summary>
-    private async Task<Result> ChangeAsync(Func<DatasetChanges, (DatasetChanges Changes, Result? Refused)> change)
+    private async Task<Result> ChangeAsync(Func<DatasetChanges, (DatasetChanges Changes, Result? Refused, bool ServesNone)> change)
     {
         await _editing.WaitAsync().ConfigureAwait(false);
         try
         {
             var current = Changes;
-            var (next, refused) = change(current);
+            var (next, refused, removesAll) = change(current);
             if (refused is { } r)
                 return r;
             if (next == current || next.SameAs(current))
@@ -174,7 +178,11 @@ internal sealed class ServedDatasets
             bool replaced;
             try
             {
-                replaced = await _source.ReplaceAsync(() => _open(next), fingerprint, () => Volatile.Write(ref _changes, next)).ConfigureAwait(false);
+                // With every dataset removed, nothing is opened: the server
+                // serves none until one is added (issue #1601).
+                replaced = removesAll
+                    ? await _source.ServeNothingAsync(fingerprint, () => Volatile.Write(ref _changes, next)).ConfigureAwait(false)
+                    : await _source.ReplaceAsync(() => _open(next), fingerprint, () => Volatile.Write(ref _changes, next)).ConfigureAwait(false);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
@@ -315,7 +323,7 @@ internal sealed class ServedDatasets
         if (error is not null)
             json["error"] = error;
         var current = datasets._source.Current;
-        var layers = current.Layers.Count > 0 ? current.DatasetLayers : null;
+        var layers = current is { Layers.Count: > 0 } ? current.DatasetLayers : null;
         json["datasets"] = new JsonArray([.. datasets.Datasets.Select((d, i) =>
         {
             var dataset = new JsonObject
