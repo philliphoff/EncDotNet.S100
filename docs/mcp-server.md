@@ -130,7 +130,7 @@ edited.
 | `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 13 tools, ~6,200 tokens | 13 tools, ~6,200 tokens |
 | `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
 | `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
-| `routes` | Check routes; in SoundCharts, also create, edit, import and export them | 22 tools, ~8,000 tokens | 1 tool, ~2,300 tokens |
+| `routes` | Check routes; in SoundCharts, also create, edit, import and export them | 22 tools, ~8,000 tokens | 1 tool, ~2,400 tokens |
 | `passage` | Check mode, departure, findings, clearance and route weather settings | 12 tools, ~2,900 tokens | none |
 | `tides` | Tide and current stations and their predictions | 4 tools, ~2,100 tokens | 4 tools, ~2,100 tokens |
 | `library` | The Library: sources, items, downloads and SECOM services | 12 tools, ~4,300 tokens | 12 tools, ~4,300 tokens |
