@@ -258,6 +258,16 @@ internal static class ServeDatasetList
     public const int VirtualizeAbove = 200;
 
     /// <summary>
+    /// The datasets the list shows with <paramref name="layer"/> chosen in the
+    /// Display panel (D17): those in it, or all of them for all layers.
+    /// </summary>
+    public static IReadOnlyList<ServedDataset> InLayer(IReadOnlyList<ServedDataset> datasets, string? layer)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        return layer is null ? datasets : [.. datasets.Where(d => string.Equals(d.Layer, layer, StringComparison.Ordinal))];
+    }
+
+    /// <summary>
     /// The datasets grouped by layer (in <paramref name="layers"/> order, then
     /// those in none), then product, then navigational purpose (Overview …
     /// Berthing, then Other). Empty groups are left out.

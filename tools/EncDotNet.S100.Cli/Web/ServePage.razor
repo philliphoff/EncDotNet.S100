@@ -40,6 +40,7 @@
                         {
                             case ServePanel.Datasets:
                                 <DatasetsPanel Selected="@selectedDataset" OnSelect="SelectDatasetAsync" OnMatches="SetDatasetMatchesAsync"
+                                               Layer="@layer" OnShowLayer="SetLayerAsync"
                                                OnZoomTo="ZoomToDatasetAsync" CopyLink="CopyDatasetLinkAsync" CopyText="CopyTextAsync"
                                                Version="_datasetsVersion" RowTags="_rowTags" />
                                 break;
@@ -231,6 +232,7 @@
             maxZoom = tileSet.MaxZoom,
             view = start,
             outlines = ServeOutlines.FeatureCollection(servedDatasets).ToJsonString(),
+            layer,
             hashParameters = ServeHash.FormatParameters(hashParameters),
             theme = Theme,
             // A built tile set's bounds stand in for coverage (D16), and a click has nothing to pick (D35).
@@ -375,6 +377,8 @@
         {
             await MapAsync("s100Map.setChart", TileJsonUrl());
             await MapAsync("s100Map.setTheme", Theme);
+            if (layer != oldLayer)
+                await SetDatasetOutlinesAsync();
             StateHasChanged();
         }
 
@@ -478,7 +482,8 @@
         return SetDatasetOutlinesAsync();
     }
 
-    private Task SetDatasetOutlinesAsync() => MapAsync("s100Map.setDatasetOutlines", selectedDataset, datasetMatches);
+    // Outlined: the selection, the matches, and only the layer chosen's datasets (D15, D17).
+    private Task SetDatasetOutlinesAsync() => MapAsync("s100Map.setDatasetOutlines", selectedDataset, datasetMatches, layer);
 
     private async Task ZoomToDatasetAsync(string id)
     {
@@ -527,6 +532,7 @@
         layer = value;
         await MapAsync("s100Map.setChart", TileJsonUrl());
         await WriteDisplayHashAsync();
+        await SetDatasetOutlinesAsync();
     }
 
     private Task SetBasemapAsync(Basemap value)

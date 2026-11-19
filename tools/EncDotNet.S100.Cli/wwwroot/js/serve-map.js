@@ -24,7 +24,7 @@ window.s100Map = (() => {
 
   // The Datasets panel's outlines (SW2, D9, D15): the row under the pointer,
   // the selected dataset, and the matches of a search or filter (null for none).
-  const outlines = { hover: null, selected: null, matches: null, flash: null };
+  const outlines = { hover: null, selected: null, matches: null, layer: null, flash: null };
 
   // muted, osm or none (D17, Q4); OpenStreetMap falls back to none when its tiles don't load.
   let basemap = "muted";
@@ -148,16 +148,26 @@ window.s100Map = (() => {
   }
 
   // Outlined: every dataset (or the matches) zoomed out, and the matches at
-  // any zoom while searching; the hovered and selected ones always. While one
-  // is selected, the others fade to 50%.
+  // any zoom while searching; the hovered and selected ones always. With a
+  // layer chosen (D17), only that layer's datasets are outlined at any zoom,
+  // though one selected from elsewhere still shows. While one is selected,
+  // the others fade to 50%.
+  // The outlines follow as soon as the style has them, which can be before the
+  // map's load (a hidden page holds that back); the focus layers come on load.
   function applyDatasetOutlines() {
-    if (!map?.getLayer("coverage-focus-line")) return;
-    const focus = [...new Set([outlines.hover, outlines.selected, outlines.flash].filter(Boolean))];
-    const inFocus = ["in", ["get", "id"], ["literal", focus]];
-    for (const id of ["coverage-focus-fill", "coverage-focus-casing", "coverage-focus-line"]) map.setFilter(id, inFocus);
-    map.setPaintProperty("coverage-focus-fill", "fill-opacity", ["case", ["==", ["get", "id"], outlines.selected ?? ""], 0.08, 0.06]);
+    if (!map?.getLayer("coverage-line")) return;
+    if (map.getLayer("coverage-focus-line")) {
+      const focus = [...new Set([outlines.hover, outlines.selected, outlines.flash].filter(Boolean))];
+      const inFocus = ["in", ["get", "id"], ["literal", focus]];
+      for (const id of ["coverage-focus-fill", "coverage-focus-casing", "coverage-focus-line"]) map.setFilter(id, inFocus);
+      map.setPaintProperty("coverage-focus-fill", "fill-opacity", ["case", ["==", ["get", "id"], outlines.selected ?? ""], 0.08, 0.06]);
+    }
 
-    const matches = outlines.matches ? ["in", ["get", "id"], ["literal", outlines.matches]] : null;
+    const scope = [
+      ...(outlines.layer ? [["==", ["get", "layer"], outlines.layer]] : []),
+      ...(outlines.matches ? [["in", ["get", "id"], ["literal", outlines.matches]]] : []),
+    ];
+    const matches = scope.length === 0 ? null : scope.length === 1 ? scope[0] : ["all", ...scope];
     const fade = outlines.selected ? 0.5 : 1;
     for (const id of ["coverage-casing", "coverage-line"]) {
       map.setFilter(id, matches);
@@ -287,6 +297,9 @@ window.s100Map = (() => {
       hashParameters = opts.hashParameters ?? "";
       theme = opts.theme ?? "auto";
       basemap = opts.basemap ?? "muted";
+      // The layer chosen filters the outlines from the first frame, before the map has loaded (D17).
+      outlines.layer = opts.layer ?? null;
+      const inLayer = outlines.layer ? { filter: ["==", ["get", "layer"], outlines.layer] } : {};
       highDpi = opts.highDpi && window.devicePixelRatio > 1;
       darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
       darkQuery.addEventListener("change", applyTheme);
@@ -317,8 +330,8 @@ window.s100Map = (() => {
             // Painted for the theme from the start, so night never flashes a light basemap.
             { id: "osm", type: "raster", source: "osm", layout: { visibility: basemap === "none" ? "none" : "visible" }, paint: basemapPaint() },
             { id: "chart", type: "raster", source: "chart" },
-            { id: "coverage-casing", type: "line", source: "coverage", maxzoom: outlinesUntil, paint: { "line-color": startOutline[0], "line-opacity": 0.6, "line-width": 3 } },
-            { id: "coverage-line", type: "line", source: "coverage", maxzoom: outlinesUntil, paint: { "line-color": startOutline[1], "line-width": 1 } },
+            { id: "coverage-casing", type: "line", source: "coverage", maxzoom: outlinesUntil, ...inLayer, paint: { "line-color": startOutline[0], "line-opacity": 0.6, "line-width": 3 } },
+            { id: "coverage-line", type: "line", source: "coverage", maxzoom: outlinesUntil, ...inLayer, paint: { "line-color": startOutline[1], "line-width": 1 } },
           ],
         },
         ...startView(opts.view),
@@ -367,9 +380,10 @@ window.s100Map = (() => {
       requestAnimationFrame(applyTheme);
     },
 
-    setDatasetOutlines(selected, matches) {
+    setDatasetOutlines(selected, matches, layer) {
       outlines.selected = selected ?? null;
       outlines.matches = matches ?? null;
+      outlines.layer = layer ?? null;
       applyDatasetOutlines();
     },
 

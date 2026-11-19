@@ -1,7 +1,8 @@
 @* The Datasets panel (issue #1578): what's served, in rows like the Library's (handoff D7–D11, D15, D33).
    The list groups by layer, product and purpose; a search or a filter makes it flat with a count. A row opens
    its details. The page (ServePage) owns the selection, the outlines and the hash; this tells it what changed.
-   Hovering a row outlines it through serve-map.js, which watches [data-dataset-row] itself (no round trip). *@
+   Hovering a row outlines it through serve-map.js, which watches [data-dataset-row] itself (no round trip).
+   With a layer chosen in the Display panel (D17), the list holds that layer's datasets only, as the outlines do. *@
 @using Microsoft.AspNetCore.Components.Web.Virtualization
 @inject IServePageData Data
 @inject NavigationManager Navigation
@@ -10,7 +11,7 @@
 {
     <p class="panel-note">A built tile set: there are no datasets to list.</p>
 }
-else if (datasets.Count == 0)
+else if (all.Count == 0)
 {
     @NotServedBlock()
     @* No datasets left (D32): the page stays up, and says how to add one. *@
@@ -26,7 +27,7 @@ else if (datasets.Count == 0)
         <p class="empty-hint">The map keeps its view, and the dataset appears here when it's added.</p>
     </div>
 }
-else if (Selected is { } id && datasets.FirstOrDefault(d => d.Id == id) is { } selected)
+else if (Selected is { } id && all.FirstOrDefault(d => d.Id == id) is { } selected)
 {
     @Details(selected)
 }
@@ -59,6 +60,10 @@ else
         {
             <p class="list-summary" role="status">
                 <span class="strong">@ServeDatasetInfo.Number(items.Count)</span> of @ServeDatasetInfo.Number(datasets.Count)
+                @if (Layer is not null)
+                {
+                    <span> in layer <span class="strong">@Layer</span></span>
+                }
                 @if (items.Count == 0 && !(problemsOnly && notServed.Count > 0))
                 {
                     <span> · nothing matches</span>
@@ -66,9 +71,16 @@ else
                 <button type="button" class="link-button" @onclick="ClearFilters">Clear</button>
             </p>
         }
-        else if (Data.Layers.Count == 1)
+        else if (Layer is not null && datasets.Count < all.Count)
         {
-            <p class="list-summary">@DatasetCount(datasets.Count) · layer <span class="strong">@Data.Layers[0]</span></p>
+            <p class="list-summary" role="status">
+                <span class="strong">@ServeDatasetInfo.Number(datasets.Count)</span> of @ServeDatasetInfo.Number(all.Count) · layer <span class="strong">@Layer</span>
+                <button type="button" class="link-button" title="List and outline every dataset" @onclick="() => OnShowLayer.InvokeAsync(null)">All layers</button>
+            </p>
+        }
+        else if (Layer is not null || Data.Layers.Count == 1)
+        {
+            <p class="list-summary">@DatasetCount(datasets.Count) · layer <span class="strong">@(Layer ?? Data.Layers[0])</span></p>
         }
     </div>
 
@@ -116,6 +128,14 @@ else
     [Parameter]
     public Func<string, Task<bool>>? CopyText { get; set; }
 
+    /// <summary>The layer chosen in the Display panel, whose datasets alone are listed; <see langword="null"/> for all (D17).</summary>
+    [Parameter]
+    public string? Layer { get; set; }
+
+    /// <summary>Show a layer (its id), or all layers (<see langword="null"/>), from the list's summary or a dataset outside the layer.</summary>
+    [Parameter]
+    public EventCallback<string?> OnShowLayer { get; set; }
+
     /// <summary>Bumped when what's served changes (SW7, D29), so the list reads the datasets again.</summary>
     [Parameter]
     public int Version { get; set; }
@@ -127,7 +147,10 @@ else
     private IReadOnlyList<EncDotNet.S100.Cli.Infrastructure.SkippedDataset> notServed = [];
     private bool notServedOpen = true;
     private int version = -1;
+    private string? layer;
 
+    // Everything served, and the datasets listed: those in the layer chosen.
+    private IReadOnlyList<ServedDataset> all = [];
     private IReadOnlyList<ServedDataset> datasets = [];
     private IReadOnlyList<DatasetGroup> groups = [];
     private HashSet<string> expanded = new(StringComparer.Ordinal);
@@ -146,10 +169,11 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Version == version)
+        if (Version == version && Layer == layer)
             return;
         var first = version == -1;
         version = Version;
+        layer = Layer;
         Load(first);
         // The matches outlined on the map follow the list.
         if (!first && filter.IsActive)
@@ -160,7 +184,8 @@ else
     private void Load(bool first)
     {
         var known = groups.Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
-        datasets = Data.Datasets;
+        all = Data.Datasets;
+        datasets = ServeDatasetList.InLayer(all, Layer);
         notServed = Data.NotServed;
         groups = ServeDatasetList.Group(datasets, Data.Layers);
         if (first)
@@ -179,7 +204,7 @@ else
     }
 
     private void Refresh() =>
-        items = ServeDatasetList.Items(datasets, groups, expanded, filter, layerHeadings: Data.Layers.Count > 1);
+        items = ServeDatasetList.Items(datasets, groups, expanded, filter, layerHeadings: Layer is null && Data.Layers.Count > 1);
 
     private async Task FilterChangedAsync()
     {
@@ -399,6 +424,13 @@ else
                     <Icon Name="@(copied == "link" ? "check" : "link")" Size="16" /> @(copied == "link" ? "Link copied" : "Copy link")
                 </button>
             </div>
+            @if (Layer is not null && dataset.Layer != Layer)
+            {
+                <p class="details-note">
+                    @(dataset.Layer is null ? "The dataset isn't in a layer" : "The dataset is in layer " + dataset.Layer)@("; the map shows layer " + Layer + ", so it isn't drawn.")
+                    <button type="button" class="link-button" @onclick="() => OnShowLayer.InvokeAsync(dataset.Layer)">@(dataset.Layer is null ? "Show all layers" : "Show layer " + dataset.Layer)</button>
+                </p>
+            }
             @if (!hasPlace)
             {
                 <p class="details-note">The dataset declares no coverage and no bounds, so it can't be outlined on the map or framed.</p>

@@ -287,7 +287,8 @@ internal static class ServeOutlines
     /// <summary>
     /// A FeatureCollection with a feature per dataset that has a place: its
     /// data coverage, or else its bounds. Each has the dataset's <c>id</c>
-    /// and <c>product</c>.
+    /// and <c>product</c>, and its <c>layer</c> when it's in one, so the map
+    /// can outline only the layer chosen (D17).
     /// </summary>
     public static JsonObject FeatureCollection(IEnumerable<ServedDataset> datasets)
     {
@@ -298,10 +299,13 @@ internal static class ServeOutlines
             var geometry = dataset.Coverage?.DeepClone() as JsonObject ?? BoundsPolygon(dataset.Bounds);
             if (geometry is null)
                 continue;
+            var properties = new JsonObject { ["id"] = dataset.Id, ["product"] = dataset.Product };
+            if (dataset.Layer is { } layer)
+                properties["layer"] = layer;
             features.Add((JsonNode)new JsonObject
             {
                 ["type"] = "Feature",
-                ["properties"] = new JsonObject { ["id"] = dataset.Id, ["product"] = dataset.Product },
+                ["properties"] = properties,
                 ["geometry"] = geometry,
             });
         }
