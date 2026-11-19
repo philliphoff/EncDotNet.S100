@@ -252,6 +252,7 @@ namespace EncDotNet.S100.Navigation
     {
         double? FinestGridSpacingMeters(EncDotNet.S100.Pipelines.BoundingBox extent);
         EncDotNet.S100.Navigation.ChartedDepth? Sample(EncDotNet.S100.DataModel.GeoPosition position);
+        void Sample(EncDotNet.S100.Navigation.WaterMaskGrid grid, System.Span<float> depthMeters);
         EncDotNet.S100.Navigation.ChartedDepth? SampleBathymetry(EncDotNet.S100.DataModel.GeoPosition position);
     }
     public interface IFallbackWaterLevelSource : EncDotNet.S100.Navigation.IWaterLevelSource
@@ -364,6 +365,70 @@ namespace EncDotNet.S100.Navigation
         public System.DateTimeOffset? Start { get; init; }
         public double StartDistanceMeters { get; init; }
         public EncDotNet.S100.Navigation.UkcState WorstState { get; init; }
+    }
+    public readonly struct NavigabilityCell : System.IEquatable<EncDotNet.S100.Navigation.NavigabilityCell>
+    {
+        public NavigabilityCell(int Row, int Column) { }
+        public int Column { get; init; }
+        public int Row { get; init; }
+    }
+    public enum NavigabilityCellClass : byte
+    {
+        Uncharted = 0,
+        Land = 1,
+        Navigable = 2,
+        Shoal = 3,
+        Hazard = 4,
+        NoDepth = 5,
+    }
+    public sealed class NavigabilityConnection : System.IEquatable<EncDotNet.S100.Navigation.NavigabilityConnection>
+    {
+        public NavigabilityConnection(bool Connected, EncDotNet.S100.Navigation.NavigabilityCell? From, EncDotNet.S100.Navigation.NavigabilityCell? To, string? Reason, EncDotNet.S100.Navigation.NavigabilityCell? Narrowest = default, double? NarrowestClearanceMeters = default) { }
+        public bool Connected { get; init; }
+        public EncDotNet.S100.Navigation.NavigabilityCell? From { get; init; }
+        public EncDotNet.S100.Navigation.NavigabilityCell? Narrowest { get; init; }
+        public double? NarrowestClearanceMeters { get; init; }
+        public string? Reason { get; init; }
+        public EncDotNet.S100.Navigation.NavigabilityCell? To { get; init; }
+    }
+    public sealed class NavigabilityGrid
+    {
+        public double CellMeters { get; }
+        public EncDotNet.S100.Navigation.WaterMaskGrid Centres { get; }
+        public System.ReadOnlySpan<EncDotNet.S100.Navigation.NavigabilityCellClass> Classes { get; }
+        public int Columns { get; }
+        public System.Collections.Generic.IReadOnlyList<int> ComponentSizes { get; }
+        public System.Collections.Generic.IReadOnlyList<string> HazardDatasets { get; }
+        public System.ReadOnlySpan<bool> Hazards { get; }
+        public System.ReadOnlySpan<float> LeastDepths { get; }
+        public double MinimumDepthMeters { get; }
+        public EncDotNet.S100.Navigation.NavigabilityGridRequest Request { get; }
+        public int Rows { get; }
+        public EncDotNet.S100.Navigation.NavigabilityCell? CellAt(EncDotNet.S100.DataModel.GeoPosition position) { }
+        public EncDotNet.S100.DataModel.GeoPosition CenterOf(EncDotNet.S100.Navigation.NavigabilityCell cell) { }
+        public EncDotNet.S100.Navigation.NavigabilityCellClass ClassAt(int row, int column) { }
+        public double ClearanceMeters(int row, int column) { }
+        public int ComponentAt(int row, int column) { }
+        public EncDotNet.S100.Navigation.NavigabilityConnection Connect(EncDotNet.S100.DataModel.GeoPosition from, EncDotNet.S100.DataModel.GeoPosition to) { }
+        public bool IsNavigable(int row, int column) { }
+        public double? LeastDepthAt(int row, int column) { }
+        public static EncDotNet.S100.Navigation.NavigabilityGrid Build(EncDotNet.S100.Navigation.RouteCheckSources sources, EncDotNet.S100.Navigation.NavigabilityGridRequest request, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class NavigabilityGridRequest : System.IEquatable<EncDotNet.S100.Navigation.NavigabilityGridRequest>
+    {
+        public const int MaxCells = 4000000;
+        public NavigabilityGridRequest(EncDotNet.S100.Pipelines.BoundingBox Extent, double CellMeters, double MinimumDepthMeters, double? HazardDepthMeters = default, bool IncludeHazards = true) { }
+        public double CellMeters { get; init; }
+        public EncDotNet.S100.Pipelines.BoundingBox Extent { get; init; }
+        public double? HazardDepthMeters { get; init; }
+        public bool IncludeHazards { get; init; }
+        public double MinimumDepthMeters { get; init; }
+        public long CellCount() { }
+        public double CellMetersFor(long maxCells) { }
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Rows",
+                "Columns"})]
+        public System.ValueTuple<int, int> Size() { }
     }
     public sealed class PassageCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.PassageCheckOptions>
     {

@@ -142,6 +142,115 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         return ChartedDepthResolver.Resolve(null, dredged, area, dredged is null && area is null ? sounding : null);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The S-101 depth and dredged areas of each overlapping cell are filled
+    /// row by row (<see cref="GridScanline"/>), the finest cells at each point
+    /// win as in <see cref="Sample(GeoPosition)"/>, and S-102 replaces them
+    /// wherever a surface has a value. The nearest-sounding fallback is left
+    /// out (see <see cref="IChartedDepthSource.Sample(WaterMaskGrid, Span{float})"/>).
+    /// </remarks>
+    public void Sample(WaterMaskGrid grid, Span<float> depthMeters)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(depthMeters.Length, grid.Count, nameof(depthMeters));
+        var count = grid.Count;
+        depthMeters[..count].Fill(float.NaN);
+        var box = new BoundingBox(grid.South, Wrap(grid.West), grid.North, Wrap(grid.East));
+
+        var finest = new CellRank?[count];
+        var covered = new bool[count];
+        var dredged = NaNs(count);
+        var area = NaNs(count);
+        var cellCoverage = new bool[count];
+        var cellDredged = new float[count];
+        var cellArea = new float[count];
+        foreach (var cell in _cells)
+        {
+            if (!Overlaps(cell.Bounds, box))
+            {
+                continue;
+            }
+
+            Array.Clear(cellCoverage);
+            if (cell.CoverageAreas.Count == 0)
+            {
+                GridScanline.FillBox(cell.Bounds, grid, cellCoverage);
+            }
+            else
+            {
+                foreach (var coverage in cell.CoverageAreas)
+                {
+                    GridScanline.Fill([coverage.ExteriorRing, .. coverage.InteriorRings], grid, cellCoverage);
+                }
+            }
+
+            Array.Fill(cellDredged, float.NaN);
+            Array.Fill(cellArea, float.NaN);
+            cell.FillDredgedAreas(grid, box, cellDredged);
+            cell.FillDepthAreas(grid, box, cellArea);
+
+            var rank = cell.Rank;
+            for (var i = 0; i < count; i++)
+            {
+                if (!cellCoverage[i])
+                {
+                    continue;
+                }
+
+                var order = covered[i] ? CellScaleRanking.Compare(rank, finest[i]) : -1;
+                if (order < 0)
+                {
+                    covered[i] = true;
+                    finest[i] = rank;
+                    dredged[i] = cellDredged[i];
+                    area[i] = cellArea[i];
+                }
+                else if (order == 0)
+                {
+                    dredged[i] = Shoaler(dredged[i], cellDredged[i]);
+                    area[i] = Shoaler(area[i], cellArea[i]);
+                }
+            }
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            // A dredged area wins over the depth area it lies in, as in Resolve.
+            depthMeters[i] = float.IsNaN(dredged[i]) ? area[i] : dredged[i];
+        }
+
+        if (FinestGridSpacingMeters(box) is null)
+        {
+            return;
+        }
+
+        for (var row = 0; row < grid.Rows; row++)
+        {
+            for (var col = 0; col < grid.Columns; col++)
+            {
+                if (SampleBathymetry(grid.PositionAt(row, col)) is { } bathymetry)
+                {
+                    depthMeters[(row * grid.Columns) + col] = (float)bathymetry.DepthMeters;
+                }
+            }
+        }
+    }
+
+    private static float[] NaNs(int count)
+    {
+        var result = new float[count];
+        Array.Fill(result, float.NaN);
+        return result;
+    }
+
+    private static float Shoaler(float a, float b) => float.IsNaN(a) ? b : float.IsNaN(b) ? a : Math.Min(a, b);
+
+    private static double Wrap(double lon) => ((lon + 540) % 360) - 180;
+
+    private static bool Overlaps(BoundingBox a, BoundingBox b) =>
+        a.SouthLatitude <= b.NorthLatitude && a.NorthLatitude >= b.SouthLatitude
+        && a.WestLongitude <= b.EastLongitude && a.EastLongitude >= b.WestLongitude;
+
     internal static bool Contains(BoundingBox b, double lat, double lon, double padDegrees = 0) =>
         lat >= b.SouthLatitude - padDegrees && lat <= b.NorthLatitude + padDegrees
         && lon >= b.WestLongitude - padDegrees && lon <= b.EastLongitude + padDegrees;
@@ -293,6 +402,31 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             }
 
             return null;
+        }
+
+        public IReadOnlyList<CoverageArea> CoverageAreas => Index.Coverage;
+
+        public void FillDredgedAreas(WaterMaskGrid grid, BoundingBox box, float[] target) =>
+            FillAreas(Index.DredgedAreas.All, grid, box, target);
+
+        public void FillDepthAreas(WaterMaskGrid grid, BoundingBox box, float[] target) =>
+            FillAreas(Index.DepthAreas.All, grid, box, target);
+
+        private static void FillAreas(List<Area> areas, WaterMaskGrid grid, BoundingBox box, float[] target)
+        {
+            foreach (var area in areas)
+            {
+                if (area.South > box.NorthLatitude || area.North < box.SouthLatitude
+                    || area.West > box.EastLongitude || area.East < box.WestLongitude)
+                {
+                    continue;
+                }
+
+                foreach (var surface in area.Surfaces)
+                {
+                    GridScanline.FillMinimum([surface.ExteriorRing, .. surface.InteriorRings], grid, target, (float)area.Value);
+                }
+            }
         }
 
         public ChartedDepth? DredgedAreaAt(double lat, double lon, int? datum) =>
@@ -484,6 +618,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
             public AreaIndex(List<Area> areas, BoundingBox bounds)
             {
+                All = areas;
                 _south = bounds.SouthLatitude;
                 _west = bounds.WestLongitude;
                 _cellLat = Math.Max((bounds.NorthLatitude - bounds.SouthLatitude) / Buckets, 1e-9);
@@ -502,6 +637,8 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                     }
                 }
             }
+
+            public List<Area> All { get; }
 
             public List<Area> Candidates(double lat, double lon)
             {
@@ -539,6 +676,8 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             }
 
             public double Value { get; }
+
+            public IReadOnlyList<SurfacePart> Surfaces => _surfaces;
 
             public string FeatureId { get; }
 
