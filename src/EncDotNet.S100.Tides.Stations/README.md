@@ -173,7 +173,10 @@ stations, and `CurrentPredictionSource` says where a prediction comes from:
 kind, depth, rotary or not, and for a subordinate station "from Golden Gate
 Bridge, 0.88 nm NE of SFB1202_17, with offsets". `CheckForUpdatesAsync`
 checks the current station list too when the catalogue has current
-stations.
+stations. NOAA lists some harmonic bins it has no constants for, and the
+download leaves them out, so for a listed bin the catalogue doesn't have
+the check reads that station's constants (one request per such station)
+and counts the bin as added only when the download would keep it.
 
 ## Bring your own stations
 
