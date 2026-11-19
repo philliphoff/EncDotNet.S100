@@ -1,0 +1,59 @@
+@* The header (handoff D3, D4): name, served summary, Not for navigation, state, link and Use in GIS. At phone width CSS leaves the name, the chip and a round state button. *@
+<header class="serve-header">
+    <div class="brand">
+        <Icon Name="map" Size="20" />
+        <span class="brand-name">@ServeSummary.Name</span>
+    </div>
+    <span class="header-divider" aria-hidden="true"></span>
+    <button type="button" class="summary-button" title="Show the datasets" @onclick="OnSummary">
+        <span>@Summary</span>
+        <Icon Name="chevron-down" Size="16" />
+    </button>
+    <span class="header-spacer"></span>
+    <span class="nfn-chip" title="These charts are not for navigation.">
+        <Icon Name="warn" Size="15" />
+        <span>Not for navigation</span>
+    </span>
+    <StatePill State="State" Detail="@StateDetail" />
+    <button type="button" class="icon-button header-link" title="@(LinkCopied ? "Link copied" : "Copy a link to this view")" aria-label="Copy a link to this view" @onclick="OnCopyLink">
+        <Icon Name="@(LinkCopied ? "check" : "link")" />
+    </button>
+    <button type="button" class="button header-gis" aria-pressed="@(GisOpen ? "true" : "false")" @onclick="OnUseInGis">
+        <Icon Name="plug" Size="16" />
+        <span>Use in GIS</span>
+    </button>
+</header>
+
+@code {
+    /// <summary>What's served: "3 datasets · S-101".</summary>
+    [Parameter, EditorRequired]
+    public string Summary { get; set; } = "";
+
+    /// <summary>The server's state.</summary>
+    [Parameter]
+    public ServerState State { get; set; }
+
+    /// <summary>The state's tooltip detail.</summary>
+    [Parameter]
+    public string? StateDetail { get; set; }
+
+    /// <summary>Whether the link was just copied.</summary>
+    [Parameter]
+    public bool LinkCopied { get; set; }
+
+    /// <summary>Whether the Use in GIS panel is open.</summary>
+    [Parameter]
+    public bool GisOpen { get; set; }
+
+    /// <summary>The summary was clicked: open Datasets.</summary>
+    [Parameter]
+    public EventCallback OnSummary { get; set; }
+
+    /// <summary>Copy a link to this view.</summary>
+    [Parameter]
+    public EventCallback OnCopyLink { get; set; }
+
+    /// <summary>Open Use in GIS.</summary>
+    [Parameter]
+    public EventCallback OnUseInGis { get; set; }
+}

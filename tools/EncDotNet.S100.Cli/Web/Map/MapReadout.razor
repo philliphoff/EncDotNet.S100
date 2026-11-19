@@ -1,0 +1,12 @@
+@* The readout, bottom left (handoff D6): the cursor's position (the centre's without one) and the zoom, which turns amber past the maximum zoom (D14).
+   The JS module writes the text; this owns only the state. *@
+<div class="map-readout" aria-hidden="true">
+    <span data-readout-position></span>
+    <span class="readout-zoom @(PastMaximum ? "past" : null)" data-readout-zoom></span>
+</div>
+
+@code {
+    /// <summary>Whether the map is past the maximum zoom.</summary>
+    [Parameter]
+    public bool PastMaximum { get; set; }
+}

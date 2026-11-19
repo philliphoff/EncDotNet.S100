@@ -1,51 +1,136 @@
+@* The page (issues #1573, #1585): the header, the rail and docked panel (a sheet on a phone) and the map.
+   One page, no router. The map is MapLibre, driven through js/serve-map.js; the state is here. *@
 @implements IAsyncDisposable
 @inject IServePageData Data
 @inject IJSRuntime JS
 
-<div id="map" class="map"></div>
-<div class="status">
-    <span>@tileSet.Name · zoom @tileSet.MinZoom–@tileSet.MaxZoom</span>
-    @if (Data.Palettes.Count > 0)
-    {
-        <select aria-label="Palette" @bind="palette" @bind:after="ApplyAsync">
-            @foreach (var p in Data.Palettes)
+<div class="serve" data-theme="@Theme">
+    <ServeHeader Summary="@summary"
+                 State="ServerState.Live"
+                 StateDetail="@(Data.Revision is { } revision ? "revision " + revision : null)"
+                 LinkCopied="linkCopied"
+                 GisOpen="activePanel == ServePanel.UseInGis"
+                 OnSummary="() => OpenPanel(ServePanel.Datasets)"
+                 OnCopyLink="CopyLinkAsync"
+                 OnUseInGis="() => OpenPanel(ServePanel.UseInGis)" />
+    <div class="serve-body">
+        <Sheet Height="sheet" PanelOpen="activePanel is not null" Summary="@summary" OnGesture="SheetGesture">
+            <RailContent>
+                <Rail Items="railItems" Active="activePanel" OnSelect="SelectPanel" />
+            </RailContent>
+            <ChildContent>
+                @if (activePanel is { } panel)
+                {
+                    <Panel Title="@PanelTitle(panel)" OnClose="() => activePanel = null">
+                        @switch (panel)
+                        {
+                            case ServePanel.Datasets:
+                                <DatasetsPanel />
+                                break;
+                            case ServePanel.Display:
+                                <DisplayPanel Palettes="Data.Palettes" Palette="@palette" PaletteChanged="SetPaletteAsync"
+                                              Times="times" TimeIndex="timeIndex" TimeIndexChanged="SetTimeAsync"
+                                              Page="page" PageChanged="SetPageAsync" />
+                                break;
+                            case ServePanel.UseInGis:
+                                <UseInGisPanel />
+                                break;
+                        }
+                    </Panel>
+                }
+            </ChildContent>
+        </Sheet>
+        <main class="map-area" aria-label="Map">
+            <div id="map" class="map"></div>
+            <ScaleBar />
+            <MapOverlayButtons OnZoomIn="() => ZoomByAsync(1)" OnZoomOut="() => ZoomByAsync(-1)" OnZoomToData="ZoomToDataAsync" OnNorthUp="NorthUpAsync" />
+            @if (zoomLimit == ZoomLimit.BelowMinimum)
             {
-                <option value="@p">@p</option>
+                <MapChip ActionLabel="Zoom to the data" ActionIcon="fit" OnAction="ZoomToDataAsync">
+                    The chart draws from zoom @tileSet.MinZoom. Outlines show where the data is.
+                </MapChip>
             }
-        </select>
-    }
-    @if (times.Count > 0)
-    {
-        <select aria-label="Time" @bind="timeIndex" @bind:after="ApplyAsync">
-            @for (int i = 0; i < times.Count; i++)
+            else if (zoomLimit == ZoomLimit.PastMaximum)
             {
-                <option value="@i">@times[i].ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture)</option>
+                <MapChip ActionLabel="@("Back to " + tileSet.MaxZoom.ToString(CultureInfo.InvariantCulture))" OnAction="BackToMaximumAsync">
+                    Past zoom @tileSet.MaxZoom, the last the server renders. Tiles are enlarged.
+                </MapChip>
             }
-        </select>
-    }
+            <MapReadout PastMaximum="zoomLimit == ZoomLimit.PastMaximum" />
+        </main>
+    </div>
 </div>
 
 @code {
+    private static readonly RailItem[] railItems =
+    [
+        new(ServePanel.Datasets, "Datasets", "layers"),
+        new(ServePanel.Display, "Display", "sliders"),
+        new(ServePanel.UseInGis, "GIS", "plug"),
+    ];
+
     private ServedTileSet tileSet = null!;
     private IReadOnlyList<DateTime> times = [];
+    private string summary = "";
     private string? palette;
     private int timeIndex;
+    private PageAppearance page;
+
+    private ServePanel? activePanel = ServePanel.Datasets;
+    private SheetHeight sheet;
+    private bool isPhone;
+    private ZoomLimit zoomLimit;
+    private bool linkCopied;
+
+    // The hash's name=value pairs, kept as read (D36): later slices add theirs.
+    private readonly Dictionary<string, string> hashParameters = new(StringComparer.Ordinal);
+
+    private DotNetObjectReference<ServePage>? self;
     private bool shown;
+
+    private string Theme => ServeTheme.Resolve(palette, page);
 
     protected override void OnInitialized()
     {
         tileSet = Data.TileSet;
         times = Data.Times;
         palette = tileSet.DefaultPalette;
+        summary = ServeSummary.Describe(Data);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
             return;
-        await JS.InvokeVoidAsync("s100Map.show", "map", TileJsonUrl(), tileSet.HighDpi, tileSet.Bounds, tileSet.Center);
+        self = DotNetObjectReference.Create(this);
+        var (view, parameters) = ServeHash.Parse(await JS.InvokeAsync<string>("s100Map.readHash"));
+        foreach (var (name, value) in parameters)
+            hashParameters[name] = value;
+
+        var start = view ?? await StartViewAsync();
+        zoomLimit = ServeMapView.Limit(start.Zoom, tileSet.MinZoom, tileSet.MaxZoom);
+        await JS.InvokeVoidAsync("s100Map.show", "map", new
+        {
+            tileJsonUrl = TileJsonUrl(),
+            highDpi = tileSet.HighDpi,
+            minZoom = tileSet.MinZoom,
+            maxZoom = tileSet.MaxZoom,
+            view = start,
+            outlines = ServeOutlines.FeatureCollection(Data.Datasets).ToJsonString(),
+            hashParameters = ServeHash.FormatParameters(hashParameters),
+            theme = Theme,
+        }, self);
+        await JS.InvokeVoidAsync("s100Shell.watchPhone", self);
         shown = true;
+        StateHasChanged();
     }
+
+    private static string PanelTitle(ServePanel panel) => panel switch
+    {
+        ServePanel.Display => "Display",
+        ServePanel.UseInGis => "Use in GIS",
+        _ => "Datasets",
+    };
 
     /// <summary>The TileJSON of the palette and time chosen, relative to the page.</summary>
     private string TileJsonUrl()
@@ -54,8 +139,142 @@
         return times.Count > 0 ? url + "?t=" + Uri.EscapeDataString(TileRenderSession.FormatTime(times[timeIndex])) : url;
     }
 
-    private Task ApplyAsync() =>
-        shown ? JS.InvokeVoidAsync("s100Map.setChart", TileJsonUrl()).AsTask() : Task.CompletedTask;
+    /// <summary>The view framing the data in the map as it's sized now (D12).</summary>
+    private async Task<MapView> StartViewAsync()
+    {
+        var size = await JS.InvokeAsync<double[]>("s100Map.size", "map");
+        return ServeMapView.Start(tileSet, size[0], size[1]);
+    }
+
+    // Rail and sheet (D1, D2).
+
+    private void SelectPanel(ServePanel panel)
+    {
+        if (isPhone)
+        {
+            // A tab raises the sheet; the open tab lowers it again.
+            if (activePanel == panel && sheet != SheetHeight.Lowered)
+            {
+                sheet = SheetHeight.Lowered;
+            }
+            else
+            {
+                activePanel = panel;
+                if (sheet == SheetHeight.Lowered)
+                    sheet = SheetHeight.Half;
+            }
+        }
+        else
+        {
+            // The active item closes its panel; the rail stays.
+            activePanel = activePanel == panel ? null : panel;
+        }
+    }
+
+    private void OpenPanel(ServePanel panel)
+    {
+        activePanel = panel;
+        if (sheet == SheetHeight.Lowered)
+            sheet = SheetHeight.Half;
+    }
+
+    private void SheetGesture(string gesture)
+    {
+        sheet = (gesture, sheet) switch
+        {
+            ("up", SheetHeight.Lowered) => SheetHeight.Half,
+            ("up", _) => SheetHeight.Full,
+            ("down", SheetHeight.Full) => SheetHeight.Half,
+            ("down", _) => SheetHeight.Lowered,
+            (_, SheetHeight.Lowered) => SheetHeight.Half,
+            _ => SheetHeight.Lowered,
+        };
+        if (sheet != SheetHeight.Lowered)
+            activePanel ??= ServePanel.Datasets;
+    }
+
+    /// <summary>From the JS module: the page crossed the phone width (768 px).</summary>
+    [JSInvokable]
+    public void OnPhoneChanged(bool phone)
+    {
+        isPhone = phone;
+        StateHasChanged();
+    }
+
+    // Map.
+
+    /// <summary>From the JS module: the map stopped moving, at <paramref name="zoom"/> (the tile set's zoom).</summary>
+    [JSInvokable]
+    public void OnViewChanged(double zoom)
+    {
+        var limit = ServeMapView.Limit(zoom, tileSet.MinZoom, tileSet.MaxZoom);
+        if (limit == zoomLimit)
+            return;
+        zoomLimit = limit;
+        StateHasChanged();
+    }
+
+    /// <summary>From the JS module: the hash was edited. Its view moves the map; its parameters replace the page's.</summary>
+    [JSInvokable]
+    public async Task OnHashChanged(string hash)
+    {
+        var (view, parameters) = ServeHash.Parse(hash);
+        hashParameters.Clear();
+        foreach (var (name, value) in parameters)
+            hashParameters[name] = value;
+        await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        if (view is { } v)
+            await MapAsync("s100Map.jumpTo", v);
+    }
+
+    private Task ZoomByAsync(int delta) => MapAsync("s100Map.zoomBy", delta);
+
+    private async Task ZoomToDataAsync()
+    {
+        if (shown)
+            await JS.InvokeVoidAsync("s100Map.flyTo", await StartViewAsync());
+    }
+
+    private Task BackToMaximumAsync() => MapAsync("s100Map.zoomTo", tileSet.MaxZoom);
+
+    private Task NorthUpAsync() => MapAsync("s100Map.northUp");
+
+    private async Task CopyLinkAsync()
+    {
+        if (!shown || !await JS.InvokeAsync<bool>("s100Map.copyLink"))
+            return;
+        linkCopied = true;
+        StateHasChanged();
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        linkCopied = false;
+    }
+
+    // Interim Display controls (SW3 and SW4 replace them).
+
+    private async Task SetPaletteAsync(string? value)
+    {
+        palette = value;
+        await MapAsync("s100Map.setChart", TileJsonUrl());
+        await MapAsync("s100Map.setTheme", Theme);
+    }
+
+    private Task SetTimeAsync(int index)
+    {
+        timeIndex = index;
+        return MapAsync("s100Map.setChart", TileJsonUrl());
+    }
+
+    private Task SetPageAsync(PageAppearance value)
+    {
+        page = value;
+        return MapAsync("s100Map.setTheme", Theme);
+    }
+
+    private async Task MapAsync(string identifier, params object?[] args)
+    {
+        if (shown)
+            await JS.InvokeVoidAsync(identifier, args);
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -68,5 +287,7 @@
         {
             // The tab is gone, and the map with it.
         }
+
+        self?.Dispose();
     }
 }

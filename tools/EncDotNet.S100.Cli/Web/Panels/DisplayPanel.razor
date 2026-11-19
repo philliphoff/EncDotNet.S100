@@ -1,0 +1,71 @@
+@* The Display panel's slot. SW3 (#1579) and SW4 (#1580) replace these interim controls with the panel and the time bar. *@
+@if (Palettes.Count > 0)
+{
+    <label class="field">
+        <span class="field-label">Chart palette</span>
+        <select @onchange="e => PaletteChanged.InvokeAsync(e.Value as string)">
+            @foreach (var p in Palettes)
+            {
+                <option value="@p" selected="@(p == Palette)">@Title(p)</option>
+            }
+        </select>
+    </label>
+}
+@if (Times.Count > 0)
+{
+    <label class="field">
+        <span class="field-label">Time (UTC)</span>
+        <select @onchange="e => TimeIndexChanged.InvokeAsync(int.Parse((string)e.Value!, CultureInfo.InvariantCulture))">
+            @for (int i = 0; i < Times.Count; i++)
+            {
+                <option value="@i" selected="@(i == TimeIndex)">@Times[i].ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture)</option>
+            }
+        </select>
+    </label>
+}
+<label class="field">
+    <span class="field-label">Page</span>
+    <select @onchange="e => PageChanged.InvokeAsync(Enum.Parse<PageAppearance>((string)e.Value!))">
+        @foreach (var appearance in Enum.GetValues<PageAppearance>())
+        {
+            <option value="@appearance" selected="@(appearance == Page)">@appearance</option>
+        }
+    </select>
+</label>
+
+@code {
+    /// <summary>The palettes served.</summary>
+    [Parameter]
+    public IReadOnlyList<string> Palettes { get; set; } = [];
+
+    /// <summary>The palette shown.</summary>
+    [Parameter]
+    public string? Palette { get; set; }
+
+    /// <summary>A palette was chosen.</summary>
+    [Parameter]
+    public EventCallback<string?> PaletteChanged { get; set; }
+
+    /// <summary>The time steps.</summary>
+    [Parameter]
+    public IReadOnlyList<DateTime> Times { get; set; } = [];
+
+    /// <summary>The step shown.</summary>
+    [Parameter]
+    public int TimeIndex { get; set; }
+
+    /// <summary>A step was chosen.</summary>
+    [Parameter]
+    public EventCallback<int> TimeIndexChanged { get; set; }
+
+    /// <summary>The page appearance.</summary>
+    [Parameter]
+    public PageAppearance Page { get; set; }
+
+    /// <summary>An appearance was chosen.</summary>
+    [Parameter]
+    public EventCallback<PageAppearance> PageChanged { get; set; }
+
+    private static string Title(string palette) =>
+        palette.Length == 0 ? palette : char.ToUpperInvariant(palette[0]) + palette[1..];
+}
