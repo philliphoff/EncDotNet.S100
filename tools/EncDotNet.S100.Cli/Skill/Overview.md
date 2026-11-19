@@ -7,6 +7,7 @@ command offers it, and treat paths as local filesystem paths.
 | Goal | Command |
 |---|---|
 | Discover supported product specifications | `s100 list-specs` |
+| Discover live data sources for `--source` and their options | `s100 sources` |
 | Detect a dataset's product and available time steps | `s100 info` |
 | Validate a dataset or verify an exchange set | `s100 validate` |
 | Query features or coverage values at a position | `s100 identify` |

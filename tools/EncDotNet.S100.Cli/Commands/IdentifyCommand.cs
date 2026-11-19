@@ -67,6 +67,15 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         [Description("Exchange-set form only: restrict loading to a comma-separated list of product specifications (e.g. --only S101,S102; hyphenation and case are ignored).")]
         public string? Only { get; init; }
 
+        [CommandOption("--source <SOURCE>")]
+        [Description("Also pick from a live data source (repeatable): an id from 's100 sources', optionally with options as id:name=value,name=value. It's started for the area around the pick and given --source-timeout for its first data; one with none by then is left out with a warning. Keys come from environment variables, never this option.")]
+        public string[] Sources { get; init; } = [];
+
+        [CommandOption("--source-timeout <SECONDS>")]
+        [Description("How long to wait for a --source's first data. Default 30.")]
+        [DefaultValue(30.0)]
+        public double SourceTimeoutSeconds { get; init; } = 30.0;
+
         [CommandOption("--radius <METERS>")]
         [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")]
         [DefaultValue(50.0)]
@@ -120,8 +129,11 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
             if (hasInput && (hasLayers || hasExchangeSet))
                 return ValidationResult.Error("A positional dataset cannot be combined with --layer or --from.");
 
-            if (!hasLayers && !hasExchangeSet && !hasInput)
-                return ValidationResult.Error("Provide a dataset, one or more --layer options, or an exchange set (--from or positional).");
+            if (!hasLayers && !hasExchangeSet && !hasInput && Sources.Length == 0)
+                return ValidationResult.Error("Provide a dataset, one or more --layer options, an exchange set (--from or positional), or a --source.");
+
+            if (!double.IsFinite(SourceTimeoutSeconds) || SourceTimeoutSeconds < 0)
+                return ValidationResult.Error("--source-timeout must be a number of seconds, 0 or more.");
 
             if (!string.IsNullOrWhiteSpace(Only)
                 && !hasExchangeSet
@@ -171,10 +183,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         var warnings = new List<string>();
         try
         {
-            var inputs = DatasetInputResolver.Resolve(
-                settings.Input, settings.Layers, settings.ExchangeSet, settings.Only,
-                warnings, out exchangeSetResolution);
-            if (inputs.Count == 0)
+            var askedForFiles = !string.IsNullOrWhiteSpace(settings.Input) || settings.Layers.Length > 0
+                || !string.IsNullOrWhiteSpace(settings.ExchangeSet);
+            var inputs = askedForFiles
+                ? DatasetInputResolver.Resolve(
+                    settings.Input, settings.Layers, settings.ExchangeSet, settings.Only,
+                    warnings, out exchangeSetResolution)
+                : [];
+            if (askedForFiles && inputs.Count == 0)
             {
                 foreach (var warning in warnings)
                     Console.Error.WriteLine(warning);
@@ -182,8 +198,18 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 return 2;
             }
 
-            var catalog = FileDatasetCatalog.Build(inputs, new ProjNetCrsTransformFactory());
-            warnings.AddRange(catalog.Warnings);
+            var files = FileDatasetCatalog.Build(inputs, new ProjNetCrsTransformFactory());
+            warnings.AddRange(files.Warnings);
+
+            // Data source design note D9: live sources, started for the area
+            // around the pick and left out if they've nothing in time.
+            using var sources = StartSources(settings, latitude, longitude, warnings, out var sourceError);
+            if (sourceError is not null)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{sourceError}[/]");
+                return 2;
+            }
+            var catalog = new StaticDatasetCatalog([.. files.Datasets, .. sources?.Datasets ?? []]);
             foreach (var warning in warnings)
                 Console.Error.WriteLine(warning);
 
@@ -233,6 +259,33 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         {
             exchangeSetResolution?.Dispose();
         }
+    }
+
+    // The area a --source runs for: the pick, padded to at least 5 km.
+    private static OneShotSources? StartSources(Settings settings, double latitude, double longitude, List<string> warnings, out string? error)
+    {
+        error = null;
+        if (settings.Sources.Length == 0)
+            return null;
+        var padMetres = Math.Max(Math.Clamp(settings.RadiusMeters, 0.0, 100_000.0), 5_000.0);
+        var latPad = padMetres / 111_320.0;
+        var lonPad = latPad / Math.Max(Math.Cos(latitude * Math.PI / 180.0), 0.01);
+        var area = new EncDotNet.S100.Datasets.Pipelines.Portrayal.GeographicBounds(
+            Math.Max(longitude - lonPad, -180), Math.Max(latitude - latPad, -90),
+            Math.Min(longitude + lonPad, 180), Math.Min(latitude + latPad, 90));
+        var (sources, problem) = OneShotSources.StartAsync(
+                settings.Sources,
+                EncDotNet.S100.Datasets.Pipelines.SourceRegistry.CreateDefault(),
+                area,
+                TimeSpan.FromSeconds(settings.SourceTimeoutSeconds))
+            .GetAwaiter().GetResult();
+        if (problem is not null)
+        {
+            error = problem;
+            return null;
+        }
+        warnings.AddRange(sources!.Warnings);
+        return sources;
     }
 
     /// <summary>

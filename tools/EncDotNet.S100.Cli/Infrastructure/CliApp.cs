@@ -140,6 +140,10 @@ internal static class CliApp
                 .WithExample("health")
                 .WithExample("health", "--port", "8100");
 
+            config.AddCommand<SourcesCommand>("sources")
+                .WithDescription("List the live data sources --source and MCP's add_data_source take (NDBC observations, NMEA own-ship weather, AIS targets), with their options and what each needs.")
+                .WithExample("sources");
+
             config.AddCommand<ListSpecsCommand>("list-specs")
                 .WithDescription("List supported product specifications and headless-render capability.")
                 .WithExample("list-specs");

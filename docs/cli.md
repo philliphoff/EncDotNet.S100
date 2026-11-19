@@ -134,6 +134,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`tides currents predict`](#tides-currents-predict) | Predicts the tidal current at a station, as speeds and directions, slacks and maxima, or an S-111 dataset. |
 | [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, or checks for newer data. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
+| [`sources`](#sources) | Lists the live data sources `--source` takes, with their options and what each still needs. |
 | [`health`](#health) | Checks that a `tiles serve`, `feed serve` or `mcp serve --transport http` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
@@ -1426,6 +1427,7 @@ s100 info al092022_5day_020.zip
 s100 identify <dataset> --lat <latitude> --lon <longitude> [options]
 s100 identify --layer <dataset> [--layer <dataset> ...] --lat <latitude> --lon <longitude> [options]
 s100 identify <exchange-set> --lat <latitude> --lon <longitude> [options]
+s100 identify [<dataset>] --source <source> --lat <latitude> --lon <longitude> [options]
 ```
 
 `identify` reports the vector features at a point and samples the coverage
@@ -1445,6 +1447,15 @@ data, a not-for-navigation notice is printed first.
 `identify` uses the same code as the MCP `identify_features` and
 `sample_coverage` tools, so the results match.
 
+`--source` also picks from a live data source, such as NDBC observations or
+AIS targets, with or without datasets. Each source is started for the area
+around the point and given `--source-timeout` for its first data; one with
+nothing by then is left out with a warning on standard error rather than
+failing the command, unless it was the only input. An unknown source or option
+exits with code 2. A source that needs a key reads it from its environment
+variable, such as `ENCDOTNET_AIS_STREAM_KEY`: a key is never accepted as a
+`--source` option. [`sources`](#sources) lists them.
+
 | Option | Default | Description |
 |---|---|---|
 | `--lat <latitude>` | required | Latitude in decimal degrees, WGS-84, from -90 to 90. |
@@ -1453,6 +1464,8 @@ data, a not-for-navigation notice is printed first.
 | `--from`, `--exchange-set <path>` | none | Picks across every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--radius <metres>` | `50` | Search distance for point and curve features, from 0 to 100,000. Area features must contain the point, so they ignore it. |
+| `--source <source>` | none | Also picks from a live data source. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options, such as `nmea.weather:Input=udp:10110`. |
+| `--source-timeout <seconds>` | `30` | How long to wait for each `--source`'s first data. |
 | `--spec <spec>` | all | Reports only this product specification or format, for example `S-124` or `GRIB2`. |
 | `--time <iso8601>` | first step | A UTC time for S-104, S-111, GRIB2 and NetCDF coverages. The nearest time step is sampled. Ignored for S-102. |
 | `--max-results <n>` | `20` | Maximum features to report, from 1 to 200. |
@@ -1466,6 +1479,7 @@ s100 identify --layer enc.000 --layer bathy.h5 --lat 50.1 --lon -1.4
 s100 identify --from exchange-set.zip --lat 50.1 --lon -1.4 --format json
 s100 identify chart.000 --lat 50.1 --lon -1.4 --attributes
 s100 identify --layer gfswave.grib2 --layer alerts.atom --lat 38.5 --lon -74.5 --time 2026-10-25T03:00Z
+s100 identify chart.000 --source ndbc.realtime --lat 42.35 --lon -70.65
 ```
 
 The JSON output is an object with `point`, `totalMatched`, `truncated`,
@@ -1908,6 +1922,18 @@ s100 tides update
 s100 tides update --check
 ```
 
+## sources
+
+```text
+s100 sources
+```
+
+`sources` prints a table of the live data sources that `identify --source`,
+`mcp serve --source` and the MCP `add_data_source` tool take: each source's
+id, what it shows, the widest view it runs in, its options (`*` marks a
+required one, and a key shows its environment variable) and whether it's
+ready or what it still needs, such as a key's environment variable.
+
 ## list-specs
 
 ```text
@@ -2062,6 +2088,7 @@ lists them all.
 | `--port <port>` | `8300` | HTTP only. The port. `0` picks a free one. |
 | `--token <token>` | generated for a non-loopback host | HTTP only. The bearer token clients must send. Letters, digits, `-` and `_`. |
 | `--no-token` | off | HTTP only. Serves without a token, even on a non-loopback address. |
+| `--source <source>` | none | Adds a live data source at startup, as `add_data_source` does. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options, such as `nmea.weather:Input=udp:10110`; keys come from environment variables. An unknown source or option exits with code 2. It runs once `set_viewport` narrows the view to its range. See [`sources`](#sources). |
 | `--live-feeds` | off | With `--collections` on SoundCharts' `collections.json`, also adds the live feeds subscribed to in its Library, such as NDBC observations or AIS targets, with their saved settings; keys come from environment variables. They run once `set_viewport` narrows the view to their range. |
 | `--allow-changes` | off | HTTP only. Also serves the tools that open datasets by path and change the Library. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
@@ -2071,6 +2098,7 @@ lists them all.
 s100 mcp serve dataset.h5
 s100 mcp serve --layer enc.000 --layer bathy.h5
 s100 mcp serve --from exchange-set.zip --only S101,S102
+s100 mcp serve --layer enc.000 --source ndbc.realtime
 ```
 
 Standard output carries the MCP protocol. Startup messages, load warnings and

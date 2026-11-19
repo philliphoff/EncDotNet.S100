@@ -1202,6 +1202,17 @@ Also left:
     querying).
   - **11d. The command line.** `--source` on `render`, `identify` and `mcp
     serve`, `--source-timeout`, `s100 sources`.
+
+    11d as built: `SourceArgument` parses `id:name=value,…`;
+    `LiveSourceFactory` creates a source from it (shared with
+    `add_data_source`, so the same refusals apply); `s100 sources` lists the
+    registry. `mcp serve --source` adds sources at startup through
+    `HeadlessLiveSources`. `identify --source` starts each one through
+    `OneShotSources` for the pick's area (at least 5 km around it), waits up
+    to `--source-timeout` for its first data and leaves out, with a warning,
+    one that has none or whose range is narrower than the area. `render
+    --source` isn't built: render draws through the file composite, which
+    has no place for a processor yet, so it waits for that path.
   - **11e. Tiles** (deferred). `tiles serve --source` with `--bbox`, live
     layers uncached; only if wanted. `tiles export --source` is refused
     from 11d.
