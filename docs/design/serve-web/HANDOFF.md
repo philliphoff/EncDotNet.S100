@@ -50,10 +50,10 @@ Captures are in the `screenshots/` folder, named `10-<frame>-….png`. Frames wi
 
 | # | Answer |
 |---|---|
-| **Q1** | **"s100 serve"**, the command people ran, with the map glyph the viewer's title bar uses. The header puts what's served next to it ("3 datasets · S-101", or the tile set's TileJSON name). The browser tab reads "3 datasets · S-101 — s100 serve". "SoundCharts Server" makes people expect the app's tools. **Left for the user** as a branding call. |
+| **Q1** | **"s100 serve"** (decided by the user, 2026-11-18): the command people ran, with the map glyph the viewer's title bar uses. The header puts what's served next to it ("3 datasets · S-101", or the tile set's TileJSON name). The browser tab reads "3 datasets · S-101 — s100 serve". |
 | **Q2** | **The viewer's rail with one docked panel.** Datasets, Display and Use in GIS, one panel at a time, collapsible, and the rail has room for Legend, Search and Mariner settings later. At phone width the rail becomes the tab bar of a bottom sheet with three heights. |
 | **Q3** | **Day follows the browser; Dusk forces dark chrome; Night forces a new night chrome** (darker than dark, dimmed text, no white). A Page setting (Auto, Light, Dark) overrides Auto for Day only. |
-| **Q4** | **A muted OpenStreetMap by default**, greyed in the browser with MapLibre raster paint, with OpenStreetMap and None as choices. With Night it's inverted and dimmed. Whether to keep OSM's own tile servers as the source is **left for the user** (open question 1). |
+| **Q4** | **A muted OpenStreetMap by default** (decided by the user, 2026-11-18), greyed in the browser with MapLibre raster paint, with OpenStreetMap and None as choices. With Night it's inverted and dimmed. The tiles come from `tile.openstreetmap.org`, with its attribution. |
 | **Q5** | **Yes.** The view, palette, time, layer, selected dataset and pick go in the URL hash. A link opens what you saw. The header's link button copies it and warns when it contains the token. |
 | **Q6** | **Behind one button.** "Use in GIS" in the header and in the rail opens a panel. The main screen stays a map. |
 | **Q7** | **A header pill** (Live, Updating, Reconnecting, Disconnected, Server stopped), a toast and a row tag for each change, problems pinned at the top of the list. Quiet when nothing changes. |
@@ -192,14 +192,17 @@ Each slice assumes #1575 (hosting, the token prefix, the data interface, bundled
 6. Whether a token is set, and the public base URL, available to the page. (SW6)
 7. Browser time zone through JS interop (client side, but every time display depends on it). (SW4)
 
+## Settled with the user
+
+- **Name (Q1):** "s100 serve" (2026-11-18).
+- **Basemap (Q4):** keep OpenStreetMap from `tile.openstreetmap.org`, muted by default, with OpenStreetMap and None as choices (2026-11-18). A `--basemap-url` option is not part of the basics.
+
 ## Open questions
 
-1. **The basemap source.** Muted OSM uses `tile.openstreetmap.org`. Its usage policy is fine for one person looking at a page, but many servers on many LANs all fetching it isn't what the policy is for. Options: keep it, with attribution and a clear "None" choice; add `--basemap-url` so people point it at their own tiles; or default to None when the server draws its own `--basemap offline`. Recommendation: keep OSM for the basics and add `--basemap-url` later. **For the user.**
-2. **The name (Q1).** "s100 serve" is the recommendation; it's a branding call. **For the user.**
-3. **Dusk forcing dark chrome.** The viewer darkens on Night only. Forcing dark on Dusk too avoids a white panel beside a dim chart, but someone at a bright desk can't get light chrome with Dusk. Recommendation: force it, and let Page: Light override it for Dusk (never for Night). **For the user.**
-4. **Mask the token by default?** Masked is recommended; someone who started the server with a token on their own machine may find it fussy.
-5. **Navigational purpose for S-101 cells.** The mock groups S-57 by the cell name's purpose digit. S-101 has no such digit; group S-101 by display scale band instead, or not at all?
-6. **How many datasets before the list virtualises,** and is the 30-dataset "start collapsed" threshold right for exchange sets with mixed products?
+1. **Dusk forcing dark chrome.** The viewer darkens on Night only. Forcing dark on Dusk too avoids a white panel beside a dim chart, but someone at a bright desk can't get light chrome with Dusk. Recommendation: force it, and let Page: Light override it for Dusk (never for Night). **For the user.**
+2. **Mask the token by default?** Masked is recommended; someone who started the server with a token on their own machine may find it fussy.
+3. **Navigational purpose for S-101 cells.** The mock groups S-57 by the cell name's purpose digit. S-101 has no such digit; group S-101 by display scale band instead, or not at all?
+4. **How many datasets before the list virtualises,** and is the 30-dataset "start collapsed" threshold right for exchange sets with mixed products?
 
 ## Not done in this round
 
