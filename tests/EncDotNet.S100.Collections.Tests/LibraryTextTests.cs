@@ -74,6 +74,20 @@ public sealed class LibraryTextTests
     }
 
     [Fact]
+    public void A_live_feed_that_needs_settings_says_so()
+    {
+        var feed = new LiveFeedSource(Guid.NewGuid(), null, "ais.aisstream");
+        var source = new LibrarySource(feed, null, LibrarySourceState.Ready);
+        var collection = new LibraryCollection(new DatasetCollection(Guid.NewGuid(), "Live feeds", [feed], DateTimeOffset.UnixEpoch), [source]);
+        var needs = new Indexing.FeedHealth(DateTimeOffset.UnixEpoch, "Key needed", DateTimeOffset.UnixEpoch, null);
+
+        Assert.Equal(("Key needed", LibraryNodeStatusKind.Warning),
+            LibraryNodeText.Status(new LibraryNodeStatusInput(collection, [source]) { Health = _ => needs }));
+        Assert.Equal((null, LibraryNodeStatusKind.None),
+            LibraryNodeText.Status(new LibraryNodeStatusInput(collection, [source]) { Health = _ => null }));
+    }
+
+    [Fact]
     public void Nodes_are_named_tagged_and_given_a_status()
     {
         var source = Source(LibrarySourceState.Indexing);

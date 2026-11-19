@@ -325,6 +325,11 @@ public static partial class LibraryNodeText
         if (sources is [{ Definition: SecomSource, Index: { } secomIndex }] && SecomCode(secomIndex) is { } secomCode)
             return SecomStatus(secomCode, hasItems: secomIndex.Items.Count > 0, c);
 
+        // A live feed that can't start says what it needs (data source design
+        // note D8): its host reports it as the feed's health.
+        if (sources is [{ Definition: LiveFeedSource live }] && input.Health?.Invoke(live) is { Failure: { } needs })
+            return (needs, LibraryNodeStatusKind.Warning);
+
         // A shared feed says whether its server is reachable (for a source, or a one-source collection).
         if (sources is [{ Definition: S100FeedSource feed }] && input.Health?.Invoke(feed) is { } health)
             return FeedStatus(feed, health, c);

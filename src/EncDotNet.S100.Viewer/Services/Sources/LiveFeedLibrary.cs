@@ -148,6 +148,31 @@ internal sealed class LiveFeedLibrary : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// A live feed's health for its Library status line: what it needs before
+    /// it can start ("Key needed"), or <see langword="null"/> when nothing.
+    /// </summary>
+    /// <param name="feed">The feed.</param>
+    /// <param name="find">Finds a registration by id.</param>
+    /// <param name="environment">Reads an environment variable.</param>
+    /// <param name="time">The clock.</param>
+    public static EncDotNet.S100.Collections.Indexing.FeedHealth? HealthOf(
+        LiveFeedSource feed,
+        Func<string, SourceRegistration?> find,
+        Func<string, string?> environment,
+        TimeProvider time)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        ArgumentNullException.ThrowIfNull(find);
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(time);
+        if (find(feed.RegistrationId) is not { } registration
+            || SourceStatus.MissingOption(registration, feed.Options, environment) is not { } missing)
+            return null;
+        var now = time.GetUtcNow();
+        return new EncDotNet.S100.Collections.Indexing.FeedHealth(now, SourceStatus.NeedsSettings(missing).Text, now, null);
+    }
+
     private static bool IsLiveFeedsCollection(LibraryCollection collection) =>
         !collection.IsSession
         && collection.Sources.Count > 0

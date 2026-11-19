@@ -560,6 +560,94 @@ The decision:
 
 Questions for real users are in §6.
 
+#### D9. `s100` and the MCP server add live sources by id
+
+Status: **decided** on 2026-11-19 (the four questions of the draft settled as recommended; see the end of this section).
+
+Today only SoundCharts can use a `SourceRegistration`. `s100` and its MCP
+server take files and exchange sets (`[input]`, `--layer`, `--from`; one
+loading path, `DatasetInputResolver` and `DatasetProcessorLoader`), and
+`SourceRegistry.Default` is referenced nowhere outside the viewer. Three
+things stand in the way:
+
+- **A live processor isn't queryable headless.** The MCP server's catalogue
+  (`HeadlessMutableCatalog`) only accepts a processor that projects to a
+  `LoadedDataset` (`ILoadedDatasetProjection`), and the query tools read
+  features through `FeatureAccessor`, which has no live case.
+  `DynamicSourceProcessor` does neither. Rendering would work: it walks the
+  processors directly.
+- **Nothing outside SoundCharts drives a live source.** `Start`, `IsActive`
+  and `UpdateArea` are called only by the viewer's `HostedSourceActivator`.
+  NDBC fetches nothing until it's given an area.
+- **Output is assumed to be reproducible.** `tiles serve` caches portrayals,
+  scenes and tiles (on disk too) keyed by file fingerprints, and `render`
+  and `tiles export` are expected to give the same output for the same
+  inputs.
+
+The decision:
+
+- **A host has its own `SourceRegistry`.** `SourceRegistry.CreateDefault()`
+  returns the built-in sources (NDBC, NMEA weather and, once it moves, AIS)
+  and `registry.AddDataSource(registration)` adds a plug-in's, mirroring
+  `ProductRegistry.AddProduct` (D5). SoundCharts keeps registering its own
+  wrappers (AIS with pirate mode, tide stations) on its instance rather than
+  on a process-wide static.
+- **AIS's registration moves into the library** (`AisSources.AisStream`,
+  with `AisFeedOptions`), so `s100` can use it; SoundCharts wraps it for
+  pirate mode and its Settings-era defaults.
+- **Sources are named by id, with options as `name=value` pairs.** On the
+  command line: a repeatable `--source <id>[:<option>=<value>,…]`, such as
+  `--source ndbc.realtime` or `--source nmea.weather:Input=udp:10110`. The
+  id ends at the first `:`, pairs split on `,`, and a value can't contain a
+  comma. Options are the ones a source marks `[SourceOption]` (D8, 9b),
+  built with `SourceOptionsForm.Build`; a bad value exits with code 2 and
+  names the option. `s100 sources` lists the ids, what each shows and its
+  options. In MCP: `list_data_sources` and `add_data_source { id, options }`;
+  `close_dataset` removes one, and `list_datasets` reports a source's
+  status (live, waiting for data, failing, needs settings) and last update.
+- **Secrets come from environment variables only** (D7 as decided). A
+  `[Secret]` option can't be given in `--source` text or an MCP argument,
+  where it would land in shell history, logs or a transcript; a source whose
+  required secret is unset is refused with the variable to set ("set
+  ENCDOTNET_AIS_STREAM_KEY"). `SourceStatus.MissingOption` moves into the
+  library so every host says the same thing.
+- **The view drives a source, as in SoundCharts.** A long-lived host (`mcp
+  serve`, `tiles serve`) starts a source when it's added and passes it the
+  area: MCP's `set_viewport`, or a query's bounding box or point (padded),
+  and the registration's activation range (`ActivationFor`) decides whether
+  it runs. A one-shot command (`render`, `identify`) needs `--bbox` (or
+  `--center`/`--scale`), starts the source for that area, waits for its
+  first data up to `--source-timeout` (default 30 s), then stops it. A
+  source that times out is left out with a warning, so a late feed never
+  costs the chart; the command fails only when that source was its only
+  input.
+- **A live processor is queryable.** `DynamicSourceProcessor` projects to a
+  `LoadedDataset` whose data holds the processor (a `LiveSourceDatasetData`)
+  and whose bounds are read when asked, and `FeatureAccessor` reads its
+  current features. Every query tool then sees live features with no change
+  of its own.
+- **No live layers in tiles for now.** `tiles export` with a source is
+  refused: a tile pyramid is a snapshot, and NDBC or AIS change under it.
+  `tiles serve` doesn't take sources either; the MCP server covers an agent
+  looking at live data. Should it be wanted, it would need `--bbox`, serve
+  live layers uncached (no disk or scene cache) and change the ETag when a
+  source changes (slice 11e, deferred).
+- **The Library's live feeds come along when asked.** `mcp serve
+  --collections` on SoundCharts' `collections.json` adds its subscribed live
+  feeds, with their saved options (secrets still from the environment), only
+  with `--live-feeds`: a headless process fetches from the network or opens
+  an NMEA port only when told to.
+
+Not in scope: pirate mode and own-ship (SoundCharts features, D4); a
+source's options in a file (`--source-options file.json`), until an option
+needs more than text.
+
+Settled on 2026-11-19: options go inline in `--source` (today's options
+are short, and secrets never go in arguments) rather than a separate
+`--source-option` flag; a one-shot command renders without a source that
+times out; `tiles serve` takes no sources for now; and `--collections`
+brings live feeds only with `--live-feeds`.
+
 ### 2.5 Alternatives rejected
 
 - **Make every source a file product with a fake path.** It would work
@@ -1048,8 +1136,9 @@ Each slice ships on its own and leaves the tree working.
      but not started; its row says **Key needed** (a secret) or **Needs
      settings**, with what to set and where in its tooltip
      (`SourceStatusKind.NeedsSettings`, `SourceStatus.MissingOption`), and
-     saving the option starts it. The Library page says so too; a Library
-     tree status line for it is left.
+     saving the option starts it. The Library page and its tree node say
+     so too (the node's status line comes from the feed's health,
+     `LiveFeedLibrary.HealthOf`).
 10. **Pick actions.** Built (P4, P5 as built; `DynamicPickHit` merged into
     `PickHit` after 7d, see 7d as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and
@@ -1058,8 +1147,24 @@ Each slice ships on its own and leaves the tree working.
 
 Also left:
 
-- **`AddDataSource` for `s100` and the MCP server**, so they can render
-  and query a source such as NDBC.
+- **11. Live sources in `s100` and the MCP server** (D9):
+  - **11a. Registries and the library side.** `SourceRegistry.CreateDefault`
+    and `AddDataSource`; AIS's registration moves into the library;
+    `MissingOption` moves into Pipelines; a headless `SourceCreationContext`
+    (hardened HTTP client, environment-only secrets). SoundCharts switches
+    to its own registry instance. No new behaviour.
+  - **11b. A live processor is queryable.** `DynamicSourceProcessor`
+    projects to a `LoadedDataset`; `FeatureAccessor` reads live features;
+    `HeadlessMutableCatalog.AddSource`. Tests drive NDBC from fixtures and
+    NMEA from recordings, never the network.
+  - **11c. MCP tools.** `list_data_sources`, `add_data_source`, status in
+    `list_datasets`, `set_viewport` and query areas driving `UpdateArea`,
+    `--collections` live feeds with `--live-feeds`. Gated like `open_dataset`.
+  - **11d. The command line.** `--source` on `render`, `identify` and `mcp
+    serve`, `--source-timeout`, `s100 sources`.
+  - **11e. Tiles** (deferred). `tiles serve --source` with `--bbox`, live
+    layers uncached; only if wanted. `tiles export --source` is refused
+    from 11d.
 - **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
   `StationSeries`, `NavigationalWarning`) in the release after next.
 
