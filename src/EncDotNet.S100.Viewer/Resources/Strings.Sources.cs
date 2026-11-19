@@ -40,5 +40,9 @@ internal static partial class Strings
     public static string LiveFeed_Revert => Get(nameof(LiveFeed_Revert));
     public static string LiveFeed_NoOptions => Get(nameof(LiveFeed_NoOptions));
     public static string Settings_AisMovedToLibrary => Get(nameof(Settings_AisMovedToLibrary));
+    public static string SourceStatus_KeyNeeded => Get(nameof(SourceStatus_KeyNeeded));
+    public static string SourceStatus_NeedsSettings => Get(nameof(SourceStatus_NeedsSettings));
+    public static string SourceStatus_NeedsSettingsFormat => Get(nameof(SourceStatus_NeedsSettingsFormat));
+    public static string SourceStatus_NeedsSettingsOrEnvironmentFormat => Get(nameof(SourceStatus_NeedsSettingsOrEnvironmentFormat));
     public static string Ais_KeyNeededFormat => Get(nameof(Ais_KeyNeededFormat));
 }

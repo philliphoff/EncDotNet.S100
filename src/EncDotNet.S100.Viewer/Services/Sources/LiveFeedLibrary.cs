@@ -22,6 +22,7 @@ internal sealed class LiveFeedLibrary : IDisposable
     private readonly ViewerSettings _settings;
     private readonly Action<Action> _post;
     private readonly Action<string>? _removedFromMap;
+    private readonly Func<string, string?> _environment;
     private readonly Dictionary<string, IReadOnlyDictionary<string, string>?> _onMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _removedThisSession = new(StringComparer.OrdinalIgnoreCase);
     private bool _started;
@@ -36,13 +37,15 @@ internal sealed class LiveFeedLibrary : IDisposable
     /// Called with a feed's name when it's removed from the map but still
     /// subscribed, to say it comes back at the next start.
     /// </param>
+    /// <param name="environment">Reads an environment variable, for a key one supplies; <see langword="null"/> for the process's.</param>
     public LiveFeedLibrary(
         CollectionLibrary library,
         SourceDatasetService sources,
         DatasetsViewModel datasets,
         ViewerSettings settings,
         Action<Action>? post = null,
-        Action<string>? removedFromMap = null)
+        Action<string>? removedFromMap = null,
+        Func<string, string?>? environment = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(sources);
@@ -54,6 +57,7 @@ internal sealed class LiveFeedLibrary : IDisposable
         _settings = settings;
         _post = post ?? (static action => action());
         _removedFromMap = removedFromMap;
+        _environment = environment ?? Environment.GetEnvironmentVariable;
     }
 
     /// <summary>The feeds a user can subscribe to; one that needs settings asks for them in the Library (slice 9b).</summary>
@@ -204,7 +208,13 @@ internal sealed class LiveFeedLibrary : IDisposable
                     _datasets.Entries.Remove(old);
             }
             _onMap[id] = feed.Options;
-            if (_datasets.AddSource(registration, OptionsOf(registration, feed)) is { } entry)
+            if (_datasets.AddSource(registration, OptionsOf(registration, feed)) is not { } entry)
+                continue;
+            // Slice 9b: a feed missing a required option, such as AIS without
+            // a key, is listed but not started until it's set up.
+            if (SourceStatus.MissingOption(registration, feed.Options, _environment) is { } missing)
+                entry.SourceStatus = SourceStatus.NeedsSettings(missing);
+            else
                 _datasets.RequestLoad(entry);
         }
         foreach (var id in _onMap.Keys.Where(id => !feeds.ContainsKey(id)).ToArray())

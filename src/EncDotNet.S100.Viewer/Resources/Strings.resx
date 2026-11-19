@@ -9106,4 +9106,18 @@
     <value>Predictions</value>
     <comment>The group label of a live feed computed for the view time, such as predicted tide stations.</comment>
   </data>
+  <data name="SourceStatus_KeyNeeded" xml:space="preserve">
+    <value>Key needed</value>
+  </data>
+  <data name="SourceStatus_NeedsSettings" xml:space="preserve">
+    <value>Needs settings</value>
+  </data>
+  <data name="SourceStatus_NeedsSettingsFormat" xml:space="preserve">
+    <value>Set {0} on its settings in the Library (Live feeds) to start it.</value>
+    <comment>{0} = option label, e.g. NMEA input.</comment>
+  </data>
+  <data name="SourceStatus_NeedsSettingsOrEnvironmentFormat" xml:space="preserve">
+    <value>Set {0} on its settings in the Library (Live feeds), or set the {1} environment variable, to start it.</value>
+    <comment>{0} = option label; {1} = environment variable name.</comment>
+  </data>
 </root>

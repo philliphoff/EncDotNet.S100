@@ -24,6 +24,9 @@ internal enum SourceStatusKind
 
     /// <summary>Running, and its last attempt failed with no data since.</summary>
     Failed,
+
+    /// <summary>Not started: a required option, such as an API key, isn't set (slice 9b).</summary>
+    NeedsSettings,
 }
 
 /// <summary>A source's status: its kind, the row's line and a tooltip with the detail.</summary>
@@ -32,6 +35,49 @@ internal enum SourceStatusKind
 /// <param name="Detail">More for the tooltip, such as the last error; <see langword="null"/> when there's none.</param>
 internal sealed record SourceStatus(SourceStatusKind Kind, string Text, string? Detail = null)
 {
+    /// <summary>
+    /// The status of a feed that can't start until <paramref name="option"/>
+    /// is set on its Library settings page, such as "Key needed".
+    /// </summary>
+    /// <param name="option">The missing required option.</param>
+    public static SourceStatus NeedsSettings(SourceOptionField option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+        return new(
+            SourceStatusKind.NeedsSettings,
+            option.Kind == SourceOptionKind.Secret ? Strings.SourceStatus_KeyNeeded : Strings.SourceStatus_NeedsSettings,
+            option.Kind == SourceOptionKind.Secret && option.EnvironmentVariable is { } variable
+                ? string.Format(CultureInfo.CurrentCulture, Strings.SourceStatus_NeedsSettingsOrEnvironmentFormat, option.Label, variable)
+                : string.Format(CultureInfo.CurrentCulture, Strings.SourceStatus_NeedsSettingsFormat, option.Label));
+    }
+
+    /// <summary>
+    /// The first required option of <paramref name="registration"/> that
+    /// <paramref name="values"/> leaves unset, or <see langword="null"/> when
+    /// it can start. A secret counts as set when its environment variable is.
+    /// </summary>
+    /// <param name="registration">The feed.</param>
+    /// <param name="values">Its saved option values; <see langword="null"/> for its defaults.</param>
+    /// <param name="environment">Reads an environment variable.</param>
+    public static SourceOptionField? MissingOption(
+        SourceRegistration registration,
+        IReadOnlyDictionary<string, string>? values,
+        Func<string, string?> environment)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        ArgumentNullException.ThrowIfNull(environment);
+        values ??= SourceOptionsForm.Read(registration, null);
+        foreach (var field in SourceOptionsForm.Fields(registration))
+        {
+            if (!field.Required || (values.TryGetValue(field.Name, out var text) && !string.IsNullOrWhiteSpace(text)))
+                continue;
+            if (field.EnvironmentVariable is { } variable && !string.IsNullOrWhiteSpace(environment(variable)))
+                continue;
+            return field;
+        }
+        return null;
+    }
+
     /// <summary>
     /// The status of a loaded source.
     /// </summary>

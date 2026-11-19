@@ -22,6 +22,11 @@ month. For package versions and release assets, see
   `identify_features` and `describe_feature` include. SoundCharts shows a
   pick's actions as buttons, and offers "Take helm" on any picked vessel
   with an MMSI.
+- **Feeds say when they need a key.** A live feed that can't start without
+  a setting, such as AIS targets without an aisstream.io key or own-ship
+  weather without an NMEA input, is listed with **Key needed** or **Needs
+  settings** on its row (the tooltip says where to set it) instead of
+  failing to load, and starts once the setting is saved in the Library.
 - **Own ship is picked like any feature.** Picking own ship shows it in
   Object information like a chart feature or an AIS target, first in the
   list (it's drawn on top), with its size and motion in a vessel section,
