@@ -110,6 +110,7 @@ window.s100Map = (() => {
     map.setPaintProperty("coverage-casing", "line-color", token("--background") || "#ffffff");
     map.setPaintProperty("coverage-line", "line-color", token("--outline-served") || "#3D8A5A");
     applyDatasetTheme();
+    applyTileSetTheme();
   }
 
   // Hovered and selected outlines are 2 px in the accent with a 6% fill (8%
@@ -157,6 +158,39 @@ window.s100Map = (() => {
     if (id === outlines.hover) return;
     outlines.hover = id;
     applyDatasetOutlines();
+  }
+
+  // A built tile set's bounds stand in for coverage (D16): a dashed rectangle
+  // with the world outside it shaded. The shade is a polygon with the bounds
+  // as its hole.
+  function addTileSetBounds(bounds) {
+    const [west, south, east0, north] = bounds;
+    const east = east0 < west ? east0 + 360 : east0;
+    const ring = [[west, south], [east, south], [east, north], [west, north], [west, south]];
+    const world = [[-540, -85.06], [540, -85.06], [540, 85.06], [-540, 85.06], [-540, -85.06]];
+    map.addSource("tile-set-bounds", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { kind: "outside" }, geometry: { type: "Polygon", coordinates: [world, [...ring].reverse()] } },
+          { type: "Feature", properties: { kind: "bounds" }, geometry: { type: "LineString", coordinates: ring } },
+        ],
+      },
+    });
+    map.addLayer({ id: "tile-set-outside", type: "fill", source: "tile-set-bounds", filter: ["==", ["get", "kind"], "outside"], paint: { "fill-color": "#09090B", "fill-opacity": 0.12 } });
+    map.addLayer({ id: "tile-set-casing", type: "line", source: "tile-set-bounds", filter: ["==", ["get", "kind"], "bounds"], paint: { "line-color": "#ffffff", "line-opacity": 0.6, "line-width": 3 } });
+    map.addLayer({ id: "tile-set-line", type: "line", source: "tile-set-bounds", filter: ["==", ["get", "kind"], "bounds"], paint: { "line-color": "#3D8A5A", "line-width": 1.5, "line-dasharray": [4, 3] } });
+    applyTileSetTheme();
+  }
+
+  function applyTileSetTheme() {
+    if (!map?.getLayer("tile-set-line")) return;
+    const t = effectiveTheme();
+    map.setPaintProperty("tile-set-outside", "fill-opacity", t === "light" ? 0.12 : 0.35);
+    map.setPaintProperty("tile-set-outside", "fill-color", t === "light" ? "#09090B" : "#000000");
+    map.setPaintProperty("tile-set-casing", "line-color", token("--background") || "#ffffff");
+    map.setPaintProperty("tile-set-line", "line-color", token("--outline-served") || "#3D8A5A");
   }
 
   function startView(view) {
@@ -250,7 +284,14 @@ window.s100Map = (() => {
         ...startView(opts.view),
       });
       map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
-      map.once("load", () => { loaded = true; addDatasetLayers(); applyTheme(); });
+      map.once("load", () => {
+        loaded = true;
+        addDatasetLayers();
+        if (opts.tileSetBounds) addTileSetBounds(opts.tileSetBounds);
+        applyTheme();
+      });
+      // A built tile set has nothing to pick: a click says so (D35). A drag isn't a click.
+      if (opts.noPick) map.on("click", () => dotnet?.invokeMethodAsync("OnNoPick"));
       document.addEventListener("pointerover", onRowHover);
       document.addEventListener("focusin", onRowHover);
       map.on("move", () => { showScale(); showZoom(); });

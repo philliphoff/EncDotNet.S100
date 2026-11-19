@@ -10,7 +10,7 @@
                  StateDetail="@(Data.Revision is { } revision ? "revision " + revision : null)"
                  LinkCopied="linkCopied"
                  GisOpen="activePanel == ServePanel.UseInGis"
-                 OnSummary="() => OpenPanel(ServePanel.Datasets)"
+                 OnSummary="() => OpenPanel(railItems[0].Panel)"
                  OnCopyLink="CopyLinkAsync"
                  OnUseInGis="() => OpenPanel(ServePanel.UseInGis)" />
     <div class="serve-body">
@@ -28,6 +28,9 @@
                             case ServePanel.Datasets:
                                 <DatasetsPanel Selected="@selectedDataset" OnSelect="SelectDatasetAsync" OnMatches="SetDatasetMatchesAsync"
                                                OnZoomTo="ZoomToDatasetAsync" CopyLink="CopyDatasetLinkAsync" CopyText="CopyTextAsync" />
+                                break;
+                            case ServePanel.TileSet:
+                                <TileSetPanel OnZoomTo="ZoomToDataAsync" />
                                 break;
                             case ServePanel.Display:
                                 <DisplayPanel Palettes="Data.Palettes" Palette="@palette" PaletteChanged="SetPaletteAsync"
@@ -59,17 +62,35 @@
                 </MapChip>
             }
             <MapReadout PastMaximum="zoomLimit == ZoomLimit.PastMaximum" />
+            @if (noPickToast)
+            {
+                <Toast Title="@ServeTileSetInfo.NoPickTitle" Detail="@ServeTileSetInfo.NoPickDetail" IconName="info" OnClose="() => noPickToast = false" />
+            }
         </main>
     </div>
 </div>
 
 @code {
-    private static readonly RailItem[] railItems =
+    private static readonly RailItem[] datasetRailItems =
     [
         new(ServePanel.Datasets, "Datasets", "layers"),
         new(ServePanel.Display, "Display", "sliders"),
         new(ServePanel.UseInGis, "GIS", "plug"),
     ];
+
+    // A built tile set has no datasets: its metadata is the first item (D35).
+    private static readonly RailItem[] tileSetRailItems =
+    [
+        new(ServePanel.TileSet, "Tile set", "grid"),
+        new(ServePanel.Display, "Display", "sliders"),
+        new(ServePanel.UseInGis, "GIS", "plug"),
+    ];
+
+    private RailItem[] railItems = datasetRailItems;
+
+    // A click on a built tile set's map says there's nothing to pick (D35).
+    private bool noPickToast;
+    private int noPickGeneration;
 
     private ServedTileSet tileSet = null!;
     private IReadOnlyList<DateTime> times = [];
@@ -102,6 +123,11 @@
         times = Data.Times;
         palette = tileSet.DefaultPalette;
         summary = ServeSummary.Describe(Data);
+        if (!Data.HasDatasets)
+        {
+            railItems = tileSetRailItems;
+            activePanel = ServePanel.TileSet;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -128,6 +154,9 @@
             outlines = ServeOutlines.FeatureCollection(servedDatasets).ToJsonString(),
             hashParameters = ServeHash.FormatParameters(hashParameters),
             theme = Theme,
+            // A built tile set's bounds stand in for coverage (D16), and a click has nothing to pick (D35).
+            tileSetBounds = Data.HasDatasets ? null : tileSet.Bounds,
+            noPick = !Data.HasDatasets,
         }, self);
         await JS.InvokeVoidAsync("s100Shell.watchPhone", self);
         shown = true;
@@ -144,6 +173,7 @@
     {
         ServePanel.Display => "Display",
         ServePanel.UseInGis => "Use in GIS",
+        ServePanel.TileSet => "Tile set",
         _ => "Datasets",
     };
 
@@ -205,7 +235,7 @@
             _ => SheetHeight.Lowered,
         };
         if (sheet != SheetHeight.Lowered)
-            activePanel ??= ServePanel.Datasets;
+            activePanel ??= railItems[0].Panel;
     }
 
     /// <summary>From the JS module: the page crossed the phone width (768 px).</summary>
@@ -248,6 +278,20 @@
             await SetDatasetOutlinesAsync();
             StateHasChanged();
         }
+    }
+
+    /// <summary>From the JS module: a click on a built tile set's map, which has nothing to pick (D35).</summary>
+    [JSInvokable]
+    public async Task OnNoPick()
+    {
+        noPickToast = true;
+        var generation = ++noPickGeneration;
+        StateHasChanged();
+        await Task.Delay(TimeSpan.FromSeconds(4));
+        if (generation != noPickGeneration)
+            return;
+        noPickToast = false;
+        StateHasChanged();
     }
 
     private Task ZoomByAsync(int delta) => MapAsync("s100Map.zoomBy", delta);

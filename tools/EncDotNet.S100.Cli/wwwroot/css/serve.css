@@ -653,3 +653,58 @@ body { background: var(--background); }
   .map-chip { top: 60px; width: auto; max-width: none; margin: 0 64px 0 12px; flex-wrap: wrap; }
   .scale-bar { left: 12px; transform: none; }
 }
+
+/* Edge states and the built tile set (SW8, D32, D35). */
+
+.empty-state { display: grid; justify-items: start; gap: 10px; padding: 8px 0; }
+.empty-state > .icon { color: var(--muted-foreground); }
+.empty-state h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.empty-state p { margin: 0; color: var(--muted-foreground); }
+.empty-command {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.empty-hint { font-size: 12px; }
+
+.tile-set-name { margin: 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.tile-set .details-fields { padding-bottom: 4px; }
+.tile-set-actions { padding-bottom: 16px; }
+.tile-set-note { display: flex; gap: 8px; margin: 0; color: var(--foreground); }
+.tile-set-note > .icon { flex: none; margin-top: 2px; color: var(--muted-foreground); }
+
+.toast {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  padding: 10px 8px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+}
+.toast > .icon { margin-top: 1px; color: var(--warning-text); }
+.toast[data-icon="check"] > .icon { color: var(--success-text); }
+.toast[data-icon="info"] > .icon { color: var(--selected); }
+.toast p { margin: 0; }
+.toast-detail { color: var(--muted-foreground); }
+.toast-close { width: 26px; height: 26px; }
+
+/* On a phone the sheet covers the map's bottom, so the toast drops from the top. */
+@media (max-width: 767px) {
+  .toast { top: 60px; bottom: auto; }
+}
