@@ -89,7 +89,7 @@ public class McpToolsetsViewerTests
         await host.Apply(ct);
 
         Assert.NotSame(first, host.Server);
-        Assert.Equal(["check_route"], await ToolNamesAsync(host, ct));
+        Assert.Equal(["check_route", "get_navigability_grid"], await ToolNamesAsync(host, ct));
     }
 
     private static async Task<IReadOnlyList<string>> ToolNamesAsync(McpServerHost host, CancellationToken ct)
