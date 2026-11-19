@@ -112,6 +112,8 @@ public static class FeatureAccessor
             TropicalCycloneDatasetData tc => FilterByExtent(TropicalCycloneDatasetProcessor.DrawnFeatures(tc.Advisory, timeStep), extent),
             // AML features keep their S-57 classes; they're never S-101 (#1372).
             AmlDatasetData { Cell: { } aml } => FilterByExtent(aml.Features, extent),
+            // A live source: its features now (data source design note D9).
+            LiveSourceDatasetData live => FilterByExtent(live.Processor.CurrentFeatures(), extent),
             _ => null,
         };
     }
