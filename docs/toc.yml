@@ -130,3 +130,9 @@
           href: design/legends.md
         - name: Viewer view model dependencies
           href: design/viewer-view-model-dependencies.md
+        - name: tiles serve web page (spike)
+          href: design/serve-webapp-blazor-spike.md
+        - name: tiles serve web page (design brief)
+          href: design/serve-web/serve-web-brief.md
+        - name: tiles serve web page (design handoff)
+          href: design/serve-web/HANDOFF.md
