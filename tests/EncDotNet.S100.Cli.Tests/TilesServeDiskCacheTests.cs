@@ -201,6 +201,9 @@ public sealed class TilesServeDiskCacheTests : IDisposable
 
             Assert.True(first.BlocksRendered > 0);
             Assert.Contains(tiles.Values, t => t is not null);
+
+            // Disposing waits only briefly for queued writes (#1607).
+            Assert.True(first.WaitForDiskWrites(TimeSpan.FromSeconds(30)));
         }
 
         // A new run with the same data and settings renders nothing.
