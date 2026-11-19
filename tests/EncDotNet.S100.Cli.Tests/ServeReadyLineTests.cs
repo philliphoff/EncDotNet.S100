@@ -60,7 +60,7 @@ public sealed class ServeReadyLineTests : IDisposable
         var source = TileSet();
         await using var server = await TileServer.StartAsync(source, IPAddress.Loopback, 0, token, viewer, ct);
 
-        var line = ServeReadyLine.Format(IPAddress.Loopback, server.Port, token, source.Format, viewer, highDpi: source.CanReadPixelRatio(2));
+        var line = ServeReadyLine.Format(IPAddress.Loopback, server.Port, token, source.Format, viewer, highDpi: source.CanReadPixelRatio(2), pmTilesArchive: false);
 
         Assert.DoesNotContain('\n', line);
         var json = JsonNode.Parse(line)!.AsObject();
@@ -99,7 +99,7 @@ public sealed class ServeReadyLineTests : IDisposable
     [Fact]
     public void Listening_on_every_address_gives_loopback_urls()
     {
-        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.Any, 8200, "t0k", TileImageFormat.Webp, viewer: true, highDpi: true))!;
+        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.Any, 8200, "t0k", TileImageFormat.Webp, viewer: true, highDpi: true, pmTilesArchive: false))!;
 
         Assert.Equal("127.0.0.1", (string?)json["host"]);
         Assert.Equal("http://127.0.0.1:8200/t0k/{z}/{x}/{y}.webp", (string?)json["tiles"]);
@@ -110,7 +110,7 @@ public sealed class ServeReadyLineTests : IDisposable
     [Fact]
     public void Listening_on_every_ipv6_address_gives_ipv6_loopback_urls()
     {
-        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.IPv6Any, 8200, token: null, TileImageFormat.Png, viewer: false, highDpi: false))!;
+        var json = JsonNode.Parse(ServeReadyLine.Format(IPAddress.IPv6Any, 8200, token: null, TileImageFormat.Png, viewer: false, highDpi: false, pmTilesArchive: false))!;
 
         Assert.Equal("::1", (string?)json["host"]);
         Assert.Equal("http://[::1]:8200/wms", (string?)json["wms"]);

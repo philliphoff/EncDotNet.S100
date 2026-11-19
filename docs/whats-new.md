@@ -35,6 +35,12 @@ month. For package versions and release assets, see
   put its own wrapper in place of a built-in source, and
   `SourceOptionsForm.MissingRequired` says which required option, such as a
   key, is unset.
+- **`tiles serve` serves a PMTiles archive whole.** When it serves a
+  `.pmtiles` archive, `tiles serve` also serves the file at `archive.pmtiles`
+  with range requests, so you can check an archive with MapLibre's
+  `pmtiles://` protocol before publishing it. The TileJSON
+  (`s100.pmtilesUrl`), the `--ready-json` line (`pmtiles`) and the start-up
+  text name the URL.
 - **AIS targets are a live feed.** Add **AIS targets** with **Add a live
   feed** in the Datasets panel instead of turning on a Settings switch, and
   without restarting; if the switch was on, they're added for you. Selecting a target shows a
