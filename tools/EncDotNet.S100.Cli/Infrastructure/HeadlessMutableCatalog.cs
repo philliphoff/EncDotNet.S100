@@ -241,6 +241,41 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         return Task.FromResult(new DatasetLoadOutcome(path, kind, added, TimedOut: false, warnings));
     }
 
+    /// <summary>
+    /// Adds a dataset that isn't a file, such as a live source (data source
+    /// design note D9): its processor, projected for the query tools and kept
+    /// as a render source. The catalog owns the processor from here on.
+    /// </summary>
+    /// <param name="idCandidate">The id to use, made unique if taken, such as the source's id.</param>
+    /// <param name="processor">The processor; it must portray and project.</param>
+    /// <returns>The dataset's id.</returns>
+    /// <exception cref="ArgumentException">The processor doesn't portray or can't be projected.</exception>
+    public DatasetId AddProcessor(string idCandidate, IDatasetProcessor processor)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(idCandidate);
+        ArgumentNullException.ThrowIfNull(processor);
+        if (processor is not (IVectorPortrayalSource or ICoveragePortrayalSource))
+            throw new ArgumentException($"'{idCandidate}' isn't renderable ({processor.Spec.Name}).", nameof(processor));
+
+        DatasetId id;
+        lock (_gate)
+        {
+            id = new DatasetId(UniqueIdLocked(idCandidate));
+            var projected = LoadedDatasetProjector.Project(id, processor, transforms: _transforms);
+            if (projected is null)
+            {
+                _usedIds.Remove(id.Value);
+                throw new ArgumentException($"'{idCandidate}' has no catalog projection.", nameof(processor));
+            }
+            _entries.Add(new Entry(projected, processor));
+            UpdateSnapshotLocked();
+        }
+
+        RaiseChanged(DatasetCatalogChangeKind.Added, id);
+        return id;
+    }
+
     /// <inheritdoc />
     public bool Remove(DatasetId id)
     {

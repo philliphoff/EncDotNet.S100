@@ -76,6 +76,27 @@ public sealed class DynamicSourceProcessorTests
     }
 
     [Fact]
+    public void A_live_source_projects_to_a_catalog_entry_that_reads_its_current_features()
+    {
+        var source = new TrackerSource();
+        source.Publish(Point("t1", 42, -70, new Dictionary<string, object?> { ["name"] = "First" }));
+        using var processor = new DynamicSourceProcessor(source, new StubPortrayal(), Spec);
+
+        var dataset = EncDotNet.S100.Datasets.Pipelines.Catalog.LoadedDatasetProjector.Project(new EncDotNet.S100.Datasets.Pipelines.Catalog.DatasetId("live"), processor)!;
+
+        Assert.Equal(SpecName.Ndbc, dataset.Spec.Name);
+        Assert.IsType<EncDotNet.S100.Datasets.Pipelines.Catalog.LiveSourceDatasetData>(dataset.Data);
+        Assert.Equal(180, dataset.Bounds.EastLongitude); // No extent of its own: the world.
+        Assert.Equal(["t1"], EncDotNet.S100.Datasets.Pipelines.Spec.FeatureAccessor.GetFeatures(dataset, null, null)!.Select(f => f.Id));
+
+        // A later query sees what the source delivered since.
+        source.Publish(Point("t2", 10, 10, new Dictionary<string, object?>()));
+        Assert.Equal(["t1", "t2"], EncDotNet.S100.Datasets.Pipelines.Spec.FeatureAccessor.GetFeatures(dataset, null, null)!.Select(f => f.Id).Order());
+        var nearBoston = new BoundingBox(southLatitude: 41, westLongitude: -71, northLatitude: 43, eastLongitude: -69);
+        Assert.Equal(["t1"], EncDotNet.S100.Datasets.Pipelines.Spec.FeatureAccessor.GetFeatures(dataset, nearBoston, null)!.Select(f => f.Id));
+    }
+
+    [Fact]
     public void An_empty_source_has_no_extent_and_no_features()
     {
         using var processor = new DynamicSourceProcessor(new TrackerSource(), new StubPortrayal(), Spec);

@@ -52,6 +52,7 @@ public sealed class DynamicSourceProcessor :
     IVectorPortrayalSource,
     ILiveDatasetProcessor,
     IHostedDatasetProcessor,
+    Catalog.ILoadedDatasetProjection,
     IDisposable
 {
     private readonly IDynamicFeatureSource _source;
@@ -151,6 +152,20 @@ public sealed class DynamicSourceProcessor :
         var features = _source.CurrentFeatures.Select(f => new FeatureView(f, FeatureTypeOf(f))).ToList();
         return FeatureHitTester.HitTest(features, latitude, longitude, radiusMeters);
     }
+
+    /// <summary>
+    /// The source's current features as S-100 features, for a host's queries
+    /// (data source design note D9): a snapshot taken when called.
+    /// </summary>
+    public IReadOnlyList<IS100Feature> CurrentFeatures() =>
+        [.. _source.CurrentFeatures.Select(f => new FeatureView(f, FeatureTypeOf(f)))];
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A <see cref="Catalog.LiveSourceDatasetData"/> holding the processor, so a
+    /// catalog entry reads the source's current features on each query.
+    /// </remarks>
+    public Catalog.LoadedDatasetData CreateLoadedData() => new Catalog.LiveSourceDatasetData(this);
 
     /// <inheritdoc />
     public IEnumerable<FeatureSummary> EnumerateFeatures()

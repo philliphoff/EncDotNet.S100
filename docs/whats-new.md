@@ -6,6 +6,11 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Live sources are queryable in a catalog.** A `DynamicSourceProcessor`
+  now projects to a `LoadedDataset` (`LiveSourceDatasetData`) whose features
+  the query tools read as they are when asked, so a live source added to a
+  headless catalog answers `identify_features` and the other queries like a
+  file. The MCP tools and `--source` that add one come next.
 - **AIS targets are a library source.** `S100Sources.AisStream`
   (`ais.aisstream`, with `AisFeedOptions`) joins NDBC observations and NMEA
   weather in `SourceRegistry.CreateDefault()`, so any host can add it.

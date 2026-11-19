@@ -1169,6 +1169,18 @@ Also left:
     projects to a `LoadedDataset`; `FeatureAccessor` reads live features;
     `HeadlessMutableCatalog.AddSource`. Tests drive NDBC from fixtures and
     NMEA from recordings, never the network.
+
+    11b as built: `DynamicSourceProcessor` is an `ILoadedDatasetProjection`
+    whose payload, `LiveSourceDatasetData`, holds the processor; with no
+    extent of its own the entry covers the world, so bounds prefilters keep
+    it. `FeatureAccessor` reads `DynamicSourceProcessor.CurrentFeatures()`
+    on each query, so `identify_features` and the other query tools see a
+    source's latest features. `HeadlessMutableCatalog.AddProcessor(id,
+    processor)` adds a processor that isn't a file (renamed from `AddSource`:
+    the caller builds the processor), and `HeadlessSources.Context` is the
+    headless creation context (hardened HTTP client, 30 s timeout, secrets
+    from environment variables only). Nothing calls them from a command or
+    tool yet: that's 11c and 11d.
   - **11c. MCP tools.** `list_data_sources`, `add_data_source`, status in
     `list_datasets`, `set_viewport` and query areas driving `UpdateArea`,
     `--collections` live feeds with `--live-feeds`. Gated like `open_dataset`.
