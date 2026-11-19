@@ -9,6 +9,7 @@
 window.s100Map = (() => {
   const ZOOM_OFFSET = 1;
   const NMI = 1852;
+  const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
   let map;
   let dotnet;
@@ -24,6 +25,11 @@ window.s100Map = (() => {
   // The Datasets panel's outlines (SW2, D9, D15): the row under the pointer,
   // the selected dataset, and the matches of a search or filter (null for none).
   const outlines = { hover: null, selected: null, matches: null };
+
+  // muted, osm or none (D17, Q4); OpenStreetMap falls back to none when its tiles don't load.
+  let basemap = "muted";
+  let basemapLoaded = false;
+  let basemapFailTimer;
 
   // On a high-DPI screen, the 512-pixel @2x tiles when they're served.
   let highDpi = false;
@@ -97,16 +103,25 @@ window.s100Map = (() => {
     if (location.hash !== hash) history.replaceState(history.state, "", hash);
   }
 
-  // The basemap, muted (Q4), dimmed for dark chrome, inverted and dimmed for night; the outlines' colours.
+  // The basemap: muted (Q4) or in its own colours, dimmed for dark chrome,
+  // inverted and dimmed for night whichever is chosen (D18), or hidden; the outlines' colours.
+  function basemapPaint() {
+    const t = effectiveTheme();
+    const muted = basemap !== "osm" || t === "night";
+    const brightness = t === "night" ? [0.22, 0] : t === "dark" ? [0, muted ? 0.6 : 0.75] : [muted ? 0.1 : 0, 1];
+    return {
+      "raster-saturation": muted ? -1 : t === "dark" ? -0.3 : 0,
+      "raster-contrast": !muted ? 0 : t === "light" ? -0.25 : -0.1,
+      "raster-brightness-min": brightness[0],
+      "raster-brightness-max": brightness[1],
+    };
+  }
+
   function applyTheme() {
     // isStyleLoaded() is false while a source reloads; the layers are there once the map has loaded.
     if (!map || !loaded) return;
-    const t = effectiveTheme();
-    const paint = t === "night" ? [0.22, 0] : t === "dark" ? [0, 0.6] : [0.1, 1];
-    map.setPaintProperty("osm", "raster-saturation", -1);
-    map.setPaintProperty("osm", "raster-contrast", t === "light" ? -0.25 : -0.1);
-    map.setPaintProperty("osm", "raster-brightness-min", paint[0]);
-    map.setPaintProperty("osm", "raster-brightness-max", paint[1]);
+    map.setLayoutProperty("osm", "visibility", basemap === "none" ? "none" : "visible");
+    for (const [name, value] of Object.entries(basemapPaint())) map.setPaintProperty("osm", name, value);
     map.setPaintProperty("coverage-casing", "line-color", token("--background") || "#ffffff");
     map.setPaintProperty("coverage-line", "line-color", token("--outline-served") || "#3D8A5A");
     applyDatasetTheme();
@@ -193,6 +208,26 @@ window.s100Map = (() => {
     map.setPaintProperty("tile-set-line", "line-color", token("--outline-served") || "#3D8A5A");
   }
 
+  // A tile that loads proves the basemap; errors with none loaded, offline or
+  // blocked, turn it off and tell the page (D17).
+  function onBasemapData(e) {
+    if (e.sourceId === "osm" && e.tile) {
+      basemapLoaded = true;
+      clearTimeout(basemapFailTimer);
+    }
+  }
+
+  function onError(e) {
+    if (e.sourceId !== "osm" || basemapLoaded || basemap === "none" || basemapFailTimer) return;
+    basemapFailTimer = setTimeout(() => {
+      basemapFailTimer = undefined;
+      if (basemapLoaded || basemap === "none") return;
+      basemap = "none";
+      applyTheme();
+      dotnet?.invokeMethodAsync("OnBasemapFailed");
+    }, 1500);
+  }
+
   function startView(view) {
     return {
       center: [view.longitude, view.latitude],
@@ -250,6 +285,7 @@ window.s100Map = (() => {
       dotnet = dotnetRef;
       hashParameters = opts.hashParameters ?? "";
       theme = opts.theme ?? "auto";
+      basemap = opts.basemap ?? "muted";
       highDpi = opts.highDpi && window.devicePixelRatio > 1;
       darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
       darkQuery.addEventListener("change", applyTheme);
@@ -258,6 +294,8 @@ window.s100Map = (() => {
       // The outlines show below the zoom the chart draws from (D13): MapLibre
       // rounds a raster zoom, so the chart's first tiles draw half a zoom early.
       outlinesUntil = opts.minZoom - 0.5 - ZOOM_OFFSET;
+      // The outlines' casing and line before the tokens are read on load (D18's night has no white).
+      const startOutline = { night: ["#000000", "#3E6E50"], dark: ["#09090B", "#4FA571"] }[effectiveTheme()] ?? ["#ffffff", "#3D8A5A"];
       map = new maplibregl.Map({
         container,
         attributionControl: false,
@@ -266,7 +304,7 @@ window.s100Map = (() => {
           sources: {
             osm: {
               type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tiles: [OSM_TILES],
               tileSize: 256,
               maxzoom: 19,
               attribution: "© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a> contributors",
@@ -275,10 +313,11 @@ window.s100Map = (() => {
             coverage: { type: "geojson", data: JSON.parse(opts.outlines) },
           },
           layers: [
-            { id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -1, "raster-contrast": -0.25, "raster-brightness-min": 0.1 } },
+            // Painted for the theme from the start, so night never flashes a light basemap.
+            { id: "osm", type: "raster", source: "osm", layout: { visibility: basemap === "none" ? "none" : "visible" }, paint: basemapPaint() },
             { id: "chart", type: "raster", source: "chart" },
-            { id: "coverage-casing", type: "line", source: "coverage", maxzoom: outlinesUntil, paint: { "line-color": "#ffffff", "line-opacity": 0.6, "line-width": 3 } },
-            { id: "coverage-line", type: "line", source: "coverage", maxzoom: outlinesUntil, paint: { "line-color": "#3D8A5A", "line-width": 1 } },
+            { id: "coverage-casing", type: "line", source: "coverage", maxzoom: outlinesUntil, paint: { "line-color": startOutline[0], "line-opacity": 0.6, "line-width": 3 } },
+            { id: "coverage-line", type: "line", source: "coverage", maxzoom: outlinesUntil, paint: { "line-color": startOutline[1], "line-width": 1 } },
           ],
         },
         ...startView(opts.view),
@@ -294,6 +333,8 @@ window.s100Map = (() => {
       if (opts.noPick) map.on("click", () => dotnet?.invokeMethodAsync("OnNoPick"));
       document.addEventListener("pointerover", onRowHover);
       document.addEventListener("focusin", onRowHover);
+      map.on("sourcedata", onBasemapData);
+      map.on("error", onError);
       map.on("move", () => { showScale(); showZoom(); });
       map.on("rotate", showBearing);
       map.on("moveend", onMoveEnd);
@@ -328,6 +369,15 @@ window.s100Map = (() => {
       outlines.selected = selected ?? null;
       outlines.matches = matches ?? null;
       applyDatasetOutlines();
+    },
+
+    setBasemap(value) {
+      basemap = value ?? "muted";
+      clearTimeout(basemapFailTimer);
+      basemapFailTimer = undefined;
+      applyTheme();
+      // Chosen again after a failure: ask for the tiles again.
+      if (basemap !== "none" && !basemapLoaded && loaded) map.getSource("osm").setTiles([OSM_TILES]);
     },
 
     setHashParameters(value) {
@@ -368,9 +418,12 @@ window.s100Map = (() => {
       window.removeEventListener("hashchange", onHashChange);
       document.removeEventListener("pointerover", onRowHover);
       document.removeEventListener("focusin", onRowHover);
+      clearTimeout(basemapFailTimer);
+      basemapFailTimer = undefined;
       map?.remove();
       map = undefined;
       loaded = false;
+      basemapLoaded = false;
       dotnet = undefined;
     },
   };
