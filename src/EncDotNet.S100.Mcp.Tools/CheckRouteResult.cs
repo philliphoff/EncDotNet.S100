@@ -11,13 +11,14 @@ public sealed record CheckRouteResult(
     [property: Description("Route length in nautical miles.")] double DistanceNm,
     [property: Description("The one answer: the worst thing the checks found, and the finding that names it.")] CheckRouteVerdict Verdict,
     [property: Description("Counts by group, and the summary line SoundCharts shows.")] CheckRouteSummary Summary,
-    [property: Description("Whether each check ran, in the order they ran: chart, areas, warnings, clearance and weather.")] IReadOnlyList<CheckRouteCheck> Checks,
+    [property: Description("Whether each check ran, in the order they ran: chart, areas, warnings, clearance and weather, then timing with window.constraints.")] IReadOnlyList<CheckRouteCheck> Checks,
     [property: Description("Every check's findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.berth_structures (info), route_check.soundings_below_safety_contour, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage; the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force; the S-124 warnings' s124.on_route, s124.near_route, s124.not_in_force and s124.cancelled; and the clearance check's clearance.below_setting, confidence.charted_depth_from_s101, confidence.datum_unconfirmed, data.water_level_ends, data.water_level_starts_late, data.no_water_level_coverage, data.water_level_no_data, data.datum_mismatch and data.no_charted_depth; and the weather check's weather.wind_above_limit, weather.waves_above_limit, weather.forecast_ends, weather.forecast_starts_late, weather.no_coverage and weather.no_data (all check: advisory, from weather model data).")] IReadOnlyList<CheckRouteFinding> Findings,
     [property: Description("The corridor swept along each leg, in route order.")] IReadOnlyList<CheckRouteLeg> Legs,
     [property: Description("The under-keel clearance: verdict, minimum, sources and, with samples.include or window, the detail. Null when the clearance check didn't run (see checks: no draft, no charted depth or no water level).")] CheckRouteClearance? Clearance,
     [property: Description("The datasets behind the result: S-101 (and S-401, and translated S-57) cells near the route, the S-122 and S-124 datasets behind area and warning findings, the S-102, S-101 and S-104 datasets the clearance read, and the weather datasets the weather check read.")] IReadOnlyList<string> Datasets,
     [property: Description("Disclaimer to show once with the findings.")] string Disclaimer,
-    [property: Description("The weather check: the limits it used, its verdict, the highest wind and waves along the route and, with window, its departure sweep. Null when it didn't run (see checks: no weather loaded, or no wind or wave limit).")] CheckRouteWeather? Weather = null)
+    [property: Description("The weather check: the limits it used, its verdict, the highest wind and waves along the route and, with window, its departure sweep. Null when it didn't run (see checks: no weather loaded, or no wind or wave limit).")] CheckRouteWeather? Weather = null,
+    [property: Description("The timing check, with window.constraints: running times (with currents when applied), gates, leg current limits and arrival constraints at the planned departure and each swept departure, and the windows that meet them all. Null without constraints, or when it was skipped (see checks: speed_missing).")] CheckRouteTiming? Timing = null)
 {
     /// <summary>The disclaimer shown once with the findings, before the clearance's sources.</summary>
     public const string DisclaimerText = "Not for navigation · checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only";
@@ -60,7 +61,8 @@ public sealed record CheckRouteResult(
             clearance,
             report.DatasetsUsed,
             DisclaimerFor(clearance, report.Weather),
-            report.Weather is { } weather ? CheckRouteWeather.From(weather) : null);
+            report.Weather is { } weather ? CheckRouteWeather.From(weather) : null,
+            report.Detail<PassageTimingResult>(TimingCheck.CheckName) is { } timing ? CheckRouteTiming.From(timing) : null);
     }
 
     private static string DisclaimerFor(CheckRouteClearance? clearance, WeatherCheckResult? weather)

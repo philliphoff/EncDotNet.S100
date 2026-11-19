@@ -60,6 +60,9 @@ public static class CatalogRouteCheckSources
                 ? new LazyWeather(() => new CatalogRouteWeatherSource(snapshot))
                 : null,
             Cyclones = CatalogRouteCyclone.FromDatasets(snapshot),
+            Currents = options.TidePredictions is { CurrentStations.Count: > 0 } catalogue
+                ? new TidePredictionCurrentSource(catalogue, new WaterReach(charts, options.MaxCurrentStationDistanceMeters))
+                : null,
         };
     }
 

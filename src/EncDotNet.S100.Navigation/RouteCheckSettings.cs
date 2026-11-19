@@ -93,6 +93,13 @@ public sealed class RouteCheckSettings
     public DepartureRange? DepartureWindow { get; init; }
 
     /// <summary>
+    /// Passage timing for the <see cref="TimingCheck"/>: whether speeds are
+    /// through the water (currents applied to the ETAs), tidal gates, leg
+    /// current limits and arrival constraints, or <c>null</c> for none.
+    /// </summary>
+    public PassageTimingSettings? Timing { get; init; }
+
+    /// <summary>
     /// The wind and wave limits for the weather check, or <c>null</c>. Each
     /// value set here replaces the plan's (<see cref="PassagePlan.VesselLimits"/>);
     /// a value set in neither isn't checked.

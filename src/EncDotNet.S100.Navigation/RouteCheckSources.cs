@@ -68,6 +68,13 @@ public sealed class RouteCheckSources
     /// when none is loaded.
     /// </summary>
     public IReadOnlyList<IRouteCyclone>? Cyclones { get; init; }
+
+    /// <summary>
+    /// Currents, for the timing check's running times, gates and leg limits
+    /// (#1561): current-station predictions when the host turns them on.
+    /// <c>null</c> when there are none.
+    /// </summary>
+    public IRouteCurrentSource? Currents { get; init; }
 }
 
 /// <summary>

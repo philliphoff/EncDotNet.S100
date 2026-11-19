@@ -672,6 +672,46 @@ These `vessel` values override every leg's value:
 every `stepMinutes` (default 5), or, as `{}`, across the S-104 range that
 covers the route. It needs a draft.
 
+`window.constraints` adds the **timing** check, which judges the planned
+departure and every swept departure against passage timing constraints and
+returns the result as `timing`. It needs a speed on every leg; without
+`from` and `to` it sweeps the 24 hours from `departure`.
+
+- `applyCurrents`: the speeds are through the water. The timing check adds
+  the current along the track to each 500 m stretch's speed, so its ETAs and
+  running times include the stream. The other checks still treat the speed
+  as over the ground.
+- `gates`: tidal gates, each at a `waypoint` (zero-based) or a `latitude`
+  and `longitude` snapped to the track, with a `station` (a current station
+  id or name, as `predict_current` takes) or the nearest station that
+  reaches the gate. Each gate has one or more of `slackWithinMinutes` (the
+  ETA within that many minutes of slack water, which needs a station),
+  `maxCurrentKnots` and `fairOnly` (the current with the track, or slack).
+- `legLimits`: `[{leg?, maxOpposingKnots}]`, the strongest current against
+  the track allowed on a leg, or on every leg without `leg`. A leg with no
+  current data isn't judged.
+- `arriveBy` and `arriveNotBefore`: the latest and earliest arrival.
+- `arrivalTide`: `{minMeters?, maxMeters?}`, the water level at the arrival
+  waypoint at the ETA (S-104, else tide predictions).
+
+Currents come from current-station predictions, so they need
+`--tide-predictions`; without them, `applyCurrents`, leg limits and current
+gates leave the check `partial` with `currents_missing`. A station reaches
+2 km by water (`--current-station-reach`). Predictions are the astronomical
+tidal current only: quote `timing.caveat` with the times.
+
+`timing` has `planned` (the planned departure in full: arrival, running
+time, each leg's running minutes with and without currents, its mean
+current along the track and the strongest against it, each gate's ETA,
+current and nearest slack, and each constraint with `code`, `holds`,
+`detail`, `value` and `limit`), `departures` (each swept departure with its
+running time and the codes of the constraints that fail), and `windows`:
+each run of departures that meets every constraint, with its `best`
+departure, nearest slack at the slack gates or else the shortest running
+time. The constraint codes are `gate.slack`, `gate.max_current`,
+`gate.fair`, `leg.opposing_current`, `arrival.by`, `arrival.not_before` and
+`arrival.tide`.
+
 `weather.maxWindKnots` or `weather.maxWaveHeightMeters` runs the weather
 check. Each replaces the route's own limit (RTZ `vesselMaxWind` and
 `vesselMaxWave`); SoundCharts' Check route uses the mariner's limits instead

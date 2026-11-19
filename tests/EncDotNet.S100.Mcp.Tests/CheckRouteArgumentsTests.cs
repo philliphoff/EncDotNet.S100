@@ -313,6 +313,8 @@ public class CheckRouteArgumentsTests
             _ when type == typeof(bool) => !(p.DefaultValue as bool? ?? false),
             _ when type == typeof(DateTimeOffset) => new DateTimeOffset(2026, 11, 1, seed, 0, 0, TimeSpan.Zero),
             _ when type == typeof(IReadOnlyList<string>) => new[] { "anchorage_area", "marine_farm" },
+            _ when type == typeof(IReadOnlyList<GateArguments>) => new[] { new GateArguments("Pass", 2, null, null, "Deception Pass", 15, 1.5, true) },
+            _ when type == typeof(IReadOnlyList<LegLimitArguments>) => new[] { new LegLimitArguments(1, 2.5) },
             _ => throw new InvalidOperationException(
                 $"{p.Member.DeclaringType?.Name}.{p.Name} has a type ({p.ParameterType}) this test can't send yet; add it so the argument is checked."),
         };
