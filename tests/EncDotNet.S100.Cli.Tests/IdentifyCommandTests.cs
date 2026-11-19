@@ -160,6 +160,30 @@ public sealed class IdentifyCommandTests
         Assert.NotEqual(0, exit);
     }
 
+    [Fact]
+    public void Identify_with_an_unknown_source_and_no_dataset_returns_two()
+    {
+        int exit = CliApp.Build().Run(
+            ["identify", "--lat", "47.6", "--lon", "-122.4", "--source", "acme.gone"], TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, exit);
+    }
+
+    [Fact]
+    public void Identify_with_a_negative_source_timeout_returns_nonzero()
+    {
+        int exit = CliApp.Build().Run(
+            ["identify", "--lat", "47.6", "--lon", "-122.4", "--source", "ndbc.realtime", "--source-timeout", "-1"], TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Sources_lists_the_live_sources()
+    {
+        Assert.Equal(0, CliApp.Build().Run(["sources"], TestContext.Current.CancellationToken));
+    }
+
     private static (int Exit, string Stdout) RunCapturingStdout(string[] args)
     {
         var original = Console.Out;

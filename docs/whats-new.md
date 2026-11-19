@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`--source` and `s100 sources`.** `s100 identify --source ndbc.realtime`
+  picks from a live data source, alone or with datasets: it's started for the
+  area around the point, and left out with a warning if it has no data within
+  `--source-timeout`. `s100 mcp serve --source` adds sources at startup, and
+  `s100 sources` lists them with their options and what each still needs.
+  Options follow the id (`nmea.weather:Input=udp:10110`); keys come from
+  environment variables only.
+
 - **Live sources in `s100 mcp serve`.** `list_data_sources` and
   `add_data_source` add NDBC observations, own-ship weather from NMEA or AIS
   targets to the session's catalog, where they answer the query tools and

@@ -138,6 +138,10 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [Description("HTTP only: serve without a token even on a non-loopback address.")]
         public bool NoToken { get; init; }
 
+        [CommandOption("--source <SOURCE>")]
+        [Description("Add a live data source at startup (repeatable): an id from 's100 sources', optionally with options as id:name=value,name=value, such as nmea.weather:Input=udp:10110. It runs once set_viewport narrows the view to its range. Keys come from environment variables, never this option.")]
+        public string[] Sources { get; init; } = [];
+
         [CommandOption("--live-feeds")]
         [Description("Also add the live feeds subscribed to in the Library (--collections on SoundCharts' collections.json), such as NDBC observations or AIS targets, with their saved settings. Keys come from environment variables. Off by default: the server then fetches from the network or opens an NMEA port only when an add_data_source call asks it to.")]
         public bool LiveFeeds { get; init; }
@@ -287,6 +291,20 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // Data source design note D9: live sources, run for the session's viewport.
             using var liveSources = new HeadlessLiveSources(
                 EncDotNet.S100.Datasets.Pipelines.SourceRegistry.CreateDefault(), catalog, session);
+            foreach (var text in settings.Sources)
+            {
+                if (SourceArgument.TryParse(text, out var parseError) is not { } source)
+                {
+                    Console.Error.WriteLine(parseError);
+                    return 2;
+                }
+                var added = liveSources.Add(source.Id, source.Options);
+                if (added.TryGetError(out var error))
+                {
+                    Console.Error.WriteLine($"--source {text}: {error!.Message}");
+                    return 2;
+                }
+            }
             if (settings.LiveFeeds)
             {
                 var feeds = services.Library.Collections

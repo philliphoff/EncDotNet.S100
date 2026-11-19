@@ -62,39 +62,10 @@ internal sealed class HeadlessLiveSources : ILiveSourceHost, IDisposable
     public ToolResult<AddDataSourceResult> Add(string id, IReadOnlyDictionary<string, string>? options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        if (!_registry.TryResolve(id, out var registration))
-            return Invalid("id", $"no source '{id}'; list_data_sources lists them");
-
-        var fields = SourceOptionsForm.Fields(registration);
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (name, value) in options ?? new Dictionary<string, string>())
-        {
-            var field = fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (field is null)
-                return Invalid("options", $"'{registration.DisplayName}' has no option '{name}'; it takes {Names(fields)}");
-            // D7, D9: a secret never travels as an argument.
-            if (field.Kind == SourceOptionKind.Secret)
-                return Invalid("options", $"{field.Label} isn't accepted as an argument: set the {field.EnvironmentVariable} environment variable before starting the server");
-            values[field.Name] = value;
-        }
-
-        if (SourceOptionsForm.MissingRequired(registration, values.Count == 0 ? null : values, _environment) is { } missing)
-            return Invalid("id", Needs(registration, missing));
-
-        IDatasetProcessor processor;
-        try
-        {
-            var built = SourceOptionsForm.Build(registration, values.Count == 0 ? null : values);
-            processor = registration.Create(HeadlessSources.Context(built, _loggerFactory));
-        }
-        catch (FormatException ex)
-        {
-            return Invalid("options", ex.Message);
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or IOException)
-        {
-            return Invalid("id", $"'{registration.DisplayName}' couldn't start: {ex.Message}");
-        }
+        if (LiveSourceFactory.TryCreate(_registry, id, options, _environment, _loggerFactory, out var problem) is not { } created)
+            return Invalid(problem!.Parameter, problem.Reason);
+        var registration = created.Registration;
+        var processor = created.Processor;
 
         DatasetId datasetId;
         try
@@ -107,7 +78,7 @@ internal sealed class HeadlessLiveSources : ILiveSourceHost, IDisposable
             return Invalid("id", ex.Message);
         }
 
-        var entry = new Added(registration, SourceOptionsForm.Build(registration, values.Count == 0 ? null : values), datasetId, processor);
+        var entry = new Added(registration, created.Options, datasetId, processor);
         lock (_gate)
             _added.Add(entry);
         Drive(entry, _session.ViewArea);
@@ -219,12 +190,7 @@ internal sealed class HeadlessLiveSources : ILiveSourceHost, IDisposable
             (a.Processor as IHostedDatasetProcessor)?.LastError?.Message))]);
 
     private static string Needs(SourceRegistration registration, SourceOptionField missing) =>
-        missing.Kind == SourceOptionKind.Secret && missing.EnvironmentVariable is { } variable
-            ? $"{registration.DisplayName} needs {missing.Label}: set the {variable} environment variable before starting the server"
-            : $"{registration.DisplayName} needs the option '{missing.Name}' ({missing.Label})";
-
-    private static string Names(IReadOnlyList<SourceOptionField> fields) =>
-        fields.Count == 0 ? "no options" : string.Join(", ", fields.Select(f => f.Name));
+        LiveSourceFactory.Needs(registration, missing);
 
     private static ToolResult<AddDataSourceResult> Invalid(string parameter, string reason) =>
         ToolResult<AddDataSourceResult>.Err(new InvalidArgument(parameter, reason));
