@@ -3,6 +3,12 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
 using EncDotNet.S100.Cli.Web;
+using EncDotNet.S100.Cli.Web.Panels;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -240,6 +246,116 @@ public sealed class ServeDatasetsPanelTests
         Assert.Contains(">US5MA1BO.000<", html, StringComparison.Ordinal);
         Assert.Matches(@">Ed \d+( · Upd \d+)? · US<", html);
         Assert.Matches(@">Forecast · .+ UTC · \d+ steps<", html);
+    }
+
+    [Fact]
+    public void Outlines_carry_each_datasets_layer_so_the_map_can_outline_one_layer()
+    {
+        var outlines = ServeOutlines.FeatureCollection(Layered);
+        var features = outlines["features"]!.AsArray().OfType<JsonObject>().ToList();
+
+        // Every dataset with a place, with its layer; the one with no place is left out.
+        Assert.Equal(["GB1", "GB2", "C111", "loose"], features.Select(f => (string?)f["properties"]!["id"]));
+        Assert.Equal(["chart", "chart", "S111"], features.Take(3).Select(f => (string?)f["properties"]!["layer"]));
+        Assert.False(features[3]["properties"]!.AsObject().ContainsKey("layer"));
+        Assert.Equal(["C111"], features.Where(f => (string?)f["properties"]!["layer"] == "S111").Select(f => (string?)f["properties"]!["id"]));
+    }
+
+    [Fact]
+    public void A_layer_chosen_scopes_the_list_to_its_datasets()
+    {
+        Assert.Same(Layered, ServeDatasetList.InLayer(Layered, null));
+        Assert.Equal(["C111", "C111b"], ServeDatasetList.InLayer(Layered, "S111").Select(d => d.Id));
+        Assert.Equal(["GB1", "GB2"], ServeDatasetList.InLayer(Layered, "chart").Select(d => d.Id));
+        Assert.Empty(ServeDatasetList.InLayer(Layered, "nothing"));
+
+        // Grouped and searched within the layer only.
+        var scoped = ServeDatasetList.InLayer(Layered, "S111");
+        var groups = ServeDatasetList.Group(scoped, ["chart", "S111"]);
+        Assert.All(groups, g => Assert.Equal("S111", g.Layer));
+        var items = ServeDatasetList.Items(scoped, groups, groups.Select(g => g.Key).ToHashSet(), DatasetFilter.None, layerHeadings: false);
+        Assert.Equal(["C111", "C111b"], items.Select(i => i.Dataset?.Id).OfType<string>());
+        var found = ServeDatasetList.Items(scoped, groups, new HashSet<string>(), new DatasetFilter("b", Set(), Set(), false), layerHeadings: false);
+        Assert.Equal(["C111b"], found.Select(i => i.Dataset!.Id));
+    }
+
+    [Fact]
+    public async Task The_list_says_its_scope_with_a_layer_chosen()
+    {
+        var all = await RenderPanelAsync(null, null);
+        Assert.Contains(">GB1<", all, StringComparison.Ordinal);
+        Assert.Contains(">C111<", all, StringComparison.Ordinal);
+        Assert.Contains("Layer <span class=\"strong\">S111</span>", all, StringComparison.Ordinal);
+
+        var s111 = await RenderPanelAsync("S111", null);
+        Assert.Contains(">C111<", s111, StringComparison.Ordinal);
+        Assert.Contains(">C111b<", s111, StringComparison.Ordinal);
+        Assert.DoesNotContain(">GB1<", s111, StringComparison.Ordinal);
+        Assert.DoesNotContain(">loose<", s111, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"layer-heading\"", s111, StringComparison.Ordinal);
+        Assert.Matches("<span class=\"strong\">2</span> of 6 · layer <span class=\"strong\">S111</span>", s111);
+        Assert.Contains(">All layers</button>", s111, StringComparison.Ordinal);
+
+        // A dataset outside the layer, from the hash or a link, still opens, and says so.
+        var outside = await RenderPanelAsync("S111", "GB1");
+        Assert.Contains(">GB1</h3>", outside, StringComparison.Ordinal);
+        Assert.Contains("The dataset is in layer chart; the map shows layer S111, so it isn't drawn.", outside, StringComparison.Ordinal);
+        Assert.Contains(">Show layer chart</button>", outside, StringComparison.Ordinal);
+        var inside = await RenderPanelAsync("S111", "C111");
+        Assert.DoesNotContain("isn't drawn", inside, StringComparison.Ordinal);
+    }
+
+    // Two layers, a dataset in neither, and one with no place.
+    private static readonly ServedDataset[] Layered =
+    [
+        Dataset("GB1", "S-101") with { Layer = "chart", Bounds = [0, 50, 1, 51] },
+        Dataset("GB2", "S-101") with { Layer = "chart", Bounds = [1, 50, 2, 51] },
+        Dataset("C111", "S-111") with { Layer = "S111", File = "C111.h5", Bounds = [0, 50, 2, 51] },
+        Dataset("C111b", "S-111") with { Layer = "S111", File = "C111b.h5" },
+        Dataset("loose", "S-102") with { Bounds = [3, 50, 4, 51] },
+        Dataset("lost", "S-102") with { Layer = "bathy" },
+    ];
+
+    private static async Task<string> RenderPanelAsync(string? layer, string? selected)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton<IServePageData>(new LayeredData());
+        services.AddSingleton<NavigationManager>(new FixedNavigationManager("http://localhost:8080/"));
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, NullLoggerFactory.Instance);
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<DatasetsPanel>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(DatasetsPanel.Layer)] = layer,
+                [nameof(DatasetsPanel.Selected)] = selected,
+            }))).ToHtmlString());
+        return WebUtility.HtmlDecode(html);
+    }
+
+    private sealed class FixedNavigationManager : NavigationManager
+    {
+        public FixedNavigationManager(string baseUri) => Initialize(baseUri, baseUri);
+    }
+
+    private sealed class LayeredData : IServePageData
+    {
+        public ServedTileSet TileSet { get; } = new("datasets", "png", 0, 14, null, null, "day", HighDpi: false);
+
+        public IReadOnlyList<string> Palettes => [];
+
+        public IReadOnlyList<DateTime> Times => [];
+
+        public bool HasDatasets => true;
+
+        public IReadOnlyList<ServedDataset> Datasets => Layered;
+
+        public IReadOnlyList<string> Layers => ["chart", "S111", "bathy"];
+
+        public string? Revision => "0";
+
+        public Task<FeatureQueryResult?> QueryFeaturesAsync(double latitude, double longitude, double radiusMeters, int maxResults, DateTime? time, CancellationToken cancellationToken) =>
+            Task.FromResult<FeatureQueryResult?>(null);
     }
 
     private static RenderedTileSource Open(params string[] layers)
