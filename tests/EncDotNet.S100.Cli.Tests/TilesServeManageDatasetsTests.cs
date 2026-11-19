@@ -222,6 +222,9 @@ public sealed class TilesServeManageDatasetsTests : IDisposable
         await using (first)
         {
             (x, y, tile) = await InnerTileAsync(first.Current!);
+
+            // Disposing waits only briefly for queued writes (#1607).
+            Assert.True(first.Current!.WaitForDiskWrites(TimeSpan.FromSeconds(30)));
         }
 
         // …and another, its memory empty, with the aids to navigation added, reads it from disk.
