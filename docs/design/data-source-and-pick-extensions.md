@@ -562,7 +562,7 @@ Questions for real users are in §6.
 
 #### D9. `s100` and the MCP server add live sources by id
 
-Status: **draft** (2026-11-19), for review before slice 11 starts.
+Status: **decided** on 2026-11-19 (the four questions of the draft settled as recommended; see the end of this section).
 
 Today only SoundCharts can use a `SourceRegistration`. `s100` and its MCP
 server take files and exchange sets (`[input]`, `--layer`, `--from`; one
@@ -617,25 +617,36 @@ The decision:
   and the registration's activation range (`ActivationFor`) decides whether
   it runs. A one-shot command (`render`, `identify`) needs `--bbox` (or
   `--center`/`--scale`), starts the source for that area, waits for its
-  first data up to `--source-timeout` (default 30 s), then stops it; a
-  source that times out is reported, not fatal, unless it's the only input.
+  first data up to `--source-timeout` (default 30 s), then stops it. A
+  source that times out is left out with a warning, so a late feed never
+  costs the chart; the command fails only when that source was its only
+  input.
 - **A live processor is queryable.** `DynamicSourceProcessor` projects to a
   `LoadedDataset` whose data holds the processor (a `LiveSourceDatasetData`)
   and whose bounds are read when asked, and `FeatureAccessor` reads its
   current features. Every query tool then sees live features with no change
   of its own.
-- **Tiles don't cache live layers.** `tiles serve` with a source requires
-  `--bbox`, serves live layers uncached (no disk cache, no scene cache) and
-  changes the ETag when the source changes. `tiles export` with a source is
+- **No live layers in tiles for now.** `tiles export` with a source is
   refused: a tile pyramid is a snapshot, and NDBC or AIS change under it.
-- **The Library's live feeds come along.** `mcp serve --collections` on
-  SoundCharts' `collections.json` adds its subscribed live feeds with their
-  saved options (secrets still from the environment), so an agent sees what
-  the user subscribed to.
+  `tiles serve` doesn't take sources either; the MCP server covers an agent
+  looking at live data. Should it be wanted, it would need `--bbox`, serve
+  live layers uncached (no disk or scene cache) and change the ETag when a
+  source changes (slice 11e, deferred).
+- **The Library's live feeds come along when asked.** `mcp serve
+  --collections` on SoundCharts' `collections.json` adds its subscribed live
+  feeds, with their saved options (secrets still from the environment), only
+  with `--live-feeds`: a headless process fetches from the network or opens
+  an NMEA port only when told to.
 
 Not in scope: pirate mode and own-ship (SoundCharts features, D4); a
 source's options in a file (`--source-options file.json`), until an option
 needs more than text.
+
+Settled on 2026-11-19: options go inline in `--source` (today's options
+are short, and secrets never go in arguments) rather than a separate
+`--source-option` flag; a one-shot command renders without a source that
+times out; `tiles serve` takes no sources for now; and `--collections`
+brings live feeds only with `--live-feeds`.
 
 ### 2.5 Alternatives rejected
 
@@ -1135,7 +1146,7 @@ Each slice ships on its own and leaves the tree working.
 
 Also left:
 
-- **11. Live sources in `s100` and the MCP server** (D9, draft):
+- **11. Live sources in `s100` and the MCP server** (D9):
   - **11a. Registries and the library side.** `SourceRegistry.CreateDefault`
     and `AddDataSource`; AIS's registration moves into the library;
     `MissingOption` moves into Pipelines; a headless `SourceCreationContext`
@@ -1147,11 +1158,12 @@ Also left:
     NMEA from recordings, never the network.
   - **11c. MCP tools.** `list_data_sources`, `add_data_source`, status in
     `list_datasets`, `set_viewport` and query areas driving `UpdateArea`,
-    `--collections` live feeds. Gated like `open_dataset`.
+    `--collections` live feeds with `--live-feeds`. Gated like `open_dataset`.
   - **11d. The command line.** `--source` on `render`, `identify` and `mcp
     serve`, `--source-timeout`, `s100 sources`.
-  - **11e. Tiles.** `tiles serve --source` with `--bbox`, live layers
-    uncached; `tiles export --source` refused. Last, and only if wanted.
+  - **11e. Tiles** (deferred). `tiles serve --source` with `--bbox`, live
+    layers uncached; only if wanted. `tiles export --source` is refused
+    from 11d.
 - **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
   `StationSeries`, `NavigationalWarning`) in the release after next.
 
@@ -1174,13 +1186,6 @@ sources take their place in the derived order once it's in.
   connection, or why nothing shows? Where do users look to add a feed:
   the Library, Datasets or Settings? Does anyone reorder overlays by hand?
   Should removing a source hide it, pause it or unsubscribe?
-
-- **D9 (draft).** Is `--source id:name=value,…` the right shape, or would
-  repeated `--source-option id.name=value` read better in scripts? Should
-  a one-shot `render` with a source that times out fail, or render without
-  it? Is `tiles serve` with live layers wanted at all, or is MCP enough?
-  Should `mcp serve` pick up the Library's live feeds by default when given
-  `--collections`?
 
 The other questions of the second draft were settled on 2026-11-13: NATO
 AML and CAP categories, fills under S-102 (the base step), and a dataset's
