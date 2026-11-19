@@ -6,8 +6,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// Capability implemented by coverage dataset processors (and the catalog
 /// payloads that carry their data) whose values can be read at a point: S-102
 /// depths, S-104 water levels and S-111 surface currents today, weather grids
-/// later. Lets the MCP <c>sample_coverage</c> and <c>sample_coverage_along</c>
-/// tools sample a product without knowing its specification.
+/// later. Lets the MCP <c>sample</c>
+/// tool sample a product without knowing its specification.
 /// </summary>
 /// <remarks>
 /// <para>

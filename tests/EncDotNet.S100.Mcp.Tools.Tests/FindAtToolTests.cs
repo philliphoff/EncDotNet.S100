@@ -182,7 +182,7 @@ public class FindAtToolTests
     // check assumes West ≤ East and matches ListDatasetsTool.Intersects;
     // wrap-around handling would need a coordinated change across all three
     // bbox helpers (FindAtTool.Contains, ListDatasetsTool.Intersects,
-    // SampleCoverageTool.Contains). TODO: enable once those are unified.
+    // SampleTool.Contains). TODO: enable once those are unified.
     [Fact(Skip = "Antimeridian-crossing bbox support is a codebase-wide change; see S-100 Part 10b §6.2.")]
     public async Task Antimeridian_crossing_bbox_contains_point()
     {

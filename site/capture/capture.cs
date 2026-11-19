@@ -681,7 +681,7 @@ async Task<byte[]> AgentClip(Viewer v)
         track.Add(new JsonArray(route[^1].Lat, route[^1].Lon));
         var points = track.Count;
         // The tool takes the polyline as a JSON string: {"vertices":[[lat,lon],...]}.
-        var along = await v.Call("sample_coverage_along", new() { ["spec"] = "S-102", ["polyline"] = new JsonObject { ["vertices"] = track }.ToJsonString() });
+        var along = await v.Call("sample", new() { ["spec"] = "S-102", ["polyline"] = new JsonObject { ["vertices"] = track }.ToJsonString() });
         var samples = along!["samples"]!.AsArray();
         var found = samples
             .Select((sample, i) => (Depth: sample?["result"]?["value"]?["depthMeters"]?.GetValue<double>(), Index: i, Sample: sample))
@@ -691,7 +691,7 @@ async Task<byte[]> AgentClip(Viewer v)
     }
 
     var first = await LeastDepth(waypoints);
-    clip.Call($"sample_coverage_along {{ spec: \"S-102\", {first.Points} points }}",
+    clip.Call($"sample {{ spec: \"S-102\", {first.Points} points }}",
         $"{first.Count} depths · least {first.Depth:0.0} m at {first.Lat:0.000}, {first.Lon:0.000}");
     await clip.Frame(v, 1.6);
 
@@ -708,7 +708,7 @@ async Task<byte[]> AgentClip(Viewer v)
     }
 
     var second = await LeastDepth(waypoints);
-    clip.Call($"sample_coverage_along {{ spec: \"S-102\", {second.Points} points }}", $"{second.Count} depths · least {second.Depth:0.0} m");
+    clip.Call($"sample {{ spec: \"S-102\", {second.Points} points }}", $"{second.Count} depths · least {second.Depth:0.0} m");
     await clip.Frame(v, 1.4);
 
     var length = (await v.Call("get_route"))!["totalDistanceNm"]!.GetValue<double>();
@@ -1360,7 +1360,7 @@ sealed class Viewer : IAsyncDisposable
     [
         "open_dataset", "close_dataset", "set_viewport", "set_palette", "set_display_category", "set_panel",
         "set_dataset_state", "set_test_clock", "set_view_time", "set_timeline_view", "select_dataset", "pick_features",
-        "create_route", "append_waypoint", "move_waypoint", "add_library_source", "library_action", "sample_coverage_along",
+        "create_route", "append_waypoint", "move_waypoint", "add_library_source", "library_action", "sample",
         "set_passage", "set_check_mode", "select_finding", "set_map_legend", "list_navigational_warnings",
         "select_navigational_warning", "ui_select",
     ];

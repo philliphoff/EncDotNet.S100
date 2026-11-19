@@ -78,7 +78,7 @@ public class AnnotationContractTests
         if (typeof(ToolError).IsAssignableFrom(t)) return true;
 
         // SampledValue and its subtypes are the discriminated payload
-        // returned by sample_coverage.
+        // returned by the sample tool.
         if (typeof(SampledValue).IsAssignableFrom(t)) return true;
 
         // Shared coordinate / spec types used across every tool result.

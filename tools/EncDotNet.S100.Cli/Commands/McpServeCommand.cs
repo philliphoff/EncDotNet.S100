@@ -110,7 +110,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         public string? TideCatalogue { get; init; }
 
         [CommandOption("--tide-predictions")]
-        [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample_coverage, sample_coverage_along and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample_coverage and sample_coverage_along the nearest current station within --current-station-reach where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
+        [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample uses the nearest current station within --current-station-reach where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
         public bool TidePredictions { get; init; }
 
         [CommandOption("--current-station-reach <METRES>")]

@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Mcp.Tests;
 /// <summary>
 /// A product the MCP layer has never heard of — a fake weather processor that
 /// implements only <see cref="ICoverageSampler"/> — is sampled through
-/// <c>sample_coverage</c> and <c>sample_coverage_along</c>, with its fields'
+/// <c>sample</c>, with its fields'
 /// quantities and units in the result (issue #1063).
 /// </summary>
 public class CoverageSamplerRoundTripTests
@@ -34,7 +34,7 @@ public class CoverageSamplerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-412",
             ["latitude"] = 11.1,
@@ -42,7 +42,7 @@ public class CoverageSamplerRoundTripTests
             ["time"] = "2026-01-01T05:00:00Z",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"sample returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
         Assert.Equal("gfs-wave", payload["datasetId"]!.GetValue<string>());
         Assert.Equal("in_range", payload["timeStatus"]!.GetValue<string>());
@@ -72,7 +72,7 @@ public class CoverageSamplerRoundTripTests
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         // Past the last step by more than one interval: out of range.
-        var late = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var late = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-412",
             ["latitude"] = 10.0,
@@ -86,14 +86,14 @@ public class CoverageSamplerRoundTripTests
         Assert.StartsWith("2026-01-01T06:00:00", error["details"]!["nearestStep"]!.GetValue<string>());
 
         // A range over both steps: one series entry per step.
-        var range = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var range = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-412",
             ["latitude"] = 10.0,
             ["longitude"] = 20.0,
             ["times"] = """{"kind":"range","from":"2026-01-01T00:00:00Z","to":"2026-01-01T06:00:00Z"}""",
         }, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.False(range.IsError ?? false, $"sample_coverage returned an error: {DumpText(range)}");
+        Assert.False(range.IsError ?? false, $"sample returned an error: {DumpText(range)}");
         var series = ParseSingleJson(range)["series"]!.AsArray();
         Assert.Equal(2, series.Count);
         Assert.Equal(1.5, series[0]!["value"]!["fields"]![0]!["value"]!.GetValue<double>());
@@ -107,13 +107,13 @@ public class CoverageSamplerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-412",
             ["polyline"] = """{"vertices":[[10.0,20.0],[12.0,22.0],[40.0,40.0]]}""",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"sample_coverage_along returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"sample returned an error: {DumpText(result)}");
         var samples = ParseSingleJson(result)["samples"]!.AsArray();
         Assert.Equal(3, samples.Count);
         Assert.Equal(10.0, samples[0]!["result"]!["value"]!["fields"]![1]!["value"]!.GetValue<double>());
@@ -129,7 +129,7 @@ public class CoverageSamplerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "S-413",
             ["latitude"] = 10.0,

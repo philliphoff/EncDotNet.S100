@@ -118,7 +118,7 @@ public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 /// <see cref="EncDotNet.S100.Datasets.Pipelines.Query.DatasetClosedDuringQuery"/>.
 /// <para>
 /// The coverage variants implement <see cref="ICoverageSampler"/>, the same
-/// sampling their processors offer, which is how the <c>sample_coverage</c>
+/// sampling their processors offer, which is how the <c>sample</c>
 /// tools read them. A product with no variant of its own reaches the catalog
 /// as a <see cref="ProductDatasetData"/> that also implements
 /// <see cref="ICoverageSampler"/>.
@@ -172,7 +172,7 @@ public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : L
 /// <see cref="LoadedDatasetProjector"/> takes the catalog entry's spec, bounds
 /// and time coverage, so the projector needs no case for the product. A
 /// coverage product's payload also implements <see cref="ICoverageSampler"/>,
-/// so the <c>sample_coverage</c> tools sample it with no tool changes.
+/// so the <c>sample</c> tool samples it with no tool changes.
 /// </summary>
 public abstract record ProductDatasetData : LoadedDatasetData
 {

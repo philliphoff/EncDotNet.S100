@@ -153,6 +153,6 @@ field.
 - **An S-111 file.** `--format s111 -o deception-pass.h5` writes the series
   as an S-111 station dataset to open in SoundCharts. See
   [Write an S-111 dataset](../cli.md#write-an-s-111-dataset).
-- **Sampling.** With `s100 mcp serve --tide-predictions`, `sample_coverage`
-  for `S-111` gives the predicted current where no S-111 covers the point.
+- **Sampling.** With `s100 mcp serve --tide-predictions`, `sample`
+  with quantity `current` gives the predicted current where no S-111 covers the point.
   See [Predicted values in sampling](../mcp-server.md#predicted-values-in-sampling).

@@ -27,7 +27,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// (<see cref="IdentifyFeaturesService"/> for vector features, including CAP
 /// warning areas, and <see cref="SampleCoverageService"/> for every coverage
 /// with a sampler: S-102, S-104, S-111 and the GRIB2 and NetCDF weather grids),
-/// so its output matches the MCP <c>identify_features</c> / <c>sample_coverage</c>
+/// so its output matches the MCP <c>identify_features</c> / <c>sample</c>
 /// tools exactly. Feature ranking follows ECDIS draw order (point before curve
 /// before area); see S-100 Edition 5.2.1 Part 9.
 /// </para>
@@ -605,7 +605,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
     };
 
     // The generic sample (GRIB2, NetCDF): each field with its quantity and
-    // unit, as sample_coverage returns it, under the "fields" kind.
+    // unit, as the sample tool returns it, under the "fields" kind.
     private static JsonObject FieldsToJson(CoverageFieldsSample sample)
     {
         var fields = new JsonArray();

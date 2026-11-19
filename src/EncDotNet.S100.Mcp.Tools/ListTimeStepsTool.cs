@@ -40,8 +40,7 @@ public sealed record ListTimeStepsResult(
 /// <summary>
 /// Returns the available time-step instants for a time-varying coverage
 /// dataset (S-104 water level, S-111 surface currents). Helps the agent
-/// ground temporal questions before issuing <c>sample_coverage</c> /
-/// <c>sample_coverage_along</c> calls.
+/// ground temporal questions before issuing <c>sample</c> calls.
 /// </summary>
 /// <remarks>
 /// <para>

@@ -52,7 +52,7 @@ public sealed record SpecSummary(
 /// for this spec.
 /// </param>
 /// <param name="CanSampleCoverage">
-/// <c>true</c> when <see cref="SampleCoverageTool"/> can sample a
+/// <c>true</c> when <see cref="SampleTool"/> can sample a
 /// scalar / vector value at a point for this spec.
 /// </param>
 /// <param name="CanListTimeSteps">
@@ -63,7 +63,7 @@ public sealed record SpecSummary(
 public sealed record SpecCapabilities(
     [property: Description("True when query_features can enumerate features for this spec.")] bool CanQueryFeatures,
     [property: Description("True when describe_feature has a describer registered for this spec.")] bool CanDescribeFeature,
-    [property: Description("True when sample_coverage can sample a scalar/vector value at a point for this spec.")] bool CanSampleCoverage,
+    [property: Description("True when the sample tool can sample a scalar/vector value at a point for this spec.")] bool CanSampleCoverage,
     [property: Description("True when list_time_steps can enumerate time steps for this spec: time-varying coverages (S-104, S-111, GRIB2, NetCDF) and CAP warnings.")] bool CanListTimeSteps);
 
 /// <summary>Result of <see cref="ListSpecsTool"/>.</summary>
@@ -103,7 +103,7 @@ public sealed class ListSpecsTool
         SpecName.Cap,
     };
 
-    // Specs SampleCoverageTool routes to a sampler: the S-100 coverages and
+    // Specs SampleTool routes to a sampler: the S-100 coverages and
     // the weather grids, whose catalog payload is a sampler (issue #1063).
     private static readonly HashSet<string> CoverageSpecs = new(StringComparer.Ordinal)
     {

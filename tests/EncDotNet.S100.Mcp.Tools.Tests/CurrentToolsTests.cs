@@ -10,7 +10,7 @@ using EncDotNet.S100.Tides.Stations;
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 /// <summary>
-/// list_current_stations, predict_current and sample_coverage's S-111
+/// list_current_stations, predict_current and sample's S-111
 /// fallback (#1454) over NOAA's recorded current stations
 /// (tests/datasets/Tides/Stations/noaa-currents.json): Deception Pass
 /// PUG1701_33 and Golden Gate SFB1202_17 (harmonic), and Golden Gate
@@ -205,7 +205,7 @@ public sealed class CurrentToolsTests
     {
         var tool = SampleTool(predictions: true);
 
-        var result = Ok(await tool.InvokeAsync(S111(48.405, -122.645, Now), TestContext.Current.CancellationToken));
+        var result = Ok(await tool.SampleCoverageAsync(S111(48.405, -122.645, Now), TestContext.Current.CancellationToken));
 
         var expected = Catalogue.Value.TryCreateCurrentPrediction(DeceptionPass)!.Predictor.CurrentAt(Now.UtcDateTime);
         var value = Assert.IsType<SurfaceCurrentStationSample>(result.Value);
@@ -232,7 +232,7 @@ public sealed class CurrentToolsTests
     {
         // Skagit Bay off Hope Island, 4.7 km from the Deception Pass narrows
         // (#1545): within a tide station's 10 km, beyond a current station's 2 km.
-        var result = await SampleTool(predictions: true).InvokeAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken);
+        var result = await SampleTool(predictions: true).SampleCoverageAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken);
 
         Assert.IsType<NoDatasetCoversPoint>(Error(result));
     }
@@ -242,7 +242,7 @@ public sealed class CurrentToolsTests
     {
         var tool = SampleTool(predictions: true, currentReachMeters: 10_000);
 
-        var result = Ok(await tool.InvokeAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken));
+        var result = Ok(await tool.SampleCoverageAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken));
 
         Assert.Equal(DeceptionPass, Assert.IsType<SurfaceCurrentStationSample>(result.Value).StationId);
         Assert.InRange(result.Source!.Station.DistanceMeters!.Value, 4_000, 5_500);
@@ -254,7 +254,7 @@ public sealed class CurrentToolsTests
     [InlineData(48.4197, "low")] // ~1.5 km north
     public async Task Confidence_falls_with_the_station_distance(double latitude, string expected)
     {
-        var result = Ok(await SampleTool(predictions: true).InvokeAsync(S111(latitude, -122.64312, Now), TestContext.Current.CancellationToken));
+        var result = Ok(await SampleTool(predictions: true).SampleCoverageAsync(S111(latitude, -122.64312, Now), TestContext.Current.CancellationToken));
 
         var source = result.Source!;
         Assert.Equal(expected, source.Confidence);
@@ -285,7 +285,7 @@ public sealed class CurrentToolsTests
         var tool = SampleTool(predictions: true);
         var window = new TimeQuery.Series(Now, Now.AddHours(3), TimeSpan.FromMinutes(15));
 
-        var result = Ok(await tool.InvokeAsync(S111(37.822, -122.462, times: window), TestContext.Current.CancellationToken));
+        var result = Ok(await tool.SampleCoverageAsync(S111(37.822, -122.462, times: window), TestContext.Current.CancellationToken));
 
         Assert.Equal(13, result.Series!.Count);
         Assert.All(result.Series, s => Assert.Equal(GoldenGateEast, Assert.IsType<SurfaceCurrentStationSample>(s.Value).StationId));
@@ -296,21 +296,21 @@ public sealed class CurrentToolsTests
     [Fact]
     public async Task With_predictions_off_or_out_of_reach_the_S111_error_stands()
     {
-        var off = await SampleTool(predictions: false).InvokeAsync(S111(48.405, -122.645, Now), TestContext.Current.CancellationToken);
-        var far = await SampleTool(predictions: true).InvokeAsync(S111(10, 10, Now), TestContext.Current.CancellationToken);
+        var off = await SampleTool(predictions: false).SampleCoverageAsync(S111(48.405, -122.645, Now), TestContext.Current.CancellationToken);
+        var far = await SampleTool(predictions: true).SampleCoverageAsync(S111(10, 10, Now), TestContext.Current.CancellationToken);
 
         Assert.IsType<NoDatasetCoversPoint>(Error(off));
         Assert.IsType<NoDatasetCoversPoint>(Error(far));
     }
 
-    private static SampleCoverageTool SampleTool(bool predictions, double? currentReachMeters = null)
+    private static SampleTool SampleTool(bool predictions, double? currentReachMeters = null)
     {
         var transforms = new ProjNetCrsTransformFactory();
         var options = new RouteCheckSourceOptions { TidePredictions = predictions ? Catalogue.Value : null };
         if (currentReachMeters is { } reach)
             options = options with { MaxCurrentStationDistanceMeters = reach };
         var cache = new RouteCheckSourceCache(transforms, options);
-        return new SampleCoverageTool(new EmptyCatalog(), transforms, cache, new FixedTime(Now));
+        return new SampleTool(new EmptyCatalog(), transforms, cache, new FixedTime(Now));
     }
 
     private static SampleCoverageRequest S111(double latitude, double longitude, DateTimeOffset? time = null, TimeQuery? times = null) =>

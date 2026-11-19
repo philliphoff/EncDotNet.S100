@@ -8,7 +8,7 @@ using EncDotNet.S100.Navigation;
 namespace EncDotNet.S100.Mcp.Tools.Tides;
 
 /// <summary>
-/// sample_coverage's S-104 fallback (#1452): the predicted tide at the
+/// sample's S-104 fallback (#1452): the predicted tide at the
 /// nearest station by water, used where no S-104 covers the point and time,
 /// as the route check and the Depth card use it (T3, #1451).
 /// </summary>

@@ -59,7 +59,7 @@ public sealed record FindAtResult(
 /// the rectangle <c>[SouthLatitude, NorthLatitude] × [WestLongitude,
 /// EastLongitude]</c>. Actual cell coverage may differ; callers that
 /// need the actual value at the point should follow up with
-/// <see cref="SampleCoverageTool"/>.
+/// <see cref="SampleTool"/>.
 /// </para>
 /// <para>
 /// For bbox and polygon queries the tool projects the query to its

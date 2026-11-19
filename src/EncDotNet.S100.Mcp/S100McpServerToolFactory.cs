@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Mcp;
 /// <summary>
 /// Builds <see cref="McpServerTool"/> wrappers around the MCP-1 tools
 /// (<see cref="ListDatasetsTool"/>, <see cref="DescribeFeatureTool"/>,
-/// <see cref="SampleCoverageTool"/>, <see cref="FindAtTool"/>),
+/// <see cref="SampleTool"/>, <see cref="FindAtTool"/>),
 /// translating <see cref="ToolResult{T}"/> outcomes into MCP
 /// <see cref="CallToolResult"/> payloads.
 /// </summary>
@@ -44,14 +44,13 @@ internal static class S100McpServerToolFactory
         ListDatasetsTool listDatasets,
         DescribeFeatureTool describeFeature,
         DescribeFeatureTypeTool describeFeatureType,
-        SampleCoverageTool sampleCoverage,
+        SampleTool sample,
         FindAtTool findAt,
         IdentifyFeaturesTool identifyFeatures,
         NearestFeaturesTool nearestFeatures,
         QueryFeaturesTool queryFeatures,
         CountFeaturesTool countFeatures,
         SearchFeaturesTool searchFeatures,
-        SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps,
         CheckRouteTool checkRoute)
@@ -59,14 +58,13 @@ internal static class S100McpServerToolFactory
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListDatasetsTool(listDatasets));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTool(describeFeature));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTypeTool(describeFeatureType));
-        yield return McpToolsets.Assign(McpToolsets.Query, CreateSampleCoverageTool(sampleCoverage));
+        yield return McpToolsets.Assign(McpToolsets.Query, CreateSampleTool(sample));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateFindAtTool(findAt));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateIdentifyFeaturesTool(identifyFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateNearestFeaturesTool(nearestFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateQueryFeaturesTool(queryFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateCountFeaturesTool(countFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateSearchFeaturesTool(searchFeatures));
-        yield return McpToolsets.Assign(McpToolsets.Query, CreateSampleCoverageAlongTool(sampleCoverageAlong));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListSpecsTool(listSpecs));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListTimeStepsTool(listTimeSteps));
         yield return McpToolsets.Assign(McpToolsets.Routes, CreateCheckRouteTool(checkRoute));
@@ -176,49 +174,60 @@ internal static class S100McpServerToolFactory
         _ => throw new ArgumentException($"outOfRange must be \"error\" or \"nearest\" (got \"{value}\").", "outOfRange"),
     };
 
-    private static McpServerTool CreateSampleCoverageTool(SampleCoverageTool inner)
+    private static McpServerTool CreateSampleTool(SampleTool inner)
     {
         var description =
-            "Samples a coverage product at a single latitude/longitude (decimal degrees, WGS-84). " +
-            "Returns the value of the nearest grid cell — no interpolation, no bbox aggregation. " +
-            "Supports S-102 (depth and optional uncertainty in metres, positive down), " +
-            "S-104 (water-level height in metres and decoded trend at the nearest time step), and " +
-            "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step), and " +
-            "the weather grids GRIB2 and NetCDF (a 'fields' sample: wave height, period and direction, wind speed and direction, gusts and " +
-            "pressure, each with its quantity and unit, at the nearest grid node and time step; directions are 'from'; weather model data, not for navigation). " +
-            "CAP warnings are areas, not a coverage: use identify_features for them. " +
-            "Of the datasets covering the point, one whose time range contains the requested time is used (finest grid first, then newest run); " +
-            "a time within one time step of either end of a range counts as in range. A single time outside every covering dataset's " +
-            "range returns time_out_of_range (details: requestedTime, datasetId, validFrom, validTo, nearestStep, run, candidates) " +
-            "unless outOfRange=\"nearest\", which samples the nearest step and reports timeStatus \"before_start\" or \"after_end\" " +
-            "(in-range results report timeStatus \"in_range\"). Range/series queries return the covered part of the window with " +
-            "truncated=true and coveredFrom/coveredTo when the data does not span it, and time_out_of_range only when there is no overlap. " +
-            "Where the host has tide predictions on and no S-104 or S-111 covers the point and time, the value is predicted at the nearest " +
-            "tide or current station within 10 km by water instead: 'source' is then set (kind \"prediction\", the station with its type " +
-            "\"tide\" or \"current\", caveat and catalogueDate); quote the caveat with the value. " +
-            "Read-only and side-effect free.";
+            "Samples a quantity at a point (latitude/longitude) or along a polyline, from the loaded data. Quantities: " +
+            "'depth': charted depth by the route check's rule (S-102 first, else the finest overlapping S-101, S-401 or translated S-57 cell's " +
+            "dredged area, depth area or nearest sounding), with its kind, dataset, featureId (for describe_feature) or S-102 gridCell, the area's " +
+            "depth range, and waterMask (water, land or uncharted; where there's no depth, depth is null); with a time, also the waterLevel there " +
+            "(S-104, else a tide prediction where the host has them on; status applied, datum_mismatch, no_coverage, before_start, after_end or no_data) " +
+            "and availableDepthMeters = depth + water level where it applies, as check_route computes clearance. " +
+            "'water_level' (S-104: height in metres and trend), 'current' (S-111: speed in m/s and knots, direction toward, degrees true) and " +
+            "'weather' (GRIB2 or NetCDF fields: waves, wind, gusts, pressure; directions 'from'; model data): the nearest grid cell or station " +
+            "at the nearest time step, no interpolation. Of the datasets covering the point, one whose time range contains the time is used " +
+            "(finest grid first, then newest run). A time outside every covering dataset's range returns time_out_of_range (details: " +
+            "requestedTime, datasetId, validFrom, validTo, nearestStep, run, candidates) unless outOfRange=\"nearest\" (then timeStatus " +
+            "\"before_start\" or \"after_end\"). Range/series 'times' return a 'series' (truncated=true with coveredFrom/coveredTo when the data " +
+            "doesn't span it); depth takes one time. Where no S-104 or S-111 covers and the host has tide predictions on, the nearest tide or " +
+            "current station within 10 km by water is used: 'source' then names it (kind \"prediction\") with a caveat to quote. " +
+            "'spec' pins one product (S-102 depth means bathymetry only). A polyline returns 'samples' in order, each with legIndex, vertexIndex, " +
+            "distanceMeters and its result, or an 'error' where that point has none; spacingMeters adds points between vertices along each rhumb-line " +
+            "leg (at most " + SampleTool.MaxProfileSamples + " samples); for depth, 'shoalest' names the shallowest sample. CAP warnings are areas: use " +
+            "identify_features. Not for navigation. Read-only and side-effect free.";
 
-        var del = ([Description("Spec of the coverage to sample (S-102, S-104, S-111, GRIB2 or NetCDF; e.g. \"S-102/2.1.0\" or \"GRIB2\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
-                   [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
-                   [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
-                   [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111, GRIB2, NetCDF); ignored for S-102. The nearest time step of a dataset whose range contains the time is selected; a time outside every covering dataset's range is handled per 'outOfRange'.")] DateTimeOffset? time = null,
-                   [Description("Optional temporal query JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T14:00:00Z\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"}, {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Range/Series populate the result's 'series' field (plus 'truncated'/'coveredFrom'/'coveredTo'). Takes precedence over 'time'.")] string? times = null,
+        var del = ([Description("What to sample: \"depth\", \"water_level\", \"current\" or \"weather\". May be omitted when 'spec' names the product.")] string? quantity = null,
+                   [Description("Sample latitude in decimal degrees, WGS-84, -90..+90. With longitude, instead of 'polyline'.")] double? latitude = null,
+                   [Description("Sample longitude in decimal degrees, WGS-84, -180..+180.")] double? longitude = null,
+                   [Description("Polyline to sample instead of a point: {\"vertices\":[[lat,lon],...]} (a JSON object or a string holding one). Corridor width is ignored.")] JsonElement? polyline = null,
+                   [Description("With a polyline, the longest distance in metres between samples along each leg; omit to sample the vertices only.")] double? spacingMeters = null,
+                   [Description("Optional product to pin (S-102, S-104, S-111, GRIB2 or NetCDF; e.g. \"S-104\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
+                   [Description("Optional UTC ISO-8601 time: the time step for water level, current and weather (the first step when omitted), and the time of the water level for depth.")] DateTimeOffset? time = null,
+                   [Description("Optional temporal query JSON envelope: {\"kind\":\"instant\",\"t\":\"…\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"} or {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Takes precedence over 'time'; depth takes an instant only.")] string? times = null,
                    [Description(OutOfRangeDescription)] string? outOfRange = null,
                    CancellationToken ct = default) =>
-            DispatchAsync(() =>
-                inner.InvokeAsync(
-                    new SampleCoverageRequest(
-                        ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
+            DispatchAsync(async () =>
+            {
+                var result = await inner.InvokeAsync(
+                    new SampleRequest(
+                        SampleTool.ParseQuantity(quantity),
+                        ParseSpec(spec),
                         latitude,
                         longitude,
+                        ParsePolyline(polyline),
+                        spacingMeters,
                         time,
                         ParseTimeQuery(times),
                         ParseOutOfRange(outOfRange)),
-                    ct));
+                    ct).ConfigureAwait(false);
+                return result.TryGetValue(out var output)
+                    ? ToolResult<object>.Ok(output.Payload)
+                    : ToolResult<object>.Err(result.TryGetError(out var error) ? error : new InvalidArgument(string.Empty, "no result"));
+            });
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
-            Name = SampleCoverageTool.Name,
+            Name = SampleTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });
@@ -233,7 +242,7 @@ internal static class S100McpServerToolFactory
             "selection (bbox / polygon / polyline), pass the optional 'query' JSON envelope and the " +
             "tool will use it in place of the lat/lon point. Containment is bbox-only — a positive " +
             "result means the point lies inside the dataset's declared rectangle, not that the " +
-            "point has actual cell coverage (call sample_coverage to read a value). Optionally " +
+            "point has actual cell coverage (call sample to read a value). Optionally " +
             "filtered by spec. Returns dataset IDs, spec, bounds, and time range, with pagination.";
 
         var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90]. Ignored when 'query' is supplied.")] double latitude,
@@ -474,44 +483,6 @@ internal static class S100McpServerToolFactory
         });
     }
 
-    private static McpServerTool CreateSampleCoverageAlongTool(SampleCoverageAlongTool inner)
-    {
-        var description =
-            "Samples a coverage product (S-102 / S-104 / S-111, or a GRIB2 or NetCDF weather grid) at every vertex of a polyline, " +
-            "returning per-vertex results in input order. Vertices that fall outside coverage or " +
-            "have no data return null entries so the agent can still use the rest of the route. " +
-            "For time-varying products (S-104, S-111, GRIB2, NetCDF), the optional time applies identically to " +
-            "every vertex — useful for \"depth/level/current at each waypoint at the same instant\". " +
-            "Time handling matches sample_coverage per vertex: a vertex whose covering datasets don't reach the requested " +
-            "time gets a null result with error code time_out_of_range (or, with outOfRange=\"nearest\", the nearest step and a " +
-            "timeStatus); when no vertex has a value and the time is the reason, the call returns time_out_of_range. " +
-            "The polyline's corridor width is ignored (corridors apply to membership queries, not " +
-            "point sampling).";
-
-        var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", \"S-111/1.1.1\", \"GRIB2\" or \"NetCDF\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
-                   [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
-                   [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
-                   [Description("Optional temporal query JSON envelope applied to every vertex; same shape as sample_coverage. Takes precedence over 'time'.")] string? times = null,
-                   [Description(OutOfRangeDescription)] string? outOfRange = null,
-                   CancellationToken ct = default) =>
-            DispatchAsync(() =>
-                inner.InvokeAsync(
-                    new SampleCoverageAlongRequest(
-                        ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
-                        ParsePolyline(polyline),
-                        time,
-                        ParseTimeQuery(times),
-                        ParseOutOfRange(outOfRange)),
-                    ct));
-
-        return McpServerTool.Create(del, new McpServerToolCreateOptions
-        {
-            Name = SampleCoverageAlongTool.Name,
-            Description = description,
-            SerializerOptions = JsonOptions,
-        });
-    }
-
     private static McpServerTool CreateCheckRouteTool(CheckRouteTool inner)
     {
         var description =
@@ -674,7 +645,7 @@ internal static class S100McpServerToolFactory
         var description =
             "Returns the S-100 specs the server is built against and, for each spec, the number of " +
             "loaded datasets and the tools applicable to it (query_features / describe_feature / " +
-            "sample_coverage). Use this to introspect what the agent can ask in the current session " +
+            "sample). Use this to introspect what the agent can ask in the current session " +
             "before issuing spatial or temporal queries.";
 
         var del = (CancellationToken ct = default) =>
@@ -695,7 +666,7 @@ internal static class S100McpServerToolFactory
             "Returns the available UTC time-step instants for a time-varying dataset " +
             "(S-104 water level, S-111 surface currents, GRIB2 and NetCDF weather grids' valid times, " +
             "and for CAP warnings the times warnings start and end). Use this to ground temporal questions " +
-            "before issuing sample_coverage or sample_coverage_along — the agent can discover the " +
+            "before calling sample — the agent can discover the " +
             "first/last instant, the cadence (when uniform), and the full list of valid times. " +
             "For S-102 (static bathymetry) the times array is empty. Read-only and side-effect free.";
 
@@ -782,6 +753,16 @@ internal static class S100McpServerToolFactory
         => string.IsNullOrWhiteSpace(attributesJson)
             ? []
             : AttributePredicateJsonReader.Parse(attributesJson);
+
+    // A polyline given as a JSON object or as a string holding one; null when absent.
+    private static GeoPolyline? ParsePolyline(JsonElement? polyline) => polyline switch
+    {
+        null => null,
+        { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+        { ValueKind: JsonValueKind.String } text => string.IsNullOrWhiteSpace(text.GetString()) ? null : ParsePolyline(text.GetString()!),
+        { ValueKind: JsonValueKind.Object } obj => ParsePolyline(obj.GetRawText()),
+        _ => throw new ArgumentException("polyline must be a JSON object {\"vertices\":[[lat,lon],...]} or a string holding one.", nameof(polyline)),
+    };
 
     private static GeoPolyline ParsePolyline(string polylineJson)
     {

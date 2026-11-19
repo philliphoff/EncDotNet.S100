@@ -1471,8 +1471,8 @@ reported as features of type `CapWarningArea`; `--attributes` adds their
 event, severity, times and description. When the result includes weather
 data, a not-for-navigation notice is printed first.
 
-`identify` uses the same code as the MCP `identify_features` and
-`sample_coverage` tools, so the results match.
+`identify` uses the same code as the MCP `identify_features` and `sample`
+tools, so the results match.
 
 `--source` also picks from a live data source, such as NDBC observations or
 AIS targets, with or without datasets. Each source is started for the area
@@ -2108,7 +2108,7 @@ lists them all.
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
-| `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample_coverage`, `sample_coverage_along` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample_coverage` and `sample_coverage_along` the nearest current station within `--current-station-reach` where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
+| `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample` uses the nearest current station within `--current-station-reach` where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
 | `--current-station-reach <metres>` | `2000` | With `--tide-predictions` only. How far, by water, a current station's prediction applies. Much shorter than a tide station's 10 km, because tidal currents change over short distances. |
 | `--transport <transport>` | `stdio` | `stdio`, or `http` to serve over HTTP. |
 | `--host <address>` | `127.0.0.1` | HTTP only. The address to listen on. `0.0.0.0` accepts other computers. |

@@ -1852,7 +1852,7 @@ only, and has no authentication. Turn it on with **Settings** >
 shows the port and the number of connected clients.
 
 Besides the standard tools, such as `list_datasets`, `describe_feature`,
-`sample_coverage` and `pick_features`, SoundCharts adds tools that control the
+`sample` and `pick_features`, SoundCharts adds tools that control the
 running app:
 
 | Tools | What they do |
@@ -1992,7 +1992,7 @@ first so the capture shows a finished frame. The old `--screenshot`,
 2. Wait for `/tmp/run/mcp.url` to appear, and read the endpoint URI from it,
    or from the `[MCP] listening on …` line in standard output.
 3. Connect an MCP client to the endpoint. Call `list_datasets`,
-   `describe_feature` or `sample_coverage` to inspect features and values.
+   `describe_feature` or `sample` to inspect features and values.
 4. To capture an image, call `await_render_idle`, then `render_to_image` for
    the map or `capture_app_screenshot` for the window.
 5. When you're done, call `close_all_datasets`, then stop the process with

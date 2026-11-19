@@ -9,8 +9,7 @@ namespace EncDotNet.S100.Mcp.Tests;
 
 /// <summary>
 /// Issue #1071: NetCDF-CF files loaded through the file catalog (as
-/// <c>s100 mcp serve</c> loads them) answer <c>sample_coverage</c> and
-/// <c>sample_coverage_along</c> with wave heights and winds and their units,
+/// <c>s100 mcp serve</c> loads them) answer <c>sample</c> with wave heights and winds and their units,
 /// with no MCP change.
 /// </summary>
 public sealed class NetCdfSampleCoverageTests : IDisposable
@@ -36,7 +35,7 @@ public sealed class NetCdfSampleCoverageTests : IDisposable
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
         var grid = ChartGrid;
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "NetCDF",
             ["latitude"] = grid.South + 5 * grid.Spacing,
@@ -66,7 +65,7 @@ public sealed class NetCdfSampleCoverageTests : IDisposable
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
         var grid = ChartWindGrid;
 
-        var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "NetCDF",
             ["polyline"] = string.Create(CultureInfo.InvariantCulture, $$"""{"vertices":[[{{grid.South + 3 * grid.Spacing}},{{grid.West + 2 * grid.Spacing}}],[{{grid.South}},{{grid.West}}],[0.0,0.0]]}"""),

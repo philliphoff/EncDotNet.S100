@@ -91,7 +91,7 @@ public sealed record QueryFeaturesResult(
 /// feature-type acronym (e.g. <c>LIGHTS</c>, <c>BOYLAT</c>) and each
 /// <see cref="FeatureMatch.FeatureId"/> is the feature record's decimal
 /// RCID. Coverage products (S-102, S-104, S-111) are not queried; use
-/// <see cref="SampleCoverageTool"/> for those.
+/// <see cref="SampleTool"/> for those.
 /// </para>
 /// <para>
 /// Intersection is computed at bounding-box precision per feature.

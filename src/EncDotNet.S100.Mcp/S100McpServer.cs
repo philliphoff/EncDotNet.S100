@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Mcp;
 /// <summary>
 /// Streamable-HTTP MCP server that exposes the three MCP-1 tools
 /// (<see cref="ListDatasetsTool"/>, <see cref="DescribeFeatureTool"/>,
-/// <see cref="SampleCoverageTool"/>) over an in-process Kestrel
+/// <see cref="SampleTool"/>) over an in-process Kestrel
 /// listener.
 /// </summary>
 /// <remarks>

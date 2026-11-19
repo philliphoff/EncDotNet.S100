@@ -14,10 +14,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/> by water
 /// (<see cref="WaterReach"/>: the loaded charts' land blocks a station, tide
 /// predictions design D19), nearest first. Grids win over stations as in
-/// <c>sample_coverage</c>.
+/// <c>sample</c>.
 /// </summary>
 /// <remarks>
-/// A grid point is found as in <c>sample_coverage</c>: the point must lie
+/// A grid point is found as in <c>sample</c>: the point must lie
 /// inside the grid's node extent, and the nearest node is read (S-104 Ed
 /// 2.0.0 §10.2). Swapped axis order, other geographic CRSs, projected CRSs
 /// and the 0…360° longitude frame are absorbed at lookup by

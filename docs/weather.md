@@ -573,8 +573,8 @@ s100 identify --layer gfswave.grib2 --layer alerts.atom --lat 38.5 --lon -74.5 -
 ```
 
 See [info](cli.md#info), [render](cli.md#render) and
-[identify](cli.md#identify) for their options. Over MCP, `list_time_steps`,
-`sample_coverage` and `sample_coverage_along` work on the grids, and
+[identify](cli.md#identify) for their options. Over MCP, `list_time_steps`
+and `sample` (quantity `weather`) work on the grids, and
 `identify_features` on the warnings and on a surface analysis's fronts and
 centres; see the [MCP server](mcp-server.md).
 

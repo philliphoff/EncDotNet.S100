@@ -50,8 +50,7 @@ public sealed class McpServeCommandTests
         "refresh_library_source",
         "remove_library_source",
         "render_to_image",
-        "sample_coverage",
-        "sample_coverage_along",
+        "sample",
         "search_features",
         "set_display_category",
         "set_display_mode",
@@ -141,7 +140,7 @@ public sealed class McpServeCommandTests
 
         // With --tide-predictions, S-104 sampling falls back to the nearest station.
         var sample = await client.CallToolAsync(
-            "sample_coverage",
+            "sample",
             new Dictionary<string, object?>
             {
                 ["spec"] = "S-104",
@@ -150,7 +149,7 @@ public sealed class McpServeCommandTests
                 ["time"] = "2026-11-18T20:00:00Z",
             },
             cancellationToken: cts.Token);
-        Assert.False(sample.IsError ?? false, "sample_coverage returned an error.");
+        Assert.False(sample.IsError ?? false, "sample returned an error.");
         using (var sampled = System.Text.Json.JsonDocument.Parse(sample.Content.OfType<TextContentBlock>().First().Text))
         {
             var source = sampled.RootElement.GetProperty("source");
