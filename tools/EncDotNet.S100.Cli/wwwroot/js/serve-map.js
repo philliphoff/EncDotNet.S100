@@ -19,6 +19,11 @@ window.s100Map = (() => {
   let darkQuery;
   let mouseOver = false;
   let loaded = false;
+  let outlinesUntil = 0;
+
+  // The Datasets panel's outlines (SW2, D9, D15): the row under the pointer,
+  // the selected dataset, and the matches of a search or filter (null for none).
+  const outlines = { hover: null, selected: null, matches: null };
 
   // On a high-DPI screen, the 512-pixel @2x tiles when they're served.
   let highDpi = false;
@@ -104,6 +109,54 @@ window.s100Map = (() => {
     map.setPaintProperty("osm", "raster-brightness-max", paint[1]);
     map.setPaintProperty("coverage-casing", "line-color", token("--background") || "#ffffff");
     map.setPaintProperty("coverage-line", "line-color", token("--outline-served") || "#3D8A5A");
+    applyDatasetTheme();
+  }
+
+  // Hovered and selected outlines are 2 px in the accent with a 6% fill (8%
+  // selected), on a casing in the page background (D15).
+  function addDatasetLayers() {
+    const none = ["in", ["get", "id"], ["literal", []]];
+    map.addLayer({ id: "coverage-focus-fill", type: "fill", source: "coverage", filter: none, paint: { "fill-color": "#2563EB", "fill-opacity": 0.06 } });
+    map.addLayer({ id: "coverage-focus-casing", type: "line", source: "coverage", filter: none, paint: { "line-color": "#ffffff", "line-opacity": 0.6, "line-width": 4 } });
+    map.addLayer({ id: "coverage-focus-line", type: "line", source: "coverage", filter: none, paint: { "line-color": "#2563EB", "line-width": 2 } });
+    applyDatasetOutlines();
+  }
+
+  function applyDatasetTheme() {
+    if (!map?.getLayer("coverage-focus-line")) return;
+    const accent = token("--selected") || "#2563EB";
+    map.setPaintProperty("coverage-focus-fill", "fill-color", accent);
+    map.setPaintProperty("coverage-focus-line", "line-color", accent);
+    map.setPaintProperty("coverage-focus-casing", "line-color", token("--background") || "#ffffff");
+  }
+
+  // Outlined: every dataset (or the matches) zoomed out, and the matches at
+  // any zoom while searching; the hovered and selected ones always. While one
+  // is selected, the others fade to 50%.
+  function applyDatasetOutlines() {
+    if (!map?.getLayer("coverage-focus-line")) return;
+    const focus = [...new Set([outlines.hover, outlines.selected].filter(Boolean))];
+    const inFocus = ["in", ["get", "id"], ["literal", focus]];
+    for (const id of ["coverage-focus-fill", "coverage-focus-casing", "coverage-focus-line"]) map.setFilter(id, inFocus);
+    map.setPaintProperty("coverage-focus-fill", "fill-opacity", ["case", ["==", ["get", "id"], outlines.selected ?? ""], 0.08, 0.06]);
+
+    const matches = outlines.matches ? ["in", ["get", "id"], ["literal", outlines.matches]] : null;
+    const fade = outlines.selected ? 0.5 : 1;
+    for (const id of ["coverage-casing", "coverage-line"]) {
+      map.setFilter(id, matches);
+      map.setLayerZoomRange(id, 0, outlines.matches ? 24 : outlinesUntil);
+    }
+    map.setPaintProperty("coverage-casing", "line-opacity", 0.6 * fade);
+    map.setPaintProperty("coverage-line", "line-opacity", fade);
+  }
+
+  // A row under the pointer (or focused) outlines its dataset, with no round trip to the server.
+  function onRowHover(e) {
+    const row = e.target?.closest?.("[data-dataset-row]");
+    const id = row?.getAttribute("data-dataset-id") ?? null;
+    if (id === outlines.hover) return;
+    outlines.hover = id;
+    applyDatasetOutlines();
   }
 
   function startView(view) {
@@ -123,6 +176,29 @@ window.s100Map = (() => {
     showZoom();
     writeHash();
     dotnet?.invokeMethodAsync("OnViewChanged", pageZoom());
+  }
+
+  // Over plain HTTP on a LAN there's no Clipboard API, so a selected text area and execCommand.
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // Fall back below.
+    }
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch { copied = false; }
+    area.remove();
+    return copied;
   }
 
   return {
@@ -147,7 +223,7 @@ window.s100Map = (() => {
 
       // The outlines show below the zoom the chart draws from (D13): MapLibre
       // rounds a raster zoom, so the chart's first tiles draw half a zoom early.
-      const outlinesUntil = opts.minZoom - 0.5 - ZOOM_OFFSET;
+      outlinesUntil = opts.minZoom - 0.5 - ZOOM_OFFSET;
       map = new maplibregl.Map({
         container,
         attributionControl: false,
@@ -174,7 +250,9 @@ window.s100Map = (() => {
         ...startView(opts.view),
       });
       map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
-      map.once("load", () => { loaded = true; applyTheme(); });
+      map.once("load", () => { loaded = true; addDatasetLayers(); applyTheme(); });
+      document.addEventListener("pointerover", onRowHover);
+      document.addEventListener("focusin", onRowHover);
       map.on("move", () => { showScale(); showZoom(); });
       map.on("rotate", showBearing);
       map.on("moveend", onMoveEnd);
@@ -205,6 +283,12 @@ window.s100Map = (() => {
       requestAnimationFrame(applyTheme);
     },
 
+    setDatasetOutlines(selected, matches) {
+      outlines.selected = selected ?? null;
+      outlines.matches = matches ?? null;
+      applyDatasetOutlines();
+    },
+
     setHashParameters(value) {
       hashParameters = value ?? "";
       if (map) writeHash();
@@ -230,35 +314,19 @@ window.s100Map = (() => {
       map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
     },
 
-    // The page's URL, with the view (D36). Over plain HTTP on a LAN there's
-    // no Clipboard API, so a selected text area and execCommand.
-    async copyLink() {
-      const text = location.href;
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-          return true;
-        }
-      } catch {
-        // Fall back below.
-      }
-      const area = document.createElement("textarea");
-      area.value = text;
-      area.setAttribute("readonly", "");
-      area.style.position = "fixed";
-      area.style.opacity = "0";
-      document.body.appendChild(area);
-      area.select();
-      let copied = false;
-      try { copied = document.execCommand("copy"); } catch { copied = false; }
-      area.remove();
-      return copied;
+    // The page's URL, with the view (D36).
+    copyLink() {
+      return copyText(location.href);
     },
+
+    copyText,
 
     dispose() {
       resizeObserver?.disconnect();
       darkQuery?.removeEventListener("change", applyTheme);
       window.removeEventListener("hashchange", onHashChange);
+      document.removeEventListener("pointerover", onRowHover);
+      document.removeEventListener("focusin", onRowHover);
       map?.remove();
       map = undefined;
       loaded = false;

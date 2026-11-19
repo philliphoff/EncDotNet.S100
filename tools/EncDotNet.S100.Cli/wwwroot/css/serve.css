@@ -324,6 +324,156 @@ body { background: var(--background); }
 .field-label { color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .field select { height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); }
 
+/* Datasets panel (SW2, D7–D11, D33): search, filter chips, groups, rows and details. */
+
+.dataset-tools { display: grid; gap: 8px; margin-bottom: 6px; }
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+.search-box:focus-within { border-color: var(--selected); }
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+.search-box input::placeholder { color: var(--muted-foreground); }
+
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-wrap { position: relative; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chip:hover:not(:disabled) { background: var(--muted); }
+.chip[aria-pressed="true"] { border-color: var(--selected); color: var(--selected); }
+.chip:disabled { color: var(--muted-foreground); cursor: default; opacity: 0.7; }
+.chip .icon { color: var(--muted-foreground); }
+.chip-backdrop { position: fixed; inset: 0; z-index: 10; }
+.chip-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 11;
+  display: grid;
+  min-width: 190px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+}
+.chip-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.chip-option:hover { background: var(--muted); }
+.chip-check { display: grid; place-items: center; width: 14px; color: var(--selected); }
+.chip-option-label { flex: 1; }
+.chip-option-count { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+
+.list-summary { display: flex; align-items: baseline; gap: 4px; margin: 2px 0 0; color: var(--muted-foreground); }
+.list-summary .strong { color: var(--foreground); }
+.link-button { margin-left: auto; padding: 0; border: 0; background: none; color: var(--selected); font-weight: 500; cursor: pointer; }
+
+.dataset-list { display: flex; flex-direction: column; margin: 0 -8px; }
+
+.layer-heading { padding: 12px 8px 2px; color: var(--muted-foreground); }
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.group-header:hover { background: var(--muted); color: var(--foreground); }
+.group-count { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+.dataset-row {
+  display: grid;
+  gap: 2px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.dataset-row:hover, .dataset-row:focus-visible { background: var(--muted); }
+.row-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row-line .tag, .details-head .tag { flex: none; white-space: nowrap; }
+.row-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.row-meta { flex: none; margin-left: auto; color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+.row-file, .row-times { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; }
+
+.tag-neutral { border-color: transparent; background: var(--muted); }
+.tag-outline { border: 1px dashed var(--muted-foreground); color: var(--muted-foreground); font-family: inherit; }
+.tag-warn { flex: none; border-color: var(--warning-border); background: var(--warning-surface); color: var(--warning-text); font-family: inherit; }
+
+.details { display: grid; gap: 12px; }
+.details-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.details-id { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; }
+.details-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.details-tags:empty { display: none; }
+.details-actions { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.button:disabled { color: var(--muted-foreground); cursor: not-allowed; opacity: 0.6; }
+.button:disabled:hover { background: var(--card); }
+.details-note { margin: 0; padding: 8px 10px; border: 1px solid var(--warning-border); border-radius: 6px; background: var(--warning-surface); color: var(--warning-text); }
+.details-fields { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px 12px; margin: 0; }
+.details-fields dt { color: var(--muted-foreground); }
+.details-fields dd { margin: 0; overflow-wrap: anywhere; }
+.details-line, .details-sub { display: block; }
+.details-sub { color: var(--muted-foreground); font-size: 12px; }
+.details-links { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
+.details-links h4 { margin: 0 0 2px; }
+.link-field { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.link-label { color: var(--muted-foreground); }
+.link-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
 /* Map and its furniture (D5, D6, D13, D14). */
 
 .map-area { position: relative; min-width: 0; overflow: hidden; background: var(--map-ground); }

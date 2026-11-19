@@ -21,11 +21,13 @@
             <ChildContent>
                 @if (activePanel is { } panel)
                 {
-                    <Panel Title="@PanelTitle(panel)" OnClose="() => activePanel = null">
+                    <Panel Title="@(panel == ServePanel.Datasets && selectedDataset is not null ? "Dataset" : PanelTitle(panel))" OnClose="() => activePanel = null"
+                           OnBack="@(panel == ServePanel.Datasets && selectedDataset is not null ? EventCallback.Factory.Create(this, () => SelectDatasetAsync(null)) : default)">
                         @switch (panel)
                         {
                             case ServePanel.Datasets:
-                                <DatasetsPanel />
+                                <DatasetsPanel Selected="@selectedDataset" OnSelect="SelectDatasetAsync" OnMatches="SetDatasetMatchesAsync"
+                                               OnZoomTo="ZoomToDatasetAsync" CopyLink="CopyDatasetLinkAsync" CopyText="CopyTextAsync" />
                                 break;
                             case ServePanel.Display:
                                 <DisplayPanel Palettes="Data.Palettes" Palette="@palette" PaletteChanged="SetPaletteAsync"
@@ -85,6 +87,10 @@
     // The hash's name=value pairs, kept as read (D36): later slices add theirs.
     private readonly Dictionary<string, string> hashParameters = new(StringComparer.Ordinal);
 
+    // The Datasets panel (SW2): the selected dataset (dataset= in the hash) and the datasets with a place (D15).
+    private string? selectedDataset;
+    private IReadOnlyList<ServedDataset> servedDatasets = [];
+
     private DotNetObjectReference<ServePage>? self;
     private bool shown;
 
@@ -107,6 +113,9 @@
         foreach (var (name, value) in parameters)
             hashParameters[name] = value;
 
+        servedDatasets = Data.Datasets;
+        selectedDataset = DatasetFromHash();
+
         var start = view ?? await StartViewAsync();
         zoomLimit = ServeMapView.Limit(start.Zoom, tileSet.MinZoom, tileSet.MaxZoom);
         await JS.InvokeVoidAsync("s100Map.show", "map", new
@@ -116,12 +125,18 @@
             minZoom = tileSet.MinZoom,
             maxZoom = tileSet.MaxZoom,
             view = start,
-            outlines = ServeOutlines.FeatureCollection(Data.Datasets).ToJsonString(),
+            outlines = ServeOutlines.FeatureCollection(servedDatasets).ToJsonString(),
             hashParameters = ServeHash.FormatParameters(hashParameters),
             theme = Theme,
         }, self);
         await JS.InvokeVoidAsync("s100Shell.watchPhone", self);
         shown = true;
+        if (selectedDataset is not null)
+        {
+            activePanel = ServePanel.Datasets;
+            await SetDatasetOutlinesAsync();
+        }
+
         StateHasChanged();
     }
 
@@ -225,6 +240,14 @@
         await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
         if (view is { } v)
             await MapAsync("s100Map.jumpTo", v);
+        if (DatasetFromHash() is var dataset && dataset != selectedDataset)
+        {
+            selectedDataset = dataset;
+            if (dataset is not null)
+                activePanel = ServePanel.Datasets;
+            await SetDatasetOutlinesAsync();
+            StateHasChanged();
+        }
     }
 
     private Task ZoomByAsync(int delta) => MapAsync("s100Map.zoomBy", delta);
@@ -248,6 +271,49 @@
         await Task.Delay(TimeSpan.FromSeconds(2));
         linkCopied = false;
     }
+
+    // Datasets (SW2, handoff D10, D15, D36).
+
+    /// <summary>The hash's <c>dataset=</c>, when it names a dataset served.</summary>
+    private string? DatasetFromHash() =>
+        hashParameters.TryGetValue("dataset", out var id) && servedDatasets.Any(d => d.Id == id) ? id : null;
+
+    private async Task SelectDatasetAsync(string? id)
+    {
+        selectedDataset = id;
+        if (id is null)
+            hashParameters.Remove("dataset");
+        else
+            hashParameters["dataset"] = id;
+        if (id is not null && isPhone)
+            sheet = SheetHeight.Full;
+        await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        await SetDatasetOutlinesAsync();
+    }
+
+    private string[]? datasetMatches;
+
+    private Task SetDatasetMatchesAsync(string[]? ids)
+    {
+        datasetMatches = ids;
+        return SetDatasetOutlinesAsync();
+    }
+
+    private Task SetDatasetOutlinesAsync() => MapAsync("s100Map.setDatasetOutlines", selectedDataset, datasetMatches);
+
+    private async Task ZoomToDatasetAsync(string id)
+    {
+        if (!shown || servedDatasets.FirstOrDefault(d => d.Id == id) is not { Bounds: { Length: 4 } bounds })
+            return;
+        if (isPhone)
+            sheet = SheetHeight.Half;
+        var size = await JS.InvokeAsync<double[]>("s100Map.size", "map");
+        await JS.InvokeVoidAsync("s100Map.flyTo", ServeMapView.Start(tileSet with { Bounds = bounds, Center = null }, size[0], size[1]));
+    }
+
+    private async Task<bool> CopyDatasetLinkAsync() => shown && await JS.InvokeAsync<bool>("s100Map.copyLink");
+
+    private async Task<bool> CopyTextAsync(string text) => shown && await JS.InvokeAsync<bool>("s100Map.copyText", text);
 
     // Interim Display controls (SW3 and SW4 replace them).
 
