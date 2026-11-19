@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     @* The token, when there is one, is the request's path base (TileServer), so links stay under it. *@
     <base href="@BaseHref" />
-    <title>s100 serve</title>
+    <title>@ServeSummary.Title(Data)</title>
     <link rel="stylesheet" href="@Assets["lib/maplibre-gl/maplibre-gl.css"]">
     <link rel="stylesheet" href="@Assets["css/serve.css"]">
     <script src="@Assets["lib/maplibre-gl/maplibre-gl.js"]"></script>
@@ -21,6 +21,9 @@
 </html>
 
 @code {
+    [Inject]
+    private IServePageData Data { get; set; } = null!;
+
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 

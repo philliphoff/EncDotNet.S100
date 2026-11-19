@@ -1,0 +1,24 @@
+@* The icon rail (handoff D1). At phone width CSS makes it the sheet's tab bar (D2). *@
+<nav class="rail" aria-label="Panels">
+    @foreach (var item in Items)
+    {
+        <button type="button" class="rail-item" aria-pressed="@(item.Panel == Active ? "true" : "false")" title="@item.Label" @onclick="() => OnSelect.InvokeAsync(item.Panel)">
+            <Icon Name="@item.Icon" Size="22" />
+            <span class="rail-label">@item.Label</span>
+        </button>
+    }
+</nav>
+
+@code {
+    /// <summary>The rail's items, in order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RailItem> Items { get; set; } = [];
+
+    /// <summary>The panel open (or, on a phone, the tab chosen).</summary>
+    [Parameter]
+    public ServePanel? Active { get; set; }
+
+    /// <summary>An item was chosen.</summary>
+    [Parameter]
+    public EventCallback<ServePanel> OnSelect { get; set; }
+}

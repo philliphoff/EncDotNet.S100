@@ -1,0 +1,33 @@
+@* The map's buttons (handoff D5): zoom in and out, a gap, zoom to the data, and the compass. On a phone CSS leaves zoom to the data and the compass. *@
+<div class="map-buttons">
+    <button type="button" class="map-button map-zoom" title="Zoom in" aria-label="Zoom in" @onclick="OnZoomIn"><Icon Name="plus" Size="20" /></button>
+    <button type="button" class="map-button map-zoom" title="Zoom out" aria-label="Zoom out" @onclick="OnZoomOut"><Icon Name="minus" Size="20" /></button>
+    <span class="map-buttons-gap" aria-hidden="true"></span>
+    <button type="button" class="map-button" title="Zoom to the data" aria-label="Zoom to the data" @onclick="OnZoomToData"><Icon Name="fit" Size="20" /></button>
+    <button type="button" class="map-button map-compass" title="North up" aria-label="North up" @onclick="OnNorthUp">
+        @* The JS module turns the needle with the map's bearing. *@
+        <svg class="compass-needle" data-compass-needle width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
+            <text x="13" y="6.5" text-anchor="middle" class="compass-n">N</text>
+            <path d="M13 8 16 15h-6z" class="compass-north" />
+            <path d="M13 22 10 15h6z" class="compass-south" />
+        </svg>
+    </button>
+</div>
+
+@code {
+    /// <summary>Zoom in one step.</summary>
+    [Parameter]
+    public EventCallback OnZoomIn { get; set; }
+
+    /// <summary>Zoom out one step.</summary>
+    [Parameter]
+    public EventCallback OnZoomOut { get; set; }
+
+    /// <summary>Frame the data (the start view).</summary>
+    [Parameter]
+    public EventCallback OnZoomToData { get; set; }
+
+    /// <summary>Turn north up.</summary>
+    [Parameter]
+    public EventCallback OnNorthUp { get; set; }
+}
