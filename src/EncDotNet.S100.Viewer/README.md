@@ -1557,7 +1557,8 @@ which needs a free API key. It's a live feed, like NDBC observations.
    store, such as Linux without `secret-tool`, the key is kept with the
    Library's settings; use the environment variable to keep it out of the
    file. A key you'd entered in Settings › Vessels carries over. Until
-   there's a key, the row says where to enter one.
+   there's a key, the row says **Key needed** (its tooltip says where to
+   enter one) and the feed doesn't start; saving a key starts it.
 
 AIS targets are listed with your datasets under **Vessels**, and added again
 the next time SoundCharts starts, until you remove them from the Library. If you had the old

@@ -1044,8 +1044,12 @@ Each slice ships on its own and leaves the tree working.
      threshold. Settings › Vessels points to the Library; the key and
      threshold it held are AIS's defaults, so nothing is lost. NMEA
      weather is offered once it has a page; `SOUNDCHARTS_NMEA_INPUT` still
-     adds it for a run. A row and node status for "Key needed" is left:
-     the row says so when it fails to start, and the page says so.
+     adds it for a run. As built after 9b: a feed missing a required option is listed in Datasets
+     but not started; its row says **Key needed** (a secret) or **Needs
+     settings**, with what to set and where in its tooltip
+     (`SourceStatusKind.NeedsSettings`, `SourceStatus.MissingOption`), and
+     saving the option starts it. The Library page says so too; a Library
+     tree status line for it is left.
 10. **Pick actions.** Built (P4, P5 as built; `DynamicPickHit` merged into
     `PickHit` after 7d, see 7d as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and

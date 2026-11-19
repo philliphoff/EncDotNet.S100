@@ -162,6 +162,19 @@ public sealed class LiveFeedSettingsTests
         Assert.Null(page.SourceId);
     }
 
+    [Theory]
+    [InlineData(null, null, "Key needed")]
+    [InlineData("sc-secret:ais.aisstream.apiKey", null, null)]
+    [InlineData(null, "from-env", null)]
+    public void AIS_needs_a_key_from_its_settings_or_the_environment(string? saved, string? environment, string? status)
+    {
+        var values = saved is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["ApiKey"] = saved };
+
+        var missing = EncDotNet.S100.Viewer.Services.Sources.SourceStatus.MissingOption(Ais, values, _ => environment);
+
+        Assert.Equal(status, missing is null ? null : EncDotNet.S100.Viewer.Services.Sources.SourceStatus.NeedsSettings(missing).Text);
+    }
+
     [Fact]
     public void AIS_runs_where_its_options_say()
     {

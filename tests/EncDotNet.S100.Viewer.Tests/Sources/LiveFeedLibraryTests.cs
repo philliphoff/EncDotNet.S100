@@ -16,7 +16,9 @@ public sealed class LiveFeedLibraryTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"live-feeds-{Guid.NewGuid():N}");
     private readonly CollectionLibrary _library;
     private readonly SourceDatasetService _sources = new(SourceRegistry.Default);
-    private readonly DatasetsViewModel _datasets = new(new FakeDatasetLoaderService());
+    private readonly FakeDatasetLoaderService _loader = new();
+    private readonly List<DatasetEntry> _loaded = [];
+    private readonly DatasetsViewModel _datasets;
     private readonly ViewerSettings _settings;
     private readonly List<string> _removedFromMap = [];
     private readonly LiveFeedLibrary _feeds;
@@ -24,6 +26,12 @@ public sealed class LiveFeedLibraryTests : IDisposable
     public LiveFeedLibraryTests()
     {
         Directory.CreateDirectory(_root);
+        _loader.LoadHook = (entry, _) =>
+        {
+            _loaded.Add(entry);
+            return Task.CompletedTask;
+        };
+        _datasets = new DatasetsViewModel(_loader);
         _library = new CollectionLibrary(
             new CollectionIndexer([new LiveFeedIndexer()]),
             new CollectionLibraryOptions(Path.Combine(_root, "collections.json"), Path.Combine(_root, "index-cache")));
@@ -138,6 +146,31 @@ public sealed class LiveFeedLibraryTests : IDisposable
     {
         Assert.Contains(S100Sources.NdbcObservations, _feeds.Offered);
         Assert.Contains(S100Sources.NmeaWeather, _feeds.Offered);
+    }
+
+    [Fact]
+    public void A_feed_missing_a_required_option_says_so_and_waits_for_it()
+    {
+        _feeds.Start();
+        _feeds.Subscribe(S100Sources.NmeaWeather);
+
+        var waiting = _datasets.FindSource(S100Sources.NmeaWeatherId)!;
+        Assert.Equal(EncDotNet.S100.Viewer.Services.Sources.SourceStatusKind.NeedsSettings, waiting.SourceStatus!.Kind);
+        Assert.Equal("Needs settings", waiting.Subtitle);
+        Assert.Contains("NMEA input", waiting.SubtitleTooltip, StringComparison.Ordinal);
+        Assert.True(waiting.NeedsAttention);
+        Assert.DoesNotContain(waiting, _loaded);
+
+        var collection = Assert.Single(_library.Collections, c => !c.IsSession);
+        _library.UpdateSource(collection.Id, Assert.Single(FeedsInLibrary()) with
+        {
+            Options = new Dictionary<string, string> { ["Input"] = "udp:10110" },
+        });
+        _feeds.Sync();
+
+        var started = _datasets.FindSource(S100Sources.NmeaWeatherId)!;
+        Assert.Null(started.SourceStatus);
+        Assert.Contains(started, _loaded);
     }
 
     [Fact]

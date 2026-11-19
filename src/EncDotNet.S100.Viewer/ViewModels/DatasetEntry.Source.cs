@@ -51,8 +51,8 @@ internal sealed partial class DatasetEntry
     /// <summary>The second line's tooltip: a failing source's error, else the line itself.</summary>
     public string SubtitleTooltip => _sourceStatus?.Detail ?? Subtitle;
 
-    /// <summary>True when a source is stale or failing, so its row's status stands out.</summary>
-    public bool NeedsAttention => _sourceStatus?.Kind is SourceStatusKind.Stale or SourceStatusKind.Failed;
+    /// <summary>True when a source is stale, failing or needs settings, so its row's status stands out.</summary>
+    public bool NeedsAttention => _sourceStatus?.Kind is SourceStatusKind.Stale or SourceStatusKind.Failed or SourceStatusKind.NeedsSettings;
 
     /// <summary>A source's group, such as "Observations"; <see langword="null"/> for a file.</summary>
     public string? SourceGroupLabel { get; private init; }
