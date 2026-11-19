@@ -13,8 +13,14 @@
                  OnSummary="() => OpenPanel(railItems[0].Panel)"
                  OnCopyLink="CopyLinkAsync"
                  OnUseInGis="() => OpenPanel(ServePanel.UseInGis)" />
-    <div class="serve-body">
+    <div class="serve-body" data-time-bar="@(times.Count == 0 ? "none" : TimeBarDocked ? "docked" : "floating")">
         <Sheet Height="sheet" PanelOpen="activePanel is not null" Summary="@summary" OnGesture="SheetGesture">
+            <TopContent>
+                @if (times.Count > 0 && TimeBarDocked)
+                {
+                    @TimeBarFragment(true)
+                }
+            </TopContent>
             <RailContent>
                 <Rail Items="railItems" Active="activePanel" OnSelect="SelectPanel" />
             </RailContent>
@@ -36,7 +42,7 @@
                                 <DisplayPanel HasDatasets="Data.HasDatasets" Palettes="Data.Palettes" Palette="@palette" PaletteChanged="SetPaletteAsync"
                                               Layers="layerChoices" Layer="@layer" LayerChanged="SetLayerAsync"
                                               Basemap="basemap" BasemapFailed="basemapFailed" BasemapChanged="SetBasemapAsync"
-                                              Times="times" TimeIndex="timeIndex" TimeIndexChanged="SetTimeAsync"
+                                              HasTimes="times.Count > 0" TimesUtc="timesUtc" TimesUtcChanged="SetTimesUtc" LocalZone="@LocalZone"
                                               Page="page" PageChanged="SetPageAsync" />
                                 break;
                             case ServePanel.UseInGis:
@@ -64,6 +70,10 @@
                 </MapChip>
             }
             <MapReadout PastMaximum="zoomLimit == ZoomLimit.PastMaximum" />
+            @if (times.Count > 0 && !TimeBarDocked)
+            {
+                @TimeBarFragment(false)
+            }
             @if (noPickToast)
             {
                 <Toast Title="@ServeTileSetInfo.NoPickTitle" Detail="@ServeTileSetInfo.NoPickDetail" IconName="info" OnClose="() => noPickToast = false" />
@@ -123,10 +133,33 @@
 
     private string Theme => ServeTheme.Resolve(palette, page);
 
+    // Time (SW4, D19, D20): the browser's zone (UTC until the circuit reads it), Local or UTC,
+    // whether the step was chosen (so t= is in the hash), and play.
+    private ServeTimeZone browserZone = ServeTimeZone.Utc;
+    private bool timesUtc;
+    private bool timeChosen;
+    private bool playing;
+    private CancellationTokenSource? playCancellation;
+
+    private ServeTimeZone Zone => timesUtc ? ServeTimeZone.Utc : browserZone;
+
+    // On a phone the bar docks into the sheet's top when the sheet rises (E3).
+    private bool TimeBarDocked => isPhone && sheet != SheetHeight.Lowered;
+
+    private string LocalZone => browserZone.Describe(times.Count > 0 ? times[timeIndex] : DateTime.UtcNow);
+
+    private RenderFragment TimeBarFragment(bool docked) =>
+        @<TimeBar Times="times" Index="timeIndex" IndexChanged="SetTimeAsync" Zone="Zone" Utc="timesUtc" UtcChanged="SetTimesUtc"
+                  Playing="playing" PlayingChanged="SetPlayingAsync" Docked="docked"
+                  Context="ServeTimes.Context(servedDatasets, times, timeIndex, Zone)"
+                  Notice="ServeTimes.Notice(times, timeIndex, DateTime.UtcNow, Zone)" />;
+
     protected override void OnInitialized()
     {
         tileSet = Data.TileSet;
         times = Data.Times;
+        timeIndex = ServeTimes.StartIndex(times, DateTime.UtcNow, null);
+        servedDatasets = Data.Datasets;
         palette = tileSet.DefaultPalette;
         summary = ServeSummary.Describe(Data);
         if (!Data.HasDatasets)
@@ -146,6 +179,8 @@
         foreach (var (name, value) in parameters)
             hashParameters[name] = value;
         ReadDisplayHash();
+        ReadTimeHash();
+        await ReadZoneAsync();
 
         servedDatasets = Data.Datasets;
         selectedDataset = DatasetFromHash();
@@ -273,9 +308,16 @@
         hashParameters.Clear();
         foreach (var (name, value) in parameters)
             hashParameters[name] = value;
-        var (oldPalette, oldLayer) = (palette, layer);
+        var (oldPalette, oldLayer, oldTime) = (palette, layer, timeIndex);
         ReadDisplayHash();
+        ReadTimeHash();
         await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        if (timeIndex != oldTime)
+        {
+            await MapAsync("s100Map.setChart", TileJsonUrl());
+            StateHasChanged();
+        }
+
         if (palette != oldPalette || layer != oldLayer)
         {
             await MapAsync("s100Map.setChart", TileJsonUrl());
@@ -425,11 +467,115 @@
         StateHasChanged();
     }
 
-    private Task SetTimeAsync(int index)
+    // Time (SW4, D19, D20, D36).
+
+    /// <summary>The step <c>t=</c> names (the nearest), else the default; the hash is rewritten to match.</summary>
+    private void ReadTimeHash()
     {
-        timeIndex = index;
-        return MapAsync("s100Map.setChart", TileJsonUrl());
+        var time = ServeTimes.FromHash(hashParameters);
+        timeChosen = time is not null && times.Count > 0;
+        timeIndex = ServeTimes.StartIndex(times, DateTime.UtcNow, time);
+        WriteTimeHash();
     }
+
+    // t= once a step is chosen, so a link opens on it; until then the page follows now.
+    private void WriteTimeHash()
+    {
+        if (timeChosen && times.Count > 0)
+            hashParameters[ServeTimes.HashParameter] = ServeTimes.FormatHash(times[timeIndex]);
+        else
+            hashParameters.Remove(ServeTimes.HashParameter);
+    }
+
+    /// <summary>The browser's zone, its offset and abbreviation at each time the page shows (D20).</summary>
+    private async Task ReadZoneAsync()
+    {
+        if (times.Count == 0)
+            return;
+        var now = DateTime.UtcNow;
+        var instants = times
+            .Concat(servedDatasets.Select(d => d.IssueTime).OfType<DateTime>())
+            .Append(new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc))
+            .Select(ServeTimeZone.AsUtc)
+            .Distinct()
+            .ToArray();
+        try
+        {
+            var zone = await JS.InvokeAsync<BrowserZone>("s100Time.zone", (object)instants.Select(TileRenderSession.FormatTime).ToArray());
+            if (zone.Offsets.Length == instants.Length && zone.Abbreviations.Length == instants.Length)
+                browserZone = ServeTimeZone.FromBrowser(zone.Id, instants.Select((t, i) => new ServeZoneSample(t, TimeSpan.FromMinutes(zone.Offsets[i]), zone.Abbreviations[i])));
+        }
+        catch (JSException)
+        {
+            // An old browser: times stay in UTC.
+        }
+    }
+
+    private async Task SetTimeAsync(int index)
+    {
+        if (times.Count == 0)
+            return;
+        timeIndex = Math.Clamp(index, 0, times.Count - 1);
+        timeChosen = true;
+        WriteTimeHash();
+        await MapAsync("s100Map.setChart", TileJsonUrl());
+        await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+    }
+
+    private void SetTimesUtc(bool utc) => timesUtc = utc;
+
+    /// <summary>Play advances a step a second and stops at the end; from the end it starts again at the first.</summary>
+    private async Task SetPlayingAsync(bool play)
+    {
+        StopPlaying();
+        if (!play || times.Count < 2)
+            return;
+        if (timeIndex >= times.Count - 1)
+            await SetTimeAsync(0);
+        playing = true;
+        var cancellation = playCancellation = new CancellationTokenSource();
+        _ = PlayAsync(cancellation.Token);
+    }
+
+    private async Task PlayAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (playing && await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+                    if (timeIndex < times.Count - 1)
+                        await SetTimeAsync(timeIndex + 1);
+                    if (timeIndex >= times.Count - 1)
+                        StopPlaying();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Paused, or the page closed.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone.
+        }
+    }
+
+    private void StopPlaying()
+    {
+        playing = false;
+        playCancellation?.Cancel();
+        playCancellation?.Dispose();
+        playCancellation = null;
+    }
+
+    /// <summary>What <c>s100Time.zone</c> returns.</summary>
+    private sealed record BrowserZone(string Id, int[] Offsets, string[] Abbreviations);
 
     private Task SetPageAsync(PageAppearance value)
     {
@@ -445,6 +591,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        StopPlaying();
         try
         {
             if (shown)

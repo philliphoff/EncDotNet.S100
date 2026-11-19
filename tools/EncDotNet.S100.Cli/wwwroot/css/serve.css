@@ -762,3 +762,173 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
   .segment { height: 36px; }
   .radio-row { min-height: 40px; }
 }
+
+/* The time bar (D19, D20, E1, E3, B8d): over the map at the bottom centre; two rows on a phone or a narrow map. */
+
+.map-area { container: map-area / inline-size; }
+
+.time-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  z-index: 3;
+  transform: translateX(-50%);
+  width: min(660px, calc(100% - 24px));
+  box-sizing: border-box;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--control-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.time-main {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+}
+.time-buttons { display: flex; gap: 2px; }
+.time-buttons .icon-button { width: 32px; height: 32px; }
+.time-buttons .icon-button:disabled { opacity: 0.4; cursor: default; background: transparent; }
+.time-play { border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
+.time-now { display: flex; flex-direction: column; min-width: 0; }
+.time-date { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+.time-clock { font: 700 17px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; }
+
+.time-track { position: relative; min-width: 0; height: 36px; }
+.time-range {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.time-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--selected) var(--progress, 0%), var(--muted) var(--progress, 0%));
+}
+.time-range::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 2px solid var(--selected);
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--background);
+  box-shadow: var(--shadow);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.time-range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--muted); }
+.time-range::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--selected); }
+.time-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--selected);
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--background);
+  box-shadow: var(--shadow);
+}
+/* The thumb's centre travels 8 px in from each end, so the ticks do too. */
+.time-ticks { position: absolute; left: 8px; right: 8px; top: 14px; height: 22px; pointer-events: none; }
+.time-tick { position: absolute; top: 0; width: 1px; height: 6px; background: var(--muted-foreground); }
+.time-tick-label {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  transform: translateX(-50%);
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+/* Labels at the ends stay within the track. */
+.time-tick-label[data-edge="start"] { transform: translateX(-8px); }
+.time-tick-label[data-edge="end"] { transform: translateX(calc(8px - 100%)); }
+.time-zone .segmented { width: 116px; }
+
+.time-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 6px;
+  padding: 6px 0 0 4px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.time-product {
+  flex: none;
+  padding: 0 5px;
+  border: 1.5px solid var(--foreground);
+  border-radius: 4px;
+  color: var(--foreground);
+  font: 700 11px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.time-context-line { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.time-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px 4px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 12px;
+}
+.time-notice > .icon { flex: none; }
+.time-notice-text { min-width: 0; }
+.time-notice-action { flex: none; height: 26px; margin-left: auto; padding: 0 10px; font-size: 12px; }
+
+/* Two rows: the buttons and the time, then the track (E3). */
+@container map-area (max-width: 560px) {
+  .time-bar { padding: 6px 10px 2px 6px; }
+  .time-main { grid-template-columns: auto 1fr; row-gap: 2px; }
+  .time-now { align-items: flex-end; }
+  .time-clock { font-size: 15px; }
+  .time-track { grid-column: 1 / -1; margin: 0 4px; }
+  .time-zone, .time-context { display: none; }
+}
+
+@media (max-width: 767px) {
+  .time-bar {
+    left: 8px;
+    right: 8px;
+    bottom: 114px;
+    width: auto;
+    transform: none;
+    padding: 6px 10px 2px 6px;
+  }
+  .time-main { grid-template-columns: auto 1fr; row-gap: 2px; }
+  .time-now { align-items: flex-end; }
+  .time-clock { font-size: 15px; }
+  .time-track { grid-column: 1 / -1; margin: 0 4px; }
+  .time-zone, .time-context { display: none; }
+  .time-notice-text { font-size: 11.5px; }
+
+  /* Docked into the risen sheet's top (E3). */
+  .time-bar[data-docked="true"] {
+    position: static;
+    flex: none;
+    padding: 0 14px 0 8px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* The bar floats over the map: the readout gives way, the attribution moves above it. */
+  .serve-body[data-time-bar="floating"] .map-readout { display: none; }
+  .serve-body[data-time-bar="floating"] .maplibregl-ctrl-bottom-right { bottom: calc(114px + var(--time-bar-height, 80px)); }
+}

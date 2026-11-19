@@ -1,6 +1,6 @@
 @* The Display panel (handoff D17, E1, E2, E4): chart palette, layers, basemap, page appearance, and a
-   placeholder for mariner settings. A built tile set keeps Basemap and Page only. The time select is
-   interim: SW4 (#1580) replaces it with the time bar. *@
+   placeholder for mariner settings. A built tile set keeps Basemap and Page only. Times
+   (Local or UTC, D20) shows when anything has time steps; the steps themselves are the time bar's (SW4). *@
 @if (HasDatasets && Palettes.Count > 0)
 {
     <div class="field" data-field="palette">
@@ -38,17 +38,13 @@
         <p class="field-note">Needs the internet. Without it the map shows the chart only.</p>
     }
 </div>
-@if (Times.Count > 0)
+@if (HasTimes)
 {
-    <label class="field" data-field="time">
-        <span class="field-label">Time (UTC)</span>
-        <select @onchange="e => TimeIndexChanged.InvokeAsync(int.Parse((string)e.Value!, CultureInfo.InvariantCulture))">
-            @for (int i = 0; i < Times.Count; i++)
-            {
-                <option value="@i" selected="@(i == TimeIndex)">@Times[i].ToString("yyyy-MM-dd HH:mm'Z'", CultureInfo.InvariantCulture)</option>
-            }
-        </select>
-    </label>
+    <div class="field" data-field="times">
+        <span class="field-label">Times</span>
+        <Segmented Label="Times" Options="TimeBar.zoneOptions" Value="@TimeBar.ZoneValue(TimesUtc)" ValueChanged="v => TimesUtcChanged.InvokeAsync(TimeBar.IsUtc(v))" />
+        <p class="field-note">Local is your browser’s time zone, @(LocalZone).</p>
+    </div>
 }
 <div class="field" data-field="page">
     <span class="field-label">Page</span>
@@ -121,17 +117,21 @@
     [Parameter]
     public EventCallback<Basemap> BasemapChanged { get; set; }
 
-    /// <summary>The time steps.</summary>
+    /// <summary>Whether anything served has time steps.</summary>
     [Parameter]
-    public IReadOnlyList<DateTime> Times { get; set; } = [];
+    public bool HasTimes { get; set; }
 
-    /// <summary>The step shown.</summary>
+    /// <summary>Whether times show in UTC rather than the browser's zone.</summary>
     [Parameter]
-    public int TimeIndex { get; set; }
+    public bool TimesUtc { get; set; }
 
-    /// <summary>A step was chosen.</summary>
+    /// <summary>Local or UTC was chosen.</summary>
     [Parameter]
-    public EventCallback<int> TimeIndexChanged { get; set; }
+    public EventCallback<bool> TimesUtcChanged { get; set; }
+
+    /// <summary>The browser's zone, "Europe/London (BST)".</summary>
+    [Parameter]
+    public string LocalZone { get; set; } = "UTC";
 
     /// <summary>The page appearance.</summary>
     [Parameter]

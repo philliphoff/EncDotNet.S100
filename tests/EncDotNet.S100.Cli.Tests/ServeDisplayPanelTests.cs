@@ -97,10 +97,11 @@ public sealed class ServeDisplayPanelTests
             [nameof(DisplayPanel.Palette)] = "night",
             [nameof(DisplayPanel.Layers)] = ServeDisplay.LayerChoices(Solent, ["chart", "S111"]),
             [nameof(DisplayPanel.Layer)] = "chart",
-            [nameof(DisplayPanel.Times)] = new[] { new DateTime(2021, 4, 1, 10, 0, 0, DateTimeKind.Utc) },
+            [nameof(DisplayPanel.HasTimes)] = true,
+            [nameof(DisplayPanel.LocalZone)] = "Europe/London (BST)",
         });
 
-        foreach (var label in new[] { "Chart palette", "Layers", "Basemap", "Time (UTC)", "Page" })
+        foreach (var label in new[] { "Chart palette", "Layers", "Basemap", "Times", "Page" })
             Assert.Contains($">{label}<", html, StringComparison.Ordinal);
 
         // The palettes with their icons, Night chosen, and its note (D17, D18).
@@ -119,6 +120,10 @@ public sealed class ServeDisplayPanelTests
         Assert.Contains("Needs the internet.", html, StringComparison.Ordinal);
         Assert.Contains("Mariner settings", html, StringComparison.Ordinal);
         Assert.Contains(">Later<", html, StringComparison.Ordinal);
+
+        // Times names the browser's zone (D20), Local chosen.
+        Assert.Matches("aria-checked=\"true\"[^>]*><span>Local</span>", html);
+        Assert.Contains("Local is your browser’s time zone, Europe/London (BST).", html, StringComparison.Ordinal);
     }
 
     [Fact]
