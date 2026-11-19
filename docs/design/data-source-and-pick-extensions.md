@@ -1048,8 +1048,9 @@ Each slice ships on its own and leaves the tree working.
      but not started; its row says **Key needed** (a secret) or **Needs
      settings**, with what to set and where in its tooltip
      (`SourceStatusKind.NeedsSettings`, `SourceStatus.MissingOption`), and
-     saving the option starts it. The Library page says so too; a Library
-     tree status line for it is left.
+     saving the option starts it. The Library page and its tree node say
+     so too (the node's status line comes from the feed's health,
+     `LiveFeedLibrary.HealthOf`).
 10. **Pick actions.** Built (P4, P5 as built; `DynamicPickHit` merged into
     `PickHit` after 7d, see 7d as built). Move "Take helm" to a contributed action, make the
     AIS card a pick section, let live hits join the same pipeline (P5), and

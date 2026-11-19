@@ -174,6 +174,19 @@ public sealed class LiveFeedLibraryTests : IDisposable
     }
 
     [Fact]
+    public void A_feed_that_needs_settings_says_so_in_the_Library()
+    {
+        var waiting = new LiveFeedSource(Guid.NewGuid(), null, S100Sources.NmeaWeatherId);
+        var ready = waiting with { Options = new Dictionary<string, string> { ["Input"] = "udp" } };
+
+        var health = LiveFeedLibrary.HealthOf(waiting, _sources.Find, _ => null, TimeProvider.System);
+
+        Assert.Equal("Needs settings", health?.Failure);
+        Assert.Null(LiveFeedLibrary.HealthOf(ready, _sources.Find, _ => null, TimeProvider.System));
+        Assert.Null(LiveFeedLibrary.HealthOf(waiting with { RegistrationId = "acme.gone" }, _sources.Find, _ => null, TimeProvider.System));
+    }
+
+    [Fact]
     public void New_settings_put_the_feed_back_with_them()
     {
         _feeds.Start();

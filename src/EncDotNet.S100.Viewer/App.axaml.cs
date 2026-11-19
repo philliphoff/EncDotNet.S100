@@ -1649,6 +1649,9 @@ public partial class App : Application
                     EncDotNet.S100.Collections.S100FeedSource feed => feeds.HealthOf(feed.FeedUri),
                     EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
                     EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
+                    // A live feed missing a required option says so (slice 9b).
+                    EncDotNet.S100.Collections.LiveFeedSource live => EncDotNet.S100.Viewer.Services.Sources.LiveFeedLibrary.HealthOf(
+                        live, sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService>().Find, Environment.GetEnvironmentVariable, sp.GetRequiredService<TimeProvider>()),
                     _ => null,
                 },
                 sp.GetRequiredService<TimeProvider>());
