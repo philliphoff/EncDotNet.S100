@@ -32,6 +32,7 @@ public class S100McpServerRoundTripTests
                 "describe_feature",
                 "describe_feature_type",
                 "find_at",
+                "get_navigability_grid",
                 "identify_features",
                 "list_datasets",
                 "list_specs",

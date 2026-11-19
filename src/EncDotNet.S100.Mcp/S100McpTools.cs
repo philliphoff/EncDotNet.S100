@@ -22,6 +22,12 @@ namespace EncDotNet.S100.Mcp;
 public static class S100McpTools
 {
     /// <summary>
+    /// Where <c>get_navigability_grid</c> writes its grid files: a folder in
+    /// the system's temporary directory.
+    /// </summary>
+    public static string NavigabilityGridDirectory { get; } = Path.Combine(Path.GetTempPath(), "s100-mcp", "navigability-grids");
+
+    /// <summary>
     /// Creates the built-in read-only tool set bound to <paramref name="catalog"/>.
     /// </summary>
     /// <param name="catalog">The dataset catalog the tools read from.</param>
@@ -66,6 +72,7 @@ public static class S100McpTools
             new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
             new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))
+            .Append(NavigabilityGridMcpTool.Create(new NavigabilityGridTool(catalog, routeCheckSources, NavigabilityGridDirectory)))
             .ToList();
     }
 }
