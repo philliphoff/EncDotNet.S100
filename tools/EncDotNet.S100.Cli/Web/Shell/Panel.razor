@@ -1,0 +1,38 @@
+@* The docked panel (handoff D1): a header with the label, an optional back arrow and the close chevron; the body; an optional footer. *@
+<section class="panel" aria-label="@Title">
+    <div class="panel-head" data-has-back="@(OnBack.HasDelegate ? "true" : "false")">
+        @if (OnBack.HasDelegate)
+        {
+            <button type="button" class="icon-button panel-back" aria-label="Back" @onclick="OnBack"><Icon Name="chevron-left" /></button>
+        }
+        <h2 class="panel-title">@Title</h2>
+        <button type="button" class="icon-button panel-close" aria-label="Close the panel" title="Close" @onclick="OnClose"><Icon Name="chevron-left" /></button>
+    </div>
+    <div class="panel-body">@ChildContent</div>
+    @if (Footer is not null)
+    {
+        <div class="panel-foot">@Footer</div>
+    }
+</section>
+
+@code {
+    /// <summary>The panel's label.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>Close the panel (desktop).</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    /// <summary>Back, when the panel shows a detail (SW2's dataset details).</summary>
+    [Parameter]
+    public EventCallback OnBack { get; set; }
+
+    /// <summary>The body.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>An optional footer.</summary>
+    [Parameter]
+    public RenderFragment? Footer { get; set; }
+}

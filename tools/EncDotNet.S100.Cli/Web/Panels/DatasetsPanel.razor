@@ -1,0 +1,29 @@
+@* The Datasets panel's slot. SW2 (#1578) fills it with rows, groups, search, filters and details; until then, a plain list. *@
+@inject IServePageData Data
+
+@if (!Data.HasDatasets)
+{
+    <p class="panel-note">A built tile set: there are no datasets to list.</p>
+}
+else if (datasets.Count == 0)
+{
+    <p class="panel-note">No datasets are being served.</p>
+}
+else
+{
+    <ul class="plain-list">
+        @foreach (var dataset in datasets)
+        {
+            <li>
+                <span class="tag">@dataset.Product</span>
+                <span class="mono strong">@dataset.Id</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<ServedDataset> datasets = [];
+
+    protected override void OnInitialized() => datasets = Data.Datasets;
+}
