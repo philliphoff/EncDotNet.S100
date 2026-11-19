@@ -85,7 +85,7 @@ internal sealed class TideStationLegendSource : ILegendSectionSource, IDisposabl
             Spec = Strings.Tides_LegendSpec,
             Title = Strings.Tides_StationsLayer,
             Source = string.Format(CultureInfo.CurrentCulture, Strings.Tides_LegendSourceFormat, count),
-            DatasetIds = [],
+            DatasetIds = [ViewModels.DatasetEntry.SourceIdPrefix + TideFeeds.TideStationsId],
             TimeSummary = string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.Tides_LegendTimeFormat,

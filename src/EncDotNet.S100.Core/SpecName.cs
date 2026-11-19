@@ -71,10 +71,18 @@ public static partial class SpecName
     public const string Ais = "AIS";
 
     /// <summary>
+    /// Tide and tidal current predictions computed from a station list, such
+    /// as NOAA's harmonic constituents, canonical name <c>"TIDES"</c>: a live
+    /// source following the view time, not an S-100 product (S-104 and S-111
+    /// are the products).
+    /// </summary>
+    public const string TidePredictions = "TIDES";
+
+    /// <summary>
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml, Ndbc, Nmea, Ais];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml, Ndbc, Nmea, Ais, TidePredictions];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the

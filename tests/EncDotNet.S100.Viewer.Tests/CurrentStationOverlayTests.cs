@@ -69,7 +69,7 @@ public sealed class CurrentStationOverlayTests : IDisposable
         using var legend = new CurrentStationLegendSource(overlay, () => PaletteType.Day, () => TimeFormat.Utc, () => ViewTime);
         Assert.Empty(legend.Sections);
 
-        overlay.SetCurrentsVisible(true);
+        overlay.Currents.IsActive = true;
         overlay.Currents.UpdateView(View(47.95, -122.58, 200_000));
 
         var section = Assert.Single(legend.Sections);

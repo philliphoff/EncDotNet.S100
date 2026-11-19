@@ -62,6 +62,20 @@ public sealed class DynamicSourceProcessorTests
     }
 
     [Fact]
+    public void A_describers_sections_reach_the_pick()
+    {
+        var source = new DescribedSource();
+        source.Publish(Point("s1", 42, -70, new Dictionary<string, object?>()));
+        using var processor = new DynamicSourceProcessor(source, new StubPortrayal(), Spec);
+
+        var info = processor.GetFeatureInfo("s1")!;
+
+        Assert.Equal("Station s1", info.FeatureTypeName);
+        var section = Assert.IsType<IceEggCodeSection>(Assert.Single(info.Sections));
+        Assert.Same(DescribedSource.Section, section);
+    }
+
+    [Fact]
     public void An_empty_source_has_no_extent_and_no_features()
     {
         using var processor = new DynamicSourceProcessor(new TrackerSource(), new StubPortrayal(), Spec);
@@ -165,6 +179,30 @@ public sealed class DynamicSourceProcessorTests
             var change = _tracker.Apply(feature);
             Changed?.Invoke(this, change);
         }
+    }
+
+    private sealed class DescribedSource : IDynamicFeatureSource, IDynamicFeatureDescriber
+    {
+        public static readonly IceEggCodeSection Section = new(IceEggCodeBuilder.Build("1", null, null, null)!);
+
+        private readonly TrackerSource _inner = new();
+
+        public string Id => _inner.Id;
+
+        public DynamicSourceMetadata Metadata => _inner.Metadata;
+
+        public IReadOnlyList<DynamicFeature> CurrentFeatures => _inner.CurrentFeatures;
+
+        public event EventHandler<DynamicFeaturesChanged>? Changed
+        {
+            add => _inner.Changed += value;
+            remove => _inner.Changed -= value;
+        }
+
+        public void Publish(DynamicFeature feature) => _inner.Publish(feature);
+
+        public DynamicFeatureDescription? Describe(DynamicFeature feature, IFormatProvider? formatProvider = null) =>
+            new("Station " + feature.Id, []) { Sections = [Section] };
     }
 
     private sealed class StubPortrayal : IDynamicFeaturePortrayal

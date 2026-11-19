@@ -1,18 +1,17 @@
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Services.Depth;
 
 namespace EncDotNet.S100.Viewer.Services.Tides;
 
 /// <summary>
-/// Binds the <see cref="TideStationSource"/> to its Layer stack toggle, the
-/// map viewport, the view time and the loaded S-104 (tide predictions design
-/// D4, D5), as the NDBC overlay did before NDBC became a data source.
+/// Binds the <see cref="TideStationSource"/> and <see cref="CurrentStationSource"/>
+/// to the map viewport, the view time and the loaded S-104 and S-111 (tide
+/// predictions design D4, D5, D16). Whether each runs is its live feed's
+/// (data source design note D8, slice 7d): its Datasets entry turns it on and off.
 /// </summary>
 /// <remarks>
-/// The overlay starts hidden (D4: off by default, kept after a restart).
-/// While it's on and the clock is Live it's refreshed every minute, so the
-/// glyphs follow the tide.
+/// While a source is on and the clock is Live it's refreshed every minute, so
+/// the glyphs follow the tide.
 /// </remarks>
 internal sealed class TideStationsOverlay : IDisposable
 {
@@ -25,7 +24,7 @@ internal sealed class TideStationsOverlay : IDisposable
     private readonly Func<IReadOnlyList<EncDotNet.S100.Datasets.Pipelines.Catalog.LoadedDataset>> _datasets;
     private readonly ITimer _tick;
     private readonly object _gate = new();
-    private IS100DynamicSourceRegistry? _registry;
+    private bool _attached;
     private CancellationTokenSource? _debounce;
     private bool _disposed;
 
@@ -69,81 +68,27 @@ internal sealed class TideStationsOverlay : IDisposable
     /// <summary>The current stations' source (D16).</summary>
     public CurrentStationSource Currents { get; }
 
-    /// <summary>Whether the overlay is on.</summary>
-    public bool IsVisible => _registry?.GetVisible(Source.Id) ?? Source.IsActive;
+    /// <summary>Whether the tide stations are on: their live feed is on the map and shown.</summary>
+    public bool IsVisible => Source.IsActive;
 
-    /// <summary>Whether the current stations overlay is on.</summary>
-    public bool AreCurrentsVisible => _registry?.GetVisible(Currents.Id) ?? Currents.IsActive;
+    /// <summary>Whether the current stations are on.</summary>
+    public bool AreCurrentsVisible => Currents.IsActive;
 
-    /// <summary>Turns the current stations overlay on or off, as its Layer stack row does.</summary>
-    /// <param name="visible">On or off.</param>
-    public void SetCurrentsVisible(bool visible)
+    /// <summary>Follows the map viewport. Idempotent.</summary>
+    public void Attach()
     {
-        if (_registry is { } registry)
-        {
-            registry.SetVisible(Currents.Id, visible);
-        }
-        else
-        {
-            Currents.IsActive = visible;
-        }
-    }
-
-    /// <summary>Turns the overlay on or off, as its Layer stack row does.</summary>
-    /// <param name="visible">On or off.</param>
-    public void SetVisible(bool visible)
-    {
-        if (_registry is { } registry)
-        {
-            registry.SetVisible(Source.Id, visible);
-        }
-        else
-        {
-            Source.IsActive = visible;
-        }
-    }
-
-    /// <summary>
-    /// Hides the overlay on first run: unless <paramref name="persisted"/>
-    /// already holds a choice for it, sets it hidden in <paramref name="registry"/>.
-    /// </summary>
-    /// <param name="registry">The registry.</param>
-    /// <param name="persisted">The persisted per-source visibility.</param>
-    public void SeedDefaultVisibility(IS100DynamicSourceRegistry registry, IReadOnlyDictionary<string, bool> persisted)
-    {
-        ArgumentNullException.ThrowIfNull(registry);
-        ArgumentNullException.ThrowIfNull(persisted);
-        if (!persisted.ContainsKey(Source.Id))
-        {
-            registry.SetVisible(Source.Id, false);
-        }
-
-        if (!persisted.ContainsKey(Currents.Id))
-        {
-            registry.SetVisible(Currents.Id, false);
-        }
-    }
-
-    /// <summary>Binds the source to <paramref name="registry"/>'s visibility and to the viewport.</summary>
-    /// <param name="registry">The registry the source is registered with.</param>
-    public void Attach(IS100DynamicSourceRegistry registry)
-    {
-        ArgumentNullException.ThrowIfNull(registry);
-        if (_registry is not null)
+        if (_attached)
         {
             return;
         }
 
-        _registry = registry;
-        registry.SourcesChanged += OnSourcesChanged;
+        _attached = true;
         if (_notifier is not null)
         {
             _notifier.ViewportChanged += OnViewportChanged;
             Source.UpdateView(_notifier.Current);
             Currents.UpdateView(_notifier.Current);
         }
-
-        OnSourcesChanged();
     }
 
     /// <inheritdoc />
@@ -164,11 +109,6 @@ internal sealed class TideStationsOverlay : IDisposable
         _tick.Dispose();
         _viewTime.Changed -= OnRefreshNeeded;
         _waterLevel.Changed -= OnRefreshNeeded;
-        if (_registry is { } registry)
-        {
-            registry.SourcesChanged -= OnSourcesChanged;
-        }
-
         if (_notifier is not null)
         {
             _notifier.ViewportChanged -= OnViewportChanged;
@@ -191,15 +131,6 @@ internal sealed class TideStationsOverlay : IDisposable
         }
 
         return false;
-    }
-
-    private void OnSourcesChanged()
-    {
-        if (_registry is { } registry && !_disposed)
-        {
-            Source.IsActive = registry.GetVisible(Source.Id);
-            Currents.IsActive = registry.GetVisible(Currents.Id);
-        }
     }
 
     private void OnRefreshNeeded(object? sender, EventArgs e) => RefreshActive();

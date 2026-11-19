@@ -20,6 +20,7 @@ internal static partial class Strings
     public static string SourceGroup_Observations => Get(nameof(SourceGroup_Observations));
     public static string SourceGroup_OwnShipSensors => Get(nameof(SourceGroup_OwnShipSensors));
     public static string SourceGroup_Vessels => Get(nameof(SourceGroup_Vessels));
+    public static string SourceGroup_Predictions => Get(nameof(SourceGroup_Predictions));
     public static string Toast_SourceRemovedFormat => Get(nameof(Toast_SourceRemovedFormat));
     public static string SourceStatus_LiveJustNow => Get(nameof(SourceStatus_LiveJustNow));
     public static string Button_AddLiveFeed => Get(nameof(Button_AddLiveFeed));

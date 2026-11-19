@@ -945,7 +945,7 @@ Each slice ships on its own and leaves the tree working.
      overlay pick service, undrawn, until slice 10 (each AIS pick would show
      twice).
    - **7d. Predicted tide stations as a source entry** (D8), replacing their
-     Layer stack toggle. Needs 7b.
+     Layer stack toggle. Needs 7b. Built (the note after 7c's).
 
      7c as built: SoundCharts registers `ais.aisstream` (`AisSource`) in
      `SourceRegistry.Default`, so the registration can wrap its source for
@@ -967,6 +967,31 @@ Each slice ships on its own and leaves the tree working.
      `own-ship.take-helm` action. `IDynamicFeatureRenderer` and the overlay
      pick path stay for own-ship and tide stations; `DynamicPickHit` merges
      into `PickHit` once tide stations move (7d).
+
+     7d as built: SoundCharts registers `tides.stations.predicted` and
+     `tides.currents.predicted` (`TideFeeds`, spec `TIDES`, the new
+     `SourceGroup.Predictions`). Each draws its shared source through a
+     `DynamicSourceProcessor` that doesn't own it, since the timeline's tide
+     lane, the legend and MCP read the same source; `TideFeedHostExtension`
+     turns the source off when its entry goes, and the sources are now
+     `IPausableDynamicSource`s. `TideStationsOverlay` keeps the view time,
+     viewport and S-104/S-111 binding and loses its registry. A
+     `DynamicFeatureDescription` can carry `Sections`, which the processor
+     passes into `FeatureInfo`; the stations add a `PredictedStationSection`
+     (kinds `tides.station.predicted`, `tides.current.predicted`), which
+     SoundCharts presents as the station card through `PickSectionPresenters`
+     (other hosts show its rows). The pick report releases a presented
+     section when the selection moves on, and the pick highlight outlines a
+     tide station's cell from its card. The Layer stack toggles migrate to
+     subscribed feeds; `set_tide_display` subscribes and unsubscribes in the
+     Library; the legend sections link from the Datasets rows. The card
+     factories are presenters now, and their `IDynamicPickCardFactory`
+     registrations and keyed renderers are gone.
+
+     Left: own-ship is the last overlay source. `DynamicPickHit`,
+     `IDynamicFeatureRenderer` and the overlay pick path stay for it, and
+     merging `DynamicPickHit` into `PickHit` waits on how own-ship is picked
+     (D8 keeps it built in and in the overlay band).
 8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
    and the AIS key migration.
 9. **Live feeds in the Library** (D8). `SourceRegistry` feeds the Library's
@@ -1025,7 +1050,7 @@ Also left:
 - **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
   `StationSeries`, `NavigationalWarning`) in the release after next.
 
-Order: 7b, then 7c with 10, then 9a, 9b and 7d, with slice 3 whenever the IEC
+Order: 7b, then 7c with 10, then 9a, 9b and 7d (all built), with slice 3 whenever the IEC
 62288 question (§6) is answered. Slice 3 is independent of the rest; live
 sources take their place in the derived order once it's in.
 

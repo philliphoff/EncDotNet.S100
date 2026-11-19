@@ -9102,4 +9102,8 @@
   <data name="Settings_AisMovedToLibrary" xml:space="preserve">
     <value>AIS targets are a live feed: subscribe to them in the Library (Add › Live feeds), and set the aisstream.io key and when they run on their settings there.</value>
   </data>
+  <data name="SourceGroup_Predictions" xml:space="preserve">
+    <value>Predictions</value>
+    <comment>The group label of a live feed computed for the view time, such as predicted tide stations.</comment>
+  </data>
 </root>

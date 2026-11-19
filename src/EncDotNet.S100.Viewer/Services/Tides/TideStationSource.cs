@@ -63,7 +63,7 @@ internal sealed record TideStationState(
 /// subordinate station is predicted on.
 /// </para>
 /// </remarks>
-internal sealed class TideStationSource : IDynamicFeatureSource, IDynamicFeatureDescriber
+internal sealed class TideStationSource : IPausableDynamicSource, IDynamicFeatureDescriber
 {
     /// <summary>The source id, and its key in <c>ViewerSettings.DynamicSourceVisibility</c>.</summary>
     public const string SourceId = "tide-stations";
@@ -308,7 +308,10 @@ internal sealed class TideStationSource : IDynamicFeatureSource, IDynamicFeature
                     Strings.Tides_Pick_PredictedHeight,
                     string.Format(culture, Strings.Tides_HeightAboveDatumFormat, state.HeightMeters, state.DatumName)),
                 new(Strings.Tides_Pick_Trend, TrendText(state.Trend)),
-            ]);
+            ])
+        {
+            Sections = [new PredictedStationSection(PredictedStationSection.TideKind, state.StationId, state.Name)],
+        };
     }
 
     /// <summary>The mariner's word for a station kind.</summary>

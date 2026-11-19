@@ -352,7 +352,7 @@ public sealed class DynamicSourceProcessor :
                     RawValue = p.Value,
                 })],
                 Geometry = view.GeometryType,
-                Sections = VesselSectionOf(feature) is { } described ? [described] : [],
+                Sections = VesselSectionOf(feature) is { } described ? [described, .. description.Sections] : description.Sections,
             };
         }
 

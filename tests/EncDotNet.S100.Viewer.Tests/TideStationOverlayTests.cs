@@ -94,7 +94,7 @@ public sealed class TideStationOverlayTests
 
         Assert.Empty(legend.Sections);
 
-        overlay.SetVisible(true);
+        overlay.Source.IsActive = true;
         await list.EnsureAvailableAsync();
         overlay.Source.UpdateView(View(47.6, -122.4, 400_000));
 

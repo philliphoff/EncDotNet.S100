@@ -1650,6 +1650,13 @@
                               IsVisible="{Binding HasSections}"
                               AutomationProperties.AutomationId="PickReport.Sections">
                     <ItemsControl.DataTemplates>
+                        <!-- Slice 7d: a predicted tide or current station's card. -->
+                        <DataTemplate DataType="vm:TideStationCardViewModel">
+                            <views:TideStationCardView />
+                        </DataTemplate>
+                        <DataTemplate DataType="vm:CurrentStationCardViewModel">
+                            <views:CurrentStationCardView />
+                        </DataTemplate>
                         <DataTemplate DataType="vm:EggCodeViewModel">
                             <Border BorderBrush="{DynamicResource BorderColor}"
                                     BorderThickness="0,1,0,0"

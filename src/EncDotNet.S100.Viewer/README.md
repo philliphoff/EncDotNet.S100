@@ -679,7 +679,8 @@ Rows include:
 - Sub-layer rows when a product draws more than one layer, such as S-111
   currents, which draws an arrow layer.
 - A row for each live overlay, such as **Own ship** (under **Dynamic
-  arrows**) or **Predicted tide stations**.
+  arrows**). Live feeds, such as predicted tide and current stations, are
+  datasets: subscribe to them in the Library's **Live feeds**.
 - A colour legend under each weather fill (wave height, wind speed): a swatch
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
   the palette the map is drawn in. An overlay drawn with symbols or styled

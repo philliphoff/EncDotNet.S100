@@ -1,11 +1,9 @@
-using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
-using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services.Tides;
 
 /// <summary>Makes the Object information card of a picked predicted current station (D16).</summary>
-internal sealed class CurrentStationCardFactory : IDynamicPickCardFactory
+internal sealed class CurrentStationCardFactory
 {
     private readonly TideStationListService _list;
     private readonly CurrentStationSource _source;
@@ -25,14 +23,18 @@ internal sealed class CurrentStationCardFactory : IDynamicPickCardFactory
         _context = context;
     }
 
-    /// <inheritdoc />
-    public IDynamicPickCard? CreateCard(DynamicSourceHit hit)
+    /// <summary>
+    /// The card of a picked station's <see cref="PredictedStationSection"/>
+    /// (data source design note slice 7d), or <see langword="null"/> to show
+    /// its rows: another kind, or a station not in the list.
+    /// </summary>
+    /// <param name="pickSection">The section.</param>
+    public object? Present(EncDotNet.S100.Datasets.Pipelines.PickSection pickSection)
     {
-        ArgumentNullException.ThrowIfNull(hit);
-        if (!ReferenceEquals(hit.Source, _source)
-            || CurrentStationSource.GetState(hit.Feature) is not { } state
+        ArgumentNullException.ThrowIfNull(pickSection);
+        if (pickSection is not PredictedStationSection { SectionKind: PredictedStationSection.CurrentKind } section
             || _list.Catalogue is not { } catalogue
-            || catalogue.FindCurrentStation(state.StationId) is not { } station
+            || catalogue.FindCurrentStation(section.StationId) is not { } station
             || _source.PredictorFor(catalogue, station.Id) is not { } predictor)
         {
             return null;
