@@ -1327,21 +1327,15 @@ public partial class App : Application
         services.AddSingleton<DatasetProcessorOwner>();
         services.AddSingleton(sp =>
         {
-            // Slice 7c: SoundCharts' own AIS feed joins the built-in sources.
-            var registry = EncDotNet.S100.Datasets.Pipelines.SourceRegistry.Default;
-            if (!registry.TryResolve(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id, out _))
-            {
-                registry.Register(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Registration(
-                    sp.GetRequiredService<ViewerSettings>()));
-            }
-            // Slice 7d: predicted tide and current stations, in place of their Layer stack toggles.
-            if (!registry.TryResolve(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStationsId, out _))
-            {
-                var tides = new Lazy<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>(
-                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>);
-                registry.Register(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStations(() => tides.Value));
-                registry.Register(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.CurrentStations(() => tides.Value));
-            }
+            // D9 (slice 11a): SoundCharts has its own registry, with its own
+            // wrappers: AIS for pirate mode, and the tide and current stations.
+            var registry = EncDotNet.S100.Datasets.Pipelines.SourceRegistry.CreateDefault();
+            registry.AddDataSource(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Registration(
+                sp.GetRequiredService<ViewerSettings>()), replace: true);
+            var tides = new Lazy<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Tides.TideStationsOverlay>);
+            registry.AddDataSource(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStations(() => tides.Value));
+            registry.AddDataSource(EncDotNet.S100.Viewer.Services.Tides.TideFeeds.CurrentStations(() => tides.Value));
             return registry;
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService(

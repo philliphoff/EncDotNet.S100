@@ -1153,6 +1153,18 @@ Also left:
     `MissingOption` moves into Pipelines; a headless `SourceCreationContext`
     (hardened HTTP client, environment-only secrets). SoundCharts switches
     to its own registry instance. No new behaviour.
+
+    11a as built: `SourceRegistry.CreateDefault()` includes
+    `S100Sources.AisStream` (`ais.aisstream`, `AisFeedOptions` in
+    Pipelines; `S100Sources.CreateAisSource` for a host that wraps the
+    source). `SourceRegistry.Register(registration, replace)` and
+    `AddDataSource(registration, replace)` put a host's wrapper in place of
+    a built-in source, keeping its position. SoundCharts builds its own
+    registry: the built-ins, its AIS wrapper (pirate mode, its wording, its
+    Settings-era defaults) and the tide and current stations.
+    `SourceOptionsForm.MissingRequired` is the shared missing-option check.
+    The headless creation context (hardened HTTP client) moves to 11b,
+    where `s100` first builds one: Pipelines can't reach `HardenedTls`.
   - **11b. A live processor is queryable.** `DynamicSourceProcessor`
     projects to a `LoadedDataset`; `FeatureAccessor` reads live features;
     `HeadlessMutableCatalog.AddSource`. Tests drive NDBC from fixtures and
