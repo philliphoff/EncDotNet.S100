@@ -1,19 +1,46 @@
-@* The Display panel's slot. SW3 (#1579) and SW4 (#1580) replace these interim controls with the panel and the time bar. *@
-@if (Palettes.Count > 0)
+@* The Display panel (handoff D17, E1, E2, E4): chart palette, layers, basemap, page appearance, and a
+   placeholder for mariner settings. A built tile set keeps Basemap and Page only. The time select is
+   interim: SW4 (#1580) replaces it with the time bar. *@
+@if (HasDatasets && Palettes.Count > 0)
 {
-    <label class="field">
+    <div class="field" data-field="palette">
         <span class="field-label">Chart palette</span>
-        <select @onchange="e => PaletteChanged.InvokeAsync(e.Value as string)">
-            @foreach (var p in Palettes)
-            {
-                <option value="@p" selected="@(p == Palette)">@Title(p)</option>
-            }
-        </select>
-    </label>
+        <Segmented Label="Chart palette" Options="paletteOptions" Value="@Palette" ValueChanged="v => PaletteChanged.InvokeAsync(v)" />
+        <p class="field-note">@ServeDisplay.PaletteNote(Palette, Page)</p>
+    </div>
 }
+@if (HasDatasets && Layers.Count > 0)
+{
+    <fieldset class="field" data-field="layers">
+        <legend class="field-label">Layers</legend>
+        <div class="radio-list">
+            @foreach (var choice in Layers)
+            {
+                <label class="radio-row">
+                    <input type="radio" name="display-layer" value="@(choice.Id ?? "")" checked="@(choice.Id == Layer)"
+                           @onchange="() => LayerChanged.InvokeAsync(choice.Id)" />
+                    <span class="radio-label">@choice.Label</span>
+                    <span class="radio-count">@Count(choice)</span>
+                </label>
+            }
+        </div>
+    </fieldset>
+}
+<div class="field" data-field="basemap">
+    <span class="field-label">Basemap</span>
+    <Segmented Label="Basemap" Options="basemapOptions" Value="@Basemap.ToString()" ValueChanged="v => BasemapChanged.InvokeAsync(Enum.Parse<Basemap>(v))" />
+    @if (BasemapFailed)
+    {
+        <p class="field-note" data-tone="warning"><Icon Name="warn" Size="14" />OpenStreetMap didn't load, so the map shows the chart only.</p>
+    }
+    else
+    {
+        <p class="field-note">Needs the internet. Without it the map shows the chart only.</p>
+    }
+</div>
 @if (Times.Count > 0)
 {
-    <label class="field">
+    <label class="field" data-field="time">
         <span class="field-label">Time (UTC)</span>
         <select @onchange="e => TimeIndexChanged.InvokeAsync(int.Parse((string)e.Value!, CultureInfo.InvariantCulture))">
             @for (int i = 0; i < Times.Count; i++)
@@ -23,17 +50,41 @@
         </select>
     </label>
 }
-<label class="field">
+<div class="field" data-field="page">
     <span class="field-label">Page</span>
-    <select @onchange="e => PageChanged.InvokeAsync(Enum.Parse<PageAppearance>((string)e.Value!))">
-        @foreach (var appearance in Enum.GetValues<PageAppearance>())
-        {
-            <option value="@appearance" selected="@(appearance == Page)">@appearance</option>
-        }
-    </select>
-</label>
+    <Segmented Label="Page" Options="pageOptions" Value="@Page.ToString()" ValueChanged="v => PageChanged.InvokeAsync(Enum.Parse<PageAppearance>(v))" />
+    <p class="field-note">@(HasDatasets ? ServeDisplay.PageNote(Palette) : "Auto follows your browser.")</p>
+</div>
+@if (HasDatasets)
+{
+    <div class="later-row" aria-disabled="true">
+        <Icon Name="sliders" Size="16" />
+        <span>Mariner settings</span>
+        <span class="later-tag">Later</span>
+    </div>
+}
 
 @code {
+    private static readonly SegmentedOption[] basemapOptions =
+    [
+        new(nameof(Basemap.Muted), "Muted"),
+        new(nameof(Basemap.OpenStreetMap), "OpenStreetMap"),
+        new(nameof(Basemap.None), "None"),
+    ];
+
+    private static readonly SegmentedOption[] pageOptions =
+    [
+        new(nameof(PageAppearance.Auto), "Auto"),
+        new(nameof(PageAppearance.Light), "Light"),
+        new(nameof(PageAppearance.Dark), "Dark"),
+    ];
+
+    private SegmentedOption[] paletteOptions = [];
+
+    /// <summary>Whether the tiles are rendered from datasets; a built tile set has no palettes or layers to choose.</summary>
+    [Parameter]
+    public bool HasDatasets { get; set; } = true;
+
     /// <summary>The palettes served.</summary>
     [Parameter]
     public IReadOnlyList<string> Palettes { get; set; } = [];
@@ -45,6 +96,30 @@
     /// <summary>A palette was chosen.</summary>
     [Parameter]
     public EventCallback<string?> PaletteChanged { get; set; }
+
+    /// <summary>All layers and each layer, or nothing without layers.</summary>
+    [Parameter]
+    public IReadOnlyList<ServeLayerChoice> Layers { get; set; } = [];
+
+    /// <summary>The layer shown; <see langword="null"/> for all layers.</summary>
+    [Parameter]
+    public string? Layer { get; set; }
+
+    /// <summary>A layer was chosen.</summary>
+    [Parameter]
+    public EventCallback<string?> LayerChanged { get; set; }
+
+    /// <summary>The basemap.</summary>
+    [Parameter]
+    public Basemap Basemap { get; set; }
+
+    /// <summary>Whether OpenStreetMap failed to load, so the map fell back to none.</summary>
+    [Parameter]
+    public bool BasemapFailed { get; set; }
+
+    /// <summary>A basemap was chosen.</summary>
+    [Parameter]
+    public EventCallback<Basemap> BasemapChanged { get; set; }
 
     /// <summary>The time steps.</summary>
     [Parameter]
@@ -65,6 +140,24 @@
     /// <summary>An appearance was chosen.</summary>
     [Parameter]
     public EventCallback<PageAppearance> PageChanged { get; set; }
+
+    protected override void OnParametersSet() =>
+        paletteOptions = [.. Palettes.Select(p => new SegmentedOption(p, Title(p), PaletteIcon(p)))];
+
+    private static string Count(ServeLayerChoice choice)
+    {
+        var count = choice.Count.ToString(CultureInfo.InvariantCulture);
+        // "All layers" shows the total; a layer adds its products: "3 · S-101".
+        return choice.Id is null || choice.Products.Count == 0 ? count : count + " · " + string.Join(", ", choice.Products);
+    }
+
+    private static string? PaletteIcon(string palette) => palette.ToLowerInvariant() switch
+    {
+        "day" => "sun",
+        "dusk" => "sunset",
+        "night" => "moon",
+        _ => null,
+    };
 
     private static string Title(string palette) =>
         palette.Length == 0 ? palette : char.ToUpperInvariant(palette[0]) + palette[1..];

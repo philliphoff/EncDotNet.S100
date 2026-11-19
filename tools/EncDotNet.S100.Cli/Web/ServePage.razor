@@ -33,7 +33,9 @@
                                 <TileSetPanel OnZoomTo="ZoomToDataAsync" />
                                 break;
                             case ServePanel.Display:
-                                <DisplayPanel Palettes="Data.Palettes" Palette="@palette" PaletteChanged="SetPaletteAsync"
+                                <DisplayPanel HasDatasets="Data.HasDatasets" Palettes="Data.Palettes" Palette="@palette" PaletteChanged="SetPaletteAsync"
+                                              Layers="layerChoices" Layer="@layer" LayerChanged="SetLayerAsync"
+                                              Basemap="basemap" BasemapFailed="basemapFailed" BasemapChanged="SetBasemapAsync"
                                               Times="times" TimeIndex="timeIndex" TimeIndexChanged="SetTimeAsync"
                                               Page="page" PageChanged="SetPageAsync" />
                                 break;
@@ -98,6 +100,10 @@
     private string? palette;
     private int timeIndex;
     private PageAppearance page;
+    private IReadOnlyList<ServeLayerChoice> layerChoices = [];
+    private string? layer;
+    private Basemap basemap;
+    private bool basemapFailed;
 
     private ServePanel? activePanel = ServePanel.Datasets;
     private SheetHeight sheet;
@@ -128,6 +134,7 @@
             railItems = tileSetRailItems;
             activePanel = ServePanel.TileSet;
         }
+        layerChoices = ServeDisplay.LayerChoices(Data.Datasets, Data.Layers);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -138,6 +145,7 @@
         var (view, parameters) = ServeHash.Parse(await JS.InvokeAsync<string>("s100Map.readHash"));
         foreach (var (name, value) in parameters)
             hashParameters[name] = value;
+        ReadDisplayHash();
 
         servedDatasets = Data.Datasets;
         selectedDataset = DatasetFromHash();
@@ -157,6 +165,7 @@
             // A built tile set's bounds stand in for coverage (D16), and a click has nothing to pick (D35).
             tileSetBounds = Data.HasDatasets ? null : tileSet.Bounds,
             noPick = !Data.HasDatasets,
+            basemap = ServeDisplay.ScriptName(basemap),
         }, self);
         await JS.InvokeVoidAsync("s100Shell.watchPhone", self);
         shown = true;
@@ -177,12 +186,9 @@
         _ => "Datasets",
     };
 
-    /// <summary>The TileJSON of the palette and time chosen, relative to the page.</summary>
-    private string TileJsonUrl()
-    {
-        var url = (palette is null || palette == tileSet.DefaultPalette ? "" : Uri.EscapeDataString(palette) + "/") + "tiles.json";
-        return times.Count > 0 ? url + "?t=" + Uri.EscapeDataString(TileRenderSession.FormatTime(times[timeIndex])) : url;
-    }
+    /// <summary>The TileJSON of the layer, palette and time chosen, relative to the page.</summary>
+    private string TileJsonUrl() =>
+        ServeDisplay.TileJsonUrl(layer, palette, tileSet.DefaultPalette, times.Count > 0 ? TileRenderSession.FormatTime(times[timeIndex]) : null);
 
     /// <summary>The view framing the data in the map as it's sized now (D12).</summary>
     private async Task<MapView> StartViewAsync()
@@ -267,7 +273,16 @@
         hashParameters.Clear();
         foreach (var (name, value) in parameters)
             hashParameters[name] = value;
+        var (oldPalette, oldLayer) = (palette, layer);
+        ReadDisplayHash();
         await MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+        if (palette != oldPalette || layer != oldLayer)
+        {
+            await MapAsync("s100Map.setChart", TileJsonUrl());
+            await MapAsync("s100Map.setTheme", Theme);
+            StateHasChanged();
+        }
+
         if (view is { } v)
             await MapAsync("s100Map.jumpTo", v);
         if (DatasetFromHash() is var dataset && dataset != selectedDataset)
@@ -359,13 +374,55 @@
 
     private async Task<bool> CopyTextAsync(string text) => shown && await JS.InvokeAsync<bool>("s100Map.copyText", text);
 
-    // Interim Display controls (SW3 and SW4 replace them).
+    // Display (D17, D18, D36).
+
+    /// <summary>The palette and layer from the hash, when they're ones served; the hash is rewritten to match.</summary>
+    private void ReadDisplayHash()
+    {
+        if (Data.HasDatasets)
+        {
+            palette = ServeDisplay.PaletteFromHash(hashParameters, Data.Palettes) ?? tileSet.DefaultPalette;
+            layer = ServeDisplay.LayerFromHash(hashParameters, Data.Layers);
+        }
+
+        ServeDisplay.WriteHash(hashParameters, palette, tileSet.DefaultPalette, layer);
+    }
+
+    private Task WriteDisplayHashAsync()
+    {
+        ServeDisplay.WriteHash(hashParameters, palette, tileSet.DefaultPalette, layer);
+        return MapAsync("s100Map.setHashParameters", ServeHash.FormatParameters(hashParameters));
+    }
 
     private async Task SetPaletteAsync(string? value)
     {
         palette = value;
         await MapAsync("s100Map.setChart", TileJsonUrl());
         await MapAsync("s100Map.setTheme", Theme);
+        await WriteDisplayHashAsync();
+    }
+
+    private async Task SetLayerAsync(string? value)
+    {
+        layer = value;
+        await MapAsync("s100Map.setChart", TileJsonUrl());
+        await WriteDisplayHashAsync();
+    }
+
+    private Task SetBasemapAsync(Basemap value)
+    {
+        basemap = value;
+        basemapFailed = false;
+        return MapAsync("s100Map.setBasemap", ServeDisplay.ScriptName(value));
+    }
+
+    /// <summary>From the JS module: OpenStreetMap didn't load, so the map shows none (D17).</summary>
+    [JSInvokable]
+    public void OnBasemapFailed()
+    {
+        basemap = Basemap.None;
+        basemapFailed = true;
+        StateHasChanged();
     }
 
     private Task SetTimeAsync(int index)
