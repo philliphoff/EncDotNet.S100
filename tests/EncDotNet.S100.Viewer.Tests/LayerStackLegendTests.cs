@@ -114,11 +114,12 @@ public sealed class LayerStackLegendTests
         Assert.True(line.HasGlyph);
         Assert.Null(line.Color);
         Assert.Same(Brushes.Transparent, line.Swatch);
-        Assert.Equal((28, 10), (line.GlyphWidth, line.GlyphHeight));
-        Assert.Equal((14, 14), (rows[3].GlyphWidth, rows[3].GlyphHeight));
-        Assert.Equal((14, 10), (rows[4].GlyphWidth, rows[4].GlyphHeight));
+        // Shown 1.25 times the renderer's size, to fill the 42 × 20 tile.
+        Assert.Equal((35, 13), (line.GlyphWidth, line.GlyphHeight));
+        Assert.Equal((18, 18), (rows[3].GlyphWidth, rows[3].GlyphHeight));
+        Assert.Equal((18, 13), (rows[4].GlyphWidth, rows[4].GlyphHeight));
         var bitmap = Assert.IsAssignableFrom<Avalonia.Media.Imaging.Bitmap>(line.Glyph);
-        Assert.Equal(56, bitmap.PixelSize.Width); // drawn at 2x
+        Assert.Equal(70, bitmap.PixelSize.Width); // drawn at 2 × 1.25
 
         // A plain swatch row keeps its box and draws no glyph.
         var swatch = rows[5];

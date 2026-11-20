@@ -323,10 +323,10 @@
     <value>Open a dataset or exchange set</value>
   </data>
   <data name="Pane_Tab_ExchangeSets" xml:space="preserve">
-    <value>EXCHANGE SETS</value>
+    <value>Exchange sets</value>
   </data>
   <data name="Pane_Tab_Datasets" xml:space="preserve">
-    <value>DATASETS</value>
+    <value>Datasets</value>
   </data>
   <data name="Pane_ExchangeSets_Empty" xml:space="preserve">
     <value>No exchange sets loaded. Open an exchange set to see its datasets here.</value>
@@ -395,16 +395,16 @@
     <value>Time</value>
   </data>
   <data name="Pane_DatasetTab_Dataset" xml:space="preserve">
-    <value>DATASET</value>
+    <value>Dataset</value>
   </data>
   <data name="Pane_DatasetTab_Layers" xml:space="preserve">
-    <value>LAYERS</value>
+    <value>Layers</value>
   </data>
   <data name="Pane_DatasetTab_NoLayers" xml:space="preserve">
     <value>This dataset has no separately-controllable layers.</value>
   </data>
   <data name="Pane_DatasetTab_Validation" xml:space="preserve">
-    <value>VALIDATION</value>
+    <value>Validation</value>
   </data>
   <data name="Pane_Validation_NoFindings" xml:space="preserve">
     <value>No findings.</value>

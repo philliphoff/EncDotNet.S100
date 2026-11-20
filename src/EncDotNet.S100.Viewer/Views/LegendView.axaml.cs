@@ -13,22 +13,12 @@ namespace EncDotNet.S100.Viewer.Views;
 /// </summary>
 public partial class LegendView : UserControl
 {
-    /// <summary>Below this width the toolbar puts the filter on its own row.</summary>
-    internal const double NarrowToolbarWidth = 320;
-
     private LegendViewModel? _viewModel;
 
     /// <summary>Creates the view.</summary>
     public LegendView()
     {
         InitializeComponent();
-    }
-
-    /// <inheritdoc />
-    protected override void OnSizeChanged(SizeChangedEventArgs e)
-    {
-        base.OnSizeChanged(e);
-        Toolbar.Classes.Set("narrow", e.NewSize.Width < NarrowToolbarWidth);
     }
 
     /// <inheritdoc />

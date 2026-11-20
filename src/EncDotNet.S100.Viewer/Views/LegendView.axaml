@@ -12,37 +12,60 @@
         <Style Selector="Expander.legendSection /template/ :is(Button)">
             <Setter Property="AutomationProperties.Name"
                     Value="{Binding $parent[Expander].(AutomationProperties.Name)}" />
-            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="MinHeight" Value="32" />
         </Style>
-        <!-- A narrow dock (D21): the filter takes its own row under the switch. -->
-        <Style Selector="Grid#Toolbar > TextBox">
-            <Setter Property="Grid.Column" Value="1" />
+        <!-- A section header looks like a Library or Datasets tree row: the
+             tree's chevron and, on hover, the accent tint (accentTree in
+             App.axaml) instead of ShadUI's hover border. -->
+        <Style Selector="Expander.legendSection /template/ ToggleButton#PART_toggle">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="Transparent">
+                        <Border Name="PART_Tint"
+                                Background="{DynamicResource AccentBrush}"
+                                Opacity="0"
+                                CornerRadius="4" />
+                        <Grid ColumnDefinitions="16,*" Margin="6,0,4,0">
+                            <ToggleButton Theme="{StaticResource AccentTreeChevronTheme}"
+                                          IsChecked="{TemplateBinding IsChecked}"
+                                          IsHitTestVisible="False"
+                                          Focusable="False"
+                                          AutomationProperties.AccessibilityView="Raw" />
+                            <ContentPresenter Grid.Column="1"
+                                              Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalContentAlignment="Stretch"
+                                              VerticalAlignment="Center" />
+                        </Grid>
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
         </Style>
-        <Style Selector="Grid#Toolbar.narrow > TextBox">
-            <Setter Property="Grid.Row" Value="1" />
-            <Setter Property="Grid.Column" Value="0" />
-            <Setter Property="Grid.ColumnSpan" Value="3" />
+        <Style Selector="Expander.legendSection /template/ ToggleButton#PART_toggle:pointerover /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.06" />
         </Style>
+        <Style Selector="Expander.legendSection /template/ ToggleButton#PART_toggle:focus-visible /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <!-- Text sizes: a row's label, a section's title and the position line are
+             primary text at the default size; captions, details and group titles are
+             secondary (SecondaryFontSize), as in the Library. -->
         <Style Selector="Button.legendLink">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Height" Value="20" />
-            <Setter Property="MinHeight" Value="20" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="FontSize" Value="{StaticResource SecondaryFontSize}" />
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
         <!-- D5: "No data at 14:20" in the header. -->
         <Style Selector="TextBlock.legendDetail.noData">
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
             <Setter Property="Opacity" Value="1" />
-        </Style>
-        <Style Selector="Border.legendChip">
-            <Setter Property="CornerRadius" Value="3" />
-            <Setter Property="Padding" Value="4,1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <!-- The ring on the row a request named (the pick's In legend, D16). -->
         <Style Selector="Border.legendRow">
@@ -60,33 +83,39 @@
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
-        <!-- The S-98 position legend (D17, #1407): fixed first row under the toolbar. -->
+        <!-- The S-98 position legend (D17, #1407): fixed first row under the toolbar.
+             A flat strip across the dock between two rules, as in the mock: each
+             line trims to the dock's width and shows in full on hover. -->
         <DataTemplate DataType="lg:PositionLegendRowViewModel">
             <Border AutomationProperties.AutomationId="Legend.Position"
                     AutomationProperties.Name="{Binding AccessibleName}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_PositionLegend}"
                     Background="{DynamicResource MutedBackgroundColor}"
                     BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="8,5,8,6">
+                    BorderThickness="0,1"
+                    Padding="10,6">
                 <StackPanel Spacing="2">
                     <TextBlock Text="{x:Static loc:Strings.PositionLegend_Heading}"
-                               FontSize="10"
-                               FontWeight="Bold"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
                                LetterSpacing="0.6"
                                Opacity="0.65" />
                     <TextBlock Text="{Binding SettingsLine}"
+                               ToolTip.Tip="{Binding SettingsLine}"
                                AutomationProperties.AutomationId="Legend.Position.Settings"
-                               FontSize="11.5"
-                               TextWrapping="Wrap" />
+                               TextTrimming="CharacterEllipsis" />
                     <TextBlock AutomationProperties.AutomationId="Legend.Position.Cell"
-                               FontSize="11.5"
+                               FontSize="{StaticResource SecondaryFontSize}"
                                Opacity="0.8"
-                               TextWrapping="Wrap">
+                               TextTrimming="CharacterEllipsis">
+                        <ToolTip.Tip>
+                            <MultiBinding StringFormat="{}{0}{1}">
+                                <Binding Path="CellName" />
+                                <Binding Path="CellDetail" />
+                            </MultiBinding>
+                        </ToolTip.Tip>
                         <Run Text="{Binding CellName}"
-                             FontFamily="{StaticResource MonoFontFamily}"
-                             FontSize="11" /><Run Text="{Binding CellDetail}" />
+                             FontFamily="{StaticResource MonoFontFamily}" /><Run Text="{Binding CellDetail}" />
                     </TextBlock>
                 </StackPanel>
             </Border>
@@ -95,20 +124,49 @@
 
     <DockPanel LastChildFill="True">
 
-        <!-- Toolbar (D4): In view | All loaded, the filter, Collapse all.
-             Later slices add their controls to this grid's free columns. -->
+        <!-- Toolbar (D4): the filter and Collapse all, then In view | All loaded.
+             Laid out and sized as the Library's filter row and state segments. -->
         <Grid x:Name="Toolbar"
               DockPanel.Dock="Top"
-              Margin="10,4,8,6"
-              ColumnDefinitions="Auto,*,Auto"
+              Margin="8,6,8,6"
+              ColumnDefinitions="*,Auto"
               RowDefinitions="Auto,Auto"
-              ColumnSpacing="6"
-              RowSpacing="6">
-            <TabControl Grid.Column="0"
-                        Classes="pillTabs compact"
+              ColumnSpacing="4"
+              RowSpacing="4">
+            <TextBox Grid.Row="0"
+                     Grid.Column="0"
+                     AutomationProperties.AutomationId="Legend.Filter"
+                     AutomationProperties.Name="{x:Static loc:Strings.Legend_FilterName}"
+                     PlaceholderText="{x:Static loc:Strings.Legend_FilterWatermark}"
+                     Text="{Binding Filter, Mode=TwoWay}"
+                     MinWidth="48">
+                <TextBox.InnerRightContent>
+                    <Button AutomationProperties.AutomationId="Legend.ClearFilter"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LegendClearFilter}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendClearFilter}"
+                            IsVisible="{Binding HasFilter}"
+                            Command="{Binding ClearFilterCommand}"
+                            Classes="Icon"
+                            Margin="0,0,4,0"
+                            Padding="2">
+                        <ic:FluentIcon Icon="Dismiss" FontSize="12" />
+                    </Button>
+                </TextBox.InnerRightContent>
+            </TextBox>
+            <Button Grid.Row="0"
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="Legend.CollapseAll"
+                    AutomationProperties.Name="{x:Static loc:Strings.Legend_CollapseAll}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendCollapseAll}"
+                    Command="{Binding CollapseAllCommand}"
+                    Classes="Icon panelIcon">
+                <ic:FluentIcon Icon="ArrowCollapseAll" FontSize="16" />
+            </Button>
+            <TabControl Grid.Row="1"
+                        Grid.ColumnSpan="2"
+                        Classes="segmentTabs"
                         AutomationProperties.AutomationId="Legend.Toolbar.InView"
                         AutomationProperties.Name="{x:Static loc:Strings.Legend_ScopeName}"
-                        VerticalAlignment="Center"
                         SelectedIndex="{Binding ScopeIndex, Mode=TwoWay}">
                 <TabItem AutomationProperties.AutomationId="Legend.Toolbar.ScopeInView"
                          Header="{x:Static loc:Strings.Legend_ScopeInView}"
@@ -117,40 +175,6 @@
                          Header="{x:Static loc:Strings.Legend_ScopeAllLoaded}"
                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendScopeAllLoaded}" />
             </TabControl>
-            <TextBox AutomationProperties.AutomationId="Legend.Filter"
-                     AutomationProperties.Name="{x:Static loc:Strings.Legend_FilterName}"
-                     PlaceholderText="{x:Static loc:Strings.Legend_FilterWatermark}"
-                     Text="{Binding Filter, Mode=TwoWay}"
-                     MinWidth="48"
-                     Height="24"
-                     MinHeight="24"
-                     FontSize="12"
-                     Padding="6,0"
-                     VerticalContentAlignment="Center">
-                <TextBox.InnerRightContent>
-                    <Button AutomationProperties.AutomationId="Legend.ClearFilter"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LegendClearFilter}"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendClearFilter}"
-                            IsVisible="{Binding HasFilter}"
-                            Command="{Binding ClearFilterCommand}"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Width="20" Height="20" MinWidth="0" MinHeight="0" Padding="0">
-                        <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="11" />
-                    </Button>
-                </TextBox.InnerRightContent>
-            </TextBox>
-            <Button Grid.Column="2"
-                    HorizontalAlignment="Right"
-                    AutomationProperties.AutomationId="Legend.CollapseAll"
-                    AutomationProperties.Name="{x:Static loc:Strings.Legend_CollapseAll}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendCollapseAll}"
-                    Command="{Binding CollapseAllCommand}"
-                    Classes="Ghost"
-                    Width="24" Height="24" MinWidth="0" MinHeight="0" Padding="0"
-                    VerticalAlignment="Center">
-                <ic:FluentIcon Icon="ArrowCollapseAll" IconVariant="Regular" FontSize="14" />
-            </Button>
         </Grid>
 
         <!-- Fixed rows under the toolbar that don't scroll or collapse: the S-98
@@ -159,13 +183,12 @@
         <ItemsControl DockPanel.Dock="Top"
                       AutomationProperties.AutomationId="Legend.Pinned"
                       IsVisible="{Binding HasPinnedRows}"
-                      ItemsSource="{Binding PinnedRows}"
-                      Margin="10,0,8,6" />
+                      ItemsSource="{Binding PinnedRows}" />
 
             <ScrollViewer x:Name="Scroller"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="4,0,4,8" Spacing="2">
+                <StackPanel Margin="4,4,4,8" Spacing="2">
                     <views:PlaceholderView IsVisible="{Binding IsEmpty}"
                                            Icon="ColorLine"
                                            Header="{Binding EmptyTitle}"
@@ -188,23 +211,20 @@
                                               ColumnSpacing="7"
                                               Background="Transparent"
                                               ToolTip.Tip="{Binding HeaderTooltip}">
-                                            <Border Grid.Column="0" Classes="legendChip">
-                                                <TextBlock Text="{Binding Spec}"
-                                                           FontFamily="{StaticResource MonoFontFamily}"
-                                                           FontSize="10"
-                                                           Opacity="0.8" />
+                                            <!-- The product tag, as the Library's and the Datasets panel's. -->
+                                            <Border Grid.Column="0" Classes="kindTag">
+                                                <TextBlock Text="{Binding Spec}" />
                                             </Border>
                                             <TextBlock Grid.Column="1"
                                                        Text="{Binding Title}"
                                                        FontWeight="SemiBold"
-                                                       FontSize="12"
                                                        VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis"
                                                        MaxWidth="200" />
                                             <TextBlock Grid.Column="2"
                                                        Text="{Binding Detail}"
                                                        AutomationProperties.AutomationId="Legend.Section.Detail"
-                                                       FontSize="11"
+                                                       FontSize="{StaticResource SecondaryFontSize}"
                                                        Opacity="0.65"
                                                        Classes="legendDetail"
                                                        Classes.noData="{Binding HasNoData}"
@@ -217,25 +237,30 @@
                                         <TextBlock Text="{Binding Caption}"
                                                    IsVisible="{Binding HasCaption}"
                                                    AutomationProperties.AutomationId="Legend.Section.Caption"
-                                                   FontSize="11"
+                                                   FontSize="{StaticResource SecondaryFontSize}"
                                                    Opacity="0.75"
-                                                   TextWrapping="Wrap" />
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,8,0,3" />
+                                        <!-- Spaced as a group title, so every line under a header starts the same way. -->
                                         <TextBlock Text="{Binding MarinerSettings}"
                                                    IsVisible="{Binding HasMarinerSettings}"
                                                    AutomationProperties.AutomationId="Legend.Section.MarinerSettings"
-                                                   FontSize="11"
+                                                   FontSize="{StaticResource SecondaryFontSize}"
                                                    Opacity="0.75"
-                                                   TextWrapping="Wrap" />
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,8,0,3" />
                                         <ItemsControl ItemsSource="{Binding VisibleGroups}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="lg:LegendGroupViewModel">
+                                                    <!-- A group title sits apart from the rows above it and close
+                                                         to its own (the mock's 20 px sub-heading, text at its foot). -->
                                                     <StackPanel Spacing="1" Margin="0,2,0,0">
                                                         <TextBlock Text="{Binding Title}"
                                                                    IsVisible="{Binding ShowTitle}"
-                                                                   FontSize="10.5"
-                                                                   FontWeight="SemiBold"
-                                                                   Opacity="0.7"
-                                                                   Margin="0,2,0,1" />
+                                                                   FontSize="{StaticResource SecondaryFontSize}"
+                                                                   FontWeight="Medium"
+                                                                   Opacity="0.6"
+                                                                   Margin="0,8,0,3" />
                                                         <ItemsControl ItemsSource="{Binding Rows}"
                                                                       AutomationProperties.Name="{x:Static loc:Strings.Legend_RowsName}"
                                                                       AutomationProperties.ControlTypeOverride="List">
@@ -253,18 +278,20 @@
                                                                             AutomationProperties.AutomationId="Legend.Row"
                                                                             AutomationProperties.Name="{Binding Label}"
                                                                             AutomationProperties.ControlTypeOverride="ListItem">
-                                                                        <StackPanel Orientation="Horizontal" Spacing="7">
-                                                                            <!-- D10: the glyph on a tile of the palette's chart background. -->
+                                                                        <!-- A grid, not a horizontal stack, so a long label trims to the dock's width. -->
+                                                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7">
+                                                                            <!-- D10: the glyph on a tile of the palette's chart background,
+                                                                                 the size of the product tag above it. -->
                                                                             <Border Background="{Binding Tile}"
-                                                                                    CornerRadius="3"
-                                                                                    Width="36"
-                                                                                    Height="18"
+                                                                                    CornerRadius="4"
+                                                                                    Width="42"
+                                                                                    Height="20"
                                                                                     VerticalAlignment="Center"
                                                                                     AutomationProperties.AutomationId="Legend.Row.Tile"
                                                                                     AutomationProperties.AccessibilityView="Raw">
                                                                                 <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                                                    <Border Width="20"
-                                                                                            Height="10"
+                                                                                    <Border Width="26"
+                                                                                            Height="12"
                                                                                             CornerRadius="2"
                                                                                             BorderThickness="1"
                                                                                             BorderBrush="{DynamicResource BorderColor}"
@@ -277,11 +304,13 @@
                                                                                            Stretch="Fill" />
                                                                                 </Panel>
                                                                             </Border>
-                                                                            <TextBlock Text="{Binding Label}"
-                                                                                       FontSize="11.5"
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       Text="{Binding Label}"
+                                                                                       ToolTip.Tip="{Binding Label}"
+                                                                                       AutomationProperties.AutomationId="Legend.Row.Label"
                                                                                        VerticalAlignment="Center"
                                                                                        TextTrimming="CharacterEllipsis" />
-                                                                        </StackPanel>
+                                                                        </Grid>
                                                                     </Border>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>

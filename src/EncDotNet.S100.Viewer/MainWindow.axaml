@@ -1325,7 +1325,7 @@
                                         x:DataType="vm:ClearanceViewModel"
                                         DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.Clearance}"
                                         IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsClearanceTabSelected}">
-                                <TabControl Classes="pillTabs compact"
+                                <TabControl Classes="segmentTabs compact"
                                             AutomationProperties.AutomationId="Clearance.Axis"
                                             HorizontalAlignment="Left"
                                             VerticalAlignment="Center"

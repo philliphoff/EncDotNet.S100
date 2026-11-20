@@ -15,32 +15,6 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
-        <!-- Now / View time: the Library's segment look. -->
-        <Style Selector="Border.navwarnSegments">
-            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="2" />
-        </Style>
-        <Style Selector="RadioButton.navwarnSegment">
-            <Setter Property="FontSize" Value="11.5" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Name="PART_Segment" CornerRadius="4" MinHeight="24" Padding="8,0" Background="Transparent">
-                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          Foreground="{TemplateBinding Foreground}" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="RadioButton.navwarnSegment:checked /template/ Border#PART_Segment">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
-            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
-        </Style>
-        <Style Selector="RadioButton.navwarnSegment:not(:checked)">
-            <Setter Property="Opacity" Value="0.7" />
-        </Style>
         <!-- The summary's text-only count reads as a link. -->
         <Style Selector="ToggleButton.navwarnLink">
             <Setter Property="Background" Value="Transparent" />
@@ -207,10 +181,10 @@
                 </Button>
             </Grid>
             <!-- #959 E3: while Check route is on, every warning or only those on the route. -->
-            <Border Classes="navwarnSegments" IsVisible="{Binding RouteScope.IsRouteScopeAvailable}">
+            <Border Classes="segmentTrack" IsVisible="{Binding RouteScope.IsRouteScopeAvailable}">
                 <Grid ColumnDefinitions="*,1.6*">
                     <RadioButton Grid.Column="0"
-                                 Classes="navwarnSegment" GroupName="NavWarningsScope"
+                                 Classes="segment" GroupName="NavWarningsScope"
                                  HorizontalAlignment="Stretch"
                                  AutomationProperties.AutomationId="NavigationalWarnings.Scope.All"
                                  AutomationProperties.Name="{Binding RouteScope.AllScopeText}"
@@ -220,7 +194,7 @@
                         <TextBlock Text="{Binding RouteScope.AllScopeText}" TextTrimming="CharacterEllipsis" />
                     </RadioButton>
                     <RadioButton Grid.Column="1"
-                                 Classes="navwarnSegment" GroupName="NavWarningsScope"
+                                 Classes="segment" GroupName="NavWarningsScope"
                                  HorizontalAlignment="Stretch"
                                  AutomationProperties.AutomationId="NavigationalWarnings.Scope.Route"
                                  AutomationProperties.Name="{Binding RouteScope.RouteScopeText}"
@@ -232,15 +206,15 @@
                 </Grid>
             </Border>
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Border Classes="navwarnSegments">
+                <Border Classes="segmentTrack">
                     <StackPanel Orientation="Horizontal">
-                        <RadioButton Classes="navwarnSegment" GroupName="NavWarningsTime"
+                        <RadioButton Classes="segment" GroupName="NavWarningsTime"
                                      AutomationProperties.AutomationId="NavigationalWarnings.Now"
                                      AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_FilterNow}"
                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_FilterNow}"
                                      Content="{x:Static loc:Strings.NavWarnings_FilterNow}"
                                      IsChecked="{Binding IsNowFilter, Mode=TwoWay}" />
-                        <RadioButton Classes="navwarnSegment" GroupName="NavWarningsTime"
+                        <RadioButton Classes="segment" GroupName="NavWarningsTime"
                                      AutomationProperties.AutomationId="NavigationalWarnings.ViewTime"
                                      AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_FilterViewTime}"
                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_FilterViewTime}"
