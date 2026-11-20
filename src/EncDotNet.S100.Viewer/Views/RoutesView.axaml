@@ -1449,7 +1449,7 @@
 
                         <!-- C4: Legs / Findings {N}. -->
                         <!-- Header-only tabs: the two lists below follow ShowLegs / ShowFindings. -->
-                        <TabControl Classes="pillTabs"
+                        <TabControl Classes="segmentTabs"
                                     AutomationProperties.AutomationId="Routes.Check.Tabs"
                                     IsVisible="{Binding HasVerdict}"
                                     SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
@@ -1457,13 +1457,14 @@
                                      Header="{x:Static loc:Strings.Check_TabLegs}" />
                             <TabItem AutomationProperties.AutomationId="Routes.Check.FindingsTab"
                                      AutomationProperties.Name="{Binding FindingsLabel}">
-                                <!-- The count in the secondary colour, as the Library's counts. -->
+                                <!-- The count fainter than the label, as the Library's counts. -->
                                 <TabItem.Header>
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <TextBlock Text="{x:Static loc:Strings.Check_TabFindings}" />
                                         <TextBlock AutomationProperties.AutomationId="Routes.Check.FindingsTab.Count"
                                                    Text="{Binding FindingsCount}"
-                                                   Foreground="{DynamicResource MutedColor}" />
+                                                   FontWeight="Normal"
+                                                   Opacity="0.7" />
                                     </StackPanel>
                                 </TabItem.Header>
                             </TabItem>

@@ -68,34 +68,6 @@
         <Style Selector="Border.libraryTag.failed > TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource ErrorColor}" />
         </Style>
-        <!-- The state segments under the filter box. -->
-        <Style Selector="Border.librarySegments">
-            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="3" />
-        </Style>
-        <Style Selector="RadioButton.librarySegment">
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Name="PART_Segment" CornerRadius="6" MinHeight="30" Padding="6,0" Background="Transparent">
-                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"
-                                          Foreground="{TemplateBinding Foreground}" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="RadioButton.librarySegment:checked /template/ Border#PART_Segment">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
-            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
-        </Style>
-        <Style Selector="RadioButton.librarySegment:not(:checked)">
-            <Setter Property="Opacity" Value="0.75" />
-        </Style>
-
         <!-- Details pane: small uppercase group headers, mono values, click-to-copy. -->
         <Style Selector="TextBlock.libraryGroupHeader">
             <Setter Property="FontSize" Value="11.5" />
@@ -109,34 +81,13 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
 
-        <!-- Tree: a small bordered mono tag for the source kind, and a status dot. -->
-        <Style Selector="Border.libraryKindTag">
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="4,0" />
-            <Setter Property="MinWidth" Value="42" />
-            <Setter Property="MinHeight" Value="20" />
-        </Style>
-        <!-- A group node keeps the tag's width, so names line up, but shows no tag. -->
-        <Style Selector="Border.libraryKindTag.empty">
-            <Setter Property="BorderBrush" Value="Transparent" />
-        </Style>
-        <Style Selector="Border.libraryKindTag > TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-            <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
-            <Setter Property="Opacity" Value="0.7" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
         <!-- "Set up an identity…" after a SECOM source's status line (#880). -->
         <Style Selector="Button.libraryFix">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="2,0" />
             <Setter Property="MinHeight" Value="0" />
-            <Setter Property="FontSize" Value="{DynamicResource LibrarySecondaryFontSize}" />
+            <Setter Property="FontSize" Value="{DynamicResource SecondaryFontSize}" />
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -216,16 +167,6 @@
             <Setter Property="Padding" Value="10,7" />
         </Style>
 
-        <!-- Toolbar and filter icon buttons: one 36 × 36 box for Button and ToggleButton
-             alike (ShadUI's Icon class only sizes Button). -->
-        <Style Selector="Button.libraryIcon, ToggleButton.libraryIcon">
-            <Setter Property="Width" Value="36" />
-            <Setter Property="Height" Value="36" />
-            <Setter Property="MinHeight" Value="36" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
         <!-- The details header's 32 × 32 icon actions. -->
         <Style Selector="Button.libraryHeaderAction">
             <Setter Property="Width" Value="32" />
@@ -289,7 +230,6 @@
 
     <UserControl.Resources>
         <!-- Sizes that differ from the ShadUI defaults (14 px body text, 36 px controls). -->
-        <x:Double x:Key="LibrarySecondaryFontSize">13</x:Double>
         <x:Double x:Key="LibraryTagHeight">22</x:Double>
         <!-- Tints for tags, from the theme's warning and error colours. -->
         <SolidColorBrush x:Key="LibraryTagWarningBackground" Color="{DynamicResource WarningColor}" Opacity="0.10" />
@@ -392,17 +332,17 @@
         <StackPanel IsVisible="{Binding Tree.IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyTitle}" FontSize="15" FontWeight="SemiBold"
                        HorizontalAlignment="Center" />
-            <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.7"
+            <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.7"
                        TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6" />
             <Button Classes="Outline libraryQuickAction" Command="{Binding Tree.AddFolderCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Folder}"
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_FolderSub}"
                     AutomationProperties.AutomationId="Library.Quick.Folder">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="DIR" /></Border>
+                    <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="DIR" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Folder}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FolderSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FolderSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -411,10 +351,10 @@
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_OnlineSub}"
                     AutomationProperties.AutomationId="Library.Quick.Online">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="WEB" /></Border>
+                    <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="WEB" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Online}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_OnlineSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_OnlineSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -423,10 +363,10 @@
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_FeedSub}"
                     AutomationProperties.AutomationId="Library.Quick.Feed">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="FEED" /></Border>
+                    <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="FEED" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -435,14 +375,14 @@
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_ManifestSub}"
                     AutomationProperties.AutomationId="Library.Quick.Manifest">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="JSON" /></Border>
+                    <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="JSON" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Manifest}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_ManifestSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_ManifestSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
-            <TextBlock Text="{x:Static loc:Strings.Library_DropHint}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.55"
+            <TextBlock Text="{x:Static loc:Strings.Library_DropHint}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.55"
                        HorizontalAlignment="Center" Margin="0,4,0,0" />
         </StackPanel>
 
@@ -460,14 +400,14 @@
                  (The dock's own header already says "LIBRARY".) -->
             <DockPanel Grid.Row="0" Margin="6,4">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
-                    <Button Classes="Icon libraryIcon"
+                    <Button Classes="Icon panelIcon"
                             AutomationProperties.AutomationId="Library.Refresh"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RefreshLibrary}"
                             Command="{Binding Tree.RefreshCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_RefreshLibrary}">
                         <ic:FluentIcon Icon="ArrowSync" FontSize="16" />
                     </Button>
-                    <ToggleButton Classes="Icon libraryIcon coverageToggle"
+                    <ToggleButton Classes="Icon panelIcon coverageToggle"
                                   AutomationProperties.AutomationId="Library.ShowCoverage"
                                   AutomationProperties.Name="{x:Static loc:Strings.Label_ShowCoverage}"
                                   AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ShowCoverage}"
@@ -475,7 +415,7 @@
                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
                         <ic:FluentIcon Icon="Map" FontSize="16" />
                     </ToggleButton>
-                    <Button Classes="Icon libraryIcon"
+                    <Button Classes="Icon panelIcon"
                             AutomationProperties.AutomationId="Library.More"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LibraryMore}"
                             Flyout="{StaticResource MoreMenu}"
@@ -522,7 +462,7 @@
                               MinHeight="20" Background="Transparent"
                               ToolTip.Tip="{Binding Tooltip}">
                             <!-- Centred on the first line (row 0), also when a status line follows. -->
-                            <Border Grid.Column="0" Classes="libraryKindTag" Classes.empty="{Binding !HasKindTag}"
+                            <Border Grid.Column="0" Classes="kindTag" Classes.empty="{Binding !HasKindTag}"
                                     VerticalAlignment="Center">
                                 <TextBlock Text="{Binding KindTag}" />
                             </Border>
@@ -544,12 +484,12 @@
                                 </TextBox.KeyBindings>
                             </TextBox>
                             <TextBlock Grid.Column="2" Text="{Binding Status}"
-                                       FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                       FontSize="{StaticResource SecondaryFontSize}"
                                        Foreground="{DynamicResource ForegroundColor}" Opacity="0.6" VerticalAlignment="Center" />
                             <!-- A manifest source named like its collection shows its file name. -->
                             <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SecondaryName}"
                                        IsVisible="{Binding HasSecondaryName}" Margin="0,1,0,0"
-                                       FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                       FontSize="{StaticResource SecondaryFontSize}"
                                        Foreground="{DynamicResource ForegroundColor}" Opacity="0.55"
                                        TextTrimming="CharacterEllipsis" />
                             <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6"
@@ -559,7 +499,7 @@
                                          Classes.warning="{Binding IsStatusWarning}"
                                          Classes.error="{Binding IsStatusError}"
                                          Classes.ok="{Binding IsStatusOk}" />
-                                <TextBlock Text="{Binding StatusLine}" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                <TextBlock Text="{Binding StatusLine}" FontSize="{StaticResource SecondaryFontSize}"
                                            Foreground="{DynamicResource ForegroundColor}" Opacity="0.7"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             </StackPanel>
@@ -603,15 +543,15 @@
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="8,2,2,2">
                             <ic:FluentIcon Grid.Column="0" Icon="Location" FontSize="14"
                                            Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource LibrarySecondaryFontSize}" TextTrimming="CharacterEllipsis">
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource SecondaryFontSize}" TextTrimming="CharacterEllipsis">
                                 <Run Text="{Binding Tap.TapHitsText}" FontWeight="SemiBold" />
                                 <Run Text="{Binding Tap.TapPositionText}" />
                             </TextBlock>
-                            <Button Grid.Column="2" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                            <Button Grid.Column="2" Classes="Ghost" Padding="6,0" FontSize="{StaticResource SecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Tap.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
                                     Command="{Binding Tap.NextTapHitCommand}" />
-                            <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                            <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource SecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Tap.ListAll"
                                     Content="{x:Static loc:Strings.Library_TapListThese}"
                                     Command="{Binding Tap.ListTapHitsCommand}" />
@@ -631,13 +571,13 @@
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="8,2,2,2">
                             <ic:FluentIcon Grid.Column="0" Icon="Location" FontSize="14"
                                            Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource LibrarySecondaryFontSize}" TextTrimming="CharacterEllipsis">
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource SecondaryFontSize}" TextTrimming="CharacterEllipsis">
                                 <Run Text="{Binding Tap.LocationHitsText}" FontWeight="SemiBold" />
                                 <Run Text="{Binding Tap.LocationCoverText}" />
                             </TextBlock>
-                            <TextBlock Grid.Column="2" Text="{Binding Tap.LocationPositionText}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
+                            <TextBlock Grid.Column="2" Text="{Binding Tap.LocationPositionText}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6"
                                        FontFamily="{StaticResource MonoFontFamily}" VerticalAlignment="Center" />
-                            <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                            <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource SecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Location.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
                                     Command="{Binding Tap.NextAtLocationCommand}" />
@@ -656,12 +596,12 @@
                                  AutomationProperties.AutomationId="Library.Filter"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
-                                <TextBlock Text="{Binding List.ItemsSummary}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
+                                <TextBlock Text="{Binding List.ItemsSummary}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6"
                                            VerticalAlignment="Center" Margin="4,0,8,0" />
                             </TextBox.InnerRightContent>
                         </TextBox>
                         <!-- #711 G2: only data valid at the Timeline's view time (with any segment). -->
-                        <ToggleButton Grid.Column="1" Classes="Icon libraryIcon coverageToggle"
+                        <ToggleButton Grid.Column="1" Classes="Icon panelIcon coverageToggle"
                                       AutomationProperties.AutomationId="Library.AtViewTime"
                                       IsVisible="{Binding List.HasViewTime}"
                                       IsChecked="{Binding List.IsAtViewTime}"
@@ -669,7 +609,7 @@
                                       AutomationProperties.Name="{x:Static loc:Strings.Library_State_AtViewTime}">
                             <ic:FluentIcon Icon="Clock" FontSize="16" />
                         </ToggleButton>
-                        <Button Grid.Column="2" Classes="Icon libraryIcon"
+                        <Button Grid.Column="2" Classes="Icon panelIcon"
                                 AutomationProperties.AutomationId="Library.FilterOptions"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
@@ -684,30 +624,30 @@
                         </Button>
                     </Grid>
                     <!-- State segments: what do I have, what can I get, what is new. -->
-                    <Border Classes="librarySegments">
+                    <Border Classes="segmentTrack">
                         <UniformGrid Rows="1">
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateAll}" AutomationProperties.AutomationId="Library.State.All" AutomationProperties.Name="{x:Static loc:Strings.Library_State_All}">
+                            <RadioButton Classes="segment" GroupName="LibraryState" IsChecked="{Binding List.IsStateAll}" AutomationProperties.AutomationId="Library.State.All" AutomationProperties.Name="{x:Static loc:Strings.Library_State_All}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_All}" />
-                                    <TextBlock Text="{Binding List.AllCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.AllCount, StringFormat={}{0:N0}}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Local}">
+                            <RadioButton Classes="segment" GroupName="LibraryState" IsChecked="{Binding List.IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Local}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Local}" />
-                                    <TextBlock Text="{Binding List.LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.LocalCount, StringFormat={}{0:N0}}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Online}">
+                            <RadioButton Classes="segment" GroupName="LibraryState" IsChecked="{Binding List.IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Online}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Online}" />
-                                    <TextBlock Text="{Binding List.OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.OnlineCount, StringFormat={}{0:N0}}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding List.IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Updates}">
+                            <RadioButton Classes="segment" GroupName="LibraryState" IsChecked="{Binding List.IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Updates}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
-                                    <TextBlock Text="{Binding List.UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding List.UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                         </UniformGrid>
@@ -750,7 +690,7 @@
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0">
                                 <TextBlock Text="{Binding List.BulkSummary}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding List.BulkScope}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
+                                <TextBlock Text="{Binding List.BulkScope}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.65"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <Panel Grid.Column="1" VerticalAlignment="Center">
@@ -787,7 +727,7 @@
                     <TextBlock IsVisible="{Binding PortrayalWarm.IsVisible, FallbackValue=False}"
                                Text="{Binding PortrayalWarm.Text, FallbackValue=''}"
                                AutomationProperties.AutomationId="Library.PrewarmStatus"
-                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
+                               FontSize="{StaticResource SecondaryFontSize}" Opacity="0.65"
                                Margin="10,0" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
@@ -874,11 +814,11 @@
                                                    FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                     </DockPanel>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Margin="0,2,0,0"
-                                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8"
+                                               FontSize="{StaticResource SecondaryFontSize}" Opacity="0.8"
                                                IsVisible="{Binding HasSubtitle}"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Summary}" Margin="0,2,0,0"
-                                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
+                                               FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6"
                                                TextTrimming="CharacterEllipsis" />
                                     <!-- A forecast run (#685): its valid window — the grey part has passed, the
                                          tinted part is ahead — and the time left (red once ended). -->
@@ -891,9 +831,9 @@
                                                          Foreground="{DynamicResource BorderColor}" />
                                         </Panel>
                                         <Panel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding TimeLeftText}" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                            <TextBlock Text="{Binding TimeLeftText}" FontSize="{StaticResource SecondaryFontSize}"
                                                        Opacity="0.75" IsVisible="{Binding !IsWindowEnded}" />
-                                            <TextBlock Text="{Binding TimeLeftText}" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                            <TextBlock Text="{Binding TimeLeftText}" FontSize="{StaticResource SecondaryFontSize}"
                                                        Foreground="{DynamicResource DestructiveColor}" IsVisible="{Binding IsWindowEnded}" />
                                         </Panel>
                                     </Grid>
@@ -903,11 +843,11 @@
                                         <ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding DownloadProgress}"
                                                      Height="4" MinHeight="4" VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="1" Text="{Binding DownloadProgressText}"
-                                                   FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
+                                                   FontSize="{StaticResource SecondaryFontSize}" Opacity="0.65"
                                                    FontFamily="{StaticResource MonoFontFamily}" VerticalAlignment="Center" />
                                         <Button Grid.Column="2" Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
                                                 AutomationProperties.AutomationId="Library.Row.CancelDownload"
-                                                FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                                FontSize="{StaticResource SecondaryFontSize}"
                                                 Content="{x:Static loc:Strings.Library_CancelDownload}"
                                                 Command="{Binding CancelDownloadCommand}" />
                                     </Grid>
@@ -1005,43 +945,43 @@
                             <!-- Title and state, indented to the name's left edge (swatch 18 + spacing 10). -->
                             <TextBlock Text="{Binding List.SelectedItem.Subtitle}" IsVisible="{Binding List.SelectedItem.HasSubtitle, FallbackValue=False}"
                                        Margin="28,0,0,0"
-                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8" TextWrapping="Wrap" />
+                                       FontSize="{StaticResource SecondaryFontSize}" Opacity="0.8" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding List.SelectedItem.PrimaryStateText}" Margin="28,0,0,0"
-                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
+                                       FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6" />
                             <!-- A weather source's credit (#1075): its attribution and licence. -->
                             <SelectableTextBlock Text="{Binding List.SelectedItem.Credit, FallbackValue=''}" Margin="28,0,0,0"
                                                  IsVisible="{Binding List.SelectedItem.HasCredit, FallbackValue=False}"
                                                  AutomationProperties.AutomationId="Library.Details.Credit"
                                                  AutomationProperties.Name="{x:Static loc:Strings.Library_DataCreditName}"
-                                                 FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" TextWrapping="Wrap" />
+                                                 FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6" TextWrapping="Wrap" />
                             <!-- A weather run (#1075): stale past 12 hours, with "Load latest run"; pin or unpin it. -->
                             <TextBlock Text="{Binding List.SelectedItem.StaleRunText, FallbackValue=''}" Margin="28,2,0,0"
                                        IsVisible="{Binding List.SelectedItem.IsStaleRun, FallbackValue=False}"
                                        AutomationProperties.AutomationId="Library.Details.StaleRun"
                                        AutomationProperties.Name="{Binding List.SelectedItem.StaleRunText, FallbackValue=''}"
                                        Foreground="{DynamicResource WarningColor}"
-                                       FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
+                                       FontSize="{StaticResource SecondaryFontSize}" TextWrapping="Wrap" />
                             <WrapPanel Margin="28,4,0,0" IsVisible="{Binding List.SelectedItem.IsWeatherRun, FallbackValue=False}">
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
                                         Command="{Binding Details.LoadLatestRunCommand}"
                                         IsVisible="{Binding List.SelectedItem.CanLoadLatestRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.LoadLatestRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_LoadLatestRun}"
-                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                        FontSize="{StaticResource SecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_LoadLatestRun}" />
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
                                         Command="{Binding Details.PinRunCommand}"
                                         IsVisible="{Binding List.SelectedItem.CanPinRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.PinRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_PinRun}"
-                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                        FontSize="{StaticResource SecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_PinRun}" />
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
                                         Command="{Binding Details.UnpinRunCommand}"
                                         IsVisible="{Binding List.SelectedItem.IsPinnedRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.UnpinRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_UnpinRun}"
-                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                        FontSize="{StaticResource SecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_UnpinRun}" />
                             </WrapPanel>
                         </StackPanel>
@@ -1061,11 +1001,11 @@
                         <StackPanel Spacing="1">
                             <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             <SelectableTextBlock Text="{Binding Host}" FontFamily="{StaticResource MonoFontFamily}"
-                                                 FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
+                                                 FontSize="{StaticResource SecondaryFontSize}" Opacity="0.65" />
                         </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Text="{x:Static loc:Strings.Secom_Details_Connection}" Classes="libraryGroupHeader" />
-                            <TextBlock Text="{x:Static loc:Strings.Secom_Picker_Label}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
+                            <TextBlock Text="{x:Static loc:Strings.Secom_Picker_Label}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6" />
                             <secom:IdentityPicker DataContext="{Binding Picker}" />
                             <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasPresentationLine}"
                                         AutomationProperties.AutomationId="Library.SourceDetails.Presentation"
@@ -1095,9 +1035,9 @@
                                             <ColumnDefinition Width="Auto" SharedSizeGroup="SecomDetailKey" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding Label}" Opacity="0.6" FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                        <TextBlock Text="{Binding Label}" Opacity="0.6" FontSize="{StaticResource SecondaryFontSize}" />
                                         <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
-                                                             FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                                             FontSize="{StaticResource SecondaryFontSize}"
                                                              Classes.mono="{Binding IsMono}"
                                                              Classes="secomToned"
                                                              Classes.success="{Binding IsSuccess}"
@@ -1125,7 +1065,7 @@
                         <StackPanel Spacing="1">
                             <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Description}" TextWrapping="Wrap"
-                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
+                                       FontSize="{StaticResource SecondaryFontSize}" Opacity="0.65" />
                         </StackPanel>
                         <TextBlock Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
                                    FontSize="12" FontWeight="Medium"
@@ -1134,14 +1074,14 @@
                                    AutomationProperties.LiveSetting="Polite"
                                    AutomationProperties.Name="{Binding Message}" />
                         <TextBlock Text="{x:Static loc:Strings.LiveFeed_NoOptions}" IsVisible="{Binding HasNoOptions}"
-                                   FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
+                                   FontSize="{StaticResource SecondaryFontSize}" Opacity="0.65" />
                         <StackPanel Spacing="8" IsVisible="{Binding HasOptions}">
                             <TextBlock Text="{x:Static loc:Strings.LiveFeed_SettingsHeader}" Classes="libraryGroupHeader" />
                             <ItemsControl ItemsSource="{Binding Options}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:LiveFeedOptionViewModel">
                                         <StackPanel Spacing="3" Margin="0,0,0,8">
-                                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.75"
+                                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.75"
                                                        IsVisible="{Binding !IsBoolean}" />
                                             <TextBox Text="{Binding Text, Mode=TwoWay}" IsVisible="{Binding IsText}"
                                                      Classes.revealPasswordButton="{Binding IsSecret}"
@@ -1158,7 +1098,7 @@
                                                       AutomationProperties.AutomationId="{Binding Field.Name, StringFormat='Library.LiveFeedSettings.Option.{0}'}"
                                                       AutomationProperties.Name="{Binding Field.Label}" />
                                             <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}" TextWrapping="Wrap"
-                                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
+                                                       FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -1186,7 +1126,7 @@
                                 <ic:FluentIcon Icon="Info" FontSize="16" VerticalAlignment="Top" Margin="0,1,0,0" />
                                 <TextBlock Grid.Column="1" Text="{Binding List.SelectedItem.AmlNote, FallbackValue=''}"
                                            AutomationProperties.AutomationId="Library.Details.AmlNote"
-                                           FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
+                                           FontSize="{StaticResource SecondaryFontSize}" TextWrapping="Wrap" />
                             </Grid>
                         </Border>
                         <Border IsVisible="{Binding List.SelectedItem.NotForNavigation, FallbackValue=False}"
@@ -1220,9 +1160,9 @@
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
                                                         <TextBlock Grid.Column="0" Text="{Binding Label}" Opacity="0.6"
-                                                                   FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                                                   FontSize="{StaticResource SecondaryFontSize}" />
                                                         <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
-                                                                             FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                                                             FontSize="{StaticResource SecondaryFontSize}"
                                                                              Classes.mono="{Binding IsMono}"
                                                                              Classes.copyable="{Binding IsCopyable}"
                                                                              ToolTip.Tip="{Binding CopyValue}"
@@ -1254,9 +1194,9 @@
                                 <views:LibrarySwatch Grid.Column="0" State="Online" Width="18" VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Details.Pairing.Title, FallbackValue=''}" FontWeight="SemiBold"
-                                               FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                               FontSize="{StaticResource SecondaryFontSize}" />
                                     <TextBlock Text="{Binding Details.Pairing.Detail, FallbackValue=''}" Opacity="0.65" TextWrapping="Wrap"
-                                               FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                               FontSize="{StaticResource SecondaryFontSize}" />
                                 </StackPanel>
                                 <Button Grid.Column="2" Classes="Outline libraryCompact" VerticalAlignment="Center"
                                         AutomationProperties.AutomationId="Library.Details.GetPairing"

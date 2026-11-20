@@ -15,8 +15,15 @@ namespace EncDotNet.S100.Viewer.ViewModels.Legends;
 /// </summary>
 internal sealed class LegendRowViewModel : ViewModelBase
 {
+    /// <summary>
+    /// How much larger than <see cref="Renderers.Skia.LegendGlyphRenderer.SizeOf"/>
+    /// the tab shows a glyph, to fill the 42 × 20 tile: a symbol 18 × 18, a
+    /// line 35 × 13.
+    /// </summary>
+    internal const float GlyphZoom = 1.25f;
+
     /// <summary>The device scale glyphs are drawn at, so they stay sharp on a high-density display.</summary>
-    private const float GlyphDeviceScale = 2f;
+    private const float GlyphDeviceScale = 2f * GlyphZoom;
 
     private readonly LegendEntry _entry;
     private Bitmap? _glyph;
@@ -38,7 +45,9 @@ internal sealed class LegendRowViewModel : ViewModelBase
         Swatch = Color is not null && Avalonia.Media.Color.TryParse(Color, out var parsed)
             ? new Avalonia.Media.Immutable.ImmutableSolidColorBrush(parsed)
             : Brushes.Transparent;
-        (GlyphWidth, GlyphHeight) = Renderers.Skia.LegendGlyphRenderer.SizeOf(entry);
+        var (width, height) = Renderers.Skia.LegendGlyphRenderer.SizeOf(entry);
+        GlyphWidth = (int)MathF.Round(width * GlyphZoom, MidpointRounding.AwayFromZero);
+        GlyphHeight = (int)MathF.Round(height * GlyphZoom, MidpointRounding.AwayFromZero);
     }
 
     /// <summary>The row this view model shows.</summary>
@@ -65,10 +74,10 @@ internal sealed class LegendRowViewModel : ViewModelBase
     /// <summary>Whether the row shows a drawn glyph: an area, a symbol or a line sample.</summary>
     public bool HasGlyph => !IsSwatch;
 
-    /// <summary>The glyph's width in logical pixels.</summary>
+    /// <summary>The glyph's width in logical pixels, as shown (<see cref="GlyphZoom"/>).</summary>
     public int GlyphWidth { get; }
 
-    /// <summary>The glyph's height in logical pixels.</summary>
+    /// <summary>The glyph's height in logical pixels, as shown (<see cref="GlyphZoom"/>).</summary>
     public int GlyphHeight { get; }
 
     /// <summary>

@@ -1,0 +1,170 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      Sizes the side panels share, so a tag, a filter row or a glyph is the
+      same size in the Library, the Datasets panel and the Legend tab.
+    -->
+
+    <!--
+      The segmented control: one look for every switch between a few
+      choices (the Library's All / Local / Online / Updates, the Legend's
+      In view / All loaded, Routes' Legs / Findings, the Datasets panel's
+      tabs, the Display settings overlay). A 32 px track holds equal-width
+      28 px segments with 13 px labels; the chosen segment is lifted onto
+      a raised card.
+
+      Two forms share it:
+        * Border.segmentTrack holding RadioButton.segment (one choice) or
+          ToggleButton.segment (independent toggles);
+        * TabControl.segmentTabs, a TabControl whose tab strip is the track.
+          Header-only tabs leave the content empty; tabs with content show
+          it under the track, Padding apart.
+
+      The compact class (a dock header beside 22 px buttons, a map card)
+      is 24 px tall with 11.5 px labels.
+    -->
+    <Style Selector="Border.segmentTrack">
+        <Setter Property="Background" Value="{DynamicResource TabItemsBackgroundColor}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="2" />
+    </Style>
+    <Style Selector="Border.segmentTrack:disabled">
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+    <Style Selector="RadioButton.segment, ToggleButton.segment, TabControl.segmentTabs > TabItem">
+        <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="RadioButton.segment, ToggleButton.segment">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Seg"
+                        Background="Transparent"
+                        CornerRadius="6"
+                        MinHeight="{TemplateBinding MinHeight}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Foreground="{TemplateBinding Foreground}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="TabControl.segmentTabs > TabItem">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Seg"
+                        Background="Transparent"
+                        CornerRadius="6"
+                        MinHeight="{TemplateBinding MinHeight}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter"
+                                      Content="{TemplateBinding Header}"
+                                      ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Foreground="{TemplateBinding Foreground}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.segment:pointerover /template/ Border#Seg, ToggleButton.segment:pointerover /template/ Border#Seg, TabControl.segmentTabs > TabItem:pointerover /template/ Border#Seg">
+        <Setter Property="Background" Value="{DynamicResource BorderColor30}" />
+    </Style>
+    <Style Selector="RadioButton.segment:checked /template/ Border#Seg, ToggleButton.segment:checked /template/ Border#Seg, TabControl.segmentTabs > TabItem:selected /template/ Border#Seg">
+        <Setter Property="Background" Value="{DynamicResource TabItemSelectedColor}" />
+        <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+    </Style>
+    <Style Selector="RadioButton.segment:checked, ToggleButton.segment:checked, TabControl.segmentTabs > TabItem:selected">
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TabControl.segmentTabs">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <UniformGrid Rows="1" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <DockPanel LastChildFill="True">
+                    <Border Name="PART_Track"
+                            Classes="segmentTrack"
+                            DockPanel.Dock="Top">
+                        <ItemsPresenter Name="PART_ItemsPresenter"
+                                        ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </Border>
+                    <ContentPresenter Name="PART_SelectedContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding SelectedContent}"
+                                      ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </DockPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!-- Compact: a 24 px track. -->
+    <Style Selector="Border.segmentTrack.compact, TabControl.segmentTabs.compact /template/ Border#PART_Track">
+        <Setter Property="Padding" Value="2" />
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Border.segmentTrack.compact :is(TemplatedControl).segment, TabControl.segmentTabs.compact > TabItem">
+        <Setter Property="MinHeight" Value="20" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Padding" Value="8,0" />
+    </Style>
+    <Style Selector="Border.segmentTrack.compact :is(TemplatedControl).segment /template/ Border#Seg, TabControl.segmentTabs.compact > TabItem /template/ Border#Seg">
+        <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <!--
+      A kind or product tag: the Library's DIR, JSON, SECOM, the Datasets
+      panel's and the Legend's S-101, S-102. Monospace on a hairline box,
+      at least 42 × 20, the height of the AML chips (AmlChips.axaml).
+    -->
+    <Style Selector="Border.kindTag">
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="4,0" />
+        <Setter Property="MinWidth" Value="42" />
+        <Setter Property="MinHeight" Value="20" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- A row that keeps the tag's width, so names line up, but shows no tag. -->
+    <Style Selector="Border.kindTag.empty">
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.kindTag > TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        <Setter Property="Opacity" Value="0.7" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A panel toolbar's icon button, beside a filter field: as tall as the field. -->
+    <Style Selector="Button.panelIcon, ToggleButton.panelIcon">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+</Styles>

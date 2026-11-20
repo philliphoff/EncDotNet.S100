@@ -65,6 +65,10 @@
           local copy here for the Datasets panel's master/detail
           splitter.
         -->
+        <!-- The tab tracks keep the panel's 8 px inset; the tabs' own content sets its margins. -->
+        <Style Selector="TabControl.segmentTabs /template/ Border#PART_Track">
+            <Setter Property="Margin" Value="8,0" />
+        </Style>
         <Style Selector="GridSplitter.PaneSplitter">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -76,87 +80,6 @@
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
 
-        <!--
-          The inspector tabs (Dataset / Layers / Validation) share the
-          ShadUI pill styling used by the outer panel tabs: a rounded
-          track holding the tabs with an animated selection pill behind
-          the active tab. As with `OuterTabs`, we override only the
-          *template* (swapping ShadUI's outer StackPanel for a DockPanel
-          so a ScrollViewer inside a TabItem gets a bounded height and
-          scrolls rather than overflowing). The base ShadUI TabControl
-          ControlTheme still supplies the sliding-pill behavior
-          (UseSlidingPill) and the horizontal items panel; the default
-          ShadUI TabItem theme styles the individual tabs.
-        -->
-        <Style Selector="TabControl.CenteredTabs">
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{TemplateBinding CornerRadius}">
-                        <DockPanel LastChildFill="True">
-                            <LayoutTransformControl DockPanel.Dock="Top"
-                                                    HorizontalAlignment="Center"
-                                                    Margin="0,0,0,8"
-                                                    Name="LayoutTransform">
-                                <Border Background="{DynamicResource TabItemsBackgroundColor}"
-                                        CornerRadius="{DynamicResource LgCornerRadius}"
-                                        HorizontalAlignment="Center"
-                                        Padding="2,4,2,0">
-                                    <Panel>
-                                        <Canvas IsHitTestVisible="False">
-                                            <Border Background="{DynamicResource TabItemSelectedColor}"
-                                                    BoxShadow="{DynamicResource Shadow}"
-                                                    Canvas.Left="0"
-                                                    Canvas.Top="0"
-                                                    CornerRadius="{DynamicResource MdCornerRadius}"
-                                                    Height="0"
-                                                    Opacity="0"
-                                                    Width="0"
-                                                    x:Name="PART_SelectionPill">
-                                                <Border.Transitions>
-                                                    <Transitions>
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
-                                                        <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
-                                                    </Transitions>
-                                                </Border.Transitions>
-                                            </Border>
-                                        </Canvas>
-                                        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
-                                                        Name="PART_ItemsPresenter" />
-                                    </Panel>
-                                </Border>
-                            </LayoutTransformControl>
-                            <ContentPresenter Content="{TemplateBinding SelectedContent}"
-                                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"
-                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              Margin="{TemplateBinding Padding}"
-                                              Name="PART_SelectedContentHost"
-                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-                        </DockPanel>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <!--
-          Match the pane-title typography (see MainWindow.axaml's Pane
-          header) so the centred tab strip reads as a title strip.
-          LetterSpacing isn't a TabItem property, so we apply it via a
-          HeaderTemplate that wraps the header string in a TextBlock.
-        -->
-        <Style Selector="TabControl.CenteredTabs > TabItem">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="Normal" />
-            <Setter Property="HeaderTemplate">
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" LetterSpacing="1" />
-                </DataTemplate>
-            </Setter>
-        </Style>
 
         <!--
           Severity badge that decorates the Validation tab header when
@@ -227,87 +150,6 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
 
-        <!--
-          Outer panel tabs (Exchange sets / Datasets) rendered with ShadUI's
-          pill styling: a rounded track holding the two tabs with an animated
-          selection pill behind the active tab. We override only the *template*
-          (swapping ShadUI's outer StackPanel for a DockPanel) so the inner
-          TreeView/ListBox in each tab gets a bounded height and scrolls rather
-          than overflowing and crowding the inspector below. The base ShadUI
-          TabControl ControlTheme still supplies the sliding-pill behavior
-          (UseSlidingPill) and the horizontal items panel, and the default
-          ShadUI TabItem theme styles the individual tabs.
-        -->
-        <Style Selector="TabControl.OuterTabs">
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{TemplateBinding CornerRadius}">
-                        <DockPanel LastChildFill="True">
-                            <LayoutTransformControl DockPanel.Dock="Top"
-                                                    HorizontalAlignment="Center"
-                                                    Margin="0,0,0,6"
-                                                    Name="LayoutTransform">
-                                <Border Background="{DynamicResource TabItemsBackgroundColor}"
-                                        CornerRadius="{DynamicResource LgCornerRadius}"
-                                        HorizontalAlignment="Center"
-                                        Padding="2,4,2,0">
-                                    <Panel>
-                                        <Canvas IsHitTestVisible="False">
-                                            <Border Background="{DynamicResource TabItemSelectedColor}"
-                                                    BoxShadow="{DynamicResource Shadow}"
-                                                    Canvas.Left="0"
-                                                    Canvas.Top="0"
-                                                    CornerRadius="{DynamicResource MdCornerRadius}"
-                                                    Height="0"
-                                                    Opacity="0"
-                                                    Width="0"
-                                                    x:Name="PART_SelectionPill">
-                                                <Border.Transitions>
-                                                    <Transitions>
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
-                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
-                                                        <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
-                                                    </Transitions>
-                                                </Border.Transitions>
-                                            </Border>
-                                        </Canvas>
-                                        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
-                                                        Name="PART_ItemsPresenter" />
-                                    </Panel>
-                                </Border>
-                            </LayoutTransformControl>
-                            <ContentPresenter Content="{TemplateBinding SelectedContent}"
-                                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"
-                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              Margin="{TemplateBinding Padding}"
-                                              Name="PART_SelectedContentHost"
-                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-                        </DockPanel>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <!--
-          The outer panel tabs share the inspector tabs' title-strip
-          typography (see `CenteredTabs > TabItem`): small, normal
-          weight, and letter-spaced. LetterSpacing isn't a TabItem
-          property, so we apply it via a HeaderTemplate that wraps the
-          header string in a TextBlock.
-        -->
-        <Style Selector="TabControl.OuterTabs > TabItem">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="Normal" />
-            <Setter Property="HeaderTemplate">
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" LetterSpacing="1" />
-                </DataTemplate>
-            </Setter>
-        </Style>
 
         <!--
           Small monochrome count pill used on source rows in the Exchange
@@ -318,17 +160,6 @@
             <Setter Property="CornerRadius" Value="9" />
             <Setter Property="Padding" Value="8,1" />
             <Setter Property="MinWidth" Value="22" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-
-        <!--
-          Spec tag (e.g. "S-101") shown on nested dataset rows in the
-          Exchange sets tree.
-        -->
-        <Style Selector="Border.SpecTag">
-            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="6,1" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
@@ -376,9 +207,10 @@
                 <RowDefinition Height="*" MinHeight="80" />
             </Grid.RowDefinitions>
 
+            <!-- The viewer's segmented tabs (PanelStyles.axaml); the lists under them scroll. -->
             <TabControl Grid.Row="0"
-                        Classes="OuterTabs"
-                        Padding="0"
+                        Classes="segmentTabs"
+                        Padding="0,6,0,0"
                         SelectedIndex="{Binding ActiveTabIndex, Mode=TwoWay}">
 
                 <!-- ── Exchange sets tab: source → dataset tree, no reorder. -->
@@ -618,12 +450,9 @@
                                             </Panel>
                                         </Grid>
                                         </StackPanel>
-                                        <Border Grid.Column="2" Classes="SpecTag" IsVisible="{Binding ShowsSpecTag}">
-                                            <TextBlock Text="{Binding ProductSpec}"
-                                                       FontSize="10"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource ForegroundColor}"
-                                                       Opacity="0.8" />
+                                        <!-- The product tag (e.g. "S-101"), the Library's and the Legend's kind tag. -->
+                                        <Border Grid.Column="2" Classes="kindTag" IsVisible="{Binding ShowsSpecTag}">
+                                            <TextBlock Text="{Binding ProductSpec}" />
                                         </Border>
                                     </Grid>
                                 </DataTemplate>
@@ -986,12 +815,12 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <TabControl Classes="CenteredTabs"
+                    <TabControl Classes="segmentTabs"
                                 x:Name="InspectorTabs"
                                 AutomationProperties.AutomationId="Datasets.Inspector"
                                 IsVisible="{Binding HasSelection}"
                                 SelectedIndex="{Binding InspectorTabIndex, Mode=TwoWay}"
-                                Padding="0"
+                                Padding="0,8,0,0"
                                 Margin="0,8,0,0">
                         <!-- Dataset-wide UX -->
                         <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Dataset}"
@@ -1140,7 +969,6 @@
                                 <StackPanel Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <TextBlock Text="{x:Static loc:Strings.Pane_DatasetTab_Validation}"
-                                               LetterSpacing="1"
                                                VerticalAlignment="Center" />
                                     <Border Classes="ValidationBadge"
                                             Classes.Error="{Binding SelectedEntry.BadgeIsError, FallbackValue=False}"

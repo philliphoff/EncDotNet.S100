@@ -395,21 +395,46 @@ public sealed class LegendTabTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_narrow_tab_puts_the_filter_on_its_own_row()
+    public void The_toolbar_is_laid_out_as_the_Library_filter_row()
     {
         var (_, service) = TwoProducts();
         using var _service = service;
         using var tab = Tab(service);
         using var host = ViewHost.Show(new LegendView { DataContext = tab }, width: 360, height: 400);
         var filter = host.Find<TextBox>("Legend.Filter");
-        Assert.Equal(0, Grid.GetRow(filter));
+        var collapse = host.Find<Button>("Legend.CollapseAll");
+        var scope = host.Find<TabControl>("Legend.Toolbar.InView");
 
+        // The filter and Collapse all on one row, the switch across the row under them.
+        Assert.Equal(0, Grid.GetRow(filter));
+        Assert.Equal(1, Grid.GetRow(scope));
+        Assert.Equal(36, collapse.Bounds.Height);
+        Assert.Equal(filter.Bounds.Height, collapse.Bounds.Height);
+        Assert.InRange(scope.Bounds.Width, 340, 344);
+
+        // A narrow dock (D21) keeps the layout; the filter takes what is left.
         host.Window.Width = 250;
         host.Settle();
+        Assert.InRange(filter.Bounds.Width, 190, 210);
+    }
 
-        Assert.Equal(1, Grid.GetRow(filter));
-        host.Settle();
-        Assert.InRange(filter.Bounds.Width, 200, 250);
+    [AvaloniaFact]
+    public void A_long_row_label_trims_to_the_dock_and_shows_in_full_on_hover()
+    {
+        var (_, service) = TwoProducts();
+        using var _service = service;
+        using var tab = Tab(service);
+        tab.ScopeIndex = 1; // All loaded
+        using var host = ViewHost.Show(new LegendView { DataContext = tab }, width: 140, height: 600);
+
+        var labels = host.FindAll<TextBlock>("Legend.Row.Label").Where(l => l.IsEffectivelyVisible).ToList();
+        Assert.NotEmpty(labels);
+        Assert.All(labels, l =>
+        {
+            Assert.Equal(l.Text, ToolTip.GetTip(l));
+            Assert.True(l.Bounds.Width < 140, $"'{l.Text}' is {l.Bounds.Width} wide");
+        });
+        Assert.Contains(labels, l => l.TextLayout.TextLines.Any(line => line.HasCollapsed));
     }
 
     [AvaloniaFact]

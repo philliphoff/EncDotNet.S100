@@ -201,7 +201,7 @@ public sealed class RoutesViewTests
             var count = host.Find<TextBlock>("Routes.Check.FindingsTab.Count");
             Assert.Equal($"{findings.Findings.Count}", count.Text);
             var label = (TextBlock)((StackPanel)count.Parent!).Children[0];
-            Assert.NotEqual(label.Foreground?.ToString(), count.Foreground?.ToString());  // the secondary colour
+            Assert.True(count.Opacity < label.Opacity);  // fainter, as the Library's counts
             Assert.Equal(2, findings.Findings.Count);
             Assert.False(host.IsShown("Routes.Check.Findings"));
 
