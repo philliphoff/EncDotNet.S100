@@ -68,6 +68,7 @@ public sealed partial class MapsuiDatasetLayerSession
     }
 
     private readonly Action<Action>? _stackMarshal;
+    private readonly IWorkScheduler _scheduler;
     private readonly CoverageOverlapIndex _overlapIndex = new();
     private readonly List<StackWaiter> _stackWaiters = [];
 
@@ -211,7 +212,7 @@ public sealed partial class MapsuiDatasetLayerSession
             Exception? error = null;
             try
             {
-                using var interest = WorkScheduler.Shared.Schedule(
+                using var interest = _scheduler.Schedule(
                     new WorkKey(new object()),
                     WorkStage.Stack,
                     WorkPriority.Visible(),

@@ -103,15 +103,41 @@ public sealed class McpServeHttpTests
         if (allowChanges)
             start.ArgumentList.Add("--allow-changes");
 
+        // The host writes "Health check: <url>" on standard error once Kestrel
+        // is listening (McpServeCommand.ServeHttpAsync). Waiting for that line
+        // instead of probing the port keeps the test independent of how long
+        // the host takes to start, and of how a connect to a port nobody
+        // listens on yet fails: on Windows that takes about 2 s (the stack
+        // retries the refused SYN), the same as a short per-probe timeout.
+        var stderr = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var process = Process.Start(start)!;
         process.OutputDataReceived += (_, _) => { };
-        process.ErrorDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is null)
+            {
+                listening.TrySetException(new InvalidOperationException(
+                    $"The host closed standard error before it was listening:{Environment.NewLine}{string.Join(Environment.NewLine, stderr)}"));
+                return;
+            }
+
+            stderr.Enqueue(e.Data);
+            if (e.Data.StartsWith("Health check: ", StringComparison.Ordinal))
+                listening.TrySetResult();
+        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         try
         {
             var endpoint = new Uri($"http://127.0.0.1:{port}/mcp");
-            Assert.True(await WaitHealthyAsync(port, cts.Token), "The server never answered /healthz.");
+            await listening.Task.WaitAsync(cts.Token);
+
+            // Listening, so this request is answered; its only limit is the
+            // test's, since the host's first request may be slow on a loaded runner.
+            using (var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan })
+            using (var health = await http.GetAsync(new Uri($"http://127.0.0.1:{port}/healthz"), cts.Token))
+                Assert.Equal(HttpStatusCode.OK, health.StatusCode);
 
             await using var client = await ConnectAsync(endpoint, "t0ken", cts.Token);
             var names = (await client.ListToolsAsync(cancellationToken: cts.Token)).Select(t => t.Name).ToHashSet();
@@ -168,27 +194,6 @@ public sealed class McpServeHttpTests
 
         using var response = await http.SendAsync(request, ct);
         return response.StatusCode;
-    }
-
-    private static async Task<bool> WaitHealthyAsync(int port, CancellationToken ct)
-    {
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                using var response = await http.GetAsync(new Uri($"http://127.0.0.1:{port}/healthz"), ct);
-                if (response.IsSuccessStatusCode)
-                    return true;
-            }
-            catch (HttpRequestException)
-            {
-            }
-
-            await Task.Delay(250, ct);
-        }
-
-        return false;
     }
 
     private static int FreePort()

@@ -151,6 +151,10 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
     /// When <see langword="null"/>, a session over the process-wide
     /// <see cref="ChartEngine.Options"/>.
     /// </param>
+    /// <param name="scheduler">
+    /// The work scheduler that portrays cells and computes off-thread stack
+    /// composes; <see langword="null"/> for <see cref="WorkScheduler.Shared"/>.
+    /// </param>
     public MapsuiDatasetLayerSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
@@ -158,7 +162,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         IInteroperabilityAuthorityProvider authorityProvider,
         Action? redrawRequested = null,
         Action<Action>? stackMarshal = null,
-        ChartSession? chartSession = null)
+        ChartSession? chartSession = null,
+        IWorkScheduler? scheduler = null)
     {
         ArgumentNullException.ThrowIfNull(layerBands);
         ArgumentNullException.ThrowIfNull(processorOwner);
@@ -170,6 +175,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         _authorityProvider = authorityProvider;
         _redrawRequested = redrawRequested;
         _stackMarshal = stackMarshal;
+        _scheduler = scheduler ?? WorkScheduler.Shared;
         _chartSession = chartSession ?? new ChartSession(ChartEngine.Options);
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
         Query = new S100MapQuery(this);
@@ -1027,7 +1033,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             IReadOnlyList<ILayer> reusable;
             lock (_sync)
                 reusable = renderEntry.Layers;
-            result = await WorkScheduler.Shared.RunAsync(
+            result = await _scheduler.RunAsync(
                 WorkStage.Portray,
                 token => _renderer.RenderAsync(processor, context, layout, reusable, token),
                 cancellationToken).ConfigureAwait(true);

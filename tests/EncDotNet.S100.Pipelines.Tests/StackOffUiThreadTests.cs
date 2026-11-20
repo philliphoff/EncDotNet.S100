@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -19,9 +20,25 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// marshalled post, landings batch, and a stale stack never overwrites a newer
 /// one.
 /// </summary>
-public sealed class StackOffUiThreadTests
+/// <remarks>
+/// Each test portrays and composes on its own <see cref="WorkScheduler"/>, not
+/// the process-wide <see cref="WorkScheduler.Shared"/>. The tests wait, with a
+/// deadline, for a compose to reach the map; on the shared scheduler that wait
+/// also covered every job the assembly's other test classes had queued ahead of
+/// it, so a loaded runner could miss the deadline with this test's own work
+/// not yet started (seen on the Windows ARM runner).
+/// </remarks>
+public sealed class StackOffUiThreadTests : IDisposable
 {
     private static readonly GeometryFactory Gf = new();
+
+    private readonly WorkScheduler _scheduler = new(new WorkSchedulerOptions
+    {
+        WorkerCount = 2,
+        ThreadName = "StackOffUiThreadTests work",
+    });
+
+    public void Dispose() => _scheduler.Dispose();
 
     // ── CoverageOverlapIndex ──────────────────────────────────────────
 
@@ -224,7 +241,8 @@ public sealed class StackOffUiThreadTests
             new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),
             new InteroperabilityAuthorityProvider(authority),
             redrawRequested: null,
-            stackMarshal: static action => action());
+            stackMarshal: static action => action(),
+            scheduler: _scheduler);
         var id = new MapDatasetId("cell");
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
@@ -359,7 +377,7 @@ public sealed class StackOffUiThreadTests
         ],
     };
 
-    private static MapsuiDatasetLayerSession CreateSession(
+    private MapsuiDatasetLayerSession CreateSession(
         Map map,
         DatasetProcessorOwner owner,
         Action<Action>? stackMarshal) =>
@@ -369,7 +387,8 @@ public sealed class StackOffUiThreadTests
             new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),
             new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()),
             redrawRequested: null,
-            stackMarshal: stackMarshal);
+            stackMarshal: stackMarshal,
+            scheduler: _scheduler);
 
     private static MapDataset Dataset(MapDatasetId id, bool isVisible = true) =>
         new(
