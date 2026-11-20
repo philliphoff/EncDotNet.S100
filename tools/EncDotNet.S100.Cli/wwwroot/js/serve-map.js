@@ -229,6 +229,8 @@ window.s100Map = (() => {
   }
 
   function onError(e) {
+    // Listening for errors stops MapLibre logging them, so log all but the basemap's (#1624).
+    if (e.sourceId !== "osm") console.error("s100 map:", e.error ?? e);
     if (e.sourceId !== "osm" || basemapLoaded || basemap === "none" || basemapFailTimer) return;
     basemapFailTimer = setTimeout(() => {
       basemapFailTimer = undefined;
@@ -307,7 +309,9 @@ window.s100Map = (() => {
 
       // The outlines show below the zoom the chart draws from (D13): MapLibre
       // rounds a raster zoom, so the chart's first tiles draw half a zoom early.
-      outlinesUntil = opts.minZoom - 0.5 - ZOOM_OFFSET;
+      // A layer's maxzoom can't be negative: from zoom 0 or 1 (--overview), MapLibre
+      // would reject the whole style and draw nothing (#1624).
+      outlinesUntil = Math.max(0, opts.minZoom - 0.5 - ZOOM_OFFSET);
       // The outlines' casing and line before the tokens are read on load (D18's night has no white).
       const startOutline = { night: ["#000000", "#3E6E50"], dark: ["#09090B", "#4FA571"] }[effectiveTheme()] ?? ["#ffffff", "#3D8A5A"];
       map = new maplibregl.Map({
