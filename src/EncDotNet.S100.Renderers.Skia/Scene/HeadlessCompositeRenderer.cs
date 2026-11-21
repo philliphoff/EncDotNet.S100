@@ -42,20 +42,39 @@ public sealed class HeadlessCompositeRenderer
     /// <param name="viewport">The shared composite viewport (explicit; no auto-fit).</param>
     /// <param name="layers">Ordered layers, bottom-most first.</param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
-    public SKBitmap Render(Viewport viewport, IReadOnlyList<CompositeLayer> layers)
+    public SKBitmap Render(Viewport viewport, IReadOnlyList<CompositeLayer> layers) => Render(viewport, layers, deviceScale: 1f);
+
+    /// <summary>
+    /// Composites the ordered layers against the shared viewport at
+    /// <paramref name="deviceScale"/> image pixels per viewport pixel, into a
+    /// newly allocated bitmap of <see cref="Viewport.WidthPixels"/> ×
+    /// <see cref="Viewport.HeightPixels"/> times the scale, rounded. The
+    /// viewport's pixels are device-independent: a scale of 2 draws the same
+    /// view, with symbols, text and lines twice as many pixels across, as a
+    /// HiDPI display does.
+    /// </summary>
+    /// <param name="viewport">The shared composite viewport, in device-independent pixels.</param>
+    /// <param name="layers">Ordered layers, bottom-most first.</param>
+    /// <param name="deviceScale">Image pixels per viewport pixel; positive and finite.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public SKBitmap Render(Viewport viewport, IReadOnlyList<CompositeLayer> layers, float deviceScale)
     {
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(viewport.WidthPixels);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(viewport.HeightPixels);
+        if (!float.IsFinite(deviceScale) || deviceScale <= 0)
+            throw new ArgumentOutOfRangeException(nameof(deviceScale), deviceScale, "The device scale must be positive and finite.");
 
         var bitmap = new SKBitmap(
-            viewport.WidthPixels,
-            viewport.HeightPixels,
+            ScaledPixels(viewport.WidthPixels, deviceScale),
+            ScaledPixels(viewport.HeightPixels, deviceScale),
             SKColorType.Rgba8888,
             SKAlphaType.Premul);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(Background.ToSkia());
+        if (deviceScale != 1f)
+            canvas.Scale(deviceScale);
 
         if (viewport.RotationDegrees % 360.0 == 0)
         {
@@ -67,14 +86,23 @@ public sealed class HeadlessCompositeRenderer
         }
         else
         {
-            DrawRotated(canvas, viewport, layers);
+            DrawRotated(canvas, viewport, layers, deviceScale);
         }
 
         canvas.Flush();
         return bitmap;
     }
 
-    private static void DrawRotated(SKCanvas canvas, Viewport viewport, IReadOnlyList<CompositeLayer> layers)
+    /// <summary>
+    /// The image pixels <paramref name="pixels"/> viewport pixels cover at
+    /// <paramref name="deviceScale"/>, rounded, and at least one.
+    /// </summary>
+    /// <param name="pixels">Viewport pixels.</param>
+    /// <param name="deviceScale">Image pixels per viewport pixel.</param>
+    public static int ScaledPixels(int pixels, float deviceScale) =>
+        Math.Max(1, (int)Math.Round(pixels * (double)deviceScale, MidpointRounding.AwayFromZero));
+
+    private static void DrawRotated(SKCanvas canvas, Viewport viewport, IReadOnlyList<CompositeLayer> layers, float deviceScale)
     {
         var cover = RotatedViewport.NorthUpCover(viewport);
         float rotation = (float)viewport.RotationDegrees;
@@ -95,21 +123,34 @@ public sealed class HeadlessCompositeRenderer
             viewport.WidthPixels + 2 * SkiaDisplayListRenderer.PointCullMarginPx,
             viewport.HeightPixels + 2 * SkiaDisplayListRenderer.PointCullMarginPx);
 
+        // The north-up surface holds image pixels, so a HiDPI render keeps
+        // its areas and lines sharp; it draws back at its viewport size.
         using var surface = SKSurface.Create(new SKImageInfo(
-            cover.WidthPixels, cover.HeightPixels, SKColorType.Rgba8888, SKAlphaType.Premul));
+            ScaledPixels(cover.WidthPixels, deviceScale),
+            ScaledPixels(cover.HeightPixels, deviceScale),
+            SKColorType.Rgba8888,
+            SKAlphaType.Premul));
         var sampling = new SKSamplingOptions(SKFilterMode.Linear);
+        var coverRect = SKRect.Create(offsetX, offsetY, cover.WidthPixels, cover.HeightPixels);
 
         foreach (var layer in layers)
         {
             ArgumentNullException.ThrowIfNull(layer);
 
             surface.Canvas.Clear(SKColors.Transparent);
+            int surfaceSave = surface.Canvas.Save();
+            if (deviceScale != 1f)
+                surface.Canvas.Scale(deviceScale);
             layer.DrawRotating(surface.Canvas, cover);
+            surface.Canvas.RestoreToCount(surfaceSave);
             using (var image = surface.Snapshot())
             {
                 canvas.Save();
                 canvas.RotateDegrees(rotation, centerX, centerY);
-                canvas.DrawImage(image, offsetX, offsetY, sampling);
+                if (deviceScale == 1f)
+                    canvas.DrawImage(image, offsetX, offsetY, sampling);
+                else
+                    canvas.DrawImage(image, coverRect, sampling);
                 canvas.Restore();
             }
 

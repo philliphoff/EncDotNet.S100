@@ -9,7 +9,6 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -75,7 +74,8 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
     {
         var path = NetCdfFixtures.WriteWaveNetCdf3(Path.Combine(_dir, "ww3.nc"));
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(Path.Combine(_dir, "cache"), 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)),
+            registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var metadata = reader.TryRead(path);
 
@@ -88,7 +88,7 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
     [Fact]
     public void The_pick_report_leads_with_the_notice_and_names_the_portrayal()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick("WeatherGridPoint", "Weather grid point", "(4,7)", "waves.nc", "NetCDF", []);
 

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core.Caching;
 
@@ -19,15 +18,18 @@ namespace EncDotNet.S100.Core.Metadata;
 /// file, envelope-version mismatch, or
 /// <see cref="DatasetMetadataSerializer.FormatVersion"/> mismatch is
 /// treated as a miss; failures never propagate. Writes are atomic
-/// (temp file + move), the store is bounded by a total-bytes cap with
-/// least-recently-used eviction (see <see cref="DiskCacheBudget"/>), and all
+/// (temp file + move), entries live in a <see cref="ContentKind"/> of the
+/// host's <see cref="ContentStore"/>, which bounds them by its byte budget, and all
 /// members are thread-safe; hits are served without a lock.
 /// </para>
 /// </remarks>
 public sealed class DiskDatasetMetadataCache : IDatasetMetadataCache
 {
-    /// <summary>File extension for persisted metadata sidecar files.</summary>
-    private const string FileExtension = ".dmeta";
+    /// <summary>The kind name hosts open for this cache (also its folder name).</summary>
+    public const string KindName = "DatasetMetadataCache";
+
+    /// <summary>The options hosts open this cache's kind with.</summary>
+    public static ContentKindOptions KindOptions { get; } = new() { Extension = ".dmeta" };
 
     /// <summary>
     /// Envelope schema version for the sidecar header (source identity +
@@ -37,35 +39,21 @@ public sealed class DiskDatasetMetadataCache : IDatasetMetadataCache
     /// </summary>
     private const int EnvelopeVersion = 1;
 
-    private readonly string _cacheDirectory;
-    private readonly DiskCacheBudget _budget;
+    private readonly ContentKind _kind;
 
     private long _hits;
     private long _misses;
 
     /// <summary>
-    /// Creates a disk-backed metadata cache rooted at
-    /// <paramref name="cacheDirectory"/>.
+    /// Creates a disk-backed metadata cache over <paramref name="kind"/>,
+    /// normally opened as <see cref="KindName"/> with <see cref="KindOptions"/>.
     /// </summary>
-    /// <param name="cacheDirectory">
-    /// Directory under which sidecar files are stored. Created on first write
-    /// if absent. Assumed private to this cache (the LRU sweep enumerates
-    /// every <c>*.dmeta</c> file in it).
-    /// </param>
-    /// <param name="maxBytes">
-    /// Soft upper bound, in bytes, on the total size of all persisted files.
-    /// After a write that exceeds it, the least-recently-used files are
-    /// evicted until the total is at or below this cap. Must be positive.
-    /// </param>
-    /// <exception cref="ArgumentException"><paramref name="cacheDirectory"/> is null or empty.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBytes"/> is not positive.</exception>
-    public DiskDatasetMetadataCache(string cacheDirectory, long maxBytes)
+    /// <param name="kind">The store kind the entries live in.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="kind"/> is null.</exception>
+    public DiskDatasetMetadataCache(ContentKind kind)
     {
-        ArgumentException.ThrowIfNullOrEmpty(cacheDirectory);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
-
-        _cacheDirectory = cacheDirectory;
-        _budget = new DiskCacheBudget(cacheDirectory, FileExtension, maxBytes);
+        ArgumentNullException.ThrowIfNull(kind);
+        _kind = kind;
     }
 
     /// <inheritdoc />
@@ -151,11 +139,7 @@ public sealed class DiskDatasetMetadataCache : IDatasetMetadataCache
     /// lowercase hex SHA-256 of the UTF-8 path, so arbitrary path content
     /// maps to a single safe filename.
     /// </summary>
-    private string GetEntryPath(string sourcePath)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(sourcePath));
-        return Path.Combine(_cacheDirectory, Convert.ToHexString(hash).ToLowerInvariant() + FileExtension);
-    }
+    private static string GetEntryPath(string sourcePath) => ContentKind.HashKey(sourcePath);
 
     /// <summary>
     /// Attempts to read a persisted entry and validate it against the current
@@ -165,7 +149,7 @@ public sealed class DiskDatasetMetadataCache : IDatasetMetadataCache
     /// </summary>
     private DatasetMetadata? TryRead(string path, SourceIdentity current)
     {
-        var bytes = _budget.TryRead(path);
+        var bytes = _kind.Read(path).Bytes;
         if (bytes is null)
             return null;
 
@@ -226,7 +210,7 @@ public sealed class DiskDatasetMetadataCache : IDatasetMetadataCache
             return;
         }
 
-        _budget.TryWrite(path, bytes);
+        _kind.Write(path, bytes);
     }
 
     /// <summary>

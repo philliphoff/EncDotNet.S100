@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;

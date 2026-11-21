@@ -88,6 +88,73 @@ internal abstract class RouteToolBase
         return route;
     }
 
+    /// <summary>
+    /// Places or moves a waypoint and reports the water there (#1628): on the
+    /// UI thread resolves the route and validates the edit, then checks the
+    /// water off it (as <c>sample</c> does), then makes the edit unless
+    /// <paramref name="validate"/> asks for a dry run.
+    /// </summary>
+    /// <param name="routeId">The route, or <c>null</c> for the active route.</param>
+    /// <param name="position">Where the waypoint goes.</param>
+    /// <param name="minDepthMeters">The least depth asked for, or <c>null</c> for the route's draft + squat + required UKC.</param>
+    /// <param name="validate">Report only; don't edit.</param>
+    /// <param name="water">The water check, or <c>null</c> when the host has none.</param>
+    /// <param name="check">Validates the edit against the route; returns an error or <c>null</c>.</param>
+    /// <param name="indexOf">The waypoint's index once placed.</param>
+    /// <param name="edit">Makes the edit.</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    protected async Task<ToolResult<RouteDetail>> PlaceAsync(
+        string? routeId,
+        GeoPosition position,
+        double? minDepthMeters,
+        bool validate,
+        WaypointWater? water,
+        Func<Route, ToolError?> check,
+        Func<Route, int> indexOf,
+        Action<Route> edit,
+        CancellationToken cancellationToken)
+    {
+        var prepared = await Invoker.InvokeAsync(() =>
+        {
+            var route = ResolveEditable(routeId, out var error);
+            if (route is null)
+                return (Error: error, MinDepth: (double?)null, From: (string?)null, Index: -1);
+            if (check(route) is { } invalid)
+                return (Error: invalid, MinDepth: null, From: null, Index: -1);
+            var (min, from) = minDepthMeters is { } asked ? (asked, "request")
+                : RouteMinDepth(route) is { } fromRoute ? (fromRoute, "route")
+                : ((double?)null, (string?)null);
+            return (Error: (ToolError?)null, MinDepth: min, From: from, Index: indexOf(route));
+        }).ConfigureAwait(false);
+        if (prepared.Error is { } failed)
+            return ToolResult<RouteDetail>.Err(failed);
+
+        var report = water is null
+            ? null
+            : await water.CheckAsync(prepared.Index, position, prepared.MinDepth, prepared.From, !validate, cancellationToken).ConfigureAwait(false);
+
+        return await Invoker.InvokeAsync(() =>
+        {
+            var route = ResolveEditable(routeId, out var error);
+            if (route is null)
+                return ToolResult<RouteDetail>.Err(error!);
+            if (!validate)
+            {
+                if (check(route) is { } invalid)
+                    return ToolResult<RouteDetail>.Err(invalid);
+                edit(route);
+            }
+
+            return ToolResult<RouteDetail>.Ok(RouteProjection.Detail(route, Routes) with { Water = report });
+        }).ConfigureAwait(false);
+    }
+
+    // The least depth a route's passage needs: draft + squat + required UKC, or null without a draft.
+    private static double? RouteMinDepth(Route route) =>
+        route.Passage.DraftMeters is { } draft
+            ? draft + (route.Passage.SquatMeters ?? 0) + (route.Passage.RequiredUkcMeters ?? 0)
+            : null;
+
     /// <summary>Validates a latitude/longitude pair against the WGS-84 range.</summary>
     protected static ToolError? ValidateLatLon(double lat, double lon)
     {
@@ -101,20 +168,6 @@ internal abstract class RouteToolBase
             return new InvalidArgument("lon", $"value {lon} is outside the WGS-84 range [{MinLon}, {MaxLon}]");
         return null;
     }
-
-    /// <summary>Applies any supplied waypoint metadata in place.</summary>
-    protected static void ApplyWaypointMetadata(
-        RouteWaypoint waypoint, int? number, string? name, bool? @fixed, double? turnRadiusNm)
-    {
-        if (number.HasValue) waypoint.Number = number;
-        if (name is not null) waypoint.Name = name;
-        if (@fixed.HasValue) waypoint.Fixed = @fixed;
-        if (turnRadiusNm.HasValue) waypoint.TurnRadiusNm = turnRadiusNm;
-    }
-
-    /// <summary>Whether any waypoint-metadata field was supplied.</summary>
-    protected static bool HasWaypointMetadata(int? number, string? name, bool? @fixed, double? turnRadiusNm)
-        => number.HasValue || name is not null || @fixed.HasValue || turnRadiusNm.HasValue;
 
     private protected static bool NotFinite(double v) => double.IsNaN(v) || double.IsInfinity(v);
 
@@ -293,7 +346,9 @@ internal sealed record AppendWaypointRequest(
     [property: Description("Optional author-assigned ordinal (S-421 routeWaypointID).")] int? Number = null,
     [property: Description("Optional waypoint name.")] string? Name = null,
     [property: Description("Optional flag pinning the waypoint so it must not be moved.")] bool? Fixed = null,
-    [property: Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? TurnRadiusNm = null);
+    [property: Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? TurnRadiusNm = null,
+    [property: Description("The least charted depth the point needs, in metres; default the route's draft + squat + required UKC.")] double? MinDepthMeters = null,
+    [property: Description("Report the water at the point without adding the waypoint.")] bool Validate = false);
 
 /// <summary>Appends a waypoint to the end of a route.</summary>
 internal sealed class AppendWaypointTool : RouteToolBase
@@ -301,9 +356,14 @@ internal sealed class AppendWaypointTool : RouteToolBase
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "append_waypoint";
 
+    private readonly WaypointWater? _water;
+
     /// <summary>Creates a new <see cref="AppendWaypointTool"/>.</summary>
-    public AppendWaypointTool(RoutesService routes, IRouteEditInvoker invoker)
-        : base(routes, invoker) { }
+    /// <param name="routes">The routes.</param>
+    /// <param name="invoker">Marshals onto the UI thread.</param>
+    /// <param name="water">Checks the water at the waypoint (#1628), or <c>null</c>.</param>
+    public AppendWaypointTool(RoutesService routes, IRouteEditInvoker invoker, WaypointWater? water = null)
+        : base(routes, invoker) => _water = water;
 
     /// <summary>Executes the tool.</summary>
     public Task<ToolResult<RouteDetail>> InvokeAsync(
@@ -315,23 +375,20 @@ internal sealed class AppendWaypointTool : RouteToolBase
         if (ValidateLatLon(request.Lat, request.Lon) is { } latLonError)
             return Task.FromResult(ToolResult<RouteDetail>.Err(latLonError));
 
-        return Invoker.InvokeAsync(() =>
-        {
-            var route = ResolveEditable(request.RouteId, out var error);
-            if (route is null)
-                return ToolResult<RouteDetail>.Err(error!);
-
-            route.History.Execute(RouteEditLabels.AppendWaypoint, () =>
-            {
-                var waypoint = route.AppendWaypoint(new GeoPosition(request.Lat, request.Lon));
-                if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
-                {
-                    ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
-                    route.NotifyChanged();
-                }
-            });
-            return Ok(route, Routes);
-        });
+        var position = new GeoPosition(request.Lat, request.Lon);
+        return PlaceAsync(
+            request.RouteId,
+            position,
+            request.MinDepthMeters,
+            request.Validate,
+            _water,
+            _ => null,
+            route => route.Waypoints.Count,
+            route => RouteEditCommands.AppendWaypoint(
+                route,
+                position,
+                new RouteWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm)),
+            cancellationToken);
     }
 }
 
@@ -349,7 +406,9 @@ internal sealed record InsertWaypointRequest(
     [property: Description("Optional author-assigned ordinal (S-421 routeWaypointID).")] int? Number = null,
     [property: Description("Optional waypoint name.")] string? Name = null,
     [property: Description("Optional flag pinning the waypoint so it must not be moved.")] bool? Fixed = null,
-    [property: Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? TurnRadiusNm = null);
+    [property: Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? TurnRadiusNm = null,
+    [property: Description("The least charted depth the point needs, in metres; default the route's draft + squat + required UKC.")] double? MinDepthMeters = null,
+    [property: Description("Report the water at the point without inserting the waypoint.")] bool Validate = false);
 
 /// <summary>Inserts a waypoint at a given index of a route.</summary>
 internal sealed class InsertWaypointTool : RouteToolBase
@@ -357,9 +416,14 @@ internal sealed class InsertWaypointTool : RouteToolBase
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "insert_waypoint";
 
+    private readonly WaypointWater? _water;
+
     /// <summary>Creates a new <see cref="InsertWaypointTool"/>.</summary>
-    public InsertWaypointTool(RoutesService routes, IRouteEditInvoker invoker)
-        : base(routes, invoker) { }
+    /// <param name="routes">The routes.</param>
+    /// <param name="invoker">Marshals onto the UI thread.</param>
+    /// <param name="water">Checks the water at the waypoint (#1628), or <c>null</c>.</param>
+    public InsertWaypointTool(RoutesService routes, IRouteEditInvoker invoker, WaypointWater? water = null)
+        : base(routes, invoker) => _water = water;
 
     /// <summary>Executes the tool.</summary>
     public Task<ToolResult<RouteDetail>> InvokeAsync(
@@ -371,28 +435,23 @@ internal sealed class InsertWaypointTool : RouteToolBase
         if (ValidateLatLon(request.Lat, request.Lon) is { } latLonError)
             return Task.FromResult(ToolResult<RouteDetail>.Err(latLonError));
 
-        return Invoker.InvokeAsync(() =>
-        {
-            var route = ResolveEditable(request.RouteId, out var error);
-            if (route is null)
-                return ToolResult<RouteDetail>.Err(error!);
-
-            if (request.Index < 0 || request.Index > route.Waypoints.Count)
-                return ToolResult<RouteDetail>.Err(new InvalidArgument(
-                    "index",
-                    $"value {request.Index} is outside the insertable range [0, {route.Waypoints.Count}]"));
-
-            route.History.Execute(RouteEditLabels.InsertWaypoint, () =>
-            {
-                var waypoint = route.InsertWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon));
-                if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
-                {
-                    ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
-                    route.NotifyChanged();
-                }
-            });
-            return Ok(route, Routes);
-        });
+        var position = new GeoPosition(request.Lat, request.Lon);
+        return PlaceAsync(
+            request.RouteId,
+            position,
+            request.MinDepthMeters,
+            request.Validate,
+            _water,
+            route => request.Index < 0 || request.Index > route.Waypoints.Count
+                ? new InvalidArgument("index", $"value {request.Index} is outside the insertable range [0, {route.Waypoints.Count}]")
+                : null,
+            _ => request.Index,
+            route => RouteEditCommands.InsertWaypoint(
+                route,
+                request.Index,
+                position,
+                new RouteWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm)),
+            cancellationToken);
     }
 }
 
@@ -406,7 +465,9 @@ internal sealed record MoveWaypointRequest(
     [property: Description("Index of the waypoint to move in [0, waypointCount).")] int Index,
     [property: Description("New WGS-84 latitude in decimal degrees [-90, 90].")] double Lat,
     [property: Description("New WGS-84 longitude in decimal degrees [-180, 180].")] double Lon,
-    [property: Description("Id of the route to edit; omit to use the active route.")] string? RouteId = null);
+    [property: Description("Id of the route to edit; omit to use the active route.")] string? RouteId = null,
+    [property: Description("The least charted depth the point needs, in metres; default the route's draft + squat + required UKC.")] double? MinDepthMeters = null,
+    [property: Description("Report the water at the new position without moving the waypoint.")] bool Validate = false);
 
 /// <summary>Moves an existing waypoint to a new position.</summary>
 internal sealed class MoveWaypointTool : RouteToolBase
@@ -414,9 +475,14 @@ internal sealed class MoveWaypointTool : RouteToolBase
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "move_waypoint";
 
+    private readonly WaypointWater? _water;
+
     /// <summary>Creates a new <see cref="MoveWaypointTool"/>.</summary>
-    public MoveWaypointTool(RoutesService routes, IRouteEditInvoker invoker)
-        : base(routes, invoker) { }
+    /// <param name="routes">The routes.</param>
+    /// <param name="invoker">Marshals onto the UI thread.</param>
+    /// <param name="water">Checks the water at the new position (#1628), or <c>null</c>.</param>
+    public MoveWaypointTool(RoutesService routes, IRouteEditInvoker invoker, WaypointWater? water = null)
+        : base(routes, invoker) => _water = water;
 
     /// <summary>Executes the tool.</summary>
     public Task<ToolResult<RouteDetail>> InvokeAsync(
@@ -428,22 +494,21 @@ internal sealed class MoveWaypointTool : RouteToolBase
         if (ValidateLatLon(request.Lat, request.Lon) is { } latLonError)
             return Task.FromResult(ToolResult<RouteDetail>.Err(latLonError));
 
-        return Invoker.InvokeAsync(() =>
-        {
-            var route = ResolveEditable(request.RouteId, out var error);
-            if (route is null)
-                return ToolResult<RouteDetail>.Err(error!);
-
-            if (request.Index < 0 || request.Index >= route.Waypoints.Count)
-                return ToolResult<RouteDetail>.Err(new InvalidArgument(
-                    "index",
-                    $"value {request.Index} is outside the waypoint range [0, {route.Waypoints.Count - 1}]"));
-
-            route.History.Execute(
+        var position = new GeoPosition(request.Lat, request.Lon);
+        return PlaceAsync(
+            request.RouteId,
+            position,
+            request.MinDepthMeters,
+            request.Validate,
+            _water,
+            route => request.Index < 0 || request.Index >= route.Waypoints.Count
+                ? new InvalidArgument("index", $"value {request.Index} is outside the waypoint range [0, {route.Waypoints.Count - 1}]")
+                : null,
+            _ => request.Index,
+            route => route.History.Execute(
                 RouteEditLabels.MoveWaypoint,
-                () => route.MoveWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon)));
-            return Ok(route, Routes);
-        });
+                () => route.MoveWaypoint(request.Index, position)),
+            cancellationToken);
     }
 }
 
@@ -485,7 +550,7 @@ internal sealed class DeleteWaypointTool : RouteToolBase
                     "index",
                     $"value {request.Index} is outside the waypoint range [0, {route.Waypoints.Count - 1}]"));
 
-            route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(request.Index));
+            RouteEditCommands.DeleteWaypoint(route, request.Index);
             return Ok(route, Routes);
         });
     }
@@ -636,38 +701,34 @@ internal sealed class SetLegAttributesTool : RouteToolBase
                     "legIndex",
                     $"value {request.LegIndex} is outside the leg range [0, {route.Legs.Count - 1}]"));
 
-            var leg = route.Legs[request.LegIndex];
-            route.History.Execute(RouteEditLabels.EditLeg, () =>
-            {
-                // Passage overrides go through the route so the "only when it
-                // differs" rule holds.
-                for (var i = 0; i < overrides.Length; i++)
+            RouteEditCommands.EditLeg(
+                route,
+                request.LegIndex,
+                overrides: r =>
                 {
-                    var (name, field) = OverrideParameters[i];
-                    if (clear.Contains(name))
-                        route.ResetLegOverride(request.LegIndex, field);
-                    else if (overrides[i].HasValue)
-                        route.SetLegOverride(request.LegIndex, field, overrides[i]);
-                }
-
-                // The plain attributes are set in place; notify only when one
-                // changed, so a no-op call records no undo step.
-                var before = leg.Clone();
-                if (geometry.HasValue) leg.GeometryType = geometry.Value;
-                for (var i = 0; i < envelope.Length; i++)
+                    for (var i = 0; i < overrides.Length; i++)
+                    {
+                        var (name, field) = OverrideParameters[i];
+                        if (clear.Contains(name))
+                            r.ResetLegOverride(request.LegIndex, field);
+                        else if (overrides[i].HasValue)
+                            r.SetLegOverride(request.LegIndex, field, overrides[i]);
+                    }
+                },
+                attributes: leg =>
                 {
-                    var (name, set) = EnvelopeParameters[i];
-                    if (clear.Contains(name))
-                        set(leg, null);
-                    else if (envelope[i].HasValue)
-                        set(leg, envelope[i]);
-                }
-                if (clear.Contains("note")) leg.Note = null;
-                else if (request.Note is not null) leg.Note = request.Note;
-
-                if (!before.HasSameAttributes(leg))
-                    route.NotifyChanged();
-            });
+                    if (geometry.HasValue) leg.GeometryType = geometry.Value;
+                    for (var i = 0; i < envelope.Length; i++)
+                    {
+                        var (name, set) = EnvelopeParameters[i];
+                        if (clear.Contains(name))
+                            set(leg, null);
+                        else if (envelope[i].HasValue)
+                            set(leg, envelope[i]);
+                    }
+                    if (clear.Contains("note")) leg.Note = null;
+                    else if (request.Note is not null) leg.Note = request.Note;
+                });
             return Ok(route, Routes);
         });
     }

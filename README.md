@@ -26,18 +26,22 @@ provides:
   any combination of supported products from an exchange set or as
   loose files and renders them, time-aligned, on an interactive map.
 - A **standalone command-line tool** (`s100`) that renders any
-  supported dataset to a PNG, or to a web-map tile set, from the shell — self-contained, with no
-  .NET install required — for batch and headless scripting.
-- An **optional MCP server** that exposes loaded datasets to AI
-  agents — feature discovery and query (`identify_features`,
-  `nearest_features`, `count_features`, `describe_feature`), coverage
-  sampling, interactive route planning, and live viewer control
-  (drive the viewport, capture the view, steer the own-ship).
+  supported dataset to an image or a web-map tile set, validates and
+  converts datasets, checks routes, predicts tides, and **serves charts**
+  as XYZ tiles, WMTS and WMS to web maps and GIS desktops. It's
+  self-contained, with no .NET install required, and also ships as the
+  `ghcr.io/philliphoff/s100` container image.
+- An **MCP server** that exposes datasets to AI agents — feature
+  discovery and query (`identify_features`, `nearest_features`,
+  `count_features`, `describe_feature`), coverage sampling, route
+  checks and tide predictions. It runs inside the viewer, where it also
+  plans routes and drives the view, or headless with `s100 mcp serve`
+  over standard input and output or HTTP.
 
 The goal is to make S-100 data approachable for .NET developers and
 end users without requiring native dependencies, commercial S-52
 assets, or platform-specific tooling. Everything runs on macOS,
-Windows, and Linux out of the box.
+Windows, and Linux.
 
 ## Getting started
 
@@ -50,9 +54,13 @@ through it, and the [viewer section](#the-viewer) below tours the
 features.
 
 **Building on top of the data?** **[docs/getting-started.md](docs/getting-started.md)**
-also walks you from zero to a rendered PNG in a few minutes — via either the
-batteries-included `EncDotNet.S100` library facade or the standalone `s100`
-command-line tool.
+walks you from zero to a rendered PNG with either the `EncDotNet.S100`
+library facade or the standalone `s100` command-line tool.
+
+**Serving charts to a web map or GIS?** Point `s100 tiles serve` at a folder
+of charts, or run it in Docker; see
+[Serve charts to a web map or GIS](docs/scenarios/serve-chart-tiles.md) and
+[Run s100 in Docker](docs/docker.md).
 
 ```csharp
 using EncDotNet.S100;
@@ -91,6 +99,7 @@ every product with a ✅ below ships a normative validation rule pack.
 | **S-131** | Marine Harbour Infrastructure | GML | Lua (Part 9A) | ✅ |
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ |
 | **S-411** | Sea Ice Information | GML | XSLT | ✅ |
+| **S-412** *(draft)* | Marine Weather Warnings | GML | XSLT | ✅ |
 | **S-421** | Route Plans | GML | XSLT | ✅ |
 | **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) |
@@ -126,16 +135,33 @@ offline basemap (Natural Earth land; OpenStreetMap optional). Headline features:
 - **Multi-product paint stack** driven by the S-98 interoperability
   authority (display planes, within-plane priority, inter-product
   rules) rather than load order.
-- **Activity-bar panels** for Datasets, Layer Stack, ECDIS Display
-  Controls, Object Information (pick reports), Routes, Vessels (AIS
-  targets + own-ship), Validation, and Settings — every panel can be
-  docked, hidden, or rearranged, and the layout persists between
-  sessions.
+- **Activity-bar panels** for the Library, Datasets, Layer Stack, ECDIS
+  Display Controls, Object Information (pick reports) and Legend,
+  Routes, Vessels (AIS targets + own-ship), Validation, Logs and
+  Settings — every panel can be docked, hidden, or rearranged, and the
+  layout persists between sessions.
+- **Library** of chart collections — local folders, exchange sets,
+  online catalogues (NOAA, USACE inland ENC, community lists, S-100
+  feeds) and SECOM services — browsed, filtered and downloaded without
+  loading every dataset.
 - **Interactive route planning** — build editable, persistent routes
   aligned to the in-repo S-421 route model: a numbered waypoint / leg
   timeline with per-leg great-circle or rhumb-line geometry and live
   distance and bearing, drawn and edited directly on the map (and
-  drivable by an AI agent through the MCP route tools).
+  drivable by an AI agent through the MCP route tools). Routes import
+  and export as RTZ and S-421.
+- **Route checks** against everything loaded — charted dangers, S-102
+  depths, S-104 or predicted tide for under-keel clearance at each
+  leg's ETA, regulated areas, navigational warnings and weather — with
+  a findings list and a clearance profile.
+- **Tide and current predictions** at NOAA stations, offline, on the
+  map and the Timeline, and to adjust charted depths where no S-104
+  covers the area.
+- **Weather overlays** (not for navigation) from GRIB2 and NetCDF
+  forecasts, CAP and S-412 warnings, NHC tropical cyclone advisories,
+  WPC surface analyses, NDBC buoys and own-ship NMEA instruments.
+- **Measure and range & bearing tools**, S-102 relief shading, and
+  predefined display combinations.
 - **Pick / Object Information** for both vector and coverage
   products, with FC-decoded attribute names, follow-the-`xlink`
   reference navigation, and an embedded time-series chart for
@@ -145,7 +171,7 @@ offline basemap (Natural Earth land; OpenStreetMap optional). Headline features:
   mariner settings (safety contour, depth contours, four shades,
   simplified symbols, radar overlay).
 - **Global timeline** for time-varying datasets (S-104, S-111,
-  S-411).
+  S-411, weather) and tide predictions.
 - **Validation panel** with click-to-zoom, severity colouring, and
   an overlay marker layer.
 - **In-app feedback and crash recovery** — a Report Feedback flow
@@ -158,6 +184,8 @@ offline basemap (Natural Earth land; OpenStreetMap optional). Headline features:
   with a per-class palette using the same hull/arrowhead vocabulary.
 - **Optional MCP server** (off by default) exposing the loaded
   datasets to AI agents.
+- **NATO Additional Military Layers** (AML) cells, drawn with
+  SoundCharts' own portrayal on their own display plane.
 
 See [the viewer README](src/EncDotNet.S100.Viewer/README.md) for the
 full feature guide, and the per-product gallery below for what each
@@ -192,26 +220,46 @@ records the datasets and viewer calls behind each one.
 
 ## Command-line tool
 
-`s100` is a cross-platform console tool that renders any supported
-product to a PNG, JPEG, or WebP from the shell — and **validates**
-datasets and exchange sets against the normative rule packs — driving
-the same portrayal and validation pipelines as the viewer through a
-headless Skia renderer, no UI required. It is suited to batch and
-scripted previews (sea-ice, surface-current, and chart thumbnails)
-and to CI conformance checks.
+`s100` is a cross-platform console tool that drives the same portrayal
+and validation pipelines as the viewer through a headless Skia
+renderer, with no UI. It renders any supported product to an image or a
+tile set, **validates** datasets and exchange sets against the normative
+rule packs, checks routes, converts between S-57 and S-101, predicts
+tides, and **serves** datasets to web maps, GIS desktops and AI agents.
 
 ```sh
 s100 render dataset.h5 out.png --palette night -w 2048 -h 1536
-s100 validate exchange-set/    # normative rules + exchange-set integrity
-s100 info dataset.h5           # detected spec, edition, and time steps
-s100 list-specs                # supported products
+s100 validate exchange-set/          # normative rules + exchange-set integrity
+s100 info dataset.h5                 # detected spec, edition, and time steps
+s100 route check route.rtz charts/ --draft 9.5
+s100 tides predict 9447130           # NOAA station, offline after `tides update`
+s100 tiles export charts/ -o charts.pmtiles
+s100 tiles serve charts/             # XYZ tiles, TileJSON, WMTS and WMS
+s100 mcp serve charts/ --transport http
 ```
+
+`tiles serve` renders a folder of S-57 cells, S-100 exchange sets and
+loose datasets on demand, or serves a built PMTiles, MBTiles,
+GeoPackage or `{z}/{x}/{y}` tile set, and picks up new editions copied
+into the folder while it runs. MapLibre, Leaflet, QGIS, ArcGIS Pro and
+GDAL can all use it; see
+[Serve charts to a web map or GIS](docs/scenarios/serve-chart-tiles.md).
 
 Each [release](https://github.com/philliphoff/EncDotNet.S100/releases)
 attaches a self-contained, per-platform archive that bundles the .NET
 runtime and native libraries, so **no .NET installation is required** —
 download, extract, and run. The same executable also ships inside the
-viewer application bundle. See [docs/cli.md](docs/cli.md) for the full
+viewer application bundle, and as the `ghcr.io/philliphoff/s100` container
+image for Linux x64 and arm64:
+
+```sh
+docker run --rm -p 8200:8200 -v "$PWD/charts:/data:ro" \
+  ghcr.io/philliphoff/s100 tiles serve /data --host 0.0.0.0 --no-token
+```
+
+[Run s100 in Docker](docs/docker.md) covers Docker Compose, health
+checks, memory limits, prebuilt tiles for small computers, and the MCP
+server in a container. See [docs/cli.md](docs/cli.md) for the full
 command and option reference.
 
 ## Libraries
@@ -223,7 +271,7 @@ split into focused packages.
 
 | Package | Description |
 |---|---|
-| **EncDotNet.S100** | Batteries-included on-ramp: open a dataset, read its features, and render it to an image using the bundled feature and portrayal catalogues — no hand-wiring of catalogues or pipelines. Start here; drop down to the focused packages below only when you need finer control. |
+| **EncDotNet.S100** | Open a dataset, read its features, and render it to an image using the bundled feature and portrayal catalogues, without wiring catalogues or pipelines by hand. Start here; use the focused packages below when you need finer control. |
 
 ### Core framework
 
@@ -234,6 +282,7 @@ split into focused packages.
 | **EncDotNet.S100.ExchangeSets** | Reader for S-100 Exchange Set catalogues and dataset/support file discovery, with signature/checksum **integrity verification** and S-100 Part 15 data-protection (decryption) support. |
 | **EncDotNet.S100.Portrayals** | Parser for S-100 Portrayal Catalogues (symbols, line styles, area fills, colour profiles, viewing groups). |
 | **EncDotNet.S100.Specifications** | Bundles official feature and portrayal catalogues as embedded resources. |
+| **EncDotNet.S100.Collections** | Indexes collections of S-100 and S-57 datasets without loading them — local folders, exchange sets, online chart catalogues and SECOM services — and downloads and syncs online items. The viewer's Library and the `s100` MCP Library tools are built on it. |
 
 ### Encoding and scripting backends
 
@@ -250,7 +299,7 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Datasets.S101** | S-101 ENC reader (incl. sequential updates), Lua portrayal pipeline, validation pack (`S101DatasetView` façade + 10 rules). |
 | **EncDotNet.S100.Datasets.S102** | S-102 bathymetry reader, coverage pipeline, validation pack. |
-| **EncDotNet.S100.Datasets.S104** | S-104 water level reader, coverage pipeline, validation pack. |
+| **EncDotNet.S100.Datasets.S104** | S-104 water level reader, station-series writer (including tide predictions), coverage pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S111** | S-111 surface currents reader, coverage pipeline (per-feature arrow symbology), validation pack. |
 | **EncDotNet.S100.Datasets.S122** | S-122 marine protected areas reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S124** | S-124 navigational warnings reader, XSLT portrayal pipeline, validation pack. |
@@ -261,12 +310,14 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S131** | S-131 marine harbour infrastructure reader, Lua portrayal pipeline (GML+Lua hybrid), validation pack. |
 | **EncDotNet.S100.Datasets.S201** | S-201 aids to navigation information (IALA) reader, XSLT portrayal pipeline, typed AtoN inventory data model, validation pack. |
 | **EncDotNet.S100.Datasets.S411** | S-411 sea ice reader, XSLT portrayal pipeline, validation pack. |
+| **EncDotNet.S100.Datasets.S412** | S-412 marine weather warnings reader (draft specification), typed warnings model, XSLT portrayal, validation pack. |
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model; pre-translation rules + delegation to the S-101 validation pack. |
 | **EncDotNet.S100.Datasets.Grib** | Managed GRIB2 decoder for wind and wave grids: regular latitude/longitude grids, analysis, forecast and time-interval products, and simple, complex, spatially differenced and PNG packing with bitmaps. Indexes fields on open, decodes on demand, and reads a whole file (or appended files) into a weather grid set. Drawn by `GribDatasetProcessor` in Datasets.Pipelines. No native dependencies. Not for navigation. |
 | **EncDotNet.S100.Datasets.Weather** | Shared in-memory model for GRIB2 and NetCDF-CF wind and wave grids: the canonical parameter table, normalisation to the coverage grid order, and an `ICoverageSource` with lazily decoded time steps, overview levels and wind speed and direction derived from U and V. Not for navigation. |
 | **EncDotNet.S100.Datasets.Cap** | CAP 1.2 marine weather warnings: one CAP alert, an Atom feed of them, or the NWS GeoJSON from `api.weather.gov/alerts`. Polygons, circles and NWS marine zone codes (resolved against a bundled, simplified NWS marine zone layer) become outlines, drawn while in force with hatching and outlines by severity. Drawn by `CapDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 | **EncDotNet.S100.Datasets.TropicalCyclones** | Tropical cyclone advisories from NHC's GIS shapefile zips: the storm, the advisory, every forecast point with its intensity and 34/50/64 kt radii by quadrant, the cone (split at 72 hours) and the past track. Loaded by `TropicalCycloneDatasetProcessor` in Datasets.Pipelines under the format name `TC`. Not for navigation. |
+| **EncDotNet.S100.Datasets.Aml** | SoundCharts' own portrayal of NATO Additional Military Layers (AML) cells read with EncDotNet.S57: dash-dot lines on a halo, unfilled ticked areas, framed point symbols and italic labels in four colour families (air, operational, seabed, environmental), on the *Additional military layers* display plane. Draws the RAL air and operational classes so far. Not the official AML portrayal; never used for depths or route checks. Not for navigation. |
 | **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. |
 | **EncDotNet.S100.Datasets.NetCdf** | Managed NetCDF-CF reader for wind and wave grids: NetCDF-3 (classic, 64-bit offset) and NetCDF-4 (on PureHDF, deflate and shuffle), with the CF interpretation that builds a weather grid set. Drawn by `NetCdfDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 
@@ -276,6 +327,8 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Navigation** | Leg ETAs and an under-keel clearance check along a route: charted depth (S-102, S-101 fallback) plus S-104 water level, minus draft and squat, at each sample's ETA. Depends only on Core. |
 | **EncDotNet.S100.Routes.Rtz** | RTZ route plan reader and writer (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2), keeping unknown attributes and vendor extensions for round trips. Depends only on Core. |
+| **EncDotNet.S100.Tides** | Harmonic tide prediction at a station: height at a time, a series at a fixed step, and high and low waters, for NOAA's 37 standard constituents and the 83 further ones it lists at some stations. Equilibrium arguments and node factors from Schureman (SP 98). No dependencies. Not for navigation. |
+| **EncDotNet.S100.Tides.Stations** | Tide station catalogue for `EncDotNet.S100.Tides`: NOAA CO-OPS reference and subordinate stations with constituents, offsets and datums (MLLW, MLW, MHW, MHHW, LAT, HAT), a cheap check for newer NOAA data, an offline JSON cache that is also the format for your own stations, stations near a point or in a box, and predictions on an S-100 vertical datum with their provenance. Not for navigation. |
 
 The **EncDotNet.S100.Datasets.S129.Fusion** library (project reference,
 not published to NuGet) is a purely additive cross-product helper that
@@ -287,8 +340,11 @@ the plan.
 
 | Package | Description |
 |---|---|
+| **EncDotNet.S100.Rendering.Scene** | The backend-neutral vector scene: lowers a portrayal display list into resolved paint operations that any rendering backend can draw. Depends only on Core and Portrayals. |
 | **EncDotNet.S100.Renderers.Skia** | Coverage and vector rendering to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps. |
+| **EncDotNet.S100.Rendering.Engine** | The tile compositor behind the viewer's map and `s100 render`, `tiles` and `mcp serve`: the Web Mercator tile grid, raster tile jobs on a work scheduler, memory and disk tile caches, and coverage clipping and overlap suppression between chart cells. No Mapsui or UI dependency. |
 | **EncDotNet.S100.Renderers.Mapsui** | Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection, plus dynamic-feature-source renderers (own-ship hull + arrowhead, AIS-target hull + per-class palette, default disc/line/polygon fallback). |
+| **EncDotNet.S100.Renderers.Mapsui.Avalonia** | Connects an S-100 map session to an Avalonia `MapControl`: a ready-made map control, redraws on the UI thread, pointer picking and PNG capture. |
 
 ### Dynamic feature sources
 
@@ -310,10 +366,12 @@ NuGet** — consume them via project reference (or through the viewer).
 
 | Project | Description |
 |---|---|
-| **EncDotNet.S100.Mcp.Tools** | Transport-agnostic Model Context Protocol tool surface (`list_datasets`, `describe_feature`, `sample_coverage`). See [its README](src/EncDotNet.S100.Mcp.Tools/README.md). |
-| **EncDotNet.S100.Mcp** | Streamable HTTP host that exposes the `Mcp.Tools` surface plus the viewer-injected `render_to_image` tool; bound to `127.0.0.1` by default, off by default, no authentication. See [its README](src/EncDotNet.S100.Mcp/README.md) and the [agent walkthrough](docs/mcp-server.md). |
+| **EncDotNet.S100.Mcp.Tools** | Transport-agnostic logic of the Model Context Protocol tools: listing datasets, describing features, spatial queries, coverage sampling, session changes and the Library. See [its README](src/EncDotNet.S100.Mcp.Tools/README.md). |
+| **EncDotNet.S100.Mcp** | Hosts the `Mcp.Tools` surface, plus host tools such as `render_to_image` and the tide tools, over Streamable HTTP (bound to `127.0.0.1` by default, with no authentication of its own) or standard input and output. SoundCharts and `s100 mcp serve` use it; `s100 mcp serve --transport http` adds a bearer token and an origin check. See [its README](src/EncDotNet.S100.Mcp/README.md) and the [MCP server guide](docs/mcp-server.md). |
 
 ## Building
+
+You need the .NET 10 SDK; `global.json` pins the feature band.
 
 ```sh
 dotnet build
@@ -333,7 +391,10 @@ ships as architecture-tagged `zip` archives and Linux as
 architecture-tagged `tar.gz` archives. The standalone `s100`
 command-line tool is also attached per platform as
 `s100-<version>-<rid>` (`.zip` on Windows, `.tar.gz` on macOS/Linux);
-see [docs/cli.md](docs/cli.md) for install instructions.
+see [docs/cli.md](docs/cli.md) for install instructions. The
+`ghcr.io/philliphoff/s100` container image is built from the Linux
+archives; [`tools/EncDotNet.S100.Cli/docker/build-local.sh`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/docker/build-local.sh)
+builds it from a working tree.
 
 ## Observability
 

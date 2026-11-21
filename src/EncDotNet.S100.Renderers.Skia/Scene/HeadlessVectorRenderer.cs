@@ -82,6 +82,11 @@ public static class HeadlessVectorRenderer
     /// <see cref="Viewport.ScaleDenominator"/> — bringing this path into
     /// alignment with the composite/GUI render paths.
     /// </param>
+    /// <param name="sizeProfile">
+    /// How S-100 Part 9 millimetres and points become pixels. Defaults to
+    /// <see cref="SymbolSizeProfile.Screen"/>, the viewer's sizes; pass
+    /// <see cref="SymbolSizeProfile.Part9Millimetres"/> for physical sizes in print.
+    /// </param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     public static SKBitmap Render(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -97,7 +102,8 @@ public static class HeadlessVectorRenderer
         Func<string, AreaFill?>? areaFillProvider = null,
         DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
         BasemapKind basemap = BasemapKind.None,
-        Viewport? viewport = null)
+        Viewport? viewport = null,
+        SymbolSizeProfile? sizeProfile = null)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
@@ -115,7 +121,8 @@ public static class HeadlessVectorRenderer
             lineStyleProvider,
             symbolScale,
             textScale,
-            areaFillProvider);
+            areaFillProvider,
+            sizeProfile: sizeProfile);
 
         // An explicit viewport frames an exact window and carries a real scale
         // denominator, so honour scale-visibility; the auto-fit fallback uses a
@@ -167,6 +174,11 @@ public static class HeadlessVectorRenderer
     /// <see cref="DrawingInstructionCategory.None"/> (lower everything). Used by
     /// the multi-layer compositor to apply a global suppression across layers.
     /// </param>
+    /// <param name="sizeProfile">
+    /// How S-100 Part 9 millimetres and points become pixels. Defaults to
+    /// <see cref="SymbolSizeProfile.Screen"/>, the viewer's sizes; pass
+    /// <see cref="SymbolSizeProfile.Part9Millimetres"/> for physical sizes in print.
+    /// </param>
     /// <returns>The resolved vector scene.</returns>
     public static VectorScene BuildScene(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -177,7 +189,8 @@ public static class HeadlessVectorRenderer
         double symbolScale,
         double textScale,
         Func<string, AreaFill?>? areaFillProvider = null,
-        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
+        SymbolSizeProfile? sizeProfile = null)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
@@ -185,6 +198,7 @@ public static class HeadlessVectorRenderer
         if (hiddenCategories != DrawingInstructionCategory.None)
             instructions = FilterInstructions(instructions, hiddenCategories);
 
+        sizeProfile ??= SymbolSizeProfile.Screen;
         var builder = new VectorSceneBuilder
         {
             ResolveColor = ColorResolver.Create(palette),
@@ -192,9 +206,10 @@ public static class HeadlessVectorRenderer
                 ? null
                 : name => VectorSceneBuilder.ResolveSymbolAsset(symbolProvider(name), palette),
             LineStyleProvider = lineStyleProvider,
-            PatternResolver = BuildPatternResolver(symbolProvider, areaFillProvider, palette),
+            PatternResolver = BuildPatternResolver(symbolProvider, areaFillProvider, palette, sizeProfile),
             SymbolScale = symbolScale,
             TextScale = textScale,
+            SizeProfile = sizeProfile,
         };
 
         return builder.Build(instructions, geometryProvider);
@@ -204,16 +219,22 @@ public static class HeadlessVectorRenderer
     /// Builds a tile resolver that rasterises pattern fills via
     /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/>. Tiles are cached
     /// per render invocation so multiple polygons sharing the same pattern do
-    /// not re-rasterise it. Returns <see langword="null"/> when either of the
+    /// not re-rasterise it. Tiles are rasterised at the profile's
+    /// <see cref="SymbolSizeProfile.PatternPixelsPerMillimetre"/>, supersampled
+    /// by <see cref="SkiaSvgRasterizer.PatternTileSupersample"/> (the renderer
+    /// scales them back down when it draws). Returns <see langword="null"/> when either of the
     /// upstream providers is unavailable (patterns then remain skipped).
     /// </summary>
     private static Func<string, byte[]?>? BuildPatternResolver(
         Func<string, string?>? symbolProvider,
         Func<string, AreaFill?>? areaFillProvider,
-        ColorPalette palette)
+        ColorPalette palette,
+        SymbolSizeProfile sizeProfile)
     {
         if (symbolProvider is null || areaFillProvider is null)
             return null;
+
+        double tilePixelsPerMm = sizeProfile.PatternPixelsPerMillimetre * SkiaSvgRasterizer.PatternTileSupersample;
 
         var cache = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         return fillName =>
@@ -231,7 +252,7 @@ public static class HeadlessVectorRenderer
                     if (!string.IsNullOrEmpty(svgContent))
                     {
                         var processed = SvgProcessor.Process(svgContent, palette);
-                        tile = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
+                        tile = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill, tilePixelsPerMm);
                     }
                 }
             }

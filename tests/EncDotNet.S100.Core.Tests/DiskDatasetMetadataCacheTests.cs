@@ -47,7 +47,7 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void Miss_then_hit_avoids_second_parse()
     {
         var source = WriteSource("a.h5", [1, 2, 3]);
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         var calls = 0;
 
         var first = cache.GetOrRead(source, _ => { calls++; return Sample(); });
@@ -63,10 +63,10 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void Hit_survives_a_new_cache_instance()
     {
         var source = WriteSource("b.h5", [4, 5, 6]);
-        new DiskDatasetMetadataCache(_cacheDir, 1_000_000)
+        new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions))
             .GetOrRead(source, _ => Sample());
 
-        var fresh = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var fresh = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         var calls = 0;
         var restored = fresh.GetOrRead(source, _ => { calls++; return Sample(); });
 
@@ -79,7 +79,7 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void Content_change_invalidates_entry()
     {
         var source = WriteSource("c.h5", [1, 1, 1]);
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         cache.GetOrRead(source, _ => Sample());
 
         // Rewrite with a different length + newer mtime.
@@ -96,7 +96,7 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void Mtime_change_alone_invalidates_entry()
     {
         var source = WriteSource("d.h5", [7, 7, 7]);
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         cache.GetOrRead(source, _ => Sample());
 
         // Same length, later write time.
@@ -112,7 +112,7 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void Corrupt_sidecar_is_a_miss_and_never_throws()
     {
         var source = WriteSource("e.h5", [2, 2]);
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         cache.GetOrRead(source, _ => Sample());
 
         foreach (var f in Directory.GetFiles(_cacheDir, "*.dmeta"))
@@ -129,7 +129,7 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void TryGet_returns_false_when_absent_and_does_not_produce()
     {
         var source = WriteSource("f.h5", [3]);
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
 
         Assert.False(cache.TryGet(source, out _));
 
@@ -142,7 +142,7 @@ public class DiskDatasetMetadataCacheTests : IDisposable
     public void Missing_source_still_returns_producer_value_without_persisting()
     {
         var missing = Path.Combine(_sourceDir, "does-not-exist.h5");
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
 
         var result = cache.GetOrRead(missing, _ => Sample());
 

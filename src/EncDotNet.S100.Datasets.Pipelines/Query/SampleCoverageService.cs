@@ -82,6 +82,11 @@ public enum TimeOutOfRangePolicy
 /// </param>
 /// <param name="CoveredFrom">For windowed queries, the start of the requested window clipped to the dataset's range.</param>
 /// <param name="CoveredTo">For windowed queries, the end of the requested window clipped to the dataset's range.</param>
+/// <param name="Source">
+/// Where the value came from when it isn't a loaded dataset's: a tide
+/// prediction used where no S-104 covers the point and time. Null for a
+/// dataset's value.
+/// </param>
 public sealed record SampleCoverageResult(
     [property: Description("Identifier of the dataset that produced the sample.")] DatasetId DatasetId,
     [property: Description("Latitude that was requested, echoed back in decimal degrees, WGS-84.")] double Latitude,
@@ -91,7 +96,50 @@ public sealed record SampleCoverageResult(
     [property: Description("Single-instant requests only: \"in_range\", or \"before_start\" / \"after_end\" when outOfRange=nearest sampled the dataset's first / last step instead. Null when no time was requested.")] string? TimeStatus = null,
     [property: Description("Windowed requests only: true when the requested window extends past the dataset's time range, so the series covers only part of it.")] bool? Truncated = null,
     [property: Description("Windowed requests only: start of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredFrom = null,
-    [property: Description("Windowed requests only: end of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredTo = null);
+    [property: Description("Windowed requests only: end of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredTo = null,
+    [property: Description("Where a value that isn't from a loaded dataset came from: a tide prediction where no S-104 covers the point and time, or a tidal current prediction where no S-111 does. Null for a dataset's value.")] SampleSource? Source = null);
+
+/// <summary>
+/// Where a sampled value came from when it isn't a loaded dataset's: a
+/// harmonic tide prediction used where no S-104 covers the point and time,
+/// or a tidal current prediction where no S-111 does.
+/// </summary>
+/// <param name="Kind">Always <c>prediction</c>.</param>
+/// <param name="Station">The station predicted.</param>
+/// <param name="VerticalDatum">The S-100 vertical datum code of the heights (MLLW is 12); <c>null</c> for a current.</param>
+/// <param name="Caveat">The note to quote with the value.</param>
+/// <param name="CatalogueDate">When the station catalogue was retrieved.</param>
+/// <param name="Confidence">
+/// For a current, how far the value can be trusted at the point given the
+/// station's distance: <c>high</c>, <c>medium</c> or <c>low</c>; <c>null</c>
+/// for a tide.
+/// </param>
+/// <param name="Note">For a current, the station's distance and what it means for the value; <c>null</c> for a tide.</param>
+[Description("Where a sampled value came from when it isn't a loaded dataset's.")]
+public sealed record SampleSource(
+    [property: Description("Always \"prediction\": the astronomical tide or tidal current, not S-104 or S-111 and not a forecast.")] string Kind,
+    [property: Description("The station the value is predicted at.")] SampleSourceStation Station,
+    [property: Description("The S-100 vertical datum code of the heights (MLLW is 12); null for a current.")] int? VerticalDatum,
+    [property: Description("Quote this with the value: \"Astronomical tide only, not a forecast.\" or, for a current, \"Astronomical tidal current only, not a forecast.\"")] string Caveat,
+    [property: Description("When the station catalogue was retrieved (UTC).")] DateTimeOffset? CatalogueDate,
+    [property: Description("Currents only: \"high\" (station within 500 m), \"medium\" (within 1 km) or \"low\" (farther). Tidal currents change over short distances, most of all either side of a narrows; null for a tide.")] string? Confidence = null,
+    [property: Description("Currents only: quote this with the value. Names the station's distance and, past 500 m, warns the current here may differ; null for a tide.")] string? Note = null);
+
+/// <summary>The station a predicted value comes from.</summary>
+/// <param name="Id">The station identifier.</param>
+/// <param name="Name">The station's name.</param>
+/// <param name="Type"><c>tide</c> or <c>current</c>.</param>
+/// <param name="Kind"><c>harmonic</c> or <c>subordinate</c>.</param>
+/// <param name="ReferenceStationId">For a subordinate station, its reference station.</param>
+/// <param name="DistanceMeters">The station's distance from the point, by water where charts are loaded.</param>
+[Description("The station a predicted value comes from.")]
+public sealed record SampleSourceStation(
+    [property: Description("The station identifier, such as \"9447130\".")] string Id,
+    [property: Description("The station's name.")] string? Name,
+    [property: Description("\"tide\" for S-104's fallback or \"current\" for S-111's.")] string Type,
+    [property: Description("\"harmonic\" or \"subordinate\".")] string Kind,
+    [property: Description("For a subordinate station, its reference station's id; otherwise null.")] string? ReferenceStationId,
+    [property: Description("Distance in metres from the point to the station, through the loaded charts' water where there are charts.")] double? DistanceMeters);
 
 /// <summary>
 /// A single entry in a <see cref="SampleCoverageResult.Series"/>: the
@@ -160,7 +208,7 @@ public sealed record TimedSampledValue(
 public sealed class SampleCoverageService
 {
     /// <summary>Tool name used in <see cref="SpecNotSupportedForTool"/> errors.</summary>
-    public const string Name = "sample_coverage";
+    public const string Name = "sample";
 
     private readonly IDatasetCatalog _catalog;
     private readonly ICrsTransformFactory _transforms;

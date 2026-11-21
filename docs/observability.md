@@ -219,7 +219,8 @@ a warm load spends its time:
 | `s100.portrayal.cache.read` | The disk portrayal-cache read, tagged `s100.cache.result` (`hit` or `miss`). |
 | `s100.cell.scene_build` | Building the Mapsui layers and scene, including the pattern clip. |
 | `s100.cell.pattern_clip` | The pattern clip, tagged `s100.cache.result` (`hit` or `miss`). |
-| `s100.cell.compose` | Composing the map's layer stack. |
+| `s100.cell.compose` | Composing the map's layer stack. In the viewer, a landing cell's compose runs as a background job outside the load's trace. |
+| `s100.cell.stack_wait` | In the viewer, waiting for a layer stack that includes the landed cell to reach the map: the background compose and the post that applies it. |
 
 To rank slow tile jobs and break down their latency from first visible enqueue
 to publish, run PerfReport's `tile-report` command on a trace file:

@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Default <see cref="IViewerUiController"/> implementation — drives the
-/// activity-panel state exposed by <see cref="MainViewModel"/> (dock open
+/// activity-panel state exposed by <see cref="ShellLayoutViewModel"/> (dock open
 /// flags and per-dock tab selection) through the Avalonia UI dispatcher.
 /// </summary>
 /// <remarks>
@@ -19,9 +19,9 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class ViewerUiController : IViewerUiController
 {
-    private readonly MainViewModel _viewModel;
+    private readonly ShellLayoutViewModel _viewModel;
 
-    public ViewerUiController(MainViewModel viewModel)
+    public ViewerUiController(ShellLayoutViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         _viewModel = viewModel;
@@ -44,7 +44,7 @@ internal sealed class ViewerUiController : IViewerUiController
     private IReadOnlyList<ViewerPanelState> SnapshotPanels()
     {
         // Left dock first, then right, then bottom; each dock in
-        // activity-bar order (IActivityTab.Order ascending). MainViewModel
+        // activity-bar order (IActivityTab.Order ascending). ShellLayoutViewModel
         // already sorts Tabs by Order, so a stable OrderBy on the dock is
         // sufficient to group without disturbing intra-dock ordering.
         return _viewModel.Tabs
@@ -68,7 +68,7 @@ internal sealed class ViewerUiController : IViewerUiController
             // Check passage folds the right dock to its edge tab (#901), and a
             // window under 900 px hides the bottom dock (#712 F5): open, but not showing.
             Showing: available && selected && dockOpen
-                && !(tab.Dock == TabDock.Right && _viewModel.IsRightDockFolded)
+                && !(tab.Dock == TabDock.Right && !_viewModel.IsRightDockPanelVisible)
                 && !(tab.Dock == TabDock.Bottom && _viewModel.IsWindowNarrow));
     }
 
@@ -107,7 +107,7 @@ internal sealed class ViewerUiController : IViewerUiController
 
     /// <summary>
     /// Selects the tab and opens its dock. Guards against
-    /// <see cref="MainViewModel.SelectedLeftTab"/>'s toggle behaviour —
+    /// <see cref="ShellLayoutViewModel.SelectedLeftTab"/>'s toggle behaviour —
     /// re-selecting the already-selected left tab while its dock is open
     /// would close the dock, so a panel that is already showing is left
     /// untouched.
@@ -116,7 +116,8 @@ internal sealed class ViewerUiController : IViewerUiController
     {
         if (tab.Dock == TabDock.Right && _viewModel.IsRightDockFolded)
         {
-            _viewModel.IsRightDockFolded = false;
+            // A Check passage fold unfolds; a narrow fold (D9) shows over the map.
+            _viewModel.ShowFoldedRightDock();
         }
 
         if (IsSelected(tab) && IsDockOpen(tab.Dock))
@@ -125,6 +126,11 @@ internal sealed class ViewerUiController : IViewerUiController
         }
 
         _viewModel.SelectTab(tab.Id);
+
+        // Opening the right dock in a narrow window folds it (D9); a caller
+        // asking to show a panel gets it over the map.
+        if (tab.Dock == TabDock.Right && _viewModel.IsRightDockNarrowFolded)
+            _viewModel.ShowFoldedRightDock();
     }
 
     /// <summary>

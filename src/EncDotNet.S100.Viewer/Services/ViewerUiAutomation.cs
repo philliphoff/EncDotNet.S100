@@ -108,14 +108,38 @@ internal sealed partial class ViewerUiAutomation : IViewerUiAutomation
         budget?.Take();
         var peer = ControlAutomationPeer.CreatePeerForElement(control);
         IReadOnlyList<UiElementSnapshot>? children = null;
+        bool? more = null;
         if (depth > 0 && budget is not null)
         {
             var list = new List<UiElementSnapshot>();
             CollectChildren(peer, depth, interactiveOnly, budget, list);
             children = list.Count > 0 ? list : null;
         }
+        else if (budget is not null && HasListableChildren(peer, interactiveOnly))
+        {
+            // Depth ran out above elements the listing would show: say so,
+            // so a client can list this element as a root (#1225).
+            more = true;
+            budget.MarkTruncated();
+        }
 
-        return Describe(control, peer, children);
+        return Describe(control, peer, children) with { More = more };
+    }
+
+    /// <summary>
+    /// Whether <see cref="CollectChildren"/> would list anything below
+    /// <paramref name="peer"/> given more depth.
+    /// </summary>
+    private static bool HasListableChildren(AutomationPeer peer, bool interactiveOnly)
+    {
+        foreach (var childPeer in peer.GetChildren())
+        {
+            if (childPeer is not ControlAutomationPeer { Owner: { IsEffectivelyVisible: true } child })
+                continue;
+            if (!interactiveOnly || IsInteresting(child, childPeer) || HasListableChildren(childPeer, interactiveOnly))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -559,6 +583,9 @@ internal sealed partial class ViewerUiAutomation : IViewerUiAutomation
             if (Used >= max)
                 Truncated = true;
         }
+
+        /// <summary>Records that depth cut the listing short.</summary>
+        public void MarkTruncated() => Truncated = true;
     }
 
     /// <summary>

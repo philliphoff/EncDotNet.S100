@@ -1,0 +1,36 @@
+@* Toasts (handoff D29): a dataset added (with Show), removed, or failing to reload. Newest last; each goes after a while. *@
+<div class="toasts" aria-live="polite">
+    @ChildContent
+    @foreach (var toast in Items)
+    {
+        <div class="live-toast" data-tone="@toast.Tone" @key="toast.Key">
+            <Icon Name="@toast.Icon" Size="16" Class="live-toast-icon" />
+            <span class="toast-text"><span class="strong">@toast.Title</span> @toast.Text</span>
+            @if (toast.ActionLabel is { } action)
+            {
+                <button type="button" class="link-button toast-action" @onclick="() => OnAction.InvokeAsync(toast)">@action</button>
+            }
+            <button type="button" class="icon-button toast-close" aria-label="Dismiss" title="Dismiss" @onclick="() => OnDismiss.InvokeAsync(toast)">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>The page's own toasts (<see cref="Toast"/>), above the live ones.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The toasts showing, oldest first.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<LiveToast> Items { get; set; } = [];
+
+    /// <summary>A toast's action was chosen.</summary>
+    [Parameter]
+    public EventCallback<LiveToast> OnAction { get; set; }
+
+    /// <summary>A toast was dismissed.</summary>
+    [Parameter]
+    public EventCallback<LiveToast> OnDismiss { get; set; }
+}

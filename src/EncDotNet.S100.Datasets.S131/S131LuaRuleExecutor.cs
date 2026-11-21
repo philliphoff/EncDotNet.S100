@@ -102,5 +102,10 @@ internal static class S131ContextParameterBindings
         new("SafetyContour", m => m.SafetyContour.TotalMetres, LuaValueSerializers.Number),
         new("SafetyDepth", m => m.SafetyDepth.TotalMetres, LuaValueSerializers.Number),
         new("TwoShades", m => !m.FourShades, LuaValueSerializers.Bool),
+        // As for S-101: only sent when explicitly chosen, so a blank value
+        // leaves the catalogue's declared default (eng) in place.
+        new("NationalLanguage",
+            m => string.IsNullOrWhiteSpace(m.NationalLanguage) ? null : m.NationalLanguage,
+            LuaValueSerializers.Str),
     ];
 }

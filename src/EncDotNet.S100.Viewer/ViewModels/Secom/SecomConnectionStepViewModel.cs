@@ -40,7 +40,7 @@ internal sealed class SecomConnectionStepViewModel : ViewModelBase
         KnownCatalogueSource source,
         SecomIdentityDirectory identities,
         Func<Uri, string?, CancellationToken, Task<SecomProbeResult>> probe,
-        Action<Keys.KeysTab>? openKeys = null)
+        Action<Keys.KeysTab>? openKeys)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(identities);

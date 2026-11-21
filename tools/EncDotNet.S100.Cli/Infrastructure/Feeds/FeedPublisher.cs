@@ -35,16 +35,17 @@ internal sealed class FeedPublisher
     private PublishedFeed? _feed;
     private DateTimeOffset _checkedAt;
 
-    public FeedPublisher(string path, string? title = null, TimeSpan? refreshInterval = null, TimeProvider? timeProvider = null)
+    public FeedPublisher(string path, TimeProvider timeProvider, string? title = null, TimeSpan? refreshInterval = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         var fullPath = System.IO.Path.GetFullPath(path);
         _source = Directory.Exists(fullPath) && !LooksLikeExchangeSetRoot(fullPath)
             ? new LocalFolderSource(Guid.NewGuid(), null, fullPath)
             : new ExchangeSetSource(Guid.NewGuid(), null, fullPath);
         _title = string.IsNullOrWhiteSpace(title) ? DefaultTitle(fullPath) : title.Trim();
         _indexer = CollectionIndexer.CreateDefault(TryReadMetadata);
-        _time = timeProvider ?? TimeProvider.System;
+        _time = timeProvider;
         _refreshInterval = refreshInterval ?? TimeSpan.FromSeconds(10);
         Path = fullPath;
     }

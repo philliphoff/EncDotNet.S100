@@ -16,21 +16,21 @@ public class RouteEditToolTests
     [Fact]
     public void Id_IsStable()
     {
-        var tool = new RouteEditTool(new RoutesService());
+        var tool = new RouteEditTool(new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)));
         Assert.Equal(RouteEditTool.ToolId, tool.Id);
     }
 
     [Fact]
     public void FormatSummary_NoActiveRoute_ReturnsNoDataText()
     {
-        var tool = new RouteEditTool(new RoutesService());
+        var tool = new RouteEditTool(new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)));
         Assert.Equal(Strings.Status_RouteEditNoData, tool.FormatSummary());
     }
 
     [Fact]
     public void FormatSummary_SingleWaypoint_ReturnsNoDataText()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
 
@@ -41,7 +41,7 @@ public class RouteEditToolTests
     [Fact]
     public void FormatSummary_TwoWaypoints_IncludesTotalDistance()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(0, 1));

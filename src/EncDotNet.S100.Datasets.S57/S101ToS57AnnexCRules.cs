@@ -120,6 +120,10 @@ public sealed partial class S101ToS57Rules
             When(Rule("MooringBuoy", "SMCFAC", "20.8", ("CATSCF", "29")), "visitorsMooring", []));
         Redirect(features, "Obstruction",
             When(Rule("Obstruction", "VEGATN", "13.6", ("CATVEG", "7")), "categoryOfObstruction", ["23"], S57GeometricPrimitive.Area));
+        // TSELNE and TSEZNE both convert to SeparationZoneOrLine, and the
+        // lower OBJL (TSELNE) would win the inversion: §15.19 makes TSEZNE
+        // the class, with TSELNE for a line.
+        Feature(features, "SeparationZoneOrLine", "TSEZNE", "15.19");
         Redirect(features, "SeparationZoneOrLine",
             OnPrimitive(Rule("SeparationZoneOrLine", "TSELNE", "15.19"), S57GeometricPrimitive.Line));
 

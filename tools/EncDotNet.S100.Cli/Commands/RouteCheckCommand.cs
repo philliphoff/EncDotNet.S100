@@ -19,7 +19,8 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 route check</c> checks an RTZ or S-421 route against datasets
 /// headlessly: the chart check (land, drying ground, the safety contour,
 /// charted dangers and chart coverage), restricted and protected areas,
-/// S-124 warnings and, when the route has a draft, the under-keel clearance.
+/// S-124 warnings, when the route has a draft the under-keel clearance, and
+/// with wind or wave limits the forecast weather along the route.
 /// </summary>
 /// <remarks>
 /// The command reads the route into a <see cref="PassagePlan"/> with its
@@ -86,14 +87,43 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         [Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route. Default 185.2 (0.1 NM).")]
         public double? NearbyMeters { get; init; }
 
+        [CommandOption("--berth-radius <METERS>")]
+        [Description("How far from the departure and arrival, in metres, structures that raise the SafetyContour alert count as the berth (a breakwater, ruin or other non-berth structure the track line cuts stays a crossing; pontoons, floating docks, piers and wharves never do): one berth-structures finding (info) per end instead of crossings. Default 100; 0 turns it off.")]
+        public double? BerthRadiusMeters { get; init; }
+
         [CommandOption("--areas-off <KINDS>")]
         [Description("Comma-separated kinds of prohibited area and area with special conditions to turn off, e.g. anchorage_area,marine_farm (the S-101 alert catalogue's ProhAre kinds). One finding per kind says the route meets them.")]
         public string? AreasOff { get; init; }
 
+        [CommandOption("--max-wind <KNOTS>")]
+        [Description("Wind limit in knots for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are reported (check). Overrides an RTZ route's vesselMaxWind.")]
+        public double? MaxWindKnots { get; init; }
+
+        [CommandOption("--max-wave <METERS>")]
+        [Description("Significant wave height limit in metres for the weather check. Overrides an RTZ route's vesselMaxWave.")]
+        public double? MaxWaveMeters { get; init; }
+
+        [CommandOption("--cyclone-radius <KNOTS>")]
+        [Description("Tropical cyclones (loaded NHC advisories): the outermost wind radius the weather check tests at each ETA, 34 (default), 50 or 64 kt. The cone is always tested.")]
+        public int? CycloneRadiusKnots { get; init; }
+
+        [CommandOption("--cyclone-must-review <KNOTS>")]
+        [Description("Tropical cyclones: the weakest wind radius whose findings are Must review: 64, 50 (default), 34 or 'never'. Weaker radii and the cone are Check.")]
+        public string? CycloneMustReview { get; init; }
+
+        [CommandOption("--no-cyclone-cpa")]
+        [Description("Tropical cyclones: don't report the route's closest approach to each storm.")]
+        [DefaultValue(false)]
+        public bool NoCycloneClosestApproach { get; init; }
+
         [CommandOption("--window")]
-        [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window. Needs a draft.")]
+        [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit).")]
         [DefaultValue(false)]
         public bool Window { get; init; }
+
+        [CommandOption("--tide-predictions <FILE>")]
+        [Description("A tide station list (the tide-stations file format, .json or .json.gz) to predict water level from where no S-104 covers. Predictions are the astronomical tide only, not a forecast; a station reaches 10 km through the loaded charts' water.")]
+        public string? TidePredictions { get; init; }
 
         [CommandOption("--only <SPECS>")]
         [Description("Exchange-set datasets only: restrict loading to a comma-separated list of product specifications (e.g. --only S101,S102,S124).")]
@@ -124,6 +154,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 return ValidationResult.Error("A route file is required.");
             if (Datasets.Length == 0)
                 return ValidationResult.Error("At least one dataset, exchange set or folder is required.");
+            if (TidePredictions is { } stations && !File.Exists(stations))
+                return ValidationResult.Error($"Tide station list not found: {stations}");
 
             foreach (var (name, value, allowZero) in new (string, double?, bool)[]
             {
@@ -136,12 +168,20 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 ("--safety-depth", SafetyDepthMeters, true),
                 ("--track-clearance", TrackClearanceMeters, true),
                 ("--nearby", NearbyMeters, true),
+                ("--berth-radius", BerthRadiusMeters, true),
+                ("--max-wind", MaxWindKnots, false),
+                ("--max-wave", MaxWaveMeters, false),
             })
             {
                 if (value is { } v && (!double.IsFinite(v) || v < 0 || (!allowZero && v == 0)))
                     return ValidationResult.Error($"{name} must be {(allowZero ? "zero or more" : "a positive number")}.");
             }
 
+            if (CycloneRadiusKnots is { } radius && CheckRouteTool.CycloneRadius(radius) is null)
+                return ValidationResult.Error("--cyclone-radius must be 34, 50 or 64.");
+            if (CycloneMustReview is { } inside && !string.Equals(inside, "never", StringComparison.OrdinalIgnoreCase)
+                && !(int.TryParse(inside, NumberStyles.None, CultureInfo.InvariantCulture, out var knots) && CheckRouteTool.CycloneRadius(knots) is not null))
+                return ValidationResult.Error("--cyclone-must-review must be 34, 50, 64 or never.");
             if (AreaKindsOff(AreasOff).FirstOrDefault(k => k.Kind is null) is { Name: { } unknown })
                 return ValidationResult.Error($"--areas-off: '{unknown}' isn't a kind: {string.Join(", ", RouteAreaKinds.Names.Values)}.");
             if (Departure is not null && !TryParseTime(Departure, out _))
@@ -210,11 +250,39 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 CorridorOverride = settings.CorridorMeters is { } corridor ? Length.FromMetres(corridor) : null,
                 TrackClearance = settings.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
                 NearbyDistance = settings.NearbyMeters is { } nearby ? Length.FromMetres(nearby) : null,
+                BerthRadius = settings.BerthRadiusMeters is { } berth ? Length.FromMetres(berth) : null,
                 AreaKindsOff = Settings.AreaKindsOff(settings.AreasOff).Select(k => k.Kind!.Value).ToList(),
                 DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
+                WeatherLimits = settings.MaxWindKnots is null && settings.MaxWaveMeters is null ? null : new WeatherLimits
+                {
+                    MaxWind = settings.MaxWindKnots is { } wind ? Speed.FromKnots(wind) : null,
+                    MaxWaveHeight = settings.MaxWaveMeters is { } wave ? Length.FromMetres(wave) : null,
+                },
+                TropicalCyclones = new TropicalCycloneCheckSettings
+                {
+                    CheckAgainst = settings.CycloneRadiusKnots is { } radius ? CheckRouteTool.CycloneRadius(radius)!.Value : TropicalCycloneRadius.Knots34,
+                    ReportClosestApproach = !settings.NoCycloneClosestApproach,
+                    MustReviewInside = settings.CycloneMustReview is not { } inside ? TropicalCycloneRadius.Knots50
+                        : string.Equals(inside, "never", StringComparison.OrdinalIgnoreCase) ? null
+                        : CheckRouteTool.CycloneRadius(int.Parse(inside, CultureInfo.InvariantCulture)),
+                },
             };
 
-            var sources = new RouteCheckSourceCache(transforms).Get(catalog.Datasets);
+            EncDotNet.S100.Tides.Stations.TideStationCatalogue? tideStations = null;
+            if (settings.TidePredictions is { } stationsPath)
+            {
+                try
+                {
+                    tideStations = EncDotNet.S100.Tides.Stations.TideStationCatalogueFile.LoadAsync(stationsPath, cancellationToken).GetAwaiter().GetResult();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or System.Text.Json.JsonException or ArgumentException or InvalidDataException)
+                {
+                    Console.Error.WriteLine($"Can't read the tide station list {stationsPath}: {ex.Message}");
+                    return 2;
+                }
+            }
+
+            var sources = new RouteCheckSourceCache(transforms, new RouteCheckSourceOptions { TidePredictions = tideStations }).Get(catalog.Datasets);
             RouteCheckReport report;
             try
             {
@@ -266,7 +334,10 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
             RequiredUkc = settings.RequiredUkcMeters is { } ukc ? Depth.FromMetres(ukc) : l.RequiredUkc,
             Name = l.Name,
         }).ToList(),
-        departure);
+        departure)
+    {
+        VesselLimits = route.Plan.VesselLimits,
+    };
 
     private static bool TryResolveDatasets(
         Settings settings,
@@ -362,12 +433,21 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         Add("corridorHalfWidthMeters", settings.CorridorMeters);
         Add("trackClearanceMeters", settings.TrackClearanceMeters);
         Add("nearbyDistanceMeters", settings.NearbyMeters);
+        Add("berthRadiusMeters", settings.BerthRadiusMeters);
         if (settings.AreasOff is { Length: > 0 } areasOff)
             settingsNode["areaKindsOff"] = new JsonArray(Settings.AreaKindsOff(areasOff).Select(k => (JsonNode?)k.Name).ToArray());
         Add("draftMeters", settings.DraftMeters);
         Add("squatMeters", settings.SquatMeters);
         Add("speedKnots", settings.SpeedKnots);
         Add("requiredUkcMeters", settings.RequiredUkcMeters);
+        Add("maxWindKnots", settings.MaxWindKnots);
+        Add("maxWaveHeightMeters", settings.MaxWaveMeters);
+        if (settings.CycloneRadiusKnots is { } cycloneRadius)
+            settingsNode["cycloneCheckAgainstKnots"] = cycloneRadius;
+        if (settings.CycloneMustReview is { } mustReview)
+            settingsNode["cycloneMustReviewInside"] = mustReview.ToLowerInvariant();
+        if (settings.NoCycloneClosestApproach)
+            settingsNode["cycloneReportClosestApproach"] = false;
 
         var check = CheckRouteResult.From(report, route.RouteId ?? Path.GetFileName(route.Path), route.Name);
         var root = new JsonObject
@@ -425,6 +505,13 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 console.MarkupLineInterpolated($"  Minimum UKC {min.UkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m (required {min.RequiredUkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m) at {min.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {min.Leg + 1}");
             if (clearance.Confidence.Count > 0)
                 console.MarkupLineInterpolated($"  Lower confidence: {string.Join(", ", clearance.Confidence)}");
+            var predicted = clearance.Sources.WaterLevels.Where(w => w.Kind == "prediction").ToList();
+            if (predicted.Count > 0)
+            {
+                var stations = predicted.Select(w => w.StationName is { } name ? $"{name} {w.Station}" : w.Station ?? w.Dataset);
+                console.MarkupLineInterpolated($"  Water level predicted: {string.Join(", ", stations)}");
+                console.MarkupLineInterpolated($"  [grey]{CheckRouteResult.PredictionCaveat}[/]");
+            }
             if (clearance.Window is { } window)
             {
                 var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();
@@ -437,6 +524,36 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 ? "The route has no draft on every leg; pass --draft for the under-keel clearance check."
                 : $"No charted depth or water level to check against ({report.Status(ClearanceCheck.CheckName)?.Reason}).";
             console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] not checked. {reason}");
+        }
+
+        if (check.Weather is { } weather)
+        {
+            console.WriteLine();
+            var limits = string.Join(", ", weather.Limits.Select(l =>
+                $"{(l.Quantity == "wind_speed" ? "wind" : "waves")} {l.Value.ToString("0.#", CultureInfo.InvariantCulture)} {l.Unit}{(l.Origin == "route" ? " (route)" : string.Empty)}"));
+            console.MarkupLineInterpolated($"[bold]Weather:[/] {weather.Verdict} (limits {(limits.Length == 0 ? "none" : limits)})");
+            if (weather.MaxWind is { } wind)
+                console.MarkupLineInterpolated($"  Max wind {wind.Value.ToString("0", CultureInfo.InvariantCulture)} kn at {wind.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {wind.LegIndex + 1}");
+            if (weather.MaxWaveHeight is { } wave)
+                console.MarkupLineInterpolated($"  Max significant wave height {wave.Value.ToString("0.0", CultureInfo.InvariantCulture)} m at {wave.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {wave.LegIndex + 1}");
+            if (weather.NotCheckedCount > 0)
+                console.MarkupLineInterpolated($"  Not checked at {weather.NotCheckedCount} of {weather.SampleCount} places along the track");
+            foreach (var storm in weather.Cyclones)
+            {
+                var met = storm.StrongestRadiusKnots is { } r ? $"inside the {r} kt radius" : "outside the tested radii";
+                var cone = storm.InCone ? ", in the cone" : string.Empty;
+                var cpa = storm.ClosestApproach is { } c
+                    ? $", closest {c.DistanceNm.ToString("0", CultureInfo.InvariantCulture)} NM{(c.Eta is { } eta ? $" at {eta.ToUniversalTime():yyyy-MM-dd HH:mm} UTC" : string.Empty)}, leg {c.LegIndex + 1}"
+                    : string.Empty;
+                var beyond = storm.BeyondForecast ? ", beyond the forecast in part (not checked)" : string.Empty;
+                console.MarkupLineInterpolated($"  {storm.Name} adv {storm.Advisory}: {met}{cone}{cpa}{beyond}");
+            }
+
+            if (weather.Window is { } window)
+            {
+                var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();
+                console.MarkupLineInterpolated($"  Departures within the limits: {(runs.Count == 0 ? "none" : string.Join(", ", runs))}");
+            }
         }
 
         console.WriteLine();

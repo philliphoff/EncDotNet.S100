@@ -1,4 +1,5 @@
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;

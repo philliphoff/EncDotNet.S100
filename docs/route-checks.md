@@ -3,7 +3,9 @@
 A route check compares a route with the loaded data. It covers land, drying
 ground, the safety contour, charted dangers, regulated and protected areas,
 S-124 navigational warnings and chart coverage. With a draft, it also computes
-the under-keel clearance (UKC) along the route at each point's ETA. Three
+the under-keel clearance (UKC) along the route at each point's ETA. With wind
+or wave limits and a weather forecast loaded, it compares the forecast along
+the route at the ETAs with the limits. Three
 hosts run the same checks and report the same findings and codes:
 
 - **SoundCharts**: **Check route** in the **Routes** panel. See the
@@ -37,7 +39,21 @@ The results are an aid for exploring the data, not for navigation.
   leg's dangers are judged against, and the UKC check runs when every leg
   has a draft. See [Keel](how-a-route-check-works.md#keel).
 - **The departure and speeds.** Speeds give each point an ETA, and
-  warnings, seasonal areas and S-104 water levels are judged at the ETAs.
+  warnings, seasonal areas, S-104 water levels and the weather forecast are
+  judged at the ETAs. Speeds are over the ground unless you say they're
+  through the water (`vessel.speedThroughWater` in `check_route`, or the
+  timing check's `applyCurrents`). Then each stretch of up to 500 m adds the
+  current along the track at its ETA, from S-111 where it covers the place
+  and time, else from a current-station prediction within reach (with
+  predictions on), and every check uses those ETAs. Where neither has a
+  value at the ETA, the speed stands as over the ground and the stretch is
+  a `data.no_current_coverage` finding (Info). Set across the track and
+  leeway aren't applied.
+- **Wind and wave limits.** The highest wind speed and significant wave
+  height the vessel accepts, for the weather check. SoundCharts uses
+  **Mariner Settings**; MCP and the command line take them as arguments. An
+  RTZ route's `vesselMaxWind` and `vesselMaxWave` are used where those leave
+  a limit unset.
   See [Time](how-a-route-check-works.md#time) for the time used where there's
   no ETA.
 
@@ -86,6 +102,7 @@ These checks run when the safety contour and safety depth are both set.
 |---|---|---|
 | `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
 | `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
+| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, and the docks joined to them, one finding per end; a breakwater or other non-berth structure the track line cuts stays a crossing. |
 | `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
@@ -97,7 +114,34 @@ Besides depth areas, every feature whose S-101 portrayal raises the
 pontoons, shoreline constructions, unsurveyed areas, and land charted as
 points or curves. An area is crossed or in the corridor as the depth areas
 are; a point or curve is crossed when the track passes within the track
-clearance (30 m) of it.
+clearance (30 m) of it. A structure (anything but an unsurveyed area or
+land) is titled for itself, "Crosses a structure" or "Structure inside the
+cross-track limits", with the safety contour alert as its reason.
+
+A route that starts or ends at a marina berth always touches its pontoons and
+piers, and a marina entrance is often narrower than the track clearance either
+side, so its breakwaters are close too. Structures within the berth radius of
+the departure or arrival waypoint are grouped into one Info finding per end,
+"Structures at the departure berth" or "Structures at the arrival berth",
+which lists them. A large marina's docks spread past any one radius, so a
+pontoon, floating dock, pier or wharf within 60 m of a structure already
+grouped joins the group too, out to four times the radius: the dock system
+counts as one berth. The radius is a setting (`--berth-radius` in
+`s100 route check`, `limits.berthRadiusMeters` in `check_route`); 0 turns the
+grouping off.
+
+The one exception is a structure that isn't a berth and that the track line
+itself cuts: it crosses the area, or passes within 1 m of the point or curve.
+Being inside the track clearance isn't enough. Such a structure stays "Crosses
+a structure" (Must review) however close to the berth it is. A berth is a
+structure a vessel lies against, so it's grouped even when the track touches
+it: a `Pontoon`, a `FloatingDock`, or a `ShorelineConstruction` whose
+`categoryOfShorelineConstruction` (S-57 `CATSLC`) is 4 pier (jetty), 5
+promenade pier, 6 wharf (quay), 11 landing steps, 14 fender, 15 solid face
+wharf or 16 open face wharf. A ruined structure (`condition` 2) or one that
+is always under water, covers and uncovers or is awash (`waterLevelEffect` 3,
+4 or 5) isn't a berth, and neither are breakwaters, moles, groynes, training
+walls, sea walls or a shoreline construction without a category.
 
 Soundings follow the portrayal's `SOUNDG03`: a sounding counts when it's no
 deeper than the safety contour. The safety depth only decides how the chart
@@ -112,6 +156,10 @@ A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
   The S-57 translation fills that attribute in for hazards without VALSOU.
 - One without a charted depth (above water, covering and uncovering, awash,
   or of unknown depth) always counts.
+- A danger judged by its `defaultClearanceDepth` (such as -15 m for a
+  floating obstruction) doesn't show that depth: its meta line says what the
+  water level does to it instead ("floating", "covers and uncovers",
+  "awash"), or "depth unknown".
 - One with a depth counts when it's no deeper than the safety contour, as
   the portrayal's `UDWHAZ05` judges it, or, on a leg with a draft, when
   it's shallower than that leg's draft + squat + required UKC.
@@ -144,7 +192,7 @@ hazard counts exactly when an ECDIS would raise the alert for it. Wrecks,
 obstructions and rocks are the dangers above. A feature type the check
 doesn't know is treated as a structure. The track clearance and the 0.1 NM
 near band are settings (`--track-clearance` and `--nearby` in
-`s100 route check`, `trackClearanceMeters` and `nearbyDistanceMeters` in
+`s100 route check`, `limits.trackClearanceMeters` and `limits.nearbyDistanceMeters` in
 `check_route`). Overhead features aren't judged against an air draft yet.
 
 ## Regulated and protected areas
@@ -167,7 +215,7 @@ ETAs where it meets the route.
 The S-101 areas are the ones whose portrayal raises the `ProhAre` alert, in
 the 13 kinds of the S-101 alert catalogue, plus precautionary areas. Areas
 charted as points count too. Each kind can be turned off (`--areas-off` in
-`s100 route check`, `areaKindsOff` in `check_route`; S-164 calls this the
+`s100 route check`, `limits.areaKindsOff` in `check_route`; S-164 calls this the
 user selection of prohibited areas). The areas of a kind that's off aren't
 reported; instead one finding, worded as the catalogue words it, says the
 indication of some areas is off, with the kind and how many the route meets.
@@ -209,13 +257,23 @@ and compares it with the required UKC (0 m when none is set).
   no data, it comes from S-101: the shallowest covering dredged area, then
   depth area (DRVAL1), then a sounding within 250 m.
 - **Water level** comes from S-104 at the ETA, interpolated between time
-  steps: grids first, then the nearest station within 10 km. Outside the
-  S-104 extent or time range there's no water level, and the stretch is a
-  gap.
+  steps: grids first, then the nearest station within 10 km. The 10 km is
+  measured through the loaded charts' water, so land on an S-101 chart
+  blocks a station from the next basin; where no chart covers, it's a
+  straight line.
+- **Tide predictions.** When the host turns them on (`s100 route check
+  --tide-predictions`, or **Use tide predictions where there's no S-104** in
+  SoundCharts), a harmonic prediction at the tide station nearest by water,
+  within 10 km, gives the water level where no S-104 covers the stretch and
+  the ETA. S-104 always wins where it covers. A prediction is the
+  astronomical tide only, not a forecast, so the stretch is lower
+  confidence. A subordinate station is predicted from its reference station
+  with NOAA's offsets.
+- **Gaps.** Outside the S-104 extent or time range, with no prediction in
+  reach, there's no water level, and the stretch is a gap.
 - **Datums.** When the depth and water-level vertical datums differ, the
   water level is reported but not applied, and the stretch is a gap.
-- **Squat** is a fixed allowance. It isn't modelled from speed, and S-111
-  currents aren't applied to ETAs.
+- **Squat** is a fixed allowance. It isn't modelled from speed.
 
 Each sample has a state:
 
@@ -230,6 +288,7 @@ The verdict is the first of these that applies: water level ends before
 arrival, below your UKC setting, incomplete data, meets your settings but
 tight, meets your settings. A departure window sweeps departures across the
 S-104 time range and lists the runs of departures that meet your settings.
+Predictions have no time range, so they don't set the window.
 For how samples are spaced and what the result reports, see
 [Under-keel clearance](mcp-server.md#under-keel-clearance).
 
@@ -242,6 +301,9 @@ settings and still be lower confidence. The reasons are:
 |---|---|
 | `charted_depth_from_s101` | The depth is from S-101 because no S-102 covers the stretch. |
 | `datum_unconfirmed` | The depth or water-level datum isn't declared, or isn't an S-100 code, so they can't be confirmed to share a reference. The water level is applied anyway. |
+| `water_level_predicted` | The water level is a harmonic tide prediction, not S-104: the astronomical tide only. Wind, pressure and river flow can move the real water level 0.5 m or more. |
+| `water_level_from_lowest_low` | Departure options only. No water level covers part of the route. The departure is judged there with the lowest water level applied anywhere on the route during its passage, capped at chart datum (0 m), and the charted depth at that level meets your settings, so the departure isn't failed for the gap. Where it doesn't meet them, the departure still has no data there and doesn't meet your settings. |
+| `water_level_at_chart_datum` | As `water_level_from_lowest_low`, but no water level was applied anywhere on the route during the passage, so the gap was judged at chart datum (0 m). The real low may be below datum. |
 
 SoundCharts draws a lower-confidence stretch in its state's colour, dashed.
 The verdict follows the clearance; the confidence reasons qualify it and
@@ -255,14 +317,103 @@ findings:
 | Code | Group | When |
 |---|---|---|
 | `clearance.below_setting` | Must review | A stretch where UKC is below the required UKC. |
+| `clearance.tight_on_predicted` | Check | A stretch that's Tight or below your UKC setting on a predicted water level. The tight margin is no wider than weather can move a prediction. |
 | `confidence.charted_depth_from_s101` | Check | A stretch where the charted depth is from S-101 because no S-102 covers it. |
 | `confidence.datum_unconfirmed` | Check | A stretch where a depth or water-level datum isn't declared, so they can't be confirmed to match. |
+| `confidence.water_level_predicted` | Info | A stretch where the water level is a harmonic tide prediction, naming the stations. |
 | `data.water_level_ends` | Check | The water-level data ends before the vessel reaches a stretch, so the water level isn't applied there. |
 | `data.water_level_starts_late` | Check | The water-level data starts after the vessel passes a stretch. |
 | `data.no_water_level_coverage` | Check | A stretch outside every water-level dataset's coverage. |
 | `data.water_level_no_data` | Check | A stretch inside water-level coverage where the data has no value. |
 | `data.datum_mismatch` | Check | The water level's datum differs from the charted depth's, so it isn't applied. |
 | `data.no_charted_depth` | Check | A stretch with no charted depth from S-102 or S-101. |
+| `data.no_current_coverage` | Info | With speeds through the water, a stretch where no S-111 or current prediction has a value at the ETA, so the speed is taken as over the ground there. |
+
+## Weather along the route
+
+With a wind or wave limit set and a GRIB2 or NetCDF weather grid loaded, the
+weather check samples the track every nautical mile at the vessel's ETA. At
+each sample it reads the wind speed at 10 m and the significant wave height
+and compares them with the limits.
+
+- **Where and when.** A sample reads the nearest grid node and the nearest
+  forecast step, as the weather layers draw them. There's no interpolation.
+- **Which grid.** Where grids overlap, the finest grid wins, then the newest
+  model run. A regional model is read before a global one. A grid that
+  reaches the ETA wins over one that doesn't, and a grid with no value at a
+  node, such as a wave model near the coast, gives way to the next one.
+- **Not checked.** An ETA more than half a time step after a forecast's last
+  step isn't checked, and the stretch is reported. It never counts as a
+  pass. The same applies before the first step, outside every grid, and
+  where the grid has no value.
+- **ETAs.** ETAs are distance over the entered speed, with the current
+  along the track added when speeds are through the water. Set across the
+  track isn't applied, so weather at an ETA is only as good as the ETA.
+- **Advisory.** Weather model output isn't official S-100 data. Every
+  weather finding is Check, and none is for navigation.
+
+| Code | Group | When |
+|---|---|---|
+| `weather.wind_above_limit` | Check | A stretch where the forecast wind is above the wind limit at the ETA. |
+| `weather.waves_above_limit` | Check | A stretch where the forecast significant wave height is above the wave limit at the ETA. |
+| `weather.forecast_ends` | Check | The forecast ends before the vessel reaches a stretch, so wind or waves aren't checked there. |
+| `weather.forecast_starts_late` | Check | The forecast starts after the vessel passes a stretch. |
+| `weather.no_coverage` | Check | A stretch outside every weather grid that has the quantity. |
+| `weather.no_data` | Check | A stretch inside a weather grid where the forecast has no value, such as waves near land. |
+
+A stretch above a limit gives its time window and highest value, for example
+"Wind above 25 kn for 3 h" with "Leg 4 → 5 · max 31 kn at 15:00 ·
+14:00–17:00". A gap is reported once for each quantity, so a wave forecast that
+ends earlier than the wind forecast gives its own finding.
+
+With a departure window, the weather check also sweeps departures across the
+forecast. It lists the runs of departures that keep the route within the
+limits and outside the tropical cyclone radius you check against.
+
+### Tropical cyclones
+
+With an NHC tropical cyclone advisory loaded, the weather check also tests
+the route against the storm. It runs without wind or wave limits.
+
+- **The storm at the ETA.** At each sample within 600 NM of the storm's
+  track, the check takes the storm at the sample's ETA, as the cyclone layer
+  draws it: a forecast point, an estimate between two of them, or the best
+  track before the advisory.
+- **Wind radii.** The sample is inside a radius when it's no farther from
+  the centre than the radius reaches in the sample's quadrant (NE, SE, SW or
+  NW). The check tests the radius you check against and every stronger one,
+  so a stretch inside the 50 kt radius is also reported inside the 34 kt
+  radius. It doesn't add a buffer: the cone already widens with time.
+- **The cone.** A sample inside the forecast cone while the forecast runs is
+  reported. The cone is always tested.
+- **Closest approach.** The nearest any sample comes to the storm's centre
+  at its ETA, with where and when.
+- **Not checked.** A stretch the vessel reaches after the last forecast point
+  isn't checked against the storm, and is reported.
+- **Advisory.** NHC advisories aren't official S-100 data, and no finding is
+  for navigation.
+
+Three settings shape the rule. SoundCharts keeps them in **Settings > Chart
+display > Mariner Settings > Tropical cyclones on a route**; MCP and the
+command line take them as arguments.
+
+| Setting | Default | Effect |
+|---|---|---|
+| Check against | 34 kt radius | The outermost radius tested: 34, 50 or 64 kt. Weaker radii aren't reported. |
+| Report closest approach | On | Adds the `weather.tc_cpa` finding. |
+| Must review inside | 50 kt radius | Radii at or above it are Must review: 64, 50 or 34 kt, or Never. Weaker radii and the cone are Check. It can't be weaker than **Check against**. |
+
+| Code | Group | When |
+|---|---|---|
+| `weather.tc_radius_34` | Check | A stretch inside the storm's 34 kt wind radius at the ETA. Must review when **Must review inside** is 34 kt. |
+| `weather.tc_radius_50` | Must review | A stretch inside the 50 kt wind radius. Check when **Must review inside** is 64 kt or Never. |
+| `weather.tc_radius_64` | Must review | A stretch inside the 64 kt wind radius. Check when **Must review inside** is Never. |
+| `weather.tc_cone` | Check | A stretch inside the forecast cone while the forecast runs. |
+| `weather.tc_cpa` | Info | The route's closest approach to the storm's centre. |
+| `weather.tc_beyond_forecast` | Check | A stretch near the storm that the vessel reaches after its last forecast point, so it isn't checked. |
+
+A radius finding gives its time window and the advisory, for example "Inside
+the 50 kt radius" with "Legs 2 → 4 · 02:00–07:00 · ZELDA adv 17".
 
 ## Received routes and Copy to edit
 

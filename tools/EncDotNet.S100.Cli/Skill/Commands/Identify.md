@@ -8,3 +8,8 @@ Prefer `--format json`. Vector matches are ranked in ECDIS draw order; coverage
 products are sampled at the same location. `--radius` affects point and curve
 features, while area features use exact containment. Use `--attributes` only
 when full feature payloads are needed because it increases output size.
+
+`--source <id>` adds a live data source (see `s100 sources`); it can be the
+only input. It waits up to `--source-timeout` seconds (default 30) for first
+data and is left out with a stderr warning if none arrives. Keys come only
+from environment variables; never pass one as a `--source` option.

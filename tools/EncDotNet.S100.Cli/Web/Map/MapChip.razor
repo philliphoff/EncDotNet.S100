@@ -1,0 +1,33 @@
+@* A centred notice over the map with one action (handoff D13, D14). *@
+<div class="map-chip" role="status">
+    <Icon Name="info" Size="16" />
+    <span class="map-chip-text">@ChildContent</span>
+    @if (ActionLabel is not null)
+    {
+        <button type="button" class="button map-chip-action" @onclick="OnAction">
+            @if (ActionIcon is not null)
+            {
+                <Icon Name="@ActionIcon" Size="16" />
+            }
+            <span>@ActionLabel</span>
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>The notice.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The action's label, or none.</summary>
+    [Parameter]
+    public string? ActionLabel { get; set; }
+
+    /// <summary>The action's icon.</summary>
+    [Parameter]
+    public string? ActionIcon { get; set; }
+
+    /// <summary>The action.</summary>
+    [Parameter]
+    public EventCallback OnAction { get; set; }
+}

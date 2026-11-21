@@ -15,7 +15,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void Current_Defaults_ToNull_ForAutoFit()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
 
         Assert.Null(((IViewportController)session).Current);
@@ -24,7 +24,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void Set_EchoesTheViewport()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -40,7 +40,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void SetToBounds_EchoesResolvedCentreAndPositiveScale()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -65,7 +65,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void Set_WithRotation_IsKept()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -77,7 +77,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void Set_WithNonFiniteRotation_Throws()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -92,7 +92,7 @@ public sealed class HeadlessS100SessionViewportTests
     [InlineData(-1.25, 50.0, double.NaN)] // non-finite scale
     public void Set_WithInvalidFields_Throws(double lon, double lat, double scale)
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -103,7 +103,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void SetToBounds_WithInvertedBox_Throws()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -118,7 +118,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void SetToBounds_WithOutOfRangeLatitude_Throws()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
@@ -133,7 +133,7 @@ public sealed class HeadlessS100SessionViewportTests
     [Fact]
     public void Set_ThenSetToBounds_AreMutuallyExclusive()
     {
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 

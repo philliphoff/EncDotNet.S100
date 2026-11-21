@@ -178,6 +178,8 @@
         <FontFamily x:Key="MonoFontFamily">SF Mono,Menlo,Cascadia Mono,Consolas,DejaVu Sans Mono,monospace</FontFamily>
         <!-- Size for dense monospace text, such as the Logs tab's rows. -->
         <x:Double x:Key="MonoFontSize">11</x:Double>
+        <!-- Secondary text in a panel (a row's second line, a caption); primary text keeps the default size. -->
+        <x:Double x:Key="SecondaryFontSize">13</x:Double>
 
         <!-- Indent step for nested accentTree rows (the Datasets panel's exchange sets,
              the Library's collections) (matches the
@@ -214,72 +216,14 @@
     <Application.Styles>
         <themes:ShadTheme />
 
-        <!--
-          Header-only pill tabs (Routes' Legs / Findings, the Clearance tab's
-          Distance / Time): ShadUI's pill track, as the Datasets panel's
-          tabs, with equal-width tabs. Stretched, it spans its container;
-          left-aligned, it sizes to its widest tab. The template keeps the
-          ShadUI parts (PART_SelectionPill, PART_ItemsPresenter) so the base
-          theme still slides the pill. The content goes outside the control.
-        -->
-        <Style Selector="TabControl.pillTabs">
-            <!-- The track's padding (the template shows no content); the
-                 tabs' own 4 px bottom margin balances the 4 px top. -->
-            <Setter Property="Padding" Value="2,4,2,0" />
-            <Setter Property="ItemsPanel">
-                <ItemsPanelTemplate>
-                    <UniformGrid Rows="1" />
-                </ItemsPanelTemplate>
-            </Setter>
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Background="{DynamicResource TabItemsBackgroundColor}"
-                            CornerRadius="{DynamicResource LgCornerRadius}"
-                            Padding="{TemplateBinding Padding}">
-                        <Panel>
-                            <Canvas IsHitTestVisible="False">
-                                <Border Background="{DynamicResource TabItemSelectedColor}"
-                                        BoxShadow="{DynamicResource Shadow}"
-                                        Canvas.Left="0"
-                                        Canvas.Top="0"
-                                        CornerRadius="{DynamicResource MdCornerRadius}"
-                                        Height="0"
-                                        Opacity="0"
-                                        Width="0"
-                                        x:Name="PART_SelectionPill">
-                                    <Border.Transitions>
-                                        <Transitions>
-                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
-                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
-                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
-                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
-                                            <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
-                                        </Transitions>
-                                    </Border.Transitions>
-                                </Border>
-                            </Canvas>
-                            <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
-                                            Name="PART_ItemsPresenter" />
-                        </Panel>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="TabControl.pillTabs > TabItem">
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-        </Style>
-        <!-- Compact, for a dock header beside 22 px buttons. The ShadUI tab
-             template keeps 4 px under each pill, which the track's 4 px top
-             padding balances. -->
-        <Style Selector="TabControl.pillTabs.compact > TabItem">
-            <Setter Property="FontSize" Value="11.5" />
-            <Setter Property="MinHeight" Value="0" />
-            <Setter Property="Padding" Value="12,2" />
-        </Style>
-
         <!-- Generic ApplicationPanel control template (title bar + content). -->
         <StyleInclude Source="avares://SoundCharts/Views/ApplicationPanel.axaml" />
+
+        <!-- The AML tag and protective-marking chips (#1236). -->
+        <StyleInclude Source="avares://SoundCharts/Views/AmlChips.axaml" />
+
+        <!-- Segmented controls, kind tags and toolbar icon buttons, shared across the viewer. -->
+        <StyleInclude Source="avares://SoundCharts/Views/PanelStyles.axaml" />
 
         <!--
           App-wide Slider accent colour. ShadUI's Slider template sets
@@ -503,92 +447,5 @@
             <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
 
-        <!--
-          Segmented control (iOS-style pill group) used by the map Display
-          Settings overlay. A rounded track (Border.segmentTrack) holds an
-          equal-width row of segments; the active segment is lifted onto a
-          raised card. Two segment flavours share one look:
-            * RadioButton.segment  — single-select groups (display category,
-              palette). Exactly one segment is checked at a time.
-            * ToggleButton.segment — independent multi-toggle groups (text
-              viewing groups), where each segment can be on/off on its own.
-          Theme-aware: the track uses SecondaryColor and the raised card uses
-          CardBackgroundColor, so the control adapts to the S-100 dusk/night
-          chrome variants alongside the rest of the app.
-        -->
-        <Style Selector="Border.segmentTrack">
-            <Setter Property="Background" Value="{DynamicResource SecondaryColor}" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="3" />
-        </Style>
-        <Style Selector="RadioButton.segment">
-            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="MinHeight" Value="28" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Name="Seg"
-                            Background="Transparent"
-                            CornerRadius="6"
-                            Padding="12,5">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="ToggleButton.segment">
-            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
-            <Setter Property="FontSize" Value="12" />
-            <!-- ShadUI's base ToggleButton sets MinHeight=36; pin both segment
-                 flavours to the same MinHeight so the multi-toggle Text row
-                 lines up exactly with the single-select Display/Palette rows. -->
-            <Setter Property="MinHeight" Value="28" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Name="Seg"
-                            Background="Transparent"
-                            CornerRadius="6"
-                            Padding="12,5">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <!-- Hover affordance on the resting (unchecked) segments. -->
-        <Style Selector="RadioButton.segment:pointerover /template/ Border#Seg">
-            <Setter Property="Background" Value="{DynamicResource BorderColor30}" />
-        </Style>
-        <Style Selector="ToggleButton.segment:pointerover /template/ Border#Seg">
-            <Setter Property="Background" Value="{DynamicResource BorderColor30}" />
-        </Style>
-        <!-- Active segment: raised card + stronger, bolder text. -->
-        <Style Selector="RadioButton.segment:checked /template/ Border#Seg">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
-            <Setter Property="BoxShadow" Value="0 1 3 0 #1F000000" />
-        </Style>
-        <Style Selector="ToggleButton.segment:checked /template/ Border#Seg">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
-            <Setter Property="BoxShadow" Value="0 1 3 0 #1F000000" />
-        </Style>
-        <Style Selector="RadioButton.segment:checked">
-            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style Selector="ToggleButton.segment:checked">
-            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <!-- Disabled track (e.g. Text group with no text layers loaded). -->
-        <Style Selector="Border.segmentTrack:disabled">
-            <Setter Property="Opacity" Value="0.5" />
-        </Style>
     </Application.Styles>
 </Application>

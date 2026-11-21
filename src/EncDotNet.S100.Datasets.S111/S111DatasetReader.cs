@@ -135,6 +135,10 @@ public static class S111DatasetReader
             ? (int)scGroup.ReadInt64Attribute("typeOfCurrentData")
             : null;
 
+        string? methodCurrentsProduct = scGroup.AttributeExists("methodCurrentsProduct")
+            ? scGroup.ReadStringAttribute("methodCurrentsProduct")
+            : null;
+
         if (dataCodingFormat is 1 or 3 or 8)
         {
             var (stations, axisOrder) = dataCodingFormat == 8
@@ -159,6 +163,7 @@ public static class S111DatasetReader
                 SurfaceCurrentDepth = surfaceCurrentDepth,
                 DataCodingFormat = dataCodingFormat,
                 TypeOfCurrentData = typeOfCurrentData,
+                MethodCurrentsProduct = methodCurrentsProduct,
                 Stations = stations,
                 AxisOrder = axisOrder,
                 MinTime = minTime,
@@ -195,6 +200,7 @@ public static class S111DatasetReader
             SurfaceCurrentDepth = surfaceCurrentDepth,
             DataCodingFormat = dataCodingFormat,
             TypeOfCurrentData = typeOfCurrentData,
+            MethodCurrentsProduct = methodCurrentsProduct,
             Coverages = coverages,
             AxisOrder = gridAxisOrder,
         })
@@ -1015,6 +1021,9 @@ public static class S111DatasetReader
             string stationId = group.AttributeExists("stationIdentification")
                 ? group.ReadStringAttribute("stationIdentification")
                 : groupName;
+            string? stationName = group.AttributeExists("stationName")
+                ? group.ReadStringAttribute("stationName")
+                : null;
 
             DateTime startTime = group.ReadRequiredDateTimeAttribute(
                 "startDateTime", "S-111", null, groupPath, spec);
@@ -1047,6 +1056,7 @@ public static class S111DatasetReader
             stations.Add(new SurfaceCurrentStation
             {
                 Identifier = stationId,
+                Name = stationName,
                 Latitude = lat,
                 Longitude = lon,
                 StartTime = startTime,

@@ -7,33 +7,46 @@
              x:DataType="vm:AddToLibraryDialogViewModel">
 
     <UserControl.Styles>
-        <!-- Facet tabs: a segmented strip; each tab carries a count badge when it has ticks. -->
+        <!-- Facet tabs: the viewer's segmented control (PanelStyles.axaml) as a list box;
+             each tab carries a count badge when it has ticks. -->
         <Style Selector="ListBox.facetTabs">
-            <Setter Property="Background" Value="Transparent" />
+            <!-- As wide as its tabs, not the column (the wizard is wide enough to leave a gap). -->
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Background" Value="{DynamicResource TabItemsBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="8" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Padding" Value="2" />
         </Style>
         <Style Selector="ListBox.facetTabs ListBoxItem">
             <Setter Property="Padding" Value="10,0" />
             <Setter Property="MinHeight" Value="28" />
-            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Border Name="PART_Segment" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
+                    <Border Name="PART_Segment" CornerRadius="6" MinHeight="{TemplateBinding MinHeight}"
+                            Padding="{TemplateBinding Padding}" Background="Transparent">
                         <ContentPresenter Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
                                           VerticalAlignment="Center" />
                     </Border>
                 </ControlTemplate>
             </Setter>
         </Style>
+        <Style Selector="ListBox.facetTabs ListBoxItem:pointerover /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource BorderColor30}" />
+        </Style>
         <Style Selector="ListBox.facetTabs ListBoxItem:selected /template/ Border#PART_Segment">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="Background" Value="{DynamicResource TabItemSelectedColor}" />
             <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
         </Style>
-        <Style Selector="ListBox.facetTabs ListBoxItem:not(:selected)">
-            <Setter Property="Opacity" Value="0.75" />
+        <Style Selector="ListBox.facetTabs ListBoxItem:selected">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="Border.countBadge">
             <Setter Property="MinWidth" Value="18" />
@@ -305,7 +318,7 @@
                     </ScrollViewer>
 
                     <!-- A remote catalogue: regions (with a count of ticked areas) beside the chosen region's areas. -->
-                    <Grid Grid.Row="1" ColumnDefinitions="200,Auto,*" IsVisible="{Binding IsRegionPicker}">
+                    <Grid Grid.Row="1" ColumnDefinitions="240,Auto,*" IsVisible="{Binding IsRegionPicker}">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Text="{Binding RegionsHeader}" Classes="muted" FontSize="11.5"
                                        FontWeight="SemiBold" LetterSpacing="0.4" Margin="14,8,10,4" />

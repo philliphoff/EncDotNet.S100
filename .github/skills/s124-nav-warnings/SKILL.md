@@ -72,9 +72,10 @@ description: |
   "warnings in force" bulletins) have no geometry. The renderer must
   tolerate geometry-less parts, and portrayal draws nothing for them; the
   viewer's Navigational warnings panel is where they are found.
-- Object information shows a warning through
-  `FeatureInfo.NavigationalWarning` (`NavigationalWarningInfo`, built by
-  `S124DatasetProcessor`), not attribute rows; keep new warning fields there
+- Object information shows a warning through the
+  `NavigationalWarningSection` in `FeatureInfo.Sections`
+  (`NavigationalWarningInfo`, built by `S124DatasetProcessor`), not attribute
+  rows; keep new warning fields there
   so the card, the panel and MCP stay in step.
 - XSLT processors differ in EXSLT support — keep transforms to plain
   XSLT 1.0/2.0 features that .NET's `XslCompiledTransform` /

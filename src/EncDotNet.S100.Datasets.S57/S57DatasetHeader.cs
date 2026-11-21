@@ -47,6 +47,20 @@ public sealed record S57DatasetHeader
     public int? CompilationScale { get; init; }
 
     /// <summary>
+    /// The product specification code (<c>DSID</c> <c>PRSP</c>): 1 for a
+    /// maritime ENC, 10 for an inland ENC, 51–57 for AML; 0 when absent.
+    /// </summary>
+    public int ProductSpecification { get; init; }
+
+    /// <summary>
+    /// The AML facts the header gives, when the dataset is a NATO Additional
+    /// Military Layers cell; otherwise <see langword="null"/>. Read from the
+    /// leading records only, so a marking in the <c>m_clas</c> meta feature
+    /// isn't seen: the header comment, then the cell name, give it.
+    /// </summary>
+    public AmlDatasetInfo? Aml { get; init; }
+
+    /// <summary>
     /// The number of ISO 8211 records read: the Data Descriptive Record plus
     /// the <c>DSID</c> and <c>DSPM</c> data records.
     /// </summary>
@@ -69,7 +83,7 @@ public sealed record S57DatasetHeader
 
         using var stream = new FileStream(
             path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096);
-        return Read(stream);
+        return Read(stream, Path.GetFileName(path));
     }
 
     /// <summary>
@@ -78,7 +92,19 @@ public sealed record S57DatasetHeader
     /// </summary>
     /// <param name="stream">A stream positioned at the start of the dataset.</param>
     /// <returns>The header, or <see langword="null"/> when the stream carries no readable <c>DSID</c>.</returns>
-    public static S57DatasetHeader? Read(Stream stream)
+    public static S57DatasetHeader? Read(Stream stream) => Read(stream, fileName: null);
+
+    /// <summary>
+    /// Reads the header of an S-57 dataset from <paramref name="stream"/>,
+    /// consuming only its leading records.
+    /// </summary>
+    /// <param name="stream">A stream positioned at the start of the dataset.</param>
+    /// <param name="fileName">
+    /// The dataset's file name, which an AML cell's name decode
+    /// (<see cref="AmlCellName"/>) reads; <see langword="null"/> uses the data set name.
+    /// </param>
+    /// <returns>The header, or <see langword="null"/> when the stream carries no readable <c>DSID</c>.</returns>
+    public static S57DatasetHeader? Read(Stream stream, string? fileName)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
@@ -113,6 +139,8 @@ public sealed record S57DatasetHeader
             CompilationScale = document.DataSetParameters is { CompilationScale: > 0 } dspm
                 ? dspm.CompilationScale
                 : null,
+            ProductSpecification = dsid.ProductSpecification,
+            Aml = AmlDatasetInfo.FromDocument(document, fileName),
         };
     }
 

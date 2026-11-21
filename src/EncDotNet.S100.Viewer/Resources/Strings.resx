@@ -73,13 +73,13 @@
     <value>{0}</value>
     <comment>{0} = number of layer entries in this S-98 display plane.</comment>
   </data>
-  <data name="LayerStack_LegendNameFormat" xml:space="preserve">
-    <value>Legend of {0}, {1} bands</value>
-    <comment>Accessible name of a colour fill's legend in the Layer Stack (#1072). {0} is the layer name, e.g. "Wave height: gfswave.grib2"; {1} the number of colour bands.</comment>
+  <data name="LayerStack_LegendLink" xml:space="preserve">
+    <value>Legend</value>
+    <comment>One-line link under a Layer Stack entry whose layer has a legend; opens the Legend tab at its section (legends D8)</comment>
   </data>
-  <data name="LayerStack_LegendRowsNameFormat" xml:space="preserve">
-    <value>Legend of {0}, {1} items</value>
-    <comment>Accessible name of a Layer Stack legend with symbol or line rows (#1293), e.g. a storm's symbols or a surface analysis's fronts. {0} is the layer name; {1} the number of rows.</comment>
+  <data name="LayerStack_LegendLinkNameFormat" xml:space="preserve">
+    <value>Show the legend of {0}</value>
+    <comment>Accessible name and tooltip of the Layer Stack's Legend link; {0} is the layer name, e.g. "Wave height: gfswave.grib2"</comment>
   </data>
   <data name="LayerStack_PriorityFormat" xml:space="preserve">
     <value>#{0}</value>
@@ -100,6 +100,9 @@
   <data name="LayerStack_Plane_OtherChartOverlays" xml:space="preserve">
     <value>Other chart overlays</value>
   </data>
+  <data name="LayerStack_Plane_AdditionalMilitaryLayers" xml:space="preserve">
+    <value>Additional military layers</value>
+  </data>
   <data name="LayerStack_Plane_CautionsAndWarnings" xml:space="preserve">
     <value>Cautions and warnings</value>
   </data>
@@ -108,6 +111,9 @@
   </data>
   <data name="LayerStack_Plane_MarinerOverlay" xml:space="preserve">
     <value>Mariner overlay</value>
+  </data>
+  <data name="LayerStack_Plane_Vessels" xml:space="preserve">
+    <value>Vessels</value>
   </data>
   <data name="LayerStack_Plane_EcdisAlerts" xml:space="preserve">
     <value>ECDIS alerts</value>
@@ -271,6 +277,18 @@
     <value>Air temperature</value>
     <comment>Weather sub-layer name (#1231): dashed 2 m air temperature isotherms every 5 °C.</comment>
   </data>
+  <data name="SubLayer_Weather_Precipitation" xml:space="preserve">
+    <value>Precipitation</value>
+    <comment>Weather sub-layer name (#1230): the precipitation rate fill in rain radar colours.</comment>
+  </data>
+  <data name="SubLayer_Weather_ThunderstormRisk" xml:space="preserve">
+    <value>Thunderstorm risk</value>
+    <comment>Weather sub-layer name (#1230): the fill of convective available potential energy (CAPE) from 1000 J/kg.</comment>
+  </data>
+  <data name="SubLayer_Weather_CloudCover" xml:space="preserve">
+    <value>Cloud cover</value>
+    <comment>Weather sub-layer name (#1230): the grey veil of total cloud cover from 25 %.</comment>
+  </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>
   </data>
@@ -305,10 +323,10 @@
     <value>Open a dataset or exchange set</value>
   </data>
   <data name="Pane_Tab_ExchangeSets" xml:space="preserve">
-    <value>EXCHANGE SETS</value>
+    <value>Exchange sets</value>
   </data>
   <data name="Pane_Tab_Datasets" xml:space="preserve">
-    <value>DATASETS</value>
+    <value>Datasets</value>
   </data>
   <data name="Pane_ExchangeSets_Empty" xml:space="preserve">
     <value>No exchange sets loaded. Open an exchange set to see its datasets here.</value>
@@ -377,16 +395,16 @@
     <value>Time</value>
   </data>
   <data name="Pane_DatasetTab_Dataset" xml:space="preserve">
-    <value>DATASET</value>
+    <value>Dataset</value>
   </data>
   <data name="Pane_DatasetTab_Layers" xml:space="preserve">
-    <value>LAYERS</value>
+    <value>Layers</value>
   </data>
   <data name="Pane_DatasetTab_NoLayers" xml:space="preserve">
     <value>This dataset has no separately-controllable layers.</value>
   </data>
   <data name="Pane_DatasetTab_Validation" xml:space="preserve">
-    <value>VALIDATION</value>
+    <value>Validation</value>
   </data>
   <data name="Pane_Validation_NoFindings" xml:space="preserve">
     <value>No findings.</value>
@@ -443,6 +461,12 @@
   </data>
   <data name="Tooltip_AddDataset" xml:space="preserve">
     <value>Open a dataset</value>
+  </data>
+  <data name="Tooltip_AddDataSource" xml:space="preserve">
+    <value>Add a live feed</value>
+  </data>
+  <data name="Label_DataSourceAlreadyAddedFormat" xml:space="preserve">
+    <value>{0} (added)</value>
   </data>
   <data name="Button_AddFeatureCatalogue" xml:space="preserve">
     <value>Add Feature Catalogue...</value>
@@ -858,8 +882,8 @@
     <value>S-100 Datasets</value>
   </data>
   <data name="FilePicker_WeatherDataType" xml:space="preserve">
-    <value>Weather Data (GRIB2, NetCDF, CAP)</value>
-    <comment>Open Dataset file type for the weather formats (#1076). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
+    <value>Weather Data (GRIB2, NetCDF, CAP, CODSUS)</value>
+    <comment>Open Dataset file type for the weather formats (#1076; WPC coded surface bulletins #1300). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
   </data>
   <data name="FilePicker_ExchangeSetFolderTitle" xml:space="preserve">
     <value>Open Exchange Set Folder</value>
@@ -884,7 +908,7 @@
 
   <!-- Pick (Object Information) panel -->
   <data name="Pick_PanelTitle" xml:space="preserve">
-    <value>OBJECT INFORMATION</value>
+    <value>Object information</value>
   </data>
   <data name="PickReport_EmptyTitle" xml:space="preserve">
     <value>No feature picked</value>
@@ -1058,6 +1082,26 @@
     <value>REFERENCES</value>
     <comment>Header above the references list in the Object Information panel.</comment>
   </data>
+  <data name="Pick_LegendKeyHeading" xml:space="preserve">
+    <value>KEY · WHAT YOU SEE HERE</value>
+    <comment>Header above the picked features' legend rows in Object information (legends design note D3, D16)</comment>
+  </data>
+  <data name="Pick_LegendKeyLineFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A key line in Object information; {0} is the product ("S-102", "Wave height"), {1} the legend row ("2–10 m")</comment>
+  </data>
+  <data name="Pick_InLegend" xml:space="preserve">
+    <value>In legend</value>
+    <comment>Link on a key line in Object information that opens the Legend tab at the row</comment>
+  </data>
+  <data name="Pick_InLegendNameFormat" xml:space="preserve">
+    <value>Show {0} in the legend</value>
+    <comment>Accessible name and tooltip of the In legend link; {0} is the key line ("S-102 · 2–10 m")</comment>
+  </data>
+  <data name="Menu_ShowDatasetLegend" xml:space="preserve">
+    <value>Show legend</value>
+    <comment>Datasets row menu item that opens the Legend tab at the dataset's section</comment>
+  </data>
   <data name="Pick_ReferenceItemFormat" xml:space="preserve">
     <value>{0} → {1}</value>
     <comment>Single reference-list row format: role followed by target identifier.</comment>
@@ -1101,6 +1145,9 @@
   </data>
   <data name="Pick_Chart_Axis_Time" xml:space="preserve">
     <value>Time (UTC)</value>
+  </data>
+  <data name="Pick_Chart_Axis_TimeLocal" xml:space="preserve">
+    <value>Time (local)</value>
   </data>
   <data name="Pick_Chart_Axis_HeightMetres" xml:space="preserve">
     <value>Height (m)</value>
@@ -1509,12 +1556,6 @@
   <data name="Tooltip_TileGpuBudgetMb" xml:space="preserve">
     <value>Budget, in megabytes, for GPU-resident tile textures, shared by all layers. When it's full, the textures drawn least recently are dropped first. Takes effect immediately.</value>
   </data>
-  <data name="Settings_TileWorkerCount" xml:space="preserve">
-    <value>Tile workers</value>
-  </data>
-  <data name="Tooltip_TileWorkerCount" xml:space="preserve">
-    <value>Number of concurrent tile-rasterisation workers per layer. More workers reduce cold pan/zoom stutter on multi-core machines; low-end profiles default to one. Reload the dataset to apply a change.</value>
-  </data>
   <data name="Settings_RenderKnob_RestartHint" xml:space="preserve">
     <value>Reload the dataset or restart to apply.</value>
   </data>
@@ -1751,6 +1792,9 @@
   <data name="TimelinePanel_NoData" xml:space="preserve">
     <value>No time-varying datasets loaded.</value>
   </data>
+  <data name="TimelinePanel_PredictionsOnly" xml:space="preserve">
+    <value>Tide predictions only: no time-varying datasets loaded.</value>
+  </data>
   <data name="TimelinePanel_EmptyTitle" xml:space="preserve">
     <value>No time-varying datasets</value>
   </data>
@@ -1773,6 +1817,70 @@
   </data>
   <data name="Status_OverscaleFactor" xml:space="preserve">
     <value>{0:0.0}×</value>
+  </data>
+  <data name="PositionLegend_Heading" xml:space="preserve">
+    <value>AT VIEW CENTRE</value>
+    <comment>Caps heading of the Legend tab's position row (S-98 position legend, legends D17)</comment>
+  </data>
+  <data name="PositionLegend_Name" xml:space="preserve">
+    <value>Position legend at the view centre</value>
+    <comment>Accessible name of the Legend tab's position row</comment>
+  </data>
+  <data name="PositionLegend_DepthsMetres" xml:space="preserve">
+    <value>Depths in metres</value>
+    <comment>Position legend: depth unit (S-98 §9.1.4)</comment>
+  </data>
+  <data name="PositionLegend_DepthsFeet" xml:space="preserve">
+    <value>Depths in feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathomsFeet" xml:space="preserve">
+    <value>Depths in fathoms and feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathoms" xml:space="preserve">
+    <value>Depths in fathoms</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_SafetyContourFormat" xml:space="preserve">
+    <value>Safety contour {0}</value>
+    <comment>Position legend: the Mariner setting; {0} is the depth with its unit, e.g. "10 m"</comment>
+  </data>
+  <data name="PositionLegend_DatumNotDeclared" xml:space="preserve">
+    <value>Datum not declared</value>
+    <comment>Position legend when the cell at the view centre declares no sounding datum</comment>
+  </data>
+  <data name="PositionLegend_NoChart" xml:space="preserve">
+    <value>No chart at the view centre</value>
+    <comment>Position legend when no chart cell covers the view centre (D17)</comment>
+  </data>
+  <data name="PositionLegend_EditionFormat" xml:space="preserve">
+    <value>ed. {0}</value>
+    <comment>Position legend: the cell's edition number</comment>
+  </data>
+  <data name="PositionLegend_EditionUpdateFormat" xml:space="preserve">
+    <value>ed. {0} upd. {1}</value>
+    <comment>Position legend: the cell's edition and the last update applied</comment>
+  </data>
+  <data name="PositionLegend_CompiledFormat" xml:space="preserve">
+    <value>compiled {0}</value>
+    <comment>Position legend: the cell's compilation scale, e.g. "compiled 1:12 000"</comment>
+  </data>
+  <data name="PositionLegend_ShownFormat" xml:space="preserve">
+    <value>shown {0}</value>
+    <comment>Position legend: the display scale, e.g. "shown 1:22 000"</comment>
+  </data>
+  <data name="PositionLegend_OverscaleFormat" xml:space="preserve">
+    <value>{0:0.0}× overscale</value>
+    <comment>Position legend: the display is finer than the cell's compilation scale</comment>
+  </data>
+  <data name="PositionLegend_Separator" xml:space="preserve">
+    <value> · </value>
+    <comment>Separator between position legend items</comment>
+  </data>
+  <data name="Tooltip_PositionLegend" xml:space="preserve">
+    <value>Units, depth datum and safety contour, then the chart cell at the view centre with its edition and compilation scale against the display scale. Updates when the map stops moving.</value>
+    <comment>Tooltip of the Legend tab's position row</comment>
   </data>
   <data name="Status_OverscalePopupHeader" xml:space="preserve">
     <value>Overscaled cells in view</value>
@@ -2370,6 +2478,14 @@
   <data name="Tooltip_DisplaySettings" xml:space="preserve">
     <value>Display settings (category, text, palette)</value>
   </data>
+  <data name="Label_MapLegend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Accessible name of the map's Legend button (overlay column, legends D15)</comment>
+  </data>
+  <data name="Tooltip_MapLegend" xml:space="preserve">
+    <value>Legend: what the map draws</value>
+    <comment>Tooltip of the map's Legend button; it shows or hides the Legend tab in the right dock</comment>
+  </data>
   <data name="Tooltip_CloseDisplaySettings" xml:space="preserve">
     <value>Close display settings</value>
   </data>
@@ -2594,6 +2710,12 @@
   <data name="Settings_McpEnabledTooltip" xml:space="preserve">
     <value>Host a Streamable HTTP MCP server on the loopback address so external agents can query loaded datasets. Off by default.</value>
   </data>
+  <data name="Settings_McpToolsets" xml:space="preserve">
+    <value>Toolsets</value>
+  </data>
+  <data name="Settings_McpToolsets_Help" xml:space="preserve">
+    <value>The groups of tools agents see. Every tool's description takes room in an agent's context, so turn off what its tasks don't need. A change restarts the server.</value>
+  </data>
   <data name="Settings_McpPort" xml:space="preserve">
     <value>Port</value>
   </data>
@@ -2725,7 +2847,7 @@
     <value>AIS Overlay</value>
   </data>
   <data name="Settings_AisSection_Help" xml:space="preserve">
-    <value>Live AIS targets streamed from aisstream.io. Requires a free API key from https://aisstream.io. Changes take effect on next viewer restart.</value>
+    <value>Live AIS targets from aisstream.io, added with Add a live feed in the Datasets panel. They need a free API key from https://aisstream.io. A new key or zoom threshold takes effect when AIS targets are next added or SoundCharts starts.</value>
   </data>
   <data name="Settings_AisEnabled" xml:space="preserve">
     <value>Enable AIS overlay</value>
@@ -2779,7 +2901,7 @@
     <comment>{0} = whole hours since the feature was updated.</comment>
   </data>
   <data name="PickReport_LastUpdatedJustNow" xml:space="preserve">
-    <value>just now</value>
+    <value>under a minute</value>
   </data>
   <data name="PickReport_Position" xml:space="preserve">
     <value>Position</value>
@@ -2839,10 +2961,10 @@
     <value>Select to centre the map on this vessel.</value>
   </data>
   <data name="Vessels_Empty_DisabledTitle" xml:space="preserve">
-    <value>AIS overlay is off</value>
+    <value>AIS targets aren't added</value>
   </data>
   <data name="Vessels_Empty_DisabledDescription" xml:space="preserve">
-    <value>Enable it under Settings → Vessels → AIS Overlay to list nearby vessels.</value>
+    <value>Add AIS targets with Add a live feed in the Datasets panel to list nearby vessels.</value>
   </data>
   <data name="Vessels_Empty_NoDataTitle" xml:space="preserve">
     <value>No vessels yet</value>
@@ -3255,7 +3377,7 @@
     <value>{0} minutes ago</value>
   </data>
   <data name="About_Time_HoursAgo" xml:space="preserve">
-    <value>{0} h ago</value>
+    <value>{0} h</value>
   </data>
   <data name="About_Time_DaysAgo" xml:space="preserve">
     <value>{0} days ago</value>
@@ -3450,28 +3572,7 @@
     <value>{0:N0} downloaded, {1:N0} failed.</value>
   </data>
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
-    <value>Browse online catalogues…</value>
-  </data>
-  <data name="Library_Chip_CoveragePolygons" xml:space="preserve">
-    <value>Coverage outlines</value>
-  </data>
-  <data name="Library_Chip_CoverageBoxes" xml:space="preserve">
-    <value>Bounding boxes</value>
-  </data>
-  <data name="Library_Chip_CoverageNone" xml:space="preserve">
-    <value>No coverage until downloaded</value>
-  </data>
-  <data name="Library_Chip_Editions" xml:space="preserve">
-    <value>Editions</value>
-  </data>
-  <data name="Library_Chip_NoEditions" xml:space="preserve">
-    <value>No editions</value>
-  </data>
-  <data name="Library_Chip_Sizes" xml:space="preserve">
-    <value>Sizes</value>
-  </data>
-  <data name="Library_Chip_NoSizes" xml:space="preserve">
-    <value>No sizes</value>
+    <value>Browse online sources…</value>
   </data>
   <data name="Button_Next" xml:space="preserve">
     <value>Next</value>
@@ -3786,7 +3887,7 @@
     <value>Edit route</value>
   </data>
   <data name="Label_SearchCatalogues" xml:space="preserve">
-    <value>Search catalogues</value>
+    <value>Search sources</value>
   </data>
   <data name="Label_SearchFeatures" xml:space="preserve">
     <value>Search features</value>
@@ -3828,7 +3929,7 @@
     <value>Scanned recursively, referenced in place</value>
   </data>
   <data name="Library_Quick_Online" xml:space="preserve">
-    <value>Browse online catalogues…</value>
+    <value>Browse online sources…</value>
   </data>
   <data name="Library_Quick_OnlineSub" xml:space="preserve">
     <value>NOAA, USACE, European inland lists</value>
@@ -3849,10 +3950,10 @@
     <value>Download ({0})</value>
   </data>
   <data name="Wizard_Title" xml:space="preserve">
-    <value>Add online catalogue</value>
+    <value>Add online source</value>
   </data>
   <data name="Wizard_StepCatalogue" xml:space="preserve">
-    <value>Catalogue</value>
+    <value>Source</value>
   </data>
   <data name="Wizard_StepInclude" xml:space="preserve">
     <value>What to include</value>
@@ -3863,11 +3964,9 @@
   <data name="Wizard_StepOfFormat" xml:space="preserve">
     <value>Step {0} of {1}</value>
   </data>
-  <data name="Wizard_ChooseCatalogueFirst" xml:space="preserve">
-    <value>Choose a catalogue first</value>
-  </data>
-  <data name="Wizard_Collection" xml:space="preserve">
-    <value>Collection</value>
+  <data name="Wizard_SelectionFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>Footer on the first step: the selected source's name and its kind ("NOAA ENC — all U.S. waters · NOAA ENC").</comment>
   </data>
   <data name="Wizard_Everything" xml:space="preserve">
     <value>Everything</value>
@@ -3963,28 +4062,19 @@
     <value>Only the catalogue is indexed. Nothing is downloaded until you load cells from the Library panel.</value>
   </data>
   <data name="Library_DirectorySearchWatermark" xml:space="preserve">
-    <value>Search by name, provider or country</value>
-  </data>
-  <data name="Library_DirectoryCountFormat" xml:space="preserve">
-    <value>{0} of {1}</value>
-  </data>
-  <data name="Library_DirectoryNoMatches" xml:space="preserve">
-    <value>No catalogue matches. Add one by URL below.</value>
+    <value>Search sources by name, provider or country</value>
   </data>
   <data name="Library_DirectoryAddByUrl" xml:space="preserve">
-    <value>Add a catalogue by URL</value>
-  </data>
-  <data name="Library_DirectoryAddByUrlHint" xml:space="preserve">
-    <value>NOAA, USACE, chartcatalogs or S-100 feed</value>
+    <value>Add by URL</value>
   </data>
   <data name="Library_DirectoryUrlHeading" xml:space="preserve">
-    <value>Catalogue URL</value>
+    <value>Catalogue or feed URL</value>
   </data>
   <data name="Library_DirectoryUrlHelp" xml:space="preserve">
-    <value>The format is recognised from the document itself. Added catalogues are listed under Custom.</value>
+    <value>We recognise NOAA and USACE ENC catalogues, chartcatalogs lists and S-100 feeds.</value>
   </data>
   <data name="Library_DirectoryUrlRecognisedFormat" xml:space="preserve">
-    <value>Recognised as {0} and added under Custom.</value>
+    <value>Recognised as {0} and added below.</value>
   </data>
   <data name="Library_DirectoryAddedByUrl" xml:space="preserve">
     <value>added by URL</value>
@@ -3994,6 +4084,94 @@
   </data>
   <data name="Library_DirectoryRemove" xml:space="preserve">
     <value>Remove</value>
+  </data>
+  <data name="Library_Category_Charts" xml:space="preserve">
+    <value>Charts</value>
+  </data>
+  <data name="Library_Category_Depth" xml:space="preserve">
+    <value>Depth, tides &amp; currents</value>
+  </data>
+  <data name="Library_Category_Weather" xml:space="preserve">
+    <value>Weather &amp; ocean</value>
+  </data>
+  <data name="Library_Category_Secom" xml:space="preserve">
+    <value>SECOM services</value>
+  </data>
+  <data name="Library_Category_User" xml:space="preserve">
+    <value>My sources</value>
+  </data>
+  <data name="Library_CategoryCountMoreFormat" xml:space="preserve">
+    <value>{0:N0}+</value>
+    <comment>A category's count when more sources can be listed (SECOM services before the registry is read).</comment>
+  </data>
+  <data name="Library_CategoryAccessibleFormat" xml:space="preserve">
+    <value>{0}, {1} sources</value>
+  </data>
+  <data name="Label_SourceCategories" xml:space="preserve">
+    <value>Source categories</value>
+  </data>
+  <data name="Library_DirectoryNoSources" xml:space="preserve">
+    <value>Nothing added yet.</value>
+  </data>
+  <data name="Library_CategoryShort_Charts" xml:space="preserve">
+    <value>Charts</value>
+  </data>
+  <data name="Library_CategoryShort_Depth" xml:space="preserve">
+    <value>Depth &amp; tides</value>
+  </data>
+  <data name="Library_CategoryShort_Weather" xml:space="preserve">
+    <value>Weather</value>
+  </data>
+  <data name="Library_CategoryShort_Secom" xml:space="preserve">
+    <value>SECOM</value>
+  </data>
+  <data name="Library_CategoryShort_User" xml:space="preserve">
+    <value>Mine</value>
+  </data>
+  <data name="Library_Limit_NoCoverage" xml:space="preserve">
+    <value>No coverage on the map until it is downloaded.</value>
+  </data>
+  <data name="Library_Limit_NoEditions" xml:space="preserve">
+    <value>New editions are not detected; refresh to check.</value>
+  </data>
+  <data name="Library_Limit_NoSizes" xml:space="preserve">
+    <value>Download sizes are not known in advance.</value>
+  </data>
+  <data name="Library_Limit_Pilot" xml:space="preserve">
+    <value>A pilot service: it may cover little and may stop.</value>
+  </data>
+  <data name="Library_Limit_NotForNavigation" xml:space="preserve">
+    <value>The provider marks this data as not for navigation.</value>
+  </data>
+  <data name="Library_DetailsBeforeDownload" xml:space="preserve">
+    <value>Before you download</value>
+  </data>
+  <data name="Library_DetailsCatalogueUrl" xml:space="preserve">
+    <value>Catalogue URL</value>
+  </data>
+  <data name="Label_CopyCatalogueUrl" xml:space="preserve">
+    <value>Copy catalogue URL</value>
+  </data>
+  <data name="Label_SelectedSource" xml:space="preserve">
+    <value>Selected source</value>
+  </data>
+  <data name="Library_RegistryListTitle" xml:space="preserve">
+    <value>List services from the registry</value>
+  </data>
+  <data name="Label_RefreshRegistry" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Library_DirectoryNoMatchesFormat" xml:space="preserve">
+    <value>No source matches “{0}”.</value>
+  </data>
+  <data name="Library_DirectoryAddItByUrl" xml:space="preserve">
+    <value>Add it by URL</value>
+  </data>
+  <data name="Library_DirectoryNoSourcesAddHint" xml:space="preserve">
+    <value>Nothing added yet. Paste a catalogue or feed URL above.</value>
+  </data>
+  <data name="Library_DetailsNoSelection" xml:space="preserve">
+    <value>Select a source to see what it offers.</value>
   </data>
   <data name="Library_Format_NoaaEnc" xml:space="preserve">
     <value>NOAA ENC</value>
@@ -4029,7 +4207,7 @@
     <value>Show SECOM services</value>
   </data>
   <data name="Library_RegistryShow" xml:space="preserve">
-    <value>Show SECOM services from the MCP service registry</value>
+    <value>Reads the Maritime Connectivity Platform service registry for SECOM services you can add.</value>
   </data>
   <data name="Library_RegistryLoading" xml:space="preserve">
     <value>Reading the service registry…</value>
@@ -4231,9 +4409,6 @@
   <data name="Library_Format_S100Catalogue" xml:space="preserve">
     <value>S-100 catalogue</value>
   </data>
-  <data name="Library_Chip_NotForNavigation" xml:space="preserve">
-    <value>Not for navigation</value>
-  </data>
   <data name="Wizard_RegionsHeaderFormat" xml:space="preserve">
     <value>Regions · {0:N0}</value>
   </data>
@@ -4324,12 +4499,6 @@
   <data name="Library_Format_S100Forecast" xml:space="preserve">
     <value>S-100 forecast</value>
   </data>
-  <data name="Library_Chip_Forecast" xml:space="preserve">
-    <value>Forecast</value>
-  </data>
-  <data name="Library_Chip_LatestRunOnly" xml:space="preserve">
-    <value>Latest run only</value>
-  </data>
   <data name="TimelinePanel_Now" xml:space="preserve">
     <value>Now</value>
   </data>
@@ -4356,9 +4525,6 @@
   </data>
   <data name="TimelinePanel_EveryMinutesFormat" xml:space="preserve">
     <value>every {0:N0} min</value>
-  </data>
-  <data name="Library_Chip_Pilot" xml:space="preserve">
-    <value>Pilot</value>
   </data>
   <data name="Menu_LibraryAddCurrents" xml:space="preserve">
     <value>Add currents for this area</value>
@@ -4629,10 +4795,26 @@
     <value>Sea ice</value>
   </data>
   <data name="TimelinePanel_ProductS412" xml:space="preserve">
-    <value>Weather</value>
+    <value>Weather warnings</value>
   </data>
   <data name="TimelinePanel_ProductS413" xml:space="preserve">
     <value>Weather and wave</value>
+  </data>
+  <data name="TimelinePanel_GroupSurfaceAnalysis" xml:space="preserve">
+    <value>Surface analysis</value>
+    <comment>Timeline lane group of WPC surface analyses and forecast fronts</comment>
+  </data>
+  <data name="TimelinePanel_LaneWpc" xml:space="preserve">
+    <value>WPC</value>
+    <comment>Lane label of a surface analysis: the issuing centre, NOAA's Weather Prediction Center</comment>
+  </data>
+  <data name="TimelinePanel_LaneAnalysis" xml:space="preserve">
+    <value>analysis</value>
+    <comment>Lane sub line of a surface analysis, before its cadence ("analysis · 3 h")</comment>
+  </data>
+  <data name="TimelinePanel_LaneForecast" xml:space="preserve">
+    <value>forecast</value>
+    <comment>Lane sub line of WPC's forecast fronts</comment>
   </data>
   <data name="Tooltip_TimelineInMapView" xml:space="preserve">
     <value>Only list the layers in the map view; they set the axis</value>
@@ -4669,6 +4851,55 @@
   </data>
   <data name="LayerTime_NoData" xml:space="preserve">
     <value>no data</value>
+  </data>
+  <data name="LayerTime_NoAnalysis" xml:space="preserve">
+    <value>No analysis at view time</value>
+    <comment>A surface analysis layer with no analysis or forecast within 12 hours before the view time</comment>
+  </data>
+  <data name="LayerTime_EstimatedFormat" xml:space="preserve">
+    <value>est. {0}</value>
+    <comment>A tropical cyclone's layer time between forecast points; {0} is the time and forecast hour, such as "5:00 PM · T+2 h"</comment>
+  </data>
+  <data name="LayerTime_BestTrackFormat" xml:space="preserve">
+    <value>{0} · best track</value>
+    <comment>A tropical cyclone's layer time before its advisory, on the observed best track; {0} is the time</comment>
+  </data>
+  <data name="LayerTime_BeyondForecastFormat" xml:space="preserve">
+    <value>last forecast point {0}, {1} earlier</value>
+    <comment>A tropical cyclone's layer time after its last forecast point; {0} is that point's time, {1} how long before the view time</comment>
+  </data>
+  <data name="LayerTime_BeforeTrackFormat" xml:space="preserve">
+    <value>track starts {0}, {1} later</value>
+    <comment>A tropical cyclone's layer time before its first best-track point; {0} is that time, {1} how long after the view time</comment>
+  </data>
+  <data name="LayerTime_BeyondForecast" xml:space="preserve">
+    <value>Beyond forecast</value>
+    <comment>Tag on a tropical cyclone's Datasets row when the view time is after its last forecast point</comment>
+  </data>
+  <data name="LayerTime_BeforeTrack" xml:space="preserve">
+    <value>Before track</value>
+    <comment>Tag on a tropical cyclone's Datasets row when the view time is before its first best-track point</comment>
+  </data>
+  <data name="TimelinePanel_GroupTropicalCyclones" xml:space="preserve">
+    <value>Tropical cyclones</value>
+    <comment>Timeline lane group of NHC tropical cyclone advisories</comment>
+  </data>
+  <data name="TimelinePanel_LaneCycloneTooltipFormat" xml:space="preserve">
+    <value>{0}: {1} forecast points from {2} to {3}
+◆ issued {4} · ◇ next advisory due {5}</value>
+    <comment>Tooltip of a tropical cyclone's Timeline lane; {0} storm, {1} count, {2}/{3} first and last forecast times, {4} issue time, {5} next advisory time</comment>
+  </data>
+  <data name="Tooltip_TimelineLaneMarks" xml:space="preserve">
+    <value>Forecast points (ticks), the advisory's issue time (◆) and the next advisory due (◇)</value>
+    <comment>Tooltip of a tropical cyclone lane's marks</comment>
+  </data>
+  <data name="LayerTime_Superseded" xml:space="preserve">
+    <value>newer analysis drawn</value>
+    <comment>A surface analysis layer hidden because a newer analysis or forecast of the same kind is drawn instead</comment>
+  </data>
+  <data name="LayerTime_Stale" xml:space="preserve">
+    <value>Stale</value>
+    <comment>Tag on a layer whose data drawn is old for its kind, e.g. a surface analysis over 6 hours old</comment>
   </data>
   <data name="LayerTime_NoDataLastFormat" xml:space="preserve">
     <value>no data · last {0}, {1} earlier</value>
@@ -5166,12 +5397,6 @@
   </data>
   <data name="Wizard_StepConnection" xml:space="preserve">
     <value>Connection</value>
-  </data>
-  <data name="Wizard_ConnectionNotNeeded" xml:space="preserve">
-    <value>Not needed</value>
-  </data>
-  <data name="Wizard_ConnectionForSecom" xml:space="preserve">
-    <value>SECOM services</value>
   </data>
   <data name="Secom_Identity_None" xml:space="preserve">
     <value>None</value>
@@ -5798,6 +6023,27 @@
   <data name="RouteCheck_Awash" xml:space="preserve">
     <value>awash</value>
   </data>
+  <data name="RouteCheck_Floating" xml:space="preserve">
+    <value>floating</value>
+  </data>
+  <data name="RouteCheck_CrossesStructure" xml:space="preserve">
+    <value>Crosses a structure</value>
+  </data>
+  <data name="RouteCheck_StructureInsideLimits" xml:space="preserve">
+    <value>Structure inside the cross-track limits</value>
+  </data>
+  <data name="RouteCheck_SafetyContourAlert" xml:space="preserve">
+    <value>safety contour alert</value>
+  </data>
+  <data name="RouteCheck_DepartureBerthStructures" xml:space="preserve">
+    <value>Structures at the departure berth</value>
+  </data>
+  <data name="RouteCheck_ArrivalBerthStructures" xml:space="preserve">
+    <value>Structures at the arrival berth</value>
+  </data>
+  <data name="RouteCheck_BerthStructuresCountFormat" xml:space="preserve">
+    <value>{0} within {1:0} m</value>
+  </data>
   <data name="RouteCheck_CoversAndUncovers" xml:space="preserve">
     <value>covers and uncovers</value>
   </data>
@@ -6063,6 +6309,26 @@
   <data name="Map_LegendNoDraft" xml:space="preserve">
     <value>No draft: the line isn't coloured by clearance.</value>
   </data>
+  <data name="Legend_RouteCheckSpec" xml:space="preserve">
+    <value>Route</value>
+    <comment>The route check section's chip in the Legend tab (#1408).</comment>
+  </data>
+  <data name="Legend_RouteCheckTitle" xml:space="preserve">
+    <value>Route check</value>
+    <comment>The route check section's name in the Legend tab.</comment>
+  </data>
+  <data name="Legend_RouteCheckUkc" xml:space="preserve">
+    <value>UKC at ETA</value>
+    <comment>The route check section's group of clearance line styles.</comment>
+  </data>
+  <data name="Legend_RouteCheckFindings" xml:space="preserve">
+    <value>Findings</value>
+    <comment>The route check section's group of finding markers.</comment>
+  </data>
+  <data name="Legend_RouteCheckWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>The route check section's group for the storm at ETA.</comment>
+  </data>
   <data name="Tooltip_MapLegendFold" xml:space="preserve">
     <value>Fold the legend</value>
   </data>
@@ -6078,11 +6344,9 @@
   <data name="Tooltip_CheckLowConfidence" xml:space="preserve">
     <value>Lower confidence: charted depth from S-101, or datums that can't be confirmed to agree. The tint still shows the clearance.</value>
   </data>
-  <data name="Dock_ObjectInformationEdge" xml:space="preserve">
-    <value>OBJECT INFORMATION</value>
-  </data>
-  <data name="Tooltip_ObjectInformationEdge" xml:space="preserve">
-    <value>Show Object Information</value>
+  <data name="Tooltip_ShowDockTabFormat" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>Tooltip and name of the folded right dock's edge tab; {0} is the tab it shows, "Object information" or "Legend"</comment>
   </data>
   <data name="Clearance_Title" xml:space="preserve">
     <value>Clearance</value>
@@ -7076,6 +7340,48 @@
   <data name="Tooltip_EcdisPanel_Weather_AirTemperature" xml:space="preserve">
     <value>Draw dashed air temperature isotherms, every 5 °C at 2 m above the surface, on every weather dataset that has air temperature. Off by default.</value>
   </data>
+  <data name="EcdisPanel_Weather_Precipitation" xml:space="preserve">
+    <value>Precipitation</value>
+    <comment>Display controls switch (#1230): the precipitation rate fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_Precipitation" xml:space="preserve">
+    <value>Draw the precipitation rate in rain radar colours, from light rain (0.1 mm/h) to violent (50 mm/h and more), on every weather dataset that has it. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_ThunderstormRisk" xml:space="preserve">
+    <value>Thunderstorm risk</value>
+    <comment>Display controls switch (#1230): the CAPE fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_ThunderstormRisk" xml:space="preserve">
+    <value>Shade where the atmosphere is unstable enough for thunderstorms and squalls: convective available potential energy (CAPE) from 1000 J/kg, in moderate, high and extreme classes. A risk, not a forecast of storms. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_CloudCover" xml:space="preserve">
+    <value>Cloud cover</value>
+    <comment>Display controls switch (#1230): the total cloud cover veil on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_CloudCover" xml:space="preserve">
+    <value>Draw total cloud cover as a light grey veil, from partly cloudy (25 %) to overcast, on every weather dataset that has it. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_WindRadii" xml:space="preserve">
+    <value>Wind radii</value>
+    <comment>Display controls switch (#1298, V26): the 34, 50 and 64 kt wind radii of every tropical cyclone.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_WindRadii" xml:space="preserve">
+    <value>Draw the 34, 50 and 64 knot wind radii of every tropical cyclone. The cone and the forecast track are always drawn. On by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_PastTrack" xml:space="preserve">
+    <value>Past track</value>
+    <comment>Display controls switch (#1298, V26): every tropical cyclone's best track.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_PastTrack" xml:space="preserve">
+    <value>Draw where each tropical cyclone has been: its best-track line and points. On by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_ForecastTimes" xml:space="preserve">
+    <value>Forecast times</value>
+    <comment>Display controls switch (#1298, V26): time and intensity labels beside tropical cyclone forecast points.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_ForecastTimes" xml:space="preserve">
+    <value>Write the time and intensity beside each tropical cyclone's forecast points. On by default.</value>
+  </data>
   <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
     <value>Navigational warnings</value>
     <comment>Switch label and accessible name: draw S-124 navigational warnings on the chart (#995).</comment>
@@ -7164,8 +7470,48 @@
     <comment>Tooltip on the Warning card's route row (#959).</comment>
   </data>
   <data name="Library_StaleRunFormat" xml:space="preserve">
-    <value>Run {0} is over 12 hours old</value>
-    <comment>{0}: a weather model run, e.g. 2026-10-25 00Z</comment>
+    <value>Run {0} is over {1} hours old</value>
+    <comment>{0}: a weather model run, e.g. 2026-10-25 00Z; {1}: hours after which a run is stale, e.g. 12</comment>
+  </data>
+  <data name="Library_StaleAdvisoryFormat" xml:space="preserve">
+    <value>Advisory {0} is over {1} hours old</value>
+    <comment>{0}: a tropical cyclone advisory number, e.g. 17; {1}: hours after which it is stale, e.g. 7</comment>
+  </data>
+  <data name="Library_StormNameFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>An NHC storm's Library row name. {0}: class and name, e.g. HURRICANE ZELDA; {1}: basin and number, e.g. AL14</comment>
+  </data>
+  <data name="Library_StormAdvisoryFormat" xml:space="preserve">
+    <value>Advisory {0} · {1}</value>
+    <comment>A storm row's subtitle. {0}: advisory number; {1}: when it was issued</comment>
+  </data>
+  <data name="Library_StormNextFormat" xml:space="preserve">
+    <value>next {0}</value>
+    <comment>When NHC's next advisory is due. {0}: a time</comment>
+  </data>
+  <data name="Library_StormNewerFormat" xml:space="preserve">
+    <value>advisory {0} available</value>
+    <comment>NHC has issued a newer advisory than the one downloaded. {0}: its number</comment>
+  </data>
+  <data name="Library_StormForecastToFormat" xml:space="preserve">
+    <value>Forecast to {0}</value>
+    <comment>The end of a storm's five-day forecast. {0}: a time</comment>
+  </data>
+  <data name="Library_StormIntensityFormat" xml:space="preserve">
+    <value>{0} kn</value>
+    <comment>A storm's maximum sustained wind. {0}: knots</comment>
+  </data>
+  <data name="Toast_StormAdvisoryTitleFormat" xml:space="preserve">
+    <value>{0}: advisory {1} is available</value>
+    <comment>Notification when NHC issues a new advisory for a loaded storm (V28). {0}: e.g. HURRICANE ZELDA; {1}: advisory number</comment>
+  </data>
+  <data name="Toast_StormAdvisoryContent" xml:space="preserve">
+    <value>The storm on the chart is from an older advisory. Not for navigation.</value>
+    <comment>Body of the new-advisory notification.</comment>
+  </data>
+  <data name="Library_StaleAnalysisFormat" xml:space="preserve">
+    <value>Analysis {0} is over {1} hours old</value>
+    <comment>{0}: a surface analysis's time, e.g. 2026-11-04 12Z; {1}: hours after which it is stale, e.g. 6</comment>
   </data>
   <data name="Library_LoadLatestRun" xml:space="preserve">
     <value>Load latest run</value>
@@ -7473,6 +7819,9 @@
   <data name="Status_DepthBasis_DatumMismatch" xml:space="preserve">
     <value>Charted · datum mismatch</value>
   </data>
+  <data name="Status_DepthBasis_ProductNotAdjustedFormat" xml:space="preserve">
+    <value>Charted · {0} not adjusted</value>
+  </data>
   <data name="Status_DepthBasisPopup_AdjustedBasisFormat" xml:space="preserve">
     <value>Charted depth + water level at {0}. The safety contour and depth shading use the adjusted values.</value>
   </data>
@@ -7508,5 +7857,1300 @@
   </data>
   <data name="Status_DepthBasisPopup_NotAdjustedProductFormat" xml:space="preserve">
     <value>Not adjusted: {0} ({1} depths are drawn as charted).</value>
+  </data>
+  <data name="Settings_RouteWeather" xml:space="preserve">
+    <value>Weather on a route</value>
+  </data>
+  <data name="Settings_RouteWeather_Help" xml:space="preserve">
+    <value>Check route compares the loaded GRIB2 or NetCDF forecast along the route, at each ETA, with these limits. Leave a limit empty to leave it unchecked; an RTZ route's own limits are used where these are empty. Forecast model data isn't for navigation.</value>
+  </data>
+  <data name="Settings_RouteMaxWind" xml:space="preserve">
+    <value>Wind limit (kn)</value>
+  </data>
+  <data name="Settings_RouteMaxWaveFormat" xml:space="preserve">
+    <value>Wave height limit ({0})</value>
+    <comment>{0}: the unit, m or ft</comment>
+  </data>
+  <data name="Settings_RouteLimitOff" xml:space="preserve">
+    <value>Off</value>
+    <comment>Placeholder of an empty weather limit box</comment>
+  </data>
+  <data name="Tooltip_RouteMaxWind" xml:space="preserve">
+    <value>The highest wind speed at 10 m the vessel accepts, in knots. Stretches of the route where the forecast is higher at the ETA are findings to check. Empty: wind isn't checked unless the route sets a limit.</value>
+  </data>
+  <data name="Tooltip_RouteMaxWave" xml:space="preserve">
+    <value>The highest significant wave height the vessel accepts. Stretches of the route where the forecast is higher at the ETA are findings to check. Empty: waves aren't checked unless the route sets a limit.</value>
+  </data>
+  <data name="Check_SummaryWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>Label of the verdict card's Weather row</comment>
+  </data>
+  <data name="Check_SummaryWeatherNoLimits" xml:space="preserve">
+    <value>No limits set</value>
+  </data>
+  <data name="Check_SummaryWeatherWithin" xml:space="preserve">
+    <value>Within your limits</value>
+  </data>
+  <data name="Check_SummaryWeatherAboveFormat" xml:space="preserve">
+    <value>{0} above limits</value>
+  </data>
+  <data name="Check_SummaryWeatherNotCheckedFormat" xml:space="preserve">
+    <value>{0} not checked</value>
+  </data>
+  <data name="Check_SummaryWeatherForecastEnds" xml:space="preserve">
+    <value>Forecast ends before arrival</value>
+  </data>
+  <data name="Tooltip_CheckSummaryWeatherNoLimits" xml:space="preserve">
+    <value>Set wind and wave limits in Settings › Chart display › Mariner Settings › Weather on a route.</value>
+  </data>
+  <data name="Tooltip_CheckSummaryWeatherFormat" xml:space="preserve">
+    <value>{0}. Forecast model data, not for navigation; ETAs don't include set and drift.</value>
+    <comment>{0}: the limits in use, e.g. Wind 25 kn (Settings) · Waves 3.0 m (route)</comment>
+  </data>
+  <data name="Check_WeatherLimitWindFormat" xml:space="preserve">
+    <value>Wind {0} ({1})</value>
+    <comment>{0}: the limit; {1}: where it comes from</comment>
+  </data>
+  <data name="Check_WeatherLimitWavesFormat" xml:space="preserve">
+    <value>Waves {0} ({1})</value>
+    <comment>{0}: the limit; {1}: where it comes from</comment>
+  </data>
+  <data name="Check_WeatherLimitFromSettings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Check_WeatherLimitFromRoute" xml:space="preserve">
+    <value>route</value>
+  </data>
+  <data name="Check_FooterWeather" xml:space="preserve">
+    <value>weather forecast</value>
+    <comment>Named in the verdict card's footer among the products used</comment>
+  </data>
+  <data name="Findings_FilterWeatherFormat" xml:space="preserve">
+    <value>Weather {0}</value>
+  </data>
+  <data name="Findings_WindAboveForFormat" xml:space="preserve">
+    <value>Wind above {0} for {1}</value>
+    <comment>{0}: the limit; {1}: a time</comment>
+  </data>
+  <data name="Findings_WavesAboveForFormat" xml:space="preserve">
+    <value>Waves above {0} for {1}</value>
+    <comment>{0}: the limit; {1}: a time</comment>
+  </data>
+  <data name="Findings_WindAboveDistanceFormat" xml:space="preserve">
+    <value>Wind above {0} for {1:0.0} NM</value>
+  </data>
+  <data name="Findings_WavesAboveDistanceFormat" xml:space="preserve">
+    <value>Waves above {0} for {1:0.0} NM</value>
+  </data>
+  <data name="Findings_WindNoun" xml:space="preserve">
+    <value>Wind</value>
+  </data>
+  <data name="Findings_WavesNoun" xml:space="preserve">
+    <value>Waves</value>
+  </data>
+  <data name="Findings_WeatherForecastEndsFormat" xml:space="preserve">
+    <value>{0} not checked: forecast ends before arrival</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_WeatherForecastStartsLateFormat" xml:space="preserve">
+    <value>{0} not checked: forecast starts later</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_NoWeatherCoverageFormat" xml:space="preserve">
+    <value>{0} not checked: outside forecast coverage</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_WeatherNoDataFormat" xml:space="preserve">
+    <value>{0} not checked: no forecast value</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_WeatherMaxAtFormat" xml:space="preserve">
+    <value>max {0} at {1}</value>
+  </data>
+  <data name="Findings_WeatherMaxFormat" xml:space="preserve">
+    <value>max {0}</value>
+  </data>
+  <data name="Findings_TimeWindowFormat" xml:space="preserve">
+    <value>{0}–{1}</value>
+  </data>
+  <data name="Findings_ForecastEndsAtFormat" xml:space="preserve">
+    <value>forecast ends {0}</value>
+  </data>
+  <data name="Findings_ForecastStartsAtFormat" xml:space="preserve">
+    <value>forecast starts {0}</value>
+  </data>
+  <data name="Findings_MinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="Findings_HoursFormat" xml:space="preserve">
+    <value>{0:0.#} h</value>
+  </data>
+  <data name="Settings_RouteCyclones" xml:space="preserve">
+    <value>Tropical cyclones on a route</value>
+  </data>
+  <data name="Settings_RouteCyclones_Help" xml:space="preserve">
+    <value>Used by the route check's weather findings. Weather findings are advisory. Not for navigation.</value>
+  </data>
+  <data name="Settings_CycloneCheckAgainst" xml:space="preserve">
+    <value>Check against</value>
+  </data>
+  <data name="Settings_CycloneReportClosestApproach" xml:space="preserve">
+    <value>Report closest approach</value>
+  </data>
+  <data name="Settings_CycloneMustReviewInside" xml:space="preserve">
+    <value>Must review inside</value>
+  </data>
+  <data name="Settings_CycloneRadiusFormat" xml:space="preserve">
+    <value>{0} kt radius</value>
+    <comment>{0}: 34, 50 or 64</comment>
+  </data>
+  <data name="Settings_CycloneNever" xml:space="preserve">
+    <value>Never</value>
+    <comment>Must review inside: no radius is Must review</comment>
+  </data>
+  <data name="Tooltip_CycloneCheckAgainst" xml:space="preserve">
+    <value>The outermost wind radius the route check tests. Radii outside it aren't reported. The cone is always tested.</value>
+  </data>
+  <data name="Tooltip_CycloneReportClosestApproach" xml:space="preserve">
+    <value>Adds each storm's closest approach to the findings, and its line on the map.</value>
+  </data>
+  <data name="Tooltip_CycloneMustReviewInside" xml:space="preserve">
+    <value>Radii at or above this are Must review. Weaker radii and the cone are Check.</value>
+  </data>
+  <data name="Settings_CycloneMappingFormat" xml:space="preserve">
+    <value>Inside the {0}: Must review. {1}: Check.</value>
+    <comment>{0}: the radii, e.g. 50 kt and 64 kt radii; {1}: the rest, e.g. The 34 kt radius and the cone</comment>
+  </data>
+  <data name="Settings_CycloneMappingNever" xml:space="preserve">
+    <value>Every radius and the cone: Check.</value>
+  </data>
+  <data name="Settings_CycloneOneRadiusFormat" xml:space="preserve">
+    <value>{0} kt radius</value>
+    <comment>{0}: knots</comment>
+  </data>
+  <data name="Settings_CycloneTwoRadiiFormat" xml:space="preserve">
+    <value>{0} kt and {1} kt radii</value>
+    <comment>{0}, {1}: knots</comment>
+  </data>
+  <data name="Settings_CycloneThreeRadiiFormat" xml:space="preserve">
+    <value>{0} kt, {1} kt and {2} kt radii</value>
+    <comment>{0}–{2}: knots</comment>
+  </data>
+  <data name="Settings_CycloneRestFormat" xml:space="preserve">
+    <value>The {0} and the cone</value>
+    <comment>{0}: the weaker radii, e.g. 34 kt radius</comment>
+  </data>
+  <data name="Settings_CycloneConeOnly" xml:space="preserve">
+    <value>The cone</value>
+  </data>
+  <data name="Check_CycloneSettingsFormat" xml:space="preserve">
+    <value>{0} kt radius and cone · Must review inside {1} kt</value>
+    <comment>Weather row tooltip. {0}: radius checked against; {1}: must review radius</comment>
+  </data>
+  <data name="Check_CycloneSettingsNeverFormat" xml:space="preserve">
+    <value>{0} kt radius and cone · Must review never</value>
+    <comment>{0}: radius checked against</comment>
+  </data>
+  <data name="Check_SummaryWeatherMustReviewFormat" xml:space="preserve">
+    <value>{0} must review</value>
+    <comment>Weather row: tropical cyclone radii at or inside Must review inside</comment>
+  </data>
+  <data name="Check_SummaryWeatherToCheckFormat" xml:space="preserve">
+    <value>{0} to check</value>
+    <comment>Weather row: tropical cyclone radii or cone to check</comment>
+  </data>
+  <data name="Check_SummaryWeatherCpaFormat" xml:space="preserve">
+    <value>CPA {0:0} NM</value>
+    <comment>Weather row: the closest approach to a tropical cyclone, nautical miles</comment>
+  </data>
+  <data name="Check_SummaryWeatherNoStorm" xml:space="preserve">
+    <value>No storm near the route</value>
+    <comment>Weather row with only a tropical cyclone advisory loaded, none near the route</comment>
+  </data>
+  <data name="Check_FooterCyclones" xml:space="preserve">
+    <value>NHC advisory</value>
+    <comment>Named in the verdict card's footer among the products used</comment>
+  </data>
+  <data name="Findings_CycloneRadiusFormat" xml:space="preserve">
+    <value>Inside the {0} kt radius</value>
+    <comment>{0}: 34, 50 or 64</comment>
+  </data>
+  <data name="Findings_CycloneConeTitle" xml:space="preserve">
+    <value>Inside the forecast cone</value>
+  </data>
+  <data name="Findings_CycloneClosestFormat" xml:space="preserve">
+    <value>Closest approach {0:0} NM</value>
+    <comment>{0}: nautical miles</comment>
+  </data>
+  <data name="Findings_CycloneBeyondFormat" xml:space="preserve">
+    <value>{0} not checked: beyond the forecast</value>
+    <comment>{0}: the storm's name</comment>
+  </data>
+  <data name="Findings_CycloneStormFormat" xml:space="preserve">
+    <value>{0} adv {1}</value>
+    <comment>{0}: storm name; {1}: advisory number</comment>
+  </data>
+  <data name="Findings_CycloneEstimated" xml:space="preserve">
+    <value>est. position</value>
+    <comment>The storm position at the closest approach is estimated between forecast points</comment>
+  </data>
+  <data name="Findings_CycloneBestTrack" xml:space="preserve">
+    <value>best track</value>
+    <comment>The storm position at the closest approach is on the best track</comment>
+  </data>
+  <data name="Legend_Weather" xml:space="preserve">
+    <value>WEATHER</value>
+    <comment>Route check legend section</comment>
+  </data>
+  <data name="Legend_StormAtEta" xml:space="preserve">
+    <value>Storm at ETA (closest approach)</value>
+  </data>
+  <data name="Map_StormAtEtaFormat" xml:space="preserve">
+    <value>at ETA {0} · CPA {1:0} NM</value>
+    <comment>Label beside the storm-at-ETA ghost. {0}: the ETA; {1}: nautical miles</comment>
+  </data>
+  <data name="Findings_TagWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>Tag of a weather finding in the findings list</comment>
+  </data>
+  <data name="EcdisPanel_BathymetryHeader" xml:space="preserve">
+    <value>Bathymetry</value>
+    <comment>Display controls section header for S-102 bathymetry. Shown while an S-102 dataset is loaded.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
+    <value>Relief shading</value>
+    <comment>Display controls switch: a hillshade over the S-102 depth bands so the seabed's shape shows. Not part of the S-102 portrayal.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
+    <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefStrength" xml:space="preserve">
+    <value>Strength</value>
+    <comment>Label before the relief shading strength segments in the Display controls Bathymetry section.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefSubtle" xml:space="preserve">
+    <value>Subtle</value>
+    <comment>Relief shading strength segment: the lightest shading.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefMedium" xml:space="preserve">
+    <value>Medium</value>
+    <comment>Relief shading strength segment: the default.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefStrong" xml:space="preserve">
+    <value>Strong</value>
+    <comment>Relief shading strength segment: the strongest shading.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Bathymetry_ReliefStrength" xml:space="preserve">
+    <value>How strongly slopes are shaded. Subtle suits fine, high-resolution cells; Strong brings out gentle features but draws steep edges dark. At Dusk and Night slopes facing the light are lightened less, so they don't glare.</value>
+  </data>
+  <data name="Status_DepthBasis_ReliefSuffix" xml:space="preserve">
+    <value> · Relief</value>
+    <comment>Appended to the DEPTHS status pill's value (e.g. "Charted · Relief") while S-102 relief shading is on and S-102 is in view. Keep the leading space and dot.</comment>
+  </data>
+  <data name="Status_DepthBasis_ReliefSuffix_Compact" xml:space="preserve">
+    <value> · R</value>
+    <comment>The compact form of the relief suffix on the DEPTHS pill when the status bar is short of room.</comment>
+  </data>
+  <data name="Status_DepthBasis_ReliefAccessibleSuffix" xml:space="preserve">
+    <value>, relief shading on</value>
+    <comment>Appended to the DEPTHS pill's accessible name while relief shading shows.</comment>
+  </data>
+  <data name="Status_DepthBasisPopup_ReliefOn" xml:space="preserve">
+    <value>Relief shading on. A display aid that shades the S-102 depth surface by its slope; depth colours and values are unchanged.</value>
+    <comment>Line in the DEPTHS popup while S-102 relief shading is on and S-102 is in view.</comment>
+  </data>
+  <data name="Status_DepthBasisPopup_ReliefOff" xml:space="preserve">
+    <value>Off</value>
+    <comment>Button beside the relief line in the DEPTHS popup: turns S-102 relief shading off.</comment>
+  </data>
+  <data name="AmlDisplay_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Link in the display panel's Additional Military Layers section that opens the Legend tab at the AML section</comment>
+  </data>
+  <data name="AmlDisplay_LegendLinkName" xml:space="preserve">
+    <value>Show the AML legend</value>
+    <comment>Tooltip and accessible name of the AML display section's Legend link, which opens the Legend tab at the AML section</comment>
+  </data>
+  <data name="AmlDisplay_ScaleHeader" xml:space="preserve">
+    <value>Scale</value>
+    <comment>Sub-heading above Follow AML scale bands</comment>
+  </data>
+  <data name="AmlDisplay_FollowScaleBands" xml:space="preserve">
+    <value>Follow AML scale bands</value>
+    <comment>Switch in the Additional Military Layers section (AML decision 26)</comment>
+  </data>
+  <data name="Tooltip_AmlDisplay_FollowScaleBands" xml:space="preserve">
+    <value>Each AML cell shows from its scale band out to the band's smallest display scale, and the finer band wins where it covers a coarser one. Off shows every AML cell at every scale.</value>
+  </data>
+  <data name="AmlDisplay_NotLoaded" xml:space="preserve">
+    <value>Not loaded</value>
+    <comment>An AML product row with no cell loaded</comment>
+  </data>
+  <data name="AmlDisplay_CellCountOne" xml:space="preserve">
+    <value>{0} cell</value>
+    <comment>An AML product row's cell count, one cell. {0}: the count</comment>
+  </data>
+  <data name="AmlDisplay_CellCountFormat" xml:space="preserve">
+    <value>{0} cells</value>
+    <comment>An AML product row's cell count. {0}: the count</comment>
+  </data>
+  <data name="AmlDisplay_ProductToolTipFormat" xml:space="preserve">
+    <value>{0} · {1}: {2} of {3} cells shown at this scale</value>
+    <comment>Tooltip of an AML product row. {0}: code; {1}: product name; {2}: cells shown; {3}: cells loaded</comment>
+  </data>
+  <data name="AmlDisplay_ClbChip" xml:space="preserve">
+    <value>AML · CLB not used for depth checks</value>
+    <comment>Corner chip on the map while AML CLB contours are drawn (AML decision 23)</comment>
+  </data>
+  <data name="Aml_TagFormat" xml:space="preserve">
+    <value>AML · {0}</value>
+    <comment>The AML tag before a cell loads, from the cell name's product code. {0}: the code, e.g. CLB</comment>
+  </data>
+  <data name="Aml_Row_ProductFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+    <comment>Second line of an AML dataset row. {0}: the tag, e.g. 'AML · CLB'; {1}: the product name</comment>
+  </data>
+  <data name="Aml_Row_Opening" xml:space="preserve">
+    <value>Opening…</value>
+    <comment>Third line of an AML dataset row while the cell opens</comment>
+  </data>
+  <data name="Aml_Row_DrawnFormat" xml:space="preserve">
+    <value>Drawn · {0:N0} features</value>
+    <comment>Third line of an AML dataset row the AML portrayal draws. {0}: feature count</comment>
+  </data>
+  <data name="Aml_Row_NotDrawnOutlinedFormat" xml:space="preserve">
+    <value>{0}. Its coverage is outlined on the map.</value>
+    <comment>Third line of the first not-drawn AML row of a set. {0}: 'Recognised, not drawn'</comment>
+  </data>
+  <data name="Aml_Row_NotDrawnIconToolTip" xml:space="preserve">
+    <value>Recognised, not drawn. The eye shows or hides its coverage outline.</value>
+    <comment>Tooltip on the dashed frame of a not-drawn AML row</comment>
+  </data>
+  <data name="Aml_Header_HighestOfFormat" xml:space="preserve">
+    <value>highest of {0}</value>
+    <comment>After the marking chip on an AML exchange-set header. {0}: number of AML cells in the set</comment>
+  </data>
+  <data name="Aml_Outline_NotDrawn" xml:space="preserve">
+    <value>Not drawn</value>
+    <comment>Label card on the coverage outline of an AML cell that isn't drawn</comment>
+  </data>
+  <data name="Aml_Outline_Hidden" xml:space="preserve">
+    <value>Hidden</value>
+    <comment>Label card on the coverage outline of a drawn AML cell whose layers are hidden</comment>
+  </data>
+  <data name="Aml_Pill_ToolTip" xml:space="preserve">
+    <value>Protective marking of the Additional Military Layers data loaded. The highest wins.</value>
+    <comment>Tooltip of the status-bar MARKING pill</comment>
+  </data>
+  <data name="Aml_Pill_AccessibleNameFormat" xml:space="preserve">
+    <value>Protective marking {0}</value>
+    <comment>Accessible name of the MARKING pill. {0}: the marking</comment>
+  </data>
+  <data name="Aml_Pill_FlyoutHeader" xml:space="preserve">
+    <value>PROTECTIVE MARKING</value>
+    <comment>Header of the MARKING pill's flyout</comment>
+  </data>
+  <data name="Aml_Pill_FlyoutRule" xml:space="preserve">
+    <value>Highest wins: UNCLASSIFIED, then RESTRICTED, then NATO RESTRICTED, then any other marking as written.</value>
+    <comment>Footnote of the MARKING pill's flyout</comment>
+  </data>
+  <data name="Aml_Pill_SetCellsFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A set line in the MARKING flyout. {0}: set name; {1}: its cell count text</comment>
+  </data>
+  <data name="Aml_CellCountOne" xml:space="preserve">
+    <value>1 cell</value>
+    <comment>AML cell count, singular</comment>
+  </data>
+  <data name="Aml_CellCountFormat" xml:space="preserve">
+    <value>{0} cells</value>
+    <comment>AML cell count, plural. {0}: count</comment>
+  </data>
+  <data name="Aml_Notice_TitleFormat" xml:space="preserve">
+    <value>{0} is military data</value>
+    <comment>First-open notification title. {0}: exchange set name</comment>
+  </data>
+  <data name="Aml_Notice_NotDrawnOneFormat" xml:space="preserve">
+    <value>1 Additional Military Layers cell ({0}). SoundCharts shows where it is but doesn't draw it.</value>
+    <comment>First-open notification body, one cell not drawn. {0}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_NotDrawnFormat" xml:space="preserve">
+    <value>{0} Additional Military Layers cells ({1}). SoundCharts shows where they are but doesn't draw them.</value>
+    <comment>First-open notification body. {0}: count; {1}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_DrawnOneFormat" xml:space="preserve">
+    <value>1 Additional Military Layers cell ({0}). SoundCharts draws it as an overlay, not a chart.</value>
+    <comment>First-open notification body, one cell drawn. {0}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_DrawnFormat" xml:space="preserve">
+    <value>{0} Additional Military Layers cells ({1}). SoundCharts draws them as an overlay, not a chart.</value>
+    <comment>First-open notification body, cells drawn. {0}: count; {1}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_MarkedFormat" xml:space="preserve">
+    <value>Marked {0}.</value>
+    <comment>Added to the first-open notification when the marking is above UNCLASSIFIED. {0}: the marking</comment>
+  </data>
+  <data name="Aml_Notice_Details" xml:space="preserve">
+    <value>Details</value>
+    <comment>First-open notification action: opens the Library item</comment>
+  </data>
+  <data name="Pick_AmlClass" xml:space="preserve">
+    <value>AML class</value>
+    <comment>Object Information class line for a class an AML catalogue adds (#1372)</comment>
+  </data>
+  <data name="Pick_AmlStandardClassWithAml" xml:space="preserve">
+    <value>S-57 class with AML attributes</value>
+    <comment>Object Information class line for a standard S-57 class carrying AML-only attributes (#1372)</comment>
+  </data>
+  <data name="Pick_AmlStandardClass" xml:space="preserve">
+    <value>S-57 class</value>
+    <comment>Object Information class line for a standard S-57 class in an AML cell (#1372)</comment>
+  </data>
+  <data name="Pick_AmlNotDrawn" xml:space="preserve">
+    <value>Not drawn. Picked from its position.</value>
+    <comment>Object Information line for an AML feature the map doesn't draw (#1372)</comment>
+  </data>
+  <data name="Pick_AmlAttributeMarkToolTip" xml:space="preserve">
+    <value>Added by Additional Military Layers to this S-57 class</value>
+    <comment>Tooltip of the AML mark before an AML-only attribute (#1372)</comment>
+  </data>
+  <data name="Pick_AmlProvenanceName" xml:space="preserve">
+    <value>AML provenance</value>
+    <comment>Accessible name of the AML provenance strip in Object Information (#1372)</comment>
+  </data>
+  <data name="Legend_LibrarySpec" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Legend_LibraryTitle" xml:space="preserve">
+    <value>Coverage outlines</value>
+  </data>
+  <data name="Legend_LibraryOutlinedFormat" xml:space="preserve">
+    <value>{0} outlined</value>
+  </data>
+  <data name="Legend_LibraryOutlinedOneFormat" xml:space="preserve">
+    <value>1 outlined</value>
+  </data>
+  <data name="Legend_LibrarySelected" xml:space="preserve">
+    <value>Selected</value>
+  </data>
+  <data name="Legend_ProductS101" xml:space="preserve">
+    <value>Electronic navigational chart</value>
+  </data>
+  <data name="Legend_CatalogueSomeFormat" xml:space="preserve">
+    <value>{0} of {1} symbols drawn in view</value>
+  </data>
+  <data name="Legend_CatalogueAll" xml:space="preserve">
+    <value>Symbols drawn in view</value>
+  </data>
+  <data name="Legend_SourceCountFormat" xml:space="preserve">
+    <value>{0} datasets</value>
+    <comment>Legend section source summary when several datasets make the section; {0} is the count</comment>
+  </data>
+  <data name="Legend_ProductS102" xml:space="preserve">
+    <value>Bathymetric surface</value>
+    <comment>Legend section title of S-102</comment>
+  </data>
+  <data name="Legend_ProductS122" xml:space="preserve">
+    <value>Marine protected areas</value>
+    <comment>Legend section title of S-122</comment>
+  </data>
+  <data name="Legend_ProductS124" xml:space="preserve">
+    <value>Navigational warnings</value>
+    <comment>Legend section title of S-124</comment>
+  </data>
+  <data name="Legend_ProductS129" xml:space="preserve">
+    <value>Under keel clearance management</value>
+    <comment>Legend section title of S-129</comment>
+  </data>
+  <data name="Legend_ProductAml" xml:space="preserve">
+    <value>Additional Military Layers</value>
+    <comment>Legend section title of AML</comment>
+  </data>
+  <data name="Legend_TabTitle" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Title of the Legend tab in the right dock (legends D2)</comment>
+  </data>
+  <data name="Label_Activity_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Accessible name of the Legend tab</comment>
+  </data>
+  <data name="Tooltip_Legend" xml:space="preserve">
+    <value>Legend of what the map draws</value>
+    <comment>Tooltip of the Legend tab</comment>
+  </data>
+  <data name="Menu_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>View › Appearance › Legend: shows or hides the Legend tab (legends D3)</comment>
+  </data>
+  <data name="Legend_ScopeName" xml:space="preserve">
+    <value>Which legends to show</value>
+    <comment>Accessible name of the In view | All loaded switch</comment>
+  </data>
+  <data name="Legend_ScopeInView" xml:space="preserve">
+    <value>In view</value>
+    <comment>Legend toolbar: only products drawn in the map view (legends D4)</comment>
+  </data>
+  <data name="Legend_ScopeAllLoaded" xml:space="preserve">
+    <value>All loaded</value>
+    <comment>Legend toolbar: every loaded product with a legend</comment>
+  </data>
+  <data name="Tooltip_LegendScopeInView" xml:space="preserve">
+    <value>Products drawn in the map view</value>
+  </data>
+  <data name="Tooltip_LegendScopeAllLoaded" xml:space="preserve">
+    <value>Every loaded product with a legend, in view or not</value>
+  </data>
+  <data name="Legend_FilterWatermark" xml:space="preserve">
+    <value>Filter</value>
+    <comment>Watermark of the Legend filter field</comment>
+  </data>
+  <data name="Legend_FilterName" xml:space="preserve">
+    <value>Filter legend rows</value>
+    <comment>Accessible name of the Legend filter field</comment>
+  </data>
+  <data name="Legend_CollapseAll" xml:space="preserve">
+    <value>Collapse all</value>
+    <comment>Legend toolbar button</comment>
+  </data>
+  <data name="Tooltip_LegendCollapseAll" xml:space="preserve">
+    <value>Collapse every section</value>
+  </data>
+  <data name="Legend_SectionNameFormat" xml:space="preserve">
+    <value>{0} {1}, {2} entries</value>
+    <comment>Accessible name of a Legend section (legends D11); {0} product chip, {1} product name, {2} row count</comment>
+  </data>
+  <data name="Legend_SectionNameOneFormat" xml:space="preserve">
+    <value>{0} {1}, 1 entry</value>
+    <comment>Accessible name of a Legend section with one row; {0} product chip, {1} product name</comment>
+  </data>
+  <data name="Legend_SectionTooltipFormat" xml:space="preserve">
+    <value>{0} {1}
+{2}</value>
+    <comment>Tooltip of a Legend section header; {0} product chip, {1} name, {2} source and time</comment>
+  </data>
+  <data name="Legend_SourceAndTimeFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>Legend section header detail; {0} source, {1} time summary</comment>
+  </data>
+  <data name="DataDynamicity_Observed" xml:space="preserve">
+    <value>Observed</value>
+    <comment>S-104/S-111 dataDynamicity 1: observed values (#1505, SoundCharts brief §7.2)</comment>
+  </data>
+  <data name="DataDynamicity_Predicted" xml:space="preserve">
+    <value>Predicted · astronomical tide only, not a forecast</value>
+    <comment>dataDynamicity 2: astronomical prediction; always says it's not a forecast</comment>
+  </data>
+  <data name="DataDynamicity_Analysis" xml:space="preserve">
+    <value>Analysis</value>
+    <comment>dataDynamicity 3: analysis or hybrid</comment>
+  </data>
+  <data name="DataDynamicity_Hindcast" xml:space="preserve">
+    <value>Hindcast</value>
+    <comment>dataDynamicity 4: hydrodynamic hindcast</comment>
+  </data>
+  <data name="DataDynamicity_Forecast" xml:space="preserve">
+    <value>Forecast</value>
+    <comment>dataDynamicity 5 (S-111: 6): hydrodynamic forecast, run time unknown</comment>
+  </data>
+  <data name="DataDynamicity_ForecastRunFormat" xml:space="preserve">
+    <value>Forecast, run {0}</value>
+    <comment>{0}: the forecast's run time, from the dataset's issue time</comment>
+  </data>
+  <data name="Legend_NoDataAtFormat" xml:space="preserve">
+    <value>No data at {0}</value>
+    <comment>Legend section header when the product has no data at the view time (legends D5); {0} is the view time of day</comment>
+  </data>
+  <data name="Legend_NotInViewFormat" xml:space="preserve">
+    <value>{0} more loaded, not in view</value>
+    <comment>Muted line under the In view sections; {0} is how many loaded products are not in view. Clicking it shows All loaded</comment>
+  </data>
+  <data name="Legend_NotInViewOneFormat" xml:space="preserve">
+    <value>1 more loaded, not in view</value>
+    <comment>As Legend_NotInViewFormat, for one product</comment>
+  </data>
+  <data name="Legend_EmptyTitle" xml:space="preserve">
+    <value>No legends yet</value>
+    <comment>Legend tab empty state</comment>
+  </data>
+  <data name="Legend_EmptyDescription" xml:space="preserve">
+    <value>Weather overlays, AML and other products that have a legend show it here once loaded.</value>
+    <comment>Legend tab empty state</comment>
+  </data>
+  <data name="Legend_NothingInViewTitle" xml:space="preserve">
+    <value>Nothing in view</value>
+    <comment>Legend tab empty state with In view selected</comment>
+  </data>
+  <data name="Legend_NothingInViewDescription" xml:space="preserve">
+    <value>No product with a legend is drawn in the map view.</value>
+  </data>
+  <data name="Legend_NoMatchTitle" xml:space="preserve">
+    <value>No matches</value>
+    <comment>Legend tab empty state when the filter matches nothing</comment>
+  </data>
+  <data name="Legend_NoMatchDescriptionFormat" xml:space="preserve">
+    <value>No section or row matches “{0}”.</value>
+    <comment>{0} is the filter text</comment>
+  </data>
+  <data name="Legend_RowsName" xml:space="preserve">
+    <value>Legend rows</value>
+    <comment>Accessible name of a Legend sections list of rows</comment>
+  </data>
+  <data name="Tooltip_LegendClearFilter" xml:space="preserve">
+    <value>Clear the filter</value>
+  </data>
+  <data name="Settings_UseTidePredictions" xml:space="preserve">
+    <value>Use tide predictions where there's no S-104</value>
+  </data>
+  <data name="Label_UseTidePredictions" xml:space="preserve">
+    <value>Use tide predictions</value>
+  </data>
+  <data name="Settings_UseTidePredictions_Help" xml:space="preserve">
+    <value>Harmonic predictions from the cached tide station list: the astronomical tide only, not a forecast. The Depth card, the route check and chart adjustment use them where no S-104 covers. Wind, pressure and river flow can move the real water level 0.5 m or more.</value>
+  </data>
+  <data name="Pick_Depth_Label_DepthNowPredicted" xml:space="preserve">
+    <value>ADJUSTED DEPTH AT SELECTED TIME (PREDICTED)</value>
+  </data>
+  <data name="Pick_Depth_PredictedSourceFormat" xml:space="preserve">
+    <value>Predicted · {0}</value>
+  </data>
+  <data name="Pick_Depth_PredictedAwayFormat" xml:space="preserve">
+    <value>{0:0.0} km away</value>
+  </data>
+  <data name="Pick_Depth_PredictedHarmonic" xml:space="preserve">
+    <value>harmonic</value>
+  </data>
+  <data name="Pick_Depth_PredictedFromReferenceFormat" xml:space="preserve">
+    <value>from {0}, with offsets</value>
+  </data>
+  <data name="Pick_Depth_PredictedNotAForecast" xml:space="preserve">
+    <value>not a forecast</value>
+  </data>
+  <data name="Pick_Depth_PredictionUncertainty" xml:space="preserve">
+    <value>Prediction: none given; weather can move it 0.5 m or more</value>
+  </data>
+  <data name="Pick_Depth_ChartedUncertaintyPredictedFormat" xml:space="preserve">
+    <value>Charted ± {0}. Prediction: none given; weather can move it 0.5 m or more</value>
+  </data>
+  <data name="Pick_Depth_Refused_DifferentDatumPredicted" xml:space="preserve">
+    <value>Not adjusted: {0} on {1}, prediction on {2}.</value>
+  </data>
+  <data name="Pick_Depth_PredictionNoun" xml:space="preserve">
+    <value>the prediction</value>
+  </data>
+  <data name="Pick_Depth_Series_Predicted" xml:space="preserve">
+    <value>Depth with predicted water level</value>
+  </data>
+  <data name="Clearance_SourcePredictedFormat" xml:space="preserve">
+    <value>Predicted · {0} · {1}</value>
+  </data>
+  <data name="Clearance_PredictedStationFormat" xml:space="preserve">
+    <value>Predicted · {0}</value>
+  </data>
+  <data name="Clearance_Gap_WaterLevelPredicted" xml:space="preserve">
+    <value>Water level predicted</value>
+  </data>
+  <data name="Check_ConfidencePredictedFormat" xml:space="preserve">
+    <value>Water level predicted on {0:0.0} NM: astronomical tide only, not a forecast</value>
+  </data>
+  <data name="Check_WindowCaveatPredicted" xml:space="preserve">
+    <value>water level partly predicted</value>
+  </data>
+  <data name="Check_WindowCaveatLowestLow" xml:space="preserve">
+    <value>water level partly taken from the lowest nearby low</value>
+  </data>
+  <data name="Check_WindowCaveatChartDatum" xml:space="preserve">
+    <value>water level partly taken at chart datum, with no nearby water level</value>
+  </data>
+  <data name="Findings_WaterLevelPredictedFormat" xml:space="preserve">
+    <value>Water level predicted for {0:0.0} NM</value>
+  </data>
+  <data name="Findings_TightOnPredictedFormat" xml:space="preserve">
+    <value>Tight on predicted water level for {0:0.0} NM</value>
+  </data>
+  <data name="Findings_PredictedStationsFormat" xml:space="preserve">
+    <value>Predicted · {0}</value>
+  </data>
+  <data name="Findings_MoreStationsFormat" xml:space="preserve">
+    <value>+{0}</value>
+  </data>
+  <data name="Findings_NotAForecast" xml:space="preserve">
+    <value>not a forecast</value>
+  </data>
+  <!-- Tides T5 begin -->
+  <data name="Tides_StationsLayer" xml:space="preserve">
+    <value>Tide stations · predicted</value>
+  </data>
+  <data name="Tides_StationsLayer_Description" xml:space="preserve">
+    <value>NOAA harmonic predictions: the astronomical tide only, not a forecast. Shown at 1:500,000 and larger; not where S-104 covers.</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadingList" xml:space="preserve">
+    <value>Downloading the station list</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadingListFormat" xml:space="preserve">
+    <value>Downloading the station list · {0:N0} of {1:N0}</value>
+    <comment>{0} = stations downloaded, {1} = stations in all.</comment>
+  </data>
+  <data name="Tides_FeedStatus_DownloadingDetail" xml:space="preserve">
+    <value>The first time, SoundCharts downloads NOAA's tide and current stations. It takes about 10 minutes; the stations appear when it's done. Keep SoundCharts open until then.</value>
+  </data>
+  <data name="Tides_FeedStatus_ReadingList" xml:space="preserve">
+    <value>Reading the station list</value>
+  </data>
+  <data name="Tides_FeedStatus_WaitingForList" xml:space="preserve">
+    <value>Waiting for the station list</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadFailed" xml:space="preserve">
+    <value>Station list download failed</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadFailedDetailFormat" xml:space="preserve">
+    <value>{0} Hide and show the feed to try again.</value>
+    <comment>{0} = why the download failed.</comment>
+  </data>
+  <data name="Tides_FeedStatus_ZoomInFormat" xml:space="preserve">
+    <value>Zoom in to 1:{0:N0} to see stations</value>
+    <comment>{0} = the smallest scale stations are drawn at, such as 500,000.</comment>
+  </data>
+  <data name="Tides_LegendSpec" xml:space="preserve">
+    <value>TIDE</value>
+  </data>
+  <data name="Tides_LegendSourceFormat" xml:space="preserve">
+    <value>NOAA CO-OPS, {0:N0} in view</value>
+  </data>
+  <data name="Tides_LegendTimeFormat" xml:space="preserve">
+    <value>{0} · predicted</value>
+  </data>
+  <data name="Tides_LegendCaption" xml:space="preserve">
+    <value>Height above chart datum (MLLW) at the view time, from 1:150,000 · dashed frame = predicted. Not drawn where S-104 covers the station.</value>
+  </data>
+  <data name="Tides_Trend_Rising" xml:space="preserve">
+    <value>rising</value>
+  </data>
+  <data name="Tides_Trend_Falling" xml:space="preserve">
+    <value>falling</value>
+  </data>
+  <data name="Tides_Trend_Turning" xml:space="preserve">
+    <value>turning</value>
+  </data>
+  <data name="Tides_Trend_RisingLegend" xml:space="preserve">
+    <value>Rising</value>
+  </data>
+  <data name="Tides_Trend_FallingLegend" xml:space="preserve">
+    <value>Falling</value>
+  </data>
+  <data name="Tides_Trend_TurningLegend" xml:space="preserve">
+    <value>Turning (high or low within 20 min)</value>
+  </data>
+  <data name="Tides_Kind_Harmonic" xml:space="preserve">
+    <value>harmonic</value>
+  </data>
+  <data name="Tides_Kind_Subordinate" xml:space="preserve">
+    <value>subordinate</value>
+  </data>
+  <data name="Tides_Pick_Station" xml:space="preserve">
+    <value>Station</value>
+  </data>
+  <data name="Tides_Pick_Kind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Tides_Pick_PredictedHeight" xml:space="preserve">
+    <value>Predicted height</value>
+  </data>
+  <data name="Tides_Pick_Trend" xml:space="preserve">
+    <value>Trend</value>
+  </data>
+  <data name="Tides_HeightAboveDatumFormat" xml:space="preserve">
+    <value>{0:0.0;−0.0} m above {1}</value>
+  </data>
+  <data name="Tides_MetresFormat" xml:space="preserve">
+    <value>{0:0.0;−0.0} m</value>
+  </data>
+  <data name="Tides_SignedMetresFormat" xml:space="preserve">
+    <value>{0:+0.0;−0.0;0.0} m</value>
+  </data>
+  <data name="Tides_High" xml:space="preserve">
+    <value>High</value>
+  </data>
+  <data name="Tides_Low" xml:space="preserve">
+    <value>Low</value>
+  </data>
+  <data name="Tides_Day_Today" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="Tides_Day_Tomorrow" xml:space="preserve">
+    <value>Tomorrow</value>
+  </data>
+  <data name="Tides_Day_Yesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="Tides_DayAndClockFormat" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Tides_ProviderUnknown" xml:space="preserve">
+    <value>Unknown provider</value>
+  </data>
+  <data name="Tides_UsePredictions" xml:space="preserve">
+    <value>Use tide predictions</value>
+  </data>
+  <data name="Tides_Card_PredictedChip" xml:space="preserve">
+    <value>Predicted</value>
+  </data>
+  <data name="Tides_Card_SubtitleHarmonicFormat" xml:space="preserve">
+    <value>NOAA tide station {0} · harmonic · {1}</value>
+  </data>
+  <data name="Tides_Card_SubtitleSubordinateFormat" xml:space="preserve">
+    <value>NOAA tide station {0} · subordinate · from {1}</value>
+  </data>
+  <data name="Tides_Card_NowFormat" xml:space="preserve">
+    <value>PREDICTED HEIGHT AT {0}</value>
+  </data>
+  <data name="Tides_Card_TrendRateFormat" xml:space="preserve">
+    <value>{0} {1:0.0} m/h</value>
+  </data>
+  <data name="Tides_Card_CurveTitleFormat" xml:space="preserve">
+    <value>12 HOURS EACH SIDE OF {0}</value>
+  </data>
+  <data name="Tides_Card_CurveDatumFormat" xml:space="preserve">
+    <value>heights above {0}</value>
+  </data>
+  <data name="Tides_Card_PredictedSeries" xml:space="preserve">
+    <value>Predicted</value>
+  </data>
+  <data name="Tides_Card_S104Series" xml:space="preserve">
+    <value>S-104</value>
+  </data>
+  <data name="Tides_Card_HighsAndLows" xml:space="preserve">
+    <value>HIGHS AND LOWS</value>
+  </data>
+  <data name="Tides_Card_ReferenceHeading" xml:space="preserve">
+    <value>REFERENCE STATION</value>
+  </data>
+  <data name="Tides_Card_ReferenceStation" xml:space="preserve">
+    <value>Station</value>
+  </data>
+  <data name="Tides_Card_HighWater" xml:space="preserve">
+    <value>High water</value>
+  </data>
+  <data name="Tides_Card_LowWater" xml:space="preserve">
+    <value>Low water</value>
+  </data>
+  <data name="Tides_Card_ReferenceDistanceFormat" xml:space="preserve">
+    <value>{0} · {1:0.0} km</value>
+  </data>
+  <data name="Tides_Card_OffsetFormat" xml:space="preserve">
+    <value>{0}{1} h {2:00} m, {3}</value>
+  </data>
+  <data name="Tides_Card_HeightRatioFormat" xml:space="preserve">
+    <value>height ×{0:0.00}</value>
+  </data>
+  <data name="Tides_Card_HeightDifferenceFormat" xml:space="preserve">
+    <value>height {0:+0.00;−0.00;0.00} m</value>
+  </data>
+  <data name="Tides_Card_ReferenceNoteFormat" xml:space="preserve">
+    <value>Highs and lows are {0}'s with these offsets. The curve between them is {0}'s curve with the offsets interpolated between them, as NOAA computes it, so it's less certain than the times and heights of the highs and lows.</value>
+  </data>
+  <data name="Tides_Card_Datum" xml:space="preserve">
+    <value>Datum</value>
+  </data>
+  <data name="Tides_Card_DatumMllw" xml:space="preserve">
+    <value>Mean Lower Low Water (MLLW), the station's chart datum</value>
+  </data>
+  <data name="Tides_Card_Mhhw" xml:space="preserve">
+    <value>MHHW</value>
+  </data>
+  <data name="Tides_Card_MhhwFormat" xml:space="preserve">
+    <value>{0:0.00} m above {1}</value>
+  </data>
+  <data name="Tides_Card_UsedForDepths" xml:space="preserve">
+    <value>Used for depths</value>
+  </data>
+  <data name="Tides_Card_UsedYes" xml:space="preserve">
+    <value>Yes, within 10 km, where there's no S-104</value>
+  </data>
+  <data name="Tides_Card_UsedNoS104" xml:space="preserve">
+    <value>No: S-104 covers this station at the view time</value>
+  </data>
+  <data name="Tides_Card_UsedNoOff" xml:space="preserve">
+    <value>No: tide predictions are off</value>
+  </data>
+  <data name="Tides_Card_StationList" xml:space="preserve">
+    <value>Station list</value>
+  </data>
+  <data name="Tides_Card_StationListFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="Tides_Card_S104Heading" xml:space="preserve">
+    <value>USED FOR DEPTHS HERE: S-104</value>
+  </data>
+  <data name="Tides_Card_S104CoversFormat" xml:space="preserve">
+    <value>S-104 {0} covers this station at {1}, so depths use it, not this prediction.</value>
+  </data>
+  <data name="Tides_Card_S104Label" xml:space="preserve">
+    <value>S-104 at view time</value>
+  </data>
+  <data name="Tides_Card_PredictedLabel" xml:space="preserve">
+    <value>Predicted</value>
+  </data>
+  <data name="Tides_Card_DifferenceLabel" xml:space="preserve">
+    <value>Difference</value>
+  </data>
+  <data name="Tides_Card_S104AtFormat" xml:space="preserve">
+    <value>{0} · S-104</value>
+  </data>
+  <data name="Tides_Card_PredictedAtFormat" xml:space="preserve">
+    <value>{0} · astronomical only</value>
+  </data>
+  <data name="Tides_Card_DifferenceFormat" xml:space="preserve">
+    <value>{0} (wind, pressure, river flow)</value>
+  </data>
+  <data name="Tides_Card_NotAForecast" xml:space="preserve">
+    <value>Predicted from NOAA harmonic constants: the astronomical tide only. Wind, pressure and river flow can move the real water level 0.5 m or more. Not for navigation.</value>
+  </data>
+  <data name="Tides_List_Format" xml:space="preserve">
+    <value>{0} station list · {1} · {2:N0} tide and {3:N0} current stations</value>
+  </data>
+  <data name="Tides_List_None" xml:space="preserve">
+    <value>No station list yet. It's downloaded from NOAA the first time predictions or a station overlay are turned on (about 10 minutes).</value>
+  </data>
+  <data name="Tides_List_Downloading" xml:space="preserve">
+    <value>Downloading NOAA's station list…</value>
+  </data>
+  <data name="Tides_List_DownloadingProgressFormat" xml:space="preserve">
+    <value>Downloading NOAA's station list · {0:N0} of {1:N0} stations</value>
+  </data>
+  <data name="Tides_List_DateUnknown" xml:space="preserve">
+    <value>date unknown</value>
+  </data>
+  <data name="Tides_List_FailedFormat" xml:space="preserve">
+    <value>The download failed: {0}</value>
+  </data>
+  <data name="Tides_List_Stale" xml:space="preserve">
+    <value>NOAA has newer data than this list. Predictions still work; refresh to use the new values.</value>
+  </data>
+  <data name="Tides_List_Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Tides_List_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Tides_List_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="TimelinePanel_PredictionsOnlyTooltip" xml:space="preserve">
+    <value>Only predictions are loaded, and they have no end: showing the next 48 hours.</value>
+  </data>
+  <data name="TimelinePanel_TideLane" xml:space="preserve">
+    <value>Tide predictions</value>
+  </data>
+  <data name="TimelinePanel_TideLaneTooltip" xml:space="preserve">
+    <value>Predicted tide at the station nearest the map centre: the astronomical tide only, with no start or end. It never sets the Timeline's range, and the data steps skip it.</value>
+  </data>
+  <data name="TimelinePanel_TideLaneStationFormat" xml:space="preserve">
+    <value>{0} {1} · {2:0.0} km</value>
+  </data>
+  <data name="TimelinePanel_TideLaneHighFormat" xml:space="preserve">
+    <value>H {0:0.0;−0.0}</value>
+  </data>
+  <data name="TimelinePanel_TideLaneLowFormat" xml:space="preserve">
+    <value>L {0:0.0;−0.0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat" xml:space="preserve">
+    <value>+ water level {0} · predicted</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat_Short" xml:space="preserve">
+    <value>+ predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedFormat_Compact" xml:space="preserve">
+    <value>Predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · predicted · part of view</value>
+  </data>
+  <data name="Status_DepthBasis_PredictedPartialFormat_Short" xml:space="preserve">
+    <value>+ predicted {0} · part</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedFormat" xml:space="preserve">
+    <value>+ water level {0} · partly predicted</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedFormat_Short" xml:space="preserve">
+    <value>Partly predicted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_PartlyPredictedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · partly predicted · part of view</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictedRowFormat" xml:space="preserve">
+    <value>Predicted · {0} NOAA stations · {1}</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictedMoreFormat" xml:space="preserve">
+    <value>{0}, +{1}</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictionsOrder" xml:space="preserve">
+    <value>S-104 first; predictions only where no S-104 covers.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_PredictionsLeaveOut" xml:space="preserve">
+    <value>Predictions leave out wind, pressure and river flow.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OfferHeading" xml:space="preserve">
+    <value>Tide predictions are available here</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OfferBody" xml:space="preserve">
+    <value>No S-104 covers this view, but NOAA tide stations are in reach. Predictions are the astronomical tide only, not a forecast.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_StaleFormat" xml:space="preserve">
+    <value>NOAA has revised the station list since {0}. Predictions still work; refresh to use the new values.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Status_DepthBasisPopup_TidePredictionsLink" xml:space="preserve">
+    <value>Tide predictions settings</value>
+  </data>
+  <data name="Tides_CurrentsLayer" xml:space="preserve">
+    <value>Current stations · predicted</value>
+  </data>
+  <data name="Tides_CurrentsLayer_Description" xml:space="preserve">
+    <value>NOAA tidal current predictions: speed and direction from harmonic constants, not a forecast. Shown at 1:500,000 and larger; not where S-111 covers.</value>
+  </data>
+  <data name="Tides_Currents_LegendSpec" xml:space="preserve">
+    <value>CURRENT</value>
+  </data>
+  <data name="Tides_Currents_LegendCaption" xml:space="preserve">
+    <value>Speed, kn · S-111 speed bands · arrow points where the current flows · dashed frame = predicted. Not drawn where S-111 covers the station.</value>
+  </data>
+  <data name="Tides_Currents_LegendSlack" xml:space="preserve">
+    <value>Slack, with the turn time</value>
+  </data>
+  <data name="Tides_Currents_SpeedLabelFormat" xml:space="preserve">
+    <value>{0:0.0} kn</value>
+  </data>
+  <data name="Tides_Currents_SlackLabelFormat" xml:space="preserve">
+    <value>slack {0}</value>
+  </data>
+  <data name="Tides_Currents_Pick_Current" xml:space="preserve">
+    <value>Predicted current</value>
+  </data>
+  <data name="Tides_Currents_SpeedDirectionFormat" xml:space="preserve">
+    <value>{0:0.0} kn · {1:000}°</value>
+  </data>
+  <data name="Tides_Currents_SubtitleFormat" xml:space="preserve">
+    <value>NOAA current station {0} · {1} · {2}</value>
+  </data>
+  <data name="Tides_Currents_FromFormat" xml:space="preserve">
+    <value>subordinate · from {0}</value>
+  </data>
+  <data name="Tides_Currents_DepthFormat" xml:space="preserve">
+    <value>{0:0.#} m below the surface</value>
+  </data>
+  <data name="Tides_Currents_DepthUnknown" xml:space="preserve">
+    <value>Not given</value>
+  </data>
+  <data name="Tides_Card_NowAtFormat" xml:space="preserve">
+    <value>PREDICTED AT {0}</value>
+  </data>
+  <data name="Tides_Currents_Slack" xml:space="preserve">
+    <value>Slack</value>
+  </data>
+  <data name="Tides_Currents_MaxFlood" xml:space="preserve">
+    <value>Max flood</value>
+  </data>
+  <data name="Tides_Currents_MaxEbb" xml:space="preserve">
+    <value>Max ebb</value>
+  </data>
+  <data name="Tides_Currents_Flood" xml:space="preserve">
+    <value>flood</value>
+  </data>
+  <data name="Tides_Currents_Ebb" xml:space="preserve">
+    <value>ebb</value>
+  </data>
+  <data name="Tides_Currents_TurningFormat" xml:space="preserve">
+    <value>{0:0.0} kn, turning to {1} at {2}</value>
+  </data>
+  <data name="Tides_Currents_FlowFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Tides_Currents_KnotsFormat" xml:space="preserve">
+    <value>{0:0.0} kn</value>
+  </data>
+  <data name="Tides_Currents_DegreesFormat" xml:space="preserve">
+    <value>{0:000}°</value>
+  </data>
+  <data name="Tides_Currents_CurveCaption" xml:space="preserve">
+    <value>knots · flood above the line, ebb below</value>
+  </data>
+  <data name="Tides_Currents_SlacksAndMaxima" xml:space="preserve">
+    <value>SLACKS AND MAXIMA</value>
+  </data>
+  <data name="Tides_Currents_FloodDirection" xml:space="preserve">
+    <value>Flood direction</value>
+  </data>
+  <data name="Tides_Currents_EbbDirection" xml:space="preserve">
+    <value>Ebb direction</value>
+  </data>
+  <data name="Tides_Currents_Depth" xml:space="preserve">
+    <value>Depth</value>
+  </data>
+  <data name="Tides_Currents_UsedFor" xml:space="preserve">
+    <value>Used for</value>
+  </data>
+  <data name="Tides_Currents_DisplayOnly" xml:space="preserve">
+    <value>Display only. Not used in route checks.</value>
+  </data>
+  <data name="Tides_Currents_Note" xml:space="preserve">
+    <value>Predicted from NOAA harmonic constants. Wind and river flow change real currents, and in a pass the strongest stream can be well away from the station. Not for navigation.</value>
+  </data>
+  <!-- Tides T5 end -->
+  <data name="Secrets_Store_Windows" xml:space="preserve">
+    <value>Windows Credential Manager</value>
+  </data>
+  <data name="Secrets_Store_MacOS" xml:space="preserve">
+    <value>the macOS Keychain</value>
+  </data>
+  <data name="Secrets_Store_Linux" xml:space="preserve">
+    <value>the Secret Service (libsecret)</value>
+  </data>
+  <data name="Settings_SecretSavedInStoreFormat" xml:space="preserve">
+    <value>The key is saved in {0}, not in settings.json.</value>
+    <comment>{0} = the secret store's name, e.g. "Windows Credential Manager".</comment>
+  </data>
+  <data name="Settings_SecretNoStoreFormat" xml:space="preserve">
+    <value>This computer has no secret store, so the key is saved in settings.json. To keep it out of the file, use the {0} environment variable instead.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="SourceStatus_Paused" xml:space="preserve">
+    <value>Paused while hidden</value>
+  </data>
+  <data name="SourceStatus_WaitingForZoom" xml:space="preserve">
+    <value>Waiting for you to zoom in</value>
+  </data>
+  <data name="SourceStatus_WaitingForZoomFormat" xml:space="preserve">
+    <value>Waiting for zoom (below {0}°)</value>
+    <comment>{0} = the widest view span, in degrees, at which the feed runs.</comment>
+  </data>
+  <data name="SourceStatus_Failed" xml:space="preserve">
+    <value>Not connecting</value>
+  </data>
+  <data name="SourceStatus_FailedSinceFormat" xml:space="preserve">
+    <value>Not updating · last data {0} ago</value>
+    <comment>{0} = a short age, e.g. "14 min".</comment>
+  </data>
+  <data name="SourceStatus_Starting" xml:space="preserve">
+    <value>Waiting for data</value>
+  </data>
+  <data name="SourceStatus_StaleFormat" xml:space="preserve">
+    <value>No new data for {0}</value>
+    <comment>{0} = a short age, e.g. "42 min".</comment>
+  </data>
+  <data name="SourceStatus_LiveFormat" xml:space="preserve">
+    <value>Live · updated {0} ago</value>
+    <comment>{0} = a short age, e.g. "3 min".</comment>
+  </data>
+  <data name="SourceStatus_AgeJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
+  <data name="SourceStatus_AgeMinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+    <comment>{0} = whole minutes.</comment>
+  </data>
+  <data name="SourceStatus_AgeHoursFormat" xml:space="preserve">
+    <value>{0} h ago</value>
+    <comment>{0} = whole hours.</comment>
+  </data>
+  <data name="SourceStatus_AgeDaysFormat" xml:space="preserve">
+    <value>{0} d</value>
+    <comment>{0} = whole days.</comment>
+  </data>
+  <data name="SourceGroup_Observations" xml:space="preserve">
+    <value>Observations</value>
+  </data>
+  <data name="SourceGroup_OwnShipSensors" xml:space="preserve">
+    <value>Own-ship sensor</value>
+  </data>
+  <data name="SourceGroup_Vessels" xml:space="preserve">
+    <value>Vessels</value>
+  </data>
+  <data name="Toast_SourceRemovedFormat" xml:space="preserve">
+    <value>Removed {0} from the map until SoundCharts next starts. To stop it for good, unsubscribe from it in the Library.</value>
+    <comment>{0} = the feed's name, e.g. "NDBC observations".</comment>
+  </data>
+  <data name="Button_AddLiveFeed" xml:space="preserve">
+    <value>Add a live feed</value>
+  </data>
+  <data name="SourceStatus_LiveJustNow" xml:space="preserve">
+    <value>Live · updated just now</value>
+  </data>
+  <data name="Ais_SourceName" xml:space="preserve">
+    <value>AIS targets</value>
+  </data>
+  <data name="Ais_SourceDescription" xml:space="preserve">
+    <value>Live AIS vessel targets from aisstream.io, for the area in view. Needs a free API key (Settings › Vessels). Not for navigation.</value>
+  </data>
+  <data name="Ais_KeyNeededFormat" xml:space="preserve">
+    <value>Key needed: enter an aisstream.io API key in the Library (Live feeds › AIS targets), or set the {0} environment variable.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="Library_LiveFeedsCollection" xml:space="preserve">
+    <value>Live feeds</value>
+    <comment>The name of the Library collection that holds the live feeds subscribed to.</comment>
+  </data>
+  <data name="Library_AddMenu_LiveFeeds" xml:space="preserve">
+    <value>Live feeds</value>
+    <comment>Library Add menu group header for live feeds (AIS, NDBC observations, ...).</comment>
+  </data>
+  <data name="LiveFeed_SecretFromEnvironmentFormat" xml:space="preserve">
+    <value>Supplied by the {0} environment variable, which comes first.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="LiveFeed_SecretSaved" xml:space="preserve">
+    <value>Saved. Type a new one to replace it.</value>
+  </data>
+  <data name="LiveFeed_SecretOrEnvironmentFormat" xml:space="preserve">
+    <value>Or set the {0} environment variable.</value>
+    <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="LiveFeed_UnknownFormat" xml:space="preserve">
+    <value>This version of SoundCharts doesn't have the {0} feed.</value>
+    <comment>{0} = feed id, e.g. ais.aisstream.</comment>
+  </data>
+  <data name="LiveFeed_NeedsSettings" xml:space="preserve">
+    <value>Needs settings: fill in the options marked * to run it.</value>
+  </data>
+  <data name="LiveFeed_InvalidFormat" xml:space="preserve">
+    <value>{0} isn't valid.</value>
+    <comment>{0} = option label.</comment>
+  </data>
+  <data name="LiveFeed_Saved" xml:space="preserve">
+    <value>Saved. The feed restarts with these settings.</value>
+  </data>
+  <data name="LiveFeed_SettingsHeader" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="LiveFeed_Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="LiveFeed_Revert" xml:space="preserve">
+    <value>Revert</value>
+  </data>
+  <data name="LiveFeed_NoOptions" xml:space="preserve">
+    <value>This feed has nothing to set.</value>
+  </data>
+  <data name="Settings_AisMovedToLibrary" xml:space="preserve">
+    <value>AIS targets are a live feed: subscribe to them in the Library (Add › Live feeds), and set the aisstream.io key and when they run on their settings there.</value>
+  </data>
+  <data name="SourceGroup_Predictions" xml:space="preserve">
+    <value>Predictions</value>
+    <comment>The group label of a live feed computed for the view time, such as predicted tide stations.</comment>
+  </data>
+  <data name="SourceStatus_KeyNeeded" xml:space="preserve">
+    <value>Key needed</value>
+  </data>
+  <data name="SourceStatus_NeedsSettings" xml:space="preserve">
+    <value>Needs settings</value>
+  </data>
+  <data name="SourceStatus_NeedsSettingsFormat" xml:space="preserve">
+    <value>Set {0} on its settings in the Library (Live feeds) to start it.</value>
+    <comment>{0} = option label, e.g. NMEA input.</comment>
+  </data>
+  <data name="SourceStatus_NeedsSettingsOrEnvironmentFormat" xml:space="preserve">
+    <value>Set {0} on its settings in the Library (Live feeds), or set the {1} environment variable, to start it.</value>
+    <comment>{0} = option label; {1} = environment variable name.</comment>
   </data>
 </root>

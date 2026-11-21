@@ -1,5 +1,8 @@
 using System.Reflection;
 using System.Text.Json;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
 
@@ -64,5 +67,25 @@ public class McpJsonTests
         var json = JsonSerializer.Serialize(sample, McpJson.Options.GetTypeInfo(typeof(SampledValue)));
 
         Assert.StartsWith("""{"$kind":"depth",""", json);
+    }
+
+    [Fact]
+    public void Identify_result_serializes_pick_sections()
+    {
+        var section = new PickSectionResult(
+            "ice.egg-code",
+            "egg",
+            [],
+            JsonDocument.Parse("""{"total":"70"}""").RootElement.Clone());
+        var match = new IdentifyMatch(
+            new DatasetId("ice"), new SpecRef("S-411", default), "seaice.1", "seaice", "surface", null, "inside", 0,
+            Sections: [section]);
+
+        var json = JsonSerializer.Serialize(
+            new IdentifyFeaturesResult(new GeoPoint(0, 0), [match], 1, false),
+            McpJson.Options);
+
+        Assert.Contains("\"kind\":\"ice.egg-code\"", json);
+        Assert.Contains("\"data\":{\"total\":\"70\"}", json);
     }
 }

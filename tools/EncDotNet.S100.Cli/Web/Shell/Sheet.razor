@@ -1,0 +1,67 @@
+@* The rail and the docked panel together (handoff D1, D2). On a desktop it's a column beside the map;
+   under 768 px CSS makes it a bottom sheet with three heights, the handle and the summary on top and the rail as its tabs. *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="sheet" data-height="@Height.ToString().ToLowerInvariant()" data-open="@(PanelOpen ? "true" : "false")">
+    <button type="button" class="sheet-handle" @ref="handle" aria-label="@HandleLabel">
+        <span aria-hidden="true"></span>
+    </button>
+    <div class="sheet-summary">@Summary</div>
+    @TopContent
+    @RailContent
+    @ChildContent
+</div>
+
+@code {
+    private ElementReference handle;
+    private DotNetObjectReference<Sheet>? self;
+
+    /// <summary>The phone sheet's height.</summary>
+    [Parameter]
+    public SheetHeight Height { get; set; }
+
+    /// <summary>Whether a panel is open beside the rail (desktop).</summary>
+    [Parameter]
+    public bool PanelOpen { get; set; }
+
+    /// <summary>What's served, shown when the sheet is lowered.</summary>
+    [Parameter]
+    public string? Summary { get; set; }
+
+    /// <summary>What docks into the sheet's top on a phone (the time bar when the sheet rises).</summary>
+    [Parameter]
+    public RenderFragment? TopContent { get; set; }
+
+    /// <summary>The rail.</summary>
+    [Parameter]
+    public RenderFragment? RailContent { get; set; }
+
+    /// <summary>The open panel.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The handle was tapped ("tap") or dragged ("up", "down").</summary>
+    [Parameter]
+    public EventCallback<string> OnGesture { get; set; }
+
+    private string HandleLabel => Height == SheetHeight.Lowered ? "Raise the panel" : "Lower the panel";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        self = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("s100Shell.sheetHandle", handle, self);
+    }
+
+    /// <summary>From the JS module: a gesture on the handle.</summary>
+    [JSInvokable]
+    public Task Gesture(string gesture) => OnGesture.InvokeAsync(gesture);
+
+    public ValueTask DisposeAsync()
+    {
+        self?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

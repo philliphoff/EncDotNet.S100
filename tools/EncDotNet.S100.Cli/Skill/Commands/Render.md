@@ -21,6 +21,11 @@ time axis. Viewport options are rejected
 for display-list JSON because `--format json` describes vector portrayal
 instructions, not pixels.
 
+`--source <id>` (composite forms only, with `--bbox` or `--center`/`--scale`)
+draws a live data source from `s100 sources` above the datasets. It waits up to
+`--source-timeout` seconds for first data and is left out with a stderr warning
+if none arrives. Keys come only from environment variables.
+
 Use `info` first to discover time-step indices and S-411 display modes.
 `ice-navigational` is only a provisional visual preview and is not a
 POLARIS/RIO risk calculation.

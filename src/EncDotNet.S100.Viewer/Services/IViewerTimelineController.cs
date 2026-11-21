@@ -134,7 +134,19 @@ internal sealed record ViewerTimelineState(
 
     /// <summary>True while Follow passage pins the view time to the passage (#904).</summary>
     public bool FollowPassage { get; init; }
+
+    /// <summary>The Tide predictions lane (#1453), or null when it doesn't show.</summary>
+    public TimelineTidePredictionsState? TidePredictions { get; init; }
 }
+
+/// <summary>The Timeline's Tide predictions lane (#1453).</summary>
+/// <param name="StationId">The station the lane follows: the one nearest the map centre.</param>
+/// <param name="Station">The lane's station text as displayed.</param>
+/// <param name="Extremes">The highs and lows on the lane.</param>
+internal sealed record TimelineTidePredictionsState(
+    string StationId,
+    string Station,
+    IReadOnlyList<ViewModels.TideLaneMark> Extremes);
 
 /// <summary>The Timeline's passage and departure-window lanes (#904).</summary>
 /// <param name="Departure">The checked departure.</param>
@@ -185,6 +197,18 @@ internal sealed record TimelineLaneState(string Id, string Label, string Group, 
 
     /// <summary>The Library's windows for the lane.</summary>
     public IReadOnlyList<TimelineLibraryWindow> Windows { get; init; } = [];
+
+    /// <summary>The lane's sub line, e.g. "adv 20 · 6 h".</summary>
+    public string Sub { get; init; } = string.Empty;
+
+    /// <summary>When the dataset was issued, the lane's solid diamond (V14); null when not marked.</summary>
+    public DateTime? Issued { get; init; }
+
+    /// <summary>When the next is expected, the lane's hollow diamond (V14); null when not marked.</summary>
+    public DateTime? NextIssue { get; init; }
+
+    /// <summary>How many step ticks the lane draws (a storm's forecast points, V14).</summary>
+    public int StepTicks { get; init; }
 }
 
 /// <summary>A window of data the Library knows for a lane (#711).</summary>
@@ -222,6 +246,12 @@ internal sealed record TimelineLayerState(
 
     /// <summary>True while the layer is drawing the view time.</summary>
     public bool Drawing { get; init; }
+
+    /// <summary>For a layer drawing stale data (its row's Stale tag), the data's age to the nearest hour; otherwise null.</summary>
+    public int? StaleHours { get; init; }
+
+    /// <summary>The row's warning tag: "Hidden" for a hidden layer, or "Beyond forecast" or "Before track" for a storm outside its range; otherwise null.</summary>
+    public string? Tag { get; init; }
 }
 
 /// <summary>The outcome of <see cref="IViewerTimelineController.SetViewTimeAsync"/>.</summary>

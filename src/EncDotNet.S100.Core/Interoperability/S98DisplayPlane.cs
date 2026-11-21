@@ -78,6 +78,14 @@ public enum S98DisplayPlane
     OtherChartOverlays = 40,
 
     /// <summary>
+    /// NATO Additional Military Layers (AML), drawn with SoundCharts' own
+    /// portrayal: above the chart, S-102 and the other chart overlays, below
+    /// cautions and warnings, routes and alerts. Not an S-98 plane: AML isn't
+    /// an S-100 product, so S-98 doesn't place it.
+    /// </summary>
+    AdditionalMilitaryLayers = 45,
+
+    /// <summary>
     /// Navigational warnings and notices to mariners (S-124).
     /// MSC.530(106)/Rev.1 §Appendix 2 layers 3-4 ("Notices to
     /// Mariners…", "Official-caution"); S-98 Main §9.2.1 layers
@@ -110,6 +118,20 @@ public enum S98DisplayPlane
     /// processor emits onto this plane today.
     /// </summary>
     MarinerOverlay = 70,
+
+    /// <summary>
+    /// AIS targets and other vessels drawn from a data source, above the
+    /// chart and the mariner's data and below ECDIS alerts.
+    /// </summary>
+    /// <remarks>
+    /// S-98 Main §9.2.1 ranks radar and AIS (layer 7) below official points
+    /// (layer 2), but the list is informative, and ECDIS practice draws
+    /// sparse, live, safety-critical targets on top. This plane is a stopgap
+    /// until the layer order is derived from information categories, where
+    /// vessels get their own step (data source design note D6, slice 3).
+    /// Own-ship stays in SoundCharts' overlay band, above every dataset.
+    /// </remarks>
+    Vessels = 75,
 
     /// <summary>
     /// ECDIS visual alerts / indications (overscale, caution, AIO).

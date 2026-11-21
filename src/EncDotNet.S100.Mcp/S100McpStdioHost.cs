@@ -37,10 +37,21 @@ public static class S100McpStdioHost
     /// Optional host-supplied tools appended to the built-in set. Names must
     /// not collide with the built-ins. May be <see langword="null"/> or empty.
     /// </param>
+    /// <param name="routeCheckSources">
+    /// The route-check sources for <c>check_route</c> and, through their tide
+    /// predictions, the S-104 fallback of <c>sample</c>; <c>null</c>
+    /// for the tools' own, without predictions.
+    /// </param>
+    /// <param name="toolsets">
+    /// The toolsets to serve (<see cref="McpToolsets"/>), or <see langword="null"/>
+    /// for every toolset.
+    /// </param>
     /// <param name="cancellationToken">Stops the host when signalled.</param>
     public static async Task RunAsync(
         IDatasetCatalog catalog,
         IReadOnlyList<McpServerTool>? additionalTools = null,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
+        IReadOnlyCollection<string>? toolsets = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(catalog);
@@ -56,7 +67,7 @@ public static class S100McpStdioHost
         // so stderr carries only real diagnostics.
         builder.Services.Configure<ConsoleLifetimeOptions>(o => o.SuppressStatusMessages = true);
 
-        var tools = S100McpTools.Create(catalog).ToList();
+        var tools = S100McpTools.Create(catalog, routeCheckSources: routeCheckSources).ToList();
         if (additionalTools is { Count: > 0 } extra)
         {
             tools.AddRange(extra);
@@ -65,7 +76,7 @@ public static class S100McpStdioHost
         builder.Services
             .AddMcpServer()
             .WithStdioServerTransport()
-            .WithTools(tools);
+            .WithTools(McpToolsets.Select(tools, toolsets));
 
         using var host = builder.Build();
         await host.RunAsync(cancellationToken).ConfigureAwait(false);

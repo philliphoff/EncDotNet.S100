@@ -63,5 +63,6 @@ perf-runs/
 /api/*
 !/api/index.md
 
-# EncDotNet checkout for the docs build (docs/fetch-encdotnet.sh)
+# EncDotNet and EncDotNet.ArcGIS checkouts for the docs build
+# (docs/fetch-encdotnet.sh, docs/fetch-encdotnet-arcgis.sh)
 /external/

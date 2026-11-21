@@ -6,6 +6,9 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class FeatureGlyphsTests
 {
     [Theory]
+    [InlineData("SurfaceFront", Icon.WeatherSqualls)]
+    [InlineData("PressureCentre", Icon.Gauge)]
+    [InlineData("TropicalCyclone", Icon.ArrowRotateCounterclockwise)]
     [InlineData("BeaconLateral", Icon.Flag)]
     [InlineData("LightAllAround", Icon.WeatherSunny)]
     [InlineData("Lighthouse", Icon.BuildingLighthouse)]

@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 using Mapsui;
 using Mapsui.Projections;
 
@@ -28,6 +31,7 @@ public sealed class MapsuiMapNavigator
     private const double WorldMaxLatitude = 85.05112878;
 
     private readonly Navigator _navigator;
+    private Navigator.ViewportChangedEventHandler? _observe;
 
     /// <summary>
     /// Creates a navigation adapter for <paramref name="map"/>.
@@ -37,9 +41,129 @@ public sealed class MapsuiMapNavigator
     /// <paramref name="map"/> is <see langword="null"/>.
     /// </exception>
     public MapsuiMapNavigator(Map map)
+        : this(map, planner: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a navigation adapter for <paramref name="map"/> that reports
+    /// the map's views, and the targets of the animations and flings it
+    /// starts, to <paramref name="planner"/> (map rendering slice&#160;9).
+    /// </summary>
+    /// <param name="map">The existing Mapsui map to navigate.</param>
+    /// <param name="planner">The map's demand planner, or <see langword="null"/> to report nothing.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="map"/> is <see langword="null"/>.
+    /// </exception>
+    public MapsuiMapNavigator(Map map, DemandPlanner? planner)
     {
         ArgumentNullException.ThrowIfNull(map);
         _navigator = map.Navigator;
+        Planner = planner;
+        if (planner is not null)
+        {
+            // Mapsui raises viewport changes on the thread that changed the
+            // view (the UI thread, or its animation callbacks); the planner
+            // is thread-safe.
+            _observe = (_, _) => ObserveViewport();
+            _navigator.ViewportChanged += _observe;
+            ObserveViewport();
+        }
+    }
+
+    /// <summary>The demand planner the map's views are reported to, or <see langword="null"/>.</summary>
+    public DemandPlanner? Planner { get; }
+
+    /// <summary>
+    /// Starts a fling as Mapsui's map control does on release
+    /// (<c>Navigator.Fling</c>), and reports its predicted resting viewport
+    /// to the <see cref="Planner"/>.
+    /// </summary>
+    /// <param name="velocityX">Release velocity, screen pixels per second.</param>
+    /// <param name="velocityY">Release velocity, screen pixels per second.</param>
+    /// <param name="maxDurationMilliseconds">The fling's longest duration.</param>
+    /// <returns>The predicted resting viewport, or null when no fling starts or nothing is reported.</returns>
+    public ViewState? Fling(double velocityX, double velocityY, long maxDurationMilliseconds = 1000)
+    {
+        var target = ForecastFling(velocityX, velocityY, maxDurationMilliseconds);
+        _navigator.Fling(velocityX, velocityY, maxDurationMilliseconds);
+        return target;
+    }
+
+    /// <summary>
+    /// Reports to the <see cref="Planner"/> the fling Mapsui is about to start
+    /// for this release velocity, without starting it: for a host whose map
+    /// control starts the fling itself.
+    /// </summary>
+    /// <param name="velocityX">Release velocity, screen pixels per second.</param>
+    /// <param name="velocityY">Release velocity, screen pixels per second.</param>
+    /// <param name="maxDurationMilliseconds">The fling's longest duration.</param>
+    /// <returns>The predicted resting viewport, or null when no fling would start or nothing is reported.</returns>
+    public ViewState? ForecastFling(double velocityX, double velocityY, long maxDurationMilliseconds = 1000)
+    {
+        if (Planner is null || _navigator.PanLock
+            || MapsuiFlingForecast.Travel(_navigator.Viewport, velocityX, velocityY, maxDurationMilliseconds)
+                is not { } travel)
+        {
+            return null;
+        }
+
+        ObserveViewport();
+        return Planner.BeginFling(travel.TravelX, travel.TravelY, travel.Duration, Stopwatch.GetTimestamp());
+    }
+
+    /// <summary>
+    /// Zooms about the view centre to <paramref name="resolution"/>, through
+    /// the navigator's limits, animating for <paramref name="durationMilliseconds"/>.
+    /// </summary>
+    /// <param name="resolution">The resolution, map units per pixel.</param>
+    /// <param name="durationMilliseconds">Animation duration; zero or less applies it at once.</param>
+    public void ZoomTo(double resolution, long durationMilliseconds)
+    {
+        var viewport = _navigator.Viewport;
+        CenterOnAndZoomToLimited(new MPoint(viewport.CenterX, viewport.CenterY), resolution, durationMilliseconds);
+    }
+
+    /// <summary>
+    /// Centres on <paramref name="center"/> at <paramref name="resolution"/>,
+    /// through the navigator's limits, animating for <paramref name="durationMilliseconds"/>.
+    /// </summary>
+    /// <param name="center">The centre in the map's coordinate system.</param>
+    /// <param name="resolution">The resolution, map units per pixel.</param>
+    /// <param name="durationMilliseconds">Animation duration; zero or less applies it at once.</param>
+    public void CenterOnAndZoomTo(MPoint center, double resolution, long durationMilliseconds)
+    {
+        ArgumentNullException.ThrowIfNull(center);
+        CenterOnAndZoomToLimited(center, resolution, durationMilliseconds);
+    }
+
+    /// <summary>Stops reporting to the planner.</summary>
+    internal void Detach()
+    {
+        if (_observe is { } observe)
+        {
+            _navigator.ViewportChanged -= observe;
+            _observe = null;
+        }
+    }
+
+    private void ObserveViewport()
+    {
+        var viewport = _navigator.Viewport;
+        if (Planner is not null && viewport.Width > 0 && viewport.Height > 0)
+        {
+            Planner.Observe(MapsuiChartLayers.ToViewState(viewport), Stopwatch.GetTimestamp());
+        }
+    }
+
+    private void ReportAnimation(Viewport target, long duration)
+    {
+        if (Planner is not null && duration > 0 && target.Width > 0 && target.Height > 0)
+        {
+            ObserveViewport();
+            Planner.BeginAnimation(
+                MapsuiChartLayers.ToViewState(target), TimeSpan.FromMilliseconds(duration), Stopwatch.GetTimestamp());
+        }
     }
 
     /// <summary>
@@ -126,6 +250,7 @@ public sealed class MapsuiMapNavigator
         }
 
         var (x, y) = SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
+        ReportAnimation(_navigator.Viewport with { CenterX = x, CenterY = y }, durationMilliseconds);
         _navigator.CenterOn(x, y, durationMilliseconds);
     }
 
@@ -205,6 +330,7 @@ public sealed class MapsuiMapNavigator
 
         var goal = _navigator.Viewport with { CenterX = center.X, CenterY = center.Y, Resolution = resolution };
         var limited = _navigator.Limiter.Limit(goal, _navigator.PanBounds, _navigator.ZoomBounds);
+        ReportAnimation(limited, duration);
         _navigator.CenterOnAndZoomTo(
             new MPoint(limited.CenterX, limited.CenterY), limited.Resolution, duration);
     }

@@ -47,8 +47,8 @@ public sealed class S100McpServerOptions
     /// Each entry is appended verbatim to the built-in tool list before
     /// the MCP server is started; tool names must therefore not collide
     /// with the built-ins (<c>list_datasets</c>, <c>describe_feature</c>,
-    /// <c>sample_coverage</c>, <c>find_at</c>, <c>query_features</c>,
-    /// <c>sample_coverage_along</c>, <c>list_specs</c>,
+    /// <c>sample</c>, <c>find_at</c>, <c>query_features</c>,
+    /// <c>list_specs</c>,
     /// <c>list_time_steps</c>, <c>check_route</c>).
     /// </remarks>
     public IReadOnlyList<McpServerTool>? AdditionalTools { get; init; }
@@ -67,4 +67,20 @@ public sealed class S100McpServerOptions
     /// its own.
     /// </summary>
     public EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? RouteCheckSources { get; init; }
+
+    /// <summary>
+    /// What the host's map draws, so the built-in <c>identify_features</c>
+    /// tool, given no time, identifies what the map shows (its view time and
+    /// the warnings it hides). May be <see langword="null"/> when the host has
+    /// no map, and the tool then identifies every drawable feature.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState? MapDrawState { get; init; }
+
+    /// <summary>
+    /// The toolsets to serve (<see cref="McpToolsets"/>), or
+    /// <see langword="null"/> for every toolset. Every tool, built-in or
+    /// additional, must declare its toolset with
+    /// <see cref="McpToolsets.Assign(string, IEnumerable{McpServerTool})"/>.
+    /// </summary>
+    public IReadOnlyCollection<string>? Toolsets { get; init; }
 }

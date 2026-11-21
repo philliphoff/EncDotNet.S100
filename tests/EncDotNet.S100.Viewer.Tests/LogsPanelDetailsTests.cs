@@ -44,8 +44,8 @@ public sealed class LogsPanelDetailsTests
             Clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 30, 6, 29, 52, 795, TimeSpan.Zero));
             Clock.SetLocalTimeZone(Plus10);
             Format = new Format(format);
-            Buffer = new LogBuffer(capacity, timeProvider: Clock);
-            Panel = new LogsViewModel(Buffer, post: action => action(), timeFormat: Format, time: Clock);
+            Buffer = new LogBuffer(capacity: capacity, timeProvider: Clock);
+            Panel = new LogsViewModel(Buffer, post: action => action(), timeFormat: Format, time: Clock, showFeedback: null);
         }
 
         public FakeTimeProvider Clock { get; }

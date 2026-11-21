@@ -1,0 +1,201 @@
+@* The time bar (handoff D19, D20, E1, E3, B8d): step back, play, step forward, the date and time, a track with
+   day ticks, and Local/UTC; a second line with the product, dynamicity, issue time and step. Over the map at
+   the bottom centre; on a phone, two rows above the lowered sheet, docked into the sheet's top when it rises. *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<section class="time-bar" aria-label="Time" data-docked="@(Docked ? "true" : "false")" @ref="element">
+    @if (Notice is { } notice)
+    {
+        <div class="time-notice" role="status">
+            <Icon Name="warn" Size="14" />
+            <span class="time-notice-text">@notice.Text</span>
+            @if (notice.ActionLabel is { } action)
+            {
+                <button type="button" class="button time-notice-action" @onclick="() => Go(notice.ActionIndex)">@action</button>
+            }
+        </div>
+    }
+    <div class="time-main">
+        <div class="time-buttons">
+            <button type="button" class="icon-button" aria-label="Previous time step" title="Previous time step"
+                    disabled="@(shown <= 0)" @onclick="() => Go(shown - 1)">
+                @Glyph("step-back")
+            </button>
+            <button type="button" class="icon-button time-play" aria-label="@(Playing ? "Pause" : "Play")" title="@(Playing ? "Pause" : "Play, a step a second")"
+                    aria-pressed="@(Playing ? "true" : "false")" @onclick="() => PlayingChanged.InvokeAsync(!Playing)">
+                @Glyph(Playing ? "pause" : "play")
+            </button>
+            <button type="button" class="icon-button" aria-label="Next time step" title="Next time step"
+                    disabled="@(shown >= Times.Count - 1)" @onclick="() => Go(shown + 1)">
+                @Glyph("step-forward")
+            </button>
+        </div>
+        <div class="time-now" aria-live="polite">
+            <span class="time-date">@ServeTimes.FormatDate(Current, Zone)</span>
+            <span class="time-clock">@ServeTimes.FormatClock(Current, Zone)</span>
+        </div>
+        <div class="time-track">
+            <input type="range" class="time-range" min="0" max="@Math.Max(0, Times.Count - 1)" step="1" value="@shown"
+                   style="--progress: @Percent(Times.Count > 1 ? (double)shown / (Times.Count - 1) : 0)"
+                   aria-label="Time step" aria-valuetext="@(ServeTimes.FormatDate(Current, Zone) + ", " + ServeTimes.FormatClock(Current, Zone))"
+                   @oninput="Preview" @onchange="Commit" />
+            <div class="time-ticks" aria-hidden="true">
+                @foreach (var tick in ticks)
+                {
+                    <span class="time-tick" style="left: @Percent(tick.Fraction)">
+                        @if (tick.Label.Length > 0)
+                        {
+                            <span class="time-tick-label" data-edge="@(tick.Fraction < 0.08 ? "start" : tick.Fraction > 0.92 ? "end" : "none")">@tick.Label</span>
+                        }
+                    </span>
+                }
+            </div>
+        </div>
+        <div class="time-zone">
+            <Segmented Label="Times" Options="zoneOptions" Value="@ZoneValue(Utc)" ValueChanged="v => UtcChanged.InvokeAsync(IsUtc(v))" />
+        </div>
+    </div>
+    @if (Context is { } context)
+    {
+        <div class="time-context">
+            @foreach (var product in context.Products)
+            {
+                <span class="time-product">@product</span>
+            }
+            <span class="time-context-line">@context.Line</span>
+        </div>
+    }
+</section>
+
+@code {
+    internal static readonly SegmentedOption[] zoneOptions =
+    [
+        new("local", "Local"),
+        new("utc", "UTC"),
+    ];
+
+    /// <summary>The Local/UTC control's value.</summary>
+    internal static string ZoneValue(bool utc) => utc ? "utc" : "local";
+
+    /// <summary>Whether the Local/UTC control's value is UTC.</summary>
+    internal static bool IsUtc(string value) => value == "utc";
+
+    private IReadOnlyList<ServeDayTick> ticks = [];
+    private IReadOnlyList<DateTime>? ticksFor;
+    private ServeTimeZone? ticksZone;
+    private int shown;
+    private int? dragging;
+    private ElementReference element;
+    private bool observed;
+
+    /// <summary>The time steps (UTC, ascending); the bar isn't shown without them.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DateTime> Times { get; set; } = [];
+
+    /// <summary>The step shown.</summary>
+    [Parameter]
+    public int Index { get; set; }
+
+    /// <summary>A step was chosen.</summary>
+    [Parameter]
+    public EventCallback<int> IndexChanged { get; set; }
+
+    /// <summary>The zone times are shown in: the browser's, or UTC.</summary>
+    [Parameter, EditorRequired]
+    public ServeTimeZone Zone { get; set; } = ServeTimeZone.Utc;
+
+    /// <summary>Whether UTC is chosen over Local.</summary>
+    [Parameter]
+    public bool Utc { get; set; }
+
+    /// <summary>Local or UTC was chosen.</summary>
+    [Parameter]
+    public EventCallback<bool> UtcChanged { get; set; }
+
+    /// <summary>Whether the steps are playing.</summary>
+    [Parameter]
+    public bool Playing { get; set; }
+
+    /// <summary>Play or pause was pressed.</summary>
+    [Parameter]
+    public EventCallback<bool> PlayingChanged { get; set; }
+
+    /// <summary>The second line: products, dynamicity, issue time and step.</summary>
+    [Parameter]
+    public ServeStepContext? Context { get; set; }
+
+    /// <summary>The note when every step is in the past or the future (B8d).</summary>
+    [Parameter]
+    public ServeTimeNotice? Notice { get; set; }
+
+    /// <summary>Whether the bar is docked into the phone sheet's top.</summary>
+    [Parameter]
+    public bool Docked { get; set; }
+
+    private DateTime Current => Times.Count == 0 ? default : Times[Math.Clamp(shown, 0, Times.Count - 1)];
+
+    protected override void OnParametersSet()
+    {
+        shown = dragging ?? Index;
+        if (!ReferenceEquals(ticksFor, Times) || !ReferenceEquals(ticksZone, Zone))
+        {
+            ticks = ServeTimes.DayTicks(Times, Zone);
+            (ticksFor, ticksZone) = (Times, Zone);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Docked)
+            return;
+        await JS.InvokeVoidAsync("s100Time.observeBar", element);
+        observed = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (observed)
+                await JS.InvokeVoidAsync("s100Time.unobserveBar", element);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone, and the bar with it.
+        }
+    }
+
+    private Task Go(int index)
+    {
+        dragging = null;
+        index = Math.Clamp(index, 0, Math.Max(0, Times.Count - 1));
+        shown = index;
+        return index == Index ? Task.CompletedTask : IndexChanged.InvokeAsync(index);
+    }
+
+    // Dragging the track shows each step's time; letting go loads its tiles.
+    private void Preview(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+            shown = (dragging = Math.Clamp(index, 0, Math.Max(0, Times.Count - 1))).Value;
+    }
+
+    private Task Commit(ChangeEventArgs e) =>
+        int.TryParse(e.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ? Go(index) : Task.CompletedTask;
+
+    private static string Percent(double fraction) => (fraction * 100).ToString("0.###", CultureInfo.InvariantCulture) + "%";
+
+    // The transport glyphs, Lucide-style like Icon.
+    private static RenderFragment Glyph(string name) => builder =>
+    {
+        var path = name switch
+        {
+            "play" => """<path d="M7 4.5v15a.5.5 0 0 0 .77.42l11.5-7.5a.5.5 0 0 0 0-.84L7.77 4.08A.5.5 0 0 0 7 4.5z"/>""",
+            "pause" => """<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>""",
+            "step-back" => """<path d="M6 5v14"/><path d="M18 5.5v13a.5.5 0 0 1-.8.4l-8.6-6.5a.5.5 0 0 1 0-.8l8.6-6.5a.5.5 0 0 1 .8.4z"/>""",
+            _ => """<path d="M18 5v14"/><path d="M6 5.5v13a.5.5 0 0 0 .8.4l8.6-6.5a.5.5 0 0 0 0-.8L6.8 5.1a.5.5 0 0 0-.8.4z"/>""",
+        };
+        builder.AddMarkupContent(0, $"""<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{path}</svg>""");
+    };
+}

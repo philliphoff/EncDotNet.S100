@@ -161,6 +161,12 @@ public class S111PortrayalCatalogue : ICoverageStyle, IPortrayalCatalogue
     /// </summary>
     public const double NominalArrowLengthMillimetres = 10.0;
 
+    /// <summary>
+    /// The caption of the S-111 legend: the unit of the speed bands and how
+    /// the arrows encode speed.
+    /// </summary>
+    public const string LegendCaption = "Speed, kn \u00B7 longer arrow = faster";
+
     /// <inheritdoc/>
     /// <remarks>Always empty: S-111 is portrayed with arrow symbols only.</remarks>
     public IReadOnlyList<ContourStyle> Contours => [];

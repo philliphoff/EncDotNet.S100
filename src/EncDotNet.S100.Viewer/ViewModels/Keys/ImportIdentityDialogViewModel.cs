@@ -30,14 +30,15 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
     private string? _error;
     private string _name = "";
 
-    public ImportIdentityDialogViewModel(SecomIdentityStore store, Func<Task<string?>> pickFile, string? replacing = null, TimeProvider? time = null)
+    public ImportIdentityDialogViewModel(SecomIdentityStore store, Func<Task<string?>> pickFile, string? replacing, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(pickFile);
         _store = store;
         _pickFile = pickFile;
         _replacing = replacing;
-        _time = time ?? TimeProvider.System;
+        _time = time;
 
         PrimaryCommand = new RelayCommand(Primary, () => CanPrimary);
         BackCommand = new RelayCommand(Back);

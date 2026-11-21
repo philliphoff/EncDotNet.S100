@@ -80,7 +80,7 @@ public sealed class ExchangeSetServiceS100RootTests : IDisposable
     private static (DatasetsViewModel Datasets, ExchangeSetService Service) CreateSystem()
     {
         var datasets = new DatasetsViewModel(new NoopLoader());
-        return (datasets, new ExchangeSetService(datasets, Notifications.TestNotifications.Create()));
+        return (datasets, new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), lazyCoordinator: null, metadataReader: null, s57CatalogCache: null));
     }
 
     /// <summary>The fixture set zipped under <c>S100_ROOT/</c>.</summary>

@@ -25,7 +25,7 @@ internal sealed class IdentityPickerViewModel : ViewModelBase
     /// <summary>Creates a picker over <paramref name="directory"/>.</summary>
     /// <param name="directory">The identities to choose from.</param>
     /// <param name="manage">Opens Settings → Keys &amp; certificates → Identities ("Manage identities…").</param>
-    public IdentityPickerViewModel(SecomIdentityDirectory directory, Action? manage = null)
+    public IdentityPickerViewModel(SecomIdentityDirectory directory, Action? manage)
     {
         ArgumentNullException.ThrowIfNull(directory);
         _directory = directory;

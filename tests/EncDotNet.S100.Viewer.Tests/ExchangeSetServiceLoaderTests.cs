@@ -111,7 +111,7 @@ public class ExchangeSetServiceLoaderTests
     private static (DatasetsViewModel datasets, ExchangeSetService service) CreateSystem()
     {
         var datasets = new DatasetsViewModel(new NoopLoader());
-        var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create());
+        var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), lazyCoordinator: null, metadataReader: null, s57CatalogCache: null);
         return (datasets, service);
     }
 
@@ -122,11 +122,13 @@ public class ExchangeSetServiceLoaderTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var cache = new Services.Caching.DiskS57CatalogCache(cacheDir, 1_000_000);
+            var cache = new Services.Caching.DiskS57CatalogCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, 1_000_000, Services.Caching.DiskS57CatalogCache.KindOptions));
 
             var datasets1 = new DatasetsViewModel(new NoopLoader());
             using (var service1 = new ExchangeSetService(
-                datasets1, Notifications.TestNotifications.Create(), s57CatalogCache: cache))
+                datasets1, Notifications.TestNotifications.Create(), s57CatalogCache: cache,
+                lazyCoordinator: null,
+                metadataReader: null))
             {
                 var first = await service1.OpenAsync(S57FramedFixture(), cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(2, datasets1.Entries.Count);
@@ -141,7 +143,9 @@ public class ExchangeSetServiceLoaderTests
             // produce the same entries + framing.
             var datasets2 = new DatasetsViewModel(new NoopLoader());
             using (var service2 = new ExchangeSetService(
-                datasets2, Notifications.TestNotifications.Create(), s57CatalogCache: cache))
+                datasets2, Notifications.TestNotifications.Create(), s57CatalogCache: cache,
+                lazyCoordinator: null,
+                metadataReader: null))
             {
                 var second = await service2.OpenAsync(S57FramedFixture(), cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(2, datasets2.Entries.Count);
@@ -187,7 +191,10 @@ public class ExchangeSetServiceLoaderTests
         using var service = new ExchangeSetService(
             datasets,
             Notifications.TestNotifications.Create(),
-            maxConcurrentLoads: 1);
+            maxConcurrentLoads: 1,
+            lazyCoordinator: null,
+            metadataReader: null,
+            s57CatalogCache: null);
 
         var openTask = service.OpenAsync(MixedFixture(), cancellationToken: TestContext.Current.CancellationToken);
         await Task.Run(async () =>

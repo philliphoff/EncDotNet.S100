@@ -22,6 +22,19 @@ public sealed record RenderContext
     /// </summary>
     public IDepthAdjustment? DepthAdjustment { get; init; }
 
+    /// <summary>
+    /// Whether the chart's safety contour gets a halo in the palette's
+    /// background, so it stays the strongest line while another product
+    /// draws many contours over the chart (AML CLB, AML design handoff
+    /// decision 22). The contour keeps its weight and draw order.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-101 and S-57, which add the halo to the display list
+    /// after the portrayal rules (<see cref="EncDotNet.S100.Pipelines.Vector.SafetyContourHalo"/>), so it
+    /// never re-runs them. Other products ignore it.
+    /// </remarks>
+    public bool SafetyContourHalo { get; init; }
+
     /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>
     public PaletteType Palette { get; init; } = PaletteType.Day;
 
@@ -186,4 +199,22 @@ public sealed record RenderContext
     /// <c>null</c>.
     /// </remarks>
     public DateTime? TimeStep { get; init; }
+
+    /// <summary>
+    /// The time zone that times drawn on the chart are written in, such as a
+    /// tropical cyclone's forecast times; <see langword="null"/> for UTC. A
+    /// host sets the zone the user reads times in: SoundCharts passes the
+    /// machine's zone or UTC, as its Local/UTC preference says.
+    /// </summary>
+    public TimeZoneInfo? DisplayTimeZone { get; init; }
+
+    /// <summary>
+    /// How old <see cref="TimeStep"/> is at the map time, to the nearest hour, once
+    /// it is past the dataset's <see cref="TimeSemantics.StaleAfter"/>, or how
+    /// old the dataset is since it was issued once past its
+    /// <see cref="TimeSemantics.StaleAfterIssue"/>; <see langword="null"/> while
+    /// it is current or the dataset has no such limit. A processor draws stale
+    /// data as old (faded, or a storm with its age).
+    /// </summary>
+    public TimeSpan? TimeStepAge { get; init; }
 }

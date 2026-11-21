@@ -2,6 +2,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -11,7 +13,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 /// <remarks>
 /// Defaults are copied from the environment-backed
-/// <see cref="RenderingOptimizations"/> store when an instance is created.
+/// <see cref="ChartSessionOptions"/> store when an instance is created.
 /// Hosts can override individual values without mutating process-global state.
 /// Additional renderer settings will move onto this type incrementally as the
 /// reusable Mapsui session API evolves.
@@ -23,7 +25,7 @@ public sealed record S100MapsuiOptions
     /// renderer (tiled vs single-surface).
     /// </summary>
     public VectorSceneMode SceneMode { get; init; } =
-        RenderingOptimizations.SceneMode;
+        ChartEngine.Options.SceneMode;
 
     /// <summary>
     /// Gets the CRS transform factory used to build the default dataset renderer
@@ -103,6 +105,37 @@ public sealed record S100MapsuiOptions
     /// suits headless or single-threaded hosts.
     /// </summary>
     public Action<Action>? DynamicSourceMarshal { get; init; }
+
+    /// <summary>
+    /// Gets the post to the map-owning thread that a UI host supplies so the
+    /// session composes the layer stack off that thread (map rendering
+    /// slice 6). When a rendered cell arrives, the S-98 projection and overlap
+    /// suppression run as a job on the work scheduler, and the result is
+    /// applied to the map — display state, clips and the layer diff — in one
+    /// post through this marshal; cells that arrive meanwhile join the next
+    /// compose. When <see langword="null"/>, every compose runs inline on the
+    /// calling thread, which suits headless or single-threaded hosts.
+    /// </summary>
+    public Action<Action>? StackMarshal { get; init; }
+
+    /// <summary>
+    /// The options of the map's chart session (map rendering slice&#160;8):
+    /// prediction, cross-band pre-warm, metatiles, the warm disk cache and GPU
+    /// residency for the map's chart tiles. Defaults to the process-wide
+    /// <see cref="ChartEngine.Options"/>, which a host's settings write to.
+    /// </summary>
+    public ChartSessionOptions? ChartOptions { get; init; }
+
+    /// <summary>
+    /// The map's demand planner (map rendering slice&#160;9). The session
+    /// reports the map's views and the targets of the animations and flings
+    /// it starts to it, its chart tiles add the planner's predicted views to
+    /// their predicted tiles, and its chart stack holds a compose while the
+    /// planner's <see cref="DemandPlanner.Arrivals"/> are pending. A host's
+    /// cell loader reads cell demand from the same planner. A new planner when
+    /// <see langword="null"/>; read it back from <see cref="MapsuiMapNavigator.Planner"/>.
+    /// </summary>
+    public DemandPlanner? DemandPlanner { get; init; }
 
     /// <summary>
     /// Gets the resolver the session's dynamic-source host uses to find an

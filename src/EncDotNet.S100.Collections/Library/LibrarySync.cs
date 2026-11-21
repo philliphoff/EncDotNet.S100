@@ -101,7 +101,7 @@ public sealed class LibrarySync : IDisposable
     /// <param name="library">The library whose synced sources are kept current.</param>
     /// <param name="downloads">The downloads that hold the local copies.</param>
     /// <param name="options">Options; defaults when <see langword="null"/>.</param>
-    /// <param name="logger">A logger, or <see langword="null"/>.</param>
+    /// <param name="logger">A logger, or <see langword="null"/> for none.</param>
     /// <param name="timeProvider">The clock; defaults to <see cref="TimeProvider.System"/>.</param>
     /// <param name="policies">The sync rules per source kind; defaults to <see cref="SecomSyncPolicy"/> and <see cref="OnlineSyncPolicy"/>.</param>
     public LibrarySync(

@@ -52,6 +52,32 @@ internal static class DatasetInputResolver
         out IDisposable? exchangeSetResolution,
         string? specHint = null)
     {
+        var skipped = new List<SkippedDataset>();
+        var inputs = Resolve(input, layers, exchangeSet, only, skipped, out exchangeSetResolution, specHint);
+        warnings.AddRange(skipped.Select(s => s.Warning));
+        return inputs;
+    }
+
+    /// <summary>
+    /// Resolves the input grammar as <see cref="Resolve(string?, string[], string?, string?, List{string}, out IDisposable?, string?)"/>
+    /// does, keeping each dataset skipped with why (issue #1583) rather than its warning alone.
+    /// </summary>
+    /// <param name="input">The positional input (a single dataset, an exchange set or a plain folder of datasets), or <c>null</c>.</param>
+    /// <param name="layers">Repeated <c>--layer</c> paths; empty when unused.</param>
+    /// <param name="exchangeSet">Explicit <c>--from</c> exchange-set source, or <c>null</c>.</param>
+    /// <param name="only">Optional comma-separated spec filter for the exchange-set form.</param>
+    /// <param name="skipped">Accumulates the datasets skipped, in input order.</param>
+    /// <param name="exchangeSetResolution">Set to the disposable that owns any extracted exchange-set resources; <c>null</c> when none was opened.</param>
+    /// <param name="specHint">Optional product-spec hint for the single-file forms.</param>
+    public static List<FileDatasetInput> Resolve(
+        string? input,
+        string[] layers,
+        string? exchangeSet,
+        string? only,
+        List<SkippedDataset> skipped,
+        out IDisposable? exchangeSetResolution,
+        string? specHint = null)
+    {
         exchangeSetResolution = null;
         var inputs = new List<FileDatasetInput>();
         var usedIds = new HashSet<string>(StringComparer.Ordinal);
@@ -65,17 +91,17 @@ internal static class DatasetInputResolver
 
         IReadOnlySet<string>? onlySpecs = string.IsNullOrWhiteSpace(only) ? null : ParseOnlySpecs(only);
         foreach (var source in exchangeSets)
-            AddExchangeSet(source, onlySpecs, inputs, usedIds, warnings, resolutions);
+            AddExchangeSet(source, onlySpecs, inputs, usedIds, skipped, resolutions);
 
         if (!positionalIsExchangeSet && !string.IsNullOrWhiteSpace(input) && Directory.Exists(input))
-            AddFolder(input, onlySpecs, inputs, usedIds, warnings, resolutions);
+            AddFolder(input, onlySpecs, inputs, usedIds, skipped, resolutions);
 
         var paths = layers.Concat(!positionalIsExchangeSet && !string.IsNullOrWhiteSpace(input) && !Directory.Exists(input) ? [input!] : []);
         foreach (var path in paths)
         {
             if (!File.Exists(path))
             {
-                warnings.Add($"Skipped missing dataset file: {path}");
+                skipped.Add(SkippedDataset.Missing(path, path));
                 continue;
             }
 
@@ -86,7 +112,7 @@ internal static class DatasetInputResolver
                 : DatasetPipelineFactory.DetectProductSpec(path);
             if (spec is null)
             {
-                warnings.Add(UnrecognizedDatasetMessage.Skipped(path));
+                skipped.Add(SkippedDataset.Unrecognized(path));
                 continue;
             }
 
@@ -106,11 +132,11 @@ internal static class DatasetInputResolver
 
     private static void AddExchangeSet(
         string source, IReadOnlySet<string>? onlySpecs, List<FileDatasetInput> inputs, HashSet<string> usedIds,
-        List<string> warnings, List<IDisposable> resolutions, string? idPrefix = null)
+        List<SkippedDataset> skipped, List<IDisposable> resolutions, string? idPrefix = null)
     {
         var resolution = ExchangeSetLayerResolution.Resolve(source, onlySpecs);
         resolutions.Add(resolution);
-        warnings.AddRange(resolution.Warnings);
+        skipped.AddRange(resolution.Skipped);
 
         foreach (var layer in resolution.Layers)
         {
@@ -131,7 +157,7 @@ internal static class DatasetInputResolver
     /// </summary>
     private static void AddFolder(
         string folder, IReadOnlySet<string>? onlySpecs, List<FileDatasetInput> inputs, HashSet<string> usedIds,
-        List<string> warnings, List<IDisposable> resolutions)
+        List<SkippedDataset> skipped, List<IDisposable> resolutions)
     {
         var root = Path.GetFullPath(folder);
         var pending = new Stack<string>();
@@ -143,7 +169,7 @@ internal static class DatasetInputResolver
             var relative = Path.GetRelativePath(root, directory).Replace(Path.DirectorySeparatorChar, '/');
             if (directory != root && ExchangeSetInput.LooksLikeExchangeSet(directory))
             {
-                AddExchangeSet(directory, onlySpecs, inputs, usedIds, warnings, resolutions, relative);
+                AddExchangeSet(directory, onlySpecs, inputs, usedIds, skipped, resolutions, relative);
                 continue;
             }
 
@@ -167,14 +193,25 @@ internal static class DatasetInputResolver
                     // A tropical cyclone advisory folder's zips are the folder's dataset (#1294).
                     if (isRun && EncDotNet.S100.Datasets.TropicalCyclones.NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(file), out _, out _, out _))
                         continue;
-                    warnings.Add($"Skipped archive in a folder (open it directly): {file}");
+                    skipped.Add(new SkippedDataset(
+                        file,
+                        SkippedDatasetKind.Unsupported,
+                        "Skipped: an archive in a folder. Serve it on its own.",
+                        $"Skipped archive in a folder (open it directly): {file}"));
                     continue;
                 }
                 if (!FolderDatasetExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
                     continue;
 
                 var spec = DatasetPipelineFactory.DetectProductSpec(file);
-                if (spec is null || (onlySpecs is not null && !onlySpecs.Contains(NormalizeOnlyToken(spec))))
+                if (spec is null)
+                {
+                    // A dataset's extension that no product claims: said, as a single file is.
+                    skipped.Add(SkippedDataset.Unrecognized(file));
+                    continue;
+                }
+
+                if (onlySpecs is not null && !onlySpecs.Contains(NormalizeOnlyToken(spec)))
                     continue;
 
                 var id = UniqueId(Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'), usedIds);

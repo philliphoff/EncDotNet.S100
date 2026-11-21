@@ -46,6 +46,30 @@ public enum KnownCatalogueFormat
     Weather,
 }
 
+/// <summary>
+/// The kind of data a <see cref="KnownCatalogueSource"/> offers: the first
+/// grouping when browsing sources. Set explicitly per entry in the curated
+/// list, because format and kind disagree in places (ERDDAP current feeds are
+/// weather services but sit with weather and ocean, not with S-111).
+/// </summary>
+public enum KnownCatalogueCategory
+{
+    /// <summary>Charts: ENC catalogues and chart lists.</summary>
+    Charts,
+
+    /// <summary>Depth, tides and currents: S-102, S-104 and S-111 products.</summary>
+    Depth,
+
+    /// <summary>Weather and ocean: forecasts, warnings, analyses and observations.</summary>
+    Weather,
+
+    /// <summary>SECOM services, curated or listed from a service registry.</summary>
+    Secom,
+
+    /// <summary>The user's own sources: added by URL, or a shared feed they connected to.</summary>
+    User,
+}
+
 /// <summary>What coverage a catalogue publishes for its cells.</summary>
 public enum KnownCatalogueCoverage
 {
@@ -111,6 +135,12 @@ public sealed record KnownCatalogueSource(
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? ServiceMrn { get; init; }
+
+    /// <summary>
+    /// The kind of data the source offers. The curated list sets it per entry;
+    /// otherwise it follows <see cref="Format"/> (see <see cref="KnownCatalogueSources.CategoryOf"/>).
+    /// </summary>
+    public KnownCatalogueCategory Category { get; init; } = KnownCatalogueSources.CategoryOf(Format);
 }
 
 /// <summary>
@@ -138,6 +168,19 @@ public static partial class KnownCatalogueSources
     /// <summary>Finds a built-in source by <see cref="KnownCatalogueSource.Id"/>.</summary>
     public static KnownCatalogueSource? Find(string id) =>
         All.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The category a source of <paramref name="format"/> falls in when its
+    /// entry does not say: chart formats are charts, S-100 exchange catalogues
+    /// and forecast feeds are depth, tides and currents.
+    /// </summary>
+    public static KnownCatalogueCategory CategoryOf(KnownCatalogueFormat format) => format switch
+    {
+        KnownCatalogueFormat.S100ExchangeCatalogue or KnownCatalogueFormat.S100ForecastModels => KnownCatalogueCategory.Depth,
+        KnownCatalogueFormat.Weather => KnownCatalogueCategory.Weather,
+        KnownCatalogueFormat.Secom => KnownCatalogueCategory.Secom,
+        _ => KnownCatalogueCategory.Charts,
+    };
 
     /// <summary>
     /// Reads a known-sources document (the embedded list, or a newer copy).
@@ -174,7 +217,10 @@ public static partial class KnownCatalogueSources
                 s.Pilot,
                 ToService(s.Weather),
                 string.IsNullOrWhiteSpace(s.Licence) ? null : s.Licence.Trim(),
-                string.IsNullOrWhiteSpace(s.Attribution) ? null : s.Attribution.Trim()))
+                string.IsNullOrWhiteSpace(s.Attribution) ? null : s.Attribution.Trim())
+            {
+                Category = s.Category ?? CategoryOf(s.Format.Value),
+            })
             .Where(s => s.Format != KnownCatalogueFormat.S100ForecastModels || s.Models.Count > 0)
             .Where(s => s.Format != KnownCatalogueFormat.Weather || s.Weather is { IsUsable: true })
             .ToArray();
@@ -196,7 +242,8 @@ public static partial class KnownCatalogueSources
             s.Pilot,
             FromService(s.Weather),
             s.Licence,
-            s.Attribution))
+            s.Attribution,
+            s.Category))
             .ToArray());
         JsonSerializer.Serialize(stream, document, WriteJson.Document);
     }
@@ -204,7 +251,7 @@ public static partial class KnownCatalogueSources
     /// <summary>
     /// Describes a catalogue the user added by URL (issue #670), with what
     /// its format provides: its title (or the host) as the name, the host as
-    /// the provider, and the region "Custom".
+    /// the provider, the region "Custom" and the category <see cref="KnownCatalogueCategory.User"/>.
     /// </summary>
     public static KnownCatalogueSource FromUrl(Uri catalogUri, KnownCatalogueFormat format, string? title = null)
     {
@@ -233,7 +280,10 @@ public static partial class KnownCatalogueSources
             coverage,
             editions,
             sizes,
-            null);
+            null)
+        {
+            Category = KnownCatalogueCategory.User,
+        };
     }
 
     /// <summary>The region user-added catalogues are listed under.</summary>
@@ -271,6 +321,7 @@ public static partial class KnownCatalogueSources
             Pilot: service.Status != Secom.SecomRegistryStatus.Released)
         {
             ServiceMrn = service.InstanceId,
+            Category = KnownCatalogueCategory.Secom,
         };
     }
 
@@ -281,6 +332,7 @@ public static partial class KnownCatalogueSources
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new LenientEnumConverter<KnownCatalogueFormat>());
         options.Converters.Add(new LenientEnumConverter<KnownCatalogueCoverage>());
+        options.Converters.Add(new LenientEnumConverter<KnownCatalogueCategory>());
         return options;
     }
 
@@ -307,7 +359,8 @@ public static partial class KnownCatalogueSources
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Pilot = false,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WeatherEntry? Weather = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Licence = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Attribution = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Attribution = null,
+        KnownCatalogueCategory? Category = null);
 
     private sealed record WeatherEntry(
         string? Service,
@@ -321,13 +374,19 @@ public static partial class KnownCatalogueSources
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DefaultHours = 0,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double GridDegrees = 0,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherParameterEntry>? Parameters = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherDatasetEntry>? Datasets = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherDatasetEntry>? Datasets = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double StaleAfterHours = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double RefreshHours = 0);
 
     private sealed record WeatherParameterEntry(
         string? Id, string? Name, string? Level, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false);
 
     private sealed record WeatherDatasetEntry(
-        string? Id, string? Name, IReadOnlyList<string>? Variables, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false);
+        string? Id,
+        string? Name,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Variables,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? File = null);
 
     private static WeatherService? ToService(WeatherEntry? entry)
     {
@@ -349,10 +408,13 @@ public static partial class KnownCatalogueSources
                 .Select(p => new WeatherServiceParameter(p.Id!, p.Name is { Length: > 0 } n ? n : p.Id!, p.Level!, p.Default))
                 .ToArray(),
             (entry.Datasets ?? [])
-                .Where(d => d.Id is { Length: > 0 } && d.Variables is { Count: > 0 })
+                .Where(d => d.Id is { Length: > 0 } && (d.Variables is { Count: > 0 } || d.File is { Length: > 0 }))
                 .Select(d => new WeatherServiceDataset(d.Id!, d.Name is { Length: > 0 } n ? n : d.Id!,
-                    d.Variables!.Where(v => v is { Length: > 0 }).ToArray(), d.Default))
-                .ToArray());
+                    (d.Variables ?? []).Where(v => v is { Length: > 0 }).ToArray(), d.Default,
+                    string.IsNullOrWhiteSpace(d.File) ? null : d.File.Trim()))
+                .ToArray(),
+            entry.StaleAfterHours > 0 ? entry.StaleAfterHours : 0,
+            entry.RefreshHours > 0 ? entry.RefreshHours : 0);
     }
 
     private static WeatherEntry? FromService(WeatherService? service) => service is null
@@ -369,7 +431,11 @@ public static partial class KnownCatalogueSources
             service.DefaultHours,
             service.GridDegrees,
             service.Parameters.Count == 0 ? null : service.Parameters.Select(p => new WeatherParameterEntry(p.Id, p.Name, p.Level, p.Default)).ToArray(),
-            service.Datasets.Count == 0 ? null : service.Datasets.Select(d => new WeatherDatasetEntry(d.Id, d.Name, d.Variables, d.Default)).ToArray());
+            service.Datasets.Count == 0
+                ? null
+                : service.Datasets.Select(d => new WeatherDatasetEntry(d.Id, d.Name, d.Variables.Count == 0 ? null : d.Variables, d.Default, d.File)).ToArray(),
+            service.StaleAfterHours,
+            service.RefreshHours);
 
     private sealed record ModelEntry(
         string? Id,

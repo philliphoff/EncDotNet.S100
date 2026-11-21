@@ -24,7 +24,8 @@ public readonly record struct SymbolAsset(
 /// <see cref="DrawingInstruction"/>s plus an <see cref="IFeatureGeometryProvider"/>)
 /// into a resolved <see cref="VectorScene"/>: instructions are sorted into
 /// Part 9 draw order, colours/symbols/line-styles are resolved, sizes are
-/// converted from millimetres to display pixels (<c>1 px = 0.32 mm</c>), and
+/// converted from millimetres to display pixels by the <see cref="SizeProfile"/>
+/// (by default <c>1 px = 0.32 mm</c>), and
 /// geometry is projected to EPSG:3857. The result is consumed by both the
 /// headless <c>SkiaDisplayListRenderer</c> and the Mapsui renderer so
 /// the S-100 portrayal-correctness logic lives in exactly one place.
@@ -92,6 +93,14 @@ public sealed class VectorSceneBuilder
     /// <summary>Global scale factor applied to all point symbols (default 1.0).</summary>
     public double SymbolScale { get; init; } = 1.0;
 
+    /// <summary>
+    /// The factors that turn S-100 Part 9 millimetres and points into display
+    /// pixels. Defaults to <see cref="SymbolSizeProfile.Screen"/>, the viewer's
+    /// sizes; use <see cref="SymbolSizeProfile.Part9Millimetres"/> for physical
+    /// sizes in print.
+    /// </summary>
+    public SymbolSizeProfile SizeProfile { get; init; } = SymbolSizeProfile.Screen;
+
     /// <summary>Global scale factor applied to all text labels (default 1.0).</summary>
     public double TextScale { get; init; } = 1.0;
 
@@ -154,39 +163,27 @@ public sealed class VectorSceneBuilder
     /// <summary>Builds a resolved scene from the supplied display list and geometry.</summary>
     public VectorScene Build(
         IReadOnlyList<DrawingInstruction> instructions,
-        IFeatureGeometryProvider geometryProvider)
+        IFeatureGeometryProvider geometryProvider) =>
+        Build(instructions, geometryProvider, patternRegions: null);
+
+    /// <summary>
+    /// Builds a resolved scene and, when <paramref name="patternRegions"/> is
+    /// supplied, adds to it the priority-clipped pattern regions the scene's
+    /// <see cref="PatternAreaPaintOp"/>s are rebuilt from.
+    /// </summary>
+    internal VectorScene Build(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider,
+        List<PatternRegion>? patternRegions)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
 
-        // S-100 Part 9 draw order: display plane, then drawing priority, then the
-        // geometry rule within a priority (areas, pattern fills, lines, points,
-        // text). A higher-priority area therefore covers a lower-priority line
-        // (#1126). The sort is stable, so ties keep display-list order.
-        var sorted = instructions
-            .OrderBy(i => i.Plane == EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
-            .ThenBy(i => i.DrawingPriority)
-            .ThenBy(i => i switch
-            {
-                AreaInstruction { AreaFillReference: not null } => 1,
-                AreaInstruction => 0,
-                LineInstruction => 2,
-                PointInstruction => 3,
-                TextInstruction => 4,
-                _ => 5,
-            })
-            .ToList();
+        var sorted = DrawOrder(instructions);
 
         // Where lines of different features share an edge, the one drawn last
         // hides the others there (S-100 Part 9 line suppression).
-        var suppressed = LineSuppression.Apply(sorted, line =>
-        {
-            if (line.CoordinatesOverride is { } coordinates)
-                return [coordinates];
-            if (geometryProvider.GetGeometry(line.FeatureReference) is not { Coordinates.Count: > 0 } lineGeometry)
-                return null;
-            return lineGeometry.Parts.Count > 1 ? lineGeometry.Parts : [lineGeometry.Coordinates];
-        });
+        var suppressed = LineSuppression.Apply(sorted, line => LinePolylines(line, geometryProvider));
 
         // Where each surface's point symbols and text go, worked out once per
         // feature (S-100 Part 9 AreaPlacement).
@@ -199,7 +196,7 @@ public sealed class VectorSceneBuilder
         }
 
         var ops = new List<PaintOp>(sorted.Count);
-        var patternPriorities = new List<(PatternAreaPaintOp Op, int Priority)>();
+        var patternPriorities = new List<(PatternAreaPaintOp Op, AreaInstruction Instruction)>();
         HashSet<string>? featuresWithPatterns = null;
 
         foreach (var instruction in sorted)
@@ -214,7 +211,13 @@ public sealed class VectorSceneBuilder
             if (instruction is LineInstruction keptLine && suppressed.TryGetValue(keptLine, out var keptPolylines))
             {
                 foreach (var polyline in keptPolylines)
-                    ops.AddRange(BuildLine(keptLine, polyline));
+                {
+                    foreach (var op in BuildLine(keptLine, polyline))
+                    {
+                        op.Instruction = keptLine;
+                        ops.Add(op);
+                    }
+                }
                 continue;
             }
 
@@ -256,9 +259,10 @@ public sealed class VectorSceneBuilder
 
             foreach (var op in built)
             {
+                op.Instruction = instruction;
                 ops.Add(op);
-                if (op is PatternAreaPaintOp patternOp)
-                    patternPriorities.Add((patternOp, instruction.DrawingPriority));
+                if (op is PatternAreaPaintOp patternOp && instruction is AreaInstruction patternInstruction)
+                    patternPriorities.Add((patternOp, patternInstruction));
             }
         }
 
@@ -267,9 +271,47 @@ public sealed class VectorSceneBuilder
         // path via PatternPriorityClipper) so the headless Skia backend and the
         // Mapsui TiledScene subsystem clip identically to the Mapsui feature arm.
         if (patternPriorities.Count > 0)
-            ClipPatternAreas(ops, patternPriorities, featuresWithPatterns);
+            ClipPatternAreas(ops, patternPriorities, featuresWithPatterns, patternRegions);
 
         return new VectorScene(ops) { ScaleMinimumCap = OutOfBandMinDisplayScale, PreferLiveDrawing = PreferLiveDrawing };
+    }
+
+    /// <summary>
+    /// Sorts a display list into S-100 Part 9 draw order: display plane, then
+    /// drawing priority, then the geometry rule within a priority (areas,
+    /// pattern fills, lines, points, text). A higher-priority area therefore
+    /// covers a lower-priority line (#1126). The sort is stable, so ties keep
+    /// display-list order.
+    /// </summary>
+    internal static List<DrawingInstruction> DrawOrder(IReadOnlyList<DrawingInstruction> instructions) =>
+        instructions
+            .OrderBy(i => i.Plane == EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
+            .ThenBy(i => i.DrawingPriority)
+            .ThenBy(i => i switch
+            {
+                AreaInstruction { AreaFillReference: not null } => 1,
+                AreaInstruction => 0,
+                LineInstruction => 2,
+                PointInstruction => 3,
+                TextInstruction => 4,
+                _ => 5,
+            })
+            .ToList();
+
+    /// <summary>
+    /// The polylines a line instruction draws: its coordinates override, else
+    /// each part of its feature's geometry, or <see langword="null"/> when it
+    /// has none.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<GeoPosition>>? LinePolylines(
+        LineInstruction line,
+        IFeatureGeometryProvider geometryProvider)
+    {
+        if (line.CoordinatesOverride is { } coordinates)
+            return [coordinates];
+        if (geometryProvider.GetGeometry(line.FeatureReference) is not { Coordinates.Count: > 0 } lineGeometry)
+            return null;
+        return lineGeometry.Parts.Count > 1 ? lineGeometry.Parts : [lineGeometry.Coordinates];
     }
 
     private static readonly GeometryFactory ClipGeometryFactory = new();
@@ -292,8 +334,9 @@ public sealed class VectorSceneBuilder
     /// </remarks>
     private void ClipPatternAreas(
         List<PaintOp> ops,
-        List<(PatternAreaPaintOp Op, int Priority)> patternPriorities,
-        HashSet<string>? featuresWithPatterns)
+        List<(PatternAreaPaintOp Op, AreaInstruction Instruction)> patternPriorities,
+        HashSet<string>? featuresWithPatterns,
+        List<PatternRegion>? patternRegions)
     {
         // Fully-opaque non-patterned solid colour fills (e.g. land) occlude
         // patterns. Translucent fills (alpha < 255 — an AreaInstruction's
@@ -325,9 +368,13 @@ public sealed class VectorSceneBuilder
         var groupTemplates = new Dictionary<(string, int), PatternGroupTemplate>(PatternGroupKeyComparer);
         var unclippable = new List<PatternAreaPaintOp>();
         var priorityOf = new Dictionary<PatternAreaPaintOp, int>(ReferenceEqualityComparer.Instance);
+        var groupInstructions = patternRegions is null
+            ? null
+            : new Dictionary<(string, int), List<AreaInstruction>>(PatternGroupKeyComparer);
 
-        foreach (var (op, priority) in patternPriorities)
+        foreach (var (op, instruction) in patternPriorities)
         {
+            int priority = instruction.DrawingPriority;
             priorityOf[op] = priority;
             var polygon = CreatePolygon(op.WorldShell, op.WorldHoles);
             if (polygon is null)
@@ -352,6 +399,15 @@ public sealed class VectorSceneBuilder
             }
 
             list.Add(polygon);
+
+            if (groupInstructions is not null)
+            {
+                if (!groupInstructions.TryGetValue(key, out var members))
+                    groupInstructions[key] = members = [];
+                // A multi-part surface lowers to several ops of one instruction.
+                if (!members.Contains(instruction, ReferenceEqualityComparer.Instance))
+                    members.Add(instruction);
+            }
         }
 
         // The shared clipper requires entries pre-sorted ascending by priority.
@@ -381,6 +437,12 @@ public sealed class VectorSceneBuilder
                 : (PatternGroupTemplate?)null;
             if (template is null)
                 continue;
+
+            if (groupInstructions is not null
+                && groupInstructions.TryGetValue((patternRef, priority), out var members))
+            {
+                patternRegions!.Add(new PatternRegion(patternRef, priority, members, geometry));
+            }
 
             foreach (var (shell, holes) in EnumeratePolygonRings(geometry))
             {
@@ -694,7 +756,7 @@ public sealed class VectorSceneBuilder
             }
         }
 
-        var widthPx = width > 0 ? (width / S100PixelSizeMm) : 0.0;
+        var widthPx = width > 0 ? (width / SizeProfile.MillimetresPerPixel) : 0.0;
         widthPx = Math.Max(widthPx, 1.0);
 
         IReadOnlyList<float>? dashArray = null;
@@ -715,7 +777,7 @@ public sealed class VectorSceneBuilder
             }
 
             var interval = instruction.DashIntervalLength > end ? instruction.DashIntervalLength : end * 2;
-            (dashArray, dashPhase) = BuildDashArray(flat, interval);
+            (dashArray, dashPhase) = BuildDashArray(flat, interval, SizeProfile.MillimetresPerPixel);
         }
         else if (dashed)
         {
@@ -748,10 +810,10 @@ public sealed class VectorSceneBuilder
     private IEnumerable<PaintOp> BuildStyledLine(
         LineInstruction instruction, IReadOnlyList<GeoPosition> coords, LineStyle style)
     {
-        var widthPx = Math.Max(style.Width / S100PixelSizeMm, 1.0);
+        var widthPx = Math.Max(style.Width / SizeProfile.MillimetresPerPixel, 1.0);
         var interval = style.IntervalLength > 0 ? style.IntervalLength : DashPatternEnd(style.DashPattern);
 
-        var (dashArray, dashPhase) = BuildDashArray(style.DashPattern, interval);
+        var (dashArray, dashPhase) = BuildDashArray(style.DashPattern, interval, SizeProfile.MillimetresPerPixel);
 
         var symbols = new List<LineSymbolPlacement>(style.Symbols.Count);
         if (SymbolResolver is not null && interval > 0)
@@ -761,9 +823,10 @@ public sealed class VectorSceneBuilder
                 if (SymbolResolver(placed.Reference) is not { } asset)
                     continue;
                 symbols.Add(new LineSymbolPlacement(
-                    new ResolvedSymbol(asset.ProcessedSvg, LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
-                    placed.Position / S100PixelSizeMm,
-                    placed.Rotation));
+                    new ResolvedSymbol(asset.ProcessedSvg, SizeProfile.LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
+                    placed.Position / SizeProfile.MillimetresPerPixel,
+                    placed.Rotation,
+                    placed.Reference));
             }
         }
 
@@ -785,18 +848,10 @@ public sealed class VectorSceneBuilder
                 DashPhasePx = dashPhase,
                 Stroke = style.HasPen,
                 Symbols = symbols,
-                SymbolIntervalPx = interval / S100PixelSizeMm,
+                SymbolIntervalPx = interval / SizeProfile.MillimetresPerPixel,
             };
         }
     }
-
-    /// <summary>
-    /// Scale for symbols placed along a line. The symbol pictures come out at
-    /// 96 DPI, while a line style's positions and dashes are millimetres at
-    /// 0.32 mm per pixel; this sizes the symbols in the line's own millimetres
-    /// so they fit the gaps the style leaves for them.
-    /// </summary>
-    private static readonly double LineSymbolScale = 1 / S100PixelSizeMm / (96 / 25.4);
 
     /// <summary>The end of a line style's last dash, in millimetres: its interval when the file gives none.</summary>
     private static double DashPatternEnd(float[]? dashes)
@@ -816,7 +871,8 @@ public sealed class VectorSceneBuilder
     /// that dash at its start within the interval. Returns no array for a solid
     /// line.
     /// </summary>
-    internal static (IReadOnlyList<float>? DashArray, double Phase) BuildDashArray(float[]? dashes, double intervalMm)
+    internal static (IReadOnlyList<float>? DashArray, double Phase) BuildDashArray(
+        float[]? dashes, double intervalMm, double millimetresPerPixel = S100PixelSizeMm)
     {
         if (dashes is null || dashes.Length < 2 || intervalMm <= 0)
             return (null, 0);
@@ -838,38 +894,25 @@ public sealed class VectorSceneBuilder
             var (start, length) = pairs[i];
             var nextStart = i + 1 < pairs.Count ? pairs[i + 1].Start : pairs[0].Start + intervalMm;
             var gap = Math.Max(nextStart - (start + length), 0);
-            array.Add((float)Math.Max(length / S100PixelSizeMm, 0.5));
-            array.Add((float)Math.Max(gap / S100PixelSizeMm, 0.5));
+            array.Add((float)Math.Max(length / millimetresPerPixel, 0.5));
+            array.Add((float)Math.Max(gap / millimetresPerPixel, 0.5));
         }
 
         // The pattern starts at the first dash; the line starts that far
         // before it in the interval.
-        var phase = (intervalMm - pairs[0].Start) % intervalMm / S100PixelSizeMm;
+        var phase = (intervalMm - pairs[0].Start) % intervalMm / millimetresPerPixel;
         return (array, phase);
     }
 
     private PointPaintOp BuildPoint(
         PointInstruction instruction, FeatureGeometry geometry, Func<FeatureGeometry, SurfacePlacement?> placementOf)
     {
-        (double X, double Y) world;
-        PlacementArea? placementArea = null;
-        if (instruction.CoordinateOverride is { } anchor)
-        {
-            world = ProjectAnchor(anchor.Latitude, anchor.Longitude);
-        }
-        else if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
-        {
-            world = placement.Anchor;
-            if (instruction.AreaPlacement == AreaPlacementMode.VisibleParts)
-                placementArea = placement.Area;
-        }
-        else
-        {
-            world = ProjectAnchor(geometry.Coordinates[0].Latitude, geometry.Coordinates[0].Longitude);
-        }
+        var (world, placementArea, anchorPlacement) = ResolveAnchor(
+            geometry, instruction.CoordinateOverride, instruction.LinePlacementPosition,
+            instruction.AreaPlacement, forText: false, placementOf)!.Value;
 
-        var symOffsetXpx = instruction.LocalOffsetX / S100PixelSizeMm;
-        var symOffsetYpx = instruction.LocalOffsetY / S100PixelSizeMm;
+        var symOffsetXpx = instruction.LocalOffsetX / SizeProfile.MillimetresPerPixel;
+        var symOffsetYpx = instruction.LocalOffsetY / SizeProfile.MillimetresPerPixel;
 
         SymbolAsset? asset = null;
         if (!string.IsNullOrEmpty(instruction.SymbolReference) && SymbolResolver is not null)
@@ -878,7 +921,7 @@ public sealed class VectorSceneBuilder
         ResolvedSymbol? symbol = asset is { } a
             ? new ResolvedSymbol(
                 a.ProcessedSvg,
-                0.6 * instruction.SymbolScale * SymbolScale,
+                SizeProfile.PointSymbolScale * instruction.SymbolScale * SymbolScale,
                 a.PivotRelativeX,
                 a.PivotRelativeY)
             : null;
@@ -890,9 +933,10 @@ public sealed class VectorSceneBuilder
             ScaleMaximum = instruction.ScaleMaximum,
             World = world,
             PlacementArea = placementArea,
+            Placement = anchorPlacement,
             Symbol = symbol,
             FallbackColor = ColorResolver.ResolveSymbolColor(instruction.SymbolReference, ResolveColor),
-            FallbackScale = 0.15 * instruction.SymbolScale * SymbolScale,
+            FallbackScale = SizeProfile.FallbackDotScale * instruction.SymbolScale * SymbolScale,
             Rotation = instruction.Rotation,
             RotationCrs = instruction.RotationCrs,
             OffsetXpx = symOffsetXpx,
@@ -903,52 +947,17 @@ public sealed class VectorSceneBuilder
     private TextPaintOp? BuildText(
         TextInstruction instruction, FeatureGeometry geometry, Func<FeatureGeometry, SurfacePlacement?> placementOf)
     {
-        // Text on a curve or surface with several parts goes on its longest
-        // curve or largest surface: the joined Coordinates would put it on a
-        // gap, or at a centroid outside every part (issue #643).
-        var coords = geometry.Parts.Count > 1
-            ? geometry.Type == GeometryType.Surface
-                ? geometry.Parts.MaxBy(RingArea)!
-                : geometry.Parts.MaxBy(PolylineLength)!
-            : geometry.Coordinates;
         if (string.IsNullOrEmpty(instruction.Text))
             return null;
 
-        (double X, double Y) world;
-        PlacementArea? placementArea = null;
-        if (instruction.CoordinateOverride is { } anchor)
-        {
-            world = ProjectAnchor(anchor.Latitude, anchor.Longitude);
-        }
-        else if (coords.Count == 0)
+        if (ResolveAnchor(
+                geometry, instruction.CoordinateOverride, instruction.LinePlacementPosition,
+                instruction.AreaPlacement, forText: true, placementOf) is not { } resolved)
         {
             return null;
         }
-        else if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
-            && geometry.Type == GeometryType.Curve)
-        {
-            var (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
-            world = ProjectAnchor(lat, lon);
-        }
-        else if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
-        {
-            world = placement.Anchor;
-            if (instruction.AreaPlacement == AreaPlacementMode.VisibleParts)
-                placementArea = placement.Area;
-        }
-        else if (geometry.Type == GeometryType.Surface && coords.Count >= 3)
-        {
-            var (lat, lon) = ComputeRingCentroid(coords);
-            world = ProjectAnchor(lat, lon);
-        }
-        else if (geometry.Type == GeometryType.Curve && coords.Count >= 2)
-        {
-            world = ProjectAnchor(coords[coords.Count / 2].Latitude, coords[coords.Count / 2].Longitude);
-        }
-        else
-        {
-            world = ProjectAnchor(coords[0].Latitude, coords[0].Longitude);
-        }
+
+        var (world, placementArea, anchorPlacement) = resolved;
 
         var foreColor = ColorResolver.ApplyTransparency(
             ResolveColor(instruction.FontColor), instruction.FontTransparency);
@@ -967,59 +976,154 @@ public sealed class VectorSceneBuilder
             ScaleMaximum = instruction.ScaleMaximum,
             World = world,
             PlacementArea = placementArea,
+            Placement = anchorPlacement,
             Text = instruction.Text,
-            FontSizePx = instruction.FontSize * TextScale,
+            FontSizePx = instruction.FontSize * SizeProfile.PixelsPerFontPoint * TextScale,
             ForeColor = foreColor,
             BackColor = backColor,
             HorizontalAlignment = instruction.HorizontalAlignment,
             VerticalAlignment = instruction.VerticalAlignment,
-            OffsetXpx = (instruction.OffsetX ?? 0) / S100PixelSizeMm,
-            OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
+            OffsetXpx = (instruction.OffsetX ?? 0) / SizeProfile.MillimetresPerPixel,
+            OffsetYpx = (instruction.OffsetY ?? 0) / SizeProfile.MillimetresPerPixel,
             FontWeight = instruction.FontWeight,
             FontProportion = instruction.FontProportion,
+            FontSlant = instruction.FontSlant,
             HaloColor = string.IsNullOrEmpty(instruction.HaloColor) ? null : ResolveColor(instruction.HaloColor),
-            HaloWidthPx = instruction.HaloWidth / S100PixelSizeMm * TextScale,
+            HaloWidthPx = instruction.HaloWidth / SizeProfile.MillimetresPerPixel * TextScale,
         };
+    }
+
+    /// <summary>
+    /// The anchor a point symbol or text is drawn at (S-100 Part 9 §11.4/§11.5
+    /// <c>AugmentedPoint</c>, <c>LinePlacement</c> and <c>AreaPlacement</c>),
+    /// the surface a live view keeps it in, and how it was chosen. Point
+    /// symbols and text share it, so they land on the same spot; text has its
+    /// own fallbacks on a curve or surface. Null when there is nowhere to put text.
+    /// </summary>
+    private static ((double X, double Y) World, PlacementArea? Area, AnchorPlacement Placement)? ResolveAnchor(
+        FeatureGeometry geometry,
+        GeoPosition? coordinateOverride,
+        double? linePlacementPosition,
+        AreaPlacementMode areaPlacement,
+        bool forText,
+        Func<FeatureGeometry, SurfacePlacement?> placementOf)
+    {
+        if (coordinateOverride is { } anchor)
+            return (ProjectAnchor(anchor.Latitude, anchor.Longitude), null, new(AnchorPlacementKind.Coordinate));
+
+        // A line placement on a curve with several parts goes on its longest
+        // curve, and text on its longest curve or largest surface: the joined
+        // Coordinates would put it on a gap, or at a centroid outside every
+        // part (issue #643).
+        int part = 0;
+        var coords = geometry.Coordinates;
+        if (geometry.Parts.Count > 1
+            && (forText || (linePlacementPosition.HasValue && geometry.Type == GeometryType.Curve)))
+        {
+            part = geometry.Type == GeometryType.Surface
+                ? IndexOfMax(geometry.Parts, RingArea)
+                : IndexOfMax(geometry.Parts, PolylineLength);
+            coords = geometry.Parts[part];
+        }
+
+        if (coords.Count == 0)
+            return forText ? null : (ProjectAnchor(geometry.Coordinates[0].Latitude, geometry.Coordinates[0].Longitude), null, new(AnchorPlacementKind.Point));
+
+        if (linePlacementPosition is { } position && coords.Count >= 2 && geometry.Type == GeometryType.Curve)
+        {
+            var (at, fraction, segment, t) = InterpolateAlongPolyline(coords, position);
+            return (ProjectAnchor(at.Latitude, at.Longitude), null,
+                new(AnchorPlacementKind.Line, part, fraction, segment, t));
+        }
+
+        if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
+        {
+            bool visibleParts = areaPlacement == AreaPlacementMode.VisibleParts;
+            return (placement.Anchor, visibleParts ? placement.Area : null,
+                new(AnchorPlacementKind.Surface, placement.Part, VisibleParts: visibleParts));
+        }
+
+        if (forText && geometry.Type == GeometryType.Surface && coords.Count >= 3)
+        {
+            var (lat, lon) = ComputeRingCentroid(coords);
+            return (ProjectAnchor(lat, lon), null, new(AnchorPlacementKind.RingVertexMean, part));
+        }
+
+        if (forText && geometry.Type == GeometryType.Curve && coords.Count >= 2)
+        {
+            int middle = coords.Count / 2;
+            return (ProjectAnchor(coords[middle].Latitude, coords[middle].Longitude), null,
+                new(AnchorPlacementKind.CurveMiddleVertex, part, Segment: middle));
+        }
+
+        return (ProjectAnchor(coords[0].Latitude, coords[0].Longitude), null, new(AnchorPlacementKind.Point, part));
+    }
+
+    private static int IndexOfMax(IReadOnlyList<IReadOnlyList<GeoPosition>> parts, Func<IReadOnlyList<GeoPosition>, double> measure)
+    {
+        int best = 0;
+        double bestValue = measure(parts[0]);
+        for (int i = 1; i < parts.Count; i++)
+        {
+            var value = measure(parts[i]);
+            if (value > bestValue)
+            {
+                best = i;
+                bestValue = value;
+            }
+        }
+        return best;
     }
 
     /// <summary>
     /// Where a surface's point symbols and text go (S-100 Part 9
     /// <c>AreaPlacement</c>): <see cref="Anchor"/>, a representative point
-    /// inside its largest part, and <see cref="Area"/>, the whole surface for
-    /// keeping them in view.
+    /// inside its largest part (<see cref="Part"/>, an index into
+    /// <c>FeatureGeometry.Parts</c>), and <see cref="Area"/>, the whole surface
+    /// for keeping them in view.
     /// </summary>
-    private sealed record SurfacePlacement((double X, double Y) Anchor, PlacementArea Area);
+    private sealed record SurfacePlacement((double X, double Y) Anchor, PlacementArea Area, int Part);
 
     private static SurfacePlacement? PlaceOnSurface(FeatureGeometry geometry)
     {
         var polygons = new List<Polygon>();
-        void Add(IReadOnlyList<GeoPosition> shell, IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
+        var partOf = new List<int>();
+        void Add(IReadOnlyList<GeoPosition> shell, IReadOnlyList<IReadOnlyList<GeoPosition>> holes, int part)
         {
             if (shell.Count < 3)
                 return;
             foreach (var (worldShell, worldHoles) in AntimeridianGeometry.ProjectSurface(shell, holes))
             {
                 if (CreatePolygon(worldShell, worldHoles) is { IsEmpty: false } polygon)
+                {
                     polygons.Add(polygon);
+                    partOf.Add(part);
+                }
             }
         }
 
         if (geometry.Parts.Count > 1)
         {
             for (int i = 0; i < geometry.Parts.Count; i++)
-                Add(geometry.Parts[i], i < geometry.PartInteriorRings.Count ? geometry.PartInteriorRings[i] : []);
+                Add(geometry.Parts[i], i < geometry.PartInteriorRings.Count ? geometry.PartInteriorRings[i] : [], i);
         }
         else
         {
-            Add(geometry.Coordinates, geometry.InteriorRings);
+            Add(geometry.Coordinates, geometry.InteriorRings, 0);
         }
 
         if (polygons.Count == 0)
             return null;
 
-        var largest = polygons.MaxBy(p => p.Area)!;
+        int largest = 0;
+        for (int i = 1; i < polygons.Count; i++)
+        {
+            if (polygons[i].Area > polygons[largest].Area)
+                largest = i;
+        }
         Geometry area = polygons.Count == 1 ? polygons[0] : ClipGeometryFactory.CreateMultiPolygon([.. polygons]);
-        return new SurfacePlacement(PlacementArea.RepresentativePoint(largest), new PlacementArea(area));
+        return new SurfacePlacement(
+            PlacementArea.RepresentativePoint(polygons[largest]), new PlacementArea(area), partOf[largest]);
     }
 
     // A point or label anchor poleward of the Web-Mercator limit (e.g. the
@@ -1071,13 +1175,16 @@ public sealed class VectorSceneBuilder
         return length;
     }
 
-    private static GeoPosition InterpolateAlongPolyline(
+    // The point a fraction of the way along a polyline, measured in plain
+    // latitude/longitude degrees, with the fraction used (clamped to 0–1), the
+    // index of the vertex starting the segment it lands on and how far along
+    // that segment it is.
+    private static (GeoPosition At, double Fraction, int Segment, double SegmentPosition) InterpolateAlongPolyline(
         IReadOnlyList<GeoPosition> coords, double fraction)
     {
-        if (coords.Count < 2)
-            return coords[0];
-
         fraction = Math.Clamp(fraction, 0.0, 1.0);
+        if (coords.Count < 2)
+            return (coords[0], fraction, 0, 0);
 
         double totalLength = 0;
         for (int i = 1; i < coords.Count; i++)
@@ -1088,7 +1195,7 @@ public sealed class VectorSceneBuilder
         }
 
         if (totalLength <= 0)
-            return coords[0];
+            return (coords[0], fraction, 0, 0);
 
         double targetLength = totalLength * fraction;
         double accumulated = 0;
@@ -1102,15 +1209,15 @@ public sealed class VectorSceneBuilder
             if (accumulated + segmentLength >= targetLength)
             {
                 double t = segmentLength > 0 ? (targetLength - accumulated) / segmentLength : 0;
-                return new GeoPosition(
+                return (new GeoPosition(
                     coords[i - 1].Latitude + t * dLat,
-                    coords[i - 1].Longitude + t * dLon);
+                    coords[i - 1].Longitude + t * dLon), fraction, i - 1, t);
             }
 
             accumulated += segmentLength;
         }
 
-        return coords[^1];
+        return (coords[^1], fraction, coords.Count - 2, 1);
     }
 
     private static GeoPosition ComputeRingCentroid(

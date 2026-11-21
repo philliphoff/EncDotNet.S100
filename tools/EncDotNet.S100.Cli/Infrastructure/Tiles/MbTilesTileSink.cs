@@ -10,14 +10,17 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <remarks>
 /// MBTiles numbers rows from the south (TMS), so each XYZ row is flipped on
 /// write. Tiles arrive from several threads; one connection serialises them and
-/// commits in batches. An existing file at the output path is replaced, and an
-/// unfinished database is deleted on dispose.
+/// commits in batches. The database is written beside the output and moved over
+/// it when finished, so a server reading an existing database at the output
+/// path keeps serving it until the new one is complete. An unfinished database
+/// is deleted on dispose, leaving any existing one as it was.
 /// </remarks>
 internal sealed class MbTilesTileSink : ITileSink
 {
     private const int BatchSize = 1000;
 
     private readonly string _outputPath;
+    private readonly string _partialPath;
     private readonly SqliteConnection _connection;
     private readonly SqliteCommand _insert;
     private readonly Lock _gate = new();
@@ -28,13 +31,14 @@ internal sealed class MbTilesTileSink : ITileSink
     public MbTilesTileSink(string outputPath)
     {
         _outputPath = Path.GetFullPath(outputPath);
-        File.Delete(_outputPath);
+        _partialPath = TileSetFile.PartialPath(_outputPath);
+        File.Delete(_partialPath);
 
         // No pooling, so disposing the connection releases the file and an
         // unfinished database can be deleted.
         _connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
-            DataSource = _outputPath,
+            DataSource = _partialPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Pooling = false,
         }.ToString());
@@ -101,7 +105,11 @@ internal sealed class MbTilesTileSink : ITileSink
 
             _transaction.Commit();
             _transaction.Dispose();
-            _transaction = _connection.BeginTransaction();
+
+            // Close the database before it is moved into place.
+            _insert.Dispose();
+            _connection.Dispose();
+            TileSetFile.Publish(_partialPath, _outputPath);
             _completed = true;
         }
     }
@@ -134,17 +142,9 @@ internal sealed class MbTilesTileSink : ITileSink
         _transaction.Dispose();
         _connection.Dispose();
 
+        // An unfinished database has no metadata; don't leave it behind.
         if (!_completed)
-        {
-            // An unfinished database has no metadata; don't leave it behind.
-            try
-            {
-                File.Delete(_outputPath);
-            }
-            catch (IOException)
-            {
-            }
-        }
+            TileSetFile.DeletePartial(_partialPath);
     }
 
     private void Execute(string sql)

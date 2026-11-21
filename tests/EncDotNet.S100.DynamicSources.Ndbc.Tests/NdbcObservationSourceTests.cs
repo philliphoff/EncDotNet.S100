@@ -24,7 +24,7 @@ public sealed class NdbcObservationSourceTests : IAsyncLifetime
         // Ten minutes after the buoy's newest row.
         _time = new FakeTimeProvider(NdbcFixtures.NewestTime(NdbcFixtures.Buoy) + TimeSpan.FromMinutes(10));
         _http = new HttpClient(_handler);
-        _source = new NdbcObservationSource(_http, timeProvider: _time);
+        _source = new NdbcObservationSource(_http, timeProvider: _time, options: null);
         _source.Changed += (_, e) => { lock (_changes) _changes.Add(e); };
     }
 

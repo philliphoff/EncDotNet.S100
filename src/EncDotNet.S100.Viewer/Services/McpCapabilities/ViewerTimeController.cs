@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 
 namespace EncDotNet.S100.Viewer.Services.McpCapabilities;
 
@@ -17,23 +16,17 @@ namespace EncDotNet.S100.Viewer.Services.McpCapabilities;
 /// thread.
 /// </remarks>
 /// <param name="globalTime">The viewer's aggregate timeline service.</param>
-/// <param name="dispatcher">
-/// Test seam marshalling an action onto the UI thread; defaults to
-/// <see cref="Dispatcher.UIThread"/> in production.
-/// </param>
+/// <param name="dispatcher">Runs an action on the UI thread.</param>
 internal sealed class ViewerTimeController(
     GlobalTimeService globalTime,
-    Func<Action, Task>? dispatcher = null)
+    Func<Action, Task> dispatcher)
     : ITimeController
 {
     private readonly GlobalTimeService _globalTime = globalTime
         ?? throw new ArgumentNullException(nameof(globalTime));
 
-    private readonly Func<Action, Task> _dispatcher = dispatcher ?? (action =>
-    {
-        var op = Dispatcher.UIThread.InvokeAsync(action);
-        return op.GetTask();
-    });
+    private readonly Func<Action, Task> _dispatcher = dispatcher
+        ?? throw new ArgumentNullException(nameof(dispatcher));
 
     /// <inheritdoc />
     public DateTime? Current => _globalTime.CurrentTime;

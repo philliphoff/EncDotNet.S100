@@ -27,6 +27,22 @@ public abstract class CoverageSubLayerBase
 
     /// <summary>Optional feature-type code for S-98 rules; null for whole-layer entries.</summary>
     public string? SourceFeatureType { get; init; }
+
+    /// <summary>
+    /// The sub-layer's legend, for a viewer's Legend tab: for a colour fill,
+    /// one swatch per band, lowest first; for symbols and lines, one row each
+    /// (see <see cref="LegendEntry"/>), resolved against the palette the
+    /// sub-layer was drawn in. <see langword="null"/> (the default) for no
+    /// legend. Renderers ignore it.
+    /// </summary>
+    public IReadOnlyList<LegendEntry>? Legend { get; init; }
+
+    /// <summary>
+    /// A one-line caption shown with <see cref="Legend"/> where the rows need
+    /// a unit or a rule, e.g. <c>"Speed, kn · longer arrow = faster"</c>, or
+    /// <see langword="null"/> (the default) for none.
+    /// </summary>
+    public string? LegendCaption { get; init; }
 }
 
 /// <summary>
@@ -76,13 +92,14 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     public bool ClipToWater { get; init; }
 
     /// <summary>
-    /// The fill's legend, for a viewer to show under the layer stack entry:
-    /// for a colour fill, one swatch per band, lowest first;
-    /// <see langword="null"/> (the default) for no legend. Set by the weather
-    /// fills (issue #1072, design note weather-sources.md §4.3). Renderers
-    /// ignore it.
+    /// Where neighbouring datasets of the same product have data, or
+    /// <see langword="null"/> for none. Set by the S-98 rule that joins
+    /// neighbouring S-102 cells (<c>R-102-102-A</c>): a renderer that fades
+    /// the surface's edge out over a pixel carries the edge colour one pixel
+    /// on where a neighbour has data, so the two fades don't leave a light
+    /// seam between the cells. Elsewhere the edge is left as it is.
     /// </summary>
-    public IReadOnlyList<LegendEntry>? Legend { get; init; }
+    public IReadOnlyList<ICoverageDataArea>? NeighbourDataAreas { get; init; }
 
     /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
@@ -91,6 +108,18 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     /// </summary>
     /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
     public GridCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        Copy(landAreaMask, NeighbourDataAreas);
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="NeighbourDataAreas"/>
+    /// replaced. Used by the S-98 rule that joins neighbouring S-102 cells.
+    /// </summary>
+    /// <param name="neighbourDataAreas">Where the neighbouring datasets have data, or null.</param>
+    public GridCoverageSubLayer WithNeighbourDataAreas(IReadOnlyList<ICoverageDataArea>? neighbourDataAreas) =>
+        Copy(LandAreaMask, neighbourDataAreas);
+
+    private GridCoverageSubLayer Copy(
+        IReadOnlyList<FeatureGeometry>? landAreaMask, IReadOnlyList<ICoverageDataArea>? neighbourDataAreas) =>
         new()
         {
             LayerKey = LayerKey,
@@ -101,9 +130,11 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
             Coverage = Coverage,
             Viewport = Viewport,
             LandAreaMask = landAreaMask,
+            NeighbourDataAreas = neighbourDataAreas,
             Opacity = Opacity,
             ClipToWater = ClipToWater,
             Legend = Legend,
+            LegendCaption = LegendCaption,
         };
 }
 
@@ -158,10 +189,30 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
     public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }
 
     /// <summary>
+    /// A sample of the isolines' line for a legend row: <see cref="Ink"/>,
+    /// <see cref="LineWidth"/> and <see cref="DashPattern"/> converted from
+    /// device-independent pixels to millimetres (one pixel is 0.32 mm, the
+    /// S-100 display pixel).
+    /// </summary>
+    public LegendLineSample LegendLine() => LegendLineSample.FromPixels(Ink, LineWidth, DashPattern);
+
+    /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
     /// </summary>
     /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
     public IsolineCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        Copy(Isolines, landAreaMask);
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="Isolines"/> replaced.
+    /// Used by the S-98 rule that hides an S-102 cell's limit of data where a
+    /// neighbouring cell has depths.
+    /// </summary>
+    /// <param name="isolines">The replacement isolines.</param>
+    public IsolineCoverageSubLayer WithIsolines(IReadOnlyList<Isoline> isolines) =>
+        Copy(isolines, LandAreaMask);
+
+    private IsolineCoverageSubLayer Copy(IReadOnlyList<Isoline> isolines, IReadOnlyList<FeatureGeometry>? landAreaMask) =>
         new()
         {
             LayerKey = LayerKey,
@@ -169,7 +220,7 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
             Plane = Plane,
             WithinPlanePriority = WithinPlanePriority,
             SourceFeatureType = SourceFeatureType,
-            Isolines = Isolines,
+            Isolines = isolines,
             Extent = Extent,
             Ink = Ink,
             LabelHalo = LabelHalo,
@@ -179,6 +230,8 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
             LabelHaloWidth = LabelHaloWidth,
             LabelSpacing = LabelSpacing,
             LandAreaMask = landAreaMask,
+            Legend = Legend,
+            LegendCaption = LegendCaption,
         };
 }
 
@@ -258,6 +311,8 @@ public sealed class ArrowCoverageSubLayer : CoverageSubLayerBase
             SymbolProvider = SymbolProvider,
             FallbackExtent = FallbackExtent,
             YieldsToS111 = YieldsToS111,
+            Legend = Legend,
+            LegendCaption = LegendCaption,
         };
 }
 
@@ -465,6 +520,14 @@ public sealed class CoveragePortrayalResult
     /// arrows inside its own (<see cref="ArrowCoverageSubLayer.YieldsToS111"/>).
     /// </summary>
     public GeographicBounds? CoverageExtent { get; init; }
+
+    /// <summary>
+    /// Where the sampled coverage has values, or <see langword="null"/> when
+    /// the producer does not report it. S-98 rules that join neighbouring
+    /// datasets read it: an S-102 cell's limit-of-data line is hidden where
+    /// another S-102 cell has depths on both sides of it.
+    /// </summary>
+    public ICoverageDataArea? DataArea { get; init; }
 
     /// <summary>
     /// The scale denominator beyond which the whole dataset is hidden as you

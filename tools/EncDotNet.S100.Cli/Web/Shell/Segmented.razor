@@ -1,0 +1,35 @@
+@* A segmented control (handoff "Components"): one of a few choices, each a button, the chosen one raised. *@
+<div class="segmented" role="radiogroup" aria-label="@Label">
+    @foreach (var option in Options)
+    {
+        var chosen = option.Value == Value;
+        <button type="button" role="radio" class="segment" aria-checked="@(chosen ? "true" : "false")"
+                @onclick="() => Choose(option.Value)">
+            @if (option.Icon is { } icon)
+            {
+                <Icon Name="@icon" Size="14" />
+            }
+            <span>@option.Label</span>
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>What the choices are of, for screen readers.</summary>
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    /// <summary>The choices.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SegmentedOption> Options { get; set; } = [];
+
+    /// <summary>The choice made.</summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>A choice was made.</summary>
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    private Task Choose(string value) => value == Value ? Task.CompletedTask : ValueChanged.InvokeAsync(value);
+}

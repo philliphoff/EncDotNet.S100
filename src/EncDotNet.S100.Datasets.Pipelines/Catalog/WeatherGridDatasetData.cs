@@ -7,8 +7,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 /// <summary>
 /// The catalog payload of a weather grid dataset (NetCDF-CF or GRIB2): a
 /// <see cref="ProductDatasetData"/> that describes itself and samples its
-/// grid, so <c>sample_coverage</c> and
-/// <c>sample_coverage_along</c> answer with wave heights and winds and their
+/// grid, so <c>sample</c> answers with wave heights and winds and their
 /// units with no MCP change (design note weather-sources.md §8.8).
 /// </summary>
 /// <remarks>
@@ -42,6 +41,9 @@ public sealed record WeatherGridDatasetData : ProductDatasetData, ICoverageSampl
 
     /// <summary>The grid set.</summary>
     public WeatherGridSet GridSet { get; }
+
+    /// <summary>The grid's sampler, shared with picks and <c>sample</c>.</summary>
+    internal Sampling.WeatherGridSampler Sampler => _sampler;
 
     /// <inheritdoc />
     public override DatasetMetadata Metadata { get; }

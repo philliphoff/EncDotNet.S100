@@ -328,6 +328,14 @@ public sealed class CoverageCompositeLayer : CompositeLayer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
 
+        // Without arrows nothing needs serialising (the colour raster is built
+        // once under the renderer's own lock), so tiles draw in parallel.
+        if (_renderer.ArrowRenderer is null || _layer.SymbolScheme is null)
+        {
+            DrawCore(canvas, viewport);
+            return;
+        }
+
         lock (_drawLock)
         {
             DrawCore(canvas, viewport);

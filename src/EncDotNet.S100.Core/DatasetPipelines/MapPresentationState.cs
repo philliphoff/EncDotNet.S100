@@ -87,12 +87,26 @@ public sealed class MapPresentationState
         EcdisDisplay = ecdisDisplay is null ? source.EcdisDisplay : Snapshot(ecdisDisplay);
         Mariner = mariner ?? source.Mariner;
         DepthAdjustment = source.DepthAdjustment;
+        DisplayTimeZone = source.DisplayTimeZone;
+        SafetyContourHalo = source.SafetyContourHalo;
     }
 
     private MapPresentationState(MapPresentationState source, IDepthAdjustment? depthAdjustment)
         : this(source)
     {
         DepthAdjustment = depthAdjustment;
+    }
+
+    private MapPresentationState(MapPresentationState source, TimeZoneInfo displayTimeZone)
+        : this(source)
+    {
+        DisplayTimeZone = displayTimeZone;
+    }
+
+    private MapPresentationState(MapPresentationState source, bool safetyContourHalo)
+        : this(source)
+    {
+        SafetyContourHalo = safetyContourHalo;
     }
 
     /// <summary>The S-100 colour palette applied across the map.</summary>
@@ -112,6 +126,23 @@ public sealed class MapPresentationState
 
     /// <summary>Mariner-configurable portrayal settings.</summary>
     public MarinerSettings Mariner { get; }
+
+    /// <summary>
+    /// The time zone that times drawn on the chart are written in
+    /// (<see cref="RenderContext.DisplayTimeZone"/>); UTC unless replaced
+    /// with <see cref="WithDisplayTimeZone"/>.
+    /// </summary>
+    public TimeZoneInfo DisplayTimeZone { get; } = TimeZoneInfo.Utc;
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="DisplayTimeZone"/> replaced.
+    /// </summary>
+    /// <param name="displayTimeZone">The zone chart times are written in.</param>
+    public MapPresentationState WithDisplayTimeZone(TimeZoneInfo displayTimeZone)
+    {
+        ArgumentNullException.ThrowIfNull(displayTimeZone);
+        return new(this, displayTimeZone);
+    }
 
     /// <summary>
     /// Returns a copy of this snapshot with <see cref="Palette"/> replaced.
@@ -163,6 +194,19 @@ public sealed class MapPresentationState
         new(this, depthAdjustment);
 
     /// <summary>
+    /// Whether the chart's safety contour gets a halo
+    /// (<see cref="RenderContext.SafetyContourHalo"/>): on while another
+    /// product draws contours over the chart, as AML CLB does.
+    /// </summary>
+    public bool SafetyContourHalo { get; }
+
+    /// <summary>Returns a copy with <see cref="SafetyContourHalo"/> replaced.</summary>
+    /// <param name="safetyContourHalo">Whether the safety contour gets a halo.</param>
+    /// <returns>A new presentation state, or this one when it is unchanged.</returns>
+    public MapPresentationState WithSafetyContourHalo(bool safetyContourHalo) =>
+        safetyContourHalo == SafetyContourHalo ? this : new(this, safetyContourHalo);
+
+    /// <summary>
     /// Returns a copy of this snapshot with <see cref="Mariner"/> replaced.
     /// </summary>
     /// <param name="mariner">The mariner-configurable portrayal settings.</param>
@@ -209,6 +253,8 @@ public sealed class MapPresentationState
             EcdisDisplay = EcdisDisplay,
             Mariner = Mariner,
             DepthAdjustment = DepthAdjustment,
+            DisplayTimeZone = DisplayTimeZone,
+            SafetyContourHalo = SafetyContourHalo,
         };
 
         var displayModeId = EcdisDisplay.ActiveDisplayModes.GetValueOrDefault(
@@ -264,6 +310,7 @@ public sealed class MapPresentationState
             ActiveDisplayModes = settings.ActiveDisplayModes.ToFrozenDictionary(
                 StringComparer.OrdinalIgnoreCase),
             LayerVisibility = settings.LayerVisibility.ToFrozenDictionary(StringComparer.Ordinal),
+            LayerOptions = settings.LayerOptions.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
 }

@@ -1,0 +1,1185 @@
+{
+  "format": "tide-stations",
+  "version": 1,
+  "provider": "NOAA CO-OPS",
+  "retrieved": "2026-11-12T00:00:00+00:00",
+  "stations": [
+    {
+      "id": "9444900",
+      "name": "PORT TOWNSEND",
+      "latitude": 48.11122222222222,
+      "longitude": -122.7596777777778,
+      "region": "WA",
+      "utcOffsetHours": -8,
+      "kind": "harmonic",
+      "constituents": [
+        {
+          "name": "M2",
+          "amplitude": 0.681,
+          "phase": 349.9
+        },
+        {
+          "name": "S2",
+          "amplitude": 0.169,
+          "phase": 13.1
+        },
+        {
+          "name": "N2",
+          "amplitude": 0.144,
+          "phase": 320.4
+        },
+        {
+          "name": "K1",
+          "amplitude": 0.767,
+          "phase": 270.5
+        },
+        {
+          "name": "M4",
+          "amplitude": 0.038,
+          "phase": 59.5
+        },
+        {
+          "name": "O1",
+          "amplitude": 0.445,
+          "phase": 249.8
+        },
+        {
+          "name": "M6",
+          "amplitude": 0.009,
+          "phase": 247
+        },
+        {
+          "name": "MK3",
+          "amplitude": 0.027,
+          "phase": 332.4
+        },
+        {
+          "name": "S4",
+          "amplitude": 0.003,
+          "phase": 93.7
+        },
+        {
+          "name": "MN4",
+          "amplitude": 0.015,
+          "phase": 29.4
+        },
+        {
+          "name": "NU2",
+          "amplitude": 0.028,
+          "phase": 332.2
+        },
+        {
+          "name": "MU2",
+          "amplitude": 0.027,
+          "phase": 242.4
+        },
+        {
+          "name": "2N2",
+          "amplitude": 0.016,
+          "phase": 292
+        },
+        {
+          "name": "OO1",
+          "amplitude": 0.029,
+          "phase": 318.4
+        },
+        {
+          "name": "LAM2",
+          "amplitude": 0.011,
+          "phase": 46.4
+        },
+        {
+          "name": "S1",
+          "amplitude": 0.022,
+          "phase": 40.9
+        },
+        {
+          "name": "M1",
+          "amplitude": 0.024,
+          "phase": 291.8
+        },
+        {
+          "name": "J1",
+          "amplitude": 0.042,
+          "phase": 301.6
+        },
+        {
+          "name": "MM",
+          "amplitude": 0.024,
+          "phase": 199
+        },
+        {
+          "name": "SSA",
+          "amplitude": 0.019,
+          "phase": 209.9
+        },
+        {
+          "name": "SA",
+          "amplitude": 0.079,
+          "phase": 282.6
+        },
+        {
+          "name": "RHO",
+          "amplitude": 0.015,
+          "phase": 239.8
+        },
+        {
+          "name": "Q1",
+          "amplitude": 0.074,
+          "phase": 241.7
+        },
+        {
+          "name": "T2",
+          "amplitude": 0.011,
+          "phase": 13.6
+        },
+        {
+          "name": "R2",
+          "amplitude": 0.002,
+          "phase": 342.1
+        },
+        {
+          "name": "2Q1",
+          "amplitude": 0.009,
+          "phase": 251
+        },
+        {
+          "name": "P1",
+          "amplitude": 0.241,
+          "phase": 269.7
+        },
+        {
+          "name": "2SM2",
+          "amplitude": 0.004,
+          "phase": 292.4
+        },
+        {
+          "name": "M3",
+          "amplitude": 0.004,
+          "phase": 100.3
+        },
+        {
+          "name": "L2",
+          "amplitude": 0.028,
+          "phase": 46.9
+        },
+        {
+          "name": "2MK3",
+          "amplitude": 0.019,
+          "phase": 341.3
+        },
+        {
+          "name": "K2",
+          "amplitude": 0.051,
+          "phase": 16.7
+        },
+        {
+          "name": "M8",
+          "amplitude": 0.002,
+          "phase": 188.4
+        },
+        {
+          "name": "MS4",
+          "amplitude": 0.021,
+          "phase": 83.2
+        }
+      ],
+      "datums": {
+        "epoch": "1983-2001",
+        "accepted": "2003-04-17",
+        "heights": {
+          "MHHW": 3.621,
+          "MHW": 3.414,
+          "MSL": 2.547,
+          "MLW": 1.785,
+          "MLLW": 1.025,
+          "LAT": -0.19649196,
+          "HAT": 4.0995083
+        }
+      }
+    },
+    {
+      "id": "9444972",
+      "name": "Marrowstone Point",
+      "latitude": 48.0917,
+      "longitude": -122.69,
+      "region": "WA",
+      "utcOffsetHours": -8,
+      "kind": "subordinate",
+      "reference": "9444900",
+      "offsets": {
+        "datum": "MLLW",
+        "highWaterMinutes": 2,
+        "lowWaterMinutes": 5,
+        "highWaterHeight": 0.12,
+        "lowWaterHeight": -0.03,
+        "heightAdjustment": "offset"
+      }
+    },
+    {
+      "id": "9445017",
+      "name": "Port Ludlow",
+      "latitude": 47.925,
+      "longitude": -122.68,
+      "region": "WA",
+      "utcOffsetHours": -8,
+      "kind": "subordinate",
+      "reference": "9447130",
+      "offsets": {
+        "datum": "MLLW",
+        "highWaterMinutes": -14,
+        "lowWaterMinutes": -14,
+        "highWaterHeight": 0.87,
+        "lowWaterHeight": 0.95,
+        "heightAdjustment": "ratio"
+      }
+    },
+    {
+      "id": "9446486",
+      "name": "Tacoma Narrows Bridge",
+      "latitude": 47.2717,
+      "longitude": -122.552,
+      "region": "WA",
+      "utcOffsetHours": -8,
+      "kind": "subordinate",
+      "reference": "9447130",
+      "offsets": {
+        "datum": "MLLW",
+        "highWaterMinutes": 28,
+        "lowWaterMinutes": 23,
+        "highWaterHeight": 1.11,
+        "lowWaterHeight": 1.02,
+        "heightAdjustment": "ratio"
+      }
+    },
+    {
+      "id": "9447130",
+      "name": "SEATTLE (Madison St.), Elliott Bay",
+      "latitude": 47.60263888888889,
+      "longitude": -122.3393055555556,
+      "region": "WA",
+      "utcOffsetHours": -8,
+      "kind": "harmonic",
+      "constituents": [
+        {
+          "name": "M2",
+          "amplitude": 1.063,
+          "phase": 10.8
+        },
+        {
+          "name": "S2",
+          "amplitude": 0.268,
+          "phase": 36.8
+        },
+        {
+          "name": "N2",
+          "amplitude": 0.214,
+          "phase": 341.1
+        },
+        {
+          "name": "K1",
+          "amplitude": 0.834,
+          "phase": 276.8
+        },
+        {
+          "name": "M4",
+          "amplitude": 0.021,
+          "phase": 200.7
+        },
+        {
+          "name": "O1",
+          "amplitude": 0.459,
+          "phase": 254.6
+        },
+        {
+          "name": "M6",
+          "amplitude": 0.009,
+          "phase": 312.8
+        },
+        {
+          "name": "MK3",
+          "amplitude": 0.036,
+          "phase": 79.3
+        },
+        {
+          "name": "S4",
+          "amplitude": 0.002,
+          "phase": 254.3
+        },
+        {
+          "name": "MN4",
+          "amplitude": 0.009,
+          "phase": 172.7
+        },
+        {
+          "name": "NU2",
+          "amplitude": 0.044,
+          "phase": 355.5
+        },
+        {
+          "name": "MU2",
+          "amplitude": 0.034,
+          "phase": 238.9
+        },
+        {
+          "name": "2N2",
+          "amplitude": 0.023,
+          "phase": 313.1
+        },
+        {
+          "name": "OO1",
+          "amplitude": 0.031,
+          "phase": 330.2
+        },
+        {
+          "name": "LAM2",
+          "amplitude": 0.02,
+          "phase": 49.9
+        },
+        {
+          "name": "S1",
+          "amplitude": 0.021,
+          "phase": 45
+        },
+        {
+          "name": "M1",
+          "amplitude": 0.024,
+          "phase": 304.1
+        },
+        {
+          "name": "J1",
+          "amplitude": 0.043,
+          "phase": 313.4
+        },
+        {
+          "name": "SSA",
+          "amplitude": 0.024,
+          "phase": 217
+        },
+        {
+          "name": "SA",
+          "amplitude": 0.07,
+          "phase": 283.2
+        },
+        {
+          "name": "MF",
+          "amplitude": 0.015,
+          "phase": 157
+        },
+        {
+          "name": "RHO",
+          "amplitude": 0.015,
+          "phase": 245
+        },
+        {
+          "name": "Q1",
+          "amplitude": 0.073,
+          "phase": 248.9
+        },
+        {
+          "name": "T2",
+          "amplitude": 0.016,
+          "phase": 38
+        },
+        {
+          "name": "R2",
+          "amplitude": 0.003,
+          "phase": 11.2
+        },
+        {
+          "name": "2Q1",
+          "amplitude": 0.01,
+          "phase": 265.5
+        },
+        {
+          "name": "P1",
+          "amplitude": 0.257,
+          "phase": 276.2
+        },
+        {
+          "name": "2SM2",
+          "amplitude": 0.008,
+          "phase": 284.4
+        },
+        {
+          "name": "M3",
+          "amplitude": 0.004,
+          "phase": 178
+        },
+        {
+          "name": "L2",
+          "amplitude": 0.049,
+          "phase": 58.7
+        },
+        {
+          "name": "2MK3",
+          "amplitude": 0.035,
+          "phase": 48.5
+        },
+        {
+          "name": "K2",
+          "amplitude": 0.079,
+          "phase": 37.7
+        },
+        {
+          "name": "M8",
+          "amplitude": 0.001,
+          "phase": 204.4
+        },
+        {
+          "name": "MS4",
+          "amplitude": 0.012,
+          "phase": 229.3
+        }
+      ],
+      "datums": {
+        "epoch": "1983-2001",
+        "accepted": "2003-04-17",
+        "heights": {
+          "MHHW": 5.882,
+          "MHW": 5.618,
+          "MSL": 4.443,
+          "MLW": 3.284,
+          "MLLW": 2.419,
+          "LAT": 1.1089039,
+          "HAT": 6.453904
+        }
+      }
+    }
+  ],
+  "currentStations": [
+    {
+      "id": "ACT2401_1",
+      "name": "Montauk Point, 1.2 miles east of",
+      "latitude": 41.075,
+      "longitude": -71.83,
+      "kind": "subordinate",
+      "floodDirection": 346,
+      "ebbDirection": 162,
+      "reference": "LIS1001_13",
+      "offsets": {
+        "slackBeforeFloodMinutes": -82,
+        "maximumFloodMinutes": -74,
+        "slackBeforeEbbMinutes": -38,
+        "maximumEbbMinutes": -125,
+        "maximumFloodRatio": 0.8,
+        "maximumEbbRatio": 0.7
+      }
+    },
+    {
+      "id": "LIS1001_13",
+      "name": "The Race",
+      "latitude": 41.22818,
+      "longitude": -72.06252,
+      "kind": "harmonic",
+      "depth": 1.83,
+      "floodDirection": 291,
+      "ebbDirection": 106,
+      "majorAxisDirection": 288.5,
+      "majorMean": -0.2006,
+      "minorMean": 0.0535,
+      "constituents": [
+        {
+          "name": "M2",
+          "majorAmplitude": 1.8684,
+          "majorPhase": 33.7,
+          "minorAmplitude": 0.10490000000000001,
+          "minorPhase": 307.4
+        },
+        {
+          "name": "S2",
+          "majorAmplitude": 0.2773,
+          "majorPhase": 60.2,
+          "minorAmplitude": 0.0262,
+          "minorPhase": 295.1
+        },
+        {
+          "name": "N2",
+          "majorAmplitude": 0.4182,
+          "majorPhase": 11.3,
+          "minorAmplitude": 0.0329,
+          "minorPhase": 253.2
+        },
+        {
+          "name": "K1",
+          "majorAmplitude": 0.1173,
+          "majorPhase": 97.1,
+          "minorAmplitude": 0.0211,
+          "minorPhase": 3.9
+        },
+        {
+          "name": "M4",
+          "majorAmplitude": 0.0309,
+          "majorPhase": 205.1,
+          "minorAmplitude": 0.0689,
+          "minorPhase": 351.5
+        },
+        {
+          "name": "O1",
+          "majorAmplitude": 0.071,
+          "majorPhase": 152.9,
+          "minorAmplitude": 0.0242,
+          "minorPhase": 36.1
+        },
+        {
+          "name": "M6",
+          "majorAmplitude": 0.0298,
+          "majorPhase": 337.9,
+          "minorAmplitude": 0.0159,
+          "minorPhase": 329.5
+        },
+        {
+          "name": "MK3",
+          "majorAmplitude": 0.018000000000000002,
+          "majorPhase": 201.5,
+          "minorAmplitude": 0.0098,
+          "minorPhase": 71.9
+        },
+        {
+          "name": "S4",
+          "majorAmplitude": 0.0062,
+          "majorPhase": 124.7,
+          "minorAmplitude": 0.0046,
+          "minorPhase": 284.2
+        },
+        {
+          "name": "MN4",
+          "majorAmplitude": 0.0201,
+          "majorPhase": 202.9,
+          "minorAmplitude": 0.0412,
+          "minorPhase": 16.6
+        },
+        {
+          "name": "NU2",
+          "majorAmplitude": 0.07,
+          "majorPhase": 1.7,
+          "minorAmplitude": 0.005699999999999999,
+          "minorPhase": 142.4
+        },
+        {
+          "name": "S6",
+          "majorAmplitude": 0,
+          "majorPhase": 0,
+          "minorAmplitude": 0.0021,
+          "minorPhase": 333.5
+        },
+        {
+          "name": "MU2",
+          "majorAmplitude": 0.0159,
+          "majorPhase": 337,
+          "minorAmplitude": 0.017,
+          "minorPhase": 219.5
+        },
+        {
+          "name": "2N2",
+          "majorAmplitude": 0.0252,
+          "majorPhase": 330.1,
+          "minorAmplitude": 0.0077,
+          "minorPhase": 203.1
+        },
+        {
+          "name": "OO1",
+          "majorAmplitude": 0.0046,
+          "majorPhase": 98.4,
+          "minorAmplitude": 0.0026000000000000003,
+          "minorPhase": 275
+        },
+        {
+          "name": "LAM2",
+          "majorAmplitude": 0.042699999999999995,
+          "majorPhase": 80.7,
+          "minorAmplitude": 0.0015,
+          "minorPhase": 220.9
+        },
+        {
+          "name": "M1",
+          "majorAmplitude": 0.005699999999999999,
+          "majorPhase": 166.7,
+          "minorAmplitude": 0.0021,
+          "minorPhase": 157.4
+        },
+        {
+          "name": "J1",
+          "majorAmplitude": 0.0087,
+          "majorPhase": 187.2,
+          "minorAmplitude": 0.0031,
+          "minorPhase": 29.2
+        },
+        {
+          "name": "RHO",
+          "majorAmplitude": 0.0040999999999999995,
+          "majorPhase": 359.1,
+          "minorAmplitude": 0.0036,
+          "minorPhase": 6.2
+        },
+        {
+          "name": "Q1",
+          "majorAmplitude": 0.0118,
+          "majorPhase": 127.3,
+          "minorAmplitude": 0.0103,
+          "minorPhase": 328
+        },
+        {
+          "name": "2Q1",
+          "majorAmplitude": 0,
+          "majorPhase": 0,
+          "minorAmplitude": 0.0015,
+          "minorPhase": 62.5
+        },
+        {
+          "name": "P1",
+          "majorAmplitude": 0.037000000000000005,
+          "majorPhase": 102,
+          "minorAmplitude": 0.009300000000000001,
+          "minorPhase": 51.9
+        },
+        {
+          "name": "2SM2",
+          "majorAmplitude": 0,
+          "majorPhase": 0,
+          "minorAmplitude": 0.0051,
+          "minorPhase": 282.7
+        },
+        {
+          "name": "M3",
+          "majorAmplitude": 0.0040999999999999995,
+          "majorPhase": 356.4,
+          "minorAmplitude": 0.009300000000000001,
+          "minorPhase": 47.3
+        },
+        {
+          "name": "L2",
+          "majorAmplitude": 0.1446,
+          "majorPhase": 67.3,
+          "minorAmplitude": 0.0309,
+          "minorPhase": 77.3
+        },
+        {
+          "name": "2MK3",
+          "majorAmplitude": 0.0067,
+          "majorPhase": 91.6,
+          "minorAmplitude": 0.0123,
+          "minorPhase": 99.9
+        },
+        {
+          "name": "K2",
+          "majorAmplitude": 0.061200000000000004,
+          "majorPhase": 44.2,
+          "minorAmplitude": 0.0098,
+          "minorPhase": 277.3
+        },
+        {
+          "name": "M8",
+          "majorAmplitude": 0.0087,
+          "majorPhase": 287,
+          "minorAmplitude": 0.0098,
+          "minorPhase": 317.4
+        },
+        {
+          "name": "MS4",
+          "majorAmplitude": 0.009300000000000001,
+          "majorPhase": 216.8,
+          "minorAmplitude": 0.0206,
+          "minorPhase": 40.8
+        }
+      ]
+    },
+    {
+      "id": "MOB1101_2",
+      "name": "Mobile Bay Entrance, off Mobile Point",
+      "latitude": 30.22703,
+      "longitude": -88.03458,
+      "kind": "harmonic",
+      "depth": 3.35,
+      "floodDirection": 14,
+      "ebbDirection": 201,
+      "majorAxisDirection": 16.4,
+      "majorMean": -0.0040999999999999995,
+      "minorMean": -0.0422,
+      "constituents": [
+        {
+          "name": "K1",
+          "majorAmplitude": 0.5968,
+          "majorPhase": 337.2,
+          "minorAmplitude": 0.0216,
+          "minorPhase": 238.1
+        },
+        {
+          "name": "O1",
+          "majorAmplitude": 0.5592,
+          "majorPhase": 327.3,
+          "minorAmplitude": 0.0242,
+          "minorPhase": 222.1
+        },
+        {
+          "name": "MK3",
+          "majorAmplitude": 0.0674,
+          "majorPhase": 158.6,
+          "minorAmplitude": 0.0118,
+          "minorPhase": 218.5
+        },
+        {
+          "name": "OO1",
+          "majorAmplitude": 0.019,
+          "majorPhase": 302,
+          "minorAmplitude": 0.0046,
+          "minorPhase": 24.2
+        },
+        {
+          "name": "M1",
+          "majorAmplitude": 0.0159,
+          "majorPhase": 10.8,
+          "minorAmplitude": 0.0036,
+          "minorPhase": 262.6
+        },
+        {
+          "name": "J1",
+          "majorAmplitude": 0.044800000000000006,
+          "majorPhase": 359.3,
+          "minorAmplitude": 0.0051,
+          "minorPhase": 9.9
+        },
+        {
+          "name": "Q1",
+          "majorAmplitude": 0.08800000000000001,
+          "majorPhase": 333.6,
+          "minorAmplitude": 0.0067,
+          "minorPhase": 263
+        },
+        {
+          "name": "2Q1",
+          "majorAmplitude": 0.0432,
+          "majorPhase": 294.3,
+          "minorAmplitude": 0.0015,
+          "minorPhase": 272.6
+        },
+        {
+          "name": "P1",
+          "majorAmplitude": 0.22280000000000003,
+          "majorPhase": 314.1,
+          "minorAmplitude": 0.0103,
+          "minorPhase": 279.7
+        },
+        {
+          "name": "M3",
+          "majorAmplitude": 0.0376,
+          "majorPhase": 87.6,
+          "minorAmplitude": 0.0015,
+          "minorPhase": 279.6
+        },
+        {
+          "name": "2MK3",
+          "majorAmplitude": 0.0319,
+          "majorPhase": 158.3,
+          "minorAmplitude": 0.0062,
+          "minorPhase": 175.5
+        },
+        {
+          "name": "M8",
+          "majorAmplitude": 0.0036,
+          "majorPhase": 224.9,
+          "minorAmplitude": 0.001,
+          "minorPhase": 70.7
+        },
+        {
+          "name": "MS4",
+          "majorAmplitude": 0.0201,
+          "majorPhase": 66.6,
+          "minorAmplitude": 0.0072,
+          "minorPhase": 79.4
+        }
+      ]
+    },
+    {
+      "id": "PCT0281_1",
+      "name": "Golden Gate Bridge, 0.8 mile east of",
+      "latitude": 37.82167,
+      "longitude": -122.46167,
+      "kind": "subordinate",
+      "floodDirection": 70,
+      "ebbDirection": 256,
+      "reference": "SFB1202_17",
+      "offsets": {
+        "slackBeforeFloodMinutes": 42,
+        "maximumFloodMinutes": 15,
+        "slackBeforeEbbMinutes": 27,
+        "maximumEbbMinutes": 43,
+        "maximumFloodRatio": 0.9,
+        "maximumEbbRatio": 1.4
+      }
+    },
+    {
+      "id": "PUG1701_33",
+      "name": "Deception Pass (Narrows)",
+      "latitude": 48.40618896484375,
+      "longitude": -122.64311981201172,
+      "kind": "harmonic",
+      "depth": 5.49,
+      "floodDirection": 108,
+      "ebbDirection": 277,
+      "majorAxisDirection": 101.5,
+      "majorMean": -0.3179,
+      "minorMean": 0.1451,
+      "constituents": [
+        {
+          "name": "M2",
+          "majorAmplitude": 2.6801999999999997,
+          "majorPhase": 241.2,
+          "minorAmplitude": 0.0062,
+          "minorPhase": 31.3
+        },
+        {
+          "name": "S2",
+          "majorAmplitude": 0.49590000000000006,
+          "majorPhase": 253,
+          "minorAmplitude": 0.032400000000000005,
+          "minorPhase": 309.1
+        },
+        {
+          "name": "N2",
+          "majorAmplitude": 0.5047,
+          "majorPhase": 221.6,
+          "minorAmplitude": 0.028300000000000002,
+          "minorPhase": 180
+        },
+        {
+          "name": "K1",
+          "majorAmplitude": 0.5402,
+          "majorPhase": 145,
+          "minorAmplitude": 0.0689,
+          "minorPhase": 309.1
+        },
+        {
+          "name": "M4",
+          "majorAmplitude": 0.0638,
+          "majorPhase": 225.2,
+          "minorAmplitude": 0.09880000000000001,
+          "minorPhase": 132.1
+        },
+        {
+          "name": "O1",
+          "majorAmplitude": 0.16149999999999998,
+          "majorPhase": 130.5,
+          "minorAmplitude": 0.0484,
+          "minorPhase": 127.9
+        },
+        {
+          "name": "M6",
+          "majorAmplitude": 0.18670000000000003,
+          "majorPhase": 210,
+          "minorAmplitude": 0.0412,
+          "minorPhase": 342.6
+        },
+        {
+          "name": "MK3",
+          "majorAmplitude": 0.1235,
+          "majorPhase": 167.2,
+          "minorAmplitude": 0.053,
+          "minorPhase": 357.9
+        },
+        {
+          "name": "S4",
+          "majorAmplitude": 0.0134,
+          "majorPhase": 95.3,
+          "minorAmplitude": 0.0051,
+          "minorPhase": 293.6
+        },
+        {
+          "name": "MN4",
+          "majorAmplitude": 0.034,
+          "majorPhase": 224.9,
+          "minorAmplitude": 0.0664,
+          "minorPhase": 74.8
+        },
+        {
+          "name": "S6",
+          "majorAmplitude": 0.0149,
+          "majorPhase": 270.9,
+          "minorAmplitude": 0.0062,
+          "minorPhase": 277.9
+        },
+        {
+          "name": "2N2",
+          "majorAmplitude": 0.1307,
+          "majorPhase": 124.4,
+          "minorAmplitude": 0.053,
+          "minorPhase": 230.4
+        },
+        {
+          "name": "OO1",
+          "majorAmplitude": 0.09210000000000002,
+          "majorPhase": 9,
+          "minorAmplitude": 0.018000000000000002,
+          "minorPhase": 42.1
+        },
+        {
+          "name": "M1",
+          "majorAmplitude": 0.08130000000000001,
+          "majorPhase": 197.8,
+          "minorAmplitude": 0.0268,
+          "minorPhase": 53.2
+        },
+        {
+          "name": "J1",
+          "majorAmplitude": 0.0257,
+          "majorPhase": 162.6,
+          "minorAmplitude": 0.0319,
+          "minorPhase": 318.6
+        },
+        {
+          "name": "Q1",
+          "majorAmplitude": 0.04730000000000001,
+          "majorPhase": 158.2,
+          "minorAmplitude": 0.028300000000000002,
+          "minorPhase": 130.9
+        },
+        {
+          "name": "2Q1",
+          "majorAmplitude": 0.0268,
+          "majorPhase": 245.3,
+          "minorAmplitude": 0.0262,
+          "minorPhase": 25.6
+        },
+        {
+          "name": "P1",
+          "majorAmplitude": 0.11570000000000001,
+          "majorPhase": 180.5,
+          "minorAmplitude": 0.09720000000000001,
+          "minorPhase": 208
+        },
+        {
+          "name": "2SM2",
+          "majorAmplitude": 0.059699999999999996,
+          "majorPhase": 103,
+          "minorAmplitude": 0.0087,
+          "minorPhase": 345.9
+        },
+        {
+          "name": "M3",
+          "majorAmplitude": 0.049400000000000006,
+          "majorPhase": 83.8,
+          "minorAmplitude": 0.0195,
+          "minorPhase": 128.4
+        },
+        {
+          "name": "L2",
+          "majorAmplitude": 0.2552,
+          "majorPhase": 260,
+          "minorAmplitude": 0.035,
+          "minorPhase": 112.4
+        },
+        {
+          "name": "2MK3",
+          "majorAmplitude": 0.1543,
+          "majorPhase": 197.2,
+          "minorAmplitude": 0.0545,
+          "minorPhase": 334.2
+        },
+        {
+          "name": "M8",
+          "majorAmplitude": 0.0113,
+          "majorPhase": 178.5,
+          "minorAmplitude": 0.0036,
+          "minorPhase": 344.8
+        },
+        {
+          "name": "MS4",
+          "majorAmplitude": 0.0159,
+          "majorPhase": 226.4,
+          "minorAmplitude": 0.0304,
+          "minorPhase": 142.6
+        }
+      ]
+    },
+    {
+      "id": "SFB1202_17",
+      "name": "Golden Gate Bridge, 0.88 nm NE of",
+      "latitude": 37.82922,
+      "longitude": -122.46202,
+      "kind": "harmonic",
+      "depth": 6.4,
+      "floodDirection": 52,
+      "ebbDirection": 238,
+      "majorAxisDirection": 55.9,
+      "majorMean": 0.1363,
+      "minorMean": -0.034,
+      "constituents": [
+        {
+          "name": "M2",
+          "majorAmplitude": 1.0412000000000001,
+          "majorPhase": 160.8,
+          "minorAmplitude": 0.11570000000000001,
+          "minorPhase": 256.9
+        },
+        {
+          "name": "S2",
+          "majorAmplitude": 0.2341,
+          "majorPhase": 183.6,
+          "minorAmplitude": 0.0129,
+          "minorPhase": 274.7
+        },
+        {
+          "name": "N2",
+          "majorAmplitude": 0.24230000000000002,
+          "majorPhase": 125.1,
+          "minorAmplitude": 0.023100000000000002,
+          "minorPhase": 233.3
+        },
+        {
+          "name": "K1",
+          "majorAmplitude": 0.3215,
+          "majorPhase": 156.6,
+          "minorAmplitude": 0.0643,
+          "minorPhase": 204.6
+        },
+        {
+          "name": "M4",
+          "majorAmplitude": 0.14300000000000002,
+          "majorPhase": 348.5,
+          "minorAmplitude": 0.0468,
+          "minorPhase": 175.6
+        },
+        {
+          "name": "O1",
+          "majorAmplitude": 0.1245,
+          "majorPhase": 154.9,
+          "minorAmplitude": 0.0381,
+          "minorPhase": 159.9
+        },
+        {
+          "name": "M6",
+          "majorAmplitude": 0.036000000000000004,
+          "majorPhase": 131.6,
+          "minorAmplitude": 0.0149,
+          "minorPhase": 222.4
+        },
+        {
+          "name": "MK3",
+          "majorAmplitude": 0.0859,
+          "majorPhase": 358,
+          "minorAmplitude": 0.0622,
+          "minorPhase": 145.9
+        },
+        {
+          "name": "S4",
+          "majorAmplitude": 0.0062,
+          "majorPhase": 333.6,
+          "minorAmplitude": 0.0072,
+          "minorPhase": 247.6
+        },
+        {
+          "name": "MN4",
+          "majorAmplitude": 0.0478,
+          "majorPhase": 293,
+          "minorAmplitude": 0.023100000000000002,
+          "minorPhase": 116.4
+        },
+        {
+          "name": "S6",
+          "majorAmplitude": 0.0031,
+          "majorPhase": 269.7,
+          "minorAmplitude": 0.001,
+          "minorPhase": 286.5
+        },
+        {
+          "name": "2N2",
+          "majorAmplitude": 0.009300000000000001,
+          "majorPhase": 350.2,
+          "minorAmplitude": 0.0046,
+          "minorPhase": 249.8
+        },
+        {
+          "name": "OO1",
+          "majorAmplitude": 0.0278,
+          "majorPhase": 237.4,
+          "minorAmplitude": 0.0175,
+          "minorPhase": 327.9
+        },
+        {
+          "name": "M1",
+          "majorAmplitude": 0.0098,
+          "majorPhase": 25.1,
+          "minorAmplitude": 0.0103,
+          "minorPhase": 22.3
+        },
+        {
+          "name": "J1",
+          "majorAmplitude": 0.0149,
+          "majorPhase": 174.4,
+          "minorAmplitude": 0.0165,
+          "minorPhase": 69.7
+        },
+        {
+          "name": "Q1",
+          "majorAmplitude": 0.036000000000000004,
+          "majorPhase": 158.2,
+          "minorAmplitude": 0.0031,
+          "minorPhase": 244.3
+        },
+        {
+          "name": "2Q1",
+          "majorAmplitude": 0.0026000000000000003,
+          "majorPhase": 3.1,
+          "minorAmplitude": 0.0072,
+          "minorPhase": 131.6
+        },
+        {
+          "name": "P1",
+          "majorAmplitude": 0.1368,
+          "majorPhase": 197.7,
+          "minorAmplitude": 0.0046,
+          "minorPhase": 196.8
+        },
+        {
+          "name": "2SM2",
+          "majorAmplitude": 0.0175,
+          "majorPhase": 343,
+          "minorAmplitude": 0.0040999999999999995,
+          "minorPhase": 53.2
+        },
+        {
+          "name": "M3",
+          "majorAmplitude": 0.0288,
+          "majorPhase": 143.5,
+          "minorAmplitude": 0.0046,
+          "minorPhase": 277.5
+        },
+        {
+          "name": "L2",
+          "majorAmplitude": 0.0432,
+          "majorPhase": 212.3,
+          "minorAmplitude": 0.005699999999999999,
+          "minorPhase": 265.3
+        },
+        {
+          "name": "2MK3",
+          "majorAmplitude": 0.04730000000000001,
+          "majorPhase": 3.4,
+          "minorAmplitude": 0.0139,
+          "minorPhase": 108.8
+        },
+        {
+          "name": "K2",
+          "majorAmplitude": 0.0772,
+          "majorPhase": 204.9,
+          "minorAmplitude": 0.0129,
+          "minorPhase": 55.3
+        },
+        {
+          "name": "M8",
+          "majorAmplitude": 0.0159,
+          "majorPhase": 225.5,
+          "minorAmplitude": 0.0021,
+          "minorPhase": 56
+        },
+        {
+          "name": "MS4",
+          "majorAmplitude": 0.0571,
+          "majorPhase": 6.1,
+          "minorAmplitude": 0.0108,
+          "minorPhase": 330.7
+        }
+      ]
+    }
+  ]
+}

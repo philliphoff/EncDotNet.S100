@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using Avalonia.Threading;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -122,11 +121,12 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
     private readonly DatasetsViewModel _datasets;
     private readonly Func<Action, Task> _dispatch;
 
-    public ViewerDatasetStateController(DatasetsViewModel datasets, Func<Action, Task>? dispatch = null)
+    public ViewerDatasetStateController(DatasetsViewModel datasets, Func<Action, Task> dispatch)
     {
         ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _datasets = datasets;
-        _dispatch = dispatch ?? (action => Dispatcher.UIThread.InvokeAsync(action).GetTask());
+        _dispatch = dispatch;
     }
 
     /// <inheritdoc />

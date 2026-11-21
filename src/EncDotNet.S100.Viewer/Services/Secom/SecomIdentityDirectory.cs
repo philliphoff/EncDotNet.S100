@@ -27,11 +27,12 @@ internal sealed class SecomIdentityDirectory
     private readonly SecomIdentityStore _store;
     private readonly TimeProvider _time;
 
-    public SecomIdentityDirectory(SecomIdentityStore store, TimeProvider? time = null)
+    public SecomIdentityDirectory(SecomIdentityStore store, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(time);
         _store = store;
-        _time = time ?? TimeProvider.System;
+        _time = time;
         _store.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         _store.Trust.IdentitiesChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }

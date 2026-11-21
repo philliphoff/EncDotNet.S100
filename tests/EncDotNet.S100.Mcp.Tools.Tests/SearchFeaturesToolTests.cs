@@ -50,6 +50,10 @@ public class SearchFeaturesToolTests
     }
 
     private static LoadedDataset S101WithNamedPoint(string id, uint rcid, string name, double lat, double lon)
+        => S101WithNamedPoint(id, rcid, name, lat, lon, LoadedDatasetFactory.Box(-1, -1, 10, 10), compilationScale: null);
+
+    private static LoadedDataset S101WithNamedPoint(
+        string id, uint rcid, string name, double lat, double lon, BoundingBox bounds, int? compilationScale)
     {
         const ushort lightsCode = 75;
         const int factor = 10_000_000;
@@ -66,7 +70,85 @@ public class SearchFeaturesToolTests
             featureTypes: new Dictionary<ushort, string> { [lightsCode] = "LIGHTS" }.ToDictionary(),
             attributeTypes: new Dictionary<ushort, string> { [ObjnamCode] = "OBJNAM" }.ToDictionary(),
             points: new Dictionary<uint, S101PointRecord> { [rcid] = point }.ToDictionary());
-        return LoadedDatasetFactory.S101(id, dataset, LoadedDatasetFactory.Box(-1, -1, 10, 10));
+        return LoadedDatasetFactory.S101(id, dataset, bounds, compilationScale);
+    }
+
+    // Two copies of one object (as NOAA charts "Friday Harbor Marina Entrance"
+    // in each usage band) plus a second object charted only in the coarse cell.
+    private static FakeDatasetCatalog OverlappingBands()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(S101WithNamedPoint("approach", 1, "Marina Entrance", 2.0, 2.0, LoadedDatasetFactory.Box(0, 0, 10, 10), 80_000));
+        catalog.Add(S101WithNamedPoint("harbour", 2, "Marina Entrance", 2.0, 2.0, LoadedDatasetFactory.Box(1, 1, 3, 3), 10_000));
+        catalog.Add(S101WithNamedPoint("approach-east", 3, "Marina Entrance", 8.0, 8.0, LoadedDatasetFactory.Box(0, 0, 10, 10), 80_000));
+        return catalog;
+    }
+
+    [Fact]
+    public async Task Overlapping_bands_return_every_copy_by_default()
+    {
+        var tool = new SearchFeaturesTool(OverlappingBands());
+
+        var result = await tool.InvokeAsync(new SearchFeaturesRequest("marina"), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(3, value.TotalCount);
+    }
+
+    [Fact]
+    public async Task FinestOnly_keeps_one_hit_per_object_from_the_finest_cell_there()
+    {
+        var tool = new SearchFeaturesTool(OverlappingBands());
+
+        var result = await tool.InvokeAsync(
+            new SearchFeaturesRequest("marina", FinestOnly: true), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(2, value.TotalCount);
+        Assert.Equal(["harbour", "approach-east"], value.Features.Select(f => f.DatasetId.Value));
+    }
+
+    [Fact]
+    public async Task FinestOnly_ranks_against_cells_outside_the_dataset_filter()
+    {
+        var tool = new SearchFeaturesTool(OverlappingBands());
+
+        var result = await tool.InvokeAsync(
+            new SearchFeaturesRequest("marina", Dataset: new DatasetId("approach"), FinestOnly: true),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Empty(value.Features);
+    }
+
+    [Fact]
+    public async Task FinestOnly_keeps_both_copies_from_cells_of_the_same_scale()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(S101WithNamedPoint("west", 1, "Marina Entrance", 2.0, 2.0, LoadedDatasetFactory.Box(0, 0, 3, 3), 20_000));
+        catalog.Add(S101WithNamedPoint("east", 2, "Marina Entrance", 2.0, 2.0, LoadedDatasetFactory.Box(1, 1, 4, 4), 20_000));
+        var tool = new SearchFeaturesTool(catalog);
+
+        var result = await tool.InvokeAsync(
+            new SearchFeaturesRequest("marina", FinestOnly: true), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(2, value.TotalCount);
+    }
+
+    [Fact]
+    public async Task FinestOnly_keeps_hits_outside_chart_cells()
+    {
+        var catalog = OverlappingBands();
+        catalog.Add(S122With("mpa", null, NamedMpa("a", "Marina Entrance Reserve", 2.0, 2.0)));
+        var tool = new SearchFeaturesTool(catalog);
+
+        var result = await tool.InvokeAsync(
+            new SearchFeaturesRequest("marina", FinestOnly: true), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Contains(value.Features, f => f.DatasetId.Value == "mpa");
+        Assert.Equal(3, value.TotalCount);
     }
 
     [Fact]

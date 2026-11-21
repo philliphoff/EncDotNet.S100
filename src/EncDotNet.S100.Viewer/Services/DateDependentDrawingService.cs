@@ -36,21 +36,22 @@ internal sealed class DateDependentDrawingService : IDisposable
     /// <param name="loader">The loaded datasets; asked to set the time before each dataset's first render.</param>
     /// <param name="viewTime">The time the map shows.</param>
     /// <param name="timeFormat">The Local/UTC setting dates are read in; local when <see langword="null"/>.</param>
-    /// <param name="time">The machine's zone and the once-a-minute check; the system clock when <see langword="null"/>.</param>
+    /// <param name="time">The machine's zone and the once-a-minute check.</param>
     /// <param name="dispatch">Runs the minute check on the UI thread; <see langword="null"/> for no minute check.</param>
     public DateDependentDrawingService(
         IDatasetLoaderService loader,
         IViewTime viewTime,
-        ITimeFormatProvider? timeFormat = null,
-        TimeProvider? time = null,
-        Action<Action>? dispatch = null)
+        ITimeFormatProvider? timeFormat,
+        TimeProvider time,
+        Action<Action>? dispatch)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(viewTime);
+        ArgumentNullException.ThrowIfNull(time);
         _loader = loader;
         _viewTime = viewTime;
         _timeFormat = timeFormat;
-        _time = time ?? TimeProvider.System;
+        _time = time;
         _loader.SetPortrayalTimeOnLoad(TimeOnLoad);
         _loader.DatasetLoaded += _ => Apply();
         _loader.DatasetRemoved += _ => Apply();

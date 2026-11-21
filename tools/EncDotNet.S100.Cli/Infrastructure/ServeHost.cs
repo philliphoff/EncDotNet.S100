@@ -3,6 +3,9 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Spectre.Console;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
@@ -10,10 +13,38 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// <summary>
 /// The listening rules the HTTP-serving commands (<c>feed serve</c>,
 /// <c>tiles serve</c>) share: localhost by default, and an access token in
-/// every URL when serving beyond this machine.
+/// every URL when serving beyond this machine, and a health check outside it.
 /// </summary>
 internal static class ServeHost
 {
+    /// <summary>The health check's path, <c>/healthz</c>, which is outside any token.</summary>
+    public const string HealthPath = "/healthz";
+
+    /// <summary>The response header of <see cref="HealthPath"/> carrying the data revision, when there is one.</summary>
+    public const string RevisionHeader = "S100-Revision";
+
+    /// <summary>
+    /// Maps <see cref="HealthPath"/>, which answers <c>200 OK</c> with the text
+    /// <c>ok</c> while the server runs. It sits outside the token prefix so a
+    /// container or load balancer health check needs no token, and it says
+    /// nothing about what's served beyond, with <paramref name="revision"/>, an
+    /// opaque <see cref="RevisionHeader"/> (issue #1497).
+    /// </summary>
+    /// <param name="endpoints">The routes to add to.</param>
+    /// <param name="revision">The current data revision; <see langword="null"/> (or returning it) for none.</param>
+    public static void MapHealth(IEndpointRouteBuilder endpoints, Func<string?>? revision = null)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        endpoints.MapGet(HealthPath, context =>
+        {
+            context.Response.ContentType = "text/plain";
+            context.Response.Headers.CacheControl = "no-store";
+            if (revision?.Invoke() is { } current)
+                context.Response.Headers[RevisionHeader] = current;
+            return context.Response.WriteAsync("ok");
+        });
+    }
+
     /// <summary>Checks <c>--host</c>, <c>--port</c>, <c>--token</c> and <c>--no-token</c>.</summary>
     public static ValidationResult Validate(string host, int port, string? token, bool noToken)
     {
@@ -62,4 +93,26 @@ internal static class ServeHost
         var prefix = token is null ? string.Empty : Uri.EscapeDataString(token) + "/";
         return new Uri(string.Create(CultureInfo.InvariantCulture, $"http://{host}:{port}/{prefix}"));
     }
+
+    /// <summary>
+    /// A slim web application builder that watches no files (issue #1506).
+    /// </summary>
+    /// <remarks>
+    /// By default the host roots its content at the working directory and
+    /// reloads <c>appsettings.json</c> on change, which puts a file watcher on
+    /// that whole tree. On Windows a working directory given as an 8.3 short
+    /// path makes that watcher throw on a rename event that arrives with the
+    /// long path, on a thread pool thread, which ends the process. The servers
+    /// read no configuration files, so the content root is the app's own
+    /// folder and configuration doesn't reload: nothing is watched.
+    /// </remarks>
+    public static WebApplicationBuilder CreateBuilder() =>
+        WebApplication.CreateSlimBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+            Args = ["--" + ReloadConfigOnChangeKey + "=false"],
+        });
+
+    /// <summary>The host setting that turns configuration reload on change on or off.</summary>
+    internal const string ReloadConfigOnChangeKey = "hostBuilder:reloadConfigOnChange";
 }

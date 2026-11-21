@@ -77,19 +77,20 @@ internal sealed class LibraryNavigationalWarningSources : INavigationalWarningSo
         ILibraryDownloader downloader,
         Func<CollectionSource, FeedHealth?> health,
         Func<Guid, string> nameOf,
-        Action<Action>? dispatch = null)
+        Action<Action> dispatch)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(health);
         ArgumentNullException.ThrowIfNull(nameOf);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _library = library;
         _datasets = datasets;
         _downloader = downloader;
         _health = health;
         _nameOf = nameOf;
-        _dispatch = dispatch ?? (action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+        _dispatch = dispatch;
         _library.Changed += OnLibraryChanged;
         _library.SourceIndexed += OnSourceIndexed;
     }

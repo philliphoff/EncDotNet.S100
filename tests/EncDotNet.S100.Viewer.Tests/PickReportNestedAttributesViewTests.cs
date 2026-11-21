@@ -25,7 +25,7 @@ public sealed class PickReportNestedAttributesViewTests
             "tidalStreamPanelValues",
             Complex("tidalStreamValue", Leaf("speedMaximum", "1.5"), Leaf("orientationValue", "10")),
             Complex("tidalStreamValue", Leaf("speedMaximum", "2.25"), Leaf("orientationValue", "190")));
-        var pick = new PickReportViewModel();
+        var pick = TestPickReport.Create();
         pick.SetPicks([
             new PickHit
             {

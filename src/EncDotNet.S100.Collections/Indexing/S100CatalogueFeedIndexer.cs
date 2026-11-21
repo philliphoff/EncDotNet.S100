@@ -51,7 +51,7 @@ public sealed class S100CatalogueFeedIndexer : ICollectionSourceIndexer
         ArgumentNullException.ThrowIfNull(httpClient);
         _httpClient = httpClient;
         _time = timeProvider ?? TimeProvider.System;
-        _cache = new FeedCache(httpClient, cacheDirectory, options, _time);
+        _cache = new FeedCache(httpClient, cacheDirectory, options ?? FeedCacheOptions.Default, _time);
     }
 
     /// <inheritdoc/>

@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Routing;
@@ -41,6 +42,28 @@ public class ViewerPassageRouteProviderTests
         route.SetLegOverride(1, RoutePassageField.Speed, 8);
         route.Legs[1].GeometryType = RouteLegGeometryType.Geodesic;
         return routes;
+    }
+
+    [Fact]
+    public async Task A_planned_route_is_created_active_with_its_stops_named()
+    {
+        // plan_route's routeName (#1560).
+        var routes = Routes();
+        var provider = new ViewerPassageRouteProvider(routes, new InlineInvoker());
+
+        var result = await provider.CreateRouteAsync(
+            "Day 1",
+            [new PlanRouteWaypoint(50.64, -0.935, "from"), new PlanRouteWaypoint(50.66, -0.95), new PlanRouteWaypoint(50.672, -0.978, "to")],
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var id));
+        var route = routes.Routes.FindById(id!)!;
+        Assert.Same(route, routes.Routes.ActiveRoute);
+        Assert.Equal("Day 1", route.Name);
+        Assert.Equal(3, route.Waypoints.Count);
+        Assert.Equal(new GeoPosition(50.66, -0.95), route.Waypoints[1].Position);
+        Assert.Equal("from", route.Waypoints[0].Name);
+        Assert.Equal("to", route.Waypoints[2].Name);
     }
 
     [Fact]

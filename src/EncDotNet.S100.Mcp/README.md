@@ -67,6 +67,7 @@ A host with its own live set of datasets, such as a viewer, implements
 | `IdleTimeout` | 10 minutes | How long an idle session is kept. |
 | `AdditionalTools` | `null` | Host tools to serve alongside the built-in tools. See [Add host tools](#add-host-tools). |
 | `PassageRoutes` | `null` | The host's routes, so `check_route` can check a route as well as a polyline. |
+| `Toolsets` | `null` (all) | The toolsets to serve. See [Toolsets](#toolsets). |
 
 ### Server members
 
@@ -99,22 +100,44 @@ error. Don't write to `Console.Out` from your own code while it runs.
 ## Built-in tools
 
 `S100McpTools.Create(catalog)` returns the built-in tools, which
-`S100McpServer` and `S100McpStdioHost` always serve. They only read the catalog:
+`S100McpServer` and `S100McpStdioHost` serve unless the selected toolsets leave them out. They only read the catalog:
 
-`list_datasets`, `describe_feature`, `describe_feature_type`,
-`sample_coverage`, `find_at`, `identify_features`, `nearest_features`,
-`query_features`, `count_features`, `search_features`,
-`sample_coverage_along`, `list_specs`, `list_time_steps` and
+`list_datasets`, `describe_feature`, `describe_feature_type`, `sample`,
+`find_at`, `identify_features`, `nearest_features`, `query_features`,
+`count_features`, `search_features`, `list_specs`, `list_time_steps` and
 `check_route`.
 
 [Query tools](../../docs/mcp-server.md#query-tools) in the MCP server guide
 describes each one.
 
+## Toolsets
+
+Every tool belongs to one toolset, so a host can serve only the tools a task
+needs: each tool's description takes room in an agent's context. The names are
+constants on `McpToolsets`, such as `McpToolsets.Query` and `McpToolsets.Routes`;
+`McpToolsets.All` lists them with a summary, and `McpToolsets.Profiles` names
+sets of them, such as `route-planning`.
+
+- Declare a tool's toolset where you create it:
+  `McpToolsets.Assign(McpToolsets.Routes, tool)`, or for a list,
+  `McpToolsets.Assign(McpToolsets.Routes, tools)`. The built-in, session,
+  Library and tide tools already declare theirs. The toolset is kept in the
+  tool's in-process metadata, so it adds nothing to `tools/list`.
+- Select toolsets with `S100McpServerOptions.Toolsets`, or the `toolsets`
+  argument of `S100McpStdioHost.RunAsync`; `null` serves them all.
+  `McpToolsets.TryParse` reads a comma-separated list of names and profiles.
+- `McpToolsets.Select(tools, toolsets)` does the selecting, and throws if a tool
+  declares no toolset. Call it yourself when you host the tools another way.
+
+[Choose toolsets](../../docs/mcp-server.md#choose-toolsets) lists the toolsets
+and their sizes.
+
 ## Add host tools
 
 Pass extra `McpServerTool` instances in `S100McpServerOptions.AdditionalTools`,
 or as the `additionalTools` argument of `S100McpStdioHost.RunAsync`. Their names
-must not match a built-in tool.
+must not match a built-in tool, and each must declare its toolset (see
+[Toolsets](#toolsets)), or the server refuses to start.
 
 `S100MutableTools.Create` (namespace `EncDotNet.S100.Mcp.MutableTools`) builds
 the tools that change a session. Each group of tools needs a capability from
@@ -140,13 +163,23 @@ tools with a headless renderer.
 `EncDotNet.S100.Mcp.Tools` as MCP tools. SoundCharts serves them over its
 Library.
 
+`TideMcpTools.Create` (namespace `EncDotNet.S100.Mcp.Tides`) builds the
+read-only tide and tidal current tools, `list_tide_stations`, `predict_tide`,
+`list_current_stations` and `predict_current`, over an
+`ITideCatalogueSource`, such as a `TideCatalogueFileSource` for the file
+`s100 tides update` writes. SoundCharts and `s100 mcp serve` both serve them.
+[Tide tools](../../docs/mcp-server.md#tide-tools) and
+[Tidal current tools](../../docs/mcp-server.md#tidal-current-tools) describe them.
+
 ## Security
 
 - The server listens on the loopback address by default, so other machines
   can't reach it.
-- There's no authentication. Any process on the machine can connect. Don't
-  bind it to a routable address without an authenticating reverse proxy in
-  front of it.
+- `S100McpServer` has no authentication. Any process on the machine can
+  connect. Don't bind it to a routable address without an authenticating
+  reverse proxy in front of it. `s100 mcp serve --transport http` adds a bearer
+  token and an origin check of its own; see
+  [MCP over HTTP](../../docs/cli.md#mcp-over-http).
 - SoundCharts starts it only when you turn it on. Its settings offer only a
   loopback address; the `--mcp-bind` command-line option can change it.
 - The built-in tools only read the catalog. Host tools you add can change

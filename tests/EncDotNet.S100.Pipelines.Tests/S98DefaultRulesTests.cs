@@ -704,7 +704,7 @@ public class S98DefaultRulesTests
         // S98DefaultRules.Default declaration order is part of the
         // public contract — pin it.
         Assert.Equal(
-            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-101-104-B", "R-101-WX-B", "R-111-A", "R-111-WX-B" },
+            new[] { "R-101-102-A", "R-101-102-B", "R-102-102-A", "R-101-124-A", "R-104-A", "R-101-104-B", "R-101-WX-B", "R-111-A", "R-111-WX-B" },
             S98DefaultRules.Default.Select(r => r.RuleId).ToArray());
     }
 

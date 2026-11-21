@@ -65,6 +65,17 @@ public sealed class PickAttribute
     public double? DepthMetresValue { get; init; }
 
     /// <summary>
+    /// A short outlined mark shown before the attribute's name, or
+    /// <see langword="null"/> for none: <c>"AML"</c> on an attribute that a
+    /// NATO Additional Military Layers catalogue adds to a standard S-57
+    /// object class (<see cref="AmlMark"/>).
+    /// </summary>
+    public string? Mark { get; init; }
+
+    /// <summary>The <see cref="Mark"/> of an AML-only attribute on a standard S-57 class: <c>"AML"</c>.</summary>
+    public const string AmlMark = "AML";
+
+    /// <summary>
     /// Sub-attributes of a complex attribute. Empty for simple attributes
     /// and for leaf rows of a complex attribute.
     /// </summary>
@@ -103,6 +114,79 @@ public sealed class PickAttribute
             RawValue = text,
             DisplayValue = text,
             IsNavigationNotice = true,
+        };
+    }
+
+    /// <summary>
+    /// The <see cref="Code"/> of the row that says how the picked values were
+    /// produced (<see cref="DataDynamicityRow"/>): <c>"dataDynamicity"</c>.
+    /// </summary>
+    public const string DataDynamicityCode = "dataDynamicity";
+
+    /// <summary>
+    /// The row that says how the picked values were produced (#1505):
+    /// <see cref="DataDynamicityCode"/>, named "Data", with the S-104
+    /// <c>dataDynamicity</c> number as its raw value and an English label as
+    /// its display value. A forecast carries its run time (the dataset's issue
+    /// time) in <see cref="DateTimeValue"/>; hosts with their own wording, such
+    /// as the viewer, relabel it from <see cref="RawValue"/>.
+    /// </summary>
+    /// <param name="kind">How the values were produced.</param>
+    /// <param name="runTime">A forecast's run time (UTC), or <see langword="null"/> when unknown or not a forecast.</param>
+    /// <returns>The row.</returns>
+    public static PickAttribute DataDynamicityRow(DataDynamicity kind, DateTime? runTime)
+    {
+        var run = kind == DataDynamicity.HydrodynamicForecast ? runTime : null;
+        var label = kind switch
+        {
+            DataDynamicity.Observation => "Observed",
+            DataDynamicity.AstronomicalPrediction => "Predicted · astronomical tide only, not a forecast",
+            DataDynamicity.AnalysisOrHybrid => "Analysis",
+            DataDynamicity.HydrodynamicHindcast => "Hindcast",
+            _ => run is { } r
+                ? "Forecast, run " + r.ToString("yyyy-MM-dd HH:mm'Z'", System.Globalization.CultureInfo.InvariantCulture)
+                : "Forecast",
+        };
+        return new PickAttribute
+        {
+            Code = DataDynamicityCode,
+            Name = "Data",
+            RawValue = ((int)kind).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DisplayValue = label,
+            DateTimeValue = run,
+        };
+    }
+
+    /// <summary>
+    /// The <see cref="Code"/> of a stale-data line (<see cref="StaleNotice"/>):
+    /// <c>"stale"</c>.
+    /// </summary>
+    public const string StaleNoticeCode = "stale";
+
+    /// <summary>
+    /// <c>true</c> when this row says the data picked is old, e.g. "This
+    /// analysis is 9 h old. A newer one is likely." on a stale
+    /// surface analysis. Non-viewer callers show it as an ordinary row; the
+    /// viewer shows it as a warning line under the notice.
+    /// </summary>
+    public bool IsStaleNotice { get; init; }
+
+    /// <summary>
+    /// A stale-data row: <see cref="StaleNoticeCode"/>, named "Stale", with
+    /// <paramref name="text"/> as its value and <see cref="IsStaleNotice"/> set.
+    /// </summary>
+    /// <param name="text">What is old and how old.</param>
+    /// <returns>The row.</returns>
+    public static PickAttribute StaleNotice(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return new PickAttribute
+        {
+            Code = StaleNoticeCode,
+            Name = "Stale",
+            RawValue = text,
+            DisplayValue = text,
+            IsStaleNotice = true,
         };
     }
 

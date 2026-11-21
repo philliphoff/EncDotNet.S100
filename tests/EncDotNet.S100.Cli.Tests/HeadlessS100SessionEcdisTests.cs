@@ -25,7 +25,7 @@ public sealed class HeadlessS100SessionEcdisTests
     {
         Assert.SkipUnless(File.Exists(FixturePath), $"Fixture not found: {FixturePath}");
 
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         var outcome = await catalog.LoadAsync(FixturePath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.SkipWhen(outcome.Added.Count == 0, "The S-57 cell could not be loaded into the catalog.");
 

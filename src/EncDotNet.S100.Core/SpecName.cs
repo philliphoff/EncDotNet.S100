@@ -43,10 +43,46 @@ public static partial class SpecName
     public const string TropicalCyclone = "TC";
 
     /// <summary>
+    /// NATO Additional Military Layers, canonical name <c>"AML"</c>: S-57
+    /// encoded military overlay cells (<c>DSID</c> <c>PRSP</c> 51–57), whose
+    /// edition is the AML product specification edition (<c>1.0</c>,
+    /// <c>2.1</c>, <c>3.0</c>).
+    /// </summary>
+    public const string Aml = "AML";
+
+    /// <summary>
+    /// NOAA National Data Buoy Center observations, canonical name
+    /// <c>"NDBC"</c>: a live source of buoy and coastal station reports rather
+    /// than a file, drawn through <c>DynamicSourceProcessor</c>.
+    /// </summary>
+    public const string Ndbc = "NDBC";
+
+    /// <summary>
+    /// Own-ship instruments read from NMEA 0183, canonical name <c>"NMEA"</c>:
+    /// a live source such as own-ship weather, drawn through
+    /// <c>DynamicSourceProcessor</c>.
+    /// </summary>
+    public const string Nmea = "NMEA";
+
+    /// <summary>
+    /// The format name of AIS vessel targets (ITU-R M.1371), such as from
+    /// aisstream.io: a live source, not an S-100 product.
+    /// </summary>
+    public const string Ais = "AIS";
+
+    /// <summary>
+    /// Tide and tidal current predictions computed from a station list, such
+    /// as NOAA's harmonic constituents, canonical name <c>"TIDES"</c>: a live
+    /// source following the view time, not an S-100 product (S-104 and S-111
+    /// are the products).
+    /// </summary>
+    public const string TidePredictions = "TIDES";
+
+    /// <summary>
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml, Ndbc, Nmea, Ais, TidePredictions];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the

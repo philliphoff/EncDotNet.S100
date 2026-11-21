@@ -48,6 +48,12 @@ public class AreaCheckTests
             plan ?? new PassagePlan([EastPassage], Departure),
             Fixture.Settings(at ?? Departure));
 
+    // The verdict of the area check's findings over East.
+    private static RouteCheckVerdict Verdict(params RouteArea[] areas) =>
+        RouteCheckVerdict.From(
+            RouteFinding.Sort(Checks.Areas(new FakeAreas(areas, null), new PassagePlan([EastPassage], Departure), AtDeparture).Findings),
+            null);
+
     [Theory]
     // #1127: entering a traffic separation zone or an area to be avoided is a
     // decision to make; only reaching into the corridor is worth checking.
@@ -121,8 +127,39 @@ public class AreaCheckTests
         Assert.Equal("route_check.enters_prohibited_area.101TEST/RestrictedArea.0.004", finding.Id);
     }
 
+    [Fact]
+    public void Entering_an_entry_restricted_area_is_checked_not_must_review()
+    {
+        // #1546: NOAA charts large-vessel Regulated Navigation Areas (33 CFR
+        // 165.1301) cell-wide as entry restricted; they mustn't drive a small
+        // boat's verdict or headline.
+        var result = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, restrictions: [8], name: "Regulated Navigation Area"));
+
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), (finding.Code, finding.Group));
+        Assert.Equal("Crosses Regulated Navigation Area", finding.Title);
+        Assert.StartsWith("Leg 1 → 2 · S-101 restricted area · entry restricted · ", finding.Meta, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Only_entry_prohibited_drives_the_verdict_and_headline()
+    {
+        var restricted = Area(RouteAreaKind.RestrictedArea, 0.002, 0.003, restrictions: [8], name: "Regulated Navigation Area");
+        var prohibited = Area(RouteAreaKind.RestrictedArea, 0.005, 0.006, restrictions: [7], name: "Naval Restricted Area");
+
+        var restrictedOnly = Verdict(restricted);
+        var both = Verdict(restricted, prohibited);
+
+        Assert.Equal(RouteCheckVerdictKind.Check, restrictedOnly.Kind);
+        Assert.Equal("Crosses Regulated Navigation Area", restrictedOnly.Headline!.Title);
+        Assert.Equal(RouteCheckVerdictKind.MustReview, both.Kind);
+        Assert.Equal("Enters Naval Restricted Area", both.Headline!.Title);
+    }
+
     [Theory]
-    [InlineData(new[] { 8 }, RouteFindingGroup.MustReview)]
+    [InlineData(new[] { 7 }, RouteFindingGroup.MustReview)]
+    [InlineData(new[] { 8 }, RouteFindingGroup.Check)]
+    [InlineData(new[] { 7, 8 }, RouteFindingGroup.MustReview)]
     [InlineData(new[] { 27 }, RouteFindingGroup.Check)]
     [InlineData(new int[0], RouteFindingGroup.Check)]
     [InlineData(new[] { 1, 3 }, RouteFindingGroup.Info)]
@@ -283,6 +320,41 @@ public class AreaCheckTests
         var patchy = new FakeCell("101FINE", 22_000, p => p.Longitude > 0.008);
         var coarseOnly = Checks.Areas(new FakeAreas([inCoarse], [patchy, coarse]), new PassagePlan([East]), AtDeparture);
         Assert.Single(coarseOnly.Findings);
+    }
+
+    [Fact]
+    public void A_coarse_area_is_cut_where_finer_cells_chart_the_track()
+    {
+        // #1543: the coarse cell's area spans 0,002°–0,009° E; a fine cell
+        // covers 0,004°–0,006° E partway along the leg, so the coarse area
+        // counts before and after the fine cell only, with a finding each.
+        var fine = new FakeCell("101FINE", 22_000, p => p.Longitude is >= 0.004 and <= 0.006);
+        var coarse = new FakeCell("101COARSE", 350_000);
+        var area = Area(RouteAreaKind.CautionArea, 0.002, 0.009) with { Cell = coarse, Feature = new RouteFindingFeature("101COARSE", "1") };
+
+        var result = Checks.Areas(new FakeAreas([area], [fine, coarse]), new PassagePlan([East]), AtDeparture);
+
+        Assert.Equal(2, result.Findings.Count);
+        Assert.Equal(2, result.Detail!.Matches.Count);
+        Assert.All(result.Detail.Matches, m => Assert.Equal(RouteAreaRelation.Enters, m.Relation));
+        Assert.Equal(result.Detail.Matches.Select(m => m.Finding), result.Findings);
+        Assert.Equal(2, result.Findings.Select(f => f.Id).Distinct().Count());
+
+        var (before, after) = (result.Detail.Matches[0], result.Detail.Matches[1]);
+        Assert.Equal(0.002 * E, before.StartDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.004 * E, before.EndDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.006 * E, after.StartDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.009 * E, after.EndDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.006 * E, after.Finding!.Location!.StartDistanceMeters, tolerance: 2.0);
+
+        // Where the fine cell covers the track from partway on, the coarse
+        // area ends where the fine coverage starts.
+        var fromMidway = new FakeCell("101FINE", 22_000, p => p.Longitude >= 0.005);
+        var trimmed = Checks.Areas(new FakeAreas([area], [fromMidway, coarse]), new PassagePlan([East]), AtDeparture);
+        var match = Assert.Single(trimmed.Detail!.Matches);
+        Assert.Single(trimmed.Findings);
+        Assert.Equal(0.002 * E, match.StartDistanceMeters, tolerance: 2.0);
+        Assert.Equal(0.005 * E, match.EndDistanceMeters, tolerance: 2.0);
     }
 
     [Fact]

@@ -383,6 +383,12 @@ public sealed class TextInstruction : DrawingInstruction
     public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
 
     /// <summary>
+    /// Font slant (S-100 Part 9 <c>FontCharacteristics.slant</c>). Defaults to
+    /// <see cref="TextFontSlant.Upright"/>.
+    /// </summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
+
+    /// <summary>
     /// Optional S-100 colour token for a halo stroked around the glyphs, so the
     /// label reads over busy chart content. Not an S-100 Part 9 text attribute:
     /// it is used by portrayals SoundCharts defines itself (S-104 water level).
@@ -428,6 +434,20 @@ public enum TextFontProportion
 
     /// <summary>A monospaced face.</summary>
     MonoSpaced = 1,
+}
+
+/// <summary>S-100 Part 9 font slant.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextFontSlant
+{
+    /// <summary>An upright face.</summary>
+    Upright = 0,
+
+    /// <summary>An italic face.</summary>
+    Italics = 1,
 }
 
 /// <summary>S-100 Part 9 horizontal text alignment.</summary>

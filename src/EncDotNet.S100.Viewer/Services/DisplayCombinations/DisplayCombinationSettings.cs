@@ -38,6 +38,9 @@ internal sealed class DisplayCombinationSettings
     /// <summary>Sub-layer visibility, by sub-layer key.</summary>
     public Dictionary<string, bool> SubLayerVisibility { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>Map-wide optional-layer settings, by option key.</summary>
+    public Dictionary<string, string> LayerOptions { get; set; } = new(StringComparer.Ordinal);
+
     /// <summary>Creates the settings record for a user combination.</summary>
     public static DisplayCombinationSettings From(DisplayCombination combination)
     {
@@ -53,6 +56,7 @@ internal sealed class DisplayCombinationSettings
             DisplayModes = new(combination.DisplayModes, StringComparer.OrdinalIgnoreCase),
             LayerVisibility = new(combination.LayerVisibility, StringComparer.Ordinal),
             SubLayerVisibility = new(combination.SubLayerVisibility, StringComparer.Ordinal),
+            LayerOptions = new(combination.LayerOptions, StringComparer.Ordinal),
         };
     }
 
@@ -76,6 +80,7 @@ internal sealed class DisplayCombinationSettings
                 .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
             LayerVisibility = new Dictionary<string, bool>(LayerVisibility ?? [], StringComparer.Ordinal),
             SubLayerVisibility = new Dictionary<string, bool>(SubLayerVisibility ?? [], StringComparer.Ordinal),
+            LayerOptions = new Dictionary<string, string>(LayerOptions ?? [], StringComparer.Ordinal),
         };
     }
 

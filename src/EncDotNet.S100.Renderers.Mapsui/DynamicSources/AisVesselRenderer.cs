@@ -28,6 +28,7 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 /// use a neutral grey.
 /// </para>
 /// </remarks>
+[Obsolete("Draw AIS targets with PortrayedDynamicFeatureRenderer over VesselPortrayal.Ais, which also renders headless. This renderer will be removed in a later release.")]
 public sealed class AisVesselRenderer : IDynamicFeatureRenderer
 {
     private const string KindPrefix = "vessel.ais.";

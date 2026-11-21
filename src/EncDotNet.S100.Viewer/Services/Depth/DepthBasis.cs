@@ -26,6 +26,13 @@ internal enum DepthBasisReason
 
     /// <summary>Adjustment is on but unavailable in the view: see <see cref="DepthBasis.WaterLevelStatus"/>.</summary>
     WaterLevel,
+
+    /// <summary>
+    /// Adjustment is on and water level is available, but every depth source
+    /// in view is a product the chart draws as charted (translated S-57
+    /// cells): see <see cref="DepthBasis.NotAdjustedSources"/>.
+    /// </summary>
+    ProductNotAdjusted,
 }
 
 /// <summary>A dataset that supplies depths or water level in the view.</summary>
@@ -36,6 +43,19 @@ internal enum DepthBasisReason
 /// <param name="End">S-104 only: the last time step (UTC).</param>
 /// <param name="Kind">S-104 only: grid or station.</param>
 /// <param name="Run">S-104 only: the run (issue time, UTC), when declared.</param>
+/// <summary>How much of an adjusted water level is a tide prediction (tide predictions design D9).</summary>
+internal enum PredictedShare
+{
+    /// <summary>None: S-104 only, or not adjusted.</summary>
+    None,
+
+    /// <summary>Part: S-104 covers part of the view and predictions the rest.</summary>
+    Part,
+
+    /// <summary>All: only predictions adjust the view.</summary>
+    All,
+}
+
 internal sealed record DepthBasisSource(
     string DatasetId,
     string Spec,
@@ -60,7 +80,7 @@ internal sealed record DepthBasisSource(
 /// <param name="Datum">Whether the depth sources and water-level sources in view share a datum, when both are present.</param>
 /// <param name="DepthSources">The depth-bearing datasets in the view.</param>
 /// <param name="WaterLevelSources">The active S-104 datasets that meet the view.</param>
-/// <param name="NotAdjusted">The depth sources in view refused for their datum (#1132).</param>
+/// <param name="NotAdjusted">The depth sources in view refused for their datum (#1132) or their product.</param>
 internal sealed record DepthBasis(
     DepthBasisKind Kind,
     DepthBasisReason Reason,
@@ -73,6 +93,27 @@ internal sealed record DepthBasis(
     IReadOnlyList<DepthBasisSource> WaterLevelSources,
     IReadOnlyList<DepthBasisSource>? NotAdjusted = null)
 {
+    /// <summary>
+    /// How much of the adjusted water level is a tide prediction (tide
+    /// predictions design D9): none, part (S-104 covers the rest) or all.
+    /// </summary>
+    public PredictedShare Predicted { get; init; }
+
+    /// <summary>The predicted stations in reach of the view, as "Seattle 9447130", nearest the centre first.</summary>
+    public IReadOnlyList<string> PredictedStations { get; init; } = [];
+
+    /// <summary>
+    /// Whether the DEPTHS flyout offers <b>Use tide predictions</b> (D2):
+    /// predictions are off, no S-104 meets the view and a station is in reach.
+    /// </summary>
+    public bool OffersPredictions { get; init; }
+
+    /// <summary>Whether predictions are in use and NOAA has newer data than the station list (D15, D21).</summary>
+    public bool PredictionsStale { get; init; }
+
+    /// <summary>The station list's date, for the stale notice.</summary>
+    public DateTimeOffset? StationListDate { get; init; }
+
     /// <summary>
     /// The depth sources in view that adjustment refuses for their datum
     /// (#1132); empty when adjustment is off or adjusts every source.

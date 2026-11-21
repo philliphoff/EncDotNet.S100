@@ -75,6 +75,46 @@ internal static class CliApp
                     .WithExample("route", "check", "route.gml", "exchange-set/", "--departure", "2026-03-01T06:00Z", "--speed", "8", "--format", "json");
             });
 
+            config.AddBranch("tides", tides =>
+            {
+                tides.SetDescription("Predict tides and tidal currents offline from harmonic constituents (NOAA CO-OPS stations). Astronomical tide and current only, not a forecast; not for navigation.");
+
+                tides.AddCommand<TidesStationsCommand>("stations")
+                    .WithDescription("List tide stations near a point, nearest first, with their kind (harmonic or subordinate), reference station and datums.")
+                    .WithExample("tides", "stations", "--near", "47.6,-122.34")
+                    .WithExample("tides", "stations", "--near", "47.6,-122.34", "--radius", "20nm", "--limit", "5", "--format", "json");
+
+                tides.AddCommand<TidesPredictCommand>("predict")
+                    .WithDescription("Predict the tide at a station: heights at a step, or the highs and lows, as a table, CSV, JSON or an S-104 dataset.")
+                    .WithExample("tides", "predict", "9447130")
+                    .WithExample("tides", "predict", "Seattle", "--from", "2026-11-13T12:00", "--to", "2026-11-13T18:00", "--step", "10m")
+                    .WithExample("tides", "predict", "9447130", "--highs-lows", "--from", "2026-11-13", "--to", "2026-11-20")
+                    .WithExample("tides", "predict", "--near", "47.6,-122.34", "--datum", "LAT", "--format", "csv")
+                    .WithExample("tides", "predict", "9447130", "--from", "2026-11-13", "--to", "2026-11-20", "--step", "6m", "--format", "s104", "-o", "seattle.h5");
+
+                tides.AddBranch("currents", currents =>
+                {
+                    currents.SetDescription("Predict tidal currents offline from harmonic constituents (NOAA CO-OPS current stations). Astronomical current only, not a forecast; not for navigation.");
+
+                    currents.AddCommand<TidesCurrentStationsCommand>("stations")
+                        .WithDescription("List tidal current stations near a point, nearest first, with their kind, reference station, depth and flood and ebb directions.")
+                        .WithExample("tides", "currents", "stations", "--near", "48.406,-122.643")
+                        .WithExample("tides", "currents", "stations", "--near", "37.82,-122.46", "--radius", "5nm", "--format", "json");
+
+                    currents.AddCommand<TidesCurrentPredictCommand>("predict")
+                        .WithDescription("Predict the tidal current at a current station: speed and direction at a step, or the slacks and maxima, as a table, CSV, JSON or an S-111 dataset.")
+                        .WithExample("tides", "currents", "predict", "PUG1701_33")
+                        .WithExample("tides", "currents", "predict", "Deception Pass", "--events", "--from", "2026-11-13", "--to", "2026-11-14")
+                        .WithExample("tides", "currents", "predict", "--near", "37.82,-122.46", "--step", "10m", "--format", "csv")
+                        .WithExample("tides", "currents", "predict", "PUG1701_33", "--from", "2026-11-13", "--to", "2026-11-20", "--step", "10m", "--format", "s111", "-o", "deception-pass.h5");
+                });
+
+                tides.AddCommand<TidesUpdateCommand>("update")
+                    .WithDescription("Download NOAA CO-OPS's tide and current stations into the offline catalogue (about 10 minutes), or check whether NOAA has newer data.")
+                    .WithExample("tides", "update")
+                    .WithExample("tides", "update", "--check");
+            });
+
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
                 .WithExample("validate", "warnings.gml")
@@ -94,6 +134,15 @@ internal static class CliApp
                 .WithExample("identify", "warnings.gml", "--lat", "50.1", "--lon", "-1.3")
                 .WithExample("identify", "--layer", "enc.000", "--layer", "bathy.h5", "--lat", "50.1", "--lon", "-1.3")
                 .WithExample("identify", "--from", "exchange-set.zip", "--lat", "50.1", "--lon", "-1.3", "--format", "json");
+
+            config.AddCommand<HealthCommand>("health")
+                .WithDescription("Ask a running tiles serve or feed serve on this machine for its /healthz health check; exits 0 when it answers, for container health checks.")
+                .WithExample("health")
+                .WithExample("health", "--port", "8100");
+
+            config.AddCommand<SourcesCommand>("sources")
+                .WithDescription("List the live data sources --source and MCP's add_data_source take (NDBC observations, NMEA own-ship weather, AIS targets), with their options and what each needs.")
+                .WithExample("sources");
 
             config.AddCommand<ListSpecsCommand>("list-specs")
                 .WithDescription("List supported product specifications and headless-render capability.")
@@ -143,13 +192,14 @@ internal static class CliApp
                 mcp.SetDescription("Model Context Protocol (MCP) server operations.");
 
                 mcp.AddCommand<McpServeCommand>("serve")
-                    .WithDescription("Serve the S-100 MCP tools over stdio, with a headless session and a dataset-collection Library, so an agent that spawns this process can query, sample, render and fetch data without a GUI.")
+                    .WithDescription("Serve the S-100 MCP tools over stdio, or over HTTP with --transport http, with a headless session and a dataset-collection Library, so an agent can query, sample, render and fetch data without a GUI.")
                     .WithExample("mcp", "serve", "dataset.h5")
                     .WithExample("mcp", "serve", "--layer", "enc.000", "--layer", "bathy.h5")
                     .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102")
                     .WithExample("mcp", "serve", "charts/")
                     .WithExample("mcp", "serve", "--collection", "noaa-s111#sfbofs", "--data-dir", "s100-data")
-                    .WithExample("mcp", "serve", "--collection", "charts.s100collection.json");
+                    .WithExample("mcp", "serve", "--collection", "charts.s100collection.json")
+                    .WithExample("mcp", "serve", "charts/", "--transport", "http", "--host", "0.0.0.0");
             });
         });
         return app;

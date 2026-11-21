@@ -33,19 +33,19 @@ public sealed class AddCollectionManifestDialogViewTests
         File.WriteAllText(bad, """{ "format": "encdotnet-s100-collection", "version": 1, "groups": [ { "id": "A" } ] }""");
 
         // Read the manifests off the UI thread; the views are built on it below.
-        var adding = new AddToLibraryDialogViewModel(library, null);
+        var adding = new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         adding.Initialize(LibrarySourceKind.LocalManifest, good, targetCollectionId: null);
         await adding.LoadCatalogAsync();
         adding.Choices()[1].IsSelected = true;
 
-        var broken = new AddToLibraryDialogViewModel(library, null);
+        var broken = new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         broken.Initialize(LibrarySourceKind.LocalManifest, bad, targetCollectionId: null);
         await broken.LoadCatalogAsync();
         Assert.True(broken.HasManifestProblems);
 
         var source = new LocalManifestSource(Guid.NewGuid(), null, good, new LocalManifestFilter { Groups = ["AU"] });
         var collection = library.AddCollection("Test", [source]);
-        var editing = new AddToLibraryDialogViewModel(library, null);
+        var editing = new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         editing.InitializeEdit(collection.Id, source);
         await editing.LoadCatalogAsync();
 
@@ -74,7 +74,7 @@ public sealed class AddCollectionManifestDialogViewTests
         var groups = string.Join(",", Enumerable.Range(0, 20).Select(i => $$"""{ "id": "G{{i}}", "paths": ["G{{i}}"] }"""));
         File.WriteAllText(path, $$"""{ "format": "encdotnet-s100-collection", "version": 1, "groups": [ {{groups}} ] }""");
 
-        var scope = new AddToLibraryDialogViewModel(library, null);
+        var scope = new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         scope.Initialize(LibrarySourceKind.LocalManifest, path, targetCollectionId: null);
         await scope.LoadCatalogAsync();
 

@@ -27,6 +27,10 @@ internal sealed class S57EdgeGraph
 
     private static readonly GeometryFactory Factory = new(new PrecisionModel(1.0));
 
+    // Probe points are not rounded to the coordinate grid: a face a unit or
+    // two wide has no grid point inside it (#1291).
+    private static readonly GeometryFactory Exact = new();
+
     private readonly Func<uint> _nextId;
     private readonly Dictionary<(int X, int Y), uint> _nodeAt = new();
 
@@ -37,7 +41,19 @@ internal sealed class S57EdgeGraph
     public readonly record struct Use(uint Edge, bool Reverse);
 
     /// <summary>A face of the planar graph: its polygon and its boundary, interior on the right.</summary>
-    public sealed record Face(Polygon Polygon, IReadOnlyList<Use> Boundary);
+    public sealed record Face(Polygon Polygon, IReadOnlyList<Use> Boundary)
+    {
+        /// <summary>A point strictly inside the face, for telling which area it lies in.</summary>
+        public Point Probe { get; } = InsidePoint(Polygon);
+    }
+
+    /// <summary>
+    /// A point strictly inside <paramref name="polygon"/>, unlike
+    /// <see cref="Geometry.InteriorPoint"/>, which rounds it to the integer
+    /// grid and so can put it outside a sliver.
+    /// </summary>
+    public static Point InsidePoint(Geometry polygon)
+        => Exact.CreatePoint(InteriorPointArea.GetInteriorPoint(polygon));
 
     public S57EdgeGraph(Func<uint> nextId) => _nextId = nextId;
 
@@ -100,7 +116,7 @@ internal sealed class S57EdgeGraph
         // Usually one exterior ring with holes inside it.
         var ordered = rings.OrderByDescending(r => Math.Abs(NetTopologySuite.Algorithm.Area.OfRingSigned(r.CoordinateSequence))).ToList();
         var shell = Factory.CreatePolygon(ordered[0]);
-        if (ordered.Skip(1).All(r => shell.Contains(Factory.CreatePolygon(r).InteriorPoint)))
+        if (ordered.Skip(1).All(r => shell.Contains(InsidePoint(Factory.CreatePolygon(r)))))
             return Factory.CreatePolygon(ordered[0], ordered.Skip(1).ToArray());
 
         // Otherwise even-odd: each ring toggles the area it encloses.
@@ -374,7 +390,7 @@ internal sealed class S57EdgeGraph
             var pointers = ring.Select(u => Pointer(u.Edge, u.Reverse, 1)).ToList();
             for (int h = 0; h < holes.Count; h++)
             {
-                if (claimed.Contains(h) || !polygon.Contains(holes[h].Polygon.InteriorPoint)) continue;
+                if (claimed.Contains(h) || !polygon.Contains(InsidePoint(holes[h].Polygon))) continue;
                 claimed.Add(h);
                 pointers.AddRange(holes[h].Ring.Select(u => Pointer(u.Edge, u.Reverse, 2)));
             }

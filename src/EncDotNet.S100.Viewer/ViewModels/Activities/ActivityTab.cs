@@ -26,9 +26,9 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
         Func<Control> iconFactory,
         TViewModel viewModel,
         bool persistAsLastSelected,
+        ITabVisibilitySource? visibility,
         TabDock dock = TabDock.Left,
         bool autoOpenOnContentSignal = false,
-        ITabVisibilitySource? visibility = null,
         string? name = null,
         bool fillsContent = false)
     {

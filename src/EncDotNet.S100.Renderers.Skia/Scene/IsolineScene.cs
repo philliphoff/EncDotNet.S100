@@ -59,7 +59,7 @@ public sealed class IsolineScene : IDisposable
 
     private readonly double _originX;
     private readonly double _originY;
-    private readonly (string Label, SKPath Path)[] _lines;
+    private readonly (string Label, SKPoint[] Vertices)[] _lines;
     private readonly SKPath? _land;
 
     /// <summary>
@@ -99,20 +99,14 @@ public sealed class IsolineScene : IDisposable
         _originX = empty ? 0 : (minX + maxX) / 2.0;
         _originY = empty ? 0 : (minY + maxY) / 2.0;
 
-        _lines = new (string, SKPath)[lines.Count];
+        _lines = new (string, SKPoint[])[lines.Count];
         for (int i = 0; i < lines.Count; i++)
         {
             var xy = lines[i].MercatorCoordinates;
-            var path = new SKPath();
-            for (int v = 0; v + 1 < xy.Length; v += 2)
-            {
-                var point = ToLocal(xy[v], xy[v + 1]);
-                if (v == 0)
-                    path.MoveTo(point);
-                else
-                    path.LineTo(point);
-            }
-            _lines[i] = (lines[i].Label, path);
+            var vertices = new SKPoint[xy.Length / 2];
+            for (int v = 0; v < vertices.Length; v++)
+                vertices[v] = ToLocal(xy[2 * v], xy[2 * v + 1]);
+            _lines[i] = (lines[i].Label, vertices);
         }
 
         if (!empty && landAreas is { Count: > 0 })
@@ -152,6 +146,13 @@ public sealed class IsolineScene : IDisposable
         {
             ClipToWater(canvas, matrix);
 
+            // A global field seen at harbour scale is millions of screen pixels
+            // long; only the segments near the canvas are stroked and labelled.
+            var visible = canvas.LocalClipBounds;
+            float labelMargin = Appearance.LabelFontSize * 4f + Appearance.LabelHaloWidth;
+            var lineCull = SKRect.Inflate(visible, Appearance.LineWidth + 1f, Appearance.LineWidth + 1f);
+            var labelCull = SKRect.Inflate(visible, labelMargin, labelMargin);
+
             using var linePaint = new SKPaint
             {
                 Color = WithOpacity(Appearance.Ink, opacity),
@@ -166,16 +167,16 @@ public sealed class IsolineScene : IDisposable
                 : null;
             linePaint.PathEffect = dash;
 
-            foreach (var (_, path) in _lines)
+            foreach (var (_, vertices) in _lines)
             {
-                using var screen = new SKPath();
-                path.Transform(matrix, screen);
-                canvas.DrawPath(screen, linePaint);
+                using var screen = VisiblePath(vertices, matrix, lineCull);
+                if (!screen.IsEmpty)
+                    canvas.DrawPath(screen, linePaint);
             }
 
             if (drawLabels)
             {
-                foreach (var (label, point) in Declutter(LabelAnchors(matrix)))
+                foreach (var (label, point) in Declutter(LabelAnchors(matrix, labelCull)))
                     DrawLabel(canvas, label, point, opacity);
             }
         }
@@ -213,7 +214,10 @@ public sealed class IsolineScene : IDisposable
 
         var matrix = LocalToScreen(mercatorToScreen);
         var turn = SKMatrix.CreateRotationDegrees((float)rotationDegrees, centerX, centerY);
-        var turned = LabelAnchors(matrix)
+        // Anchors are found north-up, so cull them by the north-up box that
+        // covers the turned bounds.
+        SKRect? northUpCull = turn.TryInvert(out var unturn) ? unturn.MapRect(cullBounds) : null;
+        var turned = LabelAnchors(matrix, northUpCull)
             .Select(anchor => (anchor.Label, Point: turn.MapPoint(anchor.Point)))
             .Where(anchor => cullBounds.Contains(anchor.Point));
         foreach (var (label, point) in Declutter(turned))
@@ -226,41 +230,98 @@ public sealed class IsolineScene : IDisposable
     /// one per line long enough to carry it), spread evenly along each line and
     /// skipped where they would sit on land.
     /// </summary>
-    internal IEnumerable<(string Label, SKPoint Point)> LabelAnchors(SKMatrix localToScreen)
+    /// <param name="localToScreen">The scene-to-screen matrix.</param>
+    /// <param name="cull">
+    /// When given, only anchors inside it are returned, and only the segments
+    /// that touch it are walked; the anchors keep the positions they have along
+    /// the whole line, so they do not move as the view pans.
+    /// </param>
+    internal IEnumerable<(string Label, SKPoint Point)> LabelAnchors(SKMatrix localToScreen, SKRect? cull = null)
     {
         bool canInvert = localToScreen.TryInvert(out var screenToLocal);
-        foreach (var (label, path) in _lines)
+        foreach (var (label, vertices) in _lines)
         {
             // An unlabelled line (empty label) carries no anchors.
-            if (label.Length == 0)
+            if (label.Length == 0 || vertices.Length < 2)
                 continue;
 
-            using var screen = new SKPath();
-            path.Transform(localToScreen, screen);
-            using var measure = new SKPathMeasure(screen, forceClosed: false);
-            do
-            {
-                float length = measure.Length;
-                if (length < MinimumLabelledLength)
-                    continue;
+            var screen = new SKPoint[vertices.Length];
+            localToScreen.MapPoints(screen, vertices);
 
-                int count = Math.Max(1, (int)(length / Appearance.LabelSpacing));
-                for (int i = 0; i < count; i++)
+            double length = 0;
+            for (int v = 1; v < screen.Length; v++)
+                length += SKPoint.Distance(screen[v - 1], screen[v]);
+            if (length < MinimumLabelledLength)
+                continue;
+
+            double count = Math.Max(1, Math.Floor(length / Appearance.LabelSpacing));
+            double step = length / count;
+            double start = 0;
+            for (int v = 1; v < screen.Length; v++)
+            {
+                var a = screen[v - 1];
+                var b = screen[v];
+                double segment = SKPoint.Distance(a, b);
+                double end = start + segment;
+                if (segment > 0 && (cull is not { } bounds || SegmentTouches(bounds, a, b)))
                 {
-                    if (!measure.GetPosition((i + 0.5f) * length / count, out var point))
-                        continue;
-                    if (_land is not null && canInvert)
+                    // Anchor k sits at (k + 0.5) · step; this segment owns [start, end).
+                    double first = Math.Max(0, Math.Ceiling(start / step - 0.5));
+                    double last = Math.Min(count - 1, Math.Ceiling(end / step - 0.5) - 1);
+                    for (double k = first; k <= last; k++)
                     {
-                        var local = screenToLocal.MapPoint(point);
-                        if (_land.Contains(local.X, local.Y))
+                        float t = (float)(((k + 0.5) * step - start) / segment);
+                        var point = new SKPoint(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+                        if (cull is { } c && !c.Contains(point))
                             continue;
+                        if (_land is not null && canInvert)
+                        {
+                            var local = screenToLocal.MapPoint(point);
+                            if (_land.Contains(local.X, local.Y))
+                                continue;
+                        }
+                        yield return (label, point);
                     }
-                    yield return (label, point);
                 }
+                start = end;
             }
-            while (measure.NextContour());
         }
     }
+
+    /// <summary>
+    /// The screen path of the segments of <paramref name="vertices"/> that touch
+    /// <paramref name="cull"/>, broken where segments are left out.
+    /// </summary>
+    private static SKPath VisiblePath(SKPoint[] vertices, SKMatrix localToScreen, SKRect cull)
+    {
+        var path = new SKPath();
+        if (vertices.Length < 2)
+            return path;
+
+        var previous = localToScreen.MapPoint(vertices[0]);
+        bool drawing = false;
+        for (int v = 1; v < vertices.Length; v++)
+        {
+            var point = localToScreen.MapPoint(vertices[v]);
+            if (SegmentTouches(cull, previous, point))
+            {
+                if (!drawing)
+                    path.MoveTo(previous);
+                path.LineTo(point);
+                drawing = true;
+            }
+            else
+            {
+                drawing = false;
+            }
+            previous = point;
+        }
+        return path;
+    }
+
+    private static bool SegmentTouches(SKRect bounds, SKPoint a, SKPoint b) =>
+        Math.Max(a.X, b.X) >= bounds.Left && Math.Min(a.X, b.X) <= bounds.Right
+        && Math.Max(a.Y, b.Y) >= bounds.Top && Math.Min(a.Y, b.Y) <= bounds.Bottom;
 
     /// <summary>
     /// The matrix from the scene's local frame to the screen, found from three
@@ -359,8 +420,6 @@ public sealed class IsolineScene : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        foreach (var (_, path) in _lines)
-            path.Dispose();
         _land?.Dispose();
     }
 }

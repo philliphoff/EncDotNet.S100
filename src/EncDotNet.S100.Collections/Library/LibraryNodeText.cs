@@ -84,7 +84,9 @@ public static partial class LibraryNodeText
     /// <summary>
     /// A short mono tag naming the kind of source: <c>DIR</c>, <c>ZIP</c>,
     /// <c>WEB</c> (an online catalogue), <c>AWS</c> (a catalogue on AWS Open
-    /// Data), <c>LIST</c> (a community list), <c>FEED</c> (a shared feed),
+    /// Data), <c>LIST</c> (a community list), <c>FEED</c> (a shared feed, or
+    /// a weather service that publishes bulletins rather than model runs, such
+    /// as WPC's surface analysis or NHC's active storms),
     /// <c>SECOM</c>, <c>JSON</c> (a collection manifest) or <c>S-128</c>.
     /// </summary>
     /// <param name="source">The source.</param>
@@ -98,12 +100,14 @@ public static partial class LibraryNodeText
         S100ForecastFeedSource { ModelsUri.Host: var forecastHost }
             when forecastHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         S100ForecastFeedSource => "WEB",
+        WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.WpcBulletins or Weather.WeatherServiceKind.NhcStorms } => "FEED",
         WeatherFeedSource { ServiceUri.Host: var weatherHost }
             when weatherHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         WeatherFeedSource => "WEB",
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
         SecomSource => "SECOM",
+        LiveFeedSource => "LIVE",
         S128CatalogueSource => "S-128",
         LocalManifestSource => "JSON",
         null => throw new ArgumentNullException(nameof(source)),
@@ -172,6 +176,7 @@ public static partial class LibraryNodeText
         S128CatalogueSource c => c.Path,
         LocalManifestSource m => m.Path,
         S100FeedSource f => LibraryTextFormat.MaskToken(f.FeedUri),
+        LiveFeedSource l => l.RegistrationId,
         _ => SourceUrl(source)?.AbsoluteUri ?? string.Empty,
     };
 
@@ -190,6 +195,7 @@ public static partial class LibraryNodeText
         S100ForecastFeedSource f => f.ModelsUri.Host,
         SecomSource s => s.ServiceUri.Host,
         WeatherFeedSource w => w.Service.ModelName ?? w.ServiceUri.Host,
+        LiveFeedSource l => l.RegistrationId,
         _ => source.GetType().Name,
     };
 
@@ -319,6 +325,11 @@ public static partial class LibraryNodeText
         if (sources is [{ Definition: SecomSource, Index: { } secomIndex }] && SecomCode(secomIndex) is { } secomCode)
             return SecomStatus(secomCode, hasItems: secomIndex.Items.Count > 0, c);
 
+        // A live feed that can't start says what it needs (data source design
+        // note D8): its host reports it as the feed's health.
+        if (sources is [{ Definition: LiveFeedSource live }] && input.Health?.Invoke(live) is { Failure: { } needs })
+            return (needs, LibraryNodeStatusKind.Warning);
+
         // A shared feed says whether its server is reachable (for a source, or a one-source collection).
         if (sources is [{ Definition: S100FeedSource feed }] && input.Health?.Invoke(feed) is { } health)
             return FeedStatus(feed, health, c);
@@ -331,6 +342,15 @@ public static partial class LibraryNodeText
             return SyncStatus(attention, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, input.Health?.Invoke(forecast), input.ForecastCounts, c, input.TimeFormat);
+        // NHC's storms say how many are active (V27), not the latest advisory.
+        if (sources is [{ Definition: WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.NhcStorms }, Index: { } storms }] && problems == 0)
+        {
+            var active = storms.Items.Count(i => !Weather.WeatherRuns.IsPinned(i));
+            return (active == 0
+                ? LibraryText.Get("Weather_NoActiveStorms")
+                : string.Format(c, LibraryText.Get("Weather_ActiveStormsFormat"), active), LibraryNodeStatusKind.Info);
+        }
+
         if (sources is [{ Definition: WeatherFeedSource, Index.PublishedAt: { } latestRun }] && problems == 0)
             return (string.Format(c, LibraryText.Get("Weather_LatestRunFormat"), Weather.WeatherRequests.FormatRun(latestRun)), LibraryNodeStatusKind.Info);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)

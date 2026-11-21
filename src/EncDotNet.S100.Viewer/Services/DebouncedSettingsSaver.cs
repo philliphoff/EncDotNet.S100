@@ -32,7 +32,7 @@ internal sealed class DebouncedSettingsSaver : IDisposable
     /// timer thread — fine for tests, but real code should pass the UI dispatcher
     /// so settings stay consistent with view-model reads.
     /// </param>
-    public DebouncedSettingsSaver(Action save, int delayMilliseconds = DefaultDelayMilliseconds, Action<Action>? dispatch = null)
+    public DebouncedSettingsSaver(Action save, Action<Action>? dispatch, int delayMilliseconds = DefaultDelayMilliseconds)
     {
         ArgumentNullException.ThrowIfNull(save);
         if (delayMilliseconds < 0) throw new ArgumentOutOfRangeException(nameof(delayMilliseconds));

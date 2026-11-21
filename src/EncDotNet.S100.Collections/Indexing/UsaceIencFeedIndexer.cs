@@ -31,7 +31,7 @@ public sealed class UsaceIencFeedIndexer : ICollectionSourceIndexer
         FeedCacheOptions? options = null,
         TimeProvider? timeProvider = null)
     {
-        _cache = new FeedCache(httpClient, cacheDirectory, options, timeProvider);
+        _cache = new FeedCache(httpClient, cacheDirectory, options ?? FeedCacheOptions.Default, timeProvider ?? TimeProvider.System);
     }
 
     /// <inheritdoc/>

@@ -13,6 +13,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
 
@@ -171,6 +172,26 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         S111DatasetData.StationSeries s => S100IssueTime.Parse(s.Dataset.IssueDate, s.Dataset.IssueTime),
         _ => null,
     };
+
+    /// <inheritdoc />
+    /// <remarks>The dataset's <c>typeOfCurrentData</c> (S-111), mapped onto S-104's numbers.</remarks>
+    public DataDynamicity? DataDynamicity => _data switch
+    {
+        S111DatasetData.GriddedCoverage g => DataDynamicityCodes.FromS111TypeOfCurrentData(g.Dataset.TypeOfCurrentData),
+        S111DatasetData.StationSeries s => DataDynamicityCodes.FromS111TypeOfCurrentData(s.Dataset.TypeOfCurrentData),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The row that labels picked values as observed, predicted, analysed,
+    /// hindcast or forecast (#1505); none when the dataset doesn't say.
+    /// </summary>
+    private List<PickAttribute> WithDataDynamicity(List<PickAttribute> attributes)
+    {
+        if (DataDynamicity is { } kind)
+            attributes.Add(PickAttribute.DataDynamicityRow(kind, IssueTime));
+        return attributes;
+    }
 
     /// <summary>
     /// S-111 surface currents are always model forecasts, whatever their files
@@ -423,6 +444,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // arrow renderer's SymbolProvider lambda reads from a memory dict.
         // The symbol set is small (one entry per S-111 speed band).
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
+        var legend = SpeedLegend(catalogue, context, symbolSvgs);
 
         var geoId = _dataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
@@ -465,6 +487,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         viewport.MinLatitude,
                         viewport.MaxLongitude,
                         viewport.MaxLatitude),
+                    Legend = legend,
+                    LegendCaption = S111PortrayalCatalogue.LegendCaption,
                 },
             },
             Spec = Spec,
@@ -710,6 +734,9 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     WithinPlanePriority = 10,
                     SourceFeatureType = "s111.stations",
                     Glyphs = glyphs,
+                    Legend = new CatalogueLegendBuilder(catalogue.ActivePalette, name => prewarmedSvgs.TryGetValue(name, out var svg) ? svg : null)
+                        .SymbolBands(symbolScheme),
+                    LegendCaption = S111PortrayalCatalogue.LegendCaption,
                     Extent = extent,
                     // Point-by-point thinning (S-111 §9.3.2, allowed for
                     // ungeorectified grids by §9.3.3) with the same arrow
@@ -778,8 +805,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = StationFeatureRefPrefix + station.Identifier,
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current (Station)",
-            StationSeries = BuildStationSeriesSnapshot(station),
-            Attributes = new List<PickAttribute>
+            Sections = [new StationSeriesSection(BuildStationSeriesSnapshot(station))],
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -841,7 +868,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         station.StartTime, station.EndTime),
                     DateTimeRangeValue = (station.StartTime, station.EndTime),
                 },
-            },
+            }),
         };
     }
 
@@ -950,7 +977,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = $"({sample.Row},{sample.Col})",
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current",
-            Attributes = attrs,
+            Attributes = WithDataDynamicity(attrs),
         };
     }
 
@@ -988,7 +1015,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = best.Identifier,
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current (Station)",
-            Attributes = new List<PickAttribute>
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -1017,7 +1044,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
                     DateTimeValue = sampleTime,
                 },
-            },
+            }),
         };
     }
 
@@ -1196,6 +1223,15 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             RulesEvaluated: rulesEvaluated,
             RulesWithFindings: findings.Select(finding => finding.RuleId).Distinct(StringComparer.Ordinal).Count());
     }
+
+    /// <summary>
+    /// The speed band legend: one arrow per band of the catalogue's
+    /// <c>select_arrow.xsl</c> table, slowest first, in the catalogue's active palette.
+    /// </summary>
+    private static IReadOnlyList<LegendEntry> SpeedLegend(
+        S111PortrayalCatalogue catalogue, RenderContext? context, Dictionary<string, string> symbolSvgs) =>
+        new CatalogueLegendBuilder(catalogue.ActivePalette, name => symbolSvgs.TryGetValue(name, out var svg) ? svg : null)
+            .SymbolBands(catalogue.ResolveSymbolScheme(context?.Mariner ?? MarinerSettings.Default));
 
     /// <summary>
     /// Pre-warms every symbol declared by the given portrayal catalogue

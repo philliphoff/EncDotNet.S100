@@ -123,7 +123,7 @@ public static partial class NhcAdvisoryReader
         return Read(files);
     }
 
-    /// <summary>Reads the advisory whose zips are <paramref name="files"/>.</summary>
+    /// <summary>Reads the advisory whose zips are <paramref name="files"/>, a final advisory when they're marked so.</summary>
     /// <param name="files">The advisory's zips.</param>
     /// <exception cref="NhcFormatException">A zip can't be read.</exception>
     public static TropicalCycloneAdvisory Read(NhcAdvisoryFiles files)
@@ -132,7 +132,8 @@ public static partial class NhcAdvisoryReader
         using var forecast = File.OpenRead(files.ForecastZip);
         using var radii = files.WindRadiiZip is { } r ? File.OpenRead(r) : null;
         using var best = files.BestTrackZip is { } b ? File.OpenRead(b) : null;
-        return Read(forecast, radii, best);
+        var advisory = Read(forecast, radii, best);
+        return files.IsFinal ? advisory with { IsFinal = true } : advisory;
     }
 
     /// <summary>

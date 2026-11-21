@@ -27,26 +27,39 @@ internal sealed class PickHit
     public string? ProductSpec { get; init; }
 
     /// <summary>
-    /// Optional time-series view model used by the pick panel to render a
-    /// chart when this hit represents a fixed-station observation
-    /// (S-104 / S-111 dcf=8). <c>null</c> for every other feature shape;
-    /// when set, the panel shows a chart section above the attribute list.
+    /// The station's time series when this hit is a fixed-station observation
+    /// (its <see cref="StationSeriesSection"/>); <c>null</c> for every other
+    /// feature shape. Object Information charts it above the attribute list
+    /// (#1401: the pick report builds the chart).
     /// </summary>
-    public StationTimeSeriesViewModel? StationSeries { get; init; }
+    public StationTimeSeriesSnapshot? StationSeries =>
+        Sections.OfType<StationSeriesSection>().FirstOrDefault()?.Series;
 
     /// <summary>
-    /// WMO / SIGRID-3 ice egg-code projection for the hit when it is an S-411
-    /// sea-ice / lake-ice feature; <c>null</c> for every other feature shape.
-    /// When set, the pick panel renders an egg-code diagram section.
+    /// The hit's pick report content that isn't attribute rows: an ice egg code
+    /// (<see cref="IceEggCodeSection"/>), a station's time series
+    /// (<see cref="StationSeriesSection"/>), a navigational warning
+    /// (<see cref="NavigationalWarningSection"/>) or a plug-in's own kind. The
+    /// station chart and the warning cards show their kinds; the pick panel
+    /// shows every other section through its kind's presenter
+    /// (<see cref="PickSectionPresenters"/>).
     /// </summary>
-    public IceEggCode? EggCode { get; init; }
+    public IReadOnlyList<PickSection> Sections { get; init; } = [];
+
+    /// <summary>
+    /// What the user can do with the feature, such as "Take helm" on a vessel
+    /// (data source design note P4), from <see cref="PickActionRegistry.Default"/>.
+    /// </summary>
+    public IReadOnlyList<PickAction> Actions { get; init; } = [];
 
     /// <summary>
     /// The warning message when the hit is part of a navigational warning
-    /// (S-124 <c>NavwarnPart</c>); <c>null</c> for every other feature. When
-    /// set, the pick panel shows a Warning card above the attributes (#932).
+    /// (its <see cref="NavigationalWarningSection"/>); <c>null</c> for every
+    /// other feature. When set, the pick panel shows a Warning card above the
+    /// attributes (#932).
     /// </summary>
-    public NavigationalWarningInfo? NavigationalWarning { get; init; }
+    public NavigationalWarningInfo? NavigationalWarning =>
+        Sections.OfType<NavigationalWarningSection>().FirstOrDefault()?.Warning;
 
     /// <summary>
     /// Whether the source dataset's exchange-set discovery metadata marks it
@@ -55,8 +68,22 @@ internal sealed class PickHit
     /// </summary>
     public bool NotForNavigation { get; init; }
 
+    /// <summary>
+    /// The provenance strip when the hit is a NATO Additional Military Layers
+    /// feature (AML tag, cell, marking, drawn state; #1372); <see langword="null"/>
+    /// for every other product.
+    /// </summary>
+    public AmlPickProvenance? Aml { get; init; }
+
     /// <summary>The data's credit from its Library source (#1075), "NOAA/NCEP GFS-Wave · Public domain"; null for none.</summary>
     public string? Credit { get; init; }
+
+    /// <summary>
+    /// The session id (<see cref="DatasetEntry.Id"/>) of the loaded dataset the
+    /// hit came from, which finds the hit's Legend section and row (#1410);
+    /// <see langword="null"/> when no loaded entry owns it.
+    /// </summary>
+    public string? DatasetId { get; init; }
 
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];

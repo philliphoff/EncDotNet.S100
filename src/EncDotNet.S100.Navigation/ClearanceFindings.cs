@@ -5,7 +5,8 @@ namespace EncDotNet.S100.Navigation;
 
 /// <summary>
 /// The findings of a clearance check (#905, handoff F4): each stretch below
-/// your UKC setting, each lower-confidence stretch, and each water-level or
+/// your UKC setting, each Tight or below stretch that rests on a predicted
+/// water level, each lower-confidence stretch, and each water-level or
 /// depth gap of a <see cref="PassageCheckResult"/>.
 /// </summary>
 /// <remarks>
@@ -13,7 +14,11 @@ namespace EncDotNet.S100.Navigation;
 /// A stretch below your UKC setting is one run of consecutive samples below
 /// it, as <see cref="PassageCheckResult.PlacesBelow"/> counts them, and is
 /// shown at its least margin. Confidence and data findings are shown at the
-/// middle of their stretch.
+/// middle of their stretch. A stretch on predicted water level is INFO
+/// (<see cref="RouteFindingCodes.WaterLevelPredicted"/>) and names its
+/// stations; where its clearance is Tight or below your setting it is also a
+/// CHECK (<see cref="RouteFindingCodes.TightOnPredicted"/>), because the tight
+/// margin is no wider than what weather can move a prediction.
 /// </para>
 /// <para>This is an aid for exploring the data. It isn't for navigation.</para>
 /// </remarks>
@@ -39,14 +44,21 @@ public static class ClearanceFindings
         formatter ??= RouteFindingFormatter.Default;
         var findings = new List<RouteFinding>();
         AddBelowSetting(findings, plan, result);
+        AddTightOnPredicted(findings, plan, result);
 
         var index = 0;
         foreach (var stretch in result.LowConfidence)
         {
-            var code = stretch.Kind == PassageStretchKind.ChartedDepthFromS101
-                ? RouteFindingCodes.ChartedDepthFromS101
-                : RouteFindingCodes.DatumUnconfirmed;
-            findings.Add(Stretch(plan, result, $"{code.Value}.{index++}", code, stretch));
+            var code = stretch.Kind switch
+            {
+                PassageStretchKind.ChartedDepthFromS101 => RouteFindingCodes.ChartedDepthFromS101,
+                PassageStretchKind.WaterLevelPredicted => RouteFindingCodes.WaterLevelPredicted,
+                _ => RouteFindingCodes.DatumUnconfirmed,
+            };
+            var sources = stretch.Kind == PassageStretchKind.WaterLevelPredicted
+                ? PredictedSources(result.Samples, stretch.FirstSample, stretch.LastSample)
+                : [];
+            findings.Add(Stretch(plan, result, $"{code.Value}.{index++}", code, stretch, sources));
         }
 
         index = 0;
@@ -165,7 +177,77 @@ public static class ClearanceFindings
         }
     }
 
-    private static RouteFinding Stretch(PassagePlan plan, PassageCheckResult result, string id, RouteFindingCode code, PassageStretch stretch) =>
+    // One CHECK per run of consecutive samples that are Tight or below the
+    // setting on a predicted water level.
+    private static void AddTightOnPredicted(List<RouteFinding> findings, PassagePlan plan, PassageCheckResult result)
+    {
+        static bool Tight(UkcSample s) =>
+            s.Band is ClearanceBand.Tight or ClearanceBand.Below && s.Confidence.HasFlag(ConfidenceReasons.WaterLevelPredicted);
+
+        var samples = result.Samples;
+        var place = 0;
+        var i = 0;
+        while (i < samples.Count)
+        {
+            if (!Tight(samples[i]))
+            {
+                i++;
+                continue;
+            }
+
+            var first = i;
+            UkcSample? lowest = null;
+            for (; i < samples.Count && Tight(samples[i]); i++)
+            {
+                var s = samples[i];
+                if (lowest is null || (s.ClearanceMeters - s.RequiredUkcMeters) < (lowest.ClearanceMeters - lowest.RequiredUkcMeters))
+                {
+                    lowest = s;
+                }
+            }
+
+            var a = samples[first];
+            var b = samples[i - 1];
+            var min = lowest!;
+            findings.Add(new RouteFinding($"{RouteFindingCodes.TightOnPredicted.Value}.{place++}", RouteFindingCodes.TightOnPredicted)
+            {
+                LegIndex = min.LegIndex,
+                Distance = Length.FromMetres(min.DistanceMeters),
+                Location = Location(plan, result, a.StartDistanceMeters, b.EndDistanceMeters),
+                Details = new ClearanceDetails
+                {
+                    State = min.State,
+                    FirstLegIndex = a.LegIndex,
+                    LastLegIndex = b.LegIndex,
+                    Length = Length.FromMetres(b.EndDistanceMeters - a.StartDistanceMeters),
+                    StartTime = a.Time,
+                    MinimumClearance = min.ClearanceMeters is { } c ? Depth.FromMetres(c) : null,
+                    RequiredUkc = Depth.FromMetres(min.RequiredUkcMeters),
+                    Margin = min.ClearanceMeters is { } m ? Length.FromMetres(m - min.RequiredUkcMeters) : null,
+                    MinimumTime = min.HasEta ? min.Time : null,
+                    WaterLevelSources = PredictedSources(samples, first, i - 1),
+                },
+            });
+        }
+    }
+
+    // The distinct predicted stations of samples first..last, in the order met.
+    private static IReadOnlyList<WaterLevelSourceInfo> PredictedSources(IReadOnlyList<UkcSample> samples, int first, int last)
+    {
+        var result = new List<WaterLevelSourceInfo>();
+        var seen = new HashSet<(string, string?)>();
+        for (var i = first; i <= last && i < samples.Count; i++)
+        {
+            if (samples[i].WaterLevel.Source is { IsPredicted: true } source && seen.Add((source.DatasetId, source.StationId)))
+            {
+                result.Add(source with { DistanceMeters = null });
+            }
+        }
+
+        return result;
+    }
+
+    private static RouteFinding Stretch(PassagePlan plan, PassageCheckResult result, string id, RouteFindingCode code, PassageStretch stretch, IReadOnlyList<WaterLevelSourceInfo>? sources = null) =>
         new(id, code)
         {
             LegIndex = stretch.FirstLeg,
@@ -178,6 +260,7 @@ public static class ClearanceFindings
                 LastLegIndex = stretch.LastLeg,
                 Length = Length.FromMetres(stretch.LengthMeters),
                 StartTime = stretch.StartTime,
+                WaterLevelSources = sources ?? [],
             },
         };
 

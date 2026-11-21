@@ -31,7 +31,7 @@ public sealed class NmeaWeatherSourceTests : IAsyncLifetime
 
     private NmeaWeatherSource Create(INmeaLineSource? input = null, NmeaWeatherSourceOptions? options = null)
     {
-        _source = new NmeaWeatherSource(input, options, _time);
+        _source = new NmeaWeatherSource(input: input, options: options, timeProvider: _time);
         _source.Changed += (_, e) => { lock (_changes) _changes.Add(e); };
         return _source;
     }
@@ -371,9 +371,9 @@ public sealed class NmeaWeatherSourceTests : IAsyncLifetime
     [Fact]
     public void Options_are_validated()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new NmeaWeatherSource(options: new NmeaWeatherSourceOptions { DropAfter = TimeSpan.Zero }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new NmeaWeatherSource(options: new NmeaWeatherSourceOptions { MaxMotionAge = TimeSpan.Zero }));
-        Assert.ThrowsAny<ArgumentException>(() => new NmeaWeatherSource(options: new NmeaWeatherSourceOptions { Id = "" }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new NmeaWeatherSource(options: new NmeaWeatherSourceOptions { DropAfter = TimeSpan.Zero }, input: null, timeProvider: TimeProvider.System));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new NmeaWeatherSource(options: new NmeaWeatherSourceOptions { MaxMotionAge = TimeSpan.Zero }, input: null, timeProvider: TimeProvider.System));
+        Assert.ThrowsAny<ArgumentException>(() => new NmeaWeatherSource(options: new NmeaWeatherSourceOptions { Id = "" }, input: null, timeProvider: TimeProvider.System));
     }
 
     // Waits for a condition the source's background work makes true,

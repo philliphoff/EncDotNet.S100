@@ -1,0 +1,66 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ic="using:FluentIcons.Avalonia"
+        xmlns:views="using:EncDotNet.S100.Viewer.Views">
+
+    <!--
+      The shared NATO Additional Military Layers chips (#1236, decisions 2–3),
+      used by the Library, the Datasets panel and the status bar. Ink, not a
+      state colour: AML is neither a failure nor a warning.
+    -->
+    <Style Selector="views|AmlTagChip">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border CornerRadius="4"
+                        Padding="6,0"
+                        MinHeight="20"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ForegroundColor}"
+                        Opacity="0.9">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="12"
+                                       Foreground="{DynamicResource ForegroundColor}" />
+                        <TextBlock Text="{TemplateBinding Text}"
+                                   FontSize="11.5"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource ForegroundColor}" />
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="views|AmlMarkingChip">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Chip"
+                        CornerRadius="4"
+                        Padding="6,0"
+                        MinHeight="20"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}">
+                    <TextBlock Name="PART_Text"
+                               Text="{TemplateBinding DisplayText}"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource MutedColor}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="views|AmlMarkingChip:elevated /template/ Border#PART_Chip">
+        <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+    </Style>
+    <!-- The window's background colour, not BackgroundColor: that one is
+         transparent in the app's themes, which left the text invisible. -->
+    <Style Selector="views|AmlMarkingChip:elevated /template/ TextBlock#PART_Text">
+        <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+    </Style>
+</Styles>

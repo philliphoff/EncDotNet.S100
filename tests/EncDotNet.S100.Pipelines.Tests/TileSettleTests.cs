@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Rendering;
@@ -12,7 +13,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// a layer is settled once its latest live frame showed only its own target
 /// tiles, at the latest view, with no visible tile work left.
 /// </summary>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class TileSettleTests : IDisposable
 {
     private const int Band = 10;
@@ -35,13 +36,13 @@ public sealed class TileSettleTests : IDisposable
         var layer = BindLayer();
 
         RenderFrame(layer, viewport);
-        var cold = S100VectorTileRenderer.EvaluateSettle([layer]);
+        var cold = MapsuiChartLayers.EvaluateSettle([layer]);
         Assert.False(cold.IsSettled);
         Assert.Equal(1, cold.LayersConsidered);
         Assert.True(cold.MissingTiles > 0);
 
         RenderUntilSettled(layer, viewport);
-        var settled = S100VectorTileRenderer.EvaluateSettle([layer]);
+        var settled = MapsuiChartLayers.EvaluateSettle([layer]);
         Assert.True(settled.IsSettled, settled.ToString());
         Assert.Equal(0, settled.MissingTiles);
         Assert.True(settled.LatestFrameTimestamp > 0);
@@ -66,27 +67,30 @@ public sealed class TileSettleTests : IDisposable
         var other = BindLayer();
         RenderFrame(other, moved);
 
-        var state = S100VectorTileRenderer.EvaluateSettle([settledLayer, other]);
+        var state = MapsuiChartLayers.EvaluateSettle([settledLayer, other]);
         Assert.False(state.IsSettled);
         Assert.Equal(1, state.LayersNotPainted);
     }
 
     [Fact]
-    public void EvaluateSettle_ReplacementShowingPredecessorTiles_IsNotSettled()
+    public void EvaluateSettle_ChartLayerShowingItsPreviousTiles_IsNotSettled()
     {
         var viewport = MakeViewport();
         var source = BindLayer();
-        RenderUntilSettled(source, viewport);
+        var session = new ChartSession(new ChartSessionOptions { TileDiskCacheEnabled = false });
+        var chart = new MemoryLayer { Name = "chart" };
+        session.Publish(chart, new ChartStack(1, [new ChartStackEntry(source)]));
+        RenderUntilSettled(chart, viewport);
 
-        var replacement = new MemoryLayer { Name = "filtered" };
-        Assert.True(S100VectorTileRenderer.TryBindFilteredScene(source, replacement, _ => true, replaces: source));
+        // A new stack changes the slot's content: its first frame shows the
+        // slot's previous tile in its place, which isn't the target yet.
+        var other = BindLayer();
+        session.Publish(chart, new ChartStack(2, [new ChartStackEntry(source), new ChartStackEntry(other) { Opacity = 0.5 }]));
+        RenderFrame(chart, viewport);
+        Assert.False(MapsuiChartLayers.EvaluateSettle([chart]).IsSettled);
 
-        // The first frame draws the replaced layer's tiles in its place.
-        RenderFrame(replacement, viewport);
-        Assert.False(S100VectorTileRenderer.EvaluateSettle([replacement]).IsSettled);
-
-        RenderUntilSettled(replacement, viewport);
-        Assert.True(S100VectorTileRenderer.EvaluateSettle([replacement]).IsSettled);
+        RenderUntilSettled(chart, viewport);
+        Assert.True(MapsuiChartLayers.EvaluateSettle([chart]).IsSettled);
     }
 
     [Fact]
@@ -96,7 +100,7 @@ public sealed class TileSettleTests : IDisposable
         disabled.Enabled = false;
         var neverBound = new MemoryLayer { Name = "plain" };
 
-        var state = S100VectorTileRenderer.EvaluateSettle([disabled, neverBound]);
+        var state = MapsuiChartLayers.EvaluateSettle([disabled, neverBound]);
 
         Assert.Equal(0, state.LayersConsidered);
         Assert.True(state.IsSettled);
@@ -170,7 +174,7 @@ public sealed class TileSettleTests : IDisposable
     {
         using var surface = SKSurface.Create(new SKImageInfo(ViewportDip, ViewportDip));
         surface.Canvas.Clear(SKColors.Transparent);
-        S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, new RenderService());
+        MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, new RenderService());
     }
 
     private static void RenderUntilSettled(ILayer layer, Mapsui.Viewport viewport)
@@ -179,7 +183,7 @@ public sealed class TileSettleTests : IDisposable
         while (true)
         {
             RenderFrame(layer, viewport);
-            if (S100VectorTileRenderer.EvaluateSettle([layer]).IsSettled)
+            if (MapsuiChartLayers.EvaluateSettle([layer]).IsSettled)
             {
                 return;
             }

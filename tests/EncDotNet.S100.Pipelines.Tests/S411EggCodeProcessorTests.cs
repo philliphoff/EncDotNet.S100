@@ -7,8 +7,9 @@ using EncDotNet.S100.Specifications;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Verifies that <see cref="S411DatasetProcessor"/> surfaces the WMO egg code
-/// on <see cref="FeatureInfo.EggCode"/> for picked sea-ice features.
+/// Verifies that picked S-411 sea-ice features carry the WMO egg code
+/// (<see cref="IceEggCodeSection"/>) through <see cref="IceEggCodeContributor"/>,
+/// with definitions from the <see cref="S411DatasetProcessor"/>'s catalogue.
 /// </summary>
 public class S411EggCodeProcessorTests
 {
@@ -36,36 +37,60 @@ public class S411EggCodeProcessorTests
             new DisplayPlaneAuthorityProvider(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
 
-    [Fact]
-    public void GetFeatureInfo_SeaIceFeature_CarriesEggCode()
+    // The egg code reaches a pick from the contributor step, which the hosts
+    // run on the processor's feature info.
+    private static IceEggCode? EggOf(S411DatasetProcessor processor, int ordinal)
     {
-        var processor = CreateProcessor();
-
-        var info = processor.GetFeatureInfoAt(0);
-
+        var info = processor.GetFeatureInfoAt(ordinal);
         Assert.NotNull(info);
-        Assert.NotNull(info!.EggCode);
-        Assert.Equal("1", info.EggCode!.TotalConcentration!.Text);
+        return PickContributorRegistry.Default.Apply(info!, processor)
+            .Sections.OfType<IceEggCodeSection>().SingleOrDefault()?.Egg;
+    }
+
+    [Fact]
+    public void Pick_SeaIceFeature_CarriesEggCode()
+    {
+        var egg = EggOf(CreateProcessor(), 0);
+
+        Assert.NotNull(egg);
+        Assert.Equal("1", egg!.TotalConcentration!.Text);
         // iceapc = 1 (single type) folds the partial-concentration row away.
-        Assert.True(info.EggCode.ConcentrationRowFolded);
-        Assert.Equal(new[] { "87" }, info.EggCode.StagesOfDevelopment.Select(v => v.Text).ToArray());
-        Assert.Equal(new[] { "7" }, info.EggCode.FormsOfIce.Select(v => v.Text).ToArray());
+        Assert.True(egg.ConcentrationRowFolded);
+        Assert.Equal(new[] { "87" }, egg.StagesOfDevelopment.Select(v => v.Text).ToArray());
+        Assert.Equal(new[] { "7" }, egg.FormsOfIce.Select(v => v.Text).ToArray());
 
         // The stage-of-development code is enriched with its Feature Catalogue
         // prose meaning for the pick report's hover tooltip.
-        var stage = info.EggCode.StagesOfDevelopment[0];
+        var stage = egg.StagesOfDevelopment[0];
         Assert.Equal("Thin First Year Ice (30 to <70 cm)", stage.Definition);
     }
 
     [Fact]
-    public void GetFeatureInfo_EmptyIceact_UsesCanonicalTotalConcentration()
+    public void Pick_EmptyIceact_UsesCanonicalTotalConcentration()
     {
-        var processor = CreateProcessor(EmptyIceactFixturePath);
+        var egg = EggOf(CreateProcessor(EmptyIceactFixturePath), 0);
 
-        var info = processor.GetFeatureInfoAt(0);
+        Assert.NotNull(egg?.TotalConcentration);
+        Assert.Equal("70", egg!.TotalConcentration!.Text);
+        Assert.Equal("totalConcentration", egg.TotalConcentration.SourceCode);
+    }
 
-        Assert.NotNull(info?.EggCode?.TotalConcentration);
-        Assert.Equal("70", info!.EggCode!.TotalConcentration!.Text);
-        Assert.Equal("totalConcentration", info.EggCode.TotalConcentration.SourceCode);
+    [Fact]
+    public void GetFeatureInfo_LeavesSectionsToTheContributors()
+    {
+        var info = CreateProcessor().GetFeatureInfoAt(0);
+
+        Assert.NotNull(info);
+        Assert.Empty(info!.Sections);
+    }
+
+    [Fact]
+    public void Processor_ResolvesListedValueDefinitionsThroughItsCatalogue()
+    {
+        IListedValueDefinitions processor = CreateProcessor();
+
+        Assert.Equal(
+            "Thin First Year Ice (30 to <70 cm)",
+            processor.ResolveListedValueDefinition("iceStageofDevelopment", "87"));
     }
 }

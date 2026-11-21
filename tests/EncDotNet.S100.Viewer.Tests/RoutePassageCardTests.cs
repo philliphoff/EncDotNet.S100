@@ -36,8 +36,8 @@ public sealed class RoutePassageCardTests : IDisposable
     private static (RoutesService Service, Route Route, RoutesPanelViewModel Vm) Create(
         DepthUnit unit = DepthUnit.Metres, TimeFormat time = TimeFormat.Utc)
     {
-        var service = new RoutesService();
-        var vm = new RoutesPanelViewModel(service, marinerSettings: new Mariner(unit), timeFormat: new Clock(time));
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var vm = TestRoutesPanel.Create(service, marinerSettings: new Mariner(unit), timeFormat: new Clock(time));
         var route = service.Routes.CreateRoute("Solent");
         route.AppendWaypoint(new GeoPosition(50.70, -1.10));
         route.AppendWaypoint(new GeoPosition(50.75, -1.20));
@@ -55,12 +55,12 @@ public sealed class RoutePassageCardTests : IDisposable
     }
 
     [Fact]
-    public void No_passage_fields_disables_check_passage_with_its_tooltip()
+    public void No_draft_offers_the_route_checks_only_with_its_tooltip()
     {
         var (_, route, vm) = Create();
 
         Assert.False(vm.HasDraft);
-        Assert.False(vm.CanCheckPassage);
+        Assert.True(vm.CanCheckPassage);
         Assert.Equal("Check the route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
 
         Type(vm.Passage.Draft, "4.5");
@@ -102,8 +102,8 @@ public sealed class RoutePassageCardTests : IDisposable
     [Fact]
     public void Card_opens_for_a_route_that_already_has_passage_values()
     {
-        var service = new RoutesService();
-        var vm = new RoutesPanelViewModel(service);
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var vm = TestRoutesPanel.Create(service);
         var casual = service.Routes.CreateRoute("Casual");
         Assert.False(vm.Passage.IsExpanded);
 

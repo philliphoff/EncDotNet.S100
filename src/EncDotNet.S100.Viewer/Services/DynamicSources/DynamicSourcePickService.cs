@@ -1,22 +1,27 @@
 using System.Globalization;
-using EncDotNet.S100.DynamicSources;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.DynamicSources;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
-using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
 /// <summary>
-/// Default <see cref="IDynamicSourcePickService"/> implementation.
-/// Delegates the geometric hit-test to the reusable
-/// <see cref="IS100DynamicSourceRegistry.HitTest"/> and projects each hit into a
-/// <see cref="DynamicPickHit"/> with localised attribute rows.
+/// Default <see cref="IDynamicSourcePickService"/> implementation: hit-tests
+/// the overlay sources (<see cref="IS100DynamicSourceRegistry.HitTest"/>),
+/// which since slice 7d are only SoundCharts' own-ship, and makes each hit an
+/// ordinary <see cref="PickHit"/> described as a source's processor would
+/// describe it (data source design note P5): title, rows, a vessel section and
+/// any pick actions. The hit has no dataset.
 /// </summary>
 internal sealed class DynamicSourcePickService : IDynamicSourcePickService
 {
     private readonly IS100DynamicSourceRegistry _registry;
 
+    /// <summary>Creates the service.</summary>
+    /// <param name="registry">The overlay sources to hit-test.</param>
     public DynamicSourcePickService(IS100DynamicSourceRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
@@ -24,155 +29,41 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<DynamicPickHit> Pick(MPoint mapPoint, double resolution)
+    public IReadOnlyList<PickHit> Pick(MPoint mapPoint, double resolution)
     {
         ArgumentNullException.ThrowIfNull(mapPoint);
 
         var raw = _registry.HitTest(mapPoint, resolution);
-        if (raw.Count == 0) return Array.Empty<DynamicPickHit>();
-
-        var hits = new List<DynamicPickHit>(raw.Count);
-        foreach (var hit in raw)
-        {
-            hits.Add(Project(hit));
-        }
-        return hits;
+        if (raw.Count == 0)
+            return [];
+        return [.. raw.Select(ToPickHit)];
     }
 
-    private static DynamicPickHit Project(DynamicSourceHit hit)
+    /// <summary>The pick hit of an overlay source's feature.</summary>
+    /// <param name="hit">The hit.</param>
+    internal static PickHit ToPickHit(DynamicSourceHit hit)
     {
-        var feature = hit.Feature;
-        var (lat, lon) = feature.Coordinates[0];
-
-        // A source that describes its own features (NDBC observations, #1070)
-        // supplies the title and the labelled values with their units.
-        var description = hit.Source is IDynamicFeatureDescriber describer
-            ? describer.Describe(feature, CultureInfo.CurrentCulture)
-            : null;
-
-        return new DynamicPickHit
+        ArgumentNullException.ThrowIfNull(hit);
+        var info = DynamicSourceProcessor.Describe(hit.Source, hit.Feature, CultureInfo.CurrentCulture);
+        var context = new PickContext
         {
-            SourceId = hit.Source.Id,
-            SourceDisplayName = hit.Source.Metadata.DisplayName,
-            FeatureId = feature.Id,
-            Kind = feature.Kind,
-            DisplayLabel = description?.Title ?? ResolveDisplayLabel(feature),
-            LastUpdated = feature.LastUpdated,
-            Latitude = lat,
-            Longitude = lon,
-            Motion = feature.Motion,
-            VesselGeometry = feature.VesselGeometry,
-            Attributes = description is null
-                ? BuildAttributeRows(feature)
-                : BuildDescribedRows(feature, description),
+            // An overlay source has no product of its own; own-ship's position
+            // and motion come from the ship's instruments.
+            Spec = new SpecRef(SpecName.Nmea, default),
+            FeatureRef = info.FeatureRef,
+            FeatureType = info.FeatureType,
+            Attributes = info.Attributes,
+            Sections = info.Sections,
+        };
+        return new PickHit
+        {
+            FeatureType = info.FeatureType,
+            FeatureTypeName = info.FeatureTypeName,
+            FeatureRef = info.FeatureRef,
+            Attributes = info.Attributes,
+            Geometry = info.Geometry,
+            Sections = info.Sections,
+            Actions = PickActionRegistry.Default.ActionsFor(context),
         };
     }
-
-    /// <summary>
-    /// Picks a human-readable label, preferring a vessel name when
-    /// the source carries one (AIS static data) and falling back to
-    /// the feature id (MMSI for AIS, "ownship" for own-ship).
-    /// </summary>
-    private static string ResolveDisplayLabel(DynamicFeature feature)
-    {
-        if (feature.Attributes.TryGetValue("vesselName", out var name)
-            && name is string s && !string.IsNullOrWhiteSpace(s))
-        {
-            return s;
-        }
-        return feature.Id;
-    }
-
-    /// <summary>
-    /// Flattens motion / geometry / attributes into a single ordered
-    /// list of label-value rows. Order: position → motion (COG /
-    /// heading / SOG) → vessel geometry → declared attributes
-    /// (insertion order). Each row's value is pre-formatted.
-    /// </summary>
-    private static IReadOnlyList<DynamicPickAttributeRow> BuildAttributeRows(DynamicFeature feature)
-    {
-        var rows = new List<DynamicPickAttributeRow>(8);
-        var (lat, lon) = feature.Coordinates[0];
-
-        rows.Add(new DynamicPickAttributeRow(
-            Strings.PickReport_Position,
-            string.Format(
-                CultureInfo.InvariantCulture,
-                Strings.PickReport_PositionFormat,
-                lat,
-                lon)));
-
-        if (feature.Motion is { } motion)
-        {
-            if (motion.CourseOverGround is { } cog)
-                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Cog, FormatDegrees(cog.TotalDegrees)));
-            if (motion.Heading is { } hdg)
-                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Heading, FormatDegrees(hdg.TotalDegrees)));
-            if (motion.SpeedOverGround is { } sog)
-                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Sog, FormatKnots(sog.TotalKnots)));
-        }
-
-        if (feature.VesselGeometry is { } geom)
-        {
-            rows.Add(new DynamicPickAttributeRow(
-                Strings.PickReport_Dimensions,
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    Strings.PickReport_DimensionsFormat,
-                    geom.LengthMetres,
-                    geom.BeamMetres)));
-        }
-
-        foreach (var (key, value) in feature.Attributes)
-        {
-            // vesselName already drives DisplayLabel — surface it in
-            // the row list too so the user sees it explicitly.
-            rows.Add(new DynamicPickAttributeRow(
-                MapAttributeKeyToLabel(key),
-                FormatAttributeValue(value)));
-        }
-
-        return rows;
-    }
-
-    /// <summary>
-    /// The position row, then the source's own labelled values
-    /// (<see cref="IDynamicFeatureDescriber"/>).
-    /// </summary>
-    private static IReadOnlyList<DynamicPickAttributeRow> BuildDescribedRows(
-        DynamicFeature feature,
-        DynamicFeatureDescription description)
-    {
-        var (lat, lon) = feature.Coordinates[0];
-        var rows = new List<DynamicPickAttributeRow>(description.Properties.Count + 1)
-        {
-            new(Strings.PickReport_Position,
-                string.Format(CultureInfo.InvariantCulture, Strings.PickReport_PositionFormat, lat, lon)),
-        };
-        foreach (var property in description.Properties)
-            rows.Add(new DynamicPickAttributeRow(property.Label, property.Value));
-        return rows;
-    }
-
-    private static string MapAttributeKeyToLabel(string key) => key switch
-    {
-        "mmsi" => Strings.PickReport_Mmsi,
-        "vesselName" => Strings.PickReport_VesselName,
-        "callSign" => Strings.PickReport_CallSign,
-        _ => key,
-    };
-
-    private static string FormatDegrees(double value) =>
-        string.Format(CultureInfo.InvariantCulture, Strings.PickReport_DegreesFormat, value);
-
-    private static string FormatKnots(double value) =>
-        string.Format(CultureInfo.InvariantCulture, Strings.PickReport_KnotsFormat, value);
-
-    private static string FormatAttributeValue(object? value) => value switch
-    {
-        null => string.Empty,
-        string s => s,
-        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
-        _ => value.ToString() ?? string.Empty,
-    };
 }

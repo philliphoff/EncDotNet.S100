@@ -28,18 +28,13 @@ public sealed class AisStreamIoMessageSource : IAisMessageSource
     private readonly Func<IAisStreamIoTransport> _transportFactory;
     private readonly ILoggerFactory _loggerFactory;
 
-    /// <summary>
-    /// Convenience constructor wiring the production
-    /// <see cref="ClientWebSocketTransport"/>.
-    /// </summary>
-    public AisStreamIoMessageSource(AisStreamIoOptions options, ILoggerFactory? loggerFactory = null)
-        : this(options, () => new ClientWebSocketTransport(), loggerFactory)
-    {
-    }
-
-    /// <summary>
-    /// Test constructor — caller supplies a transport factory.
-    /// </summary>
+    /// <summary>Creates the source.</summary>
+    /// <param name="options">The connection options, with the API key.</param>
+    /// <param name="transportFactory">
+    /// Opens a transport per subscription (the app passes a
+    /// <see cref="ClientWebSocketTransport"/>).
+    /// </param>
+    /// <param name="loggerFactory">Creates loggers; <see langword="null"/> for none.</param>
     public AisStreamIoMessageSource(
         AisStreamIoOptions options,
         Func<IAisStreamIoTransport> transportFactory,

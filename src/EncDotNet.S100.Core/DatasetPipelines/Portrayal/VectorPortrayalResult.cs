@@ -86,6 +86,32 @@ public sealed class VectorPortrayalResult
     /// </summary>
     public Func<string, string?>? SymbolProvider { get; init; }
 
+    /// <summary>
+    /// Resolves an SVG symbol name to what it shows, from the portrayal
+    /// catalogue's description (<see cref="SvgSymbol.Title"/>), or null. A
+    /// legend of the symbols drawn labels its rows with it.
+    /// </summary>
+    public Func<string, string?>? SymbolTitleProvider { get; init; }
+
+    /// <summary>
+    /// Resolves an SVG symbol name to the symbol as parsed vector geometry
+    /// (<see cref="SvgSymbol.Geometry"/>: paths, circles and palette-token
+    /// colours), or null. Covers the same symbols as
+    /// <see cref="SymbolProvider"/>, from the same catalogue records, so a
+    /// renderer that draws symbols natively need not parse SVG.
+    /// </summary>
+    public Func<string, SymbolGeometry?>? SymbolGeometryProvider { get; init; }
+
+    /// <summary>
+    /// Every symbol the portrayal catalogue defines, not only those this
+    /// dataset uses (which <see cref="SymbolProvider"/> and
+    /// <see cref="SymbolGeometryProvider"/> cover), so a renderer can build
+    /// one complete symbol style and reuse it across datasets. Symbols load
+    /// only when asked for; the normal render path never touches it. Null
+    /// for products without a symbol catalogue.
+    /// </summary>
+    public CatalogueSymbolSet? CatalogueSymbols { get; init; }
+
     /// <summary>Resolves a line-style name to its resolved style (or null).</summary>
     public Func<string, LineStyle?>? LineStyleProvider { get; init; }
 
@@ -152,6 +178,15 @@ public sealed class VectorPortrayalResult
     /// <see cref="CellMinimumDisplayScale"/> instead (the S-101 behaviour).
     /// </summary>
     public int? CellCompilationScale { get; init; }
+
+    /// <summary>
+    /// The cell's finest (smallest-denominator) intended display scale (S-101
+    /// FC §3.1.1 <c>DataCoverage.maximumDisplayScale</c>). Breaks ties between
+    /// overlapping cells ranked by the same <see cref="CellMinimumDisplayScale"/>
+    /// (see <c>CellScaleRanking</c>). Null when the cell declares none or is
+    /// ranked by <see cref="CellCompilationScale"/>.
+    /// </summary>
+    public int? CellMaximumDisplayScale { get; init; }
 
     /// <summary>
     /// The cell's declared data-coverage polygons in EPSG:4326 (lat/lon),

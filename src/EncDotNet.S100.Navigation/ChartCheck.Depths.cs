@@ -42,7 +42,7 @@ public sealed partial class ChartCheck
             if (shallow.Count > 0)
             {
                 CheckAreas(shallow, RouteChartFeatureKind.DepthArea, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor,
-                    f => new ShoalDetails
+                    (f, _) => new ShoalDetails
                     {
                         LeastDepth = Depth.FromMetres(f.DepthMeters!.Value),
                         ThresholdKind = RouteFindingThreshold.SafetyContour,
@@ -59,6 +59,8 @@ public sealed partial class ChartCheck
         // curves. The track must not pass them, so each is its own crossing
         // or corridor finding: an area as the shallow areas are, a point or
         // curve on the track when it's within the track clearance of it.
+        // Structures near the departure and arrival are grouped later
+        // (FindingList.GroupBerthStructures).
         private void CheckSafetyContourFeatures(IReadOnlyList<RouteChartFeature> features)
         {
             foreach (var feature in features)
@@ -70,9 +72,18 @@ public sealed partial class ChartCheck
                 }
 
                 _cancellationToken.ThrowIfCancellationRequested();
+                var structure = IsStructure(feature.FeatureType);
+                SafetyContourFeatureDetails Details(bool cut) => new()
+                {
+                    FeatureType = feature.FeatureType,
+                    IsStructure = structure,
+                    IsBerth = structure && IsBerth(feature),
+                    CutByTrack = cut,
+                };
+
                 if (feature.Surfaces.Count > 0)
                 {
-                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor);
+                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor, (_, crosses) => Details(crosses));
                     continue;
                 }
 
@@ -88,9 +99,51 @@ public sealed partial class ChartCheck
                     _legIndex,
                     projection.Distance,
                     RouteFindingLocation.Point(position, projection.Distance),
-                    feature);
+                    feature,
+                    Details(offset <= CutToleranceMeters));
             }
         }
+
+        // A point or curve this close to the track line is cut by it; a curve
+        // the track intersects is at 0.
+        private const double CutToleranceMeters = 1;
+
+        // Anything but water (an unsurveyed area) and land is a structure
+        // that stands in the water (#1548).
+        private static bool IsStructure(string featureType) =>
+            SkinOfTheEarth.Classify(featureType) == SkinOfTheEarthClass.None
+            && featureType is not (SkinOfTheEarth.Coastline or "LandRegion" or "LandElevation");
+
+        // A structure a vessel lies against at a berth (#1548): a pontoon, a
+        // floating dock, or a shoreline construction that is a pier, wharf,
+        // landing steps or fender. Breakwaters, moles, groynes, training and
+        // sea walls guard a harbour rather than berth in it, and a ruined
+        // structure or one that is under water, covers and uncovers or is
+        // awash is a hazard: the track must not cut those even at the berth.
+        private static bool IsBerth(RouteChartFeature feature)
+        {
+            if (feature.Condition == RuinedCondition
+                || feature.WaterLevelEffect is AlwaysUnderWater or CoversAndUncovers or Awash)
+            {
+                return false;
+            }
+
+            return feature.FeatureType switch
+            {
+                "Pontoon" or "FloatingDock" => true,
+                "ShorelineConstruction" => feature.ShorelineConstructionCategory is { } category && BerthCategories.Contains(category),
+                _ => false,
+            };
+        }
+
+        // categoryOfShorelineConstruction (S-57 CATSLC): 4 pier (jetty), 5
+        // promenade pier, 6 wharf (quay), 11 landing steps, 14 fender, 15
+        // solid face wharf, 16 open face wharf.
+        private static readonly HashSet<int> BerthCategories = [4, 5, 6, 11, 14, 15, 16];
+        private const int RuinedCondition = 2;
+        private const int AlwaysUnderWater = 3;
+        private const int CoversAndUncovers = 4;
+        private const int Awash = 5;
 
         // Soundings no deeper than the safety contour inside the cross-track
         // limits, from the finest cell where they are: the soundings the

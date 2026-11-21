@@ -42,7 +42,7 @@ src/
   EncDotNet.S100.Scripting.MoonSharp/ # ILuaEngine implementation using MoonSharp (Lua 5.2) — selectable
   EncDotNet.S100.Datasets.S101/      # S-101 ENC reader + Lua portrayal pipeline
   EncDotNet.S100.Datasets.S102/      # S-102 bathymetry reader + coverage pipeline
-  EncDotNet.S100.Datasets.S104/      # S-104 water level reader + coverage pipeline
+  EncDotNet.S100.Datasets.S104/      # S-104 water level reader, station-series writer + coverage pipeline
   EncDotNet.S100.Datasets.S111/      # S-111 surface currents reader + coverage pipeline
   EncDotNet.S100.Datasets.S122/      # S-122 marine protected areas reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
@@ -60,6 +60,8 @@ src/
   EncDotNet.S100.Datasets.Cap/       # CAP 1.2 marine weather warnings (CAP XML, Atom, NWS GeoJSON) + NWS marine zones
   EncDotNet.S100.Datasets.TropicalCyclones/ # NHC tropical cyclone advisories (GIS shapefile zips) + managed SHP/DBF reader
   EncDotNet.S100.Routes.Rtz/         # RTZ (IEC 61174 Annex S) route plan reader + writer
+  EncDotNet.S100.Tides/              # Harmonic tide prediction (Schureman SP 98 astronomy, NOAA constituents) + subordinate stations
+  EncDotNet.S100.Tides.Stations/     # Tide station catalogue: NOAA CO-OPS client, subordinate offsets, datums, offline JSON cache
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
   EncDotNet.S100.Renderers.Mapsui/   # Mapsui layer renderer with CRS projection (ProjNet/EPSG:3857)
   EncDotNet.S100.Viewer/             # Avalonia cross-platform desktop viewer (macOS, Windows, Linux)

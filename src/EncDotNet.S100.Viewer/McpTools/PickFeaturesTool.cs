@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Viewer.Services;
@@ -41,7 +40,15 @@ internal sealed record PickFeaturesResult(
     [property: Description("Ranked matches: drawn features by drawing priority, highest first, where the dataset was portrayed (S-98 15.1); then most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] IReadOnlyList<IdentifyMatch> Features,
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated,
-    [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false);
+    [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false,
+    [property: Description("With select=true, the overlay features at the point that Object information shows too, such as own-ship; empty otherwise. Live feeds such as AIS targets, NDBC observations and predicted tide stations are datasets, so they come back as features.")] IReadOnlyList<PickDynamicFeature>? DynamicFeatures = null);
+
+/// <summary>A live overlay feature a <c>pick_features</c> select showed.</summary>
+[Description("A live overlay feature at the pick: its overlay and its label.")]
+internal sealed record PickDynamicFeature(
+    [property: Description("The overlay feature's kind, such as 'ownship'.")] string SourceId,
+    [property: Description("The feature's id in the overlay, such as 'ownship'.")] string FeatureId,
+    [property: Description("The feature's label, such as the station name.")] string Label);
 
 /// <summary>
 /// Resolves the vector features under a screen pixel (or a geographic
@@ -55,7 +62,9 @@ internal sealed record PickFeaturesResult(
 /// The pixel form projects the requested coordinate through the live
 /// map's Web-Mercator projection to a WGS-84 point, then delegates to the
 /// shared <see cref="IdentifyFeaturesTool"/> ranking so a pick and a
-/// geographic identify return an identical feature shape. The geographic
+/// geographic identify return an identical feature shape. Like a click, it
+/// returns only what the map draws: time-dependent products at the view time,
+/// without the S-124 parts the map hides (<see cref="IMapDrawState"/>). The geographic
 /// form skips the projection step and is available even before the map is
 /// laid out.
 /// </para>
@@ -83,28 +92,23 @@ internal sealed class PickFeaturesTool
     private readonly IdentifyFeaturesTool _identify;
     private readonly IGeographicPickPresenter? _presenter;
 
-    /// <summary>Creates a new <see cref="PickFeaturesTool"/>.</summary>
-    public PickFeaturesTool(
-        ICapabilityAccessor<IMapCoordinateConverter> accessor,
-        IDatasetCatalog catalog)
-        : this(accessor, catalog, presenter: null)
-    {
-    }
-
     /// <summary>
-    /// Creates a new <see cref="PickFeaturesTool"/> with an optional
-    /// presenter used to honour <see cref="PickFeaturesRequest.Select"/> by
-    /// publishing the pick to the live viewer panel + highlight.
+    /// Creates a new <see cref="PickFeaturesTool"/> over
+    /// <paramref name="identify"/>, which should follow the map
+    /// (<see cref="IMapDrawState"/>) so a pick returns only what the map draws,
+    /// with an optional presenter used to honour
+    /// <see cref="PickFeaturesRequest.Select"/> by publishing the pick to the
+    /// live viewer panel + highlight.
     /// </summary>
     public PickFeaturesTool(
         ICapabilityAccessor<IMapCoordinateConverter> accessor,
-        IDatasetCatalog catalog,
+        IdentifyFeaturesTool identify,
         IGeographicPickPresenter? presenter)
     {
         ArgumentNullException.ThrowIfNull(accessor);
-        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(identify);
         _accessor = accessor;
-        _identify = new IdentifyFeaturesTool(catalog);
+        _identify = identify;
         _presenter = presenter;
     }
 
@@ -172,7 +176,8 @@ internal sealed class PickFeaturesTool
         }
 
         var selected = false;
-        if (request.Select && _presenter is not null && value.Features.Count > 0)
+        IReadOnlyList<PickDynamicFeature> dynamicFeatures = [];
+        if (request.Select && _presenter is not null)
         {
             var refs = new GeographicPickFeature[value.Features.Count];
             for (var i = 0; i < value.Features.Count; i++)
@@ -181,8 +186,9 @@ internal sealed class PickFeaturesTool
                 refs[i] = new GeographicPickFeature(match.DatasetId.Value, match.FeatureId);
             }
 
-            _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
-            selected = true;
+            var dynamicHits = _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
+            dynamicFeatures = [.. dynamicHits.Select(h => new PickDynamicFeature(h.FeatureType, h.FeatureRef, h.FeatureTypeName ?? h.FeatureType))];
+            selected = refs.Length > 0 || dynamicHits.Count > 0;
         }
 
         return ToolResult<PickFeaturesResult>.Ok(new PickFeaturesResult(
@@ -192,7 +198,8 @@ internal sealed class PickFeaturesTool
             value.Features,
             value.TotalMatched,
             value.Truncated,
-            selected));
+            selected,
+            dynamicFeatures));
     }
 
     private static ToolError? ResolvePixel(PickFeaturesRequest request)

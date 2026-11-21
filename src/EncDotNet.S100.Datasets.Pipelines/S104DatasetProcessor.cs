@@ -14,6 +14,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
@@ -163,6 +164,26 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         S104DatasetData.StationSeries s => S100IssueTime.Parse(s.Dataset.IssueDate, s.Dataset.IssueTime),
         _ => null,
     };
+
+    /// <inheritdoc />
+    /// <remarks>The dataset's <c>dataDynamicity</c> (S-104 Edition 2.0.0).</remarks>
+    public DataDynamicity? DataDynamicity => _data switch
+    {
+        S104DatasetData.GriddedCoverage g => DataDynamicityCodes.FromS104(g.Dataset.DataDynamicity),
+        S104DatasetData.StationSeries s => DataDynamicityCodes.FromS104(s.Dataset.DataDynamicity),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The row that labels picked values as observed, predicted, analysed,
+    /// hindcast or forecast (#1505); none when the dataset doesn't say.
+    /// </summary>
+    private List<PickAttribute> WithDataDynamicity(List<PickAttribute> attributes)
+    {
+        if (DataDynamicity is { } kind)
+            attributes.Add(PickAttribute.DataDynamicityRow(kind, IssueTime));
+        return attributes;
+    }
 
     /// <summary>
     /// S-104 water level steps: forecasts, each held until the next step for
@@ -385,6 +406,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // Labels follow the mariner's text scale, as S-101 labels do.
         double textScale = context?.TextScale ?? 1.0;
         var isolines = _isolinesByStep.GetOrAdd(step, s => TraceIsolines(dataset, s, cancellationToken));
+        var ink = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.InkToken, palette);
+        const double lineWidth = 1.1;
+        double[] dashPattern = [6, 3];
 
         return new IsolineCoverageSubLayer
         {
@@ -395,10 +419,19 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SourceFeatureType = IsolineLayerKey,
             Isolines = isolines,
             Extent = GridMercatorExtent(),
-            Ink = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.InkToken, palette),
+            Ink = ink,
             LabelHalo = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.IsolineLabelHaloToken, palette),
+            LineWidth = lineWidth,
+            DashPattern = dashPattern,
             LabelFontSize = 10 * textScale,
             LabelHaloWidth = 3 * textScale,
+            Legend =
+            [
+                new LineLegendEntry(
+                    LegendLineSample.FromPixels(ink, lineWidth, dashPattern),
+                    S104CoverageStyle.IsolineLegendLabel(_isolineRange!.Value.Interval)),
+            ],
+            LegendCaption = S104CoverageStyle.LegendCaption,
         };
     }
 
@@ -629,6 +662,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     TextScale = context?.TextScale ?? 1.0,
                     Product = "S-104",
                     Extent = extent,
+                    Legend = S104CoverageStyle.BuildStationLegend(palette),
+                    LegendCaption = S104CoverageStyle.LegendCaption,
                 },
             },
             Spec = Spec,
@@ -704,8 +739,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = StationFeatureRefPrefix + station.Identifier,
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level (Station)",
-            StationSeries = BuildStationSeriesSnapshot(station),
-            Attributes = new List<PickAttribute>
+            Sections = [new StationSeriesSection(BuildStationSeriesSnapshot(station))],
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -767,7 +802,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         station.StartTime, station.EndTime),
                     DateTimeRangeValue = (station.StartTime, station.EndTime),
                 },
-            },
+            }),
         };
     }
 
@@ -871,7 +906,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = $"({sample.Row},{sample.Col})",
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level",
-            Attributes = attrs,
+            Attributes = WithDataDynamicity(attrs),
         };
     }
 
@@ -911,7 +946,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureRef = best.Identifier,
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level (Station)",
-            Attributes = new List<PickAttribute>
+            Attributes = WithDataDynamicity(new List<PickAttribute>
             {
                 new()
                 {
@@ -940,7 +975,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
                     DateTimeValue = sampleTime,
                 },
-            },
+            }),
         };
     }
 

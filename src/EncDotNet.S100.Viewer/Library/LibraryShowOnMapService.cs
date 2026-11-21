@@ -32,19 +32,20 @@ internal sealed class LibraryShowOnMapService : IDisposable
         LibraryLoadService loader,
         ILibraryDownloader downloader,
         Func<Guid, string> nameOf,
-        LibrarySync? sync = null,
-        Action<Action>? dispatch = null)
+        LibrarySync? sync,
+        Action<Action> dispatch)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(nameOf);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _library = library;
         _loader = loader;
         _downloader = downloader;
         _nameOf = nameOf;
         _sync = sync;
-        _dispatch = dispatch ?? (action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+        _dispatch = dispatch;
         _library.SourceIndexed += OnSourceIndexed;
         _library.Changed += OnLibraryChanged;
     }

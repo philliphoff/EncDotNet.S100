@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Quantities;
 
@@ -7,8 +8,8 @@ namespace EncDotNet.S100.Navigation;
 /// The numbers behind a <see cref="RouteFinding"/>, by kind, so a client
 /// gets the depth that fired or an area's restrictions without parsing its
 /// text: <see cref="DangerDetails"/>, <see cref="ShoalDetails"/>,
-/// <see cref="AreaDetails"/>, <see cref="WarningDetails"/> or
-/// <see cref="ClearanceDetails"/>.
+/// <see cref="AreaDetails"/>, <see cref="WarningDetails"/>,
+/// <see cref="ClearanceDetails"/>, <see cref="WeatherDetails"/> or <see cref="TropicalCycloneDetails"/>.
 /// </summary>
 /// <remarks>
 /// Findings about land, drying ground and chart coverage carry no details:
@@ -112,12 +113,24 @@ public sealed class DangerDetails : RouteFindingDetails
     /// <summary>The danger's feature type: <c>Wreck</c>, <c>Obstruction</c> or <c>UnderwaterAwashRock</c>.</summary>
     public required string FeatureType { get; init; }
 
-    /// <summary>Its charted depth (<c>valueOfSounding</c>), or <c>null</c> when unknown.</summary>
+    /// <summary>
+    /// Its charted depth (<c>valueOfSounding</c>), else the
+    /// <c>defaultClearanceDepth</c> it was judged by (<see cref="DepthIsDefault"/>),
+    /// or <c>null</c> when unknown.
+    /// </summary>
     public Depth? Depth { get; init; }
 
     /// <summary>
+    /// <c>true</c> when <see cref="Depth"/> is the S-101
+    /// <c>defaultClearanceDepth</c> rather than a sounding (#1547): the
+    /// danger was judged by it, but it isn't a depth to show.
+    /// </summary>
+    public bool DepthIsDefault { get; init; }
+
+    /// <summary>
     /// Its <c>waterLevelEffect</c> code, which says why its depth is unknown
-    /// (1 or 2 above water, 4 covers and uncovers, 5 awash), or <c>null</c>.
+    /// or default (1 or 2 above water, 4 covers and uncovers, 5 awash, 7
+    /// floating), or <c>null</c>.
     /// </summary>
     public int? WaterLevelEffect { get; init; }
 
@@ -304,6 +317,87 @@ public sealed class ClearanceDetails : RouteFindingDetails
 
     /// <summary>The state of the stretch: <see cref="UkcState.BelowSetting"/> for a finding below your UKC setting, otherwise <c>null</c>.</summary>
     public UkcState? State { get; init; }
+
+    /// <summary>
+    /// The predicted stations the stretch's water level comes from, nearest
+    /// the start first, for <see cref="RouteFindingCodes.WaterLevelPredicted"/>
+    /// and <see cref="RouteFindingCodes.TightOnPredicted"/>; empty otherwise.
+    /// Each has no <see cref="WaterLevelSourceInfo.DistanceMeters"/>.
+    /// </summary>
+    public IReadOnlyList<WaterLevelSourceInfo> WaterLevelSources { get; init; } = [];
+}
+
+/// <summary>
+/// A feature other than a depth area whose S-101 portrayal raises the
+/// <c>SafetyContour</c> alert (#1127): a pontoon, floating dock, hulk or
+/// shoreline construction, an unsurveyed area, or land charted as a point or
+/// curve, across the track (<see cref="RouteFindingCodes.CrossesSafetyContour"/>)
+/// or inside the cross-track limits (<see cref="RouteFindingCodes.SafetyContourInCorridor"/>).
+/// </summary>
+public sealed class SafetyContourFeatureDetails : RouteFindingDetails
+{
+    /// <summary>The feature type, such as <c>Pontoon</c> or <c>UnsurveyedArea</c>.</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>
+    /// <c>true</c> for a structure (#1548): anything but an unsurveyed area
+    /// or land. Its finding is titled for the structure, not for depth.
+    /// </summary>
+    public bool IsStructure { get; init; }
+
+    /// <summary>
+    /// <c>true</c> for a structure a vessel lies against at a berth (#1548):
+    /// a pontoon, a floating dock, or a pier, wharf, landing steps or fender
+    /// that isn't ruined, under water, covering and uncovering or awash. Near
+    /// the departure and arrival, these are grouped into
+    /// <see cref="RouteFindingCodes.BerthStructures"/> even when the track
+    /// cuts them; any other structure only when it doesn't
+    /// (<see cref="CutByTrack"/>).
+    /// </summary>
+    public bool IsBerth { get; init; }
+
+    /// <summary>
+    /// <c>true</c> when the track line itself cuts the feature: it crosses
+    /// the area, or passes within 1 m of the point or curve. <c>false</c>
+    /// when the track only passes within the track clearance or the
+    /// cross-track limits of it.
+    /// </summary>
+    public bool CutByTrack { get; init; }
+}
+
+/// <summary>Which end of a route a finding is at.</summary>
+public enum RouteEnd
+{
+    /// <summary>The departure: the first waypoint.</summary>
+    Departure,
+
+    /// <summary>The arrival: the last waypoint.</summary>
+    Arrival,
+}
+
+/// <summary>
+/// The structures that raise the <c>SafetyContour</c> alert within the berth
+/// radius (<see cref="RouteCheckSettings.BerthRadius"/>) of the departure or
+/// arrival (<see cref="RouteFindingCodes.BerthStructures"/>, #1548): the
+/// pontoons, floating docks and piers a route that starts or ends at a berth
+/// always touches, in one finding.
+/// </summary>
+public sealed class BerthStructuresDetails : RouteFindingDetails
+{
+    /// <summary>The end of the route they are at.</summary>
+    public required RouteEnd End { get; init; }
+
+    /// <summary>The berth radius they are within.</summary>
+    public required Length Radius { get; init; }
+
+    /// <summary>The structures, in route order, each once.</summary>
+    public required IReadOnlyList<RouteFindingFeature> Features { get; init; }
+
+    /// <summary>How many crossing findings they stand for (<see cref="RouteFindingCodes.CrossesSafetyContour"/>).</summary>
+    public int CrossingCount { get; init; }
+
+    /// <summary>Their feature types, each once, in route order.</summary>
+    public IReadOnlyList<string> FeatureTypes => Features.Select(f => f.FeatureType).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
 }
 
 /// <summary>
@@ -318,4 +412,134 @@ public sealed class AreaKindOffDetails : RouteFindingDetails
 
     /// <summary>How many areas of the kind the route meets.</summary>
     public required int Count { get; init; }
+}
+
+/// <summary>
+/// A finding of the weather check: a stretch where wind or waves are above
+/// the limit at the ETA (<see cref="RouteFindingCodes.WindAboveLimit"/>,
+/// <see cref="RouteFindingCodes.WavesAboveLimit"/>), or a stretch the
+/// forecast doesn't check (<see cref="Gap"/>).
+/// </summary>
+/// <remarks>Weather model data isn't official S-100 data. These findings are advisory and aren't for navigation.</remarks>
+public sealed class WeatherDetails : RouteFindingDetails
+{
+    /// <summary>What was checked: wind or waves.</summary>
+    public required WeatherQuantity Quantity { get; init; }
+
+    /// <summary>Why a stretch isn't checked, for a gap finding; <c>null</c> for one above the limit.</summary>
+    public WeatherSampleState? Gap { get; init; }
+
+    /// <summary>The first leg of the stretch.</summary>
+    public int FirstLegIndex { get; init; }
+
+    /// <summary>The last leg of the stretch.</summary>
+    public int LastLegIndex { get; init; }
+
+    /// <summary>The stretch's length along the route.</summary>
+    public Length Length { get; init; }
+
+    /// <summary>When the vessel reaches the stretch (the departure without ETAs).</summary>
+    public DateTimeOffset StartTime { get; init; }
+
+    /// <summary>When the vessel leaves the stretch, or <c>null</c> without ETAs there.</summary>
+    public DateTimeOffset? EndTime { get; init; }
+
+    /// <summary>Above the limit: the limit, in the quantity's SI unit (m/s, m).</summary>
+    public double? Limit { get; init; }
+
+    /// <summary>Above the limit: where it came from.</summary>
+    public WeatherLimitOrigin? LimitOrigin { get; init; }
+
+    /// <summary>Above the limit: the highest value in the stretch, in the quantity's SI unit.</summary>
+    public double? Maximum { get; init; }
+
+    /// <summary>Above the limit: the forecast time step the highest value is from.</summary>
+    public DateTimeOffset? MaximumStepTime { get; init; }
+
+    /// <summary>Above the limit: when the vessel is at the highest value, or <c>null</c> without an ETA there.</summary>
+    public DateTimeOffset? MaximumTime { get; init; }
+
+    /// <summary>The weather dataset the values come from (the highest value's, for a stretch above the limit), or <c>null</c> for a stretch no dataset covers.</summary>
+    public string? DatasetId { get; init; }
+
+    /// <summary>That dataset's model run, or <c>null</c>.</summary>
+    public DateTimeOffset? ModelRun { get; init; }
+
+    /// <summary>For <see cref="WeatherSampleState.ForecastStartsLate"/>: the forecast's first step; otherwise <c>null</c>.</summary>
+    public DateTimeOffset? ForecastStart { get; init; }
+
+    /// <summary>For <see cref="WeatherSampleState.ForecastEnds"/>: the forecast's last step; otherwise <c>null</c>.</summary>
+    public DateTimeOffset? ForecastEnd { get; init; }
+}
+
+/// <summary>What a tropical cyclone finding is about (<see cref="TropicalCycloneDetails.Kind"/>).</summary>
+public enum TropicalCycloneFindingKind
+{
+    /// <summary>A stretch inside a wind radius (<see cref="TropicalCycloneDetails.Radius"/>).</summary>
+    Radius,
+
+    /// <summary>A stretch inside the forecast cone.</summary>
+    Cone,
+
+    /// <summary>The route's closest approach to the storm's centre.</summary>
+    ClosestApproach,
+
+    /// <summary>A stretch the vessel reaches after the last forecast point: not checked.</summary>
+    BeyondForecast,
+}
+
+/// <summary>
+/// A finding of the weather check's tropical cyclone rule (#1299, design
+/// note V38): a stretch inside a wind radius
+/// (<see cref="RouteFindingCodes.CycloneRadius34"/> and stronger) or the
+/// forecast cone (<see cref="RouteFindingCodes.CycloneCone"/>) at the ETA,
+/// the closest approach (<see cref="RouteFindingCodes.CycloneClosestApproach"/>),
+/// or a stretch after the forecast ends
+/// (<see cref="RouteFindingCodes.CycloneBeyondForecast"/>).
+/// </summary>
+/// <remarks>Tropical cyclone advisories aren't official S-100 data. These findings are advisory and aren't for navigation.</remarks>
+public sealed class TropicalCycloneDetails : RouteFindingDetails
+{
+    /// <summary>What the finding is about.</summary>
+    public required TropicalCycloneFindingKind Kind { get; init; }
+
+    /// <summary>The advisory.</summary>
+    public required RouteCycloneInfo Storm { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.Radius"/>: the wind radius; otherwise <c>null</c>.</summary>
+    public TropicalCycloneRadius? Radius { get; init; }
+
+    /// <summary>The first leg of the stretch (the leg of the closest approach).</summary>
+    public int FirstLegIndex { get; init; }
+
+    /// <summary>The last leg of the stretch (the leg of the closest approach).</summary>
+    public int LastLegIndex { get; init; }
+
+    /// <summary>The stretch's length along the route; zero for the closest approach.</summary>
+    public Length Length { get; init; }
+
+    /// <summary>When the vessel reaches the stretch, or is at the closest approach (the departure without ETAs).</summary>
+    public DateTimeOffset StartTime { get; init; }
+
+    /// <summary>When the vessel leaves the stretch, or <c>null</c> without ETAs there (and for the closest approach).</summary>
+    public DateTimeOffset? EndTime { get; init; }
+
+    /// <summary>Whether <see cref="StartTime"/> and <see cref="EndTime"/> are ETAs rather than the departure.</summary>
+    public bool HasEta { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.ClosestApproach"/>: the distance from the route to the storm's centre; otherwise <c>null</c>.</summary>
+    public Length? ClosestDistance { get; init; }
+
+    /// <summary>
+    /// For <see cref="TropicalCycloneFindingKind.ClosestApproach"/>: the storm
+    /// at that time (its centre, radii and where it comes from), drawn as the
+    /// storm-at-ETA ghost; otherwise <c>null</c>.
+    /// </summary>
+    public RouteCycloneAt? StormAtClosest { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.ClosestApproach"/>: the position on the route; otherwise <c>null</c>.</summary>
+    public GeoPosition? RoutePosition { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.BeyondForecast"/>: the time of the last forecast point; otherwise <c>null</c>.</summary>
+    public DateTimeOffset? ForecastEnd { get; init; }
 }

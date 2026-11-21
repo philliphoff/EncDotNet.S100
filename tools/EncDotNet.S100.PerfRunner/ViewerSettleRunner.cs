@@ -33,11 +33,20 @@ internal sealed record SettleRunOptions
 
     public int PanStepDelayMs { get; init; } = 16;
 
+    /// <summary>How long each animated jump of the glide route takes.</summary>
+    public int GlideMs { get; init; } = 800;
+
+    /// <summary>The fling route's release velocities, screen pixels per second.</summary>
+    public IReadOnlyList<(double VelocityX, double VelocityY)> Flings { get; init; } = SettleRoute.DefaultFlings;
+
     public double ScaleDenominator { get; init; } = SettleRoute.DefaultScaleDenominator;
 
     public string? LibrarySource { get; init; } = "Washington";
 
     public int SettleTimeoutMs { get; init; } = 120_000;
+
+    /// <summary>The longest wait for the view the viewer starts at to settle.</summary>
+    public int StartSettleTimeoutMs { get; init; } = 120_000;
 
     public int ConfirmMs { get; init; } = 250;
 
@@ -60,6 +69,9 @@ internal sealed record SettleRunOptions
 /// </summary>
 internal static class ViewerSettleRunner
 {
+    /// <summary>The <c>timeoutMs</c> the harness passes to <c>await_library_idle</c>.</summary>
+    internal const int LibraryIdleTimeoutMs = 120_000;
+
     public static async Task<JsonObject> RunAsync(McpClient client, SettleRunOptions options, CancellationToken ct)
     {
         var startedAtUtc = DateTimeOffset.UtcNow;
@@ -76,6 +88,14 @@ internal static class ViewerSettleRunner
         if (viewer["optimized"]?.GetValue<bool>() == false)
         {
             AnsiConsole.MarkupLine("[yellow]Warning:[/] the viewer is a Debug build; measure a Release build.");
+        }
+
+        if (viewer["appNapDisabled"]?.GetValue<bool>() == false
+            && viewer["os"]?.GetValue<string>()?.Contains("Darwin", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]Warning:[/] App Nap is on for the viewer, so a hidden or covered window slows the run several times over. "
+                + "Use a viewer that turns it off for the perf harness.");
         }
 
         await EnsureLibrarySourceAsync(client, options.LibrarySource, ct);
@@ -98,7 +118,7 @@ internal static class ViewerSettleRunner
 
         // Settle the starting view, so the first jump doesn't also wait for
         // whatever the viewer was doing.
-        await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
+        await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.StartSettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
 
         var steps = new JsonArray();
         await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "start" }, ct);
@@ -106,11 +126,20 @@ internal static class ViewerSettleRunner
         {
             steps.Add((JsonNode)await PanAsync(client, options, ct));
         }
+        else if (string.Equals(options.Route, "fling", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var step in await FlingsAsync(client, options, ct))
+            {
+                steps.Add((JsonNode)step);
+            }
+        }
         else
         {
+            // A glide is the same jumps, animated as a "go to" is.
+            var durationMs = string.Equals(options.Route, "glide", StringComparison.OrdinalIgnoreCase) ? options.GlideMs : 0;
             foreach (var jump in options.Jumps)
             {
-                steps.Add((JsonNode)await JumpAsync(client, options, jump, ct));
+                steps.Add((JsonNode)await JumpAsync(client, options, jump, durationMs, ct));
             }
         }
 
@@ -140,6 +169,22 @@ internal static class ViewerSettleRunner
             ["steps"] = steps,
             ["totals"] = SettleReport.Totals(steps),
         };
+        if (string.Equals(options.Route, "glide", StringComparison.OrdinalIgnoreCase))
+        {
+            manifest["glideMs"] = options.GlideMs;
+        }
+
+        if (string.Equals(options.Route, "fling", StringComparison.OrdinalIgnoreCase))
+        {
+            var flings = new JsonArray();
+            foreach (var (vx, vy) in options.Flings)
+            {
+                flings.Add((JsonNode)new JsonObject { ["velocityX"] = vx, ["velocityY"] = vy });
+            }
+
+            manifest["flings"] = flings;
+        }
+
         if (string.Equals(options.Route, "pan", StringComparison.OrdinalIgnoreCase))
         {
             manifest["pan"] = new JsonObject
@@ -154,10 +199,10 @@ internal static class ViewerSettleRunner
         return manifest;
     }
 
-    private static async Task<JsonObject> JumpAsync(McpClient client, SettleRunOptions options, SettleWaypoint jump, CancellationToken ct)
+    private static async Task<JsonObject> JumpAsync(McpClient client, SettleRunOptions options, SettleWaypoint jump, int durationMs, CancellationToken ct)
     {
         await CallJsonAsync(client, "get_render_stats", new() { ["resetWindow"] = true }, ct);
-        await SetViewportAsync(client, jump, options.ScaleDenominator, ct);
+        await SetViewportAsync(client, jump, options.ScaleDenominator, ct, durationMs);
         var settle = await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
         var metrics = await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "restart" }, ct);
         var frames = await CallJsonAsync(client, "get_render_stats", new(), ct);
@@ -195,13 +240,57 @@ internal static class ViewerSettleRunner
         return result;
     }
 
-    private static Task<JsonNode> SetViewportAsync(McpClient client, SettleWaypoint at, double scale, CancellationToken ct) =>
-        CallJsonAsync(client, "set_viewport", new()
+    /// <summary>
+    /// The fling route (map rendering slice&#160;9): settles at the first jump
+    /// stop (not recorded), then flings at each velocity in turn, waiting for
+    /// the view to settle where the fling came to rest.
+    /// </summary>
+    private static async Task<List<JsonObject>> FlingsAsync(McpClient client, SettleRunOptions options, CancellationToken ct)
+    {
+        var start = options.Jumps[0];
+        await SetViewportAsync(client, start, options.ScaleDenominator, ct);
+        await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
+        await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "restart" }, ct);
+
+        var results = new List<JsonObject>();
+        var index = 0;
+        foreach (var (vx, vy) in options.Flings)
+        {
+            index++;
+            await CallJsonAsync(client, "get_render_stats", new() { ["resetWindow"] = true }, ct);
+            var fling = await CallJsonAsync(client, "fling", new() { ["velocityX"] = vx, ["velocityY"] = vy }, ct);
+            var settle = await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
+            var metrics = await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "restart" }, ct);
+            var frames = await CallJsonAsync(client, "get_render_stats", new(), ct);
+            var step = SettleReport.Flatten(
+                FormattableString.Invariant($"fling {index} ({vx:F0},{vy:F0})"),
+                fling["targetLat"]?.GetValue<double>() ?? start.Latitude,
+                fling["targetLon"]?.GetValue<double>() ?? start.Longitude,
+                settle,
+                metrics,
+                frames);
+            Report(step);
+            results.Add(step);
+        }
+
+        return results;
+    }
+
+    private static Task<JsonNode> SetViewportAsync(McpClient client, SettleWaypoint at, double scale, CancellationToken ct, int durationMs = 0)
+    {
+        var arguments = new Dictionary<string, object?>
         {
             ["centerLat"] = at.Latitude,
             ["centerLon"] = at.Longitude,
             ["scaleDenominator"] = scale,
-        }, ct);
+        };
+        if (durationMs > 0)
+        {
+            arguments["durationMs"] = durationMs;
+        }
+
+        return CallJsonAsync(client, "set_viewport", arguments, ct);
+    }
 
     private static void Report(JsonObject step)
     {
@@ -246,7 +335,7 @@ internal static class ViewerSettleRunner
         {
             AnsiConsole.MarkupLine($"[bold]Library:[/]  turning on load as you pan for '{Markup.Escape(name)}'");
             await CallJsonAsync(client, "set_library_source_options", new() { ["id"] = id, ["showOnMap"] = true }, ct);
-            await CallJsonAsync(client, "await_library_idle", new() { ["timeoutMs"] = 120_000 }, ct);
+            await CallJsonAsync(client, "await_library_idle", new() { ["timeoutMs"] = LibraryIdleTimeoutMs }, ct);
         }
     }
 
@@ -287,16 +376,22 @@ internal static class ViewerSettleRunner
 
     private static async Task<JsonObject> WaitForPrewarmAsync(McpClient client, int timeoutMs, CancellationToken ct)
     {
+        // Bracket the pre-warm with a metrics window, so the manifest has its
+        // CPU, GC pause share and peak memory (map rendering slice 3).
+        await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "start" }, ct);
         await CallJsonAsync(client, "portrayal_prewarm", new() { ["enabled"] = "on" }, ct);
         var sw = Stopwatch.StartNew();
         var lastLine = string.Empty;
+        var peakConcurrency = 0;
         while (true)
         {
             var status = await CallJsonAsync(client, "portrayal_prewarm", new(), ct);
             var state = status["state"]?.GetValue<string>() ?? "?";
             var warm = status["warm"]?.GetValue<int>() ?? 0;
             var total = status["total"]?.GetValue<int>() ?? 0;
-            var line = FormattableString.Invariant($"{state} {warm}/{total}");
+            var concurrency = status["concurrencyLimit"]?.GetValue<int>() ?? 0;
+            peakConcurrency = Math.Max(peakConcurrency, concurrency);
+            var line = FormattableString.Invariant($"{state} {warm}/{total} ×{concurrency}");
             if (line != lastLine)
             {
                 AnsiConsole.MarkupLine($"[bold]Pre-warm:[/] {Markup.Escape(line)} after {sw.Elapsed.TotalSeconds:F0} s");
@@ -310,12 +405,16 @@ internal static class ViewerSettleRunner
                     AnsiConsole.MarkupLine($"[yellow]Warning:[/] the pre-warm stopped in state '{Markup.Escape(state)}', not complete.");
                 }
 
+                var metrics = await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "read" }, ct);
                 return new JsonObject
                 {
                     ["state"] = state,
                     ["warm"] = warm,
                     ["total"] = total,
                     ["waitedMs"] = sw.Elapsed.TotalMilliseconds,
+                    ["concurrencyLimit"] = concurrency,
+                    ["peakConcurrencyLimit"] = peakConcurrency,
+                    ["metrics"] = metrics["window"]?.DeepClone(),
                 };
             }
 

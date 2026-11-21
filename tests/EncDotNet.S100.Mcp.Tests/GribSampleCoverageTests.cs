@@ -10,8 +10,7 @@ namespace EncDotNet.S100.Mcp.Tests;
 
 /// <summary>
 /// Issue #1074: the NOAA GRIB2 fixtures loaded through the file catalog (as
-/// <c>s100 mcp serve</c> loads them) answer <c>sample_coverage</c> and
-/// <c>sample_coverage_along</c> with ecCodes' wave heights and winds and their
+/// <c>s100 mcp serve</c> loads them) answer <c>sample</c> with ecCodes' wave heights and winds and their
 /// units, with no MCP change.
 /// </summary>
 public sealed class GribSampleCoverageTests
@@ -27,7 +26,7 @@ public sealed class GribSampleCoverageTests
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
         var (latitude, longitude) = CropPoint(566);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "GRIB2",
             ["latitude"] = latitude,
@@ -62,7 +61,7 @@ public sealed class GribSampleCoverageTests
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
         var (latitude, longitude) = CropPoint(566);
 
-        var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "GRIB2",
             ["polyline"] = string.Create(CultureInfo.InvariantCulture, $$"""{"vertices":[[{{latitude}},{{longitude}}],[{{CropSouth}},{{CropEast}}],[0.0,0.0]]}"""),

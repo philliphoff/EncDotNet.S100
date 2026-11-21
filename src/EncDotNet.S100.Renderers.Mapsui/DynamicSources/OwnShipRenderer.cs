@@ -26,6 +26,7 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 /// CCRP cross = §8.3.1, COG vector convention from S-52 Annex A.
 /// </para>
 /// </remarks>
+[Obsolete("Draw own-ship with PortrayedDynamicFeatureRenderer over VesselPortrayal.OwnShip, which also renders headless. This renderer will be removed in a later release.")]
 public sealed class OwnShipRenderer : IDynamicFeatureRenderer
 {
     /// <summary>Pixel size at which the hull outline begins to display

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EncDotNet.S100.Viewer.Diagnostics;
 
@@ -16,9 +15,10 @@ internal sealed class LastErrorTracker : ILastErrorTracker
     private readonly ILogger _logger;
     private LastErrorRecord? _current;
 
-    public LastErrorTracker(ILogger<LastErrorTracker>? logger = null)
+    public LastErrorTracker(ILogger<LastErrorTracker> logger)
     {
-        _logger = logger ?? (ILogger)NullLogger.Instance;
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
     }
 
     /// <inheritdoc />

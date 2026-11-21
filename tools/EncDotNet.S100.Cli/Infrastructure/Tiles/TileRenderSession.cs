@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using EncDotNet.S100.Cli.Commands;
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Scripting;
 using SkiaSharp;
@@ -19,8 +19,26 @@ internal readonly record struct TileArea(double MinX, double MinY, double MaxX, 
 /// Where and how a tile set is rendered: the area, the zoom range, and the
 /// latitude each zoom level's scale is measured at.
 /// </summary>
-internal sealed record TileLayout(TileArea Area, double ReferenceLatitude, int MinZoom, int MaxZoom, HeadlessTileOptions TileOptions)
+internal sealed record TileLayout(TileArea Area, double ReferenceLatitude, int MinZoom, int MaxZoom, ChartTileOptions TileOptions)
 {
+    /// <summary>
+    /// This layout with tiles drawn at <paramref name="pixelRatio"/> image
+    /// pixels per tile pixel (2 for 512-pixel "@2x" tiles of the same grid);
+    /// this layout itself when it already draws at that ratio.
+    /// </summary>
+    public TileLayout AtPixelRatio(int pixelRatio) =>
+        pixelRatio == TileOptions.PixelRatio
+            ? this
+            : this with
+            {
+                TileOptions = new ChartTileOptions
+                {
+                    PixelRatio = pixelRatio,
+                    ReferenceLatitude = TileOptions.ReferenceLatitude,
+                    Background = TileOptions.Background,
+                },
+            };
+
     /// <summary>The WGS-84 bounds of the area, the full longitude range when it wraps the antimeridian.</summary>
     public (double West, double South, double East, double North) Bounds
     {
@@ -46,8 +64,9 @@ internal sealed class TileRenderSession : IDisposable
     private const int DefaultZoomCeiling = 18;
 
     private readonly TilesRenderSettings _settings;
+    private readonly DatasetChanges? _changes;
     private readonly IDisposable _catalogueManager;
-    private readonly ExchangeSetLayerResolution? _resolution;
+    private readonly IDisposable? _resolution;
     private readonly List<IDatasetProcessor> _processors;
 
     // Portrayal is serialised: the processors are shared by every palette's
@@ -56,20 +75,35 @@ internal sealed class TileRenderSession : IDisposable
 
     // The portrayal of each dataset that doesn't vary with time, per palette:
     // reused by every time step's scene.
-    private readonly Dictionary<(PaletteType Palette, int Index), VectorPortrayalResult> _timelessPortrayals = [];
+    // Keyed by the mariner settings too (MarinerStyle.Key), as they change the portrayal.
+    private readonly Dictionary<(PaletteType Palette, string Mariner, int Index), VectorPortrayalResult> _timelessPortrayals = [];
+
+    // The S-124 warnings, read on the first time asked for (issue #1499),
+    // and the parts left out at the last instant asked for: a client asks
+    // for many tiles at one time.
+    private readonly Lazy<SessionWarnings?> _warnings;
+    private volatile WarningsAtInstant? _lastWarnings;
 
     private TileRenderSession(
         TilesRenderSettings settings,
         IDisposable catalogueManager,
-        ExchangeSetLayerResolution? resolution,
+        IDisposable? resolution,
         List<IDatasetProcessor> processors,
-        IReadOnlyList<string> specs)
+        IReadOnlyList<string> specs,
+        IReadOnlyList<string>? names = null,
+        IReadOnlyList<string>? paths = null,
+        DatasetChanges? changes = null,
+        IReadOnlyList<SkippedDataset>? skipped = null)
     {
         _settings = settings;
+        Skipped = skipped ?? [];
+        _changes = changes;
         _catalogueManager = catalogueManager;
         _resolution = resolution;
         _processors = processors;
         Specs = specs;
+        Names = names ?? specs;
+        Paths = paths ?? Names;
         TryParseImage(settings, out var format);
         Format = format;
         Times = processors
@@ -79,46 +113,94 @@ internal sealed class TileRenderSession : IDisposable
             .Distinct()
             .Order()
             .ToArray();
+        _warnings = new Lazy<SessionWarnings?>(ReadWarnings);
+        DatasetFingerprints = [.. Paths.Select(DatasetFingerprint)];
     }
+
+    /// <summary>
+    /// Each dataset's <see cref="DatasetFingerprint"/> as it was opened, in
+    /// input order: a reload compares them to tell which datasets changed (issue #1583).
+    /// </summary>
+    public IReadOnlyList<string> DatasetFingerprints { get; }
 
     /// <summary>The product specification of each dataset, in input order.</summary>
     public IReadOnlyList<string> Specs { get; }
 
+    /// <summary>
+    /// The datasets found but not opened (issue #1583): unreadable,
+    /// protected, unsupported or missing, with why. Only a folder or an
+    /// exchange set skips a dataset; a dataset named on its own that can't be
+    /// opened fails the session instead.
+    /// </summary>
+    public IReadOnlyList<SkippedDataset> Skipped { get; }
+
+    /// <summary>The changes to the start-up datasets opened (issue #1494); <see langword="null"/> for none.</summary>
+    public DatasetChanges? Changes => _changes;
+
+    /// <summary>The file name of each dataset, in input order.</summary>
+    public IReadOnlyList<string> Names { get; }
+
+    /// <summary>The full path of each dataset, in input order.</summary>
+    public IReadOnlyList<string> Paths { get; }
+
     /// <summary>The tile encoding.</summary>
     public TileImageFormat Format { get; }
+
+    /// <summary>The opened datasets, in input order, as <see cref="Names"/> and <see cref="Specs"/> list them.</summary>
+    public IReadOnlyList<IDatasetProcessor> Processors => _processors;
 
     /// <summary>
     /// Opens and checks the datasets <paramref name="settings"/> names. On
     /// failure, prints why and returns a non-zero exit code with
     /// <paramref name="session"/> <see langword="null"/>.
     /// </summary>
-    public static int TryOpen(TilesRenderSettings settings, out TileRenderSession? session)
+    /// <param name="settings">The command's settings.</param>
+    /// <param name="session">The opened datasets, or <see langword="null"/> on failure.</param>
+    /// <param name="changes">Datasets added to and removed from those <paramref name="settings"/> names while serving (issue #1494); <see langword="null"/> for none.</param>
+    public static int TryOpen(TilesRenderSettings settings, out TileRenderSession? session, DatasetChanges? changes = null)
     {
         session = null;
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build(LuaEngineOption.Resolve(settings.LuaEngine));
-        ExchangeSetLayerResolution? resolution = null;
+        IDisposable? resolution = null;
         var processors = new List<IDatasetProcessor>();
+        var specsOpened = new List<string>();
+        var namesOpened = new List<string>();
+        var pathsOpened = new List<string>();
+        var skipped = new List<SkippedDataset>();
         bool opened = false;
         try
         {
-            IReadOnlyList<(string Path, string Spec)> inputs;
+            IReadOnlyList<(string Path, string Spec, bool ApplyUpdates)> inputs;
             bool applyUpdates = !settings.NoUpdates;
-            if (settings.IsExchangeSet)
+            string? folder = settings.FolderSource;
+            if (folder is not null)
+            {
+                // A folder of datasets, as s100 mcp serve reads one: loose cells keep
+                // their sibling S-101 updates; cells in an S-100 exchange set don't.
+                var resolved = DatasetInputResolver.Resolve(folder, [], null, settings.Only, skipped, out resolution);
+                foreach (var skip in skipped)
+                    Console.Error.WriteLine(skip.Warning);
+                inputs = resolved
+                    .Select(i => (i.Path, i.Spec, applyUpdates && !IsInsideExchangeSet(i.Path, folder)))
+                    .ToList();
+            }
+            else if (settings.IsExchangeSet)
             {
                 IReadOnlySet<string>? only = null;
                 if (settings.Only is not null && RenderCommand.TryParseOnlySpecs(settings.Only, out var specs))
                     only = specs;
 
-                resolution = ExchangeSetLayerResolution.Resolve(settings.ExchangeSetSource!, only);
-                foreach (var warning in resolution.Warnings)
+                var exchangeSet = ExchangeSetLayerResolution.Resolve(settings.ExchangeSetSource!, only);
+                resolution = exchangeSet;
+                foreach (var warning in exchangeSet.Warnings)
                     Console.Error.WriteLine(warning);
-                inputs = resolution.Layers.Select(l => (l.Path, l.Spec)).ToList();
-                applyUpdates = false;
+                skipped.AddRange(exchangeSet.Skipped);
+                inputs = exchangeSet.Layers.Select(l => (l.Path, l.Spec, false)).ToList();
             }
             else
             {
                 var paths = settings.IsComposite ? settings.Layers : [settings.Input!];
-                var resolved = new List<(string, string)>();
+                var resolved = new List<(string, string, bool)>();
                 foreach (var path in paths)
                 {
                     var spec = DatasetPipelineFactory.DetectProductSpec(path);
@@ -128,15 +210,25 @@ internal sealed class TileRenderSession : IDisposable
                         return 2;
                     }
 
-                    resolved.Add((path, spec));
+                    resolved.Add((path, spec, applyUpdates));
                 }
 
                 inputs = resolved;
             }
 
+            if (changes is { IsEmpty: false } && !changes.TryApply(ref inputs, applyUpdates))
+                return 2;
+
+            if (inputs.Count == 0 && changes is { IsEmpty: false })
+            {
+                // Every dataset was removed while serving (issue #1601).
+                AnsiConsole.MarkupLine("[grey]Every dataset has been removed; there is nothing to open.[/]");
+                return 2;
+            }
+
             if (inputs.Count == 0)
             {
-                AnsiConsole.MarkupLineInterpolated($"[red]No renderable datasets were found in:[/] {settings.ExchangeSetSource}");
+                AnsiConsole.MarkupLineInterpolated($"[red]No renderable datasets were found in:[/] {folder ?? settings.ExchangeSetSource}");
                 return 2;
             }
 
@@ -147,20 +239,88 @@ internal sealed class TileRenderSession : IDisposable
                 return 2;
             }
 
-            foreach (var (path, spec) in inputs)
+            // With --bbox, a dataset wholly outside the area its tiles cover is
+            // closed before it is portrayed: in a large folder most datasets are,
+            // and their portrayals would hold most of the memory (#1464).
+            double[]? box = settings.BoundingBox is not null
+                && CompositeViewportBuilder.TryParseDoubles(settings.BoundingBox, 4, out var parsedBox)
+                    ? parsedBox
+                    : null;
+
+            foreach (var (path, spec, applyInputUpdates) in inputs)
             {
-                var processor = DatasetProcessorLoader.Create(factory, spec, path, noUpdates: !applyUpdates);
-                processors.Add(processor);
+                IDatasetProcessor processor;
+                try
+                {
+                    processor = DatasetProcessorLoader.Create(factory, spec, path, noUpdates: !applyInputUpdates);
+                }
+                catch (Exception e) when (folder is not null && e is not OperationCanceledException)
+                {
+                    // In a folder, one unreadable dataset doesn't stop the rest.
+                    var failed = SkippedDataset.FailedToOpen(Path.GetFullPath(path), spec, e.Message);
+                    Console.Error.WriteLine(failed.Warning);
+                    skipped.Add(failed);
+                    continue;
+                }
+
                 if (processor.VersionAssessment?.IsWarning == true)
                     Console.Error.WriteLine(processor.VersionAssessment.BuildMessage());
                 if (processor is not (IVectorPortrayalSource or ICoveragePortrayalSource))
                 {
+                    (processor as IDisposable)?.Dispose();
+                    if (folder is not null)
+                    {
+                        var untiled = SkippedDataset.NotTileable(Path.GetFullPath(path), spec);
+                        Console.Error.WriteLine(untiled.Warning);
+                        skipped.Add(untiled);
+                        continue;
+                    }
+
                     AnsiConsole.MarkupLineInterpolated($"[red]Tiling is not supported for {spec}:[/] {path}");
                     return 3;
                 }
+
+                processors.Add(processor);
+                specsOpened.Add(spec);
+                namesOpened.Add(Path.GetFileName(path));
+                pathsOpened.Add(Path.GetFullPath(path));
             }
 
-            session = new TileRenderSession(settings, catalogueManager, resolution, processors, inputs.Select(i => i.Spec).ToList());
+            int outside = 0;
+            if (box is not null)
+            {
+                var filter = FilterBox(box, settings.MinZoom ?? LowestDefaultZoom(processors, box));
+                var crs = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+                for (int i = processors.Count - 1; i >= 0; i--)
+                {
+                    if (!IsOutside(processors[i], filter, crs))
+                        continue;
+
+                    (processors[i] as IDisposable)?.Dispose();
+                    processors.RemoveAt(i);
+                    specsOpened.RemoveAt(i);
+                    namesOpened.RemoveAt(i);
+                    pathsOpened.RemoveAt(i);
+                    outside++;
+                }
+            }
+
+            if (outside > 0)
+                Console.Error.WriteLine($"Left out {outside} dataset(s) outside --bbox.");
+
+            if (processors.Count == 0 && outside > 0)
+            {
+                AnsiConsole.MarkupLine("[red]No dataset covers --bbox.[/]");
+                return 2;
+            }
+
+            if (processors.Count == 0)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]No datasets that can be tiled were found in:[/] {folder ?? settings.ExchangeSetSource}");
+                return 2;
+            }
+
+            session = new TileRenderSession(settings, catalogueManager, resolution, processors, specsOpened, namesOpened, pathsOpened, changes, skipped);
             opened = true;
             return 0;
         }
@@ -177,6 +337,110 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>
+    /// The WGS-84 box a dataset must reach to draw in a tile that covers
+    /// <paramref name="box"/>: the box grown to whole tiles, and one more ring
+    /// of tiles for symbols and text drawn past a dataset's extent, at the
+    /// lowest zoom written. Without <c>--min-zoom</c> that zoom isn't known
+    /// until the datasets are portrayed, so two levels below the zoom at which
+    /// the box fits in one tile stands in for it.
+    /// </summary>
+    internal static double[] FilterBox(double[] box, int? minZoom)
+    {
+        if (box[0] > box[2] || box[0] < -180 || box[2] > 180)
+            return box;
+
+        double west = box[0], south = box[1], east = box[2], north = box[3];
+        if (west > east || west < -180 || east > 180)
+            return box;
+
+        var (minX, minY) = WebMercator.FromLonLat(west, Math.Max(south, -WebMercator.MaxLatitude));
+        var (maxX, maxY) = WebMercator.FromLonLat(east, Math.Min(north, WebMercator.MaxLatitude));
+        double span = Math.Max(maxX - minX, maxY - minY);
+        int extentZoom = span > 0
+            ? Math.Clamp((int)Math.Floor(Math.Log2(2.0 * XyzTileGrid.Extent / span)), 0, XyzTileGrid.MaxZoom)
+            : DefaultZoomCeiling;
+        int zoom = Math.Clamp(minZoom ?? extentZoom - 2, 0, XyzTileGrid.MaxZoom);
+
+        double tile = 2.0 * XyzTileGrid.Extent / (1 << zoom);
+        double Down(double v) => (Math.Floor((v + XyzTileGrid.Extent) / tile) - 1) * tile - XyzTileGrid.Extent;
+        double Up(double v) => (Math.Ceiling((v + XyzTileGrid.Extent) / tile) + 1) * tile - XyzTileGrid.Extent;
+        double Clamp(double v) => Math.Clamp(v, -XyzTileGrid.Extent, XyzTileGrid.Extent);
+
+        var (grownWest, grownSouth) = WebMercator.ToLonLat(Clamp(Down(minX)), Clamp(Down(minY)));
+        var (grownEast, grownNorth) = WebMercator.ToLonLat(Clamp(Up(maxX)), Clamp(Up(maxY)));
+        return
+        [
+            grownWest,
+            grownSouth <= -WebMercator.MaxLatitude + 1e-9 ? -90 : grownSouth,
+            grownEast,
+            grownNorth >= WebMercator.MaxLatitude - 1e-9 ? 90 : grownNorth,
+        ];
+    }
+
+    /// <summary>
+    /// The lowest zoom the default zoom range can start at for
+    /// <paramref name="processors"/> and <paramref name="box"/>: the zoom of
+    /// the coarsest cell minimum display scale any of them declares, as
+    /// <see cref="ResolveZoomRange"/> derives it once they're portrayed. Over
+    /// every dataset, so it's no higher than the range of those left after
+    /// filtering. <see langword="null"/>, for the stand-in zoom, when a
+    /// dataset declares no scale (coverages, GML products), since its
+    /// portrayal may still set one.
+    /// </summary>
+    internal static int? LowestDefaultZoom(IReadOnlyList<IDatasetProcessor> processors, double[] box)
+    {
+        int coarsest = 0;
+        foreach (var processor in processors)
+        {
+            if (processor.Metadata.DisplayScale?.Minimum is not int scale || scale <= 0)
+                return null;
+            coarsest = Math.Max(coarsest, scale);
+        }
+
+        if (coarsest == 0)
+            return null;
+
+        var (_, minY) = WebMercator.FromLonLat(0, Math.Clamp(box[1], -WebMercator.MaxLatitude, WebMercator.MaxLatitude));
+        var (_, maxY) = WebMercator.FromLonLat(0, Math.Clamp(box[3], -WebMercator.MaxLatitude, WebMercator.MaxLatitude));
+        // The latitude ResolveLayout measures scales at: the box's middle in Web Mercator.
+        double referenceLatitude = WebMercator.ToLonLat(0, (minY + maxY) / 2.0).Latitude;
+        return XyzTileGrid.ZoomForScaleDenominator(coarsest, referenceLatitude);
+    }
+
+    /// <summary>
+    /// True when <paramref name="processor"/>'s extent is known and lies wholly
+    /// outside the WGS-84 box <c>west, south, east, north</c>. A box or an
+    /// extent that crosses the antimeridian, or reaches past ±180°, is never
+    /// outside, so nothing that might show is left out.
+    /// </summary>
+    internal static bool IsOutside(IDatasetProcessor processor, double[] box, ICrsTransformFactory crs)
+    {
+        BoundingBox? extent;
+        try
+        {
+            extent = processor.Metadata.GetGeographicExtent(crs);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return false;
+        }
+
+        if (extent is null)
+            return false;
+
+        double west = box[0], south = box[1], east = box[2], north = box[3];
+        if (west > east || west < -180 || east > 180
+            || extent.WestLongitude > extent.EastLongitude
+            || extent.WestLongitude < -180 || extent.EastLongitude > 180)
+        {
+            return false;
+        }
+
+        return extent.EastLongitude < west || extent.WestLongitude > east
+            || extent.NorthLatitude < south || extent.SouthLatitude > north;
+    }
+
+    /// <summary>
     /// Portrays the datasets in <paramref name="palette"/> (or the
     /// <c>--palette</c> option) and prepares the composite each zoom level is
     /// rendered from.
@@ -186,10 +450,232 @@ internal sealed class TileRenderSession : IDisposable
     /// One of <see cref="Times"/>, each time-varying dataset being portrayed at
     /// its own step nearest it; <see langword="null"/> for <c>--time-step</c>.
     /// </param>
-    public TileScene Prepare(string? palette = null, DateTime? time = null)
+    /// <param name="steps">
+    /// With <c>--strict-time</c>, the step each dataset draws, by input index
+    /// (<see cref="TimeChoice.Steps"/>): a time-varying dataset without one
+    /// is left out. <see langword="null"/> for each dataset's step nearest
+    /// <paramref name="time"/>.
+    /// </param>
+    /// <param name="mariner">
+    /// Mariner settings over the start-up ones (issue #1493); <see langword="null"/>
+    /// for the start-up ones alone.
+    /// </param>
+    /// <param name="hiddenWarnings">
+    /// The S-124 warning parts left out, by input index
+    /// (<see cref="TimeChoice.HiddenWarnings"/>); <see langword="null"/> to draw every warning.
+    /// </param>
+    /// <param name="datasets">
+    /// The datasets drawn, by input index: those of one WMTS layer (issue #1495);
+    /// <see langword="null"/> for all of them.
+    /// </param>
+    public TileScene Prepare(string? palette = null, DateTime? time = null, IReadOnlyList<DateTime?>? steps = null, MarinerStyle? mariner = null, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings = null, IReadOnlySet<int>? datasets = null)
     {
         lock (_portrayGate)
-            return PrepareLocked(palette, time);
+            return PrepareLocked(palette, time, steps, mariner, hiddenWarnings, datasets);
+    }
+
+    /// <summary>
+    /// What draws at <paramref name="instant"/>. By default each time-varying
+    /// dataset draws its step nearest the entry of <see cref="Times"/>
+    /// nearest the instant, however far away. With <paramref name="strict"/>
+    /// (<c>--strict-time</c>), each draws its own step nearest the instant only
+    /// when that step is at most half a step away (<see cref="StrictStep"/>),
+    /// and nothing otherwise. Either way S-124 warnings draw only when in
+    /// force at the instant (issue #1499), as the viewer's map draws them at
+    /// its view time (<see cref="NavigationalWarningSet.IsDrawnAt"/>).
+    /// </summary>
+    /// <param name="instant">The time asked for.</param>
+    /// <param name="strict">Whether <c>--strict-time</c> applies.</param>
+    /// <param name="datasets">
+    /// The datasets of one WMTS layer (issue #1495), by input index, whose
+    /// own time steps the instant snaps to and whose alone are judged;
+    /// <see langword="null"/> for all of them.
+    /// </param>
+    public TimeChoice ChooseTime(DateTime instant, bool strict, IReadOnlySet<int>? datasets = null)
+    {
+        var choice = ChooseStep(instant, strict, datasets);
+        return WarningsAt(AsUtc(instant)) is { } warnings
+            && (datasets is null || datasets.Any(i => warnings.Hidden![i] is not null))
+            ? choice with
+            {
+                HiddenWarnings = warnings.Hidden,
+                Variant = Hash((choice.Variant ?? "-") + "|" + warnings.Signature),
+            }
+            : choice;
+    }
+
+    /// <summary>The steps drawn at <paramref name="instant"/>, before warnings are judged (<see cref="ChooseTime"/>).</summary>
+    private TimeChoice ChooseStep(DateTime instant, bool strict, IReadOnlySet<int>? datasets)
+    {
+        var times = datasets is null ? Times : TimesOf(datasets);
+        var snapped = times.Count == 0 ? (DateTime?)null : RenderContextBuilder.Nearest(times, AsUtc(instant));
+        if (!strict || snapped is not { } at)
+            return new TimeChoice(snapped);
+
+        instant = AsUtc(instant);
+        var steps = new DateTime?[_processors.Count];
+        bool differs = false, drawsSomething = false;
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (datasets is not null && !datasets.Contains(i))
+                continue;
+
+            if (!VariesWithTime(_processors[i]))
+            {
+                drawsSomething = true;
+                continue;
+            }
+
+            var own = ((ITimeAwareDatasetProcessor)_processors[i]).AvailableTimes
+                .Select(AsUtc).Distinct().Order().ToArray();
+            steps[i] = StrictStep(own, instant);
+            drawsSomething |= steps[i] is not null;
+            differs |= steps[i] != AsUtc(RenderContextBuilder.Nearest(own, at));
+        }
+
+        // When every dataset draws what it would by default, the default
+        // scene and its cached tiles serve.
+        if (!differs)
+            return new TimeChoice(at);
+
+        // A short, stable name for the steps, for cache keys and file names.
+        var signature = string.Join('.', steps.Select(s => s is { } t ? t.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-"));
+        return new TimeChoice(at, steps, Hash(signature), !drawsSomething);
+    }
+
+    /// <summary>A short, stable name for <paramref name="signature"/>: 16 lowercase hexadecimal characters.</summary>
+    private static string Hash(string signature) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(signature)), 0, 8);
+
+    /// <summary>
+    /// The S-124 warning parts not drawn at <paramref name="instant"/>, by
+    /// input index, or <see langword="null"/> when every part is drawn (or
+    /// there are none). A part is drawn when
+    /// <see cref="NavigationalWarningSet.IsDrawnAt"/> says so for the set of
+    /// every S-124 dataset served, so cancellations and in-force bulletins
+    /// count, as in the viewer; warnings not yet in force aren't drawn.
+    /// </summary>
+    internal WarningsAtInstant? WarningsAt(DateTime instant)
+    {
+        if (_warnings.Value is not { } warnings)
+            return null;
+        if (_lastWarnings is { } last && last.Instant == instant)
+            return last.Hidden is null ? null : last;
+
+        var at = new DateTimeOffset(AsUtc(instant));
+        var hidden = new IReadOnlySet<string>?[_processors.Count];
+        var signature = new System.Text.StringBuilder();
+        for (int i = 0; i < hidden.Length; i++)
+        {
+            if (warnings.Parts[i] is not { Count: > 0 } parts)
+                continue;
+
+            var left = parts
+                .Where(p => !warnings.Set.IsDrawnAt(p.Warning, at, showNotYetInForce: false))
+                .Select(p => p.FeatureRef)
+                .ToHashSet(StringComparer.Ordinal);
+            if (left.Count == 0)
+                continue;
+
+            hidden[i] = left;
+            signature.Append(i).Append(':').AppendJoin(',', left.Order(StringComparer.Ordinal)).Append(';');
+        }
+
+        var result = new WarningsAtInstant(instant, signature.Length == 0 ? null : hidden, signature.ToString());
+        _lastWarnings = result;
+        return result.Hidden is null ? null : result;
+    }
+
+    /// <summary>
+    /// Reads the parts and messages of every S-124 dataset, as the viewer's
+    /// Navigational warnings panel does; <see langword="null"/> when there are none.
+    /// </summary>
+    private SessionWarnings? ReadWarnings()
+    {
+        lock (_portrayGate)
+        {
+            var parts = new IReadOnlyList<NavigationalWarningFeature>?[_processors.Count];
+            var messages = new List<NavigationalWarningInfo>();
+            for (int i = 0; i < _processors.Count; i++)
+            {
+                if (!string.Equals(Specs[i], "S-124", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                NavigationalWarningInfo? message;
+                try
+                {
+                    parts[i] = _processors[i].GetNavigationalWarnings();
+                    message = _processors[i].GetNavigationalWarningMessage();
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    // A malformed dataset is drawn as it is, every warning.
+                    parts[i] = null;
+                    continue;
+                }
+
+                // A cancellation or bulletin may have no parts, yet ends others.
+                if (message is not null)
+                    messages.Add(message);
+                else
+                    messages.AddRange(parts[i]!.Select(p => p.Warning));
+            }
+
+            return parts.Any(p => p is { Count: > 0 }) ? new SessionWarnings(new NavigationalWarningSet(messages), parts) : null;
+        }
+    }
+
+    /// <summary>The S-124 warnings served: their set and each dataset's parts, by input index.</summary>
+    private sealed record SessionWarnings(NavigationalWarningSet Set, IReadOnlyList<NavigationalWarningFeature>?[] Parts);
+
+    /// <summary>
+    /// The step of <paramref name="sorted"/> nearest <paramref name="instant"/>,
+    /// or <see langword="null"/> when it is more than half a step away: before
+    /// the first step, after the last or in a gap. A step is the median
+    /// interval between steps, an hour for a single step.
+    /// </summary>
+    /// <param name="sorted">A dataset's steps, ascending and distinct.</param>
+    /// <param name="instant">The time asked for.</param>
+    internal static DateTime? StrictStep(IReadOnlyList<DateTime> sorted, DateTime instant)
+    {
+        if (sorted.Count == 0)
+            return null;
+
+        var nearest = RenderContextBuilder.Nearest(sorted, instant);
+        return (nearest - instant).Duration() <= TypicalStep(sorted) / 2 ? nearest : null;
+    }
+
+    /// <summary>The median interval between steps, robust to long gaps; an hour for a single step.</summary>
+    private static TimeSpan TypicalStep(IReadOnlyList<DateTime> sorted)
+    {
+        if (sorted.Count < 2)
+            return TimeSpan.FromHours(1);
+
+        var intervals = new TimeSpan[sorted.Count - 1];
+        for (int i = 1; i < sorted.Count; i++)
+            intervals[i - 1] = sorted[i] - sorted[i - 1];
+        Array.Sort(intervals);
+        return intervals[intervals.Length / 2];
+    }
+
+    /// <summary>
+    /// Each time-varying dataset and the step it draws in <paramref name="choice"/>,
+    /// <see langword="null"/> when it has no data then.
+    /// </summary>
+    /// <param name="choice">What draws.</param>
+    /// <param name="datasets">The datasets of one WMTS layer, by input index; <see langword="null"/> for all.</param>
+    public IEnumerable<(string Name, string Spec, DateTime? Step)> DescribeTime(TimeChoice choice, IReadOnlySet<int>? datasets = null)
+    {
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (!VariesWithTime(_processors[i]) || (datasets is not null && !datasets.Contains(i)))
+                continue;
+
+            var step = choice.Steps is { } steps
+                ? steps[i]
+                : choice.Time is { } at ? RenderContextBuilder.NearestTimeStep(_processors[i], at) is { } s ? AsUtc(s) : null : null;
+            yield return (Names[i], Specs[i], step);
+        }
     }
 
     /// <summary>
@@ -197,6 +683,19 @@ internal sealed class TileRenderSession : IDisposable
     /// ascending and without duplicates; empty when none of them varies.
     /// </summary>
     public IReadOnlyList<DateTime> Times { get; }
+
+    /// <summary>
+    /// The time steps of the time-varying datasets among <paramref name="datasets"/>
+    /// (by input index), in UTC, ascending and without duplicates.
+    /// </summary>
+    public IReadOnlyList<DateTime> TimesOf(IReadOnlySet<int> datasets) =>
+        [.. datasets.Where(i => i >= 0 && i < _processors.Count)
+            .Select(i => _processors[i])
+            .OfType<ITimeAwareDatasetProcessor>()
+            .SelectMany(p => p.AvailableTimes)
+            .Select(AsUtc)
+            .Distinct()
+            .Order()];
 
     /// <summary>
     /// The entry of <see cref="Times"/> nearest <paramref name="instant"/>, or
@@ -219,57 +718,87 @@ internal sealed class TileRenderSession : IDisposable
     private static bool VariesWithTime(IDatasetProcessor processor) =>
         processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0;
 
-    private TileScene PrepareLocked(string? palette, DateTime? time)
+    private TileScene PrepareLocked(string? palette, DateTime? time, IReadOnlyList<DateTime?>? steps, MarinerStyle? marinerStyle, IReadOnlyList<IReadOnlySet<string>?>? hiddenWarnings, IReadOnlySet<int>? datasets)
     {
         RenderCommand.TryParsePalette(palette ?? _settings.Palette, out var parsedPalette);
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
         RenderCommand.TryParseDisplayMode(_settings.DisplayMode, out var displayModeId);
         var hidden = HiddenCategories(_settings);
+        var nationalLanguage = RenderCommand.ResolveNationalLanguage(_settings.NationalLanguage);
+        var effectiveMariner = marinerStyle is null ? _settings.MarinerStyle : marinerStyle.Over(_settings.MarinerStyle);
+        string marinerKey = effectiveMariner.Key;
+        var mariner = effectiveMariner.ToMarinerSettings(nationalLanguage);
+        // Only when chosen, so the processors keep their own defaults (today's tiles) otherwise.
+        var contextMariner = effectiveMariner.IsEmpty ? null : mariner;
+        var ecdisDisplay = effectiveMariner.ToEcdisDisplay();
 
-        RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport) =>
-            RenderContextBuilder.Build(
+        RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport)
+        {
+            var context = RenderContextBuilder.Build(
                 processor, parsedPalette, _settings.SymbolScale, _settings.TextScale, _settings.TimeStep, hidden,
-                displayModeId: displayModeId, viewport: viewport, instant: time);
+                displayModeId: displayModeId, viewport: viewport, instant: time,
+                nationalLanguage: nationalLanguage, mariner: contextMariner, ecdisDisplay: ecdisDisplay);
+            if (hiddenWarnings?[_processors.IndexOf(processor)] is { } hiddenParts)
+                context = context with { HiddenFeatures = hiddenParts };
+            return steps is not null && VariesWithTime(processor)
+                ? context with { TimeStep = steps[_processors.IndexOf(processor)] }
+                : context;
+        }
+
+        // Warnings left out at a time are portrayed for it, not cached.
+        bool Timeless(int index) => !VariesWithTime(_processors[index]) && hiddenWarnings?[index] is null;
+
+        // With --strict-time, a time-varying dataset without a step at the
+        // time asked for is left out; so is one outside the layer drawn.
+        bool Drawn(int index) =>
+            (datasets is null || datasets.Contains(index))
+            && (steps is null || !VariesWithTime(_processors[index]) || steps[index] is not null);
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
-        // extent, and again for each zoom level (TileScene.RendererFor).
-        var inputs = new HeadlessCompositeInput[_processors.Count];
-        var vectorResults = new List<VectorPortrayalResult>();
+        // extent, and again for each zoom level (TileScene.RendererFor). The
+        // datasets still to portray run in parallel on the work scheduler.
+        var inputs = new ChartCompositeInput[_processors.Count];
+        var pending = new List<(int Index, ChartPortrayalRequest Request)>();
         bool hasCoverage = false;
         for (int i = 0; i < _processors.Count; i++)
         {
-            var processor = _processors[i];
-            if (processor is IVectorPortrayalSource vectorSource)
-            {
-                VectorPortrayalResult result;
-                if (VariesWithTime(processor))
-                {
-                    result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
-                }
-                else if (!_timelessPortrayals.TryGetValue((parsedPalette, i), out result!))
-                {
-                    result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
-                    _timelessPortrayals[(parsedPalette, i)] = result;
-                }
+            if (!Drawn(i))
+                continue;
 
-                vectorResults.Add(result);
-                inputs[i] = HeadlessCompositeInput.ForVector(result);
-            }
-            else
+            var processor = _processors[i];
+            if (processor is IVectorPortrayalSource
+                && Timeless(i)
+                && _timelessPortrayals.TryGetValue((parsedPalette, marinerKey, i), out var cached))
             {
-                var coverageSource = (ICoveragePortrayalSource)processor;
-                var result = coverageSource.BuildCoveragePortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
-                inputs[i] = HeadlessCompositeInput.ForCoverage(result);
-                hasCoverage = true;
+                inputs[i] = ChartCompositeInput.ForVector(cached);
+                continue;
             }
+
+            hasCoverage |= processor is not IVectorPortrayalSource;
+            pending.Add((i, new ChartPortrayalRequest(processor, ContextFor(processor, null))));
         }
 
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-        var options = new HeadlessCompositeOptions
+        var portrayed = ChartRenderer.PortrayAsync([.. pending.Select(p => p.Request)]).GetAwaiter().GetResult();
+        for (int p = 0; p < pending.Count; p++)
+        {
+            int i = pending[p].Index;
+            inputs[i] = portrayed[p];
+            if (portrayed[p].Vector is { } vector && Timeless(i))
+                _timelessPortrayals[(parsedPalette, marinerKey, i)] = vector;
+        }
+
+        // Datasets left out by --strict-time or the layer are left out of the scene too.
+        var drawn = Enumerable.Range(0, _processors.Count).Where(Drawn).ToArray();
+        IReadOnlyList<IDatasetProcessor> sceneProcessors = drawn.Length == _processors.Count ? _processors : [.. drawn.Select(i => _processors[i])];
+        if (drawn.Length != _processors.Count)
+            inputs = [.. drawn.Select(i => inputs[i])];
+
+        var vectorResults = inputs.Select(input => input.Vector).OfType<VectorPortrayalResult>().ToList();
+        var options = new ChartCompositeOptions
         {
             Background = Background(_settings),
-            Mariner = MarinerSettings.Default,
+            Mariner = mariner,
             HiddenCategories = hidden,
             Basemap = basemap,
             HonorScaleVisibility = true,
@@ -277,7 +806,7 @@ internal sealed class TileRenderSession : IDisposable
             KeepAreaSymbolsInView = false,
         };
 
-        return new TileScene(_processors, inputs, vectorResults, hasCoverage, compositor, options, ContextFor, _portrayGate);
+        return new TileScene(sceneProcessors, inputs, vectorResults, hasCoverage, ChartCompositorFactory.Create(), options, ContextFor, _portrayGate);
     }
 
     /// <summary>
@@ -285,24 +814,30 @@ internal sealed class TileRenderSession : IDisposable
     /// <see langword="null"/> when the datasets have no geometry and no
     /// <c>--bbox</c> is given.
     /// </summary>
-    public TileLayout? ResolveLayout(TileScene scene)
+    /// <param name="scene">The prepared datasets.</param>
+    /// <param name="referenceLatitude">
+    /// The latitude zoom levels' scales are measured at; <see langword="null"/>
+    /// for the middle of the area. <c>tiles serve --manage-datasets</c> keeps
+    /// the first one, so adding a dataset doesn't change the others' tiles.
+    /// </param>
+    public TileLayout? ResolveLayout(TileScene scene, double? referenceLatitude = null)
     {
         if (!TryResolveArea(_settings, scene.Scene, out var area))
             return null;
 
-        double referenceLatitude = WebMercator.ToLonLat(0, (area.MinY + area.MaxY) / 2.0).Latitude;
-        var (minZoom, maxZoom) = ResolveZoomRange(_settings, scene.VectorResults, area, referenceLatitude);
-        var tileOptions = new HeadlessTileOptions
+        referenceLatitude ??= WebMercator.ToLonLat(0, (area.MinY + area.MaxY) / 2.0).Latitude;
+        var (minZoom, maxZoom) = ResolveZoomRange(_settings, scene.VectorResults, area, referenceLatitude.Value);
+        var tileOptions = new ChartTileOptions
         {
             PixelRatio = _settings.TileSize / XyzTileGrid.TileSize,
-            ReferenceLatitude = referenceLatitude,
+            ReferenceLatitude = referenceLatitude.Value,
             Background = Background(_settings),
         };
-        return new TileLayout(area, referenceLatitude, minZoom, maxZoom, tileOptions);
+        return new TileLayout(area, referenceLatitude.Value, minZoom, maxZoom, tileOptions);
     }
 
     /// <summary>Encodes a rendered tile in the session's format and quality.</summary>
-    public byte[] Encode(HeadlessTile tile)
+    public byte[] Encode(ChartTile tile)
     {
         var encodeFormat = Format switch
         {
@@ -316,7 +851,11 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>The display settings baked into the tiles, as tile-set metadata records them.</summary>
-    public Dictionary<string, string> DescribeSettings(double referenceLatitude, string? palette = null, DateTime? time = null)
+    /// <param name="referenceLatitude">The latitude the zoom levels' scales are given at.</param>
+    /// <param name="palette">The palette; <see langword="null"/> for <c>--palette</c>.</param>
+    /// <param name="time">The time step; <see langword="null"/> for <c>--time-step</c>.</param>
+    /// <param name="mariner">Mariner settings over the start-up ones; <see langword="null"/> for those alone.</param>
+    public Dictionary<string, string> DescribeSettings(double referenceLatitude, string? palette = null, DateTime? time = null, MarinerStyle? mariner = null)
     {
         var description = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -331,8 +870,13 @@ internal sealed class TileRenderSession : IDisposable
         var hidden = HiddenCategories(_settings);
         if (hidden != DrawingInstructionCategory.None)
             description["hidden"] = hidden.ToString();
+        if (RenderCommand.ResolveNationalLanguage(_settings.NationalLanguage) is { } nationalLanguage)
+            description["nationalLanguage"] = nationalLanguage;
         if (!string.IsNullOrWhiteSpace(_settings.DisplayMode))
             description["displayMode"] = _settings.DisplayMode.Trim().ToLowerInvariant();
+        var effectiveMariner = mariner is null ? _settings.MarinerStyle : mariner.Over(_settings.MarinerStyle);
+        foreach (var (name, value) in effectiveMariner.Describe())
+            description[name] = value;
         if (time is { } at)
             description["time"] = FormatTime(at);
         return description;
@@ -345,20 +889,80 @@ internal sealed class TileRenderSession : IDisposable
     /// <summary>
     /// A fingerprint of everything that decides what the tiles look like: the
     /// <c>s100</c> version, every input file's path, size and write time
-    /// (including sibling update files and the whole of an exchange set), and
+    /// (including sibling update files, and the whole of an exchange set or
+    /// folder, so adding or removing a file changes it), and
     /// the options that change pixels. A persisted tile cache is kept per
     /// fingerprint, so tiles are only reused for the same data and settings.
     /// The palette is not included; it is part of each tile's key.
     /// </summary>
     /// <returns>32 lowercase hexadecimal characters.</returns>
-    public string Fingerprint() => Fingerprint(_settings);
+    public string Fingerprint() => Fingerprint(_settings, _changes);
 
     /// <summary>
     /// The <see cref="Fingerprint()"/> of the datasets <paramref name="settings"/>
     /// name, without opening them: only their files' paths, sizes and write
     /// times are read.
     /// </summary>
-    public static string Fingerprint(TilesRenderSettings settings)
+    /// <param name="settings">The command's settings.</param>
+    /// <param name="changes">Datasets added and removed while serving (issue #1494); <see langword="null"/> for none.</param>
+    public static string Fingerprint(TilesRenderSettings settings, DatasetChanges? changes = null)
+    {
+        var text = SettingsText(settings);
+        void Line(string name, object? value) =>
+            text.Append(name).Append('=').Append(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+
+        foreach (var file in InputFiles(settings))
+            FileLine(text, file);
+
+        // Only when there are any, so fingerprints without them still match.
+        if (changes is { IsEmpty: false })
+        {
+            foreach (var added in changes.Added)
+            {
+                foreach (var file in DatasetFiles(added))
+                    FileLine(text, file);
+            }
+
+            foreach (var removed in changes.Removed)
+                Line("removed", removed);
+
+            // The layers clients put datasets in (issue #1495) change those layers' tiles.
+            foreach (var (path, layer) in changes.Layers)
+                Line("layer", path + "=" + layer);
+        }
+
+        return Hash(text);
+    }
+
+    /// <summary>
+    /// A fingerprint of the options that change pixels and the <c>s100</c>
+    /// version, without any input file: what every dataset's tiles share
+    /// (<see cref="DatasetTileKeys"/>).
+    /// </summary>
+    internal string SettingsFingerprint() => Hash(SettingsText(_settings));
+
+    /// <summary>A fingerprint of one dataset's files: its own and its sibling files' paths, sizes and write times.</summary>
+    internal static string DatasetFingerprint(string path)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var file in DatasetFiles(path))
+            FileLine(text, file);
+        return Hash(text);
+    }
+
+    private static string Hash(System.Text.StringBuilder text)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
+        return Convert.ToHexStringLower(hash, 0, 16);
+    }
+
+    private static void FileLine(System.Text.StringBuilder text, string file)
+    {
+        var info = new FileInfo(file);
+        text.Append("file=").Append($"{info.FullName}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}").Append('\n');
+    }
+
+    private static System.Text.StringBuilder SettingsText(TilesRenderSettings settings)
     {
         TryParseImage(settings, out var format);
         var text = new System.Text.StringBuilder();
@@ -381,15 +985,12 @@ internal sealed class TileRenderSession : IDisposable
         Line("noUpdates", settings.NoUpdates);
         Line("metatile", settings.Metatile);
         Line("luaEngine", LuaEngineKinds.GetName(LuaEngineOption.Resolve(settings.LuaEngine)));
-
-        foreach (var file in InputFiles(settings))
-        {
-            var info = new FileInfo(file);
-            Line("file", $"{info.FullName}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}");
-        }
-
-        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
-        return Convert.ToHexStringLower(hash, 0, 16);
+        // Only when set, so fingerprints from before the option existed still match.
+        if (RenderCommand.ResolveNationalLanguage(settings.NationalLanguage) is { } nationalLanguage)
+            Line("nationalLanguage", nationalLanguage);
+        if (!settings.MarinerStyle.IsEmpty)
+            Line("mariner", settings.MarinerStyle.Key);
+        return text;
     }
 
     /// <summary>
@@ -399,6 +1000,9 @@ internal sealed class TileRenderSession : IDisposable
     /// </summary>
     private static IEnumerable<string> InputFiles(TilesRenderSettings settings)
     {
+        if (settings.FolderSource is { } folder)
+            return FolderFiles(Path.GetFullPath(folder), settings.FingerprintExcludedFolder);
+
         if (settings.IsExchangeSet)
         {
             var source = Path.GetFullPath(settings.ExchangeSetSource!);
@@ -412,17 +1016,74 @@ internal sealed class TileRenderSession : IDisposable
 
         var files = new List<string>();
         foreach (var path in settings.IsComposite ? settings.Layers : [settings.Input!])
-        {
-            var full = Path.GetFullPath(path);
-            var directory = Path.GetDirectoryName(full)!;
-            var stem = Path.GetFileNameWithoutExtension(full);
-            files.Add(full);
-            files.AddRange(Directory.EnumerateFiles(directory, stem + ".*")
-                .Where(f => !string.Equals(f, full, StringComparison.Ordinal))
-                .Order(StringComparer.Ordinal));
-        }
+            files.AddRange(DatasetFiles(path));
 
         return files;
+    }
+
+    /// <summary>A dataset file and its sibling files (S-101 and S-57 update files share its name).</summary>
+    private static List<string> DatasetFiles(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(full)!;
+        var stem = Path.GetFileNameWithoutExtension(full);
+        List<string> files = [full];
+        files.AddRange(Directory.EnumerateFiles(directory, stem + ".*")
+            .Where(f => !string.Equals(f, full, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal));
+        return files;
+    }
+
+    /// <summary>
+    /// Every file in a folder of datasets, recursively and in a stable order,
+    /// so a file added to it or removed from it changes the fingerprint.
+    /// Hidden files and folders are skipped, as the folder's datasets are found,
+    /// and so is <paramref name="excluded"/> (a tile cache kept inside it).
+    /// </summary>
+    private static List<string> FolderFiles(string root, string? excluded)
+    {
+        var excludedFull = excluded is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(excluded));
+        var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };
+        var files = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            if (excludedFull is not null && string.Equals(directory, excludedFull, StringComparison.Ordinal))
+                continue;
+            try
+            {
+                files.AddRange(Directory.EnumerateFiles(directory, "*", options));
+                foreach (var child in Directory.EnumerateDirectories(directory, "*", options))
+                    pending.Push(child);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A folder removed while it was read: the next check sees the change.
+            }
+        }
+
+        files.Sort(StringComparer.Ordinal);
+        return files;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> lies in an S-100 exchange set nested in
+    /// <paramref name="root"/> (a folder between them holding a <c>CATALOG.XML</c>).
+    /// </summary>
+    private static bool IsInsideExchangeSet(string path, string root)
+    {
+        var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        for (var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+             directory is not null && directory.Length > rootFull.Length;
+             directory = Path.GetDirectoryName(directory))
+        {
+            if (ExchangeSetInput.LooksLikeExchangeSet(directory))
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()
@@ -470,7 +1131,7 @@ internal sealed class TileRenderSession : IDisposable
         return (min, Math.Max(min, max));
     }
 
-    private static bool TryResolveArea(TilesRenderSettings settings, HeadlessCompositeScene scene, out TileArea area)
+    private static bool TryResolveArea(TilesRenderSettings settings, ChartComposition scene, out TileArea area)
     {
         if (settings.BoundingBox is not null
             && CompositeViewportBuilder.TryParseDoubles(settings.BoundingBox, 4, out var bb))
@@ -516,7 +1177,7 @@ internal sealed class TileRenderSession : IDisposable
 
 /// <summary>
 /// The datasets portrayed in one palette, prepared as a composite. Hands out a
-/// <see cref="HeadlessTileRenderer"/> per zoom level, portraying coverage
+/// <see cref="ChartTileRenderer"/> per zoom level, portraying coverage
 /// products again for each so grid sampling and arrow density suit it.
 /// <see cref="RendererFor"/> may be called concurrently.
 /// </summary>
@@ -526,21 +1187,22 @@ internal sealed class TileScene
     private const int MaxCoverageViewportPixels = 1 << 20;
 
     private readonly IReadOnlyList<IDatasetProcessor> _processors;
-    private readonly HeadlessCompositeInput[] _inputs;
+    private readonly ChartCompositeInput[] _inputs;
     private readonly bool _hasCoverage;
-    private readonly HeadlessCompositor _compositor;
-    private readonly HeadlessCompositeOptions _options;
+    private readonly ChartCompositor _compositor;
+    private readonly ChartCompositeOptions _options;
     private readonly Func<IDatasetProcessor, Viewport?, RenderContext> _contextFor;
     private readonly Lock _portrayGate;
-    private readonly ConcurrentDictionary<int, Lazy<HeadlessTileRenderer>> _renderers = new();
+    private readonly ConcurrentDictionary<int, Lazy<ChartComposition>> _zoomScenes = new();
+    private readonly ConcurrentDictionary<(int Zoom, int PixelRatio), Lazy<ChartTileRenderer>> _renderers = new();
 
     internal TileScene(
         IReadOnlyList<IDatasetProcessor> processors,
-        HeadlessCompositeInput[] inputs,
+        ChartCompositeInput[] inputs,
         IReadOnlyList<VectorPortrayalResult> vectorResults,
         bool hasCoverage,
-        HeadlessCompositor compositor,
-        HeadlessCompositeOptions options,
+        ChartCompositor compositor,
+        ChartCompositeOptions options,
         Func<IDatasetProcessor, Viewport?, RenderContext> contextFor,
         Lock portrayGate)
     {
@@ -552,27 +1214,59 @@ internal sealed class TileScene
         _options = options;
         _contextFor = contextFor;
         _portrayGate = portrayGate;
-        Scene = compositor.Prepare(inputs, options);
+        Scene = compositor.PrepareAsync(inputs, options).GetAwaiter().GetResult();
     }
 
     /// <summary>The composite of the datasets' full-extent portrayal.</summary>
-    public HeadlessCompositeScene Scene { get; }
+    public ChartComposition Scene { get; }
 
     /// <summary>The vector datasets' portrayal results (for their display scales).</summary>
     public IReadOnlyList<VectorPortrayalResult> VectorResults { get; }
 
-    /// <summary>The renderer for <paramref name="zoom"/>, created once per zoom level.</summary>
-    public HeadlessTileRenderer RendererFor(int zoom, TileLayout layout) =>
-        _renderers.GetOrAdd(zoom, z => new Lazy<HeadlessTileRenderer>(() => new HeadlessTileRenderer(
-            _hasCoverage ? _compositor.Prepare(PortrayCoverageForZoom(layout, z), _options) : Scene,
+    /// <summary>Each dataset's full-extent portrayal, by input index; read for its legend rows (<see cref="TileLegend"/>).</summary>
+    public IReadOnlyList<ChartCompositeInput?> Inputs => _inputs;
+
+    /// <summary>
+    /// The declared data coverage (<c>DataCoverage</c>, or S-57 <c>M_COVR</c>)
+    /// of <paramref name="processor"/>'s portrayal in this scene; empty when it
+    /// declares none, isn't a vector dataset or isn't in the scene.
+    /// </summary>
+    public IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> CoverageOf(IDatasetProcessor processor)
+    {
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (ReferenceEquals(_processors[i], processor))
+                return _inputs[i]?.Vector?.CoverageAreas ?? [];
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// The renderer for <paramref name="zoom"/> at the pixel ratio of
+    /// <paramref name="layout"/>'s tile options, created once per zoom level
+    /// and pixel ratio. Coverage portrayal for the level runs on the work
+    /// scheduler, so call this from outside a scheduler job; it is shared by
+    /// the pixel ratios, as it depends on the zoom level alone.
+    /// </summary>
+    public ChartTileRenderer RendererFor(int zoom, TileLayout layout) =>
+        _renderers.GetOrAdd((zoom, layout.TileOptions.PixelRatio), _ => new Lazy<ChartTileRenderer>(() => new ChartTileRenderer(
+            SceneFor(zoom, layout),
             layout.TileOptions))).Value;
+
+    /// <summary>The composite drawn at <paramref name="zoom"/>: coverage portrayed again for the level, or the full-extent scene.</summary>
+    private ChartComposition SceneFor(int zoom, TileLayout layout) =>
+        !_hasCoverage
+            ? Scene
+            : _zoomScenes.GetOrAdd(zoom, z => new Lazy<ChartComposition>(() =>
+                _compositor.PrepareAsync(PortrayCoverageForZoom(layout, z), _options).GetAwaiter().GetResult())).Value;
 
     /// <summary>
     /// Re-portrays each coverage input for one zoom level, against a viewport
     /// covering the whole tiled area at that zoom's resolution, so grid sampling
     /// and arrow density match the tiles. Vector inputs are reused.
     /// </summary>
-    private HeadlessCompositeInput[] PortrayCoverageForZoom(TileLayout layout, int zoom)
+    private ChartCompositeInput[] PortrayCoverageForZoom(TileLayout layout, int zoom)
     {
         var area = layout.Area;
         double resolution = XyzTileGrid.Resolution(zoom);
@@ -592,17 +1286,42 @@ internal sealed class TileScene
         var zoomInputs = _inputs.ToArray();
         lock (_portrayGate)
         {
-            for (int i = 0; i < _processors.Count; i++)
-            {
-                if (_processors[i] is ICoveragePortrayalSource coverageSource)
-                {
-                    var result = coverageSource.BuildCoveragePortrayalAsync(_contextFor(_processors[i], viewport))
-                        .GetAwaiter().GetResult();
-                    zoomInputs[i] = HeadlessCompositeInput.ForCoverage(result);
-                }
-            }
+            var coverage = Enumerable.Range(0, _processors.Count)
+                .Where(i => _processors[i] is ICoveragePortrayalSource)
+                .ToArray();
+            var portrayed = ChartRenderer.PortrayAsync(
+                    [.. coverage.Select(i => new ChartPortrayalRequest(_processors[i], _contextFor(_processors[i], viewport)))])
+                .GetAwaiter().GetResult();
+            for (int c = 0; c < coverage.Length; c++)
+                zoomInputs[coverage[c]] = portrayed[c];
         }
 
         return zoomInputs;
     }
 }
+
+/// <summary>
+/// What draws at a time asked for (<see cref="TileRenderSession.ChooseTime"/>).
+/// </summary>
+/// <param name="Time">The entry of <see cref="TileRenderSession.Times"/> nearest the time asked for; <see langword="null"/> for <c>--time-step</c>.</param>
+/// <param name="Steps">
+/// With <c>--strict-time</c>, when some dataset draws other than at its step
+/// nearest <paramref name="Time"/>: the step each dataset draws, by input
+/// index, <see langword="null"/> for one that draws nothing (or doesn't vary
+/// with time). Otherwise <see langword="null"/>.
+/// </param>
+/// <param name="Variant">Tells apart choices with the same <paramref name="Time"/> and different <paramref name="Steps"/>; <see langword="null"/> without them.</param>
+/// <param name="Empty">Whether nothing draws at all.</param>
+/// <param name="HiddenWarnings">
+/// The S-124 warning parts not in force at the time asked for, by input
+/// index (issue #1499), <see langword="null"/> for a dataset that draws all
+/// of its own; <see langword="null"/> when every warning draws.
+/// <paramref name="Variant"/> then tells the warnings drawn apart too.
+/// </param>
+internal sealed record TimeChoice(DateTime? Time, IReadOnlyList<DateTime?>? Steps = null, string? Variant = null, bool Empty = false, IReadOnlyList<IReadOnlySet<string>?>? HiddenWarnings = null);
+
+/// <summary>The S-124 warning parts left out at <paramref name="Instant"/> (<see cref="TileRenderSession.WarningsAt"/>).</summary>
+/// <param name="Instant">The time asked for, in UTC.</param>
+/// <param name="Hidden">The parts left out, by input index; <see langword="null"/> when every part draws.</param>
+/// <param name="Signature">A stable text of <paramref name="Hidden"/>, for cache keys.</param>
+internal sealed record WarningsAtInstant(DateTime Instant, IReadOnlyList<IReadOnlySet<string>?>? Hidden, string Signature);

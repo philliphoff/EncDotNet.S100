@@ -188,7 +188,7 @@ internal sealed class RoutesService
     {
         if (Routes.ActiveRoute is not { IsReadOnly: false } route || SelectedWaypointIndex is not { } index)
             return false;
-        route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(index));
+        RouteEditCommands.DeleteWaypoint(route, index);
         SelectedWaypointIndex = null;
         return true;
     }
@@ -205,11 +205,11 @@ internal sealed class RoutesService
     public event EventHandler? SelectionChanged;
 
     /// <summary>Creates the service.</summary>
-    /// <param name="viewTime">Where ETAs run from on a route with no departure;
-    /// now when omitted.</param>
-    public RoutesService(IViewTime? viewTime = null)
+    /// <param name="viewTime">Where ETAs run from on a route with no departure.</param>
+    public RoutesService(IViewTime viewTime)
     {
-        ViewTime = viewTime ?? new ClockViewTime(TimeProvider.System);
+        ArgumentNullException.ThrowIfNull(viewTime);
+        ViewTime = viewTime;
         Routes.Changed += (_, _) =>
         {
             // Keep the selection valid as routes/waypoints change.

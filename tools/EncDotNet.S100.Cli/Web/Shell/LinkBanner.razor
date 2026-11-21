@@ -1,0 +1,19 @@
+@* The lost-connection banners under the header (handoff D30): red when /healthz fails too (the map dims), amber when only
+   the live link dropped (tiles still load over plain HTTP), red when the server stopped. They replace Blazor's reconnect
+   dialog. The circuit is down while they show, so js/serve-live.js drives them: it marks <html data-link="…">, fills
+   the countdown and handles Try now. Nothing here changes after the first render. *@
+<div class="link-banner" data-link-banner="disconnected" role="alert">
+    <Icon Name="wifi-off" Size="16" />
+    <span class="link-banner-text"><span class="strong">Can't reach the server.</span> The map keeps what it has. <span data-link-countdown></span></span>
+    <button type="button" class="button link-retry" data-link-retry><Icon Name="refresh" Size="15" /> Try now</button>
+</div>
+<div class="link-banner link-banner-warn" data-link-banner="reconnecting" role="status">
+    <Icon Name="wifi-off" Size="16" />
+    <span class="link-banner-text"><span class="strong">Live updates paused.</span> Reconnecting… Tiles still load.</span>
+    <button type="button" class="button link-retry" data-link-retry><Icon Name="refresh" Size="15" /> Try now</button>
+</div>
+<div class="link-banner" data-link-banner="stopped" role="alert">
+    <Icon Name="wifi-off" Size="16" />
+    <span class="link-banner-text"><span class="strong">The server stopped.</span> The map keeps what it has. The page reloads when the server is back.</span>
+    <button type="button" class="button link-retry" data-link-retry><Icon Name="refresh" Size="15" /> Try now</button>
+</div>

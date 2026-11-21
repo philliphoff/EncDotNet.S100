@@ -18,6 +18,9 @@ public readonly record struct GribFixedSurface(byte Type, double? Value)
     /// <summary>The ground or water surface.</summary>
     public const byte GroundOrWater = 1;
 
+    /// <summary>The entire atmosphere, as a single layer (total cloud cover).</summary>
+    public const byte EntireAtmosphere = 10;
+
     /// <summary>An isobaric surface; the value is in pascals.</summary>
     public const byte Isobaric = 100;
 

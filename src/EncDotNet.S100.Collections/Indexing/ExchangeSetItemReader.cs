@@ -185,10 +185,16 @@ internal static class ExchangeSetItemReader
             if (header?.IntendedUsage is { } usage)
                 properties["intendedUsage"] = usage.ToString(CultureInfo.InvariantCulture);
 
+            // CATALOG.031 lists AML cells like any S-57 cell; the DSID tells them apart.
+            var aml = header?.Aml;
+            if (aml is not null)
+                AmlLibraryProperties.Write(aml, properties);
+
             yield return new CollectionItem
             {
                 Key = context.GroupKey + "/" + cell.CellName,
-                ProductSpec = "S-57",
+                ProductSpec = aml is not null ? AmlDatasetInfo.SpecName : "S-57",
+                ProductSpecVersion = aml?.Version,
                 Name = cell.CellName,
                 Title = cell.LongFileName is { } title
                     && !title.Equals(Path.GetFileName(relativePath), StringComparison.OrdinalIgnoreCase)
@@ -200,7 +206,7 @@ internal static class ExchangeSetItemReader
                 IssueDate = latest?.IssueDate ?? header?.IssueDate,
                 UpdateApplicationDate = header?.UpdateApplicationDate,
                 CompilationScale = header?.CompilationScale,
-                UsageBand = UsageBand.FromCellName(cell.CellName),
+                UsageBand = aml is null ? UsageBand.FromCellName(cell.CellName) : null,
                 Status = CollectionItemStatus.Unknown,
                 Bounds = cell.BoundingBox is { } box
                     ? new GeoBounds(box.SouthBoundLatitude, box.WestBoundLongitude, box.NorthBoundLatitude, box.EastBoundLongitude)
@@ -231,7 +237,7 @@ internal static class ExchangeSetItemReader
                 return null;
             }
 
-            var header = S57DatasetHeader.Read(stream);
+            var header = S57DatasetHeader.Read(stream, Path.GetFileName(relativePath));
             if (header is null)
             {
                 diagnostics.Add(new IndexDiagnostic(

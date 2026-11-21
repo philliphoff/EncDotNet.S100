@@ -9,6 +9,7 @@ using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Portrayals.Application;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
 using SkiaSharp;
@@ -63,14 +64,15 @@ public class TileDiskContentScopeTests : IDisposable
         var movedNs = Namespace(moved);
         Assert.NotEqual(originalNs, movedNs);
 
-        using var cache = new TileDiskCache(Path.Combine(_root, "tiles"), 64L * 1024 * 1024);
+        var cache = new TileDiskCache(
+            new EncDotNet.S100.Core.Caching.ContentStore(_root).Open(TileDiskCache.KindName, 64L * 1024 * 1024, TileDiskCache.KindOptions));
         var key = new TileKey(10, 3, 4);
         using (var image = SolidImage(64))
             cache.Write(originalNs, key, image);
 
-        using (var hit = cache.TryRead(originalNs, key))
+        using (var hit = cache.TryRead(originalNs, key, 64))
             Assert.NotNull(hit);
-        Assert.Null(cache.TryRead(movedNs, key));
+        Assert.Null(cache.TryRead(movedNs, key, 64));
     }
 
     [Fact]
@@ -139,14 +141,15 @@ public class TileDiskContentScopeTests : IDisposable
         var bumped = S104Namespace(stations.Layer, bumpedScope);
         Assert.NotEqual(current, bumped);
 
-        using var cache = new TileDiskCache(Path.Combine(_root, "tiles"), 64L * 1024 * 1024);
+        var cache = new TileDiskCache(
+            new EncDotNet.S100.Core.Caching.ContentStore(_root).Open(TileDiskCache.KindName, 64L * 1024 * 1024, TileDiskCache.KindOptions));
         var key = new TileKey(12, 2101, 1350);
         using (var image = SolidImage(64))
             cache.Write(current, key, image);
 
-        using (var hit = cache.TryRead(current, key))
+        using (var hit = cache.TryRead(current, key, 64))
             Assert.NotNull(hit);
-        Assert.Null(cache.TryRead(bumped, key));
+        Assert.Null(cache.TryRead(bumped, key, 64));
     }
 
     private string WriteS104Stations(string name)

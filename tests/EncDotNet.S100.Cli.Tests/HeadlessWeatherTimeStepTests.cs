@@ -27,7 +27,7 @@ public sealed class HeadlessWeatherTimeStepTests : IDisposable
     public async Task List_and_set_time_step_use_the_datasets_steps(string format)
     {
         var path = Write(format);
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         var outcome = await catalog.LoadAsync(path, cancellationToken: TestContext.Current.CancellationToken);
         var id = Assert.Single(outcome.Added);
         using var session = new HeadlessS100Session(catalog);
@@ -51,7 +51,7 @@ public sealed class HeadlessWeatherTimeStepTests : IDisposable
     public async Task The_time_step_set_changes_what_the_session_renders(string format)
     {
         var path = Write(format);
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
         await catalog.LoadAsync(path, cancellationToken: TestContext.Current.CancellationToken);
         using var session = new HeadlessS100Session(catalog);
         var time = (ITimeController)session;

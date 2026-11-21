@@ -61,6 +61,23 @@ public sealed class RouteCheckSettings
     public Length? NearbyDistance { get; init; }
 
     /// <summary>
+    /// How far from the departure and arrival waypoints a structure that
+    /// raises the <c>SafetyContour</c> alert is part of the berth (#1548):
+    /// any such structure the track doesn't cut, and a pontoon, floating
+    /// dock, pier, wharf, landing steps or fender
+    /// (<see cref="SafetyContourFeatureDetails.IsBerth"/>) even when it does.
+    /// <c>null</c> for <see cref="DefaultBerthRadius"/>. Such structures are reported as
+    /// one <see cref="RouteFindingCodes.BerthStructures"/> finding (INFO) per
+    /// end instead of crossings; zero turns this off. A berth structure
+    /// within 60 m of one grouped joins the group, out to four times the
+    /// radius, so a large marina's docks count as one berth (#1626).
+    /// </summary>
+    public Length? BerthRadius { get; init; }
+
+    /// <summary>The default <see cref="BerthRadius"/>: 100 m, a marina's berths and fairway.</summary>
+    public static Length DefaultBerthRadius { get; } = Length.FromMetres(100);
+
+    /// <summary>
     /// The kinds of prohibited area and area with special conditions whose
     /// indication is off (<see cref="RouteAreaKinds"/>; S-164
     /// UserSelectionProhibited Areas). The areas of these kinds aren't
@@ -70,10 +87,45 @@ public sealed class RouteCheckSettings
     public IReadOnlyCollection<int> AreaKindsOff { get; init; } = [];
 
     /// <summary>
-    /// Departures to sweep for the clearance check, or <c>null</c> for none.
-    /// The sweep is in <see cref="RouteCheckReport.Departures"/>.
+    /// Departures to sweep for the clearance and weather checks, or
+    /// <c>null</c> for none. The sweeps are in
+    /// <see cref="RouteCheckReport.Departures"/> and
+    /// <see cref="WeatherCheckResult.Departures"/>.
     /// </summary>
     public DepartureRange? DepartureWindow { get; init; }
+
+    /// <summary>
+    /// Passage timing for the <see cref="TimingCheck"/>: whether speeds are
+    /// through the water (currents applied to the ETAs), tidal gates, leg
+    /// current limits and arrival constraints, or <c>null</c> for none.
+    /// </summary>
+    public PassageTimingSettings? Timing { get; init; }
+
+    /// <summary>
+    /// Whether the legs' speeds are through the water (#1033): every check's
+    /// ETAs (water level, warnings, areas, weather and timing) then add the
+    /// current along the track from <see cref="RouteCheckSources.Currents"/>.
+    /// Without currents, or where none covers the ETA, the speed stands as
+    /// over the ground. <see cref="PassageTimingSettings.ApplyCurrents"/>
+    /// says the same.
+    /// </summary>
+    public bool SpeedsThroughWater { get; init; }
+
+    /// <summary>Whether the speeds are through the water, by either setting.</summary>
+    internal bool AppliesCurrents => SpeedsThroughWater || Timing?.ApplyCurrents == true;
+
+    /// <summary>
+    /// The wind and wave limits for the weather check, or <c>null</c>. Each
+    /// value set here replaces the plan's (<see cref="PassagePlan.VesselLimits"/>);
+    /// a value set in neither isn't checked.
+    /// </summary>
+    public WeatherLimits? WeatherLimits { get; init; }
+
+    /// <summary>
+    /// The tropical cyclone rule's settings for the weather check (#1299), or
+    /// <c>null</c> for <see cref="TropicalCycloneCheckSettings.Default"/>.
+    /// </summary>
+    public TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
 
     /// <summary>Whether the depth and danger checks run: both the safety contour and the safety depth are set.</summary>
     public bool ChecksDepths => SafetyContour is not null && SafetyDepth is not null;
@@ -96,6 +148,9 @@ public sealed class RouteCheckSettings
     /// <summary>The track clearance, in metres.</summary>
     internal double TrackClearanceMeters => Math.Max(0, TrackClearance?.TotalMetres ?? 30);
 
+    /// <summary>The berth radius, in metres.</summary>
+    internal double BerthRadiusMeters => Math.Max(0, (BerthRadius ?? DefaultBerthRadius).TotalMetres);
+
     /// <summary>The near band beyond the limits, in metres: the setting, or <paramref name="defaultMeters"/>.</summary>
     internal double NearbyMeters(double defaultMeters) => Math.Max(0, NearbyDistance?.TotalMetres ?? defaultMeters);
 
@@ -109,8 +164,10 @@ public sealed class RouteCheckSettings
 }
 
 /// <summary>
-/// The departures a clearance check sweeps (<see cref="RouteCheckSettings.DepartureWindow"/>):
-/// a fixed range, or the span of the water-level data that covers the route.
+/// The departures the clearance and weather checks sweep
+/// (<see cref="RouteCheckSettings.DepartureWindow"/>): a fixed range, or the
+/// span of each check's own data that covers the route (water level for the
+/// clearance check, the forecast for the weather check).
 /// </summary>
 public sealed record DepartureRange
 {

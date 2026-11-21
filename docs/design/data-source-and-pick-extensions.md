@@ -1,0 +1,1247 @@
+# Data source and pick extensions — Design Note
+
+> Status: **In progress**. Slice 1 of §5 (pick sections with the egg code)
+> is built in #1474, and slice 2's station series and warnings are built;
+> P1, P2, P3 and P6 describe them as built. This note proposes
+> two extension points that fit together but can ship separately: a single
+> way to add data that doesn't come from a file (§2), and a way for any
+> product or source to add its own content to the pick report (§3). §4 shows
+> how they combine, §5 proposes a work breakdown and §6 lists open
+> questions.
+>
+> The open questions of the first draft were settled on 2026-11-12. Their
+> answers are in the sections they affect: layer order (D6), live sources
+> and time (D2), secrets (D7), sections and time (P1) and section kinds
+> (P6). A second round on 2026-11-13 settled the AML and CAP categories,
+> fills under S-102 and a dataset's own category (all in D6).
+>
+> A UX review on 2026-11-18 settled where live sources live in SoundCharts
+> (D8): they stay datasets, but they're added and configured in the
+> Library, as online S-124 sources already are. §5 is re-planned around it.
+>
+> Builds on [Dynamic feature sources](dynamic-feature-source.md),
+> [Dynamic source pick](dynamic-source-pick.md),
+> [Wind and wave data](weather-sources.md) (§8, product traits and
+> code-defined portrayal) and the
+> [Rendering-backend contract](rendering-backend-contract.md).
+
+## 1. Scope
+
+EncDotNet.S100 started as an S-100 library, and its extension points
+reflect that. A new S-100 product is a `ProductRegistration`, a processor and
+a portrayal. The weather work made products that aren't S-100 (GRIB2,
+NetCDF, CAP) first-class on the same path, as long as they arrive as files.
+
+Two kinds of extension are still harder than they need to be:
+
+1. **Data that isn't a file.** AIS, own-ship, NDBC buoys and NMEA weather
+   arrive as feeds or are computed. Each one is wired into SoundCharts by
+   hand, and each gets a subset of what a file dataset gets.
+2. **Pick report content that isn't attribute rows.** The S-411 egg code,
+   S-104/S-111 station time series and S-124 warning cards are each a typed
+   property on a core type, with a matching special case in every layer
+   between the processor and the XAML.
+
+Both extension points need a third thing: a place in the layer order that
+doesn't depend on which product happened to come first. The note settles
+that too (D6).
+
+Customer work makes all of this more pressing. An ice service that isn't
+S-411, or a customer's own feed, should be able to draw on the map and show
+an egg code in the pick report without changes to the core packages.
+
+Out of scope:
+
+- Loading plug-in assemblies at runtime (§2.5).
+- New feed protocols, new symbology or new pick report designs. This note is
+  about the seams, not what plugs into them.
+- Time-scrubbable replay of live feeds, beyond deciding where it would go
+  (D2).
+
+## 2. Data sources
+
+### 2.1 What exists today
+
+There are two ways to get data onto the map.
+
+| | File datasets | Live sources |
+|---|---|---|
+| Contract | `IDatasetProcessor` plus optional capabilities (`ITimeAwareDatasetProcessor`, `ICoverageSampler`, `IVectorPortrayalSource`, `ICoveragePortrayalSource`) | `IDynamicFeatureSource` (`CurrentFeatures`, `Changed`) |
+| Created by | `ProductRegistration.CreateFromPath` / `CreateFromSource`, after byte- or envelope-based detection | Hand-written DI wiring per source in `App.axaml.cs` (`AddAisOverlay`, `AddNdbcObservations`, `AddNmeaWeather`, own-ship singletons) |
+| Drawn by | Part 9 drawing instructions (Lua, XSLT or the code-defined toolkit), lowered to the renderer-neutral `VectorScene` | `IDynamicFeatureRenderer`, which returns Mapsui `IFeature`. NDBC and NMEA weather go through `IDynamicFeaturePortrayal` (Part 9 instructions) and `PortrayedDynamicFeatureRenderer`; AIS and own-ship use the Mapsui-only `AisVesselRenderer` and `OwnShipRenderer`. |
+| Layer order | S-98 planes, with dataset layers ordered among themselves | The overlay band, above every dataset (`MapsuiLayerBands.AddOverlayLayer`). `DynamicSourceMetadata.Plane` is shown in the layer stack but doesn't order the layer against datasets. |
+| Pick | `HitTestFeatures`, `GetFeatureInfo` → `FeatureInfo` with typed `PickAttribute` rows | `DynamicSourcePickService`, 12 px point distance, `IDynamicFeatureDescriber` → `(Label, Value)` strings |
+| Time | `ITimeAwareDatasetProcessor` | Always "now" |
+| Headless, Skia, MCP | Yes | No |
+| Settings | Library entry, display settings | One settings class per source (`AisOverlaySettings`, …) |
+
+At the library level, a dataset doesn't need to be a file:
+`IS100MapSession.AddDatasetAsync(MapDataset, IDatasetProcessor, …)` accepts
+any processor. Above that level, it does. SoundCharts' `DatasetEntry`
+requires a `FilePath`, `DatasetLoaderService.LoadAsync` takes a
+`DatasetEntry`, and `ProductRegistration` can only build a processor from a
+path or an `IAssetSource`.
+
+### 2.2 Problems
+
+1. **Polled feeds don't fit either model.** NDBC refreshes every
+   10 minutes. That's a dataset that reloads, not 1 Hz push data, but the only
+   route into SoundCharts that doesn't involve a file is the live model. So NDBC
+   observations can't be sampled (`ICoverageSampler`), aren't time-aware, and
+   aren't visible to MCP. A refreshing CAP or ERDDAP feed would have the same
+   problem.
+2. **Two drawing paths for live data.** `IDynamicFeaturePortrayal` is
+   renderer-neutral, but `IDynamicFeatureRenderer` is still a public contract
+   that returns Mapsui types, and two of the four live sources use it.
+3. **Every source is wired by hand.** Each one repeats the same steps: build
+   an `HttpClient` or transport, read a settings class, wrap the source in a
+   viewport-gated overlay (`DeferredAisFeatureSource`,
+   `NdbcObservationsOverlay`), register it as `IDynamicFeatureSource`, and
+   register a keyed renderer. Nothing about a source is described in one
+   place that the UI could read.
+4. **Live data is second-class everywhere but the Mapsui map.** It doesn't
+   appear in headless renders, the Skia renderer, MCP `identify_features` or
+   `s100 info`, and it always draws above every chart layer.
+5. **Layer order is chosen case by case.** `S98DisplayPlane` is one fixed
+   list that mixes S-98's two mechanisms (§D6). Plane names describe
+   products (`DynamicArrows` exists for S-111), and each newcomer picks a
+   slot and a priority by hand: weather fills in `OnDemandSurface` though
+   they aren't official, isobars, fronts and observations in
+   `OtherChartOverlays` at priorities 90, 92 and 100, and NATO AML in a new
+   plane at 45. `MarinerOverlay` draws mariner data above all official data,
+   the reverse of S-98 Main §9.2.1. Nothing tells the next product or
+   source where it goes.
+
+### 2.3 Constraints
+
+- **Trimming.** The libraries are marked `IsTrimmable`, SoundCharts and
+  `s100` run the trim analyzers on every build, and the DI helpers carry
+  `DynamicallyAccessedMembers`. Plug-ins must be registered in code.
+- **The processor is the unit everything else understands.** Picks, MCP, the
+  headless compositor, S-98 ordering and the layer stack are all built on
+  `IDatasetProcessor`. A new parallel contract would need all of them
+  duplicated.
+- **1 Hz updates must stay cheap.** AIS can update hundreds of targets a
+  second. Re-running a whole dataset portrayal on each update isn't
+  acceptable, so incremental updates have to survive.
+- **No breaking change to `IDynamicFeatureSource`.** It has external
+  implementations, and `DynamicFeatureTracker` already does the bookkeeping
+  a push source needs. It stays as the way to write one.
+
+### 2.4 Decisions
+
+#### D1. A processor can announce that it changed
+
+Add an optional interface to `EncDotNet.S100.Core`, next to the other
+optional processor interfaces:
+
+```csharp
+public interface ILiveDatasetProcessor
+{
+    event EventHandler<DatasetChangedEventArgs>? Changed;
+}
+
+public sealed class DatasetChangedEventArgs : EventArgs
+{
+    public static new DatasetChangedEventArgs Empty { get; } = new();
+    public IReadOnlyList<string>? FeatureRefs { get; init; }  // null: everything may have changed
+    public GeographicBounds? Extent { get; init; }            // null: anywhere
+}
+```
+
+The map session treats `Changed` like a viewport or time-step change.
+`MapsuiDatasetLayerSession.SetDataset` subscribes when the processor
+implements the interface, and `RemoveDataset` and `Dispose` unsubscribe. A
+change waits 250 ms for further changes, then re-applies the dataset, so new
+available times reach the timeline, and renders it again with the
+presentation it was last rendered with, superseding a render in flight. The
+refresh runs on the synchronization context `SetDataset` was called on, and
+reports failures through `DatasetRenderFailed` as
+`MapSessionRenderKind.LiveRefresh`. Both event properties are hints: the
+session redraws the whole dataset today. Picks and MCP already re-query the
+processor, so they see new data with no further change.
+
+This alone is enough for polled feeds: an NDBC, CAP or ERDDAP processor
+refreshes its model and raises `Changed`.
+
+#### D2. Every live source is also a processor
+
+A `DynamicSourceProcessor` in `EncDotNet.S100.Datasets.Pipelines` wraps any
+`IDynamicFeatureSource` with an `IDynamicFeaturePortrayal` and implements:
+
+| Interface | From |
+|---|---|
+| `IDatasetProcessor.Spec` | The source's registration (§D4): a format name `SpecName` accepts, `IsS100 = false` |
+| `HitTestFeatures`, `EnumerateFeatures`, `GetFeatureInfo` | `CurrentFeatures`, and `IDynamicFeatureDescriber` when the source implements it (see §3) |
+| `IVectorPortrayalSource` | `IDynamicFeaturePortrayal.Portray` for each feature |
+| `ILiveDatasetProcessor` | `IDynamicFeatureSource.Changed`, with `ChangedIds` as `FeatureRefs` |
+
+Once wrapped, a live source gets a place in the layer order (D6), headless
+and Skia rendering, MCP and the pick pipeline from the processor side,
+without its own code changing.
+
+As built, the adapter draws every feature on one sub-layer at the source's
+`DynamicSourceMetadata.Plane` and `WithinPlanePriority`, and without a
+describer a pick lists the feature's motion and attributes. A source's
+snapshot can change between a hit test and the pick that follows, so
+`GetFeatureInfoAt` returns `null` and hosts fall back to the hit's feature
+reference. The adapter doesn't own the source: disposing it unsubscribes and
+leaves the source running. Until slice 7's `SourceRegistration`, the caller
+passes the spec, and `SpecName` gains a format name per source (`NDBC`,
+`NMEA`).
+
+The 1 Hz constraint is met by keeping the current Mapsui overlay path as an
+**optimization for interactive maps**, not as the contract. When a source has
+an `IDynamicFeaturePortrayal`, the session may draw it through
+`PortrayedDynamicFeatureRenderer`, which applies incremental updates to a
+`MemoryLayer`, and place that layer at its position in the layer order (D6)
+rather than in the overlay band. Headless renderers and MCP use the
+processor.
+
+**Time.** Live sources stay at "now" in this work, and
+`DynamicFeatureTracker` gains no history yet. The adapter is where history
+goes later: a source that keeps history makes the adapter an
+`ITimeAwareDatasetProcessor`, and the rule is that a live source shows its
+state at the view time when its history covers that time, and its latest
+state otherwise. AIS track trails, NDBC station series and replay of
+recorded AIS or NMEA logs all build on that.
+
+`IDynamicFeatureRenderer` becomes obsolete. AIS and own-ship move to
+`IDynamicFeaturePortrayal`. Own-ship's true-scale hull and AIS's
+class-coloured triangles are both drawable with the code-defined toolkit.
+
+#### D3. A dataset entry doesn't need a file
+
+SoundCharts' dataset model gains an origin. A `DatasetEntry` is either:
+
+- **a file**, as today (`FilePath`, optional `Source` and `RelativePath`); or
+- **a source**, identified by a source registration id (§D4) and its saved
+  options.
+
+`DatasetLoaderService` gets a path that builds the processor from the
+registration and calls `IS100MapSession.AddDatasetAsync`, which already
+exists. The Datasets panel, layer stack, visibility and removal then work for
+both kinds. Details that only make sense for files, such as the file name
+and size, are hidden for sources.
+
+D8 decides where a source is added and configured (the Library), and what
+its Datasets row shows (status, not file details).
+
+#### D4. One registration type for sources that aren't files
+
+File products are found by detection. Sources are configured instead: with a
+URL, an API key, a serial port or an area. Give them a sibling of
+`ProductRegistration`:
+
+```csharp
+public sealed record SourceRegistration
+{
+    public required string Id { get; init; }                 // "ais.aisstream", "ndbc.realtime"
+    public required string DisplayName { get; init; }
+    public required string Spec { get; init; }               // a format name, e.g. "AIS" (SpecName gains these)
+    public bool IsS100 { get; init; }                        // false for every source today
+    public InformationCategory Category { get; init; } = InformationCategory.Supplementary;  // D6
+    public Type? Options { get; init; }                      // options record, drives a generic settings page
+    public SourceActivation Activation { get; init; }        // Always, or BelowViewportSpan(degrees)
+    public required Func<SourceCreationContext, IDatasetProcessor> Create { get; init; }
+    public IReadOnlyList<IPickContributor> PickContributors { get; init; } = [];  // §3
+}
+```
+
+`SourceCreationContext` carries the options, an `ILoggerFactory`, a
+`TimeProvider`, an `HttpClient` factory with the hardened TLS handler, and
+the secret lookup of D7, which replaces what AIS does by hand today.
+
+Registrations go into a `SourceRegistry` alongside `ProductRegistry`, with a
+DI helper:
+
+```csharp
+services.AddDataSource(AisSources.AisStream);
+```
+
+SoundCharts builds from the registry:
+
+- an **Add source** list, which could share the "Add online source" wizard's
+  category and search UI (`online-catalogue-dialog.md`); D8 puts it in the
+  Library's Add menu as **Live feeds**;
+- a settings page per source from its `Options` type, replacing per-source
+  settings classes; D8 puts these in the Library too;
+- viewport gating from `Activation`, replacing `DeferredAisFeatureSource` and
+  the gating half of `NdbcObservationsOverlay` with one shared wrapper.
+
+As built so far (the library half of slice 7):
+
+- `SourceRegistration`, `SourceRegistry`, `SourceActivation` and
+  `SourceCreationContext` are in `Datasets.Pipelines`, and
+  `SourceRegistry.Default` holds the built-in `S100Sources`:
+  `ndbc.realtime` and `nmea.weather`. The options type is `OptionsType`,
+  with `DefaultOptions` for a new entry. `Category` waits for slice 3, and
+  the secret lookup for slice 8.
+- A host runs a source's processor through `IHostedDatasetProcessor`
+  (Core): `Start`, `IsActive` (pause outside the activation range or while
+  hidden, keeping the features) and `UpdateArea` (the area in view).
+  `DynamicSourceProcessor` implements it by passing each call to a source
+  that implements `IStartableDynamicSource`, `IPausableDynamicSource` or
+  `IAreaFilteredDynamicSource`; NDBC implements all three and NMEA weather
+  the first.
+- A processor built from a registration owns its source and HTTP client,
+  so disposing it stops the source.
+- The NMEA input spec parser moved to the NMEA library as `NmeaInput.Parse`.
+
+In SoundCharts (the viewer half of slice 7, so far):
+
+- A `DatasetEntry` is a file or a source (`SourceId`, `SourceOptions`,
+  `DatasetEntry.ForSource`), with the id `source:<registration id>`, so a
+  source is listed at most once. `DatasetLoaderService` builds a source's
+  processor through `SourceDatasetService`, skips the file's spec
+  detection, catalogue check, auto-zoom and recent files, and attaches the
+  processor once it's loaded.
+- `HostedSourceActivator` is the shared wrapper: it starts the processor,
+  passes it the view after 300 ms of quiet, and pauses it while the entry is
+  hidden or the view is wider than the registration's `Activation` allows.
+- **Add a data source** in the Datasets panel lists the sources that need no
+  options or have defaults. It's temporary: D8 moves adding a source to the
+  Library. Added sources are saved by id in
+  `ViewerSettings.SourceDatasets` and added again at start-up; removing the
+  entry forgets it. Saved options wait for slice 9's settings pages.
+- NDBC observations moved from a Layer Stack overlay to a source entry. The
+  overlay's toggle migrates: on becomes an added `ndbc.realtime`.
+- NMEA weather is a source entry too, added at each start when
+  `SOUNDCHARTS_NMEA_INPUT` names an input (it isn't saved). SoundCharts
+  behaviour over a source is an `ISourceHostExtension`, attached while the
+  source's entry is loaded: `NmeaOwnShipLink` forwards the own-ship fix to
+  it while own-ship is shown.
+
+The rest of slice 7 was settled on 2026-11-14:
+
+- **AIS is a Datasets entry**, added like NDBC, with no restart. Its key and
+  zoom threshold stay in Settings › Vessels until its Library feed's
+  settings page (D8, slice 9), and the old switch migrates: on becomes an
+  added AIS entry. D8 adds that its row is grouped as vessels, has no
+  reorder controls, and says when it's waiting for zoom.
+- **Own-ship stays built in**, with its Layer stack row, drawn by
+  `VesselPortrayal`; it isn't a removable entry. D8 keeps it that way; a
+  pinned own-ship row at the top of Datasets is a possible later step.
+- **Vessels stay above the chart before slice 3**: a source can ask to draw
+  above every dataset, and slice 3's vessel step replaces that. As built,
+  the ask is a `S98DisplayPlane.Vessels` plane (75), between
+  `MarinerOverlay` and `EcdisAlerts`: the vessel step's place in D6, with
+  no special case in the map session. Own-ship stays in the overlay band.
+- **The vessel list and pirate mode follow the loaded AIS entry** through
+  `ISourceHostExtension`, and go empty or stop when it's removed; the
+  pirate-mode exclusion moves into how SoundCharts builds the AIS source.
+  "Take helm" was to keep its path until slice 10, but it can't: it finds
+  targets through the overlay hit test (see slice 7c in §5).
+- **AIS redraws** are measured with a busy recorded log first; the
+  incremental overlay path stays only if a full redraw is over budget.
+  Measured on 4 cores, a full map-session redraw of `VesselPortrayal`
+  targets takes about 8 ms for 200 targets, 12–20 ms for 500 and 28–36 ms
+  for 1,000 (portrayal alone 0.5, 2.4 and 4.6 ms). With changes batched
+  every 250 ms that's under 15% of a core at 1,000 targets, so AIS redraws
+  in full and the incremental path goes.
+- **NMEA weather's input** stays the environment variable until it's an
+  option of its Library feed (D8, slice 9).
+- Still to do: `AddDataSource` for `s100` and the MCP server.
+
+Behaviour that belongs to SoundCharts and not to the data stays there:
+pirate mode, own-ship helm and "take helm" are add-ons layered over a source,
+not part of `SourceRegistration`. The "take helm" action becomes a pick
+action (§P4).
+
+#### D5. Plug-ins are packages registered in code
+
+A plug-in is a NuGet package that exposes registrations, and a host adds
+them in its start-up code. `s100` and the MCP server gain the same
+`AddDataSource` call. This keeps everything visible to the trim analyzers.
+
+#### D6. Layer order comes from information category and draw class
+
+S-98 has two mechanisms for ordering, and they do different jobs:
+
+- **Display planes and drawing priority** (S-100 Part 9 §11.6, S-98 Main
+  §7.2.9–7.2.10, `S100_IC_DisplayPlane` in an Interoperability Catalogue)
+  are normative. They order drawing within a product and, through the
+  catalogue, across the S-100 products it names. The Part A §A-6.9.1
+  Level 1 example interleaves S-102 with the ENC so soundings, aids to
+  navigation and obstructions stay above the grid.
+- **The priority of information list** (S-98 Main §9.2.1, from
+  MSC.530(106)/Rev.1) is informative. It ranks what mustn't be obscured,
+  not a drawing order: 1 alerts, 2 official points, curves and surfaces,
+  3 notices, manual input and warnings, 4 cautions, 5 official colour fills,
+  6 official on-demand data, 7 radar and AIS, 8–9 mariner's data. Annex A
+  §4.4 gives the tools: transparency at Level 0, interleaving at Level 1.
+
+`S98DisplayPlane` folds both into one numbered list, which is why every
+newcomer has to pick a slot (§2.2, problem 5). Instead, every layer, whether
+a product's sub-layer or a source, declares two facts, and the order is
+derived from them.
+
+**Information category**, after §9.2.1, plus one category S-98 doesn't
+have. A layer takes the category of what it shows, whoever produced it.
+`Supplementary` is only for information §9.2.1 has no place for. Whether
+data is official or S-100 is shown separately, as it is today (`IsS100` and
+the "Not an S-100 product" badge).
+
+| Category | §9.2.1 | Default for |
+|---|---|---|
+| `Alert` | 1 | ECDIS overscale, caution and other indications |
+| `OfficialChart` | 2, 5 | S-101, S-401, S-57 |
+| `NoticesAndWarnings` | 3 | S-124, S-412, CAP (marine weather warnings, like S-412) |
+| `Caution` | 4 | Caution features of official products |
+| `OfficialOverlay` | 2 | S-122, S-125, S-127, S-128, S-131, S-201, S-411, NATO AML |
+| `OfficialOnDemand` | 6 | S-102, S-104, S-111, S-129 |
+| `Vessel` | 7 | AIS targets, own-ship |
+| `Mariner` | 8, 9 | S-421 routes, route checks, the mariner's own annotations |
+| `Supplementary` | (none) | Weather models (GRIB2, NetCDF), weather analyses and tropical cyclone tracks, NDBC, NMEA weather, generated predictions, customer feeds |
+
+`OfficialOverlay` separates official products that aren't the ENC from the
+ENC itself, so they never interleave with ENC symbols by drawing priority
+alone. §9.2.1 doesn't make that split; it's a library choice, as
+`OtherChartOverlays` is today. NATO AML is official data from a hydrographic
+office, though not for civil navigation, so it's an official overlay, with a
+within-category priority above the other official overlays.
+
+The registration gives the default category for each layer kind, and a
+dataset can declare its own. Tide predictions that SoundCharts computes and
+writes as S-104 stations are `Supplementary`, not `OfficialOnDemand`, so
+official S-104 draws above them, as "S-104 always wins" in the tide
+predictions brief requires. The pick report and MCP can then tell predicted
+data from official data by category.
+
+**Draw class**: `Fill` for area fills and coverage surfaces,
+`LineAndSymbol` for curves, points, arrows, isolines and barbs, and `Text`.
+
+The stack, from bottom to top:
+
+1. The base: `OfficialChart` fills, then fills that replace chart content.
+   S-102 replaces the ENC depth areas (Part A §A-6.9.1), so it's base-chart
+   content, not an overlay. A replacing fill is named by a catalogue rule or
+   by its registration.
+2. Other fills, lower priority first: `Supplementary`, `Mariner`,
+   `OfficialOnDemand`, `OfficialOverlay`, `Caution`, `NoticesAndWarnings`.
+   Every fill above the base is translucent (Annex A §4.4.1), so none of
+   them hides what's beneath.
+3. Lines and symbols, lower priority first: `Supplementary`, `Mariner`,
+   `OfficialOnDemand`, `OfficialOverlay`, `Caution`, `NoticesAndWarnings`,
+   `OfficialChart`.
+4. Text, in the same order (S-98 Main §10.8 draws text last).
+5. Vessels: AIS targets, then own-ship.
+6. Alerts.
+
+Within one step, a within-category priority orders peers (it replaces
+`WithinPlanePriority`), then drawing priority, then the Part 9 type order.
+
+Two more rules complete the order:
+
+- **Vessels draw above the chart.** §9.2.1 ranks radar and AIS (7) below
+  official points (2). ECDIS practice draws own-ship and targets on top,
+  because they're sparse, live and safety-critical, and the list is
+  informative. Vessels get their own step above chart text and below
+  alerts.
+- **Interoperability Catalogue rules still win** for S-100 products. They
+  operate on the derived order, as the R-rules do on planes today, so
+  Level 1 interleaving keeps working.
+
+What changes from today:
+
+- S-111 arrows and weather barbs draw below ENC line work and symbols, as
+  §9.2.1 reads. R-111-A's placement above the ENC becomes a catalogue rule
+  if we want to keep it.
+- Mariner data draws below official data instead of above it.
+- Weather fills still draw above S-102, as they do today, because S-102 is
+  in the base.
+- AML fills still draw above the chart, S-102 and weather, and below
+  cautions and warnings, as the AML design pass chose. AML lines and
+  symbols now draw under ENC line work instead of over it, so the ENC
+  safety contour stays dominant over AML contours without depending on its
+  halo.
+- S-129 moves from the chart overlays to official on-demand data, which
+  §9.2.1 names explicitly (layer 6, under-keel clearance).
+- NDBC, NMEA weather and other supplementary data draw under official
+  symbols. AIS and own-ship stay above the chart, now in the vessel step
+  rather than the overlay band.
+- `ProductRegistration.DefaultPlanes` becomes a category for each layer
+  kind, `DynamicSourceMetadata.Plane` becomes a category, and a dataset can
+  override its registration's category.
+  `S98DisplayPlane` becomes the derived key, or goes away. The layer stack
+  groups by category.
+- Visual baselines that include S-111, weather symbols, AML or mariner data
+  change.
+
+#### D7. Secret options are stored by reference
+
+An options record marks secret properties with `[Secret]`. The settings
+page masks them and saves only a reference (`sc-secret:…`, as SECOM's
+identities use `sc-ident:…`). The value goes into an `ISecretStore`: the
+Keychain on macOS, Credential Manager on Windows, libsecret on Linux. This
+follows `ISecomKeyStore`, which keeps SECOM private keys out of
+`settings.json` the same way.
+
+The lookup is the environment variable the registration names, then the
+store. Where there's no store (a headless Linux machine or CI runner),
+SoundCharts says it can't save the secret and names the environment
+variable. `s100` and the MCP server use environment variables only. An AIS
+key already in `settings.json` moves to the store the first time SoundCharts
+reads it.
+
+As built (slice 8):
+
+- `[Secret(EnvironmentVariable = …)]`, `SecretReference` (`sc-secret:<name>`)
+  and `SourceCreationContext.ResolveSecret` are in `Datasets.Pipelines`: the
+  environment variable, then the stored secret the option refers to, then a
+  plain value. A host passes `ReadSecret`; `s100` and the MCP server leave it
+  unset.
+- SoundCharts' `ISecretStore` is Credential Manager on Windows (generic
+  credentials `SoundCharts:<name>`), the login Keychain on macOS (generic
+  passwords, service `SoundCharts`) and `secret-tool` on Linux (attributes
+  `service=SoundCharts name=<name>`, the secret on standard input).
+- The AIS key is the first secret: it moves from `settings.json` to the
+  store when SoundCharts starts, and Settings says where it's kept.
+- One change from the decision above: where there's no store, SoundCharts
+  keeps the key in `settings.json` rather than refusing to save it, so a
+  Linux user without `secret-tool` doesn't lose AIS. Settings says so and
+  names the environment variable.
+
+#### D8. Live sources are datasets, added and configured in the Library
+
+A UX review on 2026-11-18 asked whether live sources need their own space
+instead of sitting among datasets. To a mariner a live source is a
+subscription, and the dataset is what it puts on the chart; freshness is a
+scale (a static ENC, a Library feed that refreshes, NDBC every 10 minutes,
+AIS every second), not a file/live split. So sources stay datasets, as D3
+has them: show, hide, isolate, picks, the Layer stack and time stay in one
+place.
+
+What was wrong was the rest of the model as first built (slice 7):
+
+- **Lifetimes differ in one list.** Files aren't restored at start-up (only
+  Open Recent lists them), but sources are, and "Remove" means either
+  "unload now" or "unsubscribe for good".
+- **There's no status.** A source row's subtitle is its spec (`NDBC`). It
+  can't say live, waiting for zoom, paused while hidden, failing or stale,
+  so AIS showing nothing until you zoom in looks broken.
+- **File controls that don't apply.** Validation, file fields and
+  reorder buttons show on source rows; under S-98 ordering, reordering a
+  source does nothing visible.
+- **Three Adds and an overloaded word.** Open on Exchange sets, Add and
+  the plug on Datasets, and the Library's own Add; "source" means an
+  exchange set's path, a Library collection and a feed. The empty Datasets
+  panel offers only Open dataset.
+- **Settings are elsewhere.** The AIS key and zoom threshold are in
+  Settings › Vessels with a restart, NMEA's input is an environment
+  variable, and nothing on the row links to them.
+
+The decision:
+
+- **The Library holds the subscription; Datasets holds what's on the map.**
+  Live feeds become a Library source kind, **Live feeds**, in the Library's
+  Add menu and wizard beside Online and Another computer, as SECOM and
+  online S-124 sources already are. Credentials (the D7 secret store),
+  options (the settings pages generated from `OptionsType`) and the
+  subscription live there. Adding a feed puts its dataset in Datasets.
+  `ViewerSettings.SourceDatasets` becomes Library-owned, and the Datasets
+  panel's plug button goes.
+- **Two actions, two places.** "Remove from map" in Datasets unloads the
+  dataset for the session; "Unsubscribe" in the Library ends the feed.
+- **A source's Datasets row says what it's doing**: a status line (Live,
+  Waiting for zoom (below 50°), Paused, Stale 14 min, Key needed,
+  Failed) with the last update, and a link to its Library settings. File
+  details, the Validation tab and reorder controls are hidden on it.
+- **Rows group by what they are**: observations (NDBC), own-ship sensors
+  (NMEA weather, shown with own-ship) and vessels (AIS).
+- **Placement**: NDBC, NMEA weather and AIS are Library feeds with
+  Datasets entries. Own-ship stays built in. Predicted tide stations, the
+  last Layer stack-only toggle, become a source entry too (computed, no
+  network), since they're a product derived from loaded S-104.
+- **Rejected**: a separate Live panel, which would split show/hide, picks,
+  the Layer stack and time again and leave polled feeds such as NDBC
+  between the two; and a Live tab in Datasets, which shows each source in
+  two tabs and adds a third Add.
+
+Questions for real users are in §6.
+
+#### D9. `s100` and the MCP server add live sources by id
+
+Status: **decided** on 2026-11-19 (the four questions of the draft settled as recommended; see the end of this section).
+
+Today only SoundCharts can use a `SourceRegistration`. `s100` and its MCP
+server take files and exchange sets (`[input]`, `--layer`, `--from`; one
+loading path, `DatasetInputResolver` and `DatasetProcessorLoader`), and
+`SourceRegistry.Default` is referenced nowhere outside the viewer. Three
+things stand in the way:
+
+- **A live processor isn't queryable headless.** The MCP server's catalogue
+  (`HeadlessMutableCatalog`) only accepts a processor that projects to a
+  `LoadedDataset` (`ILoadedDatasetProjection`), and the query tools read
+  features through `FeatureAccessor`, which has no live case.
+  `DynamicSourceProcessor` does neither. Rendering would work: it walks the
+  processors directly.
+- **Nothing outside SoundCharts drives a live source.** `Start`, `IsActive`
+  and `UpdateArea` are called only by the viewer's `HostedSourceActivator`.
+  NDBC fetches nothing until it's given an area.
+- **Output is assumed to be reproducible.** `tiles serve` caches portrayals,
+  scenes and tiles (on disk too) keyed by file fingerprints, and `render`
+  and `tiles export` are expected to give the same output for the same
+  inputs.
+
+The decision:
+
+- **A host has its own `SourceRegistry`.** `SourceRegistry.CreateDefault()`
+  returns the built-in sources (NDBC, NMEA weather and, once it moves, AIS)
+  and `registry.AddDataSource(registration)` adds a plug-in's, mirroring
+  `ProductRegistry.AddProduct` (D5). SoundCharts keeps registering its own
+  wrappers (AIS with pirate mode, tide stations) on its instance rather than
+  on a process-wide static.
+- **AIS's registration moves into the library** (`AisSources.AisStream`,
+  with `AisFeedOptions`), so `s100` can use it; SoundCharts wraps it for
+  pirate mode and its Settings-era defaults.
+- **Sources are named by id, with options as `name=value` pairs.** On the
+  command line: a repeatable `--source <id>[:<option>=<value>,…]`, such as
+  `--source ndbc.realtime` or `--source nmea.weather:Input=udp:10110`. The
+  id ends at the first `:`, pairs split on `,`, and a value can't contain a
+  comma. Options are the ones a source marks `[SourceOption]` (D8, 9b),
+  built with `SourceOptionsForm.Build`; a bad value exits with code 2 and
+  names the option. `s100 sources` lists the ids, what each shows and its
+  options. In MCP: `list_data_sources` and `add_data_source { id, options }`;
+  `close_dataset` removes one, and `list_datasets` reports a source's
+  status (live, waiting for data, failing, needs settings) and last update.
+- **Secrets come from environment variables only** (D7 as decided). A
+  `[Secret]` option can't be given in `--source` text or an MCP argument,
+  where it would land in shell history, logs or a transcript; a source whose
+  required secret is unset is refused with the variable to set ("set
+  ENCDOTNET_AIS_STREAM_KEY"). `SourceStatus.MissingOption` moves into the
+  library so every host says the same thing.
+- **The view drives a source, as in SoundCharts.** A long-lived host (`mcp
+  serve`, `tiles serve`) starts a source when it's added and passes it the
+  area: MCP's `set_viewport`, or a query's bounding box or point (padded),
+  and the registration's activation range (`ActivationFor`) decides whether
+  it runs. A one-shot command (`render`, `identify`) needs `--bbox` (or
+  `--center`/`--scale`), starts the source for that area, waits for its
+  first data up to `--source-timeout` (default 30 s), then stops it. A
+  source that times out is left out with a warning, so a late feed never
+  costs the chart; the command fails only when that source was its only
+  input.
+- **A live processor is queryable.** `DynamicSourceProcessor` projects to a
+  `LoadedDataset` whose data holds the processor (a `LiveSourceDatasetData`)
+  and whose bounds are read when asked, and `FeatureAccessor` reads its
+  current features. Every query tool then sees live features with no change
+  of its own.
+- **No live layers in tiles for now.** `tiles export` with a source is
+  refused: a tile pyramid is a snapshot, and NDBC or AIS change under it.
+  `tiles serve` doesn't take sources either; the MCP server covers an agent
+  looking at live data. Should it be wanted, it would need `--bbox`, serve
+  live layers uncached (no disk or scene cache) and change the ETag when a
+  source changes (slice 11e, deferred).
+- **The Library's live feeds come along when asked.** `mcp serve
+  --collections` on SoundCharts' `collections.json` adds its subscribed live
+  feeds, with their saved options (secrets still from the environment), only
+  with `--live-feeds`: a headless process fetches from the network or opens
+  an NMEA port only when told to.
+
+Not in scope: pirate mode and own-ship (SoundCharts features, D4); a
+source's options in a file (`--source-options file.json`), until an option
+needs more than text.
+
+Settled on 2026-11-19: options go inline in `--source` (today's options
+are short, and secrets never go in arguments) rather than a separate
+`--source-option` flag; a one-shot command renders without a source that
+times out; `tiles serve` takes no sources for now; and `--collections`
+brings live feeds only with `--live-feeds`.
+
+### 2.5 Alternatives rejected
+
+- **Make every source a file product with a fake path.** It would work
+  through `CreateFromSource` with a synthetic `IAssetSource`, but detection,
+  Library probing and file metadata would all have to special-case it, and
+  there's still nothing to say "refresh".
+- **Keep live sources separate and add MCP, headless and S-98 support to
+  them one at a time.** Each feature would be built twice. The adapter in D2
+  gets all of them at once.
+- **Load plug-in assemblies at runtime.** It defeats the trim analysis, and
+  it raises code-trust questions SoundCharts doesn't have answers for. It can
+  be revisited if a customer needs to drop a plug-in into an installed app.
+- **A fixed plane list, renamed by role and extended when needed.** It's the
+  smallest change, but each newcomer still picks a slot and a number, and
+  a conflict still means a new plane. It's what we have now.
+- **Interoperability Catalogue only, with built-in defaults.** It's purely
+  S-98, but a catalogue can't name products that aren't S-100, which is
+  where most new data comes from.
+- **A separate Live panel, or a Live tab in Datasets** (D8). The panel
+  splits show/hide, picks, the Layer stack and time into two places; the
+  tab lists each source twice and adds a third Add.
+- **Retire `IDynamicFeatureSource` in favour of `ILiveDatasetProcessor`.**
+  A processor is a lot to implement for a feed of points.
+  `IDynamicFeatureSource` with `DynamicFeatureTracker` stays the way to write
+  a push source, and D2 turns it into a processor.
+
+## 3. Pick contributions
+
+### 3.1 How a pick works today
+
+A pick has three stages:
+
+| Stage | File datasets | Live sources |
+|---|---|---|
+| **Hit test**: what's under the cursor | `IDatasetProcessor.HitTestFeatures`, then `PickService` orders hits by S-98 15.1 (`PickOrder`: drawing priority, then geometry) | `DynamicSourcePickService`, separately |
+| **Describe**: what to say about each hit | `FeatureInfo`: typed `PickAttribute` rows, plus the typed properties `StationSeries`, `EggCode` and `NavigationalWarning`, plus row flags `IsNavigationNotice` and `IsStaleNotice` | `IDynamicFeatureDescriber` → `(Label, Value)` strings, or default rows built from `Motion` and `Attributes` |
+| **Present**: how to show it | `PickService` copies each property into `PickHit`; `PickReportView.axaml` has a template for each | `DynamicPickHit`, a sibling type; "Take helm" shows when `TryGetAisMmsi` finds an MMSI |
+
+The special cases are added at three different points:
+
+- **On the processor.** `GmlDatasetProcessorBase` has a virtual
+  `BuildEggCode`, which `S411DatasetProcessor` overrides for the feature
+  classes that carry SIGRID-3 attributes.
+- **On the core type.** `FeatureInfo` has one property per special case.
+- **In SoundCharts.** `PickHit`, `EggCodeViewModel`, the station series view
+  model, `NavigationalWarningCardViewModel` and a template for each.
+
+### 3.2 Problems
+
+1. **Each new panel touches every layer.** The egg code needed a core
+   property, a base-class hook, a `PickHit` property, a view model and a
+   template. A customer-specific panel would need the same, in packages the
+   customer doesn't own.
+2. **Contributions are tied to a product, not to the data.**
+   `IceEggCodeBuilder.Build` takes plain strings for the WMO egg code
+   attributes (S-411's `iceact`, `iceapc`, `icesod`, `iceflz`), so nothing
+   about it is specific to S-411 GML. A customer's ice service, a SIGRID-3
+   shapefile mapped to those codes or a NetCDF ice product could produce the
+   same egg, but the only hook is on the GML base class.
+   Station series has the same shape: S-104 and S-111 today, NDBC buoys
+   tomorrow.
+3. **MCP and headless output see only rows.** `identify_features` and
+   `describe_feature` return attributes, so the egg code, station series and
+   warning card never reach an agent.
+4. **Live picks are a parallel type.** `DynamicPickHit` has string rows only,
+   and its one action is hard-wired to AIS.
+
+### 3.3 Decisions
+
+#### P1. Pick sections replace typed properties
+
+`FeatureInfo` gains a list of sections. A section is plain data with a
+stable kind and a fallback to rows:
+
+```csharp
+public abstract record PickSection
+{
+    public abstract string Kind { get; }                       // "ice.egg-code", "station-series", "nav-warning"
+    public abstract IReadOnlyList<PickAttribute> ToRows();     // shown by a host that doesn't know Kind
+}
+
+public sealed record IceEggCodeSection(IceEggCode Egg) : PickSection
+{
+    public override string Kind => "ice.egg-code";
+    public override IReadOnlyList<PickAttribute> ToRows() => ...;
+}
+```
+
+`FeatureInfo.Sections` is `IReadOnlyList<PickSection>`.
+
+- The existing properties stay for one release as shims that read the first
+  section of their kind, then go away.
+- The navigation and stale notices become sections too, so `PickAttribute`
+  goes back to describing attributes.
+- Each kind is registered (P6).
+
+**Sections are snapshots.** Whatever a section shows that depends on time is
+in the section itself: a station series holds the whole series, a warning
+its validity. SoundCharts hands each presenter the view time and display
+settings, as `StationChartContext` does for station charts today, and the
+presenter moves its own now-marker or status. Neither the pick nor the
+section is re-run when the time changes.
+
+A station series section carries its channels (height, or speed and
+direction), so the presenter no longer chooses a chart by product
+(`hit.ProductSpec switch { "S-104" => …, "S-111" => … }` in
+`PickReportViewModel`). Tide predictions written as S-104 stations, and NDBC
+series later, draw the same way.
+
+#### P2. Contributors produce sections
+
+```csharp
+public interface IPickContributor
+{
+    PickSection? Contribute(PickContext context);
+}
+
+public sealed record PickContext
+{
+    public required SpecRef Spec { get; init; }
+    public required string FeatureRef { get; init; }
+    public required string FeatureType { get; init; }
+    public required IReadOnlyList<PickAttribute> Attributes { get; init; }
+    public IDatasetProcessor? Processor { get; init; }                         // null for a catalogue feature (MCP)
+    public Func<string, string, string?>? ResolveListedValueDefinition { get; init; }
+    public string? RawValue(string code);                                      // a top-level attribute's raw value
+}
+```
+
+`Processor` is optional because MCP describes features from its catalogue
+snapshot, with no processor loaded. `ResolveListedValueDefinition` looks an
+enumerated value up in the feature's catalogue; the shared step fills it from
+a processor that implements `IListedValueDefinitions`, as the GML
+processors do.
+
+A contributor is registered in one of three places:
+
+| Where | Applies to | Example |
+|---|---|---|
+| `ProductRegistration.PickContributors` | Every feature of that product | S-124 → warning card |
+| `SourceRegistration.PickContributors` (§D4) | Every feature of that source | AIS → vessel summary |
+| `PickContributorRegistry`, globally | Any feature the contributor accepts, from any product or source | Egg code attributes present → egg code |
+
+The global registration is what makes contributions independent of where
+the data comes from. `IceEggCodeContributor` reads the S-411 codes
+(`iceact` or `totalConcentration`, `iceapc`, `icesod`, `iceflz`,
+`snowDepth`) and calls `IceEggCodeBuilder`. It gives an egg code to an S-411
+sea-ice or lake-ice feature, or to any feature that carries a total or
+partial concentration, so it works for S-411 and for a customer feed or a
+converted SIGRID-3 shapefile that uses the same codes. S-411 ice leads and
+fractures, which carry a stage of development alone, get none.
+`BuildEggCode` on `GmlDatasetProcessorBase` is gone.
+
+The contributor registry and the egg contributor live in
+`EncDotNet.S100.Core`, not `Datasets.Pipelines`, because the Mapsui map
+session references only Core and has to run them. `IceEggCodeBuilder` moved
+with them, and `Datasets.Pipelines` type-forwards it.
+
+Contributors run when a feature is described, not when hits are found. Hit
+testing and S-98 15.1 ordering don't change. When two contributors produce
+the same kind for one feature, the most specific wins: source or product
+registration first, then global, then registration order.
+
+The shared step is `PickContributorRegistry.Apply(info, processor)`, run on
+a processor's `FeatureInfo` by SoundCharts' `PickService`, the map
+session's `PickAsync` and `S100FeatureCatalogue.GetFeature`. MCP's
+`identify_features`, `pick_features` and `describe_feature` read features
+from the catalogue rather than a processor, so they call
+`PickContributorRegistry.Contribute` with a context built from the feature's
+attributes. A contribution therefore shows up in all of them; a caller that
+uses `GetFeatureInfo` directly calls `Apply` itself. A processor can still
+put sections in `FeatureInfo` itself when only it has the data, for example
+a station series read from the HDF5 file.
+
+#### P3. Each host presents sections by kind
+
+- **SoundCharts.** `PickSectionPresenters` maps a kind to a factory that
+  builds its view model, and `PickReportView` shows each view model through
+  the data template for its type. `PickHit` holds sections instead of one
+  property per kind. An unknown kind shows a `PickSectionRowsViewModel`: its
+  heading and `ToRows()`, so a plug-in that only adds data still shows
+  something, and one that also ships a template shows its own panel. The
+  presenters are a static default registry, like the other registries; a
+  plug-in registers at start-up.
+
+  Two kinds keep panels of their own, because their layout isn't a block in
+  the list. The station chart sits above the attributes and is chosen by
+  the series' channels (a water level height, or a current's speed and
+  direction), not by product; a series with other channels falls back to its
+  rows in the list. The warning cards gather the warning sections of every
+  hit at the point, so a `nav-warning` section never appears in a single
+  hit's list.
+- **MCP.** `identify_features`, `pick_features` and `describe_feature`
+  report a feature's `sections`. Each has its `kind`, the kind's
+  `description`, its `rows`, and its typed `data` as JSON. An unknown kind
+  has rows only.
+- **Headless and `s100 info`.** Rows from `ToRows()`.
+
+Hosts find a kind's presenter and serialization through the kind registry
+(P6).
+
+#### P4. Pick actions are contributed too
+
+```csharp
+public sealed record PickAction(string Id, string Label, Func<PickContext, bool> AppliesTo);
+```
+
+A host registers actions and handles them by id. "Take helm" becomes an
+action registered by the own-ship feature, which applies to features that
+carry an MMSI, replacing `TryGetAisMmsi` in `PickReportViewModel`. "Open
+warning" and "Show time series" can follow.
+
+As built (slice 10, part 1): `PickAction` and `PickActionRegistry` are in
+Core, with a process-wide `PickActionRegistry.Default` the host fills at
+start-up; `ActionsFor(PickContext)` skips an action whose test throws.
+`PickContext.For(info, processor)` builds the context contributors and
+actions share, and the context now carries the feature's `Sections`.
+SoundCharts' `PickService` gives each `PickHit` its `Actions`, the pick
+report shows them as buttons (`PickReport.Action.<id>`) and raises
+`PickActionRequested`, and `TakeHelmPickAction` (`own-ship.take-helm`)
+applies to a pick with a `VesselSection` that has an MMSI. AIS is still an
+overlay, so its card keeps its own "Take helm" button until 7c moves AIS to
+the dataset path.
+
+#### P5. Live hits join the same pipeline
+
+Once live sources are processors (§D2), `DynamicPickHit` merges into
+`PickHit` and the "sectioned single list" of
+[Dynamic source pick](dynamic-source-pick.md) Q4 becomes one list.
+`IDynamicFeatureDescriber` maps onto `GetFeatureInfo` in the adapter: its
+title becomes the feature type name and its properties become rows. The
+default rows built from `Motion` and `VesselGeometry` become a built-in
+`vessel` section.
+
+As built: `VesselSection` (`vessel`) holds the name, MMSI, course and speed
+over ground, heading, length and beam, and is registered for MCP.
+`DynamicSourceProcessor` gives it to a feature that is a vessel (one with a
+hull or an MMSI), with or without a describer, and then leaves motion out of
+the rows. The merge of `DynamicPickHit` into `PickHit` comes with 7c.
+
+#### P6. Section kinds are registered
+
+MCP serializes with source-generated metadata, so it can only write types
+it's told about up front. A plug-in's section type would otherwise reach MCP
+as its rows only.
+
+Each kind registers its name, its source-generated JSON metadata (which also
+names the section type) and a one-line description, in
+`PickSectionKindRegistry` in Core:
+
+```csharp
+PickSectionKindRegistry.Default.Register(new PickSectionKind(
+    "acme.ice-chart",
+    AcmeJsonContext.Default.AcmeIceChartSection,
+    "Acme ice chart: stage of development and the analyst's note."));
+```
+
+MCP writes a section as its kind, description and rows, plus its `data`,
+which `PickSectionKind.Serialize` produces from the kind's own metadata.
+`McpJson` doesn't change for a new kind: there's no polymorphic
+discriminator list to extend, as there is for `SampledValue`, and a plug-in
+brings its own metadata. SoundCharts' fallback heading uses the kind's
+description.
+
+Built-in kinds have no prefix. Other kinds start with their owner's name
+(`acme.ice-chart`), and registering a name twice fails at start-up.
+
+### 3.4 Alternatives rejected
+
+- **Keep adding properties to `FeatureInfo`.** It works for the core team,
+  but a customer can't add one without forking, and every host has to learn
+  every property.
+- **An open dictionary of extension data on `FeatureInfo`.** It's simpler,
+  but loses typing, has no fallback for hosts that don't understand an
+  entry, and gives MCP nothing to describe in a schema.
+- **Contributors on the processor only.** That's the `BuildEggCode` model
+  today. It ties every contribution to the code that reads the file, which is
+  what stops the egg code being reused.
+
+## 4. How the two fit together
+
+Two worked examples show the extension points combining.
+
+**A customer ice service.** The customer has an HTTP API that returns ice
+polygons with egg code attributes under the S-411 codes, updated every few
+hours.
+
+1. Their package defines a `SourceRegistration` whose `Create` returns a
+   processor that fetches polygons into memory, portrays them with the
+   code-defined toolkit, and raises `Changed` after each refresh (§D1, §D4).
+2. They add no pick contributor: the global egg contributor (§P2) sees the
+   concentration attributes and adds the egg code.
+3. The source appears in **Add source**, gets a settings page from its
+   options record, and its API key is stored by reference (D7). It draws as
+   supplementary data under official chart symbols (D6), shows egg codes in
+   the pick report and in MCP, and renders headless. No core package
+   changes.
+
+**NDBC observations.** Today NDBC is a live source with its own overlay
+wrapper and string pick rows.
+
+1. Its `SourceRegistration` sets `Activation` to below a viewport span,
+   replacing the gating in `NdbcObservationsOverlay` (§D4).
+2. `DynamicSourceProcessor` makes it a processor (§D2), so it's in MCP and
+   headless renders.
+3. NDBC's realtime files already hold weeks of rows, which the parser reads
+   and the source combines into the latest observation. If the source keeps
+   those rows, a station series contributor can turn them into the same
+   `station-series` section S-104 and S-111 use, and the pick report draws
+   the same chart (§P2, §P3).
+
+## 5. Work breakdown
+
+Each slice ships on its own and leaves the tree working.
+
+1. **Pick sections with the egg code.** Built in #1474. Add `PickSection`,
+   `IPickContributor`, the global registry, the kind registry and the
+   SoundCharts presenter lookup. Move the egg code to a global contributor
+   and a section, with the `FeatureInfo.EggCode` shim. Serialize sections in
+   MCP. This proves the pattern on the case with one consumer and a builder
+   that works with any data source.
+2. **Station series and warnings as sections.** Built, except the notice
+   flags. Move `StationSeries`, with its channels in the section, and
+   `NavigationalWarning`. Remove the shims in the following release.
+   - **The two notice flags** (`IsNavigationNotice`, `IsStaleNotice`) are
+     left for a follow-up: MCP and the CLI show them as attribute rows
+     today, so moving them changes those outputs and needs its own
+     decision on how they read there.
+3. **Layer order by category and draw class.** Add the categories and the
+   derived order, give each product registration its categories, let a
+   dataset override its category (tide predictions), move the R-rules onto
+   the derived order, and rebaseline.
+4. **`ILiveDatasetProcessor`.** Built. Add the interface and the session's
+   re-render on `Changed`.
+5. **`DynamicSourceProcessor`.** Built. Add the adapter. Move NDBC and NMEA
+   weather onto it first, since they already use `IDynamicFeaturePortrayal`.
+   Both work through it, under the format names `NDBC` and `NMEA`;
+   SoundCharts keeps drawing them as overlays until slice 7 can list a
+   source in the Datasets panel.
+6. **AIS and own-ship portrayals.** Built, except the interface's
+   obsolescence. Move both to `IDynamicFeaturePortrayal` and mark
+   `IDynamicFeatureRenderer` obsolete.
+   - `VesselPortrayal` (`EncDotNet.S100.Portrayals`) draws both, with the
+     course vector, arrowhead and true-scale outline as Part 9 augmented
+     geometry (`InstructionBuilder.PointAt` and `Path`). The outline is a
+     line, as S-52 draws it, without the old translucent fill, and the
+     outline and disc switch at the scale denominator where the hull is
+     22 px long, which is the same at every latitude. (The Mapsui renderer
+     reckoned the switch with `cos φ` the wrong way round, so it drew the
+     hull only from `22 / cos² φ` px.)
+   - `OwnShipRenderer` and `AisVesselRenderer` are obsolete.
+     `IDynamicFeatureRenderer` itself stays until slice 7: the overlay host
+     and `PortrayedDynamicFeatureRenderer` still go through it.
+7. **`SourceRegistration` and source dataset entries.** Built: the library
+   half (#1485), NDBC (#1486) and NMEA weather (#1488) as source entries,
+   and the `Vessels` plane stopgap (#1489). The rest is re-planned under D8
+   as slices 7b–7d and 9.
+   - **7b. Source rows that say what they're doing** (D8). Built: see the
+     note below. A status for each
+     source entry (Live, Waiting for zoom, Paused, Stale, Key needed,
+     Failed) with the last update, from `HostedSourceActivator` and the
+     processor; file details, Validation and reorder hidden on source rows;
+     rows grouped as observations, own-ship sensors and vessels; Add in the
+     empty Datasets panel; a confirmation when removing a source; one
+     meaning for "source" in strings and automation ids. Needs nothing
+     else, and goes first so AIS lands in a list that can say "waiting for
+     zoom".
+     As built: `SourceStatus.Evaluate` gives Paused, Waiting for zoom,
+     Waiting for data, Live, Stale or Failed from `HostedSourceActivator`'s
+     run state, `IHostedDatasetProcessor.LastUpdated` and `LastError`, and
+     the registration's new `StaleAfter`; `SourceDatasetService` re-reads it
+     on pause or resume, on new data and every 30 s. `SourceRegistration.Group`
+     labels the row (Observations, Own-ship sensor, Vessels). "Key needed"
+     comes with AIS (7c), and the settings link with slice 9. The plug
+     button's wording is now "Add a live feed".
+   - **7c. AIS as a source entry.** Built (the note after 7d). Its registration, the old switch
+     migrating to an added entry, no restart, the vessel list and pirate
+     mode following the loaded entry (`ISourceHostExtension`), and
+     `IDynamicFeatureRenderer` removed once nothing draws through it. Needs
+     7b. "Take helm" and the AIS pick card find targets through the overlay
+     hit test, so they can't keep their path once AIS is a dataset. Decided
+     on 2026-11-18: 7c ships with slice 10, rather than keeping AIS in the
+     overlay pick service, undrawn, until slice 10 (each AIS pick would show
+     twice).
+   - **7d. Predicted tide stations as a source entry** (D8), replacing their
+     Layer stack toggle. Needs 7b. Built (the note after 7c's).
+
+     7c as built: SoundCharts registers `ais.aisstream` (`AisSource`) in
+     `SourceRegistry.Default`, so the registration can wrap its source for
+     pirate mode (`ExcludingAisFeatureSource`, which now passes `Start`,
+     `UpdateArea` and `LastError` through). `AisDynamicFeatureSource` can
+     defer its subscription until `Start` and implements
+     `IStartableDynamicSource` and `IAreaFilteredDynamicSource`; a driver
+     that can't change its area in place is subscribed to again. The key and
+     the zoom threshold still come from Settings › Vessels; without a key,
+     adding the feed fails with a message saying where to enter one ("Key
+     needed" as a row status waits for slice 9). `AisHostExtension` attaches
+     pirate mode (`PirateModeController.AttachAis`), the vessel list
+     (`VesselListViewModel.SetAisSource`) and the Vessels tab (`AisPresence`)
+     to the loaded entry. The Settings switch is gone and migrates to an
+     added entry. `AisOverlayServiceCollectionExtensions`,
+     `DeferredAisFeatureSource` and `DisabledAisFeatureSource` are removed,
+     with the AIS overlay card's own "Take helm" button: AIS picks come
+     through the dataset path, with a `VesselSection` and the
+     `own-ship.take-helm` action. `IDynamicFeatureRenderer` and the overlay
+     pick path stay for own-ship and tide stations; `DynamicPickHit` merges
+     into `PickHit` once tide stations move (7d).
+
+     7d as built: SoundCharts registers `tides.stations.predicted` and
+     `tides.currents.predicted` (`TideFeeds`, spec `TIDES`, the new
+     `SourceGroup.Predictions`). Each draws its shared source through a
+     `DynamicSourceProcessor` that doesn't own it, since the timeline's tide
+     lane, the legend and MCP read the same source; `TideFeedHostExtension`
+     turns the source off when its entry goes, and the sources are now
+     `IPausableDynamicSource`s. `TideStationsOverlay` keeps the view time,
+     viewport and S-104/S-111 binding and loses its registry. A
+     `DynamicFeatureDescription` can carry `Sections`, which the processor
+     passes into `FeatureInfo`; the stations add a `PredictedStationSection`
+     (kinds `tides.station.predicted`, `tides.current.predicted`), which
+     SoundCharts presents as the station card through `PickSectionPresenters`
+     (other hosts show its rows). The pick report releases a presented
+     section when the selection moves on, and the pick highlight outlines a
+     tide station's cell from its card. The Layer stack toggles migrate to
+     subscribed feeds; `set_tide_display` subscribes and unsubscribes in the
+     Library; the legend sections link from the Datasets rows. The card
+     factories are presenters now, and their `IDynamicPickCardFactory`
+     registrations and keyed renderers are gone.
+
+     Own-ship is the last overlay source. Decided on 2026-11-19 (option
+     A): it stays built in and drawn by the overlay host through
+     `IDynamicFeatureRenderer`, and its picks become ordinary `PickHit`s.
+     As built: `DynamicSourceProcessor.Describe(source, feature)` is public,
+     so `DynamicSourcePickService` describes an overlay hit as a processor
+     would (title, rows, `VesselSection`, pick actions) and returns a
+     `PickHit` with no dataset; `PickService` puts it ahead of the datasets'
+     hits in `PickResult.Hits`, so own-ship is selected first, as it's drawn
+     on top. `DynamicPickHit`, `PickResult.DynamicHits`, the pick report's
+     dynamic section and `IDynamicPickCardFactory` are gone (`IDynamicPickCard`
+     stays for the station cards). "Take helm" doesn't apply to own-ship.
+     MCP's `pick_features` keeps `dynamicFeatures` for overlay hits.
+8. **Secret store.** Built (D7 as built). Add `ISecretStore`, `[Secret]`
+   and the AIS key migration.
+9. **Live feeds in the Library** (D8). `SourceRegistry` feeds the Library's
+   Add menu and wizard as **Live feeds**; each feed's settings page is
+   generated from its `OptionsType`, with secrets in the D7 store; the
+   Library owns the subscription and the saved list (and each feed's
+   options, saved today only by id). "Unsubscribe" there, "Remove from map"
+   in Datasets. The AIS key and zoom threshold leave Settings › Vessels,
+   NMEA weather's input leaves the environment variable, and the Datasets
+   plug button goes. Needs 7b; best after 7c, so AIS moves once. Split in
+   two:
+   - **9a. Live feeds as a Library source kind.** Built. `LiveFeedSource`
+     (kind `LIVE`, holding the registration id) is a `CollectionSource`
+     with a no-op `LiveFeedIndexer`. The Library's Add menu lists the feeds
+     under **Live feeds**; choosing one adds it to a "Live feeds" collection.
+     SoundCharts' `LiveFeedLibrary` puts every subscribed feed on the map at
+     start-up and follows the Library: removing the feed from the Library
+     takes it off the map, while removing its Datasets row only takes it off
+     until the next start (a toast says so). `ViewerSettings.SourceDatasets`
+     moves into the Library once and empties; the old switch migrations
+     still feed it. The Datasets toolbar's plug button is gone; the empty
+     panel's **Add a live feed** subscribes through the Library too.
+     Automated runs and the `SOUNDCHARTS_NMEA_INPUT` entry don't touch it.
+   - **9b. Feed settings pages.** Each feed's details pane in the Library is
+     generated from its `OptionsType`, with `[Secret]` options in the D7
+     store and the options saved on the `LiveFeedSource`; "Key needed" as
+     a row and node status; the AIS key and zoom threshold and NMEA
+     weather's input move there.
+
+     9b as built: `[SourceOption(label)]` (with `Description`, `Required`,
+     `Order`) marks the options a host shows; others keep their defaults,
+     so NDBC's tuning knobs stay off the page. `SourceOptionsForm` turns a
+     registration's options into `SourceOptionField`s (text, secret,
+     boolean, integer, number, duration, URL, choice), reads values as
+     invariant text and builds the options back from the defaults.
+     `LiveFeedSource.Options` keeps the text; a secret is saved as an
+     `sc-secret:<feed id>.<option>` reference (`ais.aisstream.apiKey`, the
+     name slice 8 already used). The Library shows a selected feed's
+     settings in its details pane (`LiveFeedSettingsViewModel`), and saving
+     puts the feed back on the map with them. `SourceRegistration.
+     ActivationFromOptions` lets AIS's `AisFeedOptions` set its zoom
+     threshold. Settings › Vessels points to the Library; the key and
+     threshold it held are AIS's defaults, so nothing is lost. NMEA
+     weather is offered once it has a page; `SOUNDCHARTS_NMEA_INPUT` still
+     adds it for a run. As built after 9b: a feed missing a required option is listed in Datasets
+     but not started; its row says **Key needed** (a secret) or **Needs
+     settings**, with what to set and where in its tooltip
+     (`SourceStatusKind.NeedsSettings`, `SourceStatus.MissingOption`), and
+     saving the option starts it. The Library page and its tree node say
+     so too (the node's status line comes from the feed's health,
+     `LiveFeedLibrary.HealthOf`).
+10. **Pick actions.** Built (P4, P5 as built; `DynamicPickHit` merged into
+    `PickHit` after 7d, see 7d as built). Move "Take helm" to a contributed action, make the
+    AIS card a pick section, let live hits join the same pipeline (P5), and
+    merge `DynamicPickHit` into `PickHit`. Ships with 7c (decided
+    2026-11-18).
+
+Also left:
+
+- **11. Live sources in `s100` and the MCP server** (D9):
+  - **11a. Registries and the library side.** `SourceRegistry.CreateDefault`
+    and `AddDataSource`; AIS's registration moves into the library;
+    `MissingOption` moves into Pipelines; a headless `SourceCreationContext`
+    (hardened HTTP client, environment-only secrets). SoundCharts switches
+    to its own registry instance. No new behaviour.
+
+    11a as built: `SourceRegistry.CreateDefault()` includes
+    `S100Sources.AisStream` (`ais.aisstream`, `AisFeedOptions` in
+    Pipelines; `S100Sources.CreateAisSource` for a host that wraps the
+    source). `SourceRegistry.Register(registration, replace)` and
+    `AddDataSource(registration, replace)` put a host's wrapper in place of
+    a built-in source, keeping its position. SoundCharts builds its own
+    registry: the built-ins, its AIS wrapper (pirate mode, its wording, its
+    Settings-era defaults) and the tide and current stations.
+    `SourceOptionsForm.MissingRequired` is the shared missing-option check.
+    The headless creation context (hardened HTTP client) moves to 11b,
+    where `s100` first builds one: Pipelines can't reach `HardenedTls`.
+  - **11b. A live processor is queryable.** `DynamicSourceProcessor`
+    projects to a `LoadedDataset`; `FeatureAccessor` reads live features;
+    `HeadlessMutableCatalog.AddSource`. Tests drive NDBC from fixtures and
+    NMEA from recordings, never the network.
+
+    11b as built: `DynamicSourceProcessor` is an `ILoadedDatasetProjection`
+    whose payload, `LiveSourceDatasetData`, holds the processor; with no
+    extent of its own the entry covers the world, so bounds prefilters keep
+    it. `FeatureAccessor` reads `DynamicSourceProcessor.CurrentFeatures()`
+    on each query, so `identify_features` and the other query tools see a
+    source's latest features. `HeadlessMutableCatalog.AddProcessor(id,
+    processor)` adds a processor that isn't a file (renamed from `AddSource`:
+    the caller builds the processor), and `HeadlessSources.Context` is the
+    headless creation context (hardened HTTP client, 30 s timeout, secrets
+    from environment variables only). Nothing calls them from a command or
+    tool yet: that's 11c and 11d.
+  - **11c. MCP tools.** `list_data_sources`, `add_data_source`, status in
+    `list_datasets`, `set_viewport` and query areas driving `UpdateArea`,
+    `--collections` live feeds with `--live-feeds`. Gated like `open_dataset`.
+
+    11c as built: `ILiveSourceHost` with `list_data_sources` and
+    `add_data_source` (options as an object of text values; a `[Secret]`
+    option is refused as an argument and names its environment variable)
+    in the MCP tools, served by `s100 mcp serve` with the other tools that
+    open datasets. `HeadlessLiveSources` adds a source to the headless
+    catalog and drives it from the session's viewport
+    (`HeadlessS100Session.ViewportChanged` and `ViewArea`, at the reference
+    render size): it runs within the registration's range for the options
+    and pauses outside it, starting on first activation, as SoundCharts'
+    activator does; `close_dataset` ends it. `--live-feeds` adds the
+    Library's subscribed feeds, dropping saved secrets. Two changes from
+    the plan: a source's status is in `list_data_sources` rather than
+    `list_datasets`, whose shape is unchanged; and a query's own area
+    doesn't drive a source yet, only `set_viewport` (set it before
+    querying).
+  - **11d. The command line.** `--source` on `render`, `identify` and `mcp
+    serve`, `--source-timeout`, `s100 sources`.
+
+    11d as built: `SourceArgument` parses `id:name=value,…`;
+    `LiveSourceFactory` creates a source from it (shared with
+    `add_data_source`, so the same refusals apply); `s100 sources` lists the
+    registry. `mcp serve --source` adds sources at startup through
+    `HeadlessLiveSources`. `identify --source` starts each one through
+    `OneShotSources` for the pick's area (at least 5 km around it), waits up
+    to `--source-timeout` for its first data and leaves out, with a warning,
+    one that has none or whose range is narrower than the area. `render
+    --source` followed in its own change: `PngS100DatasetRenderer` gained a
+    `RenderAsync(layers, overlays, …)` overload that draws caller-owned
+    processors above the parsed layers, and the composite and exchange-set
+    forms pass the live sources as overlays, started for the `--bbox` or
+    `--center`/`--scale` area, which `--source` requires.
+  - **11e. Tiles** (deferred). `tiles serve --source` with `--bbox`, live
+    layers uncached; only if wanted. `tiles export --source` is refused
+    from 11d.
+- **Slice 2's notice flags** and **removing the shims** (`FeatureInfo.EggCode`,
+  `StationSeries`, `NavigationalWarning`) in the release after next.
+
+Order: 7b, then 7c with 10, then 9a, 9b and 7d (all built), with slice 3 whenever the IEC
+62288 question (§6) is answered. Slice 3 is independent of the rest; live
+sources take their place in the derived order once it's in.
+
+## 6. Open questions
+
+- **IEC 62288 and the vessel step.** D6 draws AIS and own-ship above chart
+  text, following ECDIS practice rather than a literal reading of S-98 Main
+  §9.2.1. IEC 62288 §5 and the IMO symbol guidance (SN.1/Circ.243/Rev.2)
+  hold the presentation rules for own-ship and targets. Check them before
+  slice 3 ships.
+
+- **For real users** (D8): do mariners expect AIS and own-ship sensors
+  among chart data or apart from it (an ECDIS user and a desktop planner
+  may differ)? Is the start-up asymmetry a problem, and should files be
+  restored too? Which status matters most at a glance: last update,
+  connection, or why nothing shows? Where do users look to add a feed:
+  the Library, Datasets or Settings? Does anyone reorder overlays by hand?
+  Should removing a source hide it, pause it or unsubscribe?
+
+The other questions of the second draft were settled on 2026-11-13: NATO
+AML and CAP categories, fills under S-102 (the base step), and a dataset's
+own category, all in D6.

@@ -37,6 +37,51 @@ internal static class SettleRoute
         (new("Seattle", 47.6050, -122.3550), new("Bainbridge Island", 47.6200, -122.5200));
 
     /// <summary>
+    /// The default flings from Seattle (map rendering slice&#160;9): west across
+    /// Elliott Bay twice, then south, then back east, each at 4000 px/s,
+    /// Mapsui's fastest fling.
+    /// </summary>
+    public static IReadOnlyList<(double VelocityX, double VelocityY)> DefaultFlings { get; } =
+    [
+        (4000, 0),
+        (4000, 0),
+        (0, -4000),
+        (-4000, 0),
+    ];
+
+    /// <summary>Parses <c>vx,vy;vx,vy</c> release velocities in screen pixels per second.</summary>
+    /// <param name="value">The text.</param>
+    /// <param name="flings">The velocities.</param>
+    /// <returns>Whether every fling parsed and lies within ±20000 px/s.</returns>
+    public static bool TryParseFlings(string? value, out IReadOnlyList<(double VelocityX, double VelocityY)> flings)
+    {
+        flings = [];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var list = new List<(double, double)>();
+        foreach (var fling in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = fling.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length != 2
+                || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var vx)
+                || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var vy)
+                || !double.IsFinite(vx) || !double.IsFinite(vy)
+                || Math.Abs(vx) > 20_000 || Math.Abs(vy) > 20_000)
+            {
+                return false;
+            }
+
+            list.Add((vx, vy));
+        }
+
+        flings = list;
+        return list.Count > 0;
+    }
+
+    /// <summary>
     /// Parses <c>Name=lat,lon;Name=lat,lon</c>. A name may be left out
     /// (<c>lat,lon</c>), in which case the stop is named by its position.
     /// </summary>

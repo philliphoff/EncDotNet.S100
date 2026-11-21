@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Services.DisplayCombinations;
 using ModelContextProtocol.Server;
@@ -70,13 +69,13 @@ internal sealed record NoActiveDisplayCombination()
 internal sealed record SetDisplayCombinationRequest(string? Id, bool? Reapply);
 
 /// <summary>Lists the display combinations (MCP <c>list_display_combinations</c>).</summary>
-internal sealed class ListDisplayCombinationsTool(DisplayCombinationService service, Func<Action, Task>? dispatch = null)
+internal sealed class ListDisplayCombinationsTool(DisplayCombinationService service, Func<Action, Task> dispatch)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "list_display_combinations";
 
     private readonly DisplayCombinationService _service = service ?? throw new ArgumentNullException(nameof(service));
-    private readonly Func<Action, Task> _dispatch = dispatch ?? DisplayCombinationDispatch.UiThread;
+    private readonly Func<Action, Task> _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
 
     /// <summary>Reads the combinations on the UI thread.</summary>
     public async Task<ToolResult<DisplayCombinationListDto>> InvokeAsync(CancellationToken ct = default)
@@ -118,13 +117,13 @@ internal sealed class ListDisplayCombinationsTool(DisplayCombinationService serv
 }
 
 /// <summary>Applies a display combination (MCP <c>set_display_combination</c>).</summary>
-internal sealed class SetDisplayCombinationTool(DisplayCombinationService service, Func<Action, Task>? dispatch = null)
+internal sealed class SetDisplayCombinationTool(DisplayCombinationService service, Func<Action, Task> dispatch)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "set_display_combination";
 
     private readonly DisplayCombinationService _service = service ?? throw new ArgumentNullException(nameof(service));
-    private readonly Func<Action, Task> _dispatch = dispatch ?? DisplayCombinationDispatch.UiThread;
+    private readonly Func<Action, Task> _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
 
     /// <summary>Applies the request on the UI thread.</summary>
     public async Task<ToolResult<SetDisplayCombinationDto>> InvokeAsync(SetDisplayCombinationRequest request, CancellationToken ct = default)
@@ -150,12 +149,6 @@ internal sealed class SetDisplayCombinationTool(DisplayCombinationService servic
             [.. applied.Datasets.Select(d => new DisplayCombinationDatasetDto(d.Id, d.Product, d.Active))],
             applied.NotLoaded));
     }
-}
-
-internal static class DisplayCombinationDispatch
-{
-    /// <summary>Runs on the UI thread, where the display state and the datasets live.</summary>
-    public static Task UiThread(Action action) => Dispatcher.UIThread.InvokeAsync(action).GetTask();
 }
 
 /// <summary>Wraps the display-combination tools as MCP server tools.</summary>

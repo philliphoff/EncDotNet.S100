@@ -145,7 +145,7 @@ public class GlobalTimeServiceTests
         s.Register(NewEntry(), new StubTimeAware(t1, t2, t3));
 
         // Now inside the data, so the axis (which always includes now) is just the data.
-        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)));
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
 
         Assert.Equal(3, vm.Ticks.Count);
         Assert.True(vm.IsSnapToTickEnabled);
@@ -165,7 +165,7 @@ public class GlobalTimeServiceTests
         for (var i = 0; i < samples.Length; i++) samples[i] = t0.AddMinutes(i);
         s.Register(NewEntry(), new StubTimeAware(samples));
 
-        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t0.AddHours(1))));
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t0.AddHours(1))), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
 
         // Samples under 0.7 % of the axis apart: no ticks, no snapping; the
         // band reads as solid data (#708 C4). Stepping still works.
@@ -184,7 +184,7 @@ public class GlobalTimeServiceTests
         s.Register(NewEntry(), new StubTimeAware(t1, t2, t3));
 
         // Now inside the data, so the axis (which always includes now) is just the data.
-        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)));
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
 
         // The default step is 1 h (#708 C6).
         Assert.Equal(t1, s.CurrentTime);
@@ -225,7 +225,7 @@ public class GlobalTimeServiceTests
         service.AttachTo(session);
         // As DatasetLoaderService does: every clock change is re-applied to the session.
         service.CurrentTimeChanged += time => session.SetCurrentTime(time);
-        _ = new TimelineViewModel(service, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(now)), action => action());
+        _ = new TimelineViewModel(service, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(now)), action => action(), refresher: null, progress: null, scope: null, library: null);
         var id = new MapDatasetId("111US00_CBOFS_US4MD1DD");
         Assert.True(owner.TryRegister(id, new SessionTimeProcessor([.. Enumerable.Range(0, 49).Select(h => run.AddHours(h))], "S-111")));
 

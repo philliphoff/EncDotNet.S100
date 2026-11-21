@@ -69,6 +69,16 @@ internal sealed class BaseSpatialIndex
     /// </summary>
     public (double MinX, double MaxX)? XSpan => _maxX >= _minX ? (_minX, _maxX) : null;
 
+    /// <summary>
+    /// The world bounds of every bounded op together, or <see langword="null"/>
+    /// when no op has bounds.
+    /// </summary>
+    public (double MinX, double MinY, double MaxX, double MaxY)? Bounds =>
+        _maxX >= _minX ? (_minX, _minY, _maxX, _maxY) : null;
+
+    /// <summary>Whether some ops have no bounds and so meet every query.</summary>
+    public bool HasUnboundedOps => _alwaysCandidates.Count > 0;
+
     /// <summary>Builds the index over <paramref name="baseScene"/>'s area/line ops.</summary>
     /// <param name="baseScene">The scene to index.</param>
     /// <param name="indexAnchors">

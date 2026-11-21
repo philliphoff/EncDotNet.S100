@@ -71,7 +71,7 @@ public sealed class TimelineLanesTests
     {
         var service = new GlobalTimeService();
         var scope = new FakeScope();
-        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action(), scope: scope);
+        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action(), scope: scope, refresher: null, progress: null, library: null);
         return (service, timeline, scope);
     }
 
@@ -300,7 +300,7 @@ public sealed class TimelineLanesTests
         var service = new GlobalTimeService();
         var scope = new FakeScope { Unknown = true };
         var library = new FakeLibrary { Entries = entries };
-        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action(), scope: scope, library: library);
+        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action(), scope: scope, library: library, refresher: null, progress: null);
         return (service, timeline, scope, library);
     }
 
@@ -520,7 +520,7 @@ public sealed class TimelineLanesTests
                 Entry("111US00_DBOFS_US4DE1AD", Run, 48, LibraryTimedState.Online, Delaware),
             ],
         };
-        var timeline = new TimelineViewModel(service, format, clock, action => action(), scope: new FakeScope { Unknown = true }, library: library);
+        var timeline = new TimelineViewModel(service, format, clock, action => action(), scope: new FakeScope { Unknown = true }, library: library, refresher: null, progress: null);
         Load(service, Model("cbofs", older) with { Name = "111US00_CBOFS_US4MD1DD" });
         var culture = System.Globalization.CultureInfo.CurrentCulture;
         string Local(DateTime utc) => LayerTimes.Clock(utc, TimeFormat.Local, eastern, culture);

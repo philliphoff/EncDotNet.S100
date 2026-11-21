@@ -69,6 +69,28 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     /// <inheritdoc />
     public event EventHandler<DatasetCatalogChangedEventArgs>? Changed;
 
+    /// <summary>
+    /// The features the map hides of the entry <paramref name="dataset"/> was
+    /// projected from (<see cref="DatasetEntry.HiddenFeatures"/>), or
+    /// <see langword="null"/> when it hides none or the dataset isn't one of
+    /// this catalog's.
+    /// </summary>
+    /// <param name="dataset">A dataset of <see cref="Datasets"/>.</param>
+    public IReadOnlySet<string>? HiddenFeaturesOf(LoadedDataset dataset)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        lock (_gate)
+        {
+            foreach (var (entry, projected) in _cache)
+            {
+                if (ReferenceEquals(projected, dataset))
+                    return entry.HiddenFeatures;
+            }
+        }
+
+        return null;
+    }
+
     private void OnDatasetLoaded(DatasetEntry entry)
     {
         if (_disposed) return;

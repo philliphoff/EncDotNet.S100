@@ -10,9 +10,9 @@ namespace EncDotNet.S100.Mcp.Tests;
 /// Issue #1076: over MCP, the weather formats are listed by <c>list_specs</c>
 /// as not S-100, with their portrayal basis and the tools that work on them;
 /// <c>list_time_steps</c> lists GRIB2, NetCDF and CAP steps; the NetCDF grid
-/// answers <c>sample_coverage_along</c>; and CAP warnings, which have time
+/// answers <c>sample</c>; and CAP warnings, which have time
 /// steps but no coverage, answer <c>identify_features</c> and
-/// <c>describe_feature</c> rather than <c>sample_coverage</c>.
+/// <c>describe_feature</c> rather than <c>sample</c>.
 /// </summary>
 public sealed class WeatherMcpToolsTests : IDisposable
 {
@@ -93,7 +93,7 @@ public sealed class WeatherMcpToolsTests : IDisposable
         double Lat(int row) => grid.South + row * grid.Spacing;
         double Lon(int column) => grid.West + column * grid.Spacing;
 
-        var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "NetCDF",
             ["polyline"] = string.Create(
@@ -119,7 +119,7 @@ public sealed class WeatherMcpToolsTests : IDisposable
         await using var server = await McpTestHelpers.StartServerAsync(Catalog());
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("sample", new Dictionary<string, object?>
         {
             ["spec"] = "CAP",
             ["latitude"] = 38.5,

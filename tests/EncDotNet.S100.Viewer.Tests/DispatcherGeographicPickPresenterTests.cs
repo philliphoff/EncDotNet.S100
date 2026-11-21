@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -8,6 +7,8 @@ public class DispatcherGeographicPickPresenterTests
 {
     private sealed class CapturingPickService : IPickService
     {
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
         public (double Lat, double Lon, IReadOnlyList<GeographicPickFeature> Features)? Presented { get; private set; }
 
         public void PresentGeographicPick(
@@ -15,7 +16,7 @@ public class DispatcherGeographicPickPresenterTests
             => Presented = (latitude, longitude, features);
 
         // Unused members for this test.
-        public void HandlePick(Mapsui.MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null) { }
+        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public bool NavigateToReference(FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
         public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => false;
@@ -28,10 +29,12 @@ public class DispatcherGeographicPickPresenterTests
         var marshalled = false;
         var presenter = new DispatcherGeographicPickPresenter(
             pickService,
-            marshal: action => { marshalled = true; action(); });
+            marshal: action => { marshalled = true; action(); },
+            dynamicPicks: null,
+            resolution: () => null);
 
         var features = new[] { new GeographicPickFeature("test.gml", "1") };
-        presenter.Present(47.6, -122.3, features);
+        _ = presenter.Present(47.6, -122.3, features);
 
         Assert.True(marshalled);
         Assert.NotNull(pickService.Presented);

@@ -64,7 +64,7 @@ public sealed class PassageTimelineTests : IDisposable
         var f = new PassageCheckFixture(tide: tide ?? PassageCheckFixture.HighWaterUntil0750, viewTime: new TimelineViewTime(time, clock), post: post);
         if (!routeDeparture)
             f.Route.SetDeparture(null);
-        var timeline = new TimelineViewModel(time, new Utc(), clock, action => action());
+        var timeline = new TimelineViewModel(time, new Utc(), clock, action => action(), refresher: null, progress: null, scope: null, library: null);
         var follow = new FollowPassageService(f.Check, time);
         timeline.AttachPassage(f.Check, follow);
 

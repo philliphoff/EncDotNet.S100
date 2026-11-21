@@ -1,8 +1,10 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
@@ -68,14 +70,14 @@ public sealed class NetCdfRenderingTests : IDisposable
         var factory = new ProjNetCrsTransformFactory();
         using var waves = new NetCdfDatasetProcessor(
             NetCdfFixtures.WriteWaveNetCdf4(Path.Combine(_dir, "waves.nc")), factory);
-        var wavesInput = HeadlessCompositeInput.ForCoverage(await waves.BuildCoveragePortrayalAsync(null, Ct));
-        var compositor = new HeadlessCompositor(factory);
+        var wavesInput = ChartCompositeInput.ForCoverage(await waves.BuildCoveragePortrayalAsync(null, Ct));
+        var compositor = new ChartCompositor(factory, new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
 
-        Assert.True(compositor.Prepare([HeadlessCompositeInput.ForVector(s101)])
+        Assert.True(compositor.Prepare([ChartCompositeInput.ForVector(s101)])
             .TryGetWorldBounds(out double cellMinX, out double cellMinY, out double cellMaxX, out double cellMaxY));
         Assert.True(compositor.Prepare([wavesInput])
             .TryGetWorldBounds(out double gridMinX, out double gridMinY, out double gridMaxX, out double gridMaxY));
-        Assert.True(compositor.Prepare([HeadlessCompositeInput.ForVector(s101), wavesInput])
+        Assert.True(compositor.Prepare([ChartCompositeInput.ForVector(s101), wavesInput])
             .TryGetWorldBounds(out double minX, out double minY, out double maxX, out double maxY));
 
         var extent = waves.Metadata.Extent!;
@@ -111,15 +113,15 @@ public sealed class NetCdfRenderingTests : IDisposable
             NetCdfFixtures.WriteWindNetCdf4(Path.Combine(_dir, $"wind-{time:HH}.nc")), factory);
         var context = new RenderContext { TimeStep = time };
 
-        HeadlessCompositeInput[] inputs =
+        ChartCompositeInput[] inputs =
         [
-            HeadlessCompositeInput.ForVector(s101),
-            HeadlessCompositeInput.ForCoverage(await wind.BuildCoveragePortrayalAsync(context, Ct)),
-            HeadlessCompositeInput.ForCoverage(await waves.BuildCoveragePortrayalAsync(context, Ct)),
+            ChartCompositeInput.ForVector(s101),
+            ChartCompositeInput.ForCoverage(await wind.BuildCoveragePortrayalAsync(context, Ct)),
+            ChartCompositeInput.ForCoverage(await waves.BuildCoveragePortrayalAsync(context, Ct)),
         ];
 
-        return new HeadlessCompositor(factory)
-            .Render(inputs, new HeadlessCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) });
+        return new ChartCompositor(factory, new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes))
+            .Render(inputs, new ChartCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) });
     }
 
     // A square viewport centred on (longitude, latitude), spanning the same

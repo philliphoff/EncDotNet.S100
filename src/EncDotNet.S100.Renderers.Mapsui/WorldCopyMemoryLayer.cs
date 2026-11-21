@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
@@ -9,10 +10,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// A <see cref="MemoryLayer"/> whose features also draw at the adjacent world
 /// copies (<see cref="WorldCopies"/>), so overlays tied to chart data (pick
 /// highlights, extent outlines, the overscale curtain, validation findings)
-/// follow the chart wherever it is drawn (issue #773). A tile-rendered
-/// dataset layer whose features only carry pick identity uses it too, so a
-/// click on a copy of the chart hits its features. Hosts use it for their own
-/// overlays of chart data in EPSG:3857.
+/// follow the chart wherever it is drawn (issue #773). Hosts use it for their
+/// own overlays of chart data in EPSG:3857.
 /// </summary>
 /// <remarks>
 /// <see cref="ILayer.Extent"/> stays the extent of the features themselves, so

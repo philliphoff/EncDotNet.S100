@@ -1,12 +1,12 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using SkiaSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -72,6 +72,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [Description("Exchange-set form only: restrict compositing to a comma-separated list of product specifications (e.g. --only S101,S128; hyphenation and case are ignored). Datasets of other specs discovered in the set are omitted.")]
         public string? Only { get; init; }
 
+        [CommandOption("--source <SOURCE>")]
+        [Description("Composite form only: also draw a live data source above the datasets (repeatable): an id from 's100 sources', optionally with options as id:name=value,name=value. Needs --bbox or --center/--scale, the area it's started for; it's given --source-timeout for its first data and left out with a warning if it has none. Keys come from environment variables, never this option.")]
+        public string[] Sources { get; init; } = [];
+
+        [CommandOption("--source-timeout <SECONDS>")]
+        [Description("How long to wait for a --source's first data. Default 30.")]
+        [DefaultValue(30.0)]
+        public double SourceTimeoutSeconds { get; init; } = 30.0;
+
         [CommandOption("-o|--output <PATH>")]
         [Description("Output image path. Required (or given positionally) for the composite form; optional alternative to the positional <output> for the single-dataset form.")]
         public string? OutputOption { get; init; }
@@ -112,6 +121,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [DefaultValue("day")]
         public string Palette { get; init; } = "day";
 
+        [CommandOption("--national-language <CODE>")]
+        [Description("The ISO 639-2 language (e.g. fra) to prefer for chart text such as feature names, where the product's portrayal supports it (S-101, S-131). Features without a name in that language use their default name. Default: the catalogue's default (eng).")]
+        public string? NationalLanguage { get; init; }
+
         [CommandOption("--symbol-scale")]
         [Description("Symbol scale factor (default 1.0).")]
         [DefaultValue(1.0)]
@@ -139,6 +152,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [CommandOption("--hide")]
         [Description("Comma-separated list of drawing-instruction categories to suppress: text, points, lines, areas (e.g. --hide text,points). Combines additively with --no-text. In the composite form the suppression is global (applies to every layer).")]
         public string? Hide { get; init; }
+
+        [CommandOption("--show-layer <KEYS>")]
+        [Description("Single-dataset form only: comma-separated sub-layer keys to draw even when they're off by default, as the viewer's Display controls switches do, e.g. --show-layer weather.precipitation,weather.cape,weather.cloud. 's100 info' lists a dataset's layer keys.")]
+        public string? ShowLayer { get; init; }
 
         [CommandOption("--debug")]
         [Description("Show full stack traces on error, and surface host/Lua portrayal diagnostics on stderr.")]
@@ -217,6 +234,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (!TryParsePalette(Palette, out _))
                 return ValidationResult.Error($"Unknown palette '{Palette}'. Use day, dusk, or night.");
 
+            if (!TryParseNationalLanguage(NationalLanguage, out _))
+                return ValidationResult.Error(NationalLanguageError(NationalLanguage));
+
             if (TimeStep < 0)
                 return ValidationResult.Error("--time-step must be zero or greater.");
 
@@ -241,6 +261,12 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (IsComposite && IsExplicitExchangeSet)
                 return ValidationResult.Error(
                     "--layer and --exchange-set/--from cannot be combined. Use one or the other.");
+
+            if (ShowLayer is not null && (IsComposite || IsExchangeSetComposite))
+                return ValidationResult.Error("--show-layer applies only to the single-dataset form.");
+
+            if (ShowLayer is not null && ParseLayerKeys(ShowLayer).Length == 0)
+                return ValidationResult.Error("--show-layer must be a comma-separated list of sub-layer keys (e.g. weather.precipitation).");
 
             if (Only is not null && !IsExchangeSetComposite)
                 return ValidationResult.Error(
@@ -339,6 +365,16 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (!viewportResult.Successful)
                 return viewportResult;
 
+            if (Sources.Length > 0)
+            {
+                if (!IsComposite && !IsExchangeSetComposite)
+                    return ValidationResult.Error("--source works with the composite forms (--layer or an exchange set).");
+                if (string.IsNullOrWhiteSpace(BoundingBox) && string.IsNullOrWhiteSpace(Center))
+                    return ValidationResult.Error("--source needs --bbox or --center/--scale: the area it's started for.");
+            }
+            if (!double.IsFinite(SourceTimeoutSeconds) || SourceTimeoutSeconds < 0)
+                return ValidationResult.Error("--source-timeout must be a number of seconds, 0 or more.");
+
             var dir = Path.GetDirectoryName(Path.GetFullPath(output));
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 return ValidationResult.Error($"Output directory does not exist: {dir}");
@@ -433,7 +469,18 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
-                ResolveBasemap(settings), displayModeId, viewport);
+                ResolveBasemap(settings), displayModeId, viewport,
+                nationalLanguage: ResolveNationalLanguage(settings.NationalLanguage));
+            if (settings.ShowLayer is { } shown)
+            {
+                renderContext = renderContext with
+                {
+                    EcdisDisplay = (renderContext.EcdisDisplay ?? new EcdisDisplaySettings()) with
+                    {
+                        LayerVisibility = ParseLayerKeys(shown).ToDictionary(key => key, _ => true, StringComparer.Ordinal),
+                    },
+                };
+            }
 
             TryResolveOutput(settings.Format, outputPath, out var outputKind, out var imageFormat, out _);
 
@@ -449,12 +496,12 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 var portrayal = vectorSource.BuildVectorPortrayalAsync(renderContext)
                     .GetAwaiter().GetResult();
                 var json = DisplayListJsonWriter.Serialize(
-                    portrayal, Path.GetFileName(datasetPath), settings.Palette.Trim().ToLowerInvariant());
+                    portrayal, Path.GetFileName(datasetPath), settings.Palette.Trim().ToLowerInvariant(), hidden);
                 File.WriteAllText(outputPath, json);
 
                 int instructionCount = portrayal.SubLayers.Sum(l => l.Instructions.Count);
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[green]Wrote[/] {outputPath} ([grey]{spec}, display-list, {instructionCount} instruction(s)[/])");
+                    $"[green]Wrote[/] {outputPath} ([grey]{spec}, display-list, {instructionCount} instruction(s), schema v{DisplayListJsonWriter.SchemaVersion}[/])");
                 return 0;
             }
 
@@ -508,10 +555,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 subLayer => subLayer is GridCoverageSubLayer or ArrowCoverageSubLayer or GlyphCoverageSubLayer);
             if (hasRenderableCoverage)
             {
-                var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-                return compositor.Render(
-                    [HeadlessCompositeInput.ForCoverage(portrayal)],
-                    new HeadlessCompositeOptions
+                return ChartCompositorFactory.Create().Render(
+                    [ChartCompositeInput.ForCoverage(portrayal)],
+                    new ChartCompositeOptions
                     {
                         Width = width,
                         Height = height,
@@ -629,10 +675,25 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 Viewport = ResolveViewport(settings),
                 Basemap = ResolveBasemap(settings),
                 DisplayModeId = displayModeId,
+                Mariner = ResolveNationalLanguage(settings.NationalLanguage) is { } nationalLanguage
+                    ? MarinerSettings.Default with { NationalLanguage = nationalLanguage }
+                    : null,
             };
 
+            // Data source design note D9: live sources, started for the
+            // viewport and drawn above the datasets if they've data in time.
+            using var sources = StartSources(settings, options.Viewport, out var sourceError);
+            if (sourceError is not null)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{sourceError}[/]");
+                return 2;
+            }
+            var overlays = sources?.Processors ?? [];
+            foreach (var processor in overlays)
+                specNames.Add(processor.Spec.Name);
+
             using var renderer = new PngS100DatasetRenderer(LuaEngineOption.Resolve(settings.LuaEngine));
-            byte[] png = renderer.RenderAsync(layers, options).GetAwaiter().GetResult();
+            byte[] png = renderer.RenderAsync(layers, overlays, options).GetAwaiter().GetResult();
 
             TryResolveFormat(settings.Format, outputPath, out var format, out _);
             using var bitmap = SKBitmap.Decode(png)
@@ -640,7 +701,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             WriteImage(bitmap, outputPath, format, settings.Quality);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Wrote[/] {outputPath} ([grey]{label} of {layers.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
+                $"[green]Wrote[/] {outputPath} ([grey]{label} of {layers.Count + overlays.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
             return 0;
         }
         catch (Exception ex)
@@ -653,6 +714,29 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 dataset.Dispose();
         }
     }
+
+    private static OneShotSources? StartSources(Settings settings, Viewport? viewport, out string? error)
+    {
+        error = null;
+        if (settings.Sources.Length == 0 || viewport is null)
+            return null;
+        var area = new GeographicBounds(viewport.MinLongitude, viewport.MinLatitude, viewport.MaxLongitude, viewport.MaxLatitude);
+        var (sources, problem) = OneShotSources.StartAsync(
+                settings.Sources, SourceRegistry.CreateDefault(), area, TimeSpan.FromSeconds(settings.SourceTimeoutSeconds))
+            .GetAwaiter().GetResult();
+        if (problem is not null)
+        {
+            error = problem;
+            return null;
+        }
+        foreach (var warning in sources!.Warnings)
+            Console.Error.WriteLine(warning);
+        return sources;
+    }
+
+    // The sub-layer keys of --show-layer, trimmed, without empty entries.
+    internal static string[] ParseLayerKeys(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static RgbaColor? ResolveBackground(Settings settings)
     {
@@ -856,6 +940,35 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             case "webp": format = SKEncodedImageFormat.Webp; return true;
             default: format = SKEncodedImageFormat.Png; return false;
         }
+    }
+
+    /// <summary>
+    /// Parses a <c>--national-language</c> value: blank means "not set"
+    /// (<see langword="null"/>); otherwise a three-letter ISO 639-2 code,
+    /// returned in lower case as the portrayal catalogues compare it.
+    /// </summary>
+    internal static bool TryParseNationalLanguage(string? value, out string? language)
+    {
+        language = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        var code = value.Trim();
+        if (code.Length != 3 || !code.All(char.IsAsciiLetter))
+            return false;
+
+        language = code.ToLowerInvariant();
+        return true;
+    }
+
+    internal static string NationalLanguageError(string? value) =>
+        $"Invalid --national-language '{value}'. Use a three-letter ISO 639-2 code, e.g. eng, fra or deu.";
+
+    /// <summary>The validated <c>--national-language</c>, or <see langword="null"/> when not set.</summary>
+    internal static string? ResolveNationalLanguage(string? value)
+    {
+        TryParseNationalLanguage(value, out var language);
+        return language;
     }
 
     internal static bool TryParsePalette(string value, out PaletteType palette)

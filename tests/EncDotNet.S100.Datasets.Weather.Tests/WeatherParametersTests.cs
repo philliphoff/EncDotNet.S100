@@ -18,6 +18,9 @@ public class WeatherParametersTests
     [InlineData("wave.swell.hs", 10, 0, 8, "sea_surface_swell_wave_significant_height", WeatherUnit.Metres)]
     [InlineData("pressure.msl", 0, 3, 1, "air_pressure_at_mean_sea_level", WeatherUnit.Pascals)]
     [InlineData("sea.temperature", 10, 3, 0, "sea_surface_temperature", WeatherUnit.Kelvin)]
+    [InlineData("precipitation.rate", 0, 1, 7, "precipitation_flux", WeatherUnit.KilogramsPerSquareMetrePerSecond)]
+    [InlineData("cape", 0, 7, 6, "atmosphere_convective_available_potential_energy", WeatherUnit.JoulesPerKilogram)]
+    [InlineData("cloud.cover", 0, 6, 1, "cloud_area_fraction", WeatherUnit.Percent)]
     public void Table_maps_each_canonical_id(string id, byte discipline, byte category, byte number, string standardName, WeatherUnit unit)
     {
         var definition = WeatherParameters.Find(id);
@@ -117,11 +120,29 @@ public class WeatherParametersTests
     }
 
     [Fact]
+    public void Precipitation_and_CAPE_are_read_at_the_surface_and_cloud_cover_for_the_entire_atmosphere()
+    {
+        var rate = WeatherParameters.Find(WeatherParameters.PrecipitationRate)!;
+        var cape = WeatherParameters.Find(WeatherParameters.Cape)!;
+        var cloud = WeatherParameters.Find(WeatherParameters.CloudCover)!;
+
+        Assert.Equal((WeatherParameters.PrecipitationGroup, WeatherLevel.Surface), (rate.Group, rate.Level));
+        Assert.Equal((WeatherParameters.CapeGroup, WeatherLevel.Surface), (cape.Group, cape.Level));
+        Assert.Equal((WeatherParameters.CloudGroup, WeatherLevel.EntireAtmosphere), (cloud.Group, cloud.Level));
+        Assert.Equal(WeatherLevelKind.EntireAtmosphere, WeatherLevel.EntireAtmosphere.Kind);
+        Assert.Equal("entire atmosphere", WeatherLevel.EntireAtmosphere.Description);
+        Assert.Same(cape, WeatherParameters.FindByCfStandardName("atmosphere_convective_available_potential_energy_wrt_surface"));
+        Assert.Equal("kilograms per square metre per second", WeatherUnits.GetLabel(WeatherUnit.KilogramsPerSquareMetrePerSecond));
+        Assert.Equal("joules per kilogram", WeatherUnits.GetLabel(WeatherUnit.JoulesPerKilogram));
+        Assert.Equal("percent", WeatherUnits.GetLabel(WeatherUnit.Percent));
+    }
+
+    [Fact]
     public void Ids_codes_and_names_are_unique()
     {
         var all = WeatherParameters.All;
 
-        Assert.Equal(21, all.Count);
+        Assert.Equal(24, all.Count);
         Assert.Equal(all.Count, all.Select(d => d.Id).Distinct().Count());
         // A code is shared only by rows at different levels (temperature at 2 m and at the surface).
         var codes = all.SelectMany(d => d.GribCodes.Select(c => (c, d.Level))).ToList();

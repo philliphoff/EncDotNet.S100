@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
 /// Verifies that <see cref="S124DatasetProcessor"/> surfaces the warning
-/// message on <see cref="FeatureInfo.NavigationalWarning"/> for a picked
+/// message in a <see cref="NavigationalWarningSection"/> for a picked
 /// <c>NavwarnPart</c> (#932).
 /// </summary>
 public class S124NavigationalWarningProcessorTests
@@ -34,7 +34,7 @@ public class S124NavigationalWarningProcessorTests
     {
         var info = CreateProcessor("navwarn_ccg_ed2.gml").GetFeatureInfoAt(0);
 
-        var warning = info?.NavigationalWarning;
+        var warning = info?.Sections.OfType<NavigationalWarningSection>().SingleOrDefault()?.Warning;
         Assert.NotNull(warning);
         Assert.Equal("P", warning!.Series);
         Assert.Equal("477/20", warning.Number);
@@ -55,7 +55,7 @@ public class S124NavigationalWarningProcessorTests
     [Fact]
     public void GetFeatureInfo_BilingualPart_CarriesEveryLanguage()
     {
-        var warning = CreateProcessor("navwarn_ccg_ed2_bilingual.gml").GetFeatureInfoAt(0)?.NavigationalWarning;
+        var warning = CreateProcessor("navwarn_ccg_ed2_bilingual.gml").GetFeatureInfoAt(0)?.Sections.OfType<NavigationalWarningSection>().SingleOrDefault()?.Warning;
 
         Assert.Equal(["eng", "fra"], warning!.Texts.Select(t => t.Language));
     }

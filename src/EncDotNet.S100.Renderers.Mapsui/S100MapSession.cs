@@ -373,6 +373,7 @@ internal sealed class S100MapSession : IS100MapSession
         // registered processor. Dispose the owner only when this session created
         // it; an injected owner is borrowed and its lifetime belongs to the
         // caller (e.g. a DI host sharing it across services).
+        _navigator.Detach();
         _session.Dispose();
         if (_ownsProcessorOwner)
         {

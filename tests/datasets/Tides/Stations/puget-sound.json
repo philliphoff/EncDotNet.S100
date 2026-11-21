@@ -1,0 +1,450 @@
+{
+ "format": "tide-stations",
+ "version": 1,
+ "provider": "NOAA CO-OPS",
+ "retrieved": "2026-11-12T00:00:00+00:00",
+ "stations": [
+  {
+   "id": "9444900",
+   "name": "PORT TOWNSEND",
+   "latitude": 48.11122222222222,
+   "longitude": -122.7596777777778,
+   "region": "WA",
+   "utcOffsetHours": -8,
+   "kind": "harmonic",
+   "constituents": [
+    {
+     "name": "M2",
+     "amplitude": 0.681,
+     "phase": 349.9
+    },
+    {
+     "name": "S2",
+     "amplitude": 0.169,
+     "phase": 13.1
+    },
+    {
+     "name": "N2",
+     "amplitude": 0.144,
+     "phase": 320.4
+    },
+    {
+     "name": "K1",
+     "amplitude": 0.767,
+     "phase": 270.5
+    },
+    {
+     "name": "M4",
+     "amplitude": 0.038,
+     "phase": 59.5
+    },
+    {
+     "name": "O1",
+     "amplitude": 0.445,
+     "phase": 249.8
+    },
+    {
+     "name": "M6",
+     "amplitude": 0.009,
+     "phase": 247
+    },
+    {
+     "name": "MK3",
+     "amplitude": 0.027,
+     "phase": 332.4
+    },
+    {
+     "name": "S4",
+     "amplitude": 0.003,
+     "phase": 93.7
+    },
+    {
+     "name": "MN4",
+     "amplitude": 0.015,
+     "phase": 29.4
+    },
+    {
+     "name": "NU2",
+     "amplitude": 0.028,
+     "phase": 332.2
+    },
+    {
+     "name": "MU2",
+     "amplitude": 0.027,
+     "phase": 242.4
+    },
+    {
+     "name": "2N2",
+     "amplitude": 0.016,
+     "phase": 292
+    },
+    {
+     "name": "OO1",
+     "amplitude": 0.029,
+     "phase": 318.4
+    },
+    {
+     "name": "LAM2",
+     "amplitude": 0.011,
+     "phase": 46.4
+    },
+    {
+     "name": "S1",
+     "amplitude": 0.022,
+     "phase": 40.9
+    },
+    {
+     "name": "M1",
+     "amplitude": 0.024,
+     "phase": 291.8
+    },
+    {
+     "name": "J1",
+     "amplitude": 0.042,
+     "phase": 301.6
+    },
+    {
+     "name": "MM",
+     "amplitude": 0.024,
+     "phase": 199
+    },
+    {
+     "name": "SSA",
+     "amplitude": 0.019,
+     "phase": 209.9
+    },
+    {
+     "name": "SA",
+     "amplitude": 0.079,
+     "phase": 282.6
+    },
+    {
+     "name": "RHO",
+     "amplitude": 0.015,
+     "phase": 239.8
+    },
+    {
+     "name": "Q1",
+     "amplitude": 0.074,
+     "phase": 241.7
+    },
+    {
+     "name": "T2",
+     "amplitude": 0.011,
+     "phase": 13.6
+    },
+    {
+     "name": "R2",
+     "amplitude": 0.002,
+     "phase": 342.1
+    },
+    {
+     "name": "2Q1",
+     "amplitude": 0.009,
+     "phase": 251
+    },
+    {
+     "name": "P1",
+     "amplitude": 0.241,
+     "phase": 269.7
+    },
+    {
+     "name": "2SM2",
+     "amplitude": 0.004,
+     "phase": 292.4
+    },
+    {
+     "name": "M3",
+     "amplitude": 0.004,
+     "phase": 100.3
+    },
+    {
+     "name": "L2",
+     "amplitude": 0.028,
+     "phase": 46.9
+    },
+    {
+     "name": "2MK3",
+     "amplitude": 0.019,
+     "phase": 341.3
+    },
+    {
+     "name": "K2",
+     "amplitude": 0.051,
+     "phase": 16.7
+    },
+    {
+     "name": "M8",
+     "amplitude": 0.002,
+     "phase": 188.4
+    },
+    {
+     "name": "MS4",
+     "amplitude": 0.021,
+     "phase": 83.2
+    }
+   ],
+   "datums": {
+    "epoch": "1983-2001",
+    "accepted": "2003-04-17",
+    "heights": {
+     "MHHW": 3.621,
+     "MHW": 3.414,
+     "MSL": 2.547,
+     "MLW": 1.785,
+     "MLLW": 1.025,
+     "LAT": -0.19649196,
+     "HAT": 4.0995083
+    }
+   }
+  },
+  {
+   "id": "9444972",
+   "name": "Marrowstone Point",
+   "latitude": 48.0917,
+   "longitude": -122.69,
+   "region": "WA",
+   "utcOffsetHours": -8,
+   "kind": "subordinate",
+   "reference": "9444900",
+   "offsets": {
+    "datum": "MLLW",
+    "highWaterMinutes": 2,
+    "lowWaterMinutes": 5,
+    "highWaterHeight": 0.12,
+    "lowWaterHeight": -0.03,
+    "heightAdjustment": "offset"
+   }
+  },
+  {
+   "id": "9445017",
+   "name": "Port Ludlow",
+   "latitude": 47.925,
+   "longitude": -122.68,
+   "region": "WA",
+   "utcOffsetHours": -8,
+   "kind": "subordinate",
+   "reference": "9447130",
+   "offsets": {
+    "datum": "MLLW",
+    "highWaterMinutes": -14,
+    "lowWaterMinutes": -14,
+    "highWaterHeight": 0.87,
+    "lowWaterHeight": 0.95,
+    "heightAdjustment": "ratio"
+   }
+  },
+  {
+   "id": "9446486",
+   "name": "Tacoma Narrows Bridge",
+   "latitude": 47.2717,
+   "longitude": -122.552,
+   "region": "WA",
+   "utcOffsetHours": -8,
+   "kind": "subordinate",
+   "reference": "9447130",
+   "offsets": {
+    "datum": "MLLW",
+    "highWaterMinutes": 28,
+    "lowWaterMinutes": 23,
+    "highWaterHeight": 1.11,
+    "lowWaterHeight": 1.02,
+    "heightAdjustment": "ratio"
+   }
+  },
+  {
+   "id": "9447130",
+   "name": "SEATTLE (Madison St.), Elliott Bay",
+   "latitude": 47.60263888888889,
+   "longitude": -122.3393055555556,
+   "region": "WA",
+   "utcOffsetHours": -8,
+   "kind": "harmonic",
+   "constituents": [
+    {
+     "name": "M2",
+     "amplitude": 1.063,
+     "phase": 10.8
+    },
+    {
+     "name": "S2",
+     "amplitude": 0.268,
+     "phase": 36.8
+    },
+    {
+     "name": "N2",
+     "amplitude": 0.214,
+     "phase": 341.1
+    },
+    {
+     "name": "K1",
+     "amplitude": 0.834,
+     "phase": 276.8
+    },
+    {
+     "name": "M4",
+     "amplitude": 0.021,
+     "phase": 200.7
+    },
+    {
+     "name": "O1",
+     "amplitude": 0.459,
+     "phase": 254.6
+    },
+    {
+     "name": "M6",
+     "amplitude": 0.009,
+     "phase": 312.8
+    },
+    {
+     "name": "MK3",
+     "amplitude": 0.036,
+     "phase": 79.3
+    },
+    {
+     "name": "S4",
+     "amplitude": 0.002,
+     "phase": 254.3
+    },
+    {
+     "name": "MN4",
+     "amplitude": 0.009,
+     "phase": 172.7
+    },
+    {
+     "name": "NU2",
+     "amplitude": 0.044,
+     "phase": 355.5
+    },
+    {
+     "name": "MU2",
+     "amplitude": 0.034,
+     "phase": 238.9
+    },
+    {
+     "name": "2N2",
+     "amplitude": 0.023,
+     "phase": 313.1
+    },
+    {
+     "name": "OO1",
+     "amplitude": 0.031,
+     "phase": 330.2
+    },
+    {
+     "name": "LAM2",
+     "amplitude": 0.02,
+     "phase": 49.9
+    },
+    {
+     "name": "S1",
+     "amplitude": 0.021,
+     "phase": 45
+    },
+    {
+     "name": "M1",
+     "amplitude": 0.024,
+     "phase": 304.1
+    },
+    {
+     "name": "J1",
+     "amplitude": 0.043,
+     "phase": 313.4
+    },
+    {
+     "name": "SSA",
+     "amplitude": 0.024,
+     "phase": 217
+    },
+    {
+     "name": "SA",
+     "amplitude": 0.07,
+     "phase": 283.2
+    },
+    {
+     "name": "MF",
+     "amplitude": 0.015,
+     "phase": 157
+    },
+    {
+     "name": "RHO",
+     "amplitude": 0.015,
+     "phase": 245
+    },
+    {
+     "name": "Q1",
+     "amplitude": 0.073,
+     "phase": 248.9
+    },
+    {
+     "name": "T2",
+     "amplitude": 0.016,
+     "phase": 38
+    },
+    {
+     "name": "R2",
+     "amplitude": 0.003,
+     "phase": 11.2
+    },
+    {
+     "name": "2Q1",
+     "amplitude": 0.01,
+     "phase": 265.5
+    },
+    {
+     "name": "P1",
+     "amplitude": 0.257,
+     "phase": 276.2
+    },
+    {
+     "name": "2SM2",
+     "amplitude": 0.008,
+     "phase": 284.4
+    },
+    {
+     "name": "M3",
+     "amplitude": 0.004,
+     "phase": 178
+    },
+    {
+     "name": "L2",
+     "amplitude": 0.049,
+     "phase": 58.7
+    },
+    {
+     "name": "2MK3",
+     "amplitude": 0.035,
+     "phase": 48.5
+    },
+    {
+     "name": "K2",
+     "amplitude": 0.079,
+     "phase": 37.7
+    },
+    {
+     "name": "M8",
+     "amplitude": 0.001,
+     "phase": 204.4
+    },
+    {
+     "name": "MS4",
+     "amplitude": 0.012,
+     "phase": 229.3
+    }
+   ],
+   "datums": {
+    "epoch": "1983-2001",
+    "accepted": "2003-04-17",
+    "heights": {
+     "MHHW": 5.882,
+     "MHW": 5.618,
+     "MSL": 4.443,
+     "MLW": 3.284,
+     "MLLW": 2.419,
+     "LAT": 1.1089039,
+     "HAT": 6.453904
+    }
+   }
+  }
+ ]
+}

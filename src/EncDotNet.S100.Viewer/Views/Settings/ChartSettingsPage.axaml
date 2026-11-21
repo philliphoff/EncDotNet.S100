@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.ChartSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:ChartSettingsPageViewModel">
 
     <!-- Settings → Chart display: basemap, scale indicators and mariner settings (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -193,6 +193,138 @@
                 <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}" TextWrapping="Wrap" />
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding WaterLevelApplyUndeclaredDatum}"  AutomationProperties.AutomationId="Settings.WaterLevelApplyUndeclaredDatum" AutomationProperties.Name="{x:Static loc:Strings.Label_WaterLevelApplyUndeclaredDatum}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}"/>
             </Grid>
+            <!-- Water level sources (#1451, tide predictions design D1): a source,
+                 not an adjustment mode, so it stays on with adjustment off. -->
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_UseTidePredictions_Help}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_UseTidePredictions}" TextWrapping="Wrap" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding UseTidePredictions}" AutomationProperties.AutomationId="Settings.UseTidePredictions" AutomationProperties.Name="{x:Static loc:Strings.Label_UseTidePredictions}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_UseTidePredictions}"/>
+            </Grid>
+            <!-- The station list's date and refresh (tide predictions D15, Q7b). -->
+            <StackPanel Spacing="4" Margin="0,-4,0,0" DataContext="{Binding TideStationList}" x:DataType="vm:TideStationListViewModel">
+                <TextBlock Text="{Binding Text}"
+                           FontSize="11"
+                           Opacity="0.7"
+                           TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="Settings.TideStationList.Text" />
+                <TextBlock Text="{Binding Note}"
+                           IsVisible="{Binding HasNote}"
+                           FontSize="11"
+                           Foreground="{DynamicResource WarningColor}"
+                           TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="Settings.TideStationList.Note" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="{Binding DownloadLabel}"
+                            Command="{Binding DownloadCommand}"
+                            FontSize="12"
+                            AutomationProperties.AutomationId="Settings.TideStationList.Download" />
+                    <Button Content="{x:Static loc:Strings.Tides_List_Cancel}"
+                            Command="{Binding CancelCommand}"
+                            IsVisible="{Binding IsDownloading}"
+                            FontSize="12"
+                            AutomationProperties.AutomationId="Settings.TideStationList.Cancel" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Weather on a route (#1093): Check route's wind and wave limits,
+                 kept with the mariner settings. -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteWeather}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteWeather_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteMaxWind}"
+                           FontSize="12" />
+                <TextBox Text="{Binding RouteMaxWindDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         PlaceholderText="{x:Static loc:Strings.Settings_RouteLimitOff}"
+                         AutomationProperties.AutomationId="Settings.RouteMaxWind"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_RouteMaxWind}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_RouteMaxWind}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteMaxWind}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding RouteMaxWaveLabel}"
+                           FontSize="12" />
+                <TextBox Text="{Binding RouteMaxWaveDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         PlaceholderText="{x:Static loc:Strings.Settings_RouteLimitOff}"
+                         AutomationProperties.AutomationId="Settings.RouteMaxWave"
+                         AutomationProperties.Name="{Binding RouteMaxWaveLabel}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_RouteMaxWave}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteMaxWave}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Tropical cyclones on a route (#1299, design note V39): the route
+                 check's cyclone rule, kept with the mariner settings. -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteCyclones}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteCyclones_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneCheckAgainst}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_CycloneCheckAgainst}" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AvailableCycloneCheckAgainst}"
+                          SelectedValue="{Binding CycloneCheckAgainstKnots}"
+                          SelectedValueBinding="{Binding Knots}"
+                          AutomationProperties.AutomationId="Settings.CycloneCheckAgainst"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_CycloneCheckAgainst}"
+                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CycloneCheckAgainst}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneCheckAgainst}"
+                          MinWidth="140">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneReportClosestApproach}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_CycloneReportClosestApproach}" VerticalAlignment="Center" />
+                <ToggleSwitch Grid.Column="1" Classes="setting"
+                              IsChecked="{Binding CycloneReportClosestApproach}"
+                              AutomationProperties.AutomationId="Settings.CycloneReportClosestApproach"
+                              AutomationProperties.Name="{x:Static loc:Strings.Settings_CycloneReportClosestApproach}"
+                              AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CycloneReportClosestApproach}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneMustReviewInside}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_CycloneMustReviewInside}" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AvailableCycloneMustReviewInside}"
+                          SelectedValue="{Binding CycloneMustReviewInsideKnots}"
+                          SelectedValueBinding="{Binding Knots}"
+                          AutomationProperties.AutomationId="Settings.CycloneMustReviewInside"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_CycloneMustReviewInside}"
+                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CycloneMustReviewInside}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneMustReviewInside}"
+                          MinWidth="140">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+            <TextBlock Text="{Binding CycloneMappingText}"
+                       AutomationProperties.AutomationId="Settings.CycloneMapping"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
 
             <!-- National Language -->
             <StackPanel Spacing="6">

@@ -214,19 +214,21 @@ panel. The menu groups sources by where the data is.
   `.s100collection.json` file. See
   [Local collection manifests](../../docs/local-collection-manifest.md).
 
-**Online:** **Browse online catalogues…** opens the **Add online catalogue**
-wizard. See [Add an online catalogue](#add-an-online-catalogue).
+**Online:** **Browse online sources…** opens the **Add online source**
+wizard. See [Add an online source](#add-an-online-source).
 
 **Another computer:** **Connect to a shared feed…** adds datasets served by
 `s100` on another computer. See [Shared feeds](#shared-feeds).
 
-### Add an online catalogue
+### Add an online source
 
-The **Add online catalogue** wizard has three steps. **Back** and the step
-header go back without losing your choices, and each catalogue is read only
-once.
+The **Add online source** wizard has three steps, or four for a SECOM service
+(see [SECOM services](#secom-services)). The step header shows what you chose
+in each step you've completed. **Back** and the step header go back without
+losing your choices, and each catalogue is read only once. On the first step
+the footer repeats your selection.
 
-1. **Catalogue**: choose from a curated directory, grouped by region. Search
+1. **Source**: choose from a curated directory, grouped by region. Search
    by name, provider or country. The directory includes NOAA ENC; USACE Inland
    ENC rivers and buoy overlay; NOAA S-102 bathymetry and S-104 and S-111
    forecasts; S-124 navigational warnings from Canada over SECOM; community
@@ -667,7 +669,7 @@ The **Layer stack** panel lists every visible layer in its S-98 display
 plane, grouped within each plane by S-98 priority. The planes include **Base
 chart (under)**, **Bathymetry**, **On-demand surface**, **Base chart (over)**,
 **Other chart overlays**, **Cautions and warnings**, **Dynamic arrows**,
-**Mariner overlay** and **ECDIS alerts**. **Show empty planes** shows planes
+**Mariner overlay**, **Vessels** (AIS targets) and **ECDIS alerts**. **Show empty planes** shows planes
 with no layers. The basemap is always at the bottom, and map tools (the
 measure tool and validation findings) are always at the top.
 
@@ -677,7 +679,8 @@ Rows include:
 - Sub-layer rows when a product draws more than one layer, such as S-111
   currents, which draws an arrow layer.
 - A row for each live overlay, such as **Own ship** (under **Dynamic
-  arrows**) or **NDBC buoy observations** (under **Other chart overlays**).
+  arrows**). Live feeds, such as predicted tide and current stations, are
+  datasets: subscribe to them in the Library's **Live feeds**.
 - A colour legend under each weather fill (wave height, wind speed): a swatch
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
   the palette the map is drawn in. An overlay drawn with symbols or styled
@@ -821,6 +824,21 @@ dataset.
 - **Ignore scale minimum**
 - **National Language**: the 3-letter ISO 639-2/B code for chart text, or
   **(Catalogue default)**.
+
+**Weather on a route** sets the limits [Check route](#check-a-route) compares
+a loaded GRIB2 or NetCDF forecast with: **Wind limit (kn)** and **Wave height
+limit**, in metres or, for any other depth unit, feet. Both are off (empty) by
+default; an RTZ route's own `vesselMaxWind` and `vesselMaxWave` are used where
+a limit is off. They're kept with the mariner settings, not with a route, and
+changing one re-runs an open route check without redrawing the chart.
+
+**Tropical cyclones on a route** sets how Check route tests a route against a
+loaded NHC advisory: **Check against** (the 34, 50 or 64 kt radius; 34 kt by
+default; the cone is always tested), **Report closest approach** (on by
+default) and **Must review inside** (64, 50 or 34 kt, or Never; 50 kt by
+default, and never outside **Check against**). A line under them spells out
+which findings are Must review and which are Check. They're kept with the
+mariner settings, and a change re-runs an open route check.
 
 ## Identify features
 
@@ -1248,7 +1266,10 @@ It checks the active route against the loaded data: land and drying ground,
 chart coverage, water shallower than the **Safety Contour** and charted
 dangers (from [Mariner settings](#mariner-settings)), restricted and S-122
 protected areas, and S-124 navigational warnings, judged at each point's ETA.
-With a draft, on the passage or on every leg, it also checks under-keel
+With a GRIB2 or NetCDF forecast loaded and a wind or wave limit set (**Weather
+on a route** in [Mariner settings](#mariner-settings), or the RTZ route's own),
+it also compares the forecast wind and significant wave height at each
+point's ETA with the limits. With a draft, on the passage or on every leg, it also checks under-keel
 clearance at each point's ETA: UKC = charted depth + water level − draft −
 squat, against the **Required UKC** (0 m when unset). Charted depth comes from
 loaded S-102, or from S-101 where there's no S-102 (lower confidence); water
@@ -1287,11 +1308,26 @@ and confidence. While it's on:
   **INFO**: each stretch below your UKC setting, depths charted from S-101
   only, water-level gaps (such as data ending before arrival), expired S-111
   runs, which aren't used in ETAs, and the route check's findings, such as
-  land, dangers and areas the route crosses and warnings on it. A tag names
-  the check behind each one. Clicking a finding zooms the map to it, outlines it dashed in its tone
+  land, dangers and areas the route crosses and warnings on it, and the
+  stretches where wind or waves are above your limits ("Wind above 25 kn for
+  3 h", with the time window) or the forecast doesn't reach ("Wind not
+  checked: forecast ends before arrival"). Weather findings are always
+  **CHECK**: forecast model data is advisory. A tag names the check behind
+  each one, and a **Weather** chip filters to the weather findings. Clicking a finding zooms the map to it, outlines it dashed in its tone
   with a "Zoomed to finding" chip, and moves the profile cursor there. On the
   map, a small dot marks each finding, red for MUST REVIEW, amber for CHECK
   and grey for INFO.
+
+  While a weather forecast is loaded, the card has a **Weather** row: "No
+  limits set", "Within your limits", "1 above limits" or "Forecast ends
+  before arrival". With a tropical cyclone advisory loaded, it also counts the
+  storm's findings and gives the closest approach, as in "2 must review · 2 to
+  check · CPA 12 NM". Its tooltip names the limits in use and where each comes
+  from (Settings or the route), and the cyclone settings ("34 kt radius and
+  cone · Must review inside 50 kt"). Clicking it filters **Findings** to
+  weather. On the map, the storm at the ETA of the closest approach is drawn
+  as its class letter in a dashed ring, joined to the route by a dashed line,
+  and the legend gains a **Weather** group.
 
   Without a draft there's no clearance: the verdict card is titled from the
   findings, such as "2 items to review", and says "Add a draft to check
@@ -1382,9 +1418,28 @@ holds.
 
 ## Show buoy observations
 
-**NDBC buoy observations** shows the latest observations from NOAA National
-Data Buoy Center buoys and C-MAN stations. Turn it on with its row under
-**Other chart overlays** in the **Layer stack** panel; it's off until you do.
+**NDBC observations** shows the latest observations from NOAA National
+Data Buoy Center buoys and C-MAN stations. It's a live feed: in the **Library**, choose **Add** and then, under
+**Live feeds**, **NDBC observations** (or **Add a live feed** when the
+**Datasets** panel is empty). That subscribes to it in a **Live feeds**
+collection and puts it on the map. It's listed with your datasets, and you
+show and hide it the same way; its place in the drawing order comes from
+the layer order, so it has no move buttons. Removing its row takes it off
+the map until SoundCharts next starts; to unsubscribe, remove it from the
+Library. If you had the old **NDBC buoy
+observations** Layer stack row turned on, it's added for you.
+
+A live feed's row is labelled with what it shows (**Observations**) and says
+what it's doing in place of a file's product name:
+
+- **Waiting for zoom (below 25°)**: the view is too wide, so nothing is
+  fetched.
+- **Paused while hidden**: the row is hidden.
+- **Waiting for data**, then **Live · updated 3 min ago**.
+- **No new data for 42 min**: nothing new for longer than the feed expects
+  (30 minutes for NDBC), shown in the warning colour.
+- **Not connecting**, or **Not updating · last data 2 h ago**: its last
+  attempts failed; the tooltip has the error.
 
 - Each station is a ring with a wind barb pointing into the wind (pennants
   50 kn, full barbs 10 kn, half barbs 5 kn) and, for buoys, the significant
@@ -1396,7 +1451,7 @@ Data Buoy Center buoys and C-MAN stations. Turn it on with its row under
   pressure and its tendency, air, water and dew-point temperatures,
   visibility and tide, with the observation time and its age.
 - SoundCharts fetches only the stations in the map view (plus a small
-  margin), only while the row is on and the view is narrower than 25°, and
+  margin), only while the source is shown and the view is narrower than 25°, and
   each station at most every 10 minutes, NDBC's update interval. Stations
   that fail are retried less often, up to every 2 hours.
 
@@ -1406,9 +1461,9 @@ Not for navigation. See the
 ## Show own-ship wind from NMEA instruments
 
 **Own-ship wind and weather (NMEA)** shows the ship's own wind and water
-temperature from its NMEA 0183 instruments. Set the
-`SOUNDCHARTS_NMEA_INPUT` environment variable before starting SoundCharts
-to the input:
+temperature from its NMEA 0183 instruments. In the **Library**, choose
+**Add** and then, under **Live feeds**, **Own-ship weather (NMEA)**; select
+it in the **Live feeds** collection and set its **NMEA input**:
 
 | Value | Input |
 | --- | --- |
@@ -1417,8 +1472,10 @@ to the input:
 | `tcp://plotter.local:10110` | A TCP NMEA server; reconnects when the connection drops |
 | A file path | A recording, replayed at 10 lines a second, over and over |
 
-The row then appears under **Other chart overlays** in the **Layer stack**
-panel. Without the variable there's no row.
+It's then listed in the **Datasets** panel, where you show, hide or remove
+it like a dataset. Setting the `SOUNDCHARTS_NMEA_INPUT` environment variable
+to an input before starting SoundCharts also adds it for that run, as
+before.
 
 - A small ring with a wind barb sits up and to the right of the own-ship
   symbol, with the true wind (such as **200° 14 kn**) and the water
@@ -1485,23 +1542,42 @@ heading.
 
 ### Show AIS vessels
 
-The AIS overlay shows live targets from [aisstream.io](https://aisstream.io),
-which needs a free API key. In **Settings** > **Vessels** > **AIS Overlay**:
+**AIS targets** shows live vessels from [aisstream.io](https://aisstream.io),
+which needs a free API key. It's a live feed, like NDBC observations.
 
-1. Turn on **Enable AIS overlay**.
-2. Enter your **API key**, or set the `ENCDOTNET_AIS_STREAM_KEY` environment
-   variable. The environment variable takes precedence. A key entered in
-   Settings is stored in plain text in `settings.json`.
-3. Restart SoundCharts. Changes to this section take effect at the next start.
+1. In the **Library**, choose **Add** and then, under **Live feeds**,
+   **AIS targets**. There's no restart.
+2. Select **AIS targets** in the Library's **Live feeds** collection, enter
+   your **aisstream.io API key** in its settings, and choose **Save**. Or set
+   the `ENCDOTNET_AIS_STREAM_KEY` environment variable, which takes
+   precedence. A key entered in the Library is saved in the computer's
+   secret store: Credential Manager on Windows, the Keychain on macOS, or
+   the Secret Service (libsecret, through `secret-tool`) on Linux; the
+   Library keeps only a reference to it. On a computer with no secret
+   store, such as Linux without `secret-tool`, the key is kept with the
+   Library's settings; use the environment variable to keep it out of the
+   file. A key you'd entered in Settings › Vessels carries over. Until
+   there's a key, the row says **Key needed** (its tooltip says where to
+   enter one) and the feed doesn't start; saving a key starts it.
+
+AIS targets are listed with your datasets under **Vessels**, and added again
+the next time SoundCharts starts, until you remove them from the Library. If you had the old
+**Enable AIS overlay** switch on, they're added for you. They draw above the
+chart (the **Vessels** plane), and their row says what they're doing, such as
+**Waiting for zoom (below 50°)** or **Live · updated just now**.
 
 SoundCharts doesn't subscribe to aisstream.io until you zoom in. The
-subscription opens when the map view's latitude and longitude spans are both at
-or below **Activate at viewport span (degrees)**, 50° by default. At start-up
-the map shows the whole world, so nothing streams until you zoom in. Then the
-subscription opens for the map view's bounding box and follows it as you pan
-and zoom. Once open, it stays open for the rest of the session, even if you
-zoom back out. Clear the field to subscribe as soon as SoundCharts starts. See
+subscription opens when the map view's latitude and longitude spans are both
+at or below **Runs in views narrower than (degrees)** in its Library
+settings, 50° by default, and follows the view as you pan and zoom. While
+you're zoomed out or the row is hidden, it stops following the view and the
+targets you have stay. Set it to 0 to subscribe as soon as AIS targets are
+added. Saving new settings restarts the feed; there's no restart of
+SoundCharts. See
 [AIS zoom-gated subscription](../../docs/design/ais-zoom-gated-subscription.md).
+
+Select a target to see its name, MMSI, course, speed, heading and size in
+the **Pick report**, with a **Take helm** button (pirate mode).
 
 ### The Vessels panel
 
@@ -1776,7 +1852,7 @@ only, and has no authentication. Turn it on with **Settings** >
 shows the port and the number of connected clients.
 
 Besides the standard tools, such as `list_datasets`, `describe_feature`,
-`sample_coverage` and `pick_features`, SoundCharts adds tools that control the
+`sample` and `pick_features`, SoundCharts adds tools that control the
 running app:
 
 | Tools | What they do |
@@ -1824,10 +1900,11 @@ a run, stop the process from the operating system; SoundCharts ignores
 | `--mcp-bind <ADDRESS>` | MCP bind address. Use a loopback address. Implies `--mcp`. |
 | `--mcp-port-file <PATH>` | Write the MCP endpoint URI to this file once the server is listening. Implies `--mcp`. |
 | `--mcp-test-hooks` | Add test-only MCP tools, such as `set_test_clock`, which moves or freezes the app's current time. Implies `--mcp`. |
+| `--mcp-toolsets <names>` | Serve only these MCP toolsets for this run, such as `route-planning` or `query,routes,map`, overriding Settings. See [Choose toolsets](../../docs/mcp-server.md#choose-toolsets). Implies `--mcp`. |
 | `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12, or PEM with its key) to SECOM services for this run, instead of the identity chosen in **Settings** > **Keys & certificates**. The password, if any, comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD`. |
 | `--settings <PATH>` | Use this settings file instead of the per-user one. |
 | `--data-dir <PATH>` | Put the settings file and all caches under this folder. You can also set `S100_DATA_DIR`. |
-| `--cache-dir <PATH>` | Put only the render caches (portrayal instructions, pattern clips and tiles) under this folder, leaving settings and the Library where they are. You can also set `S100_CACHE_DIR`. `S100_VECTOR_TILE_DISK_DIR` still overrides the tile cache's folder. Performance runs use it to start from empty caches. |
+| `--cache-dir <PATH>` | Put only the render caches (portrayal instructions, pattern clips and tiles) under this folder, leaving settings and the Library where they are. You can also set `S100_CACHE_DIR`. `S100_VECTOR_TILE_DISK_DIR` still gives the tile cache a folder of its own (tiles go in its `tiles` subfolder). Performance runs use it to start from empty caches. |
 | `--ephemeral` | Use throwaway settings that are never saved. Can't be combined with `--settings`. |
 | `--center <LAT,LON>` | Center the map on this position. Needs `--zoom`. |
 | `--zoom <LEVEL>` | Web Mercator zoom level, 0 to 24, for `--center`. |
@@ -1915,7 +1992,7 @@ first so the capture shows a finished frame. The old `--screenshot`,
 2. Wait for `/tmp/run/mcp.url` to appear, and read the endpoint URI from it,
    or from the `[MCP] listening on …` line in standard output.
 3. Connect an MCP client to the endpoint. Call `list_datasets`,
-   `describe_feature` or `sample_coverage` to inspect features and values.
+   `describe_feature` or `sample` to inspect features and values.
 4. To capture an image, call `await_render_idle`, then `render_to_image` for
    the map or `capture_app_screenshot` for the window.
 5. When you're done, call `close_all_datasets`, then stop the process with

@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -72,7 +75,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             notifier,
             (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
             entry => unloaded.Add(entry),
-            options ?? new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            options ?? new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
     [Fact]
     public async Task InViewCell_IsLoaded()
@@ -185,7 +192,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             entry => unloaded.Add(entry),
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var cell = Cell("US5ZZ", 40, -75, 41, -74);
         coordinator.Register(new[] { cell });
@@ -220,7 +231,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             entry => unloaded.Add(entry),
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var cell = Cell("US5DD", 40, -75, 41, -74);
         coordinator.Register(new[] { cell });
@@ -354,7 +369,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             entry => unloaded.Add(entry),
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var cellA = Cell("US5GA", 40, -75, 41, -74);
         var cellB = Cell("US5GB", 40, -75, 41, -74);
@@ -405,7 +424,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 inMarshal.Value = true;
                 try { action(); }
                 finally { inMarshal.Value = false; }
-            });
+            },
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { Cell("US5MA", 40, -75, 41, -74) });
         await Task.Run(() => notifier.Publish(Viewport(40, -75, 41, -74)), TestContext.Current.CancellationToken);
@@ -432,7 +454,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { blocker, far });
 
@@ -470,7 +496,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             notifier,
             (entry, _) => { order.Enqueue(entry); return Task.CompletedTask; },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var corner = Cell("US5CORNER", 40.0, -75.0, 40.1, -74.9);
         var middle = Cell("US5MIDDLE", 40.4, -74.6, 40.6, -74.4);
@@ -497,7 +527,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 order.Enqueue(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         // The blocker takes the only slot; the rest queue behind it.
         coordinator.Register(new[] { blocker });
@@ -532,7 +566,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 done.Add(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[]
         {
@@ -544,6 +582,55 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
 
         Assert.True(await WaitUntilAsync(() => done.Count == 3));
         Assert.Equal(1, maxRunning);
+    }
+
+    [Theory]
+    [InlineData((int)LoadTier.Visible, WorkClass.Visible)]
+    [InlineData((int)LoadTier.Ahead, WorkClass.Predicted)]
+    [InlineData((int)LoadTier.Covered, WorkClass.Background)]
+    [InlineData((int)LoadTier.Unbounded, WorkClass.Background)]
+    public void PriorityFor_MapsTiersToWorkClassesWithUrgencyInPixels(int tier, WorkClass expected)
+    {
+        // 0.01° at 10 m/px is about 111 px.
+        var priority = ExchangeSetLazyLoadCoordinator.PriorityFor((LoadTier)tier, 0.01, 10);
+
+        Assert.Equal(expected, priority.Class);
+        Assert.Equal(111.32, priority.Urgency, 2);
+    }
+
+    [Fact]
+    public async Task LoadRunsUnderItsDemand_WhichFollowsTheCellIntoView()
+    {
+        var notifier = new FakeNotifier();
+        WorkDemand? seen = null;
+        var release = new TaskCompletionSource();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                seen = WorkDemand.Current;
+                await release.Task;
+                entry.IsLoaded = true;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
+
+        var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
+        coordinator.Register(new[] { ahead });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => seen is not null));
+        Assert.Equal(WorkClass.Predicted, seen!.Priority.Class);
+        Assert.Null(WorkDemand.Current);
+
+        // The view reaches the cell while it loads: its work becomes visible.
+        notifier.Publish(Viewport(40, -74, 41, -73));
+        Assert.Equal(WorkClass.Visible, seen.Priority.Class);
+        release.SetResult();
     }
 
     [Fact]
@@ -561,7 +648,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 ViewportDebounce = TimeSpan.Zero,
                 SpeculativeRetryDelay = TimeSpan.FromMilliseconds(20),
             },
-            hasVisibleTileWork: () => Volatile.Read(ref tilesBusy));
+            hasVisibleTileWork: () => Volatile.Read(ref tilesBusy),
+            marshal: null,
+            unloadMany: null,
+            planner: null);
 
         var visible = Cell("US5VIS", 40.4, -74.6, 40.6, -74.4);
         var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
@@ -597,7 +687,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 }
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { cell });
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -631,7 +725,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             (_, _) => Task.CompletedTask,
             single.Add,
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, RetentionBudget = 0 },
-            unloadMany: entries => batches.Enqueue(entries.ToArray()));
+            unloadMany: entries => batches.Enqueue(entries.ToArray()),
+            marshal: null,
+            hasVisibleTileWork: null,
+            planner: null);
 
         var cells = new[]
         {
@@ -711,7 +808,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 ViewportDebounce = TimeSpan.Zero,
                 SpeculativeRetryDelay = TimeSpan.FromMilliseconds(20),
             },
-            hasVisibleTileWork: tilesBusy);
+            hasVisibleTileWork: tilesBusy,
+            marshal: null,
+            unloadMany: null,
+            planner: null);
 
     [Fact]
     public async Task CoarseCellCoveredByFinerCells_WaitsForThem()
@@ -755,7 +855,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 order.Enqueue(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { coarse, west, east });
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -867,5 +971,166 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             && Interlocked.CompareExchange(ref target, value, current) != current)
         {
         }
+    }
+
+    // A ViewState (EPSG:3857) centred on a WGS-84 point, about 0.2° across at 47.6°N.
+    private static ViewState ViewAt(double latitude, double longitude, double resolution = 20.0)
+    {
+        var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(longitude, latitude);
+        return new ViewState(x, y, resolution, 0, 1000, 800);
+    }
+
+    [Fact]
+    public async Task Destination_LoadsItsCellsAsPredictedWorkWhenTheGestureStarts()
+    {
+        var notifier = new FakeNotifier();
+        var planner = new DemandPlanner();
+        var classes = new ConcurrentDictionary<DatasetEntry, WorkClass>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (entry, _) =>
+            {
+                classes[entry] = WorkDemand.Current!.Priority.Class;
+                return Task.CompletedTask;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            planner: planner,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
+
+        var here = Cell("HERE", 47.55, -122.45, 47.65, -122.25);
+        var there = Cell("THERE", 47.20, -122.55, 47.30, -122.35);
+        coordinator.Register(new[] { here, there });
+        notifier.Publish(Viewport(47.55, -122.45, 47.65, -122.25));
+        Assert.True(await WaitUntilAsync(() => classes.ContainsKey(here)));
+        Assert.False(classes.ContainsKey(there));
+
+        // An animated "go to" Tacoma: its cells start loading now, before the
+        // view gets there, as predicted work.
+        planner.Observe(ViewAt(47.60, -122.35), System.Diagnostics.Stopwatch.GetTimestamp());
+        planner.BeginAnimation(ViewAt(47.25, -122.45), TimeSpan.FromSeconds(2), System.Diagnostics.Stopwatch.GetTimestamp());
+
+        Assert.True(await WaitUntilAsync(() => classes.ContainsKey(there)));
+        Assert.Equal(WorkClass.Visible, classes[here]);
+        Assert.Equal(WorkClass.Predicted, classes[there]);
+
+        // Arriving there counts a cell that was ready: a hit, and a used prediction.
+        notifier.Publish(Viewport(47.20, -122.55, 47.30, -122.35));
+        var stats = planner.Stats.Snapshot();
+        Assert.Equal(1, stats.CellsPredicted);
+        Assert.Equal(1, stats.CellsUsed);
+        Assert.Equal(1, stats.CellHits);
+        Assert.Equal(1, stats.CellMisses);
+    }
+
+    [Fact]
+    public async Task Arrivals_FollowTheViewsLoads()
+    {
+        var notifier = new FakeNotifier();
+        var planner = new DemandPlanner();
+        var gate = new TaskCompletionSource();
+        var started = 0;
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (_, _) =>
+            {
+                Interlocked.Increment(ref started);
+                await gate.Task;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            planner: planner,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
+
+        coordinator.Register(new[]
+        {
+            Cell("A", 40.0, -75.0, 40.5, -74.5),
+            Cell("B", 40.5, -74.5, 41.0, -74.0),
+        });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        // One loading, one queued: the stack waits for both.
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref started) == 1));
+        Assert.Equal(2, planner.Arrivals.Pending);
+
+        gate.SetResult();
+        Assert.True(await WaitUntilAsync(() => planner.Arrivals.Pending == 0));
+    }
+
+    [Fact]
+    public async Task Release_CellsOutsideEveryWindowAreReleased()
+    {
+        var notifier = new FakeNotifier();
+        var planner = new DemandPlanner();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            planner: planner,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
+
+        var cell = Cell("A", 40.0, -75.0, 40.5, -74.5);
+        coordinator.Register(new[] { cell });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(cell)));
+
+        // Far away, with no history to come back to (the planner has seen no views).
+        notifier.Publish(Viewport(10, 10, 11, 11));
+
+        Assert.Equal(1, planner.Stats.Snapshot().CellsReleased);
+    }
+
+    [Fact]
+    public async Task Destination_CellsStillLoadingThereCoverCoarseCellsOnArrival()
+    {
+        var notifier = new FakeNotifier();
+        var planner = new DemandPlanner();
+        var started = new ConcurrentQueue<DatasetEntry>();
+        var release = new TaskCompletionSource();
+        var (west, east, coarse) = CoveredView();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                started.Enqueue(entry);
+                await release.Task;
+                entry.IsLoaded = true;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            hasVisibleTileWork: () => false,
+            planner: planner,
+            marshal: null,
+            unloadMany: null);
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(20, -60, 21, -59));
+
+        // An animation to the covered view: the finer cells start loading for it.
+        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(-75, 40);
+        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(-74, 41);
+        const double resolution = 5;
+        var target = new ViewState(
+            (minX + maxX) / 2, (minY + maxY) / 2, resolution, 0, (maxX - minX) / resolution, (maxY - minY) / resolution);
+        planner.Observe(target with { CenterX = target.CenterX + 2_000_000 }, System.Diagnostics.Stopwatch.GetTimestamp());
+        planner.BeginAnimation(target, TimeSpan.FromSeconds(1), System.Diagnostics.Stopwatch.GetTimestamp());
+        Assert.True(await WaitUntilAsync(() => started.Count == 2));
+        Assert.DoesNotContain(coarse, started);
+
+        // The view arrives while they still load: they cover the coarse cell,
+        // as cells loading as visible would.
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(coarse, started);
+        Assert.Equal(0, coordinator.GetVisibleWork().QueuedVisible);
+
+        release.SetResult();
     }
 }

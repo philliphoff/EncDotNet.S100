@@ -51,6 +51,21 @@ public abstract class PaintOp
     /// zoomed-in limit; S-100 Part 9 §11.1). Null means no upper bound.
     /// </summary>
     public double? ScaleMaximum { get; init; }
+
+    /// <summary>
+    /// The display-list instruction this op was built from, or
+    /// <see langword="null"/> when it has no single source (a pattern op
+    /// rebuilt by priority clipping merges several, and a scene read back by
+    /// <see cref="VectorSceneSerializer"/> carries none).
+    /// </summary>
+    /// <remarks>
+    /// Renderers do not need it: the op is already resolved. It is there for
+    /// consumers that hand the scene on as data (<c>s100 render --format json</c>)
+    /// and need what the op itself does not keep, such as the symbol, line
+    /// style or font name, the display plane, the viewing groups and the
+    /// drawing priority.
+    /// </remarks>
+    public DrawingInstruction? Instruction { get; internal set; }
 }
 
 /// <summary>
@@ -95,6 +110,9 @@ public sealed class PointPaintOp : PaintOp
     /// <see cref="World"/>.
     /// </summary>
     public PlacementArea? PlacementArea { get; init; }
+
+    /// <summary>How <see cref="World"/> was chosen (S-100 Part 9 line and area placement).</summary>
+    public AnchorPlacement Placement { get; init; }
 
     /// <summary>
     /// The resolved SVG symbol, or <see langword="null"/> when no symbol could
@@ -192,7 +210,9 @@ public sealed class LinePaintOp : PaintOp
 /// Its rotation, clockwise, relative to the line's direction where it lands
 /// (S-100 Part 9 <c>LineSymbol rotation</c>); 180 puts it on the other side.
 /// </param>
-public readonly record struct LineSymbolPlacement(ResolvedSymbol Symbol, double PositionPx, double RotationDegrees = 0);
+/// <param name="Reference">The portrayal-catalogue symbol name, or <see langword="null"/> when not known.</param>
+public readonly record struct LineSymbolPlacement(
+    ResolvedSymbol Symbol, double PositionPx, double RotationDegrees = 0, string? Reference = null);
 
 /// <summary>A resolved solid-colour area fill (with optional outline).</summary>
 /// <remarks>
@@ -277,6 +297,9 @@ public sealed class TextPaintOp : PaintOp
     /// </summary>
     public PlacementArea? PlacementArea { get; init; }
 
+    /// <summary>How <see cref="World"/> was chosen (S-100 Part 9 line and area placement).</summary>
+    public AnchorPlacement Placement { get; init; }
+
     /// <summary>The literal text to render.</summary>
     public required string Text { get; init; }
 
@@ -306,6 +329,9 @@ public sealed class TextPaintOp : PaintOp
 
     /// <summary>Font proportion (S-100 Part 9 <c>FontCharacteristics.proportion</c>).</summary>
     public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>Font slant (S-100 Part 9 <c>FontCharacteristics.slant</c>).</summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
 
     /// <summary>Resolved halo colour stroked around the glyphs, or null for no halo.</summary>
     public RgbaColor? HaloColor { get; init; }

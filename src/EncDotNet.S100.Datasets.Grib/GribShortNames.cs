@@ -41,6 +41,10 @@ internal static class GribShortNames
         (10, 3, 0) => "WTMP",
         (0, 19, 0) => "VIS",
         (2, 0, 0) => "LAND",
+        (0, 1, 7) => "PRATE",
+        (0, 1, 8) => "APCP",
+        (0, 6, 1) => "TCDC",
+        (0, 7, 6) => "CAPE",
         _ => null,
     };
 

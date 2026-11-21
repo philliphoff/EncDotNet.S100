@@ -37,6 +37,7 @@ public sealed class TilesExportCommandTests
             Assert.Equal(13, (int?)json["maxzoom"]);
             Assert.Equal("{z}/{x}/{y}.png", (string?)json["tiles"]![0]);
             Assert.Equal("day", (string?)json["s100"]!["palette"]);
+            Assert.Null(json["s100"]!["nationalLanguage"]);
 
             foreach (var zoom in new[] { "12", "13" })
             {
@@ -171,19 +172,32 @@ public sealed class TilesExportCommandTests
     }
 
     [Fact]
-    public void Mbtiles_replaces_an_existing_file_and_removes_an_unfinished_one()
+    public void Mbtiles_keeps_the_existing_file_until_finished_and_removes_an_unfinished_one()
     {
         var path = TempPath("replace") + ".mbtiles";
         try
         {
-            File.WriteAllText(path, "not a database");
+            File.WriteAllText(path, "old tile set");
             using (var sink = new MbTilesTileSink(path))
             {
                 sink.Write(1, 0, 0, [1, 2, 3]);
+
+                // Still being written: the old file is untouched.
+                Assert.Equal("old tile set", File.ReadAllText(path));
             }
 
-            // Disposed without Complete: nothing is left behind.
-            Assert.False(File.Exists(path));
+            // Disposed without Complete: the old file stays, and nothing else is left.
+            Assert.Equal("old tile set", File.ReadAllText(path));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
+
+            using (var sink = new MbTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+                sink.Complete(Metadata());
+            }
+
+            Assert.Equal([1, 2, 3], new MbTilesTileSource(path).Read(1, 0, 0));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
         }
         finally
         {
@@ -191,6 +205,51 @@ public sealed class TilesExportCommandTests
                 File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Pmtiles_keeps_the_existing_file_until_finished_and_removes_an_unfinished_one()
+    {
+        var path = TempPath("replace") + ".pmtiles";
+        try
+        {
+            File.WriteAllText(path, "old tile set");
+            using (var sink = new PmTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+                Assert.Equal("old tile set", File.ReadAllText(path));
+            }
+
+            Assert.Equal("old tile set", File.ReadAllText(path));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
+            Assert.False(File.Exists(path + ".spool"));
+
+            using (var sink = new PmTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+                sink.Complete(Metadata());
+            }
+
+            Assert.Equal([1, 2, 3], new PmTilesTileSource(path).Read(1, 0, 0));
+            Assert.False(File.Exists(TileSetFile.PartialPath(path)));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static TileSetMetadata Metadata() => new()
+    {
+        Name = "test",
+        Description = "test",
+        Format = TileImageFormat.Png,
+        MinZoom = 1,
+        MaxZoom = 1,
+        Bounds = (-180, -85, 180, 85),
+        TilePixelSize = 256,
+        Settings = new Dictionary<string, string>(),
+    };
 
     [Fact]
     public void Cli_closure_reaches_SQLite()
@@ -207,6 +266,8 @@ public sealed class TilesExportCommandTests
     [InlineData("out.MBTiles", null, "MbTiles")]
     [InlineData("out", null, "Xyz")]
     [InlineData("out", "mbtiles", "MbTiles")]
+    [InlineData("out.GPKG", null, "GeoPackage")]
+    [InlineData("out", "geopackage", "GeoPackage")]
     [InlineData("out.pmtiles", "xyz", "Xyz")]
     public void Container_comes_from_the_option_or_the_extension(string output, string? option, string expected)
     {
@@ -243,6 +304,56 @@ public sealed class TilesExportCommandTests
     }
 
     [Fact]
+    public void A_dataset_outside_the_bbox_is_left_out()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+
+        var output = TempPath("outside") + ".pmtiles";
+        try
+        {
+            // The cell is off Massachusetts; the box is in the Gulf of Guinea.
+            int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, "--bbox", "1,1,2,2", "--max-zoom", "10"], TestContext.Current.CancellationToken);
+
+            Assert.Equal(2, exit);
+            Assert.False(File.Exists(output));
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void The_filter_box_covers_whole_tiles_and_a_ring_more_at_the_lowest_zoom()
+    {
+        double[] box = [-71.12, 42.28, -70.88, 42.42];
+
+        var grown = TileRenderSession.FilterBox(box, minZoom: 10);
+
+        // A zoom-10 tile is 360/1024 = 0.35° wide: the box grows to whole tiles,
+        // then by one more tile on every side.
+        double tile = 360.0 / 1024;
+        Assert.InRange(box[0] - grown[0], tile, 2 * tile);
+        Assert.InRange(grown[2] - box[2], tile, 2 * tile);
+        Assert.True(grown[1] < box[1] - 0.2 && grown[3] > box[3] + 0.2);
+
+        // A deeper lowest zoom grows it less.
+        var tighter = TileRenderSession.FilterBox(box, minZoom: 14);
+        Assert.True(tighter[0] > grown[0] && tighter[2] < grown[2]);
+    }
+
+    [Theory]
+    [InlineData(170, 10, -170, 20)]
+    [InlineData(-190, 10, -170, 20)]
+    public void A_box_across_the_antimeridian_is_not_grown(double west, double south, double east, double north)
+    {
+        double[] box = [west, south, east, north];
+
+        Assert.Equal(box, TileRenderSession.FilterBox(box, minZoom: 10));
+    }
+
+    [Fact]
     public void Large_tile_sets_need_yes()
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
@@ -262,12 +373,36 @@ public sealed class TilesExportCommandTests
         }
     }
 
+    [Fact]
+    public void National_language_is_recorded_in_the_tile_set_metadata()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+
+        var output = TempPath("language");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["tiles", "export", S57, "-o", output, "--min-zoom", "12", "--max-zoom", "12", "--national-language", "FRA"],
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, exit);
+            var json = JsonNode.Parse(File.ReadAllText(Path.Combine(output, XyzDirectoryTileSink.TileJsonFileName)))!;
+            Assert.Equal("fra", (string?)json["s100"]!["nationalLanguage"]);
+        }
+        finally
+        {
+            if (Directory.Exists(output))
+                Directory.Delete(output, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("--tile-size", "300")]
     [InlineData("--container", "zip")]
     [InlineData("--format", "gif")]
     [InlineData("--metatile", "0")]
     [InlineData("--min-zoom", "25")]
+    [InlineData("--national-language", "french")]
     public void Invalid_options_are_rejected(string option, string value)
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");

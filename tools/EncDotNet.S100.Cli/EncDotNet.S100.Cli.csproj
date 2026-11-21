@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -21,11 +21,27 @@
     <!-- Trim analyzers run on every build (issue #764): reflection they cannot
          follow is an error, as in the libraries. The app is not published trimmed. -->
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <!-- The web SDK writes an IIS web.config on publish; the CLI is never hosted in IIS. -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
 
+  <!--
+    Microsoft.NET.Sdk.Web, for the tiles serve web page's Razor components
+    (issue #1575): only the Web SDK adds the framework's blazor.web.js as a
+    static web asset. It also brings the ASP.NET Core shared framework
+    (Kestrel for the serve commands). Its ASP.NET implicit usings are removed,
+    so the CLI compiles as it did under Microsoft.NET.Sdk.
+  -->
   <ItemGroup>
-    <!-- Kestrel for `s100 feed serve` (already present through EncDotNet.S100.Mcp). -->
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Using Remove="System.Net.Http.Json" />
+    <Using Remove="Microsoft.AspNetCore.Builder" />
+    <Using Remove="Microsoft.AspNetCore.Hosting" />
+    <Using Remove="Microsoft.AspNetCore.Http" />
+    <Using Remove="Microsoft.AspNetCore.Routing" />
+    <Using Remove="Microsoft.Extensions.Configuration" />
+    <Using Remove="Microsoft.Extensions.DependencyInjection" />
+    <Using Remove="Microsoft.Extensions.Hosting" />
+    <Using Remove="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,14 +67,19 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp\EncDotNet.S100.Mcp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Rendering.Engine\EncDotNet.S100.Rendering.Engine.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Routes.Rtz\EncDotNet.S100.Routes.Rtz.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Tides.Stations\EncDotNet.S100.Tides.Stations.csproj" />
   </ItemGroup>
 
 </Project>

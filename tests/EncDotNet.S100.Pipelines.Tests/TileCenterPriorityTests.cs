@@ -1,15 +1,13 @@
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Unit tests for the centre-priority tile dequeue
-/// (<see cref="S100VectorTileRenderer.TakeNearest"/>). These pin the properties
-/// the worker relies on when draining a priority tier: the tile nearest the
-/// viewport centre is picked first, the pick is removed from the pending set,
-/// ties are broken deterministically (independent of hash iteration order), and
-/// draining the whole set yields a centre-out ordering. Visible-before-predicted
-/// tiering is the caller's concern and is unaffected.
+/// Unit tests for the centre-first tile order (<see cref="S100VectorTileRenderer.TileUrgency"/>).
+/// Each tile job's urgency within its class is its on-screen distance from the
+/// view centre, so the work scheduler rasterises central tiles of every layer
+/// before the perimeter. Visible-before-predicted is the job's class and is
+/// unaffected.
 /// </summary>
 public class TileCenterPriorityTests
 {
@@ -23,101 +21,49 @@ public class TileCenterPriorityTests
     }
 
     [Fact]
-    public void TakeNearest_EmptySetReturnsDefault()
+    public void TileUrgency_IsZeroAtTheCentreTile()
     {
-        var pending = new HashSet<TileKey>();
-        Assert.Equal(default, S100VectorTileRenderer.TakeNearest(pending, 0, 0));
-        Assert.Empty(pending);
+        var centre = new TileKey(Band, 200, 200);
+        var (cx, cy) = TileCenter(centre);
+
+        Assert.Equal(0, S100VectorTileRenderer.TileUrgency(centre, cx, cy, TileGrid.ResolutionForBand(Band)), 6);
     }
 
     [Fact]
-    public void TakeNearest_PicksTileNearestViewportCentre()
+    public void TileUrgency_OrdersABlockCentreOut()
     {
-        var near = new TileKey(Band, 100, 100);
-        var far = new TileKey(Band, 140, 100);
-        var farther = new TileKey(Band, 180, 60);
-        var pending = new HashSet<TileKey> { far, farther, near };
-
-        var (cx, cy) = TileCenter(near);
-        var picked = S100VectorTileRenderer.TakeNearest(pending, cx, cy);
-
-        Assert.Equal(near, picked);
-    }
-
-    [Fact]
-    public void TakeNearest_RemovesReturnedTile()
-    {
-        var a = new TileKey(Band, 10, 10);
-        var b = new TileKey(Band, 11, 10);
-        var pending = new HashSet<TileKey> { a, b };
-
-        var (cx, cy) = TileCenter(a);
-        var picked = S100VectorTileRenderer.TakeNearest(pending, cx, cy);
-
-        Assert.Equal(a, picked);
-        Assert.DoesNotContain(a, pending);
-        Assert.Contains(b, pending);
-        Assert.Single(pending);
-    }
-
-    [Fact]
-    public void TakeNearest_BreaksEqualDistanceTiesDeterministically()
-    {
-        // Two tiles equidistant from a centre exactly between them: the tie-break
-        // is (Band, Y, X), so the lower (Y, X) wins regardless of set order.
-        var left = new TileKey(Band, 50, 50);
-        var right = new TileKey(Band, 51, 50);
-        var size = TileGrid.TileWorldSize(Band);
-        var (lx, _) = TileCenter(left);
-        var (_, ly) = TileCenter(left);
-        var midX = lx + size * 0.5; // exactly on the shared edge → equal distance
-
-        var forward = S100VectorTileRenderer.TakeNearest(
-            new HashSet<TileKey> { left, right }, midX, ly);
-        var reversed = S100VectorTileRenderer.TakeNearest(
-            new HashSet<TileKey> { right, left }, midX, ly);
-
-        Assert.Equal(left, forward);
-        Assert.Equal(left, reversed);
-    }
-
-    [Fact]
-    public void TakeNearest_DrainingYieldsCentreOutOrdering()
-    {
-        // A 5x5 block of tiles centred on (cx, cy); draining one at a time must
-        // produce non-decreasing distance from the centre (centre tile first,
-        // corners last).
         var centreTile = new TileKey(Band, 200, 200);
         var (cx, cy) = TileCenter(centreTile);
-        var pending = new HashSet<TileKey>();
+        var resolution = TileGrid.ResolutionForBand(Band);
+        var tiles = new List<TileKey>();
         for (var dy = -2; dy <= 2; dy++)
         {
             for (var dx = -2; dx <= 2; dx++)
             {
-                pending.Add(new TileKey(Band, 200 + dx, 200 + dy));
+                tiles.Add(new TileKey(Band, 200 + dx, 200 + dy));
             }
         }
 
-        double DistSq(TileKey k)
-        {
-            var (tx, ty) = TileCenter(k);
-            return (tx - cx) * (tx - cx) + (ty - cy) * (ty - cy);
-        }
+        var ordered = tiles.OrderBy(k => S100VectorTileRenderer.TileUrgency(k, cx, cy, resolution)).ToList();
 
-        var first = S100VectorTileRenderer.TakeNearest(pending, cx, cy);
-        Assert.Equal(centreTile, first);
+        Assert.Equal(centreTile, ordered[0]);
+        var ring = (TileKey k) => Math.Max(Math.Abs(k.X - 200), Math.Abs(k.Y - 200));
+        Assert.All(ordered.Take(9), k => Assert.True(ring(k) <= 1, $"{k} is outside the inner ring"));
+    }
 
-        var previous = DistSq(first);
-        while (pending.Count > 0)
-        {
-            var next = S100VectorTileRenderer.TakeNearest(pending, cx, cy);
-            var d = DistSq(next);
-            // Same-ring tiles are equal-distance ties resolved by (Band, Y, X),
-            // so allow the same sub-ULP relative slack the dequeue treats as a
-            // tie rather than requiring a strict exact-distance ordering.
-            var tolerance = 1e-9 * Math.Max(previous, d);
-            Assert.True(d >= previous - tolerance, $"drain order must be non-decreasing distance: {previous} -> {d}");
-            previous = d;
-        }
+    [Fact]
+    public void TileUrgency_IsInPixelsSoBandsCompare()
+    {
+        // One tile away at the band's own resolution is one tile size in pixels,
+        // whichever band: a fine layer's neighbour doesn't outrank a coarse one's.
+        var fine = new TileKey(Band + 2, 800, 800);
+        var coarse = new TileKey(Band, 200, 200);
+        var (fx, fy) = TileCenter(fine);
+        var (cx, cy) = TileCenter(coarse);
+
+        var fineNeighbour = S100VectorTileRenderer.TileUrgency(fine with { X = 801 }, fx, fy, TileGrid.ResolutionForBand(Band + 2));
+        var coarseNeighbour = S100VectorTileRenderer.TileUrgency(coarse with { X = 201 }, cx, cy, TileGrid.ResolutionForBand(Band));
+
+        Assert.Equal(coarseNeighbour, fineNeighbour, 3);
     }
 }

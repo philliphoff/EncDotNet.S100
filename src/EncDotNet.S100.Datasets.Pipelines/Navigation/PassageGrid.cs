@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <summary>
 /// A regular S-102, S-104 or S-111 grid's georeferencing as latitude rows and
 /// longitude columns, so the passage sources, the pick report and
-/// <c>sample_coverage</c> find the cell or node under a WGS-84 position
+/// <c>sample</c> find the cell or node under a WGS-84 position
 /// whatever quirks the producer wrote (#943).
 /// </summary>
 /// <remarks>

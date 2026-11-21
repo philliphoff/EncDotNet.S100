@@ -82,11 +82,26 @@ public static class RouteFindingCodes
     /// </summary>
     public static RouteFindingCode OverheadOnRoute { get; } = new("route_check.overhead_on_route", RouteFindingCategory.Chart, RouteFindingGroup.Check);
 
-    /// <summary>The track crosses depth, dredged or drying areas shallower than the safety contour. MUST REVIEW.</summary>
+    /// <summary>
+    /// The track crosses depth, dredged or drying areas shallower than the
+    /// safety contour, or another feature that raises the <c>SafetyContour</c>
+    /// alert (<see cref="SafetyContourFeatureDetails"/>). MUST REVIEW.
+    /// </summary>
     public static RouteFindingCode CrossesSafetyContour { get; } = new("route_check.crosses_safety_contour", RouteFindingCategory.Depth, RouteFindingGroup.MustReview);
 
     /// <summary>Areas shallower than the safety contour reach into the corridor, but the track doesn't cross them. CHECK.</summary>
     public static RouteFindingCode SafetyContourInCorridor { get; } = new("route_check.safety_contour_in_corridor", RouteFindingCategory.Depth, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// The structures that raise the <c>SafetyContour</c> alert within the
+    /// berth radius (<see cref="RouteCheckSettings.BerthRadius"/>) of the
+    /// departure or arrival, in one finding per end (#1548). INFO: a route
+    /// that starts or ends at a berth always touches them. A structure that
+    /// isn't a berth (<see cref="SafetyContourFeatureDetails.IsBerth"/>), such
+    /// as a breakwater, stays a crossing when the track cuts it
+    /// (<see cref="SafetyContourFeatureDetails.CutByTrack"/>).
+    /// </summary>
+    public static RouteFindingCode BerthStructures { get; } = new("route_check.berth_structures", RouteFindingCategory.Chart, RouteFindingGroup.Info);
 
     /// <summary>
     /// Soundings no deeper than the safety contour inside the cross-track
@@ -103,8 +118,8 @@ public static class RouteFindingCodes
 
     /// <summary>
     /// The track enters an S-101 area whose <c>restriction</c> is entry
-    /// prohibited (7) or entry restricted (8), in force while the vessel is
-    /// there. MUST REVIEW.
+    /// prohibited (7), in force while the vessel is there. MUST REVIEW. An
+    /// area that is only entry restricted (8) is <see cref="RestrictedArea"/>.
     /// </summary>
     public static RouteFindingCode EntersProhibitedArea { get; } = new("route_check.enters_prohibited_area", RouteFindingCategory.Area, RouteFindingGroup.MustReview, 2);
 
@@ -113,7 +128,7 @@ public static class RouteFindingCodes
 
     /// <summary>
     /// An S-101 <c>RestrictedArea</c> or <c>MilitaryPracticeArea</c> with
-    /// other restrictions. CHECK, or INFO when its restrictions don't bear on
+    /// other restrictions, entry restricted (8) among them. CHECK, or INFO when its restrictions don't bear on
     /// a passage (such as fishing or anchoring prohibited) or it only
     /// reaches inside the cross-track limits.
     /// </summary>
@@ -169,6 +184,19 @@ public static class RouteFindingCodes
     /// <summary>A stretch where a depth or water-level datum isn't declared, so the two can't be confirmed to match. CHECK.</summary>
     public static RouteFindingCode DatumUnconfirmed { get; } = new("confidence.datum_unconfirmed", RouteFindingCategory.Confidence, RouteFindingGroup.Check);
 
+    /// <summary>
+    /// A stretch where the water level is a harmonic prediction, not S-104:
+    /// the astronomical tide only, not a forecast. INFO.
+    /// </summary>
+    public static RouteFindingCode WaterLevelPredicted { get; } = new("confidence.water_level_predicted", RouteFindingCategory.Confidence, RouteFindingGroup.Info);
+
+    /// <summary>
+    /// A stretch whose clearance is Tight or below your UKC setting and rests
+    /// on a predicted water level: the tight margin (0.5 m by default) is no
+    /// wider than what weather can move the real water level. CHECK.
+    /// </summary>
+    public static RouteFindingCode TightOnPredicted { get; } = new("clearance.tight_on_predicted", RouteFindingCategory.Clearance, RouteFindingGroup.Check);
+
     /// <summary>The water-level data ends before the vessel reaches a stretch, so the tide isn't applied there. CHECK.</summary>
     public static RouteFindingCode WaterLevelEnds { get; } = new("data.water_level_ends", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
@@ -177,6 +205,12 @@ public static class RouteFindingCodes
 
     /// <summary>A stretch outside every water-level dataset's coverage. CHECK.</summary>
     public static RouteFindingCode NoWaterLevelCoverage { get; } = new("data.no_water_level_coverage", RouteFindingCategory.Data, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// With speeds through the water, a stretch where no current covers the
+    /// ETA, so the speed is taken as over the ground there (#1033). INFO.
+    /// </summary>
+    public static RouteFindingCode NoCurrentCoverage { get; } = new("data.no_current_coverage", RouteFindingCategory.Data, RouteFindingGroup.Info);
 
     /// <summary>A stretch inside water-level coverage where the data has no value. CHECK.</summary>
     public static RouteFindingCode WaterLevelNoData { get; } = new("data.water_level_no_data", RouteFindingCategory.Data, RouteFindingGroup.Check);
@@ -187,20 +221,72 @@ public static class RouteFindingCodes
     /// <summary>A stretch with no charted depth from S-102 or S-101. CHECK.</summary>
     public static RouteFindingCode NoChartedDepth { get; } = new("data.no_charted_depth", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
+    /// <summary>A stretch where the forecast wind is above the wind limit at the ETA. CHECK: weather findings are advisory.</summary>
+    public static RouteFindingCode WindAboveLimit { get; } = new("weather.wind_above_limit", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch where the forecast significant wave height is above the wave limit at the ETA. CHECK.</summary>
+    public static RouteFindingCode WavesAboveLimit { get; } = new("weather.waves_above_limit", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The forecast ends before the vessel reaches a stretch, so wind or waves aren't checked there. CHECK.</summary>
+    public static RouteFindingCode WeatherForecastEnds { get; } = new("weather.forecast_ends", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The forecast starts after the vessel passes a stretch, so wind or waves aren't checked there. CHECK.</summary>
+    public static RouteFindingCode WeatherForecastStartsLate { get; } = new("weather.forecast_starts_late", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch outside every weather grid with the quantity, so it isn't checked there. CHECK.</summary>
+    public static RouteFindingCode NoWeatherCoverage { get; } = new("weather.no_coverage", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch inside a weather grid where the forecast has no value, such as waves near land. CHECK.</summary>
+    public static RouteFindingCode WeatherNoData { get; } = new("weather.no_data", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// A stretch inside a tropical cyclone's 34 kt wind radius at the ETA
+    /// (#1299). CHECK by default; the group follows
+    /// <see cref="TropicalCycloneCheckSettings.MustReviewInside"/>.
+    /// </summary>
+    public static RouteFindingCode CycloneRadius34 { get; } = new("weather.tc_radius_34", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch inside a tropical cyclone's 50 kt wind radius at the ETA. MUST REVIEW by default.</summary>
+    public static RouteFindingCode CycloneRadius50 { get; } = new("weather.tc_radius_50", RouteFindingCategory.Weather, RouteFindingGroup.MustReview);
+
+    /// <summary>A stretch inside a tropical cyclone's 64 kt wind radius at the ETA. MUST REVIEW by default.</summary>
+    public static RouteFindingCode CycloneRadius64 { get; } = new("weather.tc_radius_64", RouteFindingCategory.Weather, RouteFindingGroup.MustReview);
+
+    /// <summary>A stretch inside a tropical cyclone's forecast cone while the vessel is there. CHECK.</summary>
+    public static RouteFindingCode CycloneCone { get; } = new("weather.tc_cone", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The route's closest approach to a tropical cyclone's centre, at the ETAs. INFO.</summary>
+    public static RouteFindingCode CycloneClosestApproach { get; } = new("weather.tc_cpa", RouteFindingCategory.Weather, RouteFindingGroup.Info);
+
+    /// <summary>A stretch the vessel reaches after a nearby tropical cyclone's last forecast point, so it isn't checked against it. CHECK.</summary>
+    public static RouteFindingCode CycloneBeyondForecast { get; } = new("weather.tc_beyond_forecast", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The code of a stretch inside a wind radius.</summary>
+    /// <param name="radius">The radius.</param>
+    /// <returns><see cref="CycloneRadius34"/>, <see cref="CycloneRadius50"/> or <see cref="CycloneRadius64"/>.</returns>
+    public static RouteFindingCode CycloneRadius(TropicalCycloneRadius radius) => radius switch
+    {
+        TropicalCycloneRadius.Knots64 => CycloneRadius64,
+        TropicalCycloneRadius.Knots50 => CycloneRadius50,
+        _ => CycloneRadius34,
+    };
+
     /// <summary>Every code, by category and then as listed here.</summary>
     public static IReadOnlyList<RouteFindingCode> All { get; } =
     [
         CrossesLand, LandInCorridor, CrossesDrying, DryingInCorridor,
         DangerInCorridor, DangerNearRoute, AidToNavigation, StructureOnTrack, StructureInCorridor, OverheadOnRoute,
-        CrossesSafetyContour, SafetyContourInCorridor,
+        CrossesSafetyContour, SafetyContourInCorridor, BerthStructures,
         SoundingsBelowSafetyContour, CrossesS102Shoal, S102ShoalInCorridor,
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
         TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce, AreaKindOff,
         WarningOnRoute, WarningNearRoute, WarningNotInForce, WarningCancelled,
-        BelowSetting,
-        ChartedDepthFromS101, DatumUnconfirmed,
+        BelowSetting, TightOnPredicted,
+        ChartedDepthFromS101, DatumUnconfirmed, WaterLevelPredicted,
         OutsideChartCoverage, WaterLevelEnds, WaterLevelStartsLate, NoWaterLevelCoverage,
-        WaterLevelNoData, DatumMismatch, NoChartedDepth,
+        WaterLevelNoData, DatumMismatch, NoChartedDepth, NoCurrentCoverage,
+        WindAboveLimit, WavesAboveLimit, WeatherForecastEnds, WeatherForecastStartsLate, NoWeatherCoverage, WeatherNoData,
+        CycloneRadius34, CycloneRadius50, CycloneRadius64, CycloneCone, CycloneClosestApproach, CycloneBeyondForecast,
     ];
 
     private static readonly Dictionary<string, RouteFindingCode> ByValue = All.ToDictionary(c => c.Value, StringComparer.Ordinal);

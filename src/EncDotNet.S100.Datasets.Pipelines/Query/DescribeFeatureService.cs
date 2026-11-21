@@ -2,15 +2,18 @@ using System.ComponentModel;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Query;
 
 /// <summary>Request payload for <see cref="DescribeFeatureService"/>.</summary>
 /// <param name="DatasetId">Stable dataset identifier returned by list_datasets.</param>
 /// <param name="FeatureId">GML id of the feature within the dataset.</param>
+/// <param name="IncludeGeometry">Whether the <c>describe_feature</c> tool keeps the geometry's coordinates (#1628); the service itself always includes them.</param>
 public sealed record DescribeFeatureRequest(
     [property: Description("Stable dataset identifier returned by list_datasets.")] DatasetId DatasetId,
-    [property: Description("GML id of the feature within the dataset.")] string FeatureId);
+    [property: Description("GML id of the feature within the dataset.")] string FeatureId,
+    [property: Description("Include the feature's coordinates. False keeps the geometry's primitive and bounding box and replaces the coordinates with counts: an S-101 area or sounding group can run to hundreds of kilobytes. Default true.")] bool IncludeGeometry = true);
 
 /// <summary>Result of <see cref="DescribeFeatureService"/>.</summary>
 /// <param name="Spec">The spec the feature was parsed from.</param>
@@ -30,6 +33,13 @@ public sealed record DescribeFeatureResult(
     /// </summary>
     [Description("Set when the specification defines no portrayal, so the feature's on-map symbol is SoundCharts' own, not IHO symbology (S-104: \"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology\"). Null otherwise.")]
     public string? PortrayalNote { get; init; }
+
+    /// <summary>
+    /// Pick report content that isn't attribute rows, such as the ice egg code
+    /// of a sea-ice feature; <c>null</c> when the feature has none.
+    /// </summary>
+    [Description("Object Information content that isn't attribute rows, such as the WMO ice egg code of a sea-ice feature; null when the feature has none.")]
+    public IReadOnlyList<PickSectionResult>? Sections { get; init; }
 }
 
 /// <summary>
@@ -114,11 +124,27 @@ public sealed class DescribeFeatureService
 
         var context = new FeatureDescriberContext(target, request.FeatureId, snapshot, _units);
         var result = describer.Describe(context);
+        if (result.TryGetValue(out var withoutSections)
+            && FindFeature(target, request.FeatureId) is { } feature
+            && PickSectionResult.For(target.Spec, feature) is { } sections)
+        {
+            result = ToolResult<DescribeFeatureResult>.Ok(withoutSections with { Sections = sections });
+        }
         if (ProductRegistry.Default.PortrayalOf(target.Spec.Name).AsApplication is { } portrayal
             && result.TryGetValue(out var described))
         {
             result = ToolResult<DescribeFeatureResult>.Ok(described with { PortrayalNote = portrayal.Note });
         }
         return Task.FromResult(result);
+    }
+
+    private static IS100Feature? FindFeature(LoadedDataset dataset, string featureId)
+    {
+        foreach (var feature in FeatureAccessor.GetFeatures(dataset) ?? [])
+        {
+            if (string.Equals(feature.Id, featureId, StringComparison.Ordinal))
+                return feature;
+        }
+        return null;
     }
 }

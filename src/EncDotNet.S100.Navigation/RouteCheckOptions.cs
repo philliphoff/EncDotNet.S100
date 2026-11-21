@@ -32,6 +32,9 @@ public sealed record RouteCheckOptions
     /// <summary>Tuning for <see cref="ClearanceCheck"/>.</summary>
     public PassageCheckOptions Clearance { get; init; } = PassageCheckOptions.Default;
 
+    /// <summary>Tuning for <see cref="WeatherCheck"/>.</summary>
+    public WeatherCheckOptions Weather { get; init; } = WeatherCheckOptions.Default;
+
     /// <summary>
     /// Renders every finding's title and meta line. Hosts with their own
     /// resources (the viewer's <c>Strings.resx</c>) pass their own.

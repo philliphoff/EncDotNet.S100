@@ -144,10 +144,16 @@ public static class PatternPriorityClipper
         // Difference subject and when accumulated into the higher-priority union.
         var merged = entries.Select(e =>
         {
-            Geometry g = e.Polygons.Count == 1
-                ? e.Polygons[0]
-                : new MultiPolygon([.. e.Polygons]);
-            return (e.PatternRef, e.Priority, Geometry: SimplifyForClip(g));
+            if (e.Polygons.Count == 1)
+                return (e.PatternRef, e.Priority, Geometry: SimplifyForClip(e.Polygons[0]));
+
+            // Areas of one group may overlap (two features with the same
+            // pattern and priority), which makes their MultiPolygon invalid; an
+            // overlay on it can then fail and leave the group unclipped, so
+            // the pattern shows through a higher-priority one. Dissolve the
+            // group into one valid area first.
+            Geometry g = SimplifyForClip(new MultiPolygon([.. e.Polygons]));
+            return (e.PatternRef, e.Priority, Geometry: TryUnion(g) ?? g);
         }).ToList();
 
         // Walk from highest priority down, accumulating a union of
@@ -214,6 +220,22 @@ public static class PatternPriorityClipper
         // A result with no polygonal component (an area collapsed to lines or
         // points) has no visible pattern area left.
         return PolygonalOrEmpty(result);
+    }
+
+    /// <summary>
+    /// Dissolves the polygonal components of <paramref name="geometry"/> into
+    /// one area, or returns <see langword="null"/> when the union fails.
+    /// </summary>
+    private static Geometry? TryUnion(Geometry geometry)
+    {
+        try
+        {
+            return PolygonalOrEmpty(OverlayNGRobust.Union(PolygonalOrEmpty(geometry)));
+        }
+        catch (Exception ex) when (IsOverlayFailure(ex))
+        {
+            return null;
+        }
     }
 
     private static Geometry PolygonalOrEmpty(Geometry geometry) =>

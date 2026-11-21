@@ -60,7 +60,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// </summary>
     private readonly S57TranslationTarget _target;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private IReadOnlyList<SoundingDatumArea>? _soundingDatums;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -378,7 +378,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // product's category mapping and default-hidden VGs correctly.
         (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, context?.SafetyContourHalo == true, fc, cancellationToken).ConfigureAwait(false);
 
         // Pattern-clip cache identity, as for S-101: the clip reads only the
         // visible area fills, so a display toggle that leaves them unchanged
@@ -466,6 +466,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
+            SymbolGeometryProvider = name => prewarm.ResolveSymbol(name)?.Geometry,
+            CatalogueSymbols = new CatalogueSymbolSet(s101Cat),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             OutOfBandMinDisplayScale = null,
@@ -479,10 +482,12 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// Returns the cell's drawing instructions under the catalogue's current
     /// ECDIS display state (already applied by the caller). The Lua rules run
     /// only when the mariner settings change; otherwise the cached rule output
-    /// is re-filtered. Call with <see cref="_renderGate"/> held.
+    /// is re-filtered, and the safety contour gets its halo when
+    /// <paramref name="safetyContourHalo"/> (<see cref="RenderContext.SafetyContourHalo"/>).
+    /// Call with <see cref="_renderGate"/> held.
     /// </summary>
     private async Task<(IReadOnlyList<DrawingInstruction> Visible, IReadOnlyList<DrawingInstruction> Unfiltered, string RuleKey)> GetDisplayInstructionsAsync(
-        MarinerSettings mariner, FeatureCatalogue fc, CancellationToken cancellationToken)
+        MarinerSettings mariner, bool safetyContourHalo, FeatureCatalogue fc, CancellationToken cancellationToken)
     {
         var s101Cat = _catalogue;
         var ruleKey = S101DatasetProcessor.BuildRuleOutputCacheKey(
@@ -506,7 +511,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             _cachedRuleKey = ruleKey;
         }
 
-        return (VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat), _cachedRuleOutput, ruleKey);
+        var visible = VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat);
+        return (safetyContourHalo ? SafetyContourHalo.Apply(visible) : visible, _cachedRuleOutput, ruleKey);
     }
 
     /// <summary>
@@ -612,10 +618,25 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// The cell's scale rank against overlapping cells (see
     /// <see cref="CellScaleRanking"/>): its compilation
     /// scale (DSPM CSCL), else the translated <c>DataCoverage</c> minimum
-    /// display scale, the same rank the display and the route check use.
-    /// Smaller is finer; <see langword="null"/> when the cell declares none.
+    /// display scale with its maximum display scale as the tie-break, the same
+    /// rank the display and the route check use; <see langword="null"/> when
+    /// the cell declares none.
     /// </summary>
-    public int? CellRankingScale => CellExtent.RankingScale;
+    public CellRank? CellRank => CellExtent.Rank;
+
+    /// <inheritdoc/>
+    /// <remarks>DSID <c>EDTN</c>, <c>ISDT</c>, and the last update applied (<see cref="UpdateReport"/>) or else <c>UPDN</c>.</remarks>
+    public ChartCellEdition? Edition =>
+        _rawS57Document.DataSetIdentification is { } dsid && ChartCellEditions.Number(dsid.EditionNumber) is int edition
+            ? new ChartCellEdition(
+                edition,
+                UpdateReport?.AppliedThroughUpdateNumber ?? ChartCellEditions.Number(dsid.UpdateNumber) ?? 0,
+                ChartCellEditions.Date(dsid.IssueDate))
+            : null;
+
+    /// <inheritdoc/>
+    /// <remarks>The DSPM compilation scale (CSCL).</remarks>
+    public int? CompilationScale => S57Dataset.ResolveCompilationScale(_rawS57Document);
 
     /// <summary>
     /// Whether the cell's translated <c>DataCoverage</c> (from <c>M_COVR</c>
@@ -672,7 +693,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         }
     }
 
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage) CellExtent
     {
         get
         {
@@ -681,9 +702,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
             _featureIndex ??= BuildFeatureIndex();
             extent = (
-                CellScaleRanking.RankingScale(
-                    S57Dataset.ResolveCompilationScale(_rawS57Document),
-                    S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                S101DatasetProcessor.ResolveCellRank(
+                    _featureIndex.Values,
+                    S57Dataset.ResolveCompilationScale(_rawS57Document)),
                 CoverageAreaResolver.Resolve(_featureIndex.Values));
             _cellExtent = extent;
             return extent;
@@ -879,7 +900,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             // portrayal, keyed on this cell's portrayal spec — see the core path.
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, context?.SafetyContourHalo == true, fc, cancellationToken).ConfigureAwait(false);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
 

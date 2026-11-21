@@ -77,7 +77,7 @@ public class CaptureAppScreenshotToolTests
     {
         var png = FakeAppScreenshotProvider.MakePng(1600, 1000);
         var provider = new FakeAppScreenshotProvider(png);
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -98,7 +98,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Invoke_passes_the_clamped_scale_to_the_provider(double? scale, double expected)
     {
         var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(2200, 1400));
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         var result = await tool.InvokeAsync(scale, TestContext.Current.CancellationToken);
 
@@ -110,7 +110,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Invoke_returns_window_not_ready_when_provider_yields_null()
     {
         var provider = new FakeAppScreenshotProvider(png: null);
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -124,7 +124,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Invoke_returns_window_not_ready_when_provider_yields_empty()
     {
         var provider = new FakeAppScreenshotProvider(png: Array.Empty<byte>());
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -136,7 +136,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Invoke_wraps_provider_exception_as_window_not_ready()
     {
         var provider = new FakeAppScreenshotProvider(toThrow: new InvalidOperationException("boom"));
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -159,7 +159,7 @@ public class CaptureAppScreenshotToolTests
         }
 
         var provider = new FakeAppScreenshotProvider(png: junk);
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
@@ -172,7 +172,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Invoke_honours_cancellation()
     {
         var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -197,7 +197,8 @@ public class CaptureAppScreenshotToolTests
         var tool = new CaptureAppScreenshotTool(provider, Panels(
             Panel("Datasets", "Left", showing: true),
             Panel("PickReport", "Right", showing: true),
-            Panel("Timeline", "Bottom", showing: true)));
+            Panel("Timeline", "Bottom", showing: true)),
+            displayCombination: null);
 
         var result = await tool.InvokeAsync(2, panel, TestContext.Current.CancellationToken);
 
@@ -211,7 +212,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Panel_reports_unknown_and_hidden_panels()
     {
         var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
-        var tool = new CaptureAppScreenshotTool(provider, Panels(Panel("Library", "Left", showing: false)));
+        var tool = new CaptureAppScreenshotTool(provider, Panels(Panel("Library", "Left", showing: false)), displayCombination: null);
 
         Assert.True((await tool.InvokeAsync(null, "Nope", TestContext.Current.CancellationToken)).TryGetError(out var unknown));
         Assert.Equal("panel_not_found", unknown!.Code);
@@ -225,7 +226,7 @@ public class CaptureAppScreenshotToolTests
     {
         var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
         provider.Hidden.Add(AppScreenshotRegion.RightDock);
-        var tool = new CaptureAppScreenshotTool(provider, Panels(Panel("PickReport", "Right", showing: true)));
+        var tool = new CaptureAppScreenshotTool(provider, Panels(Panel("PickReport", "Right", showing: true)), displayCombination: null);
 
         Assert.True((await tool.InvokeAsync(null, "PickReport", TestContext.Current.CancellationToken)).TryGetError(out var err));
         Assert.Equal("panel_not_showing", err!.Code);
@@ -235,7 +236,7 @@ public class CaptureAppScreenshotToolTests
     public async Task Map_needs_no_panel_controller_but_other_panels_do()
     {
         var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
-        var tool = new CaptureAppScreenshotTool(provider);
+        var tool = new CaptureAppScreenshotTool(provider, panels: null, displayCombination: null);
 
         Assert.True((await tool.InvokeAsync(null, "map", TestContext.Current.CancellationToken)).TryGetValue(out _));
         Assert.True((await tool.InvokeAsync(null, "Datasets", TestContext.Current.CancellationToken)).TryGetError(out var err));
@@ -245,7 +246,7 @@ public class CaptureAppScreenshotToolTests
     [Fact]
     public void Constructor_rejects_null_provider()
     {
-        Assert.Throws<ArgumentNullException>(() => new CaptureAppScreenshotTool(null!));
+        Assert.Throws<ArgumentNullException>(() => new CaptureAppScreenshotTool(null!, panels: null, displayCombination: null));
     }
 }
 

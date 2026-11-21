@@ -43,7 +43,7 @@ public class RangeBearingToolTests
     public void Origin_range_and_bearing_give_the_expected_end(string test, string origin, double metres, double bearing, string expected)
     {
         // Accuracy4–6: type Origin, Range and Bearing, read End.
-        var state = new RangeBearingState { Geometry = LegGeometry.GreatCircle };
+        var state = new RangeBearingState(settings: null) { Geometry = LegGeometry.GreatCircle };
         state.SetOrigin(Position(origin));
         state.SetRange(metres);
         state.SetBearing(bearing);
@@ -57,7 +57,7 @@ public class RangeBearingToolTests
     [MemberData(nameof(DirectProblems))]
     public void The_card_gives_the_expected_end_from_typed_text(string test, string origin, double metres, double bearing, string expected)
     {
-        var state = new RangeBearingState { Geometry = LegGeometry.GreatCircle };
+        var state = new RangeBearingState(settings: null) { Geometry = LegGeometry.GreatCircle };
         var card = Card(state, DistanceUnit.Metric);
         var start = Position(origin);
 
@@ -75,7 +75,7 @@ public class RangeBearingToolTests
     public void A_vrm_of_2000000_m_lies_on_the_first_2000000_m_ring()
     {
         // Accuracy12: range 2,000,000 m with rings every 2,000,000 m.
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(Viking);
         state.SetRange(2_000_000);
         state.SetRings(true, 2_000_000, 3);
@@ -99,7 +99,7 @@ public class RangeBearingToolTests
     [Fact]
     public void A_circle_round_a_pole_is_drawn_open_and_never_filled()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(new GeoPosition(85, 30));
         state.SetRange(1_000_000);
 
@@ -116,7 +116,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Clicks_place_the_origin_follow_the_cursor_fix_the_end_and_start_again()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         Assert.False(state.Hover(CorundCape));
 
         state.Click(Viking);
@@ -143,7 +143,7 @@ public class RangeBearingToolTests
     [Fact]
     public void A_locked_range_lets_the_cursor_swing_only_the_bearing()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetRange(5000);
         state.Click(Viking);
         state.Hover(CorundCape);
@@ -156,7 +156,7 @@ public class RangeBearingToolTests
     [Fact]
     public void A_locked_bearing_lets_the_cursor_change_only_the_range()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetBearing(45);
         state.Click(Viking);
         state.Hover(CorundCape);
@@ -168,7 +168,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Unlocking_a_fixed_end_lets_it_follow_the_cursor_again()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(Viking);
         state.SetRange(5000);
         state.SetBearing(90);
@@ -185,7 +185,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Delete_clears_the_origin_and_the_locks()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(Viking);
         state.SetRange(5000);
 
@@ -210,7 +210,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Switching_the_geometry_moves_the_end_along_the_other_line()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(Viking);
         state.SetRange(3_000_000);
         state.SetBearing(60);
@@ -225,7 +225,7 @@ public class RangeBearingToolTests
     [Fact]
     public void The_card_refuses_a_bare_M_and_keeps_the_field()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         var card = Card(state, DistanceUnit.NauticalMiles);
 
         Type(card, Field.Range, "12 M");
@@ -243,7 +243,7 @@ public class RangeBearingToolTests
     [Fact]
     public void The_card_shows_the_range_in_the_primary_unit_with_the_other_underneath()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         var card = Card(state, DistanceUnit.NauticalMiles);
 
         Type(card, Field.Range, "2000000 m");
@@ -261,7 +261,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Tabbing_through_a_field_without_typing_locks_nothing()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.Click(Viking);
         state.Hover(CorundCape);
         var card = Card(state, DistanceUnit.NauticalMiles);
@@ -275,7 +275,7 @@ public class RangeBearingToolTests
     [Fact]
     public void A_field_being_typed_in_is_not_overwritten_by_the_cursor()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.Click(Viking);
         var card = Card(state, DistanceUnit.NauticalMiles);
 
@@ -290,7 +290,7 @@ public class RangeBearingToolTests
     [Fact]
     public void A_bad_origin_shows_the_hint_and_keeps_the_old_origin()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(Viking);
         var card = Card(state, DistanceUnit.NauticalMiles);
 
@@ -303,7 +303,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Nudging_turns_the_bearing_and_steps_the_range_by_its_last_digit()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetBearing(359.5);
         state.SetRange(1852);
         var card = Card(state, DistanceUnit.NauticalMiles);
@@ -318,7 +318,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Rings_are_typed_on_the_card()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         var card = Card(state, DistanceUnit.Metric);
 
         Type(card, Field.RingInterval, "2,000 km");
@@ -332,7 +332,7 @@ public class RangeBearingToolTests
     [Fact]
     public async Task Set_range_bearing_turns_the_tool_on_locks_and_returns_unrounded_values()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         var settings = new ViewerSettings { IsReadOnly = true };
         var set = new SetRangeBearingTool(state, settings, new InlineInvoker());
         var get = new GetRangeBearingTool(state, new InlineInvoker());
@@ -366,7 +366,7 @@ public class RangeBearingToolTests
     [InlineData("geometry", null, null, "orthodrome")]
     public async Task Set_range_bearing_rejects_bad_arguments_before_changing_anything(string parameter, string? origin, string? range, string? geometry)
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         var set = new SetRangeBearingTool(state, new ViewerSettings { IsReadOnly = true }, new InlineInvoker());
 
         var result = await set.InvokeAsync(
@@ -381,7 +381,7 @@ public class RangeBearingToolTests
     [Fact]
     public void G_switches_the_geometry_and_Delete_clears()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         var copied = 0;
 
         Assert.True(RangeBearingKeys.Handle(state, Key.G, KeyModifiers.None, () => copied++));
@@ -399,7 +399,7 @@ public class RangeBearingToolTests
     [Fact]
     public void Copy_text_has_both_unit_systems_and_the_earth_model()
     {
-        var state = new RangeBearingState();
+        var state = new RangeBearingState(settings: null);
         state.SetOrigin(Viking);
         state.SetRange(33193.554);
         state.SetBearing(295.614);

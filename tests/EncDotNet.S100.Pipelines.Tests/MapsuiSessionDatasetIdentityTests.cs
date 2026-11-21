@@ -39,15 +39,19 @@ public sealed class MapsuiSessionDatasetIdentityTests
         var secondLayer = Assert.Single((await session.RenderAsync(second, MapPresentationState.Default, ct))!.Layers, IsSurface);
         Assert.NotSame(firstLayer, secondLayer);
 
-        AssertOwnEntries(session, first, firstLayer, 1.0);
-        AssertOwnEntries(session, second, secondLayer, 0.4);
+        // The two copies overlap, so S-98 rule R-102-102-A joins them: each
+        // surface on the stack is its own, rastered again with the other's
+        // data area.
+        var firstStacked = AssertOwnEntries(session, first, 1.0);
+        var secondStacked = AssertOwnEntries(session, second, 0.4);
+        Assert.NotSame(firstStacked, secondStacked);
 
         // A later compose keeps the same layers instead of rebuilding one
         // dataset's coverage from the other's prebuilt entry.
         session.SetDataset(Dataset(session, first, isVisible: false));
         session.SetDataset(Dataset(session, first, isVisible: true));
-        AssertOwnEntries(session, first, firstLayer, 1.0);
-        AssertOwnEntries(session, second, secondLayer, 0.4);
+        Assert.Same(firstStacked, AssertOwnEntries(session, first, 1.0));
+        Assert.Same(secondStacked, AssertOwnEntries(session, second, 0.4));
 
         // Hiding one leaves the other painted.
         session.SetDataset(Dataset(session, second, isVisible: false));
@@ -56,13 +60,12 @@ public sealed class MapsuiSessionDatasetIdentityTests
         Assert.Contains(firstLayer, session.GetStackedLayers());
     }
 
-    private static void AssertOwnEntries(
-        MapsuiDatasetLayerSession session, MapDatasetId id, ILayer expected, double opacity)
+    private static ILayer AssertOwnEntries(MapsuiDatasetLayerSession session, MapDatasetId id, double opacity)
     {
         var entry = Assert.Single(session.GetLayerStackEntries(), e => e.SourceDatasetId == id.Value && IsSurface(e.Layer));
-        Assert.Same(expected, entry.Layer);
         Assert.Equal(opacity, entry.Layer.Opacity, 3);
-        Assert.Contains(expected, session.GetStackedLayers());
+        Assert.Contains(entry.Layer, session.GetStackedLayers());
+        return entry.Layer;
     }
 
     private static bool IsSurface(ILayer layer) => layer.Name.StartsWith("S-102: ", StringComparison.Ordinal);

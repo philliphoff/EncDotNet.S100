@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
@@ -76,7 +77,7 @@ public sealed class LocationDepthProbeCellRankingTests : IDisposable
         var (lat, lon) = SoundingIn(harbour);
 
         Assert.True(coastal.CoversPoint(lat, lon));
-        Assert.Equal(12_000, harbour.CellRankingScale);
+        Assert.Equal(new CellRank(12_000), harbour.CellRank);
         Assert.Equal([harbour], LocationDepthProbe.FinestCoveringCells([coastal, harbour], lat, lon)!);
         Assert.True(LocationDepthProbe.FinestCoveringCells([coastal, harbour, peer], lat, lon)!.SetEquals([harbour, peer]));
     }

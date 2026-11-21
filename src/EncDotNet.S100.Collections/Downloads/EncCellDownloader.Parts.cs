@@ -114,6 +114,32 @@ public sealed partial class EncCellDownloader
     }
 
     /// <summary>
+    /// Saves each part's whole response as its own file in
+    /// <paramref name="folder"/>, under the part's <see cref="RemotePart.FileName"/>.
+    /// </summary>
+    private async Task FetchFilesAsync(
+        RemoteItemLocation remote, IReadOnlyList<RemotePart> parts, string folderName, string folder,
+        IProgress<long>? bytesProgress, CancellationToken cancellationToken)
+    {
+        if (parts.Any(p => p.FileName is not { } name || !IsSafeName(name) || p.GribFields is not null)
+            || parts.Select(p => p.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != parts.Count)
+        {
+            throw new InvalidDataException($"The download for {folderName} has parts without distinct, safe file names.");
+        }
+
+        Directory.CreateDirectory(folder);
+        long total = 0;
+        foreach (var part in parts)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, part.Uri);
+            Identify(_httpClient, request, remote);
+            await using var target = new FileStream(
+                Path.Combine(folder, part.FileName!), FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+            total = await CopyResponseAsync(request, target, total, null, bytesProgress, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Appends a response to <paramref name="target"/>; for a byte range, only
     /// that range, even from a server that ignored the <c>Range</c> header and
     /// sent the whole file.

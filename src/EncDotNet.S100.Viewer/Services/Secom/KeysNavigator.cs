@@ -9,13 +9,14 @@ namespace EncDotNet.S100.Viewer.Services.Secom;
 /// certificate problem (a directory chip, a Library source, a notification)
 /// to where it is fixed (#880).
 /// </summary>
-internal sealed class KeysNavigator(Func<SettingsViewModel> settings, Func<MainViewModel> main)
+internal sealed class KeysNavigator(Func<KeysAndCertificatesViewModel> keys, Func<SettingsViewModel> settings, Func<ShellLayoutViewModel> layout)
 {
     /// <summary>Shows Settings → Keys &amp; certificates on <paramref name="tab"/>.</summary>
     public void Open(KeysTab tab)
     {
-        settings().ShowKeysAndCertificates(tab);
-        main().SelectTab("Settings");
+        keys().SelectedTab = tab;
+        settings().SelectedCategory = SettingsCategory.KeysAndCertificates;
+        layout().SelectTab("Settings");
     }
 
     /// <summary>

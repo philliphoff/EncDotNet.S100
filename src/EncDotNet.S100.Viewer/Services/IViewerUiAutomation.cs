@@ -81,7 +81,11 @@ internal sealed record UiTreeQuery(UiTarget? Root, int Depth, bool InteractiveOn
 /// <summary>The element trees on screen.</summary>
 /// <param name="Roots">One entry per window or open popup, main window first.</param>
 /// <param name="NodeCount">Elements returned.</param>
-/// <param name="Truncated">True when <see cref="UiTreeQuery.MaxNodes"/> cut the listing short.</param>
+/// <param name="Truncated">
+/// True when <see cref="UiTreeQuery.MaxNodes"/> cut the listing short, or
+/// <see cref="UiTreeQuery.Depth"/> left out elements below one marked
+/// <see cref="UiElementSnapshot.More"/>.
+/// </param>
 internal sealed record UiTreeSnapshot(IReadOnlyList<UiRootSnapshot> Roots, int NodeCount, bool Truncated);
 
 /// <summary>A window or popup and its element tree.</summary>
@@ -108,6 +112,10 @@ internal sealed record UiRootSnapshot(string Kind, string? Title, UiElementSnaps
 /// <param name="Expanded">For an expand / collapse element, whether it is expanded.</param>
 /// <param name="Bounds">Position and size in its window, in device-independent pixels.</param>
 /// <param name="Children">Child elements, or null for a leaf or when depth ran out.</param>
+/// <param name="More">
+/// True when depth ran out on this element and it has children the listing
+/// would show: list it as a root to see them. Null otherwise.
+/// </param>
 internal sealed record UiElementSnapshot(
     string Ref,
     string? Id,
@@ -125,7 +133,8 @@ internal sealed record UiElementSnapshot(
     bool? Selected,
     bool? Expanded,
     UiBounds Bounds,
-    IReadOnlyList<UiElementSnapshot>? Children);
+    IReadOnlyList<UiElementSnapshot>? Children,
+    bool? More = null);
 
 /// <summary>An element's position and size in its window.</summary>
 internal sealed record UiBounds(double X, double Y, double Width, double Height);

@@ -38,9 +38,9 @@ public sealed class DepartureWindowMcpToolsTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var f = new PassageCheckFixture(tide: PassageCheckFixture.HighWaterUntil0750);
         var invoker = new InlineInvoker();
-        Value(await new SetCheckModeTool(f.Routes, invoker, f.Check).InvokeAsync(new SetCheckModeRequest(true), ct));
+        Value(await new SetCheckModeTool(f.Routes, invoker, f.Check, findings: null).InvokeAsync(new SetCheckModeRequest(true), ct));
 
-        var state = Value(await new GetCheckStateTool(f.Routes, invoker, f.Check).InvokeAsync(true, ct));
+        var state = Value(await new GetCheckStateTool(f.Routes, invoker, f.Check, findings: null).InvokeAsync(true, ct));
         Assert.Equal(PassageCheckFixture.Departure, state.Departure);
         Assert.False(state.DepartureIsViewTime);
         Assert.False(state.WindowComputing);
@@ -55,7 +55,7 @@ public sealed class DepartureWindowMcpToolsTests : IDisposable
         Assert.Equal("Departures 06:00Z–06:40Z meet your settings.", window.Text);
         Assert.Equal("Depart 06:40Z", window.DepartButton);
 
-        var setDeparture = new SetDepartureTool(f.Routes, invoker, f.Check);
+        var setDeparture = new SetDepartureTool(f.Routes, invoker, f.Check, findings: null);
         var moved = Value(await setDeparture.InvokeAsync(new SetDepartureRequest(NearestMeeting: true), ct));
         Assert.Equal(At(6, 40), moved.Departure);
         Assert.Equal("meets_settings", moved.Verdict);
@@ -78,7 +78,7 @@ public sealed class DepartureWindowMcpToolsTests : IDisposable
     {
         var ct = TestContext.Current.CancellationToken;
         var f = new PassageCheckFixture(tide: _ => 0.5f);
-        var tool = new SetDepartureTool(f.Routes, new InlineInvoker(), f.Check);
+        var tool = new SetDepartureTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         Assert.True((await tool.InvokeAsync(new SetDepartureRequest(), ct)).TryGetError(out var neither));
         Assert.IsType<InvalidArgument>(neither);
@@ -103,7 +103,7 @@ public sealed class DepartureWindowMcpToolsTests : IDisposable
     public async Task Get_clearance_state_reports_the_departure_band()
     {
         var f = new PassageCheckFixture(tide: PassageCheckFixture.HighWaterUntil0750);
-        var vm = new ClearanceViewModel(f.Check, timeFormat: new UtcTime());
+        var vm = new ClearanceViewModel(f.Check, timeFormat: new UtcTime(), mariner: null, theme: null);
         var tools = new ClearanceTools(vm, new InlineInvoker());
         Assert.Null(Value(await tools.GetAsync(TestContext.Current.CancellationToken)).DepartureBand);
 
@@ -125,7 +125,7 @@ public sealed class DepartureWindowMcpToolsTests : IDisposable
     public void Set_departure_adapter_exposes_its_parameters()
     {
         var f = new PassageCheckFixture();
-        var tool = PassageCheckMcpAdapters.Create(new SetDepartureTool(f.Routes, new InlineInvoker(), f.Check));
+        var tool = PassageCheckMcpAdapters.Create(new SetDepartureTool(f.Routes, new InlineInvoker(), f.Check, findings: null));
         Assert.Equal("set_departure", tool.ProtocolTool.Name);
         var props = tool.ProtocolTool.InputSchema.GetProperty("properties");
         foreach (var name in new[] { "departure", "nearestMeeting", "routeId", "wait" })

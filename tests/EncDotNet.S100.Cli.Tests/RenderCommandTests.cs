@@ -269,13 +269,13 @@ public sealed class RenderCommandTests
             Assert.Equal("S-124", root.GetProperty("product").GetString());
             Assert.Equal("navwarn_surface.gml", root.GetProperty("dataset").GetString());
 
-            var instructions = root.GetProperty("instructions");
+            var instructions = root.GetProperty("ops");
             Assert.Equal(JsonValueKind.Array, instructions.ValueKind);
             Assert.Equal(
-                root.GetProperty("instructionCount").GetInt32(), instructions.GetArrayLength());
+                root.GetProperty("opCount").GetInt32(), instructions.GetArrayLength());
             Assert.True(instructions.GetArrayLength() > 0);
 
-            // Every instruction carries the base portrayal fields the format promises.
+            // Every op carries the base portrayal fields the format promises.
             foreach (var instruction in instructions.EnumerateArray())
             {
                 Assert.False(string.IsNullOrEmpty(instruction.GetProperty("kind").GetString()));
@@ -288,6 +288,191 @@ public sealed class RenderCommandTests
         {
             if (File.Exists(output))
                 File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_json_hands_out_the_drawn_scene_of_an_s101_cell()
+    {
+        var dataset = FixturePath(Path.Combine("S101", "101AA00DS0008.000"));
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        try
+        {
+            Assert.Equal(0, CliApp.Build().Run(["render", dataset, output], TestContext.Current.CancellationToken));
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(output));
+            var root = doc.RootElement;
+            Assert.Equal(DisplayListJsonWriter.SchemaVersion, root.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal("EPSG:4326", root.GetProperty("crs").GetString());
+            var ops = root.GetProperty("ops").EnumerateArray().ToList();
+            Assert.Equal(root.GetProperty("opCount").GetInt32(), ops.Count);
+
+            static bool InCell(JsonElement position) =>
+                position[0].GetDouble() is > 62 and < 63 && position[1].GetDouble() is > -33 and < -32;
+
+            for (int i = 0; i < ops.Count; i++)
+            {
+                var op = ops[i];
+                Assert.Equal(i, op.GetProperty("order").GetInt32());
+                Assert.True(op.TryGetProperty("plane", out _));
+                Assert.True(op.TryGetProperty("drawingPriority", out _));
+                Assert.True(op.GetProperty("viewingGroups").GetArrayLength() > 0);
+
+                switch (op.GetProperty("kind").GetString())
+                {
+                    case "area":
+                    case "pattern":
+                        var shell = op.GetProperty("rings")[0];
+                        Assert.True(shell.GetArrayLength() >= 3);
+                        Assert.All(shell.EnumerateArray(), p => Assert.True(InCell(p)));
+                        break;
+                    case "line":
+                        var coordinates = op.GetProperty("coordinates");
+                        Assert.True(coordinates.GetArrayLength() >= 2);
+                        Assert.All(coordinates.EnumerateArray(), p => Assert.True(InCell(p)));
+                        Assert.StartsWith("#", op.GetProperty("color").GetString());
+                        Assert.True(op.GetProperty("widthPx").GetDouble() >= 1);
+                        break;
+                    case "point":
+                    case "text":
+                        Assert.True(InCell(op.GetProperty("anchor")));
+                        Assert.False(string.IsNullOrEmpty(op.GetProperty("placement").GetProperty("kind").GetString()));
+                        break;
+                    default:
+                        Assert.Fail($"Unexpected kind {op.GetProperty("kind")}");
+                        break;
+                }
+            }
+
+            JsonElement First(string kind, Func<JsonElement, bool> where) =>
+                ops.First(o => o.GetProperty("kind").GetString() == kind && where(o));
+
+            // A named point symbol with its resolved scale and pivot.
+            var point = First("point", o => o.TryGetProperty("symbol", out _));
+            Assert.True(point.GetProperty("scale").GetDouble() > 0);
+            Assert.Equal(2, point.GetProperty("pivot").GetArrayLength());
+
+            // A complex line style: its dashes and the symbols it places, by name.
+            var styled = First("line", o => o.TryGetProperty("lineSymbols", out _));
+            Assert.False(string.IsNullOrEmpty(styled.GetProperty("lineStyle").GetString()));
+            Assert.False(string.IsNullOrEmpty(styled.GetProperty("lineSymbols")[0].GetProperty("symbol").GetString()));
+            Assert.True(styled.GetProperty("symbolIntervalPx").GetDouble() > 0);
+
+            // Text with its font fields, offset and a line placement on a curve.
+            var text = First("text", o => o.TryGetProperty("offsetPx", out _));
+            Assert.True(text.GetProperty("fontSizePx").GetDouble() > 0);
+            Assert.False(string.IsNullOrEmpty(text.GetProperty("fontWeight").GetString()));
+            Assert.False(string.IsNullOrEmpty(text.GetProperty("verticalAlignment").GetString()));
+            var onLine = First("text", o => o.GetProperty("placement").GetProperty("kind").GetString() == "Line");
+            Assert.InRange(onLine.GetProperty("placement").GetProperty("linePosition").GetDouble(), 0, 1);
+
+            // A pattern fill names its area fill.
+            Assert.False(string.IsNullOrEmpty(First("pattern", _ => true).GetProperty("areaFill").GetString()));
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    // An S-131 anchorage with a default English name and a French chart name.
+    private const string BilingualS131 = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <S131:Dataset xmlns:S131="http://www.iho.int/S131/1.0"
+                      xmlns:S100="http://www.iho.int/s100gml/5.0"
+                      xmlns:gml="http://www.opengis.net/gml/3.2"
+                      gml:id="DS_S131_Language">
+          <S100:DatasetIdentificationInformation>
+            <S100:productIdentifier>S-131</S100:productIdentifier>
+          </S100:DatasetIdentificationInformation>
+          <S131:members>
+            <S131:AnchorageArea gml:id="f1">
+              <S131:geometry>
+                <S100:pointProperty>
+                  <gml:Point gml:id="p1" srsName="EPSG:4326">
+                    <gml:pos>44.65 -63.57</gml:pos>
+                  </gml:Point>
+                </S100:pointProperty>
+              </S131:geometry>
+              <S131:featureName>
+                <S131:name>Inner Anchorage</S131:name>
+                <S131:language>eng</S131:language>
+                <S131:nameUsage>1</S131:nameUsage>
+              </S131:featureName>
+              <S131:featureName>
+                <S131:name>Mouillage Interieur</S131:name>
+                <S131:language>fra</S131:language>
+                <S131:nameUsage>2</S131:nameUsage>
+              </S131:featureName>
+            </S131:AnchorageArea>
+          </S131:members>
+        </S131:Dataset>
+        """;
+
+    [Theory]
+    [InlineData(null, "Inner Anchorage")]
+    [InlineData("fra", "Mouillage Interieur")]
+    [InlineData("FRA", "Mouillage Interieur")]
+    public void Render_national_language_selects_the_feature_name(string? language, string expected)
+    {
+        var dataset = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.gml");
+        var output = Path.ChangeExtension(dataset, ".json");
+        File.WriteAllText(dataset, BilingualS131);
+        try
+        {
+            string[] args = language is null
+                ? ["render", dataset, output]
+                : ["render", dataset, output, "--national-language", language];
+            int exit = CliApp.Build().Run(args, TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, exit);
+            using var doc = JsonDocument.Parse(File.ReadAllText(output));
+            var strings = StringValues(doc.RootElement).ToList();
+            Assert.Contains(strings, s => s.Contains(expected, StringComparison.Ordinal));
+            var other = expected == "Inner Anchorage" ? "Mouillage Interieur" : "Inner Anchorage";
+            Assert.DoesNotContain(strings, s => s.Contains(other, StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(dataset);
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_with_bad_national_language_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(
+            ["render", dataset, output, "--national-language", "fr"], TestContext.Current.CancellationToken);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    private static IEnumerable<string> StringValues(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                yield return element.GetString()!;
+                break;
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                    foreach (var value in StringValues(property.Value))
+                        yield return value;
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                    foreach (var value in StringValues(item))
+                        yield return value;
+                break;
         }
     }
 

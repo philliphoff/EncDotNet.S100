@@ -48,18 +48,56 @@ Each op in `scene.Ops` is in S-100 Part 9 draw order. Coordinates are EPSG:3857
 metres, sizes are logical display pixels (1 px = 0.32 mm), and colours are
 resolved to `RgbaColor`. The XML docs on `PaintOp` give the full unit contract.
 
+## Get line instructions per edge
+
+A renderer that draws the portrayal itself (GIS symbology, vector PDF or SVG)
+can take the line instructions as data instead of a scene. `LineEdges.Resolve`
+returns each run a line instruction strokes, in geographic coordinates and
+Part 9 draw order, with S-100 Part 9 line suppression already applied: a curve
+shared by several features, such as a dashed boundary between two areas, is
+handed out once, by the instruction drawn last there.
+
+```csharp
+foreach (var edge in LineEdges.Resolve(instructions, geometryProvider))
+{
+    // edge.Instruction: the LineInstruction (style, colour, width, scale limits).
+    // edge.Coordinates: the GeoPosition polyline to stroke with it.
+}
+```
+
+These are the same runs the scene's `LinePaintOp`s stroke.
+
+Area patterns come out the same way. `PatternRegions.Resolve` returns, for each
+pattern and drawing priority, the region where that pattern is drawn, with
+S-100 Part 9 pattern priority clipping already applied: where patterned areas
+overlap, only the highest-priority pattern shows, and no pattern shows over an
+opaque colour fill such as land.
+
+```csharp
+foreach (var region in PatternRegions.Resolve(instructions, geometryProvider))
+{
+    // region.PatternReference: the area fill to tile, such as DQUALB01.
+    // region.Instructions: the AreaInstructions it fills (features, scale limits).
+    // region.Area: the visible Polygon or MultiPolygon, in EPSG:3857 metres.
+}
+```
+
+These are the regions the scene's `PatternAreaPaintOp`s fill.
+
 ## Main types
 
 | Type | Role |
 |---|---|
 | `VectorScene`, `PaintOp` (`PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`, `TextPaintOp`) | The ordered list of resolved paint operations. Each op carries its own scale minimum (SCAMIN). |
 | `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles come in as PNG bytes through the `PatternResolver` delegate (`Func<string, byte[]?>`), so the builder doesn't rasterise anything itself. Pattern fills are priority-clipped with `PatternPriorityClipper`. |
+| `SymbolSizeProfile` | The factors that turn S-100 Part 9 millimetres and points into pixels. `Screen`, the default, is the viewer's sizes; `Part9Millimetres(dpi)` draws physical sizes for print. See [Symbol sizes](../../docs/embedding-the-renderer.md#symbol-sizes). |
 | `IVectorSceneRenderer<TSurface>` | The contract a rendering backend implements to draw a `VectorScene` onto its own surface type. |
 | `WorldToScreen` | The EPSG:3857-to-pixel transform for a `Viewport`. When the viewport is shifted across the ±180° antimeridian, it wraps ops into that window. |
 | `SeamAwareBoundsAccumulator` | Computes the extent to fit a dataset to. For geometry that straddles the antimeridian, it shifts the western part east so the dataset is framed on its true extent instead of the whole world. |
 | `RotatedViewport` | Geometry for drawing a rotated viewport as a north-up cover that's then rotated onto the output. |
 | `ResolvedSymbol`, `SymbolAsset` | A resolved point symbol and its pivot (S-100 Part 9 §11.5). |
 | `PatternPriorityClipper` | Clips tiled pattern area fills by display priority (S-100 Part 9 §11.3). It subtracts higher-priority pattern areas and opaque solid fills, such as land, from each lower-priority pattern. |
+| `PatternRegions`, `PatternRegion` | The area patterns of a display list as data: each pattern's visible region after priority clipping, for renderers that draw the portrayal themselves. |
 | `PatternClipMemoizer` | An optional delegate you pass to `VectorSceneBuilder.PatternClipCache` to reuse the clip result. The clip doesn't depend on the palette, so a rebuild that only changes the palette can skip it. |
 | `CoverageSymbolField` | The oriented symbols of a styled coverage grid, such as S-111 current arrows, flattened to EPSG:3857 arrays so every backend places, sizes and thins them the same way. |
 | `ColorResolver` | Resolves S-100 colour tokens to `RgbaColor`. |

@@ -47,7 +47,9 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
 
     private sealed class NoPick : IPickService
     {
-        public void HandlePick(Mapsui.MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null) { }
+        public event EventHandler<PickResult>? Picked { add { } remove { } }
+
+        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.PickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public void PresentGeographicPick(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features) { }
         public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
@@ -117,14 +119,15 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
                     (Warning("AUSCOAST", 190, Oct(1)), new GeoPosition(-34.0, 151.5))),
                 [new DatasetEntry("/tmp/auscoast_200.gml", "S-124")] = new FakeProcessor(Bulletin("AUSCOAST", 200, Oct(12))),
             };
-            Service = new NavigationalWarningsService(Loader);
-            Panel = new NavigationalWarningsViewModel(
+            Service = new NavigationalWarningsService(Loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
+            Panel = TestNavigationalWarnings.Panel(
                 Service,
-                new NoPick(),
+                pick: new NoPick(),
                 viewTime: new ViewTime(at),
                 timeFormat: new Utc(),
                 loader: Loader,
-                clock: new FixedClock(Now));
+                clock: new FixedClock(Now),
+                viewport: null);
         }
 
         public NavigationalWarningEntry Entry(string number) =>
@@ -258,8 +261,8 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
                 [new DatasetEntry("/tmp/navarea_xi.gml", "S-124")] = new FakeProcessor(Bulletin("NAVAREA XI", 40, Oct(12), 31, 36) with { Issuer = "NAVAREA XI coordinator" }),
             },
         };
-        var service = new NavigationalWarningsService(loader);
-        var panel = new NavigationalWarningsViewModel(service, new NoPick(), viewTime: new ViewTime(Oct(14)), timeFormat: new Utc(), loader: loader, clock: new FixedClock(Now));
+        var service = new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
+        var panel = TestNavigationalWarnings.Panel(service, pick: new NoPick(), viewTime: new ViewTime(Oct(14)), timeFormat: new Utc(), loader: loader, clock: new FixedClock(Now), viewport: null);
 
         var group = Assert.Single(panel.Items.OfType<NavigationalWarningGroupItem>());
         Assert.Equal(("NAVAREA XI", 0, "NAVAREA XI coordinator"), (group.Name, group.Count, group.Source));

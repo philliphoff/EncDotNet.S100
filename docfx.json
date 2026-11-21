@@ -75,6 +75,17 @@
         ]
       },
       {
+        "src": "external/EncDotNet.ArcGIS/docs",
+        "dest": "docs/arcgis",
+        "files": [
+          "*.md"
+        ],
+        "exclude": [
+          "coding-style.md",
+          "docs-style.md"
+        ]
+      },
+      {
         "src": "external/EncDotNet/src",
         "dest": "src",
         "files": [
@@ -86,8 +97,16 @@
     ],
     "resource": [
       {
+        "src": "external/EncDotNet.ArcGIS/docs/images",
+        "dest": "docs/arcgis/images",
+        "files": [
+          "**"
+        ]
+      },
+      {
         "files": [
           "docs/images/**",
+          "docs/design/**/*.png",
           "readme/**",
           "site/src/assets/shots/*.png",
           "src/*/images/**",

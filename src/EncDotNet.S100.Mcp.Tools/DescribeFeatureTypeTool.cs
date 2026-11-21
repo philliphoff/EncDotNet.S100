@@ -134,22 +134,20 @@ public sealed class DescribeFeatureTypeTool
     }
 
     /// <summary>
-    /// Creates a tool backed by a custom Feature Catalogue resolver
-    /// (primarily for testing with synthetic catalogues).
+    /// Creates a tool backed by a custom Feature Catalogue resolver.
     /// </summary>
     /// <param name="catalogueResolver">Maps a spec name (e.g. <c>S-124</c>) to a Feature Catalogue XML stream, or <c>null</c> when unavailable.</param>
     /// <param name="acceptedSpecs">
     /// The canonical spec names the resolver can serve. Surfaced in the
     /// <see cref="FeatureCatalogueNotAvailable"/> error so a caller who
-    /// passed a slightly-off name can self-correct. Defaults to empty.
+    /// passed a slightly-off name can self-correct.
     /// </param>
-    public DescribeFeatureTypeTool(Func<string, Stream?> catalogueResolver, IEnumerable<string>? acceptedSpecs = null)
+    public DescribeFeatureTypeTool(Func<string, Stream?> catalogueResolver, IEnumerable<string> acceptedSpecs)
     {
         ArgumentNullException.ThrowIfNull(catalogueResolver);
+        ArgumentNullException.ThrowIfNull(acceptedSpecs);
         _catalogues = new FeatureCatalogueManager(catalogueResolver);
-        _acceptedSpecs = acceptedSpecs is null
-            ? []
-            : acceptedSpecs.ToArray();
+        _acceptedSpecs = acceptedSpecs.ToArray();
     }
 
     /// <summary>Executes the tool.</summary>

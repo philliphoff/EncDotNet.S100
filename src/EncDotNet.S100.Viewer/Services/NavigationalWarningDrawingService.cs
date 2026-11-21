@@ -56,25 +56,27 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     /// <param name="settings">Where <see cref="ShowNotYetInForce"/> is kept; <see langword="null"/> keeps it in memory.</param>
     /// <param name="loader">The loader, asked to hide parts before a dataset's first render; <see langword="null"/> skips that.</param>
     /// <param name="time">The clock for the once-a-minute check; <see langword="null"/> for none.</param>
-    /// <param name="dispatch">Runs the minute check on the UI thread; inline when <see langword="null"/>.</param>
-    /// <param name="display">Where the Navigational warnings switch lives; <see langword="null"/> keeps it in memory, on.</param>
+    /// <param name="dispatch">Runs the minute check on the UI thread.</param>
+    /// <param name="display">Where the Navigational warnings switch lives.</param>
     public NavigationalWarningDrawingService(
         NavigationalWarningsService warnings,
         IViewTime viewTime,
-        ViewerSettings? settings = null,
-        IDatasetLoaderService? loader = null,
-        TimeProvider? time = null,
-        Action<Action>? dispatch = null,
-        EcdisDisplayState? display = null)
+        ViewerSettings? settings,
+        IDatasetLoaderService? loader,
+        TimeProvider? time,
+        Action<Action> dispatch,
+        EcdisDisplayState display)
     {
         ArgumentNullException.ThrowIfNull(warnings);
         ArgumentNullException.ThrowIfNull(viewTime);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        ArgumentNullException.ThrowIfNull(display);
         _warnings = warnings;
         _viewTime = viewTime;
         _settings = settings;
-        _dispatch = dispatch ?? (action => action());
+        _dispatch = dispatch;
         _showNotYetInForce = settings?.ShowWarningsNotYetInForce ?? false;
-        _display = display ?? new EcdisDisplayState();
+        _display = display;
         _display.NavigationalWarningsChanged += OnShowNavigationalWarningsChanged;
         _warnings.Changed += (_, _) => Apply();
         _viewTime.Changed += (_, _) => Apply();
@@ -151,20 +153,16 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Follows <paramref name="pickReport"/>'s open Warning card
-    /// (<see cref="PickReportViewModel.WarningCard"/>), which stays drawn
-    /// while it is open.
+    /// Follows Object Information's open Warning card
+    /// (<see cref="ObjectInformationSelection.OpenWarning"/>), which stays
+    /// drawn while it is open.
     /// </summary>
-    /// <param name="pickReport">The pick report that shows the cards.</param>
-    public void Follow(PickReportViewModel pickReport)
+    /// <param name="selection">What Object Information shows.</param>
+    public void Follow(ObjectInformationSelection selection)
     {
-        ArgumentNullException.ThrowIfNull(pickReport);
-        void Update() => SetOpenWarning(pickReport.WarningCard?.Hit?.DatasetFileName, pickReport.WarningCard?.Hit?.FeatureRef);
-        pickReport.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(PickReportViewModel.WarningCard) or null)
-                Update();
-        };
+        ArgumentNullException.ThrowIfNull(selection);
+        void Update() => SetOpenWarning(selection.OpenWarning?.DatasetFileName, selection.OpenWarning?.FeatureRef);
+        selection.OpenWarningChanged += (_, _) => Update();
         Update();
     }
 

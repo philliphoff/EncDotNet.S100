@@ -114,9 +114,10 @@ These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
   only the part of its scene near the viewport, so drawing one tile of a large
   composite doesn't walk every op.
 - **`HeadlessCompositeRenderer`**: clears the background once, then draws an
-  ordered list of `CompositeLayer`s against a shared viewport. It doesn't decide
+  ordered list of `CompositeLayer`s against a shared viewport, at a device
+  scale for HiDPI images if asked. It doesn't decide
   the order or which layers to suppress. The S-98 interoperability engine
-  (`HeadlessCompositor` in `EncDotNet.S100.Datasets.Pipelines`) makes that
+  (`ChartCompositor` in `EncDotNet.S100.Rendering.Engine`) makes that
   decision; this renderer draws the result.
 
 ### Basemap and symbols
@@ -127,8 +128,8 @@ These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
   coarsest level that stays within a pixel at a given resolution,
   `GetLandPolygons` returns that level's land in a rectangle, and
   `GetLandScene` returns the land in a `Viewport` as `AreaPaintOp`s filled with
-  `LandFill` (RGB 238, 232, 220). The headless renderers, `HeadlessCompositor`
-  and SoundCharts all draw land from this one asset.
+  `LandFill` (RGB 238, 232, 220). The headless renderers, the chart engine's
+  `ChartCompositor` and SoundCharts all draw land from this one asset.
 - **`SkiaSvgRasterizer`**: rasterises SVG portrayal symbols into tiled pattern
   bitmaps.
 

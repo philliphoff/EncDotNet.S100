@@ -23,12 +23,12 @@ internal sealed record RouteFindingsDto(
     [property: Description("The findings, in list order: by group, then by distance along the route.")] IReadOnlyList<RouteFindingDto> Findings)
 {
     /// <summary>The filter chip.</summary>
-    [Description("The list's filter chip: all, clearance, route or warnings (live list only; a one-off check reports all). Set it with set_findings_view or a verdict-card summary row.")]
+    [Description("The list's filter chip: all, clearance, route, warnings or weather (live list only; a one-off check reports all). Set it with set_findings_view or a verdict-card summary row.")]
     public string Filter { get; init; } = "all";
 
     /// <summary>Per-chip counts.</summary>
-    [Description("How many findings each filter chip shows: all, clearance (the clearance check's findings and its confidence and data findings), route (route checks against the chart) and warnings (S-124).")]
-    public FindingsCountsDto Counts { get; init; } = new(0, 0, 0, 0);
+    [Description("How many findings each filter chip shows: all, clearance (the clearance check's findings and its confidence and data findings), route (route checks against the chart), warnings (S-124) and weather (the weather check).")]
+    public FindingsCountsDto Counts { get; init; } = new(0, 0, 0, 0, 0);
 
     /// <summary>The merged rows.</summary>
     [Description("The list's merged rows (after the filter): check and info findings that share a code show as one row with a count (×N); must_review never merges. Each gives every member finding's id.")]
@@ -57,7 +57,8 @@ internal sealed record FindingsCountsDto(
     [property: Description("Every finding.")] int All,
     [property: Description("The clearance check's findings, with its confidence and data findings.")] int Clearance,
     [property: Description("Route checks against the chart (land, drying, dangers, areas, chart coverage).")] int Route,
-    [property: Description("S-124 navigational warnings.")] int Warnings);
+    [property: Description("S-124 navigational warnings.")] int Warnings,
+    [property: Description("The weather check's findings: wind or waves above your limits, and stretches the forecast doesn't check.")] int Weather);
 
 /// <summary>A merged row.</summary>
 [Description("Check or info findings with the same code, shown as one row with a count.")]
@@ -73,7 +74,7 @@ internal sealed record MergedFindingsDto(
 /// <summary>Request for <see cref="SetFindingsViewTool"/>.</summary>
 [Description("Request for set_findings_view: set the findings list's filter chip, INFO fold and expanded merged row.")]
 internal sealed record SetFindingsViewRequest(
-    [property: Description("The filter chip: all, clearance, route or warnings; omit to keep it.")] string? Filter = null,
+    [property: Description("The filter chip: all, clearance, route, warnings or weather; omit to keep it.")] string? Filter = null,
     [property: Description("True to unfold INFO, false to fold it; omit to keep it.")] bool? InfoOpen = null,
     [property: Description("Id of a merged row to expand (from get_findings' merged), or an empty string to collapse; omit to keep it.")] string? ExpandedId = null);
 
@@ -193,7 +194,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         return Dto(routeId, live, findings, selected, stale, departure, format) with
         {
             Filter = PassageCheckToolBase.Filter(filter),
-            Counts = new FindingsCountsDto(counts[FindingsFilter.All], counts[FindingsFilter.Clearance], counts[FindingsFilter.Route], counts[FindingsFilter.Warnings]),
+            Counts = new FindingsCountsDto(counts[FindingsFilter.All], counts[FindingsFilter.Clearance], counts[FindingsFilter.Route], counts[FindingsFilter.Warnings], counts[FindingsFilter.Weather]),
             Merged = RouteFindingsViewModel.Entries(findings, filter)
                 .Where(e => e.IsMerged)
                 .Select(e => new MergedFindingsDto(
@@ -372,10 +373,11 @@ internal sealed class SetFindingsViewTool : RouteFindingsToolBase
                     "clearance" => FindingsFilter.Clearance,
                     "route" => FindingsFilter.Route,
                     "warnings" => FindingsFilter.Warnings,
+                    "weather" => FindingsFilter.Weather,
                     _ => null,
                 };
                 if (filter is null)
-                    return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("filter", $"'{name}' isn't a filter; use all, clearance, route or warnings"));
+                    return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("filter", $"'{name}' isn't a filter; use all, clearance, route, warnings or weather"));
             }
 
             string? expand = null;
@@ -432,7 +434,7 @@ internal static class RouteFindingsMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("The filter chip: all, clearance, route or warnings; omit to keep it.")] string? filter = null,
+            [Description("The filter chip: all, clearance, route, warnings or weather; omit to keep it.")] string? filter = null,
             [Description("True to unfold the INFO group, false to fold it; omit to keep it.")] bool? infoOpen = null,
             [Description("Id of a merged row to expand (get_findings' merged), or an empty string to collapse; omit to keep it.")] string? expandedId = null,
             CancellationToken ct = default) =>

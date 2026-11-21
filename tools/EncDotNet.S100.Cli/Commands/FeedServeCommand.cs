@@ -74,7 +74,7 @@ internal sealed class FeedServeCommand : AsyncCommand<FeedServeCommand.Settings>
         var address = IPAddress.Parse(settings.Host);
         var token = ResolveToken(settings, address);
 
-        var publisher = new FeedPublisher(settings.Path, settings.Title, TimeSpan.FromSeconds(settings.RefreshSeconds));
+        var publisher = new FeedPublisher(settings.Path, TimeProvider.System, settings.Title, TimeSpan.FromSeconds(settings.RefreshSeconds));
         AnsiConsole.MarkupLine($"Indexing [bold]{Markup.Escape(publisher.Path)}[/]…");
         var feed = await publisher.GetAsync(force: true).ConfigureAwait(false);
         // Files that could not be read are left out; show a few rather than flood the console.

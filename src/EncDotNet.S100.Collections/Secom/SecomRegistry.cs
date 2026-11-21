@@ -166,7 +166,7 @@ public sealed record SecomProbeResult(SecomReachability Reachability, string? De
 /// <see cref="SecomRegistryListing.Stale"/> set.
 /// </para>
 /// </remarks>
-public sealed class SecomRegistry
+public sealed class SecomRegistry : ISecomRegistry
 {
     /// <summary>The MCC Maritime Service Registry's SECOM search.</summary>
     public static Uri DefaultSearchUri { get; } = new("https://msr.maritimeconnectivity.net/api/secom/v1/searchService");

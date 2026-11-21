@@ -1,4 +1,5 @@
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 
@@ -40,7 +41,7 @@ public class CoverageClipTests
         var layer = new MemoryLayer();
         CoverageClip.Set(layer, null);
 
-        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1));
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public class CoverageClipTests
         // World square (-50,-50)-(50,50) -> screen (50,50)-(150,150).
         CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 2.0)]);
 
-        var paths = CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1);
+        var paths = CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1);
 
         var path = Assert.Single(paths);
         var bounds = path.Bounds;
@@ -68,7 +69,7 @@ public class CoverageClipTests
         // not clip the coarser cell (no blank hole).
         CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 0.5)]);
 
-        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1));
     }
 
     [Fact]
@@ -79,7 +80,7 @@ public class CoverageClipTests
         // clips the coarser cell where they overlap.
         CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 1000)]);
 
-        Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1000));
+        Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1000));
     }
 
     [Fact]
@@ -92,7 +93,7 @@ public class CoverageClipTests
             new FinerCoverage(Square(10, 10, 40), CutoffResolution: 0.25),   // dropped (<1)
         ]);
 
-        Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1));
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public class CoverageClipTests
             new FinerCoverage(Square(-300, 0, 100), CutoffResolution: 2.0),    // off-screen (left)
         ]);
 
-        var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1));
         Assert.Equal(190f, path.Bounds.Left, 3);
     }
 
@@ -135,7 +136,7 @@ public class CoverageClipTests
         ]);
         CoverageClip.Set(layer, [new FinerCoverage(Gf.CreatePolygon(shell, [hole]), CutoffResolution: double.MaxValue)]);
 
-        var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1));
 
         // Even-odd fill lets the inner ring punch a hole so the coarse cell still
         // shows through a finer cell's no-coverage gaps.
@@ -154,6 +155,6 @@ public class CoverageClipTests
         CoverageClip.Set(layer, null);
 
         Assert.Null(CoverageClip.Get(layer));
-        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(MakeViewport()), resolution: 1));
     }
 }

@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Cli.Tests;
 public sealed class HeadlessLibraryToolsTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "headless-tools-" + Guid.NewGuid().ToString("N"));
-    private readonly HeadlessMutableCatalog _catalog = new();
+    private readonly HeadlessMutableCatalog _catalog = new(null, CliTestProcessors.Bundled);
     private readonly CollectionLibrary _library;
     private readonly LibraryOperations _operations;
     private readonly HeadlessLibrary _host;
@@ -32,7 +32,7 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
             _library,
             new LibraryDownloads(LibraryDownloads.ManagedFolders(new HttpClient(), Path.Combine(_root, "downloads"))),
             new LibraryLoader(new CatalogLibraryOpener(_catalog)));
-        _host = new HeadlessLibrary(operations);
+        _host = new HeadlessLibrary(operations, sync: null, userCatalogues: null, health: null, time: TimeProvider.System, readers: null, probe: null);
     }
 
     public void Dispose()
@@ -239,7 +239,7 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
             Secom = (_, _, _, _) => Task.FromResult(new SecomServiceDescription(
                 [new CatalogFacetValue("S-124", 5, 5_120)], 5, 5, Truncated: false, Collections.Secom.SecomApiVersion.V2)),
         };
-        var host = new HeadlessLibrary(_operations, readers: readers);
+        var host = new HeadlessLibrary(_operations, readers: readers, sync: null, userCatalogues: null, health: null, time: TimeProvider.System, probe: null);
         var tool = new AddLibrarySourceTool(host);
 
         var forecast = Value(await tool.InvokeAsync(
@@ -275,7 +275,7 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
                 throw new HttpRequestException("SECOM /api/secom/v2/object/summary answered 401 Unauthorized.");
             },
         };
-        var tool = new AddLibrarySourceTool(new HeadlessLibrary(_operations, readers: readers));
+        var tool = new AddLibrarySourceTool(new HeadlessLibrary(_operations, readers: readers, sync: null, userCatalogues: null, health: null, time: TimeProvider.System, probe: null));
 
         // Without wait, a service that can't be read is refused, as before.
         Assert.True((await tool.InvokeAsync(

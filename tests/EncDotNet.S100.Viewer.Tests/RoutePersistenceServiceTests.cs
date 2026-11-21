@@ -39,7 +39,7 @@ public class RoutePersistenceServiceTests : IDisposable
         route.AppendWaypoint(new GeoPosition(3, 4));
         RouteStore.Save(seed, _paths.RoutesFilePath);
 
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         using var persistence = new RoutePersistenceService(routes, _paths, new ViewerSettings());
         persistence.Initialize();
 
@@ -51,7 +51,7 @@ public class RoutePersistenceServiceTests : IDisposable
     [Fact]
     public void Flush_AfterChange_WritesRoutesToDisk()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         using var persistence = new RoutePersistenceService(routes, _paths, new ViewerSettings());
         persistence.Initialize();
 
@@ -71,7 +71,7 @@ public class RoutePersistenceServiceTests : IDisposable
     [Fact]
     public void ReadOnly_DoesNotWriteOnFlush()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         using var persistence = new RoutePersistenceService(
             routes, _paths, new ViewerSettings { IsReadOnly = true });
         persistence.Initialize();
@@ -90,7 +90,7 @@ public class RoutePersistenceServiceTests : IDisposable
         seed.CreateRoute("Existing", "route-1");
         RouteStore.Save(seed, _paths.RoutesFilePath);
 
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         using var persistence = new RoutePersistenceService(
             routes, _paths, new ViewerSettings { IsReadOnly = true });
         persistence.Initialize();
@@ -101,7 +101,7 @@ public class RoutePersistenceServiceTests : IDisposable
     [Fact]
     public void Initialize_IsIdempotent()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         using var persistence = new RoutePersistenceService(routes, _paths, new ViewerSettings());
         persistence.Initialize();
         persistence.Initialize(); // second call must be a no-op, not throw.

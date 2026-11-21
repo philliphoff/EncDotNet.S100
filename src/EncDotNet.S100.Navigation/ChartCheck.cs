@@ -107,6 +107,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 && last.Settings.CorridorOverride == settings.CorridorOverride
                 && last.Settings.TrackClearance == settings.TrackClearance
                 && last.Settings.NearbyDistance == settings.NearbyDistance
+                && last.Settings.BerthRadius == settings.BerthRadius
                 && PassageLegs.Same(last.Legs, context.Plan.Legs))
             {
                 reuse = (last.Findings, last.Result);
@@ -169,6 +170,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
 
         dangers.AddTo(findings);
         hazards.AddTo(findings);
+        findings.GroupBerthStructures(legs[0].Points[0], legs[^1].Points[^1], legs.Count - 1, offset, settings.BerthRadiusMeters);
 
         return (findings.Sorted(), new ChartCheckResult(corridors));
     }
@@ -314,13 +316,14 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         // Finds the track's crossings of one kind of area, then the
         // cross-sections that touch it where the track doesn't; returns the
         // merged crossings. Details, when given, are a finding's details
-        // from the shoalest feature in it.
+        // from the shoalest feature in it, and whether the track crosses it
+        // (rather than its cross-sections only touching it).
         private List<Piece> CheckAreas(
             IReadOnlyList<RouteChartFeature> features,
             RouteChartFeatureKind kind,
             RouteFindingCode crossesCode,
             RouteFindingCode inCorridorCode,
-            Func<RouteChartFeature, RouteFindingDetails>? details = null)
+            Func<RouteChartFeature, bool, RouteFindingDetails>? details = null)
         {
             var pieces = new List<Piece>();
             var touched = new RouteChartFeature?[_stations.Count];
@@ -414,7 +417,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 }
 
                 _findings.Add(crossesCode, _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature,
-                    details?.Invoke(piece.Shoalest ?? piece.Feature));
+                    details?.Invoke(piece.Shoalest ?? piece.Feature, true));
             }
 
             // A run of touched cross-sections that reaches a crossing is the
@@ -447,7 +450,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 var end = _stations[k2 - 1].Distance;
                 var feature = touched[first]!;
                 _findings.Add(inCorridorCode, _legIndex, start, Location(start, end), feature,
-                    details?.Invoke(runShoalest ?? feature));
+                    details?.Invoke(runShoalest ?? feature, false));
             }
 
             return merged;
@@ -580,7 +583,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 }
             }
 
-            return covering is null ? [] : CellScaleRanking.FinestBand(covering, i => _cells[i].RankingScale);
+            return covering is null ? [] : CellScaleRanking.FinestBand(covering, i => _cells[i].Rank);
         }
 
         private List<(GeoPosition A, GeoPosition B)> AreaEdges(RouteChartFeature feature)
@@ -880,11 +883,23 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         }
     }
 
-    /// <summary>Collects findings with ids that are stable within one result, rendered by a formatter.</summary>
+    /// <summary>
+    /// Collects findings, and gives them ids that are stable within one
+    /// result (in the order they were added) and their text when the sweep
+    /// is done, so a finding can still be folded into another.
+    /// </summary>
     private sealed class FindingList(RouteFindingFormatter formatter)
     {
-        private readonly List<RouteFinding> _findings = new();
-        private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
+        private readonly List<Entry> _entries = new();
+
+        private sealed record Entry(
+            RouteFindingCode Code,
+            int LegIndex,
+            double Distance,
+            RouteFindingLocation Location,
+            RouteFindingFeature? Feature,
+            RouteFindingDetails? Details,
+            RouteFindingGroup? Group);
 
         // Each code is in its own group: crossings and dangers in the
         // corridor are MUST REVIEW, the rest CHECK.
@@ -895,20 +910,152 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             RouteFindingLocation location,
             RouteChartFeature? feature,
             RouteFindingDetails? details = null,
-            RouteFindingGroup? group = null)
+            RouteFindingGroup? group = null) =>
+            _entries.Add(new Entry(
+                code,
+                legIndex,
+                distance,
+                location,
+                feature is null ? null : new RouteFindingFeature(feature.Cell.DatasetId, feature.FeatureId) { FeatureType = feature.FeatureType },
+                details,
+                group));
+
+        // #1548: the structures that raise the SafetyContour alert within
+        // the berth radius of the departure or the arrival become one INFO
+        // finding per end. A route that starts or ends at a berth always
+        // touches its pontoons and piers, and a marina entrance is often
+        // narrower than the track clearance either side, so its breakwaters
+        // are close too. But a structure that isn't a berth
+        // (SafetyContourFeatureDetails.IsBerth) and that the track line
+        // itself cuts (CutByTrack) stays a MUST REVIEW crossing. Berth
+        // structures joined to the grouped ones are grouped too (#1626).
+        public void GroupBerthStructures(GeoPosition departure, GeoPosition arrival, int lastLeg, double totalDistance, double radius)
         {
-            _counts.TryGetValue(code.Value, out var n);
-            _counts[code.Value] = n + 1;
-            _findings.Add(formatter.Render(new RouteFinding($"{code.Value}.{n}", code, group)
+            if (!(radius > 0))
             {
-                LegIndex = legIndex,
-                Distance = Length.FromMetres(distance),
-                Location = location,
-                Feature = feature is null ? null : new RouteFindingFeature(feature.Cell.DatasetId, feature.FeatureId) { FeatureType = feature.FeatureType },
-                Details = details,
-            }));
+                return;
+            }
+
+            var atDeparture = new List<Entry>();
+            var atArrival = new List<Entry>();
+            _entries.RemoveAll(e =>
+            {
+                if (e.Details is not SafetyContourFeatureDetails { IsStructure: true } structure
+                    || (structure.CutByTrack && !structure.IsBerth))
+                {
+                    return false;
+                }
+
+                // An end the route starts and finishes at takes the structure once, at the departure.
+                if (Within(e.Location, departure, radius))
+                {
+                    atDeparture.Add(e);
+                    return true;
+                }
+
+                if (Within(e.Location, arrival, radius))
+                {
+                    atArrival.Add(e);
+                    return true;
+                }
+
+                return false;
+            });
+
+            // #1626: a marina's docks spread past any one radius, so a berth
+            // structure next to one already grouped joins it, out to a few
+            // radii from the end: the dock system counts as one berth.
+            Chain(atDeparture, departure, radius);
+            Chain(atArrival, arrival, radius);
+
+            AddBerth(RouteEnd.Departure, atDeparture, 0, 0, departure, radius);
+            AddBerth(RouteEnd.Arrival, atArrival, lastLeg, totalDistance, arrival, radius);
         }
 
-        public IReadOnlyList<RouteFinding> Sorted() => RouteFinding.Sort(_findings);
+        // How close a berth structure must be to one grouped at an end to join it, in metres.
+        private const double BerthJoinMeters = 60;
+
+        // How far from the end, in radii, the joined structures may reach.
+        private const double BerthReachRadii = 4;
+
+        private void Chain(List<Entry> grouped, GeoPosition end, double radius)
+        {
+            if (grouped.Count == 0)
+            {
+                return;
+            }
+
+            var reach = radius * BerthReachRadii;
+            bool joined;
+            do
+            {
+                joined = false;
+                var added = _entries.FindAll(e =>
+                    e.Details is SafetyContourFeatureDetails { IsStructure: true, IsBerth: true }
+                    && Within(e.Location, end, reach)
+                    && grouped.Any(g => Near(g.Location, e.Location, BerthJoinMeters)));
+                if (added.Count > 0)
+                {
+                    grouped.AddRange(added);
+                    _entries.RemoveAll(added.Contains);
+                    joined = true;
+                }
+            }
+            while (joined);
+        }
+
+        // Whether any points of two locations are within a distance of each other.
+        private static bool Near(RouteFindingLocation a, RouteFindingLocation b, double meters) =>
+            a.Path.Any(p => b.Path.Any(q => Wgs84Geodesy.GeodesicDistanceMetres(p, q) <= meters));
+
+        private void AddBerth(RouteEnd end, List<Entry> structures, int legIndex, double distance, GeoPosition at, double radius)
+        {
+            if (structures.Count == 0)
+            {
+                return;
+            }
+
+            structures.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            var features = structures.Select(e => e.Feature).OfType<RouteFindingFeature>().Distinct().ToArray();
+            _entries.Add(new Entry(
+                RouteFindingCodes.BerthStructures,
+                legIndex,
+                distance,
+                RouteFindingLocation.Point(at, distance),
+                features.Length > 0 ? features[0] : null,
+                new BerthStructuresDetails
+                {
+                    End = end,
+                    Radius = Length.FromMetres(radius),
+                    Features = features,
+                    CrossingCount = structures.Count(e => e.Code == RouteFindingCodes.CrossesSafetyContour),
+                },
+                null));
+        }
+
+        // Whether any point of a location is within radius of a position.
+        private static bool Within(RouteFindingLocation location, GeoPosition position, double radius) =>
+            location.Path.Any(p => Wgs84Geodesy.GeodesicDistanceMetres(p, position) <= radius);
+
+        public IReadOnlyList<RouteFinding> Sorted()
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var findings = new List<RouteFinding>(_entries.Count);
+            foreach (var e in _entries)
+            {
+                counts.TryGetValue(e.Code.Value, out var n);
+                counts[e.Code.Value] = n + 1;
+                findings.Add(formatter.Render(new RouteFinding($"{e.Code.Value}.{n}", e.Code, e.Group)
+                {
+                    LegIndex = e.LegIndex,
+                    Distance = Length.FromMetres(e.Distance),
+                    Location = e.Location,
+                    Feature = e.Feature,
+                    Details = e.Details,
+                }));
+            }
+
+            return RouteFinding.Sort(findings);
+        }
     }
 }

@@ -54,7 +54,7 @@ public sealed class ChartCatalogsFeedIndexer : ICollectionSourceIndexer
         TimeProvider? timeProvider = null)
     {
         _httpClient = httpClient;
-        _cache = new FeedCache(httpClient, cacheDirectory, options, timeProvider);
+        _cache = new FeedCache(httpClient, cacheDirectory, options ?? FeedCacheOptions.Default, timeProvider ?? TimeProvider.System);
         _downloadsRoot = downloadsRoot;
         _local = new LocalSourceIndexer(probe);
     }

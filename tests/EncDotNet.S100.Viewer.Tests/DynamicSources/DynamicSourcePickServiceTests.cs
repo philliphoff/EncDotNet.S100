@@ -56,7 +56,7 @@ public class DynamicSourcePickServiceTests
     }
 
     [Fact]
-    public void Pick_ProjectsHit_WithAttributesAndMotion()
+    public void Pick_MakesAPickHit_WithAVesselSection()
     {
         var registry = new FakeRegistry();
         var source = new FakeDynamicFeatureSource("ais.test", new DynamicSourceMetadata
@@ -92,28 +92,24 @@ public class DynamicSourcePickServiceTests
         var sut = new DynamicSourcePickService(registry);
         var hits = sut.Pick(ToMercator(Lat, Lon), resolution: 10.0);
 
+        // Data source design note P5: an ordinary hit, as a processor describes it.
         var hit = Assert.Single(hits);
-        Assert.Equal("ais.test", hit.SourceId);
-        Assert.Equal("AIS — test", hit.SourceDisplayName);
-        Assert.Equal("367123456", hit.FeatureId);
-        Assert.Equal("vessel.ais.cargo", hit.Kind);
-        Assert.Equal("MV ALPHA", hit.DisplayLabel); // vesselName wins over feature id
-        Assert.Equal(Lat, hit.Latitude);
-        Assert.Equal(Lon, hit.Longitude);
-        Assert.NotNull(hit.Motion);
-        Assert.Equal(270.0, hit.Motion!.CourseOverGround?.TotalDegrees);
-
-        // Attribute rows include Position, COG, Heading, SOG, then declared attributes.
-        Assert.Contains(hit.Attributes, r => r.Label == "Position");
-        Assert.Contains(hit.Attributes, r => r.Label == "COG" && r.Value.Contains("270"));
-        Assert.Contains(hit.Attributes, r => r.Label == "SOG" && r.Value.Contains("12.3"));
-        Assert.Contains(hit.Attributes, r => r.Label == "MMSI");
-        Assert.Contains(hit.Attributes, r => r.Label == "Name" && r.Value == "MV ALPHA");
-        Assert.Contains(hit.Attributes, r => r.Label == "Call sign" && r.Value == "ABC123");
+        Assert.Equal("vessel.ais.cargo", hit.FeatureType);
+        Assert.Equal("AIS — test", hit.FeatureTypeName);
+        Assert.Equal("367123456", hit.FeatureRef);
+        Assert.Null(hit.DatasetFileName);
+        Assert.Null(hit.OwningProcessor);
+        var vessel = Assert.IsType<EncDotNet.S100.Datasets.Pipelines.VesselSection>(Assert.Single(hit.Sections));
+        Assert.Equal("367123456", vessel.Mmsi);
+        Assert.Equal("MV ALPHA", vessel.Name);
+        Assert.Equal(270.0, vessel.CourseOverGroundDegrees);
+        Assert.Equal(12.3, vessel.SpeedOverGroundKnots);
+        Assert.Contains(hit.Attributes, r => r.Code == "callSign" && r.DisplayText == "ABC123");
+        Assert.Contains(hit.Attributes, r => r.Code == "lastUpdated");
     }
 
     [Fact]
-    public void Pick_FallsBackToFeatureId_WhenVesselNameMissing()
+    public void Pick_OwnShip_IsAnOrdinaryHitWithNoTakeHelm()
     {
         var registry = new FakeRegistry();
         var source = new FakeDynamicFeatureSource("ownship", new DynamicSourceMetadata { DisplayName = "Own Ship" });
@@ -133,7 +129,12 @@ public class DynamicSourcePickServiceTests
         var sut = new DynamicSourcePickService(registry);
         var hits = sut.Pick(ToMercator(Lat, Lon), resolution: 10.0);
 
-        Assert.Equal("ownship", Assert.Single(hits).DisplayLabel);
+        var hit = Assert.Single(hits);
+        Assert.Equal("ownship", hit.FeatureType);
+        Assert.Equal("Own Ship", hit.FeatureTypeName);
+        // Own-ship can't take its own helm (P4).
+        EncDotNet.S100.Viewer.Services.DynamicSources.TakeHelmPickAction.Register(EncDotNet.S100.Datasets.Pipelines.PickActionRegistry.Default);
+        Assert.Empty(hit.Actions);
     }
 
     private sealed class DescribedSource : IDynamicFeatureSource, IDynamicFeatureDescriber
@@ -174,10 +175,10 @@ public class DynamicSourcePickServiceTests
 
         var hit = Assert.Single(sut.Pick(ToMercator(Lat, Lon), resolution: 10.0));
 
-        Assert.Equal("BOSTON 16 NM East of Boston, MA", hit.DisplayLabel);
-        Assert.Equal(3, hit.Attributes.Count); // position, then the description's rows
-        Assert.Equal("Wind", hit.Attributes[2].Label);
-        Assert.Equal("230° 14.4 kn (7.4 m/s)", hit.Attributes[2].Value);
-        Assert.DoesNotContain(hit.Attributes, a => a.Label == "observation");
+        Assert.Equal("BOSTON 16 NM East of Boston, MA", hit.FeatureTypeName);
+        Assert.Equal(2, hit.Attributes.Count); // the description's rows
+        Assert.Equal("Wind", hit.Attributes[1].Name);
+        Assert.Equal("230° 14.4 kn (7.4 m/s)", hit.Attributes[1].DisplayText);
+        Assert.DoesNotContain(hit.Attributes, a => a.Code == "observation");
     }
 }

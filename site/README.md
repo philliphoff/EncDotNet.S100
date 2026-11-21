@@ -58,6 +58,28 @@ The build turns images into responsive AVIF with a WebP fallback, and drops the
 full-size source copies. Captures come out at 2× (2200 × 1400 for window shots); let the
 build handle sizing.
 
+## Section links
+
+Every section, feature row and card has an id, so a post or a message can point
+at one part of the page, such as `https://soundcharts.app/#weather-cyclones`.
+Hovering a heading shows a link button (`Permalink.astro`) that goes to the
+section and copies its URL. Keep these ids stable once published; when you add
+a row or card, give it an id named `<section>-<topic>` and wrap its heading with
+a `Permalink`.
+
+| Section | Section id | Rows and cards |
+|---|---|---|
+| S-100 products | `data` | one per product, by spec: `s-101`, `s-102`, `s-104`, … |
+| The viewer | `viewer` | `viewer-layers`, `viewer-timeline`, `viewer-inspect` |
+| Passage planning | `passage` | `passage-plan`, `passage-check`, `passage-warnings`, `passage-warning-findings`, `passage-ci` |
+| Weather | `weather` | `weather-wind-waves`, `weather-ocean`, `weather-hazards`, `weather-cyclones`, `weather-surface-analysis`, `weather-route`, `weather-fog`, `weather-rain`, `weather-sources` |
+| Library | `library` | `library-browse`, `library-catalogues`, `library-validation`, `library-ecdis` |
+| Palettes | `palettes` | |
+| For developers | `developers` | `developers-sdk`, `developers-cli`, `developers-mcp`, `standards` |
+| Open source | `open-source` | |
+
+The hero's download button is `#download`, and `#top` is the top of the page.
+
 ## Capturing shots
 
 [`capture/capture.cs`](capture/capture.cs) drives a Release build of the viewer

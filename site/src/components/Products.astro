@@ -1,4 +1,5 @@
 ---
+import Permalink from './Permalink.astro';
 import Shot from './Shot.astro';
 import { products } from '../data/content';
 ---
@@ -6,7 +7,7 @@ import { products } from '../data/content';
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Beyond the chart</span>
-      <h2 id="data-title">One map, many layers of the sea.</h2>
+      <div class="anchored"><h2 id="data-title">One map, many layers of the sea.</h2><Permalink to="data" label="S-100 products" /></div>
       <p class="lede">
         S-100 is the IHO's framework for the next generation of marine data. A chart is the base layer. Depth surfaces,
         water levels, currents, warnings, ice, routes and harbour data each come as their own product, and SoundCharts
@@ -16,7 +17,7 @@ import { products } from '../data/content';
     <div class="products">
       {
         products.map((p) => (
-          <div class:list={['product', { extra: p.extra }]}>
+          <div id={p.spec.toLowerCase()} class:list={['product', { extra: p.extra }]}>
             <Shot
               id={p.shot}
               standin={p.standin}

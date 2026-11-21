@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.MutableTools;
+using EncDotNet.S100.Mcp.Tools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -20,7 +21,7 @@ internal static class SetOwnShipMcpAdapter
 
     private const string Description =
         "Mutates the live viewer's simulated own-ship position by driving the helm. All fields " +
-        "optional: provide lat AND lon together to reposition; cog/sog adjust course/speed; heading " +
+        "optional: provide latitude AND longitude together to reposition (lat/lon are accepted as older names); cog/sog adjust course/speed; heading " +
         "(gyro heading, applied only with a position); hold=true stops the vessel, hold=false resumes " +
         "its remembered speed. Angles are degrees true; speed is metres per second. Works even when " +
         "the own-ship overlay is hidden (the state is cached and shown when enabled). Viewer-injected " +
@@ -32,16 +33,18 @@ internal static class SetOwnShipMcpAdapter
         ArgumentNullException.ThrowIfNull(inner);
 
         var del = (
-            [Description("WGS-84 latitude in decimal degrees [-90, 90]. Must be paired with lon.")] double? lat = null,
-            [Description("WGS-84 longitude in decimal degrees [-180, 180]. Must be paired with lat.")] double? lon = null,
+            [Description("WGS-84 latitude in decimal degrees [-90, 90]. Must be paired with longitude.")] double? latitude = null,
+            [Description("WGS-84 longitude in decimal degrees [-180, 180]. Must be paired with latitude.")] double? longitude = null,
             [Description("Course over ground in degrees true; normalised to [0, 360).")] double? cog = null,
             [Description("Speed over ground in metres per second; clamped to be non-negative.")] double? sog = null,
-            [Description("Gyro heading in degrees true; only applied together with lat/lon.")] double? heading = null,
+            [Description("Gyro heading in degrees true; only applied together with a position.")] double? heading = null,
             [Description("true stops the vessel (remembering speed); false resumes the remembered speed.")] bool? hold = null,
+            [Description("Alias of latitude (older name).")] double? lat = null,
+            [Description("Alias of longitude (older name).")] double? lon = null,
             CancellationToken ct = default) =>
-            DispatchAsync(() => inner.InvokeAsync(
-                new SetOwnShipRequest(lat, lon, cog, sog, heading, hold),
-                ct));
+            DispatchAsync(() => PositionArguments.Resolve(latitude, longitude, lat, lon, ("latitude", "longitude", "lat", "lon"), out var position) is { } bad
+                ? Task.FromResult(ToolResult<SetOwnShipResult>.Err(bad))
+                : inner.InvokeAsync(new SetOwnShipRequest(position?.Latitude, position?.Longitude, cog, sog, heading, hold), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -70,9 +73,8 @@ internal static class SetOwnShipMcpAdapter
     }
 
     /// <summary>
-    /// Test seam: translates an already-completed
-    /// <see cref="ToolResult{T}"/> into a <see cref="CallToolResult"/>
-    /// using the same shape this adapter produces in production.
+    /// Translates the tool's <see cref="ToolResult{T}"/> into the
+    /// <see cref="CallToolResult"/> a client receives.
     /// </summary>
     internal static CallToolResult TranslateResult(ToolResult<SetOwnShipResult> result)
     {

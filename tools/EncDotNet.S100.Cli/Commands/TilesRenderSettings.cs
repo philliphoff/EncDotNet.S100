@@ -1,5 +1,8 @@
 using System.ComponentModel;
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Cli.Infrastructure.Tiles;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Rendering.Scene;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -9,13 +12,14 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <summary>
 /// The inputs and display options shared by the commands that render tiles
 /// from datasets: <c>tiles export</c> and <c>tiles serve</c>. The input grammar
-/// matches <c>s100 render</c>: one dataset, several <c>--layer</c> datasets, or
-/// an exchange set.
+/// matches <c>s100 render</c> — one dataset, several <c>--layer</c> datasets, or
+/// an exchange set — plus, as <c>s100 mcp serve</c> takes it, a plain folder of
+/// datasets (searched recursively) or an S-57 exchange set (<c>CATALOG.031</c>).
 /// </summary>
 internal abstract class TilesRenderSettings : CommandSettings
 {
     [CommandArgument(0, "[input]")]
-    [Description("The dataset to tile, or an exchange set (a directory containing a CATALOG.XML, a CATALOG.XML, or an exchange-set .zip). tiles serve also takes a built tile set: a {z}/{x}/{y} directory, a .pmtiles archive or a .mbtiles database. Omit when using --layer or --exchange-set.")]
+    [Description("The dataset to tile, an exchange set (a directory containing a CATALOG.XML, a CATALOG.XML, or an exchange-set .zip), or a folder of datasets, searched recursively (an S-57 ENC_ROOT with a CATALOG.031 is read this way). tiles serve also takes a built tile set: a {z}/{x}/{y} directory, a .pmtiles archive, a .mbtiles database or a .gpkg GeoPackage. Omit when using --layer or --exchange-set.")]
     public string? Input { get; init; }
 
     [CommandOption("--layer <PATH>")]
@@ -23,11 +27,11 @@ internal abstract class TilesRenderSettings : CommandSettings
     public string[] Layers { get; init; } = [];
 
     [CommandOption("--exchange-set|--from <PATH>")]
-    [Description("Tile every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one. Applies no S-101 updates; data-protected and unsupported datasets are skipped with a warning. Mutually exclusive with --layer.")]
+    [Description("Tile every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one; an S-57 exchange set (a directory containing a CATALOG.031, or the CATALOG.031) is read as a folder of datasets. Applies no S-101 updates from an S-100 exchange set; data-protected and unsupported datasets are skipped with a warning. Mutually exclusive with --layer.")]
     public string? ExchangeSet { get; init; }
 
     [CommandOption("--only <SPECS>")]
-    [Description("Exchange-set form only: restrict tiling to a comma-separated list of product specifications (e.g. --only S101,S102).")]
+    [Description("Exchange-set and folder forms only: restrict tiling to a comma-separated list of product specifications (e.g. --only S101,S102).")]
     public string? Only { get; init; }
 
     [CommandOption("--min-zoom <ZOOM>")]
@@ -61,6 +65,10 @@ internal abstract class TilesRenderSettings : CommandSettings
     [Description("Colour palette: day, dusk, or night (default day).")]
     [DefaultValue("day")]
     public string Palette { get; init; } = "day";
+
+    [CommandOption("--national-language <CODE>")]
+    [Description("The ISO 639-2 language (e.g. fra) to prefer for chart text such as feature names, where the product's portrayal supports it (S-101, S-131). Features without a name in that language use their default name. Default: the catalogue's default (eng).")]
+    public string? NationalLanguage { get; init; }
 
     [CommandOption("--symbol-scale <FACTOR>")]
     [Description("Symbol scale factor (default 1.0).")]
@@ -104,6 +112,58 @@ internal abstract class TilesRenderSettings : CommandSettings
     [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod or ice-navigational (PROVISIONAL preview, not a POLARIS/RIO computation).")]
     public string? DisplayMode { get; init; }
 
+    [CommandOption("--display-category <CATEGORY>")]
+    [Description("Mariner setting: the ECDIS display category, display-base, standard, other-information or all. Default: every viewing group (all).")]
+    public string? DisplayCategory { get; init; }
+
+    [CommandOption("--safety-contour <METRES>")]
+    [Description("Mariner setting: the safety contour in metres (S-101 SafetyContour). Default 30.")]
+    public double? SafetyContour { get; init; }
+
+    [CommandOption("--safety-depth <METRES>")]
+    [Description("Mariner setting: the safety depth in metres; shallower soundings are emphasised (S-101 SafetyDepth). Default 30.")]
+    public double? SafetyDepth { get; init; }
+
+    [CommandOption("--shallow-contour <METRES>")]
+    [Description("Mariner setting: the shallow contour in metres, used with --four-shades (S-101 ShallowContour). Default 2.")]
+    public double? ShallowContour { get; init; }
+
+    [CommandOption("--deep-contour <METRES>")]
+    [Description("Mariner setting: the deep contour in metres, used with --four-shades (S-101 DeepContour). Default 30.")]
+    public double? DeepContour { get; init; }
+
+    [CommandOption("--four-shades")]
+    [Description("Mariner setting: shade depth areas in four shades rather than two (S-101 FourShades).")]
+    public bool FourShades { get; init; }
+
+    [CommandOption("--no-soundings")]
+    [Description("Mariner setting: don't draw soundings (S-101 viewing group 33010).")]
+    public bool NoSoundings { get; init; }
+
+    [CommandOption("--no-shallow-water-dangers")]
+    [Description("Mariner setting: don't emphasise isolated dangers in shallow water (S-101 ShallowWaterDangers).")]
+    public bool NoShallowWaterDangers { get; init; }
+
+    [CommandOption("--symbolized-boundaries")]
+    [Description("Mariner setting: draw symbolized area boundaries rather than plain ones (S-101 PlainBoundaries off).")]
+    public bool SymbolizedBoundaries { get; init; }
+
+    [CommandOption("--simplified-symbols")]
+    [Description("Mariner setting: draw simplified point symbols rather than paper-chart ones (S-101 SimplifiedSymbols).")]
+    public bool SimplifiedSymbols { get; init; }
+
+    [CommandOption("--full-light-lines")]
+    [Description("Mariner setting: draw light sector legs to their full nominal range (S-101 FullLightLines).")]
+    public bool FullLightLines { get; init; }
+
+    [CommandOption("--ignore-scamin")]
+    [Description("Mariner setting: draw features at every scale, ignoring their scale minimum (S-101 IgnoreScaleMinimum).")]
+    public bool IgnoreScaleMinimum { get; init; }
+
+    [CommandOption("--depth-unit <UNIT>")]
+    [Description("Mariner setting: the unit depths are shown in: metres (default), feet, fathoms-feet or fathoms.")]
+    public string? DepthUnit { get; init; }
+
     [CommandOption("--metatile <TILES>")]
     [Description("Render blocks of N x N tiles at once and cut them apart (1-16, default 4). Larger blocks are faster for dense data and use more memory.")]
     [DefaultValue(4)]
@@ -114,7 +174,7 @@ internal abstract class TilesRenderSettings : CommandSettings
     public int? Parallel { get; init; }
 
     [CommandOption("--no-updates")]
-    [Description("Do not apply sibling S-101 sequential updates (.001, .002, …) found alongside an .000 base cell given positionally or with --layer. The exchange-set form never applies updates.")]
+    [Description("Do not apply sibling S-101 sequential updates (.001, .002, …) found alongside an .000 base cell given positionally, with --layer, or loose in a folder. Cells inside an S-100 exchange set never have updates applied.")]
     [DefaultValue(false)]
     public bool NoUpdates { get; init; }
 
@@ -124,11 +184,72 @@ internal abstract class TilesRenderSettings : CommandSettings
 
     public bool IsComposite => Layers.Length > 0;
 
+    /// <summary>
+    /// The mariner settings chosen with the options above (issue #1493), only
+    /// those given set, so tiles rendered without any look as they always have.
+    /// </summary>
+    public MarinerStyle MarinerStyle => new()
+    {
+        DisplayCategory = TryParseDisplayCategory(DisplayCategory, out var category) ? category : null,
+        SafetyContour = SafetyContour,
+        SafetyDepth = SafetyDepth,
+        ShallowContour = ShallowContour,
+        DeepContour = DeepContour,
+        FourShades = FourShades ? true : null,
+        Soundings = NoSoundings ? false : null,
+        ShallowWaterDangers = NoShallowWaterDangers ? false : null,
+        PlainBoundaries = SymbolizedBoundaries ? false : null,
+        SimplifiedSymbols = SimplifiedSymbols ? true : null,
+        FullLightLines = FullLightLines ? true : null,
+        IgnoreScaleMinimum = IgnoreScaleMinimum ? true : null,
+        DepthUnit = TryParseDepthUnit(DepthUnit, out var unit) ? unit : null,
+    };
+
+    /// <summary>Parses <c>--display-category</c>: a category name, with or without hyphens, in any case.</summary>
+    internal static bool TryParseDisplayCategory(string? text, out EcdisDisplayCategory category) =>
+        MarinerStyle.TryParseName(text?.Replace("-", string.Empty, StringComparison.Ordinal), out category);
+
+    /// <summary>Parses <c>--depth-unit</c>: a unit name, with or without hyphens, in any case.</summary>
+    internal static bool TryParseDepthUnit(string? text, out DepthUnit unit) =>
+        MarinerStyle.TryParseName(text?.Replace("-", string.Empty, StringComparison.Ordinal), out unit);
+
     public bool IsExplicitExchangeSet => !string.IsNullOrWhiteSpace(ExchangeSet);
 
+    /// <summary>
+    /// The folder of datasets to tile, searched recursively as
+    /// <see cref="DatasetInputResolver"/> does: a positional directory that
+    /// isn't an S-100 exchange set, or an S-57 exchange set (its
+    /// <c>CATALOG.031</c> folder) given positionally or with <c>--from</c>;
+    /// <see langword="null"/> for the other forms.
+    /// </summary>
+    public string? FolderSource
+    {
+        get
+        {
+            if (IsComposite)
+                return null;
+            var candidate = IsExplicitExchangeSet ? ExchangeSet : Input;
+            if (string.IsNullOrWhiteSpace(candidate) || ExchangeSetInput.LooksLikeExchangeSet(candidate))
+                return null;
+            if (ExchangeSetInput.LooksLikeS57ExchangeSet(candidate))
+                return ExchangeSetInput.ResolveS57Root(candidate);
+            return !IsExplicitExchangeSet && Directory.Exists(candidate) ? candidate : null;
+        }
+    }
+
+    /// <summary>Whether the input is a folder of datasets (<see cref="FolderSource"/>).</summary>
+    public bool IsFolder => FolderSource is not null;
+
     public bool IsExchangeSet =>
-        IsExplicitExchangeSet
-        || (!IsComposite && !string.IsNullOrWhiteSpace(Input) && ExchangeSetInput.LooksLikeExchangeSet(Input));
+        !IsFolder
+        && (IsExplicitExchangeSet
+            || (!IsComposite && !string.IsNullOrWhiteSpace(Input) && ExchangeSetInput.LooksLikeExchangeSet(Input)));
+
+    /// <summary>
+    /// A folder the input fingerprint ignores, such as a tile cache kept inside
+    /// the data folder; <see langword="null"/> for none.
+    /// </summary>
+    public virtual string? FingerprintExcludedFolder => null;
 
     public string? ExchangeSetSource => IsExplicitExchangeSet ? ExchangeSet : Input;
 
@@ -141,11 +262,15 @@ internal abstract class TilesRenderSettings : CommandSettings
         if ((IsComposite || IsExplicitExchangeSet) && !string.IsNullOrWhiteSpace(Input))
             return ValidationResult.Error("With --layer or --exchange-set, do not also pass a positional dataset.");
 
-        if (IsExchangeSet)
+        if (IsFolder)
+        {
+            // A folder of datasets; the datasets in it are checked when opened.
+        }
+        else if (IsExchangeSet)
         {
             if (!ExchangeSetInput.LooksLikeExchangeSet(ExchangeSetSource!))
                 return ValidationResult.Error(
-                    $"Not an S-100 exchange set (expected a directory with CATALOG.XML, a CATALOG.XML, or an exchange-set .zip): {ExchangeSetSource}");
+                    $"Not an exchange set (expected a directory with CATALOG.XML or CATALOG.031, a CATALOG.XML or CATALOG.031, or an exchange-set .zip): {ExchangeSetSource}");
         }
         else if (IsComposite)
         {
@@ -160,13 +285,13 @@ internal abstract class TilesRenderSettings : CommandSettings
         else
         {
             if (string.IsNullOrWhiteSpace(Input))
-                return ValidationResult.Error("A dataset or exchange-set path is required (or use --layer / --exchange-set).");
+                return ValidationResult.Error("A dataset, folder or exchange-set path is required (or use --layer / --exchange-set).");
             if (!File.Exists(Input))
                 return ValidationResult.Error($"Dataset file not found: {Input}");
         }
 
-        if (Only is not null && !IsExchangeSet)
-            return ValidationResult.Error("--only applies only to the exchange-set form.");
+        if (Only is not null && !IsExchangeSet && !IsFolder)
+            return ValidationResult.Error("--only applies only to the exchange-set and folder forms.");
         if (Only is not null && !RenderCommand.TryParseOnlySpecs(Only, out _))
             return ValidationResult.Error("--only must be a comma-separated list of product specifications (e.g. S101,S102).");
 
@@ -191,6 +316,8 @@ internal abstract class TilesRenderSettings : CommandSettings
             return ValidationResult.Error("--quality must be between 1 and 100.");
         if (!RenderCommand.TryParsePalette(Palette, out _))
             return ValidationResult.Error($"Unknown palette '{Palette}'. Use day, dusk, or night.");
+        if (!RenderCommand.TryParseNationalLanguage(NationalLanguage, out _))
+            return ValidationResult.Error(RenderCommand.NationalLanguageError(NationalLanguage));
         if (TimeStep < 0)
             return ValidationResult.Error("--time-step must be zero or greater.");
         if (Background is not null && !RenderCommand.TryParseHexColor(Background, out _))
@@ -206,6 +333,21 @@ internal abstract class TilesRenderSettings : CommandSettings
         if (DisplayMode is not null && !RenderCommand.TryParseDisplayMode(DisplayMode, out _))
             return ValidationResult.Error(
                 $"Invalid --display-mode value '{DisplayMode}'. Use ice-concentration, ice-sod or ice-navigational.");
+        if (DisplayCategory is not null && !TryParseDisplayCategory(DisplayCategory, out _))
+            return ValidationResult.Error(
+                $"Invalid --display-category value '{DisplayCategory}'. Use display-base, standard, other-information or all.");
+        if (DepthUnit is not null && !TryParseDepthUnit(DepthUnit, out _))
+            return ValidationResult.Error($"Invalid --depth-unit value '{DepthUnit}'. Use metres, feet, fathoms-feet or fathoms.");
+        foreach (var (option, depth) in new[]
+                 {
+                     ("--safety-contour", SafetyContour), ("--safety-depth", SafetyDepth),
+                     ("--shallow-contour", ShallowContour), ("--deep-contour", DeepContour),
+                 })
+        {
+            if (depth is { } metres && !MarinerStyle.IsValidDepth(metres))
+                return ValidationResult.Error($"{option} must be a depth in metres from 0 to {MarinerStyle.MaxDepthMetres:0}.");
+        }
+
         if (Metatile is < 1 or > 16)
             return ValidationResult.Error("--metatile must be between 1 and 16.");
         if (Parallel is < 1)

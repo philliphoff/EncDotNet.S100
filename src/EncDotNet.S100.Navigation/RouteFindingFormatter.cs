@@ -88,6 +88,8 @@ public class RouteFindingFormatter
             RouteFindingCategory.Warning when finding.Details is WarningDetails warning => WarningTitle(finding, warning),
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceTitle(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceTitle(finding),
+            RouteFindingCategory.Weather when finding.Details is WeatherDetails weather => WeatherTitle(finding, weather),
+            RouteFindingCategory.Weather when finding.Details is TropicalCycloneDetails cyclone => CycloneTitle(cyclone),
             _ => ChartTitle(finding),
         };
     }
@@ -105,6 +107,8 @@ public class RouteFindingFormatter
             RouteFindingCategory.Warning when finding.Details is WarningDetails warning => WarningMeta(warning),
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceMeta(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceMeta(finding),
+            RouteFindingCategory.Weather when finding.Details is WeatherDetails weather => WeatherMeta(weather),
+            RouteFindingCategory.Weather when finding.Details is TropicalCycloneDetails cyclone => CycloneMeta(cyclone),
             _ => ChartMeta(finding),
         };
     }
@@ -227,6 +231,24 @@ public class RouteFindingFormatter
     /// <summary>The title of <see cref="RouteFindingCodes.SafetyContourInCorridor"/>.</summary>
     protected virtual string SafetyContourInCorridor => "Shallower than the safety contour inside the cross-track limits";
 
+    /// <summary>The title of <see cref="RouteFindingCodes.CrossesSafetyContour"/> for a structure (<see cref="SafetyContourFeatureDetails.IsStructure"/>, #1548).</summary>
+    protected virtual string CrossesStructure => "Crosses a structure";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.SafetyContourInCorridor"/> for a structure (#1548).</summary>
+    protected virtual string StructureInsideLimits => "Structure inside the cross-track limits";
+
+    /// <summary>Why a structure's or another feature's finding fires: its portrayal raises the <c>SafetyContour</c> alert (#1548).</summary>
+    protected virtual string SafetyContourAlert => "safety contour alert";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.BerthStructures"/> at the departure.</summary>
+    protected virtual string DepartureBerthStructures => "Structures at the departure berth";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.BerthStructures"/> at the arrival.</summary>
+    protected virtual string ArrivalBerthStructures => "Structures at the arrival berth";
+
+    /// <summary>How many structures are at a berth ({0}) and the berth radius ({1}, metres).</summary>
+    protected virtual string BerthStructuresCountFormat => "{0} within {1:0} m";
+
     /// <summary>The title of <see cref="RouteFindingCodes.SoundingsBelowSafetyContour"/>.</summary>
     protected virtual string SoundingsBelowSafetyContour => "Soundings no deeper than the safety contour";
 
@@ -269,6 +291,9 @@ public class RouteFindingFormatter
     /// <summary>A danger that shows above water (<c>waterLevelEffect</c> 1 or 2).</summary>
     protected virtual string AboveWater => "above water";
 
+    /// <summary>A danger that floats (<c>waterLevelEffect</c> 7), such as a log boom.</summary>
+    protected virtual string Floating => "floating";
+
     /// <summary>The safety-depth threshold fired ({0}).</summary>
     protected virtual string BelowSafetyDepthFormat => "shallower than safety depth {0}";
 
@@ -291,6 +316,14 @@ public class RouteFindingFormatter
         {
             var type = (finding.Details as DangerDetails)?.FeatureType ?? finding.Feature?.FeatureType ?? string.Empty;
             return Format(code == RouteFindingCodes.DangerInCorridor ? DangerInCorridorFormat : DangerNearRouteFormat, DangerKind(type));
+        }
+
+        switch (finding.Details)
+        {
+            case SafetyContourFeatureDetails { IsStructure: true }:
+                return code == RouteFindingCodes.CrossesSafetyContour ? CrossesStructure : StructureInsideLimits;
+            case BerthStructuresDetails berth:
+                return berth.End == RouteEnd.Departure ? DepartureBerthStructures : ArrivalBerthStructures;
         }
 
         if (finding.Details is HazardDetails hazard)
@@ -341,6 +374,13 @@ public class RouteFindingFormatter
             parts.Add(Format(LengthFormat, length / PassageGeodesy.MetersPerNauticalMile));
         }
 
+        if (finding.Details is BerthStructuresDetails berth)
+        {
+            parts.Add(Format(BerthStructuresCountFormat, berth.Features.Count, berth.Radius.TotalMetres));
+            parts.Add(string.Join(", ", berth.FeatureTypes));
+            return string.Join(Separator, parts);
+        }
+
         if (finding.Feature?.FeatureType is { } featureType)
         {
             parts.Add(featureType);
@@ -348,6 +388,9 @@ public class RouteFindingFormatter
 
         switch (finding.Details)
         {
+            case SafetyContourFeatureDetails:
+                parts.Add(SafetyContourAlert);
+                break;
             case HazardDetails hazard:
                 parts.Add(hazard.Side == RouteFindingSide.OnTrack
                     ? OnTrack
@@ -357,25 +400,30 @@ public class RouteFindingFormatter
                 parts.Add(danger.Side == RouteFindingSide.OnTrack
                     ? OnTrack
                     : Format(danger.Side == RouteFindingSide.Port ? ToPortFormat : ToStarboardFormat, danger.Offset.TotalMetres));
-                if (danger.Depth is not { } depth)
+                if (danger.Depth is not { } depth || danger.DepthIsDefault)
                 {
+                    // A default clearance depth is a stand-in for judging the
+                    // danger, not a depth to show (#1547): say what the
+                    // water level does to it instead.
                     parts.Add(danger.WaterLevelEffect switch
                     {
                         1 or 2 => AboveWater,
                         4 => CoversAndUncovers,
                         5 => Awash,
+                        7 => Floating,
                         _ => DepthUnknown,
                     });
                 }
                 else
                 {
                     parts.Add(FormatDepth(depth));
-                    if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
-                    {
-                        parts.Add(kind == RouteFindingThreshold.SafetyContour
-                            ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
-                            : Below(kind, threshold));
-                    }
+                }
+
+                if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
+                {
+                    parts.Add(kind == RouteFindingThreshold.SafetyContour
+                        ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
+                        : Below(kind, threshold));
                 }
 
                 break;
@@ -463,7 +511,7 @@ public class RouteFindingFormatter
 
     // ---- Area findings ----
 
-    /// <summary>Title when the track enters an area where entry is prohibited or restricted ({0}: the area's name or kind).</summary>
+    /// <summary>Title when the track enters an area where entry is prohibited ({0}: the area's name or kind).</summary>
     protected virtual string AreaEntersFormat => "Enters {0}";
 
     /// <summary>Title when the track crosses any other area ({0}: the area's name or kind).</summary>
@@ -816,6 +864,21 @@ public class RouteFindingFormatter
     /// <summary>The meta of <see cref="RouteFindingCodes.DatumUnconfirmed"/> ({0}: nautical miles).</summary>
     protected virtual string DatumUnconfirmedMetaFormat => "{0:0.0} NM · a depth or water-level datum isn't declared";
 
+    /// <summary>The title of <see cref="RouteFindingCodes.WaterLevelPredicted"/> ({0}: nautical miles).</summary>
+    protected virtual string WaterLevelPredictedFormat => "Water level predicted for {0:0.0} NM";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.TightOnPredicted"/> ({0}: nautical miles).</summary>
+    protected virtual string TightOnPredictedFormat => "Tight on predicted water level for {0:0.0} NM";
+
+    /// <summary>The stations a predicted water level comes from ({0}: the stations, as "Seattle 9447130, Edmonds 9447427").</summary>
+    protected virtual string PredictedStationsFormat => "Predicted · {0}";
+
+    /// <summary>More predicted stations than are named ({0}: how many more).</summary>
+    protected virtual string MoreStationsFormat => "+{0}";
+
+    /// <summary>The caveat on a predicted water level.</summary>
+    protected virtual string NotAForecast => "not a forecast";
+
     /// <summary>The title of <see cref="RouteFindingCodes.WaterLevelEnds"/>.</summary>
     protected virtual string WaterLevelEnds => "Water-level data ends before arrival";
 
@@ -824,6 +887,12 @@ public class RouteFindingFormatter
 
     /// <summary>The title of <see cref="RouteFindingCodes.NoWaterLevelCoverage"/>.</summary>
     protected virtual string NoWaterLevelCoverage => "Outside water-level coverage";
+
+    /// <summary>The title of <see cref="RouteFindingCodes.NoCurrentCoverage"/>.</summary>
+    protected virtual string NoCurrentCoverage => "No current at the ETA";
+
+    /// <summary>Why a stretch's ETA has no current applied.</summary>
+    protected virtual string SpeedOverGround => "speed taken as over the ground";
 
     /// <summary>The title of <see cref="RouteFindingCodes.WaterLevelNoData"/>.</summary>
     protected virtual string WaterLevelNoData => "No water-level value";
@@ -862,12 +931,15 @@ public class RouteFindingFormatter
                 : Format(BelowDistanceFormat, Nm(details?.Length ?? Length.Zero)),
             "confidence.charted_depth_from_s101" => ChartedDepthFromS101,
             "confidence.datum_unconfirmed" => DatumUnconfirmed,
+            "confidence.water_level_predicted" => Format(WaterLevelPredictedFormat, Nm(details?.Length ?? Length.Zero)),
+            "clearance.tight_on_predicted" => Format(TightOnPredictedFormat, Nm(details?.Length ?? Length.Zero)),
             "data.water_level_ends" => WaterLevelEnds,
             "data.water_level_starts_late" => WaterLevelStartsLate,
             "data.no_water_level_coverage" => NoWaterLevelCoverage,
             "data.water_level_no_data" => WaterLevelNoData,
             "data.datum_mismatch" => DatumMismatch,
             "data.no_charted_depth" => NoChartedDepth,
+            "data.no_current_coverage" => NoCurrentCoverage,
             _ => finding.Code.Value,
         };
     }
@@ -890,6 +962,14 @@ public class RouteFindingFormatter
             return Join(LegLabel(leg, leg), min);
         }
 
+        if (finding.Code == RouteFindingCodes.TightOnPredicted)
+        {
+            var leg = finding.LegIndex ?? details.FirstLegIndex;
+            var clearance = details.MinimumClearance is { } c ? FormatDepth(c) : NoValue;
+            var min = details.MinimumTime is { } at ? Format(MinAtFormat, clearance, FormatEta(at)) : Format(MinFormat, clearance);
+            return Join(LegLabel(leg, leg), min, PredictedStations(details.WaterLevelSources));
+        }
+
         var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
         var nm = Nm(details.Length);
         var length = Format(StretchLengthFormat, nm);
@@ -897,12 +977,230 @@ public class RouteFindingFormatter
         {
             "confidence.charted_depth_from_s101" => Join(legs, Format(OutsideS102Format, nm)),
             "confidence.datum_unconfirmed" => Join(legs, Format(DatumUnconfirmedMetaFormat, nm)),
+            "confidence.water_level_predicted" => Join(legs, PredictedStations(details.WaterLevelSources), NotAForecast),
             "data.water_level_ends" => Join(legs, Format(StretchFromFormat, FormatEta(details.StartTime)), Format(TideNotAppliedForFormat, nm)),
             "data.water_level_starts_late" => Join(legs, Format(TideNotAppliedForFormat, nm)),
             "data.no_charted_depth" => Join(legs, length, NoDepthSource),
+            "data.no_current_coverage" => Join(legs, length, SpeedOverGround),
             _ => Join(legs, length, TideNotApplied),
         };
     }
+
+    /// <summary>
+    /// "Predicted · Seattle 9447130, Edmonds 9447427": the predicted stations
+    /// a finding's water level comes from, the first three by name.
+    /// </summary>
+    /// <param name="sources">The stations.</param>
+    /// <returns>The text, or an empty string without stations.</returns>
+    protected virtual string PredictedStations(IReadOnlyList<WaterLevelSourceInfo> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        const int named = 3;
+        var labels = sources.Select(s => s.StationLabel).OfType<string>().ToList();
+        if (labels.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var text = string.Join(", ", labels.Take(named));
+        if (labels.Count > named)
+        {
+            text = $"{text}, {Format(MoreStationsFormat, labels.Count - named)}";
+        }
+
+        return Format(PredictedStationsFormat, text);
+    }
+
+    // ---- Weather findings ----
+
+    /// <summary>Title above the wind limit ({0}: the limit), with the time spent above it ({1}: from <see cref="FormatDuration"/>).</summary>
+    protected virtual string WindAboveForFormat => "Wind above {0} for {1}";
+
+    /// <summary>Title above the wave limit ({0}: the limit), with the time spent above it ({1}).</summary>
+    protected virtual string WavesAboveForFormat => "Waves above {0} for {1}";
+
+    /// <summary>Title above the wind limit ({0}: the limit) without ETAs, with the stretch's length ({1}: nautical miles).</summary>
+    protected virtual string WindAboveDistanceFormat => "Wind above {0} for {1:0.0} NM";
+
+    /// <summary>Title above the wave limit ({0}: the limit) without ETAs, with the stretch's length ({1}: nautical miles).</summary>
+    protected virtual string WavesAboveDistanceFormat => "Waves above {0} for {1:0.0} NM";
+
+    /// <summary>Wind, as the subject of a "not checked" title.</summary>
+    protected virtual string WindNoun => "Wind";
+
+    /// <summary>Waves, as the subject of a "not checked" title.</summary>
+    protected virtual string WavesNoun => "Waves";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.WeatherForecastEnds"/> ({0}: <see cref="WindNoun"/> or <see cref="WavesNoun"/>).</summary>
+    protected virtual string WeatherForecastEndsFormat => "{0} not checked: forecast ends before arrival";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.WeatherForecastStartsLate"/> ({0}: the quantity).</summary>
+    protected virtual string WeatherForecastStartsLateFormat => "{0} not checked: forecast starts later";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.NoWeatherCoverage"/> ({0}: the quantity).</summary>
+    protected virtual string NoWeatherCoverageFormat => "{0} not checked: outside forecast coverage";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.WeatherNoData"/> ({0}: the quantity).</summary>
+    protected virtual string WeatherNoDataFormat => "{0} not checked: no forecast value";
+
+    /// <summary>The highest value in a stretch ({0}) and when the vessel is there ({1}).</summary>
+    protected virtual string WeatherMaxAtFormat => "max {0} at {1}";
+
+    /// <summary>The highest value in a stretch ({0}) without an ETA.</summary>
+    protected virtual string WeatherMaxFormat => "max {0}";
+
+    /// <summary>The time window the vessel is in a stretch, from ({0}) to ({1}).</summary>
+    protected virtual string TimeWindowFormat => "{0}–{1}";
+
+    /// <summary>When the forecast ends ({0}: the time of its last step).</summary>
+    protected virtual string ForecastEndsAtFormat => "forecast ends {0}";
+
+    /// <summary>When the forecast starts ({0}: the time of its first step).</summary>
+    protected virtual string ForecastStartsAtFormat => "forecast starts {0}";
+
+    /// <summary>A time spent somewhere in whole minutes ({0}), under an hour.</summary>
+    protected virtual string MinutesFormat => "{0} min";
+
+    /// <summary>A time spent somewhere in hours ({0}, to a tenth).</summary>
+    protected virtual string HoursFormat => "{0:0.#} h";
+
+    /// <summary>A wind speed with its unit: knots to the whole knot, "25 kn".</summary>
+    /// <param name="metresPerSecond">The speed.</param>
+    /// <returns>The text.</returns>
+    protected virtual string FormatWind(double metresPerSecond) =>
+        Speed.FromMetresPerSecond(metresPerSecond).TotalKnots.ToString("0", Culture) + " kn";
+
+    /// <summary>A wave height with its unit: metres to a tenth, or feet to the whole foot when <see cref="DepthUnit"/> isn't metres.</summary>
+    /// <param name="metres">The height.</param>
+    /// <returns>The text.</returns>
+    protected virtual string FormatWaveHeight(double metres) => DepthUnit == DepthUnit.Metres
+        ? metres.ToString("0.0", Culture) + " m"
+        : Length.FromMetres(metres).TotalFeet.ToString("0", Culture) + " ft";
+
+    /// <summary>A time spent somewhere: whole minutes under an hour, hours to a tenth beyond.</summary>
+    /// <param name="duration">The time.</param>
+    /// <returns>The text.</returns>
+    protected virtual string FormatDuration(TimeSpan duration) => duration < TimeSpan.FromMinutes(59.5)
+        ? Format(MinutesFormat, Math.Max(1, (int)Math.Round(duration.TotalMinutes)))
+        : Format(HoursFormat, Math.Round(duration.TotalHours, 1));
+
+    /// <summary>The title of a weather finding.</summary>
+    /// <param name="finding">The finding.</param>
+    /// <param name="details">Its details.</param>
+    /// <returns>The title.</returns>
+    protected virtual string WeatherTitle(RouteFinding finding, WeatherDetails details)
+    {
+        var wind = details.Quantity == WeatherQuantity.WindSpeed;
+        if (details.Gap is not { } gap)
+        {
+            var limit = details.Limit is { } l ? WeatherValue(details.Quantity, l) : NoValue;
+            return details.EndTime is { } end
+                ? Format(wind ? WindAboveForFormat : WavesAboveForFormat, limit, FormatDuration(end - details.StartTime))
+                : Format(wind ? WindAboveDistanceFormat : WavesAboveDistanceFormat, limit, Nm(details.Length));
+        }
+
+        var noun = wind ? WindNoun : WavesNoun;
+        return gap switch
+        {
+            WeatherSampleState.ForecastEnds => Format(WeatherForecastEndsFormat, noun),
+            WeatherSampleState.ForecastStartsLate => Format(WeatherForecastStartsLateFormat, noun),
+            WeatherSampleState.NoCoverage => Format(NoWeatherCoverageFormat, noun),
+            _ => Format(WeatherNoDataFormat, noun),
+        };
+    }
+
+    /// <summary>The meta line of a weather finding: "Legs 4 → 6 · max 31 kn at 15:00 · 14:00–17:00".</summary>
+    /// <param name="details">The finding's details.</param>
+    /// <returns>The meta line.</returns>
+    protected virtual string WeatherMeta(WeatherDetails details)
+    {
+        var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
+        var window = details.EndTime is { } end
+            ? Format(TimeWindowFormat, FormatEta(details.StartTime), FormatEta(end))
+            : null;
+        if (details.Gap is not { } gap)
+        {
+            var max = details.Maximum is { } m ? WeatherValue(details.Quantity, m) : NoValue;
+            var peak = details.MaximumTime is { } at ? Format(WeatherMaxAtFormat, max, FormatEta(at)) : Format(WeatherMaxFormat, max);
+            return Join(legs, peak, window);
+        }
+
+        var edge = gap switch
+        {
+            WeatherSampleState.ForecastEnds when details.ForecastEnd is { } e => Format(ForecastEndsAtFormat, FormatTime(e)),
+            WeatherSampleState.ForecastStartsLate when details.ForecastStart is { } s => Format(ForecastStartsAtFormat, FormatTime(s)),
+            _ => null,
+        };
+        return Join(legs, Format(StretchFromFormat, FormatEta(details.StartTime)), edge, Format(StretchLengthFormat, Nm(details.Length)));
+    }
+
+    // ---- Tropical cyclone findings (#1299) ----
+
+    /// <summary>Title inside a wind radius ({0}: its knots, 34, 50 or 64).</summary>
+    protected virtual string CycloneRadiusFormat => "Inside the {0} kt radius";
+
+    /// <summary>Title inside the forecast cone.</summary>
+    protected virtual string CycloneConeTitle => "Inside the forecast cone";
+
+    /// <summary>Title of the closest approach ({0}: the distance in nautical miles).</summary>
+    protected virtual string CycloneClosestFormat => "Closest approach {0:0} NM";
+
+    /// <summary>Title of a stretch after the forecast ends ({0}: the storm's name).</summary>
+    protected virtual string CycloneBeyondFormat => "{0} not checked: beyond the forecast";
+
+    /// <summary>The storm and its advisory ({0}: the name, {1}: the advisory number), "ZELDA adv 17".</summary>
+    protected virtual string CycloneStormFormat => "{0} adv {1}";
+
+    /// <summary>The storm position is an estimate between two forecast points.</summary>
+    protected virtual string CycloneEstimated => "est. position";
+
+    /// <summary>The storm position is on the best track, before the advisory.</summary>
+    protected virtual string CycloneBestTrack => "best track";
+
+    /// <summary>The title of a tropical cyclone finding.</summary>
+    /// <param name="details">Its details.</param>
+    /// <returns>The title.</returns>
+    protected virtual string CycloneTitle(TropicalCycloneDetails details) => details.Kind switch
+    {
+        TropicalCycloneFindingKind.Radius => Format(CycloneRadiusFormat, (int)(details.Radius ?? TropicalCycloneRadius.Knots34)),
+        TropicalCycloneFindingKind.Cone => CycloneConeTitle,
+        TropicalCycloneFindingKind.ClosestApproach => Format(CycloneClosestFormat, details.ClosestDistance is { } d ? Nm(d) : 0),
+        _ => Format(CycloneBeyondFormat, details.Storm.Name),
+    };
+
+    /// <summary>The meta line of a tropical cyclone finding: "Leg 2 → 4 · 02:00–07:00 · ZELDA adv 17".</summary>
+    /// <param name="details">The finding's details.</param>
+    /// <returns>The meta line.</returns>
+    protected virtual string CycloneMeta(TropicalCycloneDetails details)
+    {
+        var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
+        var storm = Format(CycloneStormFormat, details.Storm.Name, details.Storm.Advisory);
+        switch (details.Kind)
+        {
+            case TropicalCycloneFindingKind.ClosestApproach:
+                var basis = details.StormAtClosest?.Basis switch
+                {
+                    RouteCycloneBasis.Estimated => CycloneEstimated,
+                    RouteCycloneBasis.BestTrack => CycloneBestTrack,
+                    _ => null,
+                };
+                return Join(FormatEta(details.StartTime), legs, storm, basis);
+            case TropicalCycloneFindingKind.BeyondForecast:
+                return Join(
+                    legs,
+                    Format(StretchFromFormat, FormatEta(details.StartTime)),
+                    details.ForecastEnd is { } e ? Format(ForecastEndsAtFormat, FormatTime(e)) : null,
+                    storm);
+            default:
+                var window = details.EndTime is { } end
+                    ? Format(TimeWindowFormat, FormatEta(details.StartTime), FormatEta(end))
+                    : Format(StretchFromFormat, FormatEta(details.StartTime));
+                return Join(legs, window, storm);
+        }
+    }
+
+    private string WeatherValue(WeatherQuantity quantity, double value) =>
+        quantity == WeatherQuantity.WindSpeed ? FormatWind(value) : FormatWaveHeight(value);
 
     private string Join(params string?[] parts) =>
         string.Join(Separator, parts.Where(p => !string.IsNullOrEmpty(p)));

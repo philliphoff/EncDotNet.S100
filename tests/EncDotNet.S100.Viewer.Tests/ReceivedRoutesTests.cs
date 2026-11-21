@@ -74,12 +74,12 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         public Harness(CheckSettingsStore? store = null)
         {
             Closed = [];
-            Service = new ReceivedRoutesService(Loader, Routes, store, Closed.Add, read: e => S421Dataset.Open(e.FilePath));
+            Service = new ReceivedRoutesService(Loader, Routes, store ?? new CheckSettingsStore(), Closed.Add, read: e => S421Dataset.Open(e.FilePath), notifications: null, follow: null);
         }
 
         public FakeDatasetLoaderService Loader { get; } = new();
 
-        public RoutesService Routes { get; } = new();
+        public RoutesService Routes { get; } = new(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
 
         public ReceivedRoutesService Service { get; }
 
@@ -231,8 +231,8 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         File.Copy(Fixture("RTE-TEST-GBASIC.s421.gml"), Path.Combine(basicFolder, "route.gml"));
         File.Copy(Fixture("RTE-TEST-GMIN.s421.gml"), Path.Combine(minFolder, "route.gml"));
         var loader = new FakeDatasetLoaderService();
-        var routes = new RoutesService();
-        var service = new ReceivedRoutesService(loader, routes);
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var service = new ReceivedRoutesService(loader, routes, checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null, read: EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset);
         var datasets = new DatasetsViewModel(loader);
         using var basicSource = Core.FileSystemAssetSource.Create(basicFolder);
         using var minSource = Core.FileSystemAssetSource.Create(minFolder);
@@ -520,7 +520,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     {
         var h = new Harness();
         h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
-        var panel = new RoutesPanelViewModel(h.Routes);
+        var panel = TestRoutesPanel.Create(h.Routes);
 
         Assert.True(panel.IsActiveReadOnly);
         Assert.False(panel.CanEditActiveRoute);
@@ -555,14 +555,16 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     {
         var h = new Harness();
         var entry = h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
-        var panel = new RoutesPanelViewModel(h.Routes);
+        var panel = TestRoutesPanel.Create(h.Routes);
         panel.Passage.IsExpanded = true;
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 
         Assert.True(host.IsShown("Routes.Active.ReadOnlyBadge"));
         Assert.Equal("S-421 · BASIC.00001 ed. 1", host.Find<TextBlock>("Routes.Active.Source").Text);
         Assert.False(host.IsShown("Routes.Active.Rename"));
-        Assert.False(host.Find<ToggleButton>("Routes.EditToggle").IsEnabled);
+        // Copy to edit takes Edit's place (A8).
+        Assert.True(host.IsShown("Routes.CopyToEdit"));
+        Assert.False(host.IsShown("Routes.EditToggle"));
         Assert.True(host.IsShown("Routes.Passage.CheckSettings"));
         Assert.True(host.IsShown("Routes.Passage.RouteValues"));
         Assert.True(host.Find<TextBox>("Routes.Passage.Speed").IsReadOnly);

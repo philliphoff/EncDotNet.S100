@@ -132,7 +132,7 @@ public sealed class NmeaLineSourceTests
             }
         }, ct);
 
-        var source = new NmeaTcpLineSource("127.0.0.1", port, reconnectDelay: TimeSpan.FromMilliseconds(50));
+        var source = new NmeaTcpLineSource("127.0.0.1", port: port, reconnectDelay: TimeSpan.FromMilliseconds(50), timeProvider: TimeProvider.System);
         Assert.Equal($"tcp://127.0.0.1:{port}", source.Description);
 
         var lines = await ReadAll(source, max: 2);

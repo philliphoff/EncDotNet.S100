@@ -126,8 +126,10 @@ public static class LoadedDatasetProjector
         // the catalog entry must keep the product identity "S-57" (product
         // identity vs. portrayal spec; see the Datasets.Pipelines README).
         // Mirrors the processor overload, which takes the identity from the
-        // processor's Spec.
+        // processor's Spec. An AML cell listed as S-57 opens as AML and keeps
+        // that identity: it isn't an S-57 chart.
         return registration.PortrayalSpec is not null
+            && loaded.Data is not AmlDatasetData
             && !string.Equals(loaded.Spec.Name, registration.Spec, StringComparison.OrdinalIgnoreCase)
                 ? loaded with { Spec = new SpecRef(registration.Spec, default) }
                 : loaded;
@@ -208,6 +210,7 @@ public static class LoadedDatasetProjector
             S131DatasetData d => Gml(id, "S-131", d.Model.ReadMetadata(), data),
             S201DatasetData d => Gml(id, "S-201", d.Model.ReadMetadata(), data),
             S411DatasetData d => Gml(id, "S-411", d.Model.ReadMetadata(), data),
+            S412DatasetData d => Gml(id, "S-412", d.Model.ReadMetadata(), data),
             S421DatasetData d => Gml(id, "S-421", d.Model.ReadMetadata(), data),
             S102CoverageData d => new LoadedDataset(
                 id, d.Source.Spec, ResolveCoverageBounds(d.Source, ComputeS102Bounds(d.Source.Dataset), transforms), null, data),

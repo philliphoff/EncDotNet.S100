@@ -384,7 +384,7 @@ Each scenario runs in one of two modes:
 | Mode | Starts from |
 |---|---|
 | `cold` | Empty portrayal, pattern-clip and tile caches. The background portrayal pre-warm is switched off for the session, so it can't warm cells between jumps. |
-| `prewarm` | Warm caches: the harness switches the pre-warm on and waits until it reports `complete` (every load-as-you-pan cell is in the portrayal cache), then runs the route. |
+| `prewarm` | Warm caches: the harness switches the pre-warm on and waits until it reports `complete` (every load-as-you-pan cell is in the portrayal cache), then runs the route. The manifest's `prewarm` block records how long that took, the pre-warm's concurrency limit, and the CPU, GC and memory window over it (`metrics`). |
 
 ### Data you need
 
@@ -475,6 +475,20 @@ run's table. See [PerfReport](../EncDotNet.S100.PerfReport/README.md#settle-runs
 A single run is noisy. Use `--repeat <n>` for several runs of each engine and
 mode, and compare medians.
 
+### Keep runs comparable on macOS
+
+- **App Nap.** macOS throttles an app whose windows are all hidden or covered:
+  it lowers the app's CPU priority and coalesces its timers. A viewer in that
+  state settles several times slower, with three to four times the CPU time and
+  frame p95 in the hundreds of milliseconds. The viewer turns App Nap off when
+  the first perf-harness tool is called, so the window's visibility doesn't
+  matter. The manifest's `viewer.appNapDisabled` records it, and `summarise`
+  marks a macOS run with **App Nap on**.
+- **Screen lock.** With the screen locked the viewer doesn't paint, so
+  `await_settled` times out. Keep the screen unlocked.
+- **Other work.** On macOS the load average overstates how busy the machine is.
+  Wait for `top` to show at least 85% idle before each run.
+
 ### When a view is settled
 
 The viewer's MCP tool `await_settled` decides. The view is settled when both
@@ -523,10 +537,14 @@ period.
 | Tile native | Native bytes the tile raster caches and GPU tile textures hold, summed over every layer. |
 | Working set | Resident memory. The peak is sampled every 100 ms through the window, because the process's own peak counter isn't reliable on macOS. |
 | Frame p50, p95, max | Map paint times over the window, from `get_render_stats`. The `pan` scenario's frame times are the pan's. |
+| Scheduler cores busy | Work scheduler worker time ÷ wall: how many of its workers were busy on average. |
+| Visible job wait p95 | 95th percentile of the time from a visible job (a tile on screen) being queued, or promoted to visible, to a worker starting it. The totals take the largest step's p95. |
+| Job run p95 | 95th percentile of how long a job held a worker per run, every class. |
 
 Peaks of the GC heap, GC committed and tile native bytes are sampled the same
 way. The manifest's `totals` add CPU, wall, GC pause and allocation over the
-moves, divide for cores busy and pause share, and take the largest peaks.
+moves, divide for cores busy and pause share, and take the largest peaks and
+job-wait percentiles.
 Each step also keeps the raw MCP replies under `raw`.
 
 ### Split a warm cell load by stage
@@ -541,7 +559,8 @@ With `--trace` (and `--launch`), each viewer writes its spans to
 | `s100.portrayal.cache.read` | The portrayal-cache read alone, tagged `s100.cache.result` = `hit` or `miss`. |
 | `s100.cell.scene_build` | Building the Mapsui layers and scene, including the pattern clip. |
 | `s100.cell.pattern_clip` | The pattern clip, tagged `s100.cache.result` = `hit` or `miss`. |
-| `s100.cell.compose` | Composing the layer stack. |
+| `s100.cell.compose` | Composing the layer stack. A landing cell's compose runs as a background job, outside the load's trace. |
+| `s100.cell.stack_wait` | Waiting for a layer stack with the landed cell to reach the map. |
 
 Summarize them with `dotnet run --project tools/EncDotNet.S100.PerfReport --
 summarise <stem>.jsonl`.

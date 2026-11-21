@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.IntegrationsSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:IntegrationsSettingsPageViewModel">
 
     <!-- Settings → Integrations: the MCP server and Feature Catalogue eXaminer links (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -42,6 +42,30 @@
                             VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
+
+            <StackPanel Spacing="3" Margin="0,8,0,0">
+                <TextBlock Text="{x:Static loc:Strings.Settings_McpToolsets}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_McpToolsets_Help}" />
+            </StackPanel>
+            <ItemsControl ItemsSource="{Binding Toolsets}"
+                          AutomationProperties.AutomationId="Settings.McpToolsets">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:McpToolsetOptionViewModel">
+                        <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="1">
+                                <TextBlock Text="{Binding Name}" />
+                                <TextBlock Classes="settingsHelp" Text="{Binding Summary}" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" Classes="setting"
+                                          IsChecked="{Binding IsEnabled}"
+                                          AutomationProperties.AutomationId="{Binding AutomationId}"
+                                          AutomationProperties.Name="{Binding Name}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <Separator Margin="0,8,0,0" />
             <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_ExaminerSection}" />

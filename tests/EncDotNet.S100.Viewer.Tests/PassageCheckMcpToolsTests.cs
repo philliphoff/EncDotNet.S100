@@ -26,7 +26,7 @@ public sealed class PassageCheckMcpToolsTests
     public async Task Set_check_mode_turns_check_on_waits_and_reports_the_verdict()
     {
         var f = new PassageCheckFixture();
-        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check);
+        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         var state = Value(await tool.InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken));
 
@@ -50,10 +50,10 @@ public sealed class PassageCheckMcpToolsTests
     {
         // #939: no S-102 datum. The verdict still follows the band.
         var f = new PassageCheckFixture(depthDatum: null, tide: PassageCheckFixture.TwoHighWaters);
-        await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken);
+        await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null).InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken);
         await f.Check.WhenIdle();
 
-        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(true, TestContext.Current.CancellationToken));
+        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null).InvokeAsync(true, TestContext.Current.CancellationToken));
 
         Assert.Equal("below_setting", state.Verdict);
         Assert.Equal(["datum_unconfirmed"], state.Confidence);
@@ -68,7 +68,7 @@ public sealed class PassageCheckMcpToolsTests
     public async Task Full_confidence_reports_no_confidence_reasons()
     {
         var f = new PassageCheckFixture();
-        var state = Value(await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken));
+        var state = Value(await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null).InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken));
 
         Assert.Empty(state.Confidence);
         Assert.Null(state.ConfidenceText);
@@ -79,7 +79,7 @@ public sealed class PassageCheckMcpToolsTests
     {
         var f = new PassageCheckFixture();
         f.Route.SetPassageValue(RoutePassageField.Draft, null);
-        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check);
+        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         var result = await tool.InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken);
 
@@ -98,7 +98,7 @@ public sealed class PassageCheckMcpToolsTests
         var f = new PassageCheckFixture();
         var empty = f.Routes.Routes.CreateRoute("Empty");
         empty.AppendWaypoint(new GeoPosition(0, 0));
-        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check);
+        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         var result = await tool.InvokeAsync(new SetCheckModeRequest(true, empty.Id), TestContext.Current.CancellationToken);
 
@@ -111,7 +111,7 @@ public sealed class PassageCheckMcpToolsTests
     public async Task Set_check_mode_on_an_unknown_route_is_route_not_found()
     {
         var f = new PassageCheckFixture();
-        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check);
+        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         var result = await tool.InvokeAsync(new SetCheckModeRequest(true, "missing"), TestContext.Current.CancellationToken);
 
@@ -123,9 +123,9 @@ public sealed class PassageCheckMcpToolsTests
     public async Task The_cursor_is_settable_and_read_back()
     {
         var f = new PassageCheckFixture();
-        await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check)
+        await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check, findings: null)
             .InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken);
-        var cursor = new SetPassageCursorTool(f.Routes, new InlineInvoker(), f.Check);
+        var cursor = new SetPassageCursorTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         var state = Value(await cursor.InvokeAsync(new SetPassageCursorRequest(3.0), TestContext.Current.CancellationToken));
 
@@ -134,7 +134,7 @@ public sealed class PassageCheckMcpToolsTests
         Assert.NotNull(state.CursorEta);
         Assert.NotNull(f.Check.Cursor);
 
-        var read = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(wait: true, TestContext.Current.CancellationToken));
+        var read = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null).InvokeAsync(wait: true, TestContext.Current.CancellationToken));
         Assert.Equal(state.CursorLongitude, read.CursorLongitude);
 
         var hidden = Value(await cursor.InvokeAsync(new SetPassageCursorRequest(null), TestContext.Current.CancellationToken));
@@ -145,7 +145,7 @@ public sealed class PassageCheckMcpToolsTests
     public async Task The_cursor_needs_a_result()
     {
         var f = new PassageCheckFixture();
-        var cursor = new SetPassageCursorTool(f.Routes, new InlineInvoker(), f.Check);
+        var cursor = new SetPassageCursorTool(f.Routes, new InlineInvoker(), f.Check, findings: null);
 
         var result = await cursor.InvokeAsync(new SetPassageCursorRequest(1), TestContext.Current.CancellationToken);
 

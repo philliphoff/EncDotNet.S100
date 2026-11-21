@@ -33,9 +33,11 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
     private bool? _isInMapView;
     private DateTime? _nearest;
     private IReadOnlyList<NormalizedCoverageBand> _bands = [];
+    private IReadOnlyList<NormalizedCoverageBand> _pastBands = [];
+    private IReadOnlyList<TimelineLaneMark> _marks = [];
     private IReadOnlyList<NormalizedGap> _gaps = [];
 
-    public TimelineLaneViewModel(string key, MapsuiMapTimedDataset? dataset, string spec, Color color, Action<DateTime> jump, ILibraryTimeSource? library = null)
+    public TimelineLaneViewModel(string key, MapsuiMapTimedDataset? dataset, string spec, Color color, Action<DateTime> jump, ILibraryTimeSource? library)
     {
         Key = key;
         _dataset = dataset;
@@ -263,6 +265,27 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
     }
 
     /// <summary>The axis's collapsed gaps, hatched through every lane (handoff E3).</summary>
+    /// <summary>The part of the data before the dataset's first step (a storm's past track), drawn faded (V14).</summary>
+    public IReadOnlyList<NormalizedCoverageBand> PastBands
+    {
+        get => _pastBands;
+        internal set => SetProperty(ref _pastBands, value);
+    }
+
+    /// <summary>The lane's marks: step ticks, the issue diamond and the next-issue diamond (V14).</summary>
+    public IReadOnlyList<TimelineLaneMark> Marks
+    {
+        get => _marks;
+        internal set
+        {
+            if (SetProperty(ref _marks, value))
+                OnPropertyChanged(nameof(HasMarks));
+        }
+    }
+
+    /// <summary>True when the lane has marks to draw.</summary>
+    public bool HasMarks => _marks.Count > 0;
+
     public IReadOnlyList<NormalizedGap> Gaps
     {
         get => _gaps;

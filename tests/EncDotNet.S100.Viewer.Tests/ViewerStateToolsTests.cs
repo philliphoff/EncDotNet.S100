@@ -41,7 +41,7 @@ public sealed class ViewerStateToolsTests
     {
         var time = new GlobalTimeService();
         var clock = new FakeTimeProvider(new DateTimeOffset(now));
-        var timeline = new TimelineViewModel(time, timeFormat: null, clock, action => action());
+        var timeline = new TimelineViewModel(time, timeFormat: null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
         var controller = new ViewerTimelineController(
             time, timeline, new DatasetsViewModel(new FakeDatasetLoaderService()), clock, Immediate);
         return (time, controller, clock);
@@ -441,7 +441,7 @@ public sealed class ViewerStateToolsTests
     {
         var time = new GlobalTimeService();
         var clock = new AdjustableTimeProvider(new FakeTimeProvider(new DateTimeOffset(Run.AddHours(9))));
-        _ = new TimelineViewModel(time, timeFormat: null, clock, action => action());
+        _ = new TimelineViewModel(time, timeFormat: null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
         time.ApplySnapshot(RunSnapshot());
         Assert.Equal(TimeMode.Live, time.Mode);
 
@@ -469,11 +469,36 @@ public sealed class ViewerStateToolsTests
                 new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
             ViewerStateMcpAdapters.Create(new ListNotificationsTool(notifications)),
             ViewerStateMcpAdapters.Create(new DismissNotificationTool(notifications)),
-            ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider())),
+            ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider(inner: TimeProvider.System))),
         };
 
         Assert.Equal(
             ["get_timeline_state", "set_view_time", "step_time", "set_timeline_view", "set_dataset_state", "select_dataset", "list_notifications", "dismiss_notification", "set_test_clock"],
             tools.Select(tool => tool.ProtocolTool.Name));
+    }
+
+    [Fact]
+    public void TimelineState_ReportsTheTidePredictionsLane()
+    {
+        var high = new DateTime(2026, 11, 13, 16, 2, 0, DateTimeKind.Utc);
+        var state = new ViewerTimelineState(
+            false, high, null, true, null, null, 0, [], [], false, false, "13.11.2026 00:02",
+            "Tide predictions only: no time-varying datasets loaded.", [])
+        {
+            TidePredictions = new TimelineTidePredictionsState(
+                "9446484",
+                "Tacoma 9446484 · 1.2 km from centre",
+                [new TideLaneMark(0.25, true, "H 3.6", high, 3.6123)]),
+        };
+
+        var dto = GetTimelineStateTool.ToDto(state);
+
+        var lane = Assert.IsType<TimelineTidePredictionsDto>(dto.TidePredictions);
+        Assert.Equal("9446484", lane.StationId);
+        var extreme = Assert.Single(lane.Extremes);
+        Assert.Equal("high", extreme.Kind);
+        Assert.Equal(high, extreme.Time);
+        Assert.Equal(3.612, extreme.HeightMeters);
+        Assert.Null(GetTimelineStateTool.ToDto(state with { TidePredictions = null }).TidePredictions);
     }
 }

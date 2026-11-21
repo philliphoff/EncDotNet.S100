@@ -11,12 +11,15 @@ public sealed record CheckRouteResult(
     [property: Description("Route length in nautical miles.")] double DistanceNm,
     [property: Description("The one answer: the worst thing the checks found, and the finding that names it.")] CheckRouteVerdict Verdict,
     [property: Description("Counts by group, and the summary line SoundCharts shows.")] CheckRouteSummary Summary,
-    [property: Description("Whether each check ran, in the order they ran: chart, areas, warnings and clearance.")] IReadOnlyList<CheckRouteCheck> Checks,
-    [property: Description("Every check's findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_contour, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage; the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force; the S-124 warnings' s124.on_route, s124.near_route, s124.not_in_force and s124.cancelled; and the clearance check's clearance.below_setting, confidence.charted_depth_from_s101, confidence.datum_unconfirmed, data.water_level_ends, data.water_level_starts_late, data.no_water_level_coverage, data.water_level_no_data, data.datum_mismatch and data.no_charted_depth.")] IReadOnlyList<CheckRouteFinding> Findings,
+    [property: Description("Whether each check ran, in the order they ran: chart, areas, warnings, clearance and weather, then timing with window.constraints.")] IReadOnlyList<CheckRouteCheck> Checks,
+    [property: Description("Every check's findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.berth_structures (info), route_check.soundings_below_safety_contour, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage; the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force; the S-124 warnings' s124.on_route, s124.near_route, s124.not_in_force and s124.cancelled; and the clearance check's clearance.below_setting, confidence.charted_depth_from_s101, confidence.datum_unconfirmed, data.water_level_ends, data.water_level_starts_late, data.no_water_level_coverage, data.water_level_no_data, data.datum_mismatch and data.no_charted_depth; and the weather check's weather.wind_above_limit, weather.waves_above_limit, weather.forecast_ends, weather.forecast_starts_late, weather.no_coverage and weather.no_data (all check: advisory, from weather model data).")] IReadOnlyList<CheckRouteFinding> Findings,
     [property: Description("The corridor swept along each leg, in route order.")] IReadOnlyList<CheckRouteLeg> Legs,
-    [property: Description("The under-keel clearance: verdict, minimum, sources and, with includeSamples or includeWindow, the detail. Null when the clearance check didn't run (see checks: no draft, no charted depth or no water level).")] CheckRouteClearance? Clearance,
-    [property: Description("The datasets behind the result: S-101 (and S-401, and translated S-57) cells near the route, the S-122 and S-124 datasets behind area and warning findings, and the S-102, S-101 and S-104 datasets the clearance read.")] IReadOnlyList<string> Datasets,
-    [property: Description("Disclaimer to show once with the findings.")] string Disclaimer)
+    [property: Description("The under-keel clearance: verdict, minimum, sources and, with samples.include or window, the detail. Null when the clearance check didn't run (see checks: no draft, no charted depth or no water level).")] CheckRouteClearance? Clearance,
+    [property: Description("The datasets behind the result: S-101 (and S-401, and translated S-57) cells near the route, the S-122 and S-124 datasets behind area and warning findings, the S-102, S-101 and S-104 datasets the clearance read, the weather datasets the weather check read, and the S-111 datasets the ETAs read currents from.")] IReadOnlyList<string> Datasets,
+    [property: Description("Disclaimer to show once with the findings.")] string Disclaimer,
+    [property: Description("The weather check: the limits it used, its verdict, the highest wind and waves along the route and, with window, its departure sweep. Null when it didn't run (see checks: no weather loaded, or no wind or wave limit).")] CheckRouteWeather? Weather = null,
+    [property: Description("The timing check, with window.constraints: running times (with currents when applied), gates, leg current limits and arrival constraints at the planned departure and each swept departure, and the windows that meet them all. Null without constraints, or when it was skipped (see checks: speed_missing).")] CheckRouteTiming? Timing = null,
+    [property: Description("With speeds through the water (vessel.speedThroughWater or window.constraints.applyCurrents): whether currents were applied to every check's ETAs, what they were read from, and how much of the route had none at the ETA. Null with speeds over the ground.")] CheckRouteCurrents? Currents = null)
 {
     /// <summary>The disclaimer shown once with the findings, before the clearance's sources.</summary>
     public const string DisclaimerText = "Not for navigation · checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only";
@@ -58,7 +61,19 @@ public sealed record CheckRouteResult(
                 l.StarboardMeters)).ToList(),
             clearance,
             report.DatasetsUsed,
-            clearance is null ? DisclaimerText : DisclaimerText + " · clearance " + clearance.Disclaimer);
+            DisclaimerFor(clearance, report.Weather),
+            report.Weather is { } weather ? CheckRouteWeather.From(weather) : null,
+            report.Detail<PassageTimingResult>(TimingCheck.CheckName) is { } timing ? CheckRouteTiming.From(timing) : null,
+            CheckRouteCurrents.From(report));
+    }
+
+    private static string DisclaimerFor(CheckRouteClearance? clearance, WeatherCheckResult? weather)
+    {
+        var text = clearance is null ? DisclaimerText : DisclaimerText + " · clearance " + clearance.Disclaimer;
+        if (weather is null)
+            return text;
+        text += " · " + CheckRouteWeather.DisclaimerText;
+        return weather.Cyclones.Count == 0 ? text : text + " · " + CheckRouteWeather.CycloneDisclaimerText;
     }
 
     /// <summary>The summary line for a set of findings, as SoundCharts' no-draft verdict titles.</summary>
@@ -81,6 +96,7 @@ public sealed record CheckRouteResult(
         RouteFindingCategory.Warning => "warning",
         RouteFindingCategory.Clearance => "clearance",
         RouteFindingCategory.Confidence => "confidence",
+        RouteFindingCategory.Weather => "weather",
         _ => "data",
     };
 
@@ -106,15 +122,22 @@ public sealed record CheckRouteResult(
         _ => "no_data",
     };
 
+    /// <summary>The caveat every predicted water level carries (tide predictions design D17).</summary>
+    public const string PredictionCaveat = "Astronomical tide only, not a forecast.";
+
     /// <summary>
     /// The wire codes for lower-confidence reasons, in a fixed order:
-    /// <c>charted_depth_from_s101</c>, then <c>datum_unconfirmed</c>.
+    /// <c>charted_depth_from_s101</c>, <c>datum_unconfirmed</c>, then
+    /// <c>water_level_predicted</c>, then <c>water_level_from_lowest_low</c>
+    /// and <c>water_level_at_chart_datum</c> (departure options only: no water
+    /// level covers part of the route, and the charted depth at the passage's
+    /// lowest low, capped at datum, or at datum without one, meets the setting).
     /// </summary>
     /// <param name="reasons">The reasons.</param>
     /// <returns>The codes; empty at full confidence.</returns>
     public static IReadOnlyList<string> ConfidenceCodes(ConfidenceReasons reasons)
     {
-        var codes = new List<string>(2);
+        var codes = new List<string>(5);
         if (reasons.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
         {
             codes.Add("charted_depth_from_s101");
@@ -123,6 +146,21 @@ public sealed record CheckRouteResult(
         if (reasons.HasFlag(ConfidenceReasons.DatumUnconfirmed))
         {
             codes.Add("datum_unconfirmed");
+        }
+
+        if (reasons.HasFlag(ConfidenceReasons.WaterLevelPredicted))
+        {
+            codes.Add("water_level_predicted");
+        }
+
+        if (reasons.HasFlag(ConfidenceReasons.WaterLevelFromLowestLow))
+        {
+            codes.Add("water_level_from_lowest_low");
+        }
+
+        if (reasons.HasFlag(ConfidenceReasons.WaterLevelAtChartDatum))
+        {
+            codes.Add("water_level_at_chart_datum");
         }
 
         return codes;
@@ -301,10 +339,10 @@ public sealed record CheckRouteClearance(
     [property: Description("Stretches with no data: no charted depth, no S-104 coverage, before/after the S-104 time range, masked S-104 values, or a datum mismatch.")] IReadOnlyList<CheckRouteStretch> Gaps,
     [property: Description("Lower-confidence stretches: charted depth from S-101, or datums that can't be confirmed to agree. The samples in them keep their own state (meets_settings, tight or below_setting).")] IReadOnlyList<CheckRouteStretch> LowConfidence,
     [property: Description("Datasets, stations and datums behind the clearance.")] CheckRouteClearanceSources Sources,
-    [property: Description("Per-leg results in route order; present only when includeSamples is set.")] IReadOnlyList<CheckRouteClearanceLeg>? Legs,
-    [property: Description("Per-sample values; present only when includeSamples is set.")] IReadOnlyList<CheckRouteSample>? Samples,
-    [property: Description("True when samples were thinned to maxSamples; present only when includeSamples is set.")] bool? SamplesThinned,
-    [property: Description("The departure sweep; present only when includeWindow is set (and, without windowFrom and windowTo, some S-104 covers the passage).")] CheckRouteWindow? Window,
+    [property: Description("Per-leg results in route order; present only when samples.include is set.")] IReadOnlyList<CheckRouteClearanceLeg>? Legs,
+    [property: Description("Per-sample values; present only when samples.include is set.")] IReadOnlyList<CheckRouteSample>? Samples,
+    [property: Description("True when samples were thinned to samples.max; present only when samples.include is set.")] bool? SamplesThinned,
+    [property: Description("The departure sweep; present only with window (and, without window.from and window.to, some S-104 covers the passage).")] CheckRouteWindow? Window,
     [property: Description("The data the clearance was computed from, e.g. \"computed from S-102, S-104 for your settings\".")] string Disclaimer)
 {
     /// <summary>Projects a report's clearance result.</summary>
@@ -392,7 +430,8 @@ public sealed record CheckRouteClearance(
         var products = new List<string>();
         if (sources.BathymetryDatasets.Count > 0) products.Add("S-102");
         if (sources.FallbackDatasets.Count > 0) products.Add("S-101");
-        if (sources.WaterLevelSources.Count > 0) products.Add("S-104");
+        if (sources.WaterLevelSources.Any(w => !w.IsPredicted)) products.Add("S-104");
+        if (sources.WaterLevelSources.Any(w => w.IsPredicted)) products.Add("tide predictions (astronomical tide only, not a forecast)");
         return "computed from " + (products.Count == 0 ? "no data" : string.Join(", ", products)) + " for your settings";
     }
 
@@ -492,7 +531,17 @@ public sealed record CheckRouteClearance(
         s.BathymetryDatasets,
         s.FallbackDatasets,
         s.WaterLevelSources.Select(w => new CheckRouteWaterLevelSource(
-            w.DatasetId, w.Kind == WaterLevelSourceKind.Grid ? "grid" : "station", w.StationId)).ToList(),
+            w.DatasetId,
+            w.Kind switch
+            {
+                WaterLevelSourceKind.Grid => "grid",
+                WaterLevelSourceKind.Prediction => "prediction",
+                _ => "station",
+            },
+            w.StationId,
+            w.StationName,
+            w.ReferenceStationId,
+            w.IsPredicted ? CheckRouteResult.PredictionCaveat : null)).ToList(),
         s.DepthDatums.Select(Datum).ToList(),
         s.WaterLevelDatums.Select(Datum).ToList(),
         CheckRouteResult.Round(s.MaxUncertaintyMeters));
@@ -583,16 +632,19 @@ public sealed record CheckRouteStretch(
 public sealed record CheckRouteClearanceSources(
     [property: Description("S-102 datasets that supplied charted depth.")] IReadOnlyList<string> BathymetryDatasets,
     [property: Description("S-101 cells that supplied charted depth where S-102 didn't (low confidence).")] IReadOnlyList<string> FallbackDatasets,
-    [property: Description("S-104 datasets (and stations) that supplied water level.")] IReadOnlyList<CheckRouteWaterLevelSource> WaterLevels,
+    [property: Description("S-104 datasets (and stations), and predicted tide stations, that supplied water level.")] IReadOnlyList<CheckRouteWaterLevelSource> WaterLevels,
     [property: Description("Vertical datums of the charted depths.")] IReadOnlyList<CheckRouteDatum> DepthDatums,
     [property: Description("Vertical datums of the water levels.")] IReadOnlyList<CheckRouteDatum> WaterLevelDatums,
     [property: Description("Largest S-102 depth uncertainty met, metres; null when none.")] double? MaxUncertaintyMeters);
 
-/// <summary>An S-104 source.</summary>
+/// <summary>A water-level source: an S-104 grid or station, or a predicted tide station.</summary>
 public sealed record CheckRouteWaterLevelSource(
-    [property: Description("S-104 dataset id.")] string Dataset,
-    [property: Description("\"grid\" or \"station\".")] string Kind,
-    [property: Description("Station identifier, for a station series.")] string? Station);
+    [property: Description("S-104 dataset id, or the tide station list's id for a prediction.")] string Dataset,
+    [property: Description("\"grid\" or \"station\" (S-104), or \"prediction\" (a harmonic tide prediction).")] string Kind,
+    [property: Description("Station identifier, for a station series or a prediction.")] string? Station,
+    [property: Description("Station name, for a prediction.")] string? StationName = null,
+    [property: Description("For a prediction at a subordinate station, the reference station it's predicted from with offsets.")] string? ReferenceStation = null,
+    [property: Description("For a prediction: \"Astronomical tide only, not a forecast.\"")] string? Caveat = null);
 
 /// <summary>A vertical datum code and its name.</summary>
 public sealed record CheckRouteDatum(
@@ -647,3 +699,288 @@ public sealed record CheckRouteDeparture(
     [property: Description("UKC at the smallest margin, metres; null when no sample has a clearance.")] double? MinUkcMeters,
     [property: Description("Minutes below the UKC setting.")] double MinutesBelow,
     [property: Description("Lower-confidence reasons along the passage at this departure.")] IReadOnlyList<string> Confidence);
+
+/// <summary>The weather check's result.</summary>
+public sealed record CheckRouteWeather(
+    [property: Description("inside_cyclone_radius (inside a tropical cyclone's tested wind radius somewhere), above_limits, forecast_ends_before_arrival (nothing above a limit, but a grid's or a nearby storm's forecast ends before the vessel reaches part of the route), incomplete (part of the route isn't checked: no coverage, no value, or the forecast starts later) or within_limits.")] string Verdict,
+    [property: Description("The limits checked, each with where it came from: settings (the request) or route (RTZ vesselMaxWind/vesselMaxWave).")] IReadOnlyList<CheckRouteWeatherLimit> Limits,
+    [property: Description("The highest checked wind along the route, or null when none was checked.")] CheckRouteWeatherMaximum? MaxWind,
+    [property: Description("The highest checked significant wave height along the route, or null when none was checked.")] CheckRouteWeatherMaximum? MaxWaveHeight,
+    [property: Description("Number of places along the track the forecast was read (one per nautical mile).")] int SampleCount,
+    [property: Description("Number of those where a limited quantity, or a nearby tropical cyclone, wasn't checked (the forecast ends or starts later, no coverage, or no value).")] int NotCheckedCount,
+    [property: Description("The weather datasets read.")] IReadOnlyList<string> Datasets,
+    [property: Description("The departure sweep, with window: across window.from..window.to, or across the forecast that covers the route. Null without window.")] CheckRouteWeatherWindow? Window,
+    [property: Description("Disclaimer for the weather findings.")] string Disclaimer)
+{
+    /// <summary>The disclaimer of the weather check.</summary>
+    public const string DisclaimerText = "weather from forecast model data, nearest grid node and time step at each ETA, advisory, not official S-100 data";
+
+    /// <summary>The disclaimer added when tropical cyclones were checked.</summary>
+    public const string CycloneDisclaimerText = "tropical cyclones from NHC advisories, the storm interpolated between forecast points at each ETA, advisory, not for navigation";
+
+    /// <summary>The tropical cyclone settings the check used (#1299).</summary>
+    [Description("The tropical cyclone rule's settings used: the radius checked against, whether the closest approach is reported, and the weakest radius that is must_review.")]
+    public CheckRouteCycloneSettings? CycloneSettings { get; init; }
+
+    /// <summary>The tropical cyclones near the route (#1299).</summary>
+    [Description("The tropical cyclones (NHC advisories) within 600 NM of the route: the strongest tested radius met, the cone, whether part of the route is beyond the forecast, and the closest approach. Empty without any.")]
+    public IReadOnlyList<CheckRouteCyclone> Cyclones { get; init; } = [];
+
+    /// <summary>Projects a weather check's result.</summary>
+    /// <param name="result">The result.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteWeather From(WeatherCheckResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return new CheckRouteWeather(
+            VerdictCode(result.Verdict),
+            result.Limits.Select(l => new CheckRouteWeatherLimit(
+                QuantityCode(l.Quantity),
+                Value(l.Quantity, l.Value),
+                Unit(l.Quantity),
+                l.Origin == WeatherLimitOrigin.Route ? "route" : "settings")).ToList(),
+            Maximum(result, WeatherQuantity.WindSpeed),
+            Maximum(result, WeatherQuantity.SignificantWaveHeight),
+            result.Samples.Count,
+            result.Samples.Count(s => s.Readings.Any(r => !r.IsChecked) || s.Cyclones.Any(c => c.BeyondForecast)),
+            result.DatasetsUsed,
+            result.Departures is { } sweep ? CheckRouteWeatherWindow.From(sweep) : null,
+            DisclaimerText)
+        {
+            CycloneSettings = CheckRouteCycloneSettings.From(result.CycloneSettings),
+            Cyclones = [.. result.Cyclones.Select(CheckRouteCyclone.From)],
+        };
+    }
+
+    /// <summary>The wire code of a weather verdict.</summary>
+    /// <param name="verdict">The verdict.</param>
+    /// <returns>The code.</returns>
+    public static string VerdictCode(WeatherVerdict verdict) => verdict switch
+    {
+        WeatherVerdict.InsideCycloneRadius => "inside_cyclone_radius",
+        WeatherVerdict.AboveLimits => "above_limits",
+        WeatherVerdict.ForecastEndsBeforeArrival => "forecast_ends_before_arrival",
+        WeatherVerdict.Incomplete => "incomplete",
+        _ => "within_limits",
+    };
+
+    /// <summary>The wire code of a quantity: <c>wind_speed</c> or <c>significant_wave_height</c>.</summary>
+    /// <param name="quantity">The quantity.</param>
+    /// <returns>The code.</returns>
+    public static string QuantityCode(WeatherQuantity quantity) =>
+        quantity == WeatherQuantity.WindSpeed ? "wind_speed" : "significant_wave_height";
+
+    /// <summary>A quantity's value in its wire unit: wind in knots, waves in metres, to two decimals.</summary>
+    /// <param name="quantity">The quantity.</param>
+    /// <param name="si">The value in m/s or m.</param>
+    /// <returns>The value.</returns>
+    public static double Value(WeatherQuantity quantity, double si) => Math.Round(
+        quantity == WeatherQuantity.WindSpeed ? Quantities.Speed.FromMetresPerSecond(si).TotalKnots : si, 2);
+
+    /// <summary>A quantity's wire unit: <c>kn</c> or <c>m</c>.</summary>
+    /// <param name="quantity">The quantity.</param>
+    /// <returns>The unit.</returns>
+    public static string Unit(WeatherQuantity quantity) => quantity == WeatherQuantity.WindSpeed ? "kn" : "m";
+
+    private static CheckRouteWeatherMaximum? Maximum(WeatherCheckResult result, WeatherQuantity quantity) =>
+        result.Maximum(quantity) is { } max
+            ? new CheckRouteWeatherMaximum(
+                Value(quantity, max.Reading.Value!.Value),
+                Unit(quantity),
+                max.Sample.LegIndex,
+                CheckRouteResult.Nm(max.Sample.DistanceMeters),
+                max.Sample.HasEta ? max.Sample.Time.ToUniversalTime() : null,
+                max.Reading.StepTime?.ToUniversalTime(),
+                max.Reading.Source?.DatasetId)
+            : null;
+}
+
+/// <summary>A limit the weather check used.</summary>
+public sealed record CheckRouteWeatherLimit(
+    [property: Description("wind_speed or significant_wave_height.")] string Quantity,
+    [property: Description("The limit, in unit.")] double Value,
+    [property: Description("kn for wind, m for waves.")] string Unit,
+    [property: Description("settings (the request) or route (the route's own: RTZ vesselMaxWind/vesselMaxWave).")] string Origin);
+
+/// <summary>The highest value of a quantity along the route.</summary>
+public sealed record CheckRouteWeatherMaximum(
+    [property: Description("The value, in unit.")] double Value,
+    [property: Description("kn for wind, m for waves.")] string Unit,
+    [property: Description("Zero-based leg.")] int LegIndex,
+    [property: Description("Distance from departure, nautical miles.")] double DistanceNm,
+    [property: Description("ETA there, ISO 8601 UTC; null without one.")] DateTimeOffset? Eta,
+    [property: Description("The forecast time step read, ISO 8601 UTC.")] DateTimeOffset? StepTime,
+    [property: Description("The weather dataset read.")] string? DatasetId);
+
+/// <summary>The weather check's departure sweep.</summary>
+public sealed record CheckRouteWeatherWindow(
+    [property: Description("Minutes between departures.")] int StepMinutes,
+    [property: Description("Runs of departures within every limit along the route.")] IReadOnlyList<CheckRouteWindowRange> Windows,
+    [property: Description("One entry per swept departure.")] IReadOnlyList<CheckRouteWeatherDeparture> Departures)
+{
+    /// <summary>Projects a sweep.</summary>
+    /// <param name="sweep">The sweep.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteWeatherWindow From(WeatherDepartureSweep sweep)
+    {
+        ArgumentNullException.ThrowIfNull(sweep);
+        return new CheckRouteWeatherWindow(
+            (int)Math.Round(sweep.Step.TotalMinutes),
+            sweep.Windows().Select(w => new CheckRouteWindowRange(w.First.ToUniversalTime(), w.Last.ToUniversalTime())).ToList(),
+            sweep.Options.Select(o => new CheckRouteWeatherDeparture(
+                o.Departure.ToUniversalTime(),
+                o.Arrival?.ToUniversalTime(),
+                CheckRouteWeather.VerdictCode(o.Verdict),
+                o.MaxWindMetresPerSecond is { } w ? CheckRouteWeather.Value(WeatherQuantity.WindSpeed, w) : null,
+                o.MaxWaveHeightMetres is { } h ? Math.Round(h, 2) : null,
+                Math.Round(o.TimeAboveLimits.TotalMinutes, 1))
+            {
+                CycloneRadiusKnots = o.CycloneRadius is { } r ? (int)r : null,
+                CycloneClosestNm = o.CycloneClosestMeters is { } m ? CheckRouteResult.Nm(m) : null,
+            }).ToList());
+    }
+}
+
+/// <summary>One departure of the weather sweep.</summary>
+public sealed record CheckRouteWeatherDeparture(
+    [property: Description("Departure, UTC.")] DateTimeOffset Departure,
+    [property: Description("Arrival, UTC; null without ETAs.")] DateTimeOffset? Arrival,
+    [property: Description("Weather verdict code for this departure (see weather.verdict).")] string Verdict,
+    [property: Description("Highest wind checked, knots; null when none was.")] double? MaxWindKnots,
+    [property: Description("Highest significant wave height checked, metres; null when none was.")] double? MaxWaveHeightMeters,
+    [property: Description("Minutes the vessel spends where wind or waves are above a limit (0 without ETAs).")] double MinutesAboveLimits)
+{
+    /// <summary>The strongest tested tropical cyclone radius the route meets for this departure.</summary>
+    [Description("The strongest tested tropical cyclone wind radius the route meets for this departure, in knots (34, 50 or 64); null when it stays outside them.")]
+    public int? CycloneRadiusKnots { get; init; }
+
+    /// <summary>The closest approach to a storm's centre for this departure.</summary>
+    [Description("The closest the route comes to a tropical cyclone's centre for this departure, nautical miles; null without a storm near the route.")]
+    public double? CycloneClosestNm { get; init; }
+}
+
+/// <summary>The tropical cyclone rule's settings (#1299).</summary>
+public sealed record CheckRouteCycloneSettings(
+    [property: Description("The outermost wind radius tested, knots: 34, 50 or 64. The cone is always tested.")] int CheckAgainstKnots,
+    [property: Description("Whether the closest approach is reported (weather.tc_cpa).")] bool ReportClosestApproach,
+    [property: Description("The weakest radius whose findings are must_review, knots (34, 50 or 64), or null for never. Weaker radii and the cone are check.")] int? MustReviewInsideKnots)
+{
+    /// <summary>Projects the settings, with Must review inside moved in to Check against when it lies outside it.</summary>
+    /// <param name="settings">The settings.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteCycloneSettings From(TropicalCycloneCheckSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return new((int)settings.CheckAgainst, settings.ReportClosestApproach, settings.EffectiveMustReviewInside is { } m ? (int)m : null);
+    }
+}
+
+/// <summary>A tropical cyclone near the route (#1299).</summary>
+public sealed record CheckRouteCyclone(
+    [property: Description("The advisory's dataset id.")] string DatasetId,
+    [property: Description("The storm's ATCF id, such as AL142026.")] string StormId,
+    [property: Description("The storm's name.")] string Name,
+    [property: Description("The advisory number.")] string Advisory,
+    [property: Description("When the advisory was issued, ISO 8601 UTC.")] DateTimeOffset IssueTime,
+    [property: Description("The advisory's last forecast point, ISO 8601 UTC. Later ETAs aren't checked against the storm.")] DateTimeOffset ForecastEnd,
+    [property: Description("The strongest tested wind radius the route meets at the ETAs, knots; null when it stays outside them.")] int? StrongestRadiusKnots,
+    [property: Description("Whether the route meets the forecast cone while the forecast runs.")] bool InCone,
+    [property: Description("Whether part of the route near the storm is reached after its last forecast point (weather.tc_beyond_forecast).")] bool BeyondForecast,
+    [property: Description("The closest approach to the storm's centre at the ETAs, or null when the vessel is never on the route while the storm is.")] CheckRouteCycloneApproach? ClosestApproach)
+{
+    /// <summary>Projects a storm's result.</summary>
+    /// <param name="storm">The storm.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteCyclone From(CycloneCheckStorm storm)
+    {
+        ArgumentNullException.ThrowIfNull(storm);
+        return new(
+            storm.Info.DatasetId,
+            storm.Info.StormId,
+            storm.Info.Name,
+            storm.Info.Advisory,
+            storm.Info.IssueTime.ToUniversalTime(),
+            storm.ForecastEnd.ToUniversalTime(),
+            storm.StrongestRadius is { } r ? (int)r : null,
+            storm.InCone,
+            storm.BeyondForecast,
+            storm.ClosestApproach is { } c ? CheckRouteCycloneApproach.From(c.DistanceMeters, c.LegIndex, c.RouteDistanceMeters, c.RoutePosition, c.HasEta ? c.Time : null, c.Storm) : null);
+    }
+}
+
+/// <summary>The route's closest approach to a storm's centre.</summary>
+public sealed record CheckRouteCycloneApproach(
+    [property: Description("The distance from the route to the storm's centre, nautical miles.")] double DistanceNm,
+    [property: Description("Zero-based leg.")] int LegIndex,
+    [property: Description("Distance from departure, nautical miles.")] double RouteDistanceNm,
+    [property: Description("Latitude of the place on the route.")] double Latitude,
+    [property: Description("Longitude of the place on the route.")] double Longitude,
+    [property: Description("ETA there, ISO 8601 UTC; null without one.")] DateTimeOffset? Eta,
+    [property: Description("Latitude of the storm's centre then.")] double StormLatitude,
+    [property: Description("Longitude of the storm's centre then.")] double StormLongitude,
+    [property: Description("Where the storm position comes from: forecast (a forecast point), estimated (between two) or best_track.")] string Basis)
+{
+    /// <summary>Projects a closest approach.</summary>
+    /// <param name="metres">The distance, metres.</param>
+    /// <param name="legIndex">The leg.</param>
+    /// <param name="routeMetres">Distance from departure, metres.</param>
+    /// <param name="position">The place on the route.</param>
+    /// <param name="eta">The ETA, or null.</param>
+    /// <param name="storm">The storm then.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteCycloneApproach From(double metres, int legIndex, double routeMetres, DataModel.GeoPosition position, DateTimeOffset? eta, RouteCycloneAt storm)
+    {
+        ArgumentNullException.ThrowIfNull(storm);
+        return new(
+            CheckRouteResult.Nm(metres),
+            legIndex,
+            CheckRouteResult.Nm(routeMetres),
+            position.Latitude,
+            position.Longitude,
+            eta?.ToUniversalTime(),
+            storm.Centre.Latitude,
+            storm.Centre.Longitude,
+            BasisCode(storm.Basis));
+    }
+
+    /// <summary>The wire code of a storm position's basis.</summary>
+    /// <param name="basis">The basis.</param>
+    /// <returns>forecast, estimated or best_track.</returns>
+    public static string BasisCode(RouteCycloneBasis basis) => basis switch
+    {
+        RouteCycloneBasis.Estimated => "estimated",
+        RouteCycloneBasis.BestTrack => "best_track",
+        _ => "forecast",
+    };
+}
+
+/// <summary>The currents applied to a check's ETAs (#1033).</summary>
+/// <param name="Applied">Whether currents were applied: speeds through the water, and current data loaded.</param>
+/// <param name="Sources">The S-111 datasets and current stations read.</param>
+/// <param name="WithoutCurrentNm">How far along the route no current covered the ETA, so the speed was taken as over the ground.</param>
+public sealed record CheckRouteCurrents(
+    [property: Description("Whether currents were applied to the ETAs: false when no S-111 or current predictions are loaded (then the speeds are taken as over the ground).")] bool Applied,
+    [property: Description("What the currents were read from: S-111 datasets (origin s111) and current stations (origin prediction), with id and name.")] IReadOnlyList<CheckRouteCurrentSource> Sources,
+    [property: Description("Nautical miles of the route where no current covered the ETA (each stretch is a data.no_current_coverage finding).")] double WithoutCurrentNm)
+{
+    /// <summary>The currents of a report, or <c>null</c> when its speeds were over the ground.</summary>
+    /// <param name="report">The report.</param>
+    /// <returns>The currents, or <c>null</c>.</returns>
+    public static CheckRouteCurrents? From(RouteCheckReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (!report.Settings.SpeedsThroughWater && report.Settings.Timing?.ApplyCurrents != true)
+        {
+            return null;
+        }
+
+        var schedule = report.Schedule;
+        return new CheckRouteCurrents(
+            schedule.CurrentsApplied,
+            [.. schedule.CurrentSources
+                .GroupBy(s => s.Id, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .Select(s => new CheckRouteCurrentSource(s.Id, s.Name, s.Origin == RouteCurrentOrigin.S111 ? "s111" : "prediction"))],
+            Math.Round(schedule.CurrentGaps.Sum(g => g.EndAlongLegMeters - g.StartAlongLegMeters) / PassageGeodesy.MetersPerNauticalMile, 2));
+    }
+}

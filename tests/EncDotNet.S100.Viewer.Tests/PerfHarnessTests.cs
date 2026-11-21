@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.ExchangeSets;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
@@ -169,7 +170,11 @@ public sealed class PerfHarnessTests
             notifier,
             (_, _) => release.Task,
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register([Cell("A", 40, -75, 41, -74.5), Cell("B", 40, -74.5, 41, -74)]);
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -196,7 +201,11 @@ public sealed class PerfHarnessTests
             notifier,
             (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.FromMilliseconds(80) });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.FromMilliseconds(80) },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
         coordinator.Register([Cell("A", 40, -75, 41, -74)]);
 
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -215,7 +224,11 @@ public sealed class PerfHarnessTests
             notifier,
             (_, _) => release.Task,
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 2 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 2 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         // Just east of the view, inside the ahead margin.
         coordinator.Register([Cell("Ahead", 40, -73.9, 41, -73.6)]);
@@ -265,7 +278,7 @@ public sealed class PerfHarnessTests
     public void Sampler_TracksPeaksOnlyWhileAWindowIsOpen()
     {
         var source = new FakeSource();
-        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4);
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
 
         source.WorkingSet = 5_000;
         sampler.SampleOnce();
@@ -291,11 +304,56 @@ public sealed class PerfHarnessTests
     }
 
     [Fact]
+    public async Task Sampler_ReportsUiThreadDelaysOverTheWindow()
+    {
+        // A fake UI thread that holds every probe for about 20 ms, as a busy
+        // UI thread would.
+        using var stalls = new UiThreadStallMonitor(action => ThreadPool.QueueUserWorkItem(_ =>
+        {
+            Thread.Sleep(20);
+            action();
+        }));
+        using var sampler = new ProcessMetricsSampler(
+            new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: stalls);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileCount: null, schedulerStats: null, predictionStats: null);
+
+        Assert.True(tool.Invoke("start").TryGetValue(out _));
+        var deadline = Stopwatch.StartNew();
+        while (stalls.Snapshot().Count < 3 && deadline.Elapsed < TimeSpan.FromSeconds(10))
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.True(tool.Invoke("restart").TryGetValue(out var metrics));
+
+        var ui = metrics!.Window!.UiThread;
+        Assert.NotNull(ui);
+        Assert.True(ui.Count >= 3);
+        Assert.InRange(ui.MaxMs, 18, 2_000);
+        Assert.Equal(ui.Count, ui.Over8Ms);
+
+        sampler.StopWindow();
+        var stopped = stalls.Snapshot().Count;
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.InRange(stalls.Snapshot().Count, stopped, stopped + 1);
+    }
+
+    [Fact]
+    public void LatencySnapshot_CountAbove_CountsLongerDurations()
+    {
+        var histogram = new LatencyHistogram();
+        foreach (var ms in new[] { 1.0, 5.0, 9.0, 20.0, 60.0 })
+            histogram.Record(ms);
+
+        var snapshot = histogram.Snapshot();
+        Assert.Equal(3, snapshot.CountAbove(8));
+        Assert.Equal(1, snapshot.CountAbove(50));
+        Assert.Equal(0, snapshot.CountAbove(100));
+    }
+
+    [Fact]
     public void GetProcessMetrics_StartRestartStop()
     {
         var source = new FakeSource();
-        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => 7);
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => 7, schedulerStats: null, predictionStats: null);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var none));
         Assert.Null(none!.Window);
@@ -312,7 +370,66 @@ public sealed class PerfHarnessTests
         Assert.False(tool.Invoke("bogus").TryGetValue(out _));
     }
 
+    [Fact]
+    public async Task GetProcessMetrics_ReportsTheSchedulerOverTheWindow()
+    {
+        var source = new FakeSource();
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
+        using var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2, ThreadName = "metrics test" });
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats, tileCount: null, predictionStats: null);
+
+        Assert.True(tool.Invoke(null).TryGetValue(out var none));
+        Assert.Null(none!.Scheduler);
+
+        // Work before the window doesn't count.
+        await scheduler.Schedule(new WorkKey("before"), WorkStage.Raster, WorkPriority.Visible(), _ => ValueTask.FromResult(true))
+            .Result.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        // A job's result completes before its worker records the run, so wait
+        // for the workers to go idle before opening or closing the window.
+        await WaitForIdleWorkersAsync(scheduler);
+        Assert.True(tool.Invoke("start").TryGetValue(out _));
+        var jobs = Enumerable.Range(0, 3)
+            .Select(i => scheduler.Schedule(new WorkKey("in", i), WorkStage.Raster, WorkPriority.Visible(), _ => ValueTask.FromResult(true)).Result)
+            .Append(scheduler.Schedule(new WorkKey("bg"), WorkStage.Raster, WorkPriority.Background(), _ => ValueTask.FromResult(true)).Result);
+        await Task.WhenAll(jobs).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await WaitForIdleWorkersAsync(scheduler);
+
+        Assert.True(tool.Invoke("restart").TryGetValue(out var window));
+        var reported = window!.Scheduler;
+        Assert.NotNull(reported);
+        Assert.Equal(2, reported.Workers);
+        Assert.Equal(3, reported.VisibleWait.Count);
+        Assert.Equal(1, reported.BackgroundWait.Count);
+        Assert.Equal(4, reported.Run.Count);
+        Assert.Equal(4, reported.Completed);
+
+        Assert.True(tool.Invoke("stop").TryGetValue(out var stopped));
+        Assert.Equal(0, stopped!.Scheduler!.Completed);
+        Assert.True(tool.Invoke(null).TryGetValue(out var after));
+        Assert.Null(after!.Scheduler);
+    }
+
+    private static async Task WaitForIdleWorkersAsync(WorkScheduler scheduler)
+    {
+        var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 10;
+        while (scheduler.GetStats().BusyWorkers > 0)
+        {
+            Assert.True(Stopwatch.GetTimestamp() < deadline, "Scheduler workers didn't go idle.");
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+        }
+    }
+
     // ── Pre-warm control ─────────────────────────────────────────────
+
+    [Fact]
+    public void MacAppNap_Disable_HoldsTheActivityOnMacOSOnly()
+    {
+        var disabled = MacAppNap.Disable("EncDotNet.S100.Viewer.Tests");
+
+        Assert.Equal(OperatingSystem.IsMacOS(), disabled);
+        Assert.Equal(disabled, MacAppNap.IsDisabled);
+        Assert.Equal(disabled, MacAppNap.Disable("again"));
+    }
 
     [Fact]
     public void PortrayalPrewarm_OverridesTheSettingForTheSession()
@@ -321,9 +438,11 @@ public sealed class PerfHarnessTests
         var tool = new PortrayalPrewarmTool(
             () => new PortrayalWarmStatus(PortrayalWarmState.CacheFull, 12, 298),
             holder,
-            () => true);
+            () => true,
+            () => 6);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var read));
+        Assert.Equal(6, read!.ConcurrencyLimit);
         Assert.Equal("cache_full", read!.State);
         Assert.Equal((12, 298), (read.Warm, read.Total));
         Assert.True(read.Enabled);
@@ -353,6 +472,7 @@ public sealed class PerfHarnessTests
         Assert.Equal(Path.Combine(cacheDir, "PatternClipCache"), paths.PatternClipCacheDirectory);
         Assert.Equal(Path.Combine(cacheDir, "tiles"), paths.TileDiskCacheDirectory);
         Assert.Equal(cacheDir, paths.RenderCacheDirectory);
+        Assert.Equal(cacheDir, paths.RenderStoreDirectory);
         // Settings, the Library index and the other caches stay put.
         Assert.StartsWith(baseDir, paths.SettingsFilePath, StringComparison.Ordinal);
         Assert.StartsWith(baseDir, paths.CollectionIndexCacheDirectory, StringComparison.Ordinal);
@@ -364,7 +484,7 @@ public sealed class PerfHarnessTests
     {
         var paths = new ViewerDataPaths();
         Assert.Null(paths.RenderCacheDirectory);
-        Assert.Null(paths.TileDiskCacheDirectory);
+        Assert.Equal(paths.CacheStoreDirectory, paths.RenderStoreDirectory);
     }
 
     [Fact]
@@ -395,8 +515,8 @@ public sealed class PerfHarnessTests
             Assert.NotNull(settleJson[field]);
         Assert.NotNull(settleJson["loads"]!["loaded"]);
 
-        using var sampler = new ProcessMetricsSampler(new FakeSource(), TimeSpan.FromHours(1), 4);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment());
+        using var sampler = new ProcessMetricsSampler(new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileCount: null, schedulerStats: null, predictionStats: null);
         Assert.True(tool.Invoke("start").TryGetValue(out var metrics));
         var metricsJson = Reply(ToolResultOk(metrics!));
         foreach (var field in new[]
@@ -428,7 +548,7 @@ public sealed class PerfHarnessTests
     // ── Helpers ──────────────────────────────────────────────────────
 
     private static PerfEnvironmentDto Environment() =>
-        new("luacsharp", false, true, true, "Interactive", 16, "test", "Arm64", ".NET", null, true);
+        new("luacsharp", false, true, true, "Interactive", 16, "test", "Arm64", ".NET", null, true, true);
 
     private static ProcessMetricsReading Reading(
         long timestamp, double cpuMs, double pauseMs, (int, int, int) gen, long allocated, long workingSet) =>

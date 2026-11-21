@@ -23,50 +23,15 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     private readonly TimeRefreshProgress? _progress;
     private TimelineAxisMap? _axis;
 
-    public TimelineViewModel(GlobalTimeService service)
-        : this(service, timeFormat: null)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat)
-        : this(service, timeFormat, TimeProvider.System)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time)
-        : this(service, timeFormat, time, PostToUiThread)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher)
-        : this(service, timeFormat, time, PostToUiThread, refresher)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher, TimeRefreshProgress progress)
-        : this(service, timeFormat, time, PostToUiThread, refresher, progress)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher, TimeRefreshProgress progress, ITimelineMapScope scope)
-        : this(service, timeFormat, time, PostToUiThread, refresher, progress, scope)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher, TimeRefreshProgress progress, ITimelineMapScope scope, ILibraryTimeSource library)
-        : this(service, timeFormat, time, PostToUiThread, refresher, progress, scope, library)
-    {
-    }
-
     internal TimelineViewModel(
         GlobalTimeService service,
         ITimeFormatProvider? timeFormat,
         TimeProvider time,
         Action<Action> dispatch,
-        IForecastRunRefresher? refresher = null,
-        TimeRefreshProgress? progress = null,
-        ITimelineMapScope? scope = null,
-        ILibraryTimeSource? library = null)
+        IForecastRunRefresher? refresher,
+        TimeRefreshProgress? progress,
+        ITimelineMapScope? scope,
+        ILibraryTimeSource? library)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(time);
@@ -221,8 +186,11 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// <summary>True when the step controls are shown: whenever the timeline is active.</summary>
     public bool AreStepButtonsVisible => IsActive;
 
-    /// <summary>True when the timeline panel should be visible.</summary>
-    public bool IsActive => _service.IsActive;
+    /// <summary>
+    /// True when the timeline panel should be visible: a timed dataset is
+    /// loaded, or open-ended predictions give the view time a meaning (D14).
+    /// </summary>
+    public bool IsActive => _service.HasViewTime;
 
     /// <summary>
     /// Data-coverage ranges expressed as fractions of the slider extent
@@ -695,14 +663,6 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             : string.Format(c, Strings.TimelinePanel_EveryMinutesFormat, Math.Max(1, (int)step.TotalMinutes));
     }
 
-    private static void PostToUiThread(Action action)
-    {
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
-            action();
-        else
-            Avalonia.Threading.Dispatcher.UIThread.Post(action);
-    }
-
     /// <summary>
     /// The time as a screen reader reads it (time-overlays D12): "10/31/2026
     /// 2:00 PM, in 23 min, pinned" or "10/31/2026 2:00 PM, live".
@@ -745,7 +705,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         {
             var samples = _service.AllSamples;
             if (samples.Count == 0 || _service.MinTime is null || _service.MaxTime is null)
-                return Strings.TimelinePanel_NoData;
+                return TidePredictions?.HasLane == true ? Strings.TimelinePanel_PredictionsOnly : Strings.TimelinePanel_NoData;
             var fmt = ActiveFormat;
             if (IsForecastTimeline)
             {
@@ -790,3 +750,19 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 /// <see cref="TimelineViewModel.SliderMinimum"/>..<see cref="TimelineViewModel.SliderMaximum"/>.
 /// </summary>
 internal readonly record struct NormalizedCoverageBand(double Start, double Width);
+
+/// <summary>What a mark on a lane's track is (V14).</summary>
+internal enum TimelineLaneMarkKind
+{
+    /// <summary>A step of the dataset, such as a storm's forecast point: a tall tick.</summary>
+    Step,
+
+    /// <summary>When the dataset was issued: a solid diamond.</summary>
+    Issued,
+
+    /// <summary>When a newer dataset is next expected: a hollow diamond.</summary>
+    NextIssue,
+}
+
+/// <summary>A mark on a lane's track at <see cref="Position"/>, a fraction of the axis in <c>[0,1]</c>.</summary>
+internal readonly record struct TimelineLaneMark(double Position, TimelineLaneMarkKind Kind);

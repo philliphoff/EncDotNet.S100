@@ -12,14 +12,6 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class MainViewModelPickModeTests
 {
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme { get; private set; }
-        public event System.EventHandler? ThemeChanged;
-        public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; ThemeChanged?.Invoke(this, System.EventArgs.Empty); return IsDarkTheme; }
-        public ChromeTheme Current => IsDarkTheme ? ChromeTheme.Dark : ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { IsDarkTheme = ChromeThemes.IsDark(theme); ThemeChanged?.Invoke(this, System.EventArgs.Empty); }
-    }
 
     private sealed class StubDatasetLoaderService : IDatasetLoaderService
     {
@@ -54,25 +46,24 @@ public class MainViewModelPickModeTests
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
+        var settingsVm = new ViewerSettingsService(settings);
+        var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var shellLayout = new ShellLayoutViewModel(settings, activityTabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
-            settings,
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            layout: shellLayout,
+            mapTools: TestMapTools.Create(settingsVm, routeStore),
+            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
+            mapChrome: TestMapChrome.Create(catalogues, datasets),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new StubDatasetLoaderService()),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
-            pickReport: pickReport ?? new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService()),
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            notifications: Notifications.TestNotifications.Create(),
-            activityTabs: activityTabs);
+            palette: new PaletteMenuViewModel(settingsVm),
+            pickReport: pickReport ?? TestPickReport.Create(),
+            timeline: timeline,
+            routes: routeStore);
     }
 
     /// <summary>
@@ -90,146 +81,27 @@ public class MainViewModelPickModeTests
             viewModel: pickReport,
             persistAsLastSelected: false,
             dock: TabDock.Right,
-            autoOpenOnContentSignal: true);
+            autoOpenOnContentSignal: true,
+            visibility: null);
 
     private static readonly System.Collections.Generic.IReadOnlyList<PickAttribute> NoAttrs =
         Array.Empty<PickAttribute>();
-
-    [Fact]
-    public void IsPickModeActive_DefaultsToFalse()
-    {
-        var vm = CreateViewModel();
-        Assert.False(vm.IsPickModeActive);
-    }
-
-    [Fact]
-    public void TogglePickModeCommand_FlipsState()
-    {
-        var vm = CreateViewModel();
-
-        vm.TogglePickModeCommand.Execute(null);
-        Assert.True(vm.IsPickModeActive);
-
-        vm.TogglePickModeCommand.Execute(null);
-        Assert.False(vm.IsPickModeActive);
-    }
-
-    [Fact]
-    public void ExitPickModeCommand_TurnsOffAndIsIdempotent()
-    {
-        var vm = CreateViewModel();
-        vm.IsPickModeActive = true;
-
-        vm.ExitPickModeCommand.Execute(null);
-        Assert.False(vm.IsPickModeActive);
-
-        vm.ExitPickModeCommand.Execute(null);
-        Assert.False(vm.IsPickModeActive);
-    }
-
-    [Fact]
-    public void IsPickModeActive_RaisesPropertyChanged()
-    {
-        var vm = CreateViewModel();
-        var fired = 0;
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
-                fired++;
-        };
-
-        vm.TogglePickModeCommand.Execute(null);
-        vm.TogglePickModeCommand.Execute(null);
-
-        Assert.Equal(2, fired);
-    }
-
-    [Fact]
-    public void ToggleRouteEditModeCommand_FlipsState()
-    {
-        var vm = CreateViewModel();
-
-        vm.ToggleRouteEditModeCommand.Execute(null);
-        Assert.True(vm.IsRouteEditModeActive);
-
-        vm.ToggleRouteEditModeCommand.Execute(null);
-        Assert.False(vm.IsRouteEditModeActive);
-    }
-
-    [Fact]
-    public void RouteEditMode_AndPickMode_AreMutuallyExclusive()
-    {
-        var vm = CreateViewModel();
-
-        vm.IsPickModeActive = true;
-        vm.ToggleRouteEditModeCommand.Execute(null);
-
-        Assert.True(vm.IsRouteEditModeActive);
-        Assert.False(vm.IsPickModeActive);
-    }
-
-    [Fact]
-    public void PromoteMeasurementToRouteCommand_DisabledWithoutMeasurement()
-    {
-        var vm = CreateViewModel();
-        Assert.False(vm.PromoteMeasurementToRouteCommand.CanExecute(null));
-    }
-
-    [Fact]
-    public void PromoteMeasurement_KeepsGreatCircleGeometry()
-    {
-        var vm = CreateViewModel();
-        vm.ToggleMeasureModeCommand.Execute(null);
-        vm.MeasureSession.SetGeometry(EncDotNet.S100.Navigation.LegGeometry.GreatCircle);
-        vm.MeasureSession.State.SetWaypoints([new(0, 0), new(10, 10), new(20, 0)]);
-        vm.MeasureSession.NotifyChanged();
-        Assert.True(vm.PromoteMeasurementToRouteCommand.CanExecute(null));
-
-        vm.PromoteMeasurementToRouteCommand.Execute(null);
-
-        var route = vm.RoutesService.Routes.Routes[^1];
-        Assert.Equal(2, route.Legs.Count);
-        Assert.All(route.Legs, l => Assert.Equal(Routing.RouteLegGeometryType.Geodesic, l.GeometryType));
-        Assert.True(vm.IsRouteEditModeActive);
-    }
-
-    [Fact]
-    public void MeasureCard_Close_AndActivationRequest_DriveTheTool()
-    {
-        var vm = CreateViewModel();
-
-        vm.MeasureSession.RequestActivation();
-        Assert.True(vm.IsMeasureModeActive);
-
-        vm.MeasureCard.CloseCommand.Execute(null);
-        Assert.False(vm.IsMeasureModeActive);
-    }
-
-    [Fact]
-    public void IsToolSummaryVisible_TrueWhileRouteEditing()
-    {
-        var vm = CreateViewModel();
-        Assert.False(vm.IsToolSummaryVisible);
-
-        vm.ToggleRouteEditModeCommand.Execute(null);
-        Assert.True(vm.IsToolSummaryVisible);
-    }
 
     [Fact]
     public void CloseDockCommand_Right_ClearsPickWhenPickReportShown()
     {
         // issue #374: dismissing the Pick Report must also drop the pick (and
         // its map highlight) so the report and overlay stay in sync.
-        var pickReport = new PickReportViewModel();
+        var pickReport = TestPickReport.Create();
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
         Assert.True(pickReport.HasPick);
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
 
-        vm.CloseDockCommand.Execute(TabDock.Right);
+        vm.Layout.CloseDockCommand.Execute(TabDock.Right);
 
-        Assert.False(vm.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
         Assert.False(pickReport.HasPick);
     }
 
@@ -238,16 +110,16 @@ public class MainViewModelPickModeTests
     {
         // issue #374: after a manual close clears the pick, a fresh pick is a
         // genuine HasPick false→true transition and re-opens the dock.
-        var pickReport = new PickReportViewModel();
+        var pickReport = TestPickReport.Create();
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
-        vm.CloseDockCommand.Execute(TabDock.Right);
-        Assert.False(vm.IsRightDockOpen);
+        vm.Layout.CloseDockCommand.Execute(TabDock.Right);
+        Assert.False(vm.Layout.IsRightDockOpen);
 
         pickReport.SetPick("FT2", "FT2 name", "ref-2", "ds.000", "S-101", NoAttrs);
 
         Assert.True(pickReport.HasPick);
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
     }
 }

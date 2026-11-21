@@ -105,6 +105,25 @@ public sealed record EcdisDisplaySettings
         ArgumentNullException.ThrowIfNull(layerKey);
         return LayerVisibility.TryGetValue(layerKey, out var visible) ? visible : defaultVisible;
     }
+
+    /// <summary>
+    /// Map-wide settings of a product's optional layers that are more than on
+    /// or off, keyed like <see cref="LayerVisibility"/> (e.g.
+    /// <c>"s102.relief.strength"</c> → <c>"subtle"</c>). A processor reads the
+    /// value it knows and falls back to its own default for a missing key or an
+    /// unknown value. Saved and restored with the other display settings and
+    /// with display combinations. Empty by default.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LayerOptions { get; init; }
+        = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The <see cref="LayerOptions"/> value for <paramref name="key"/>, or <see langword="null"/> when unset.</summary>
+    /// <param name="key">The option key.</param>
+    public string? GetLayerOption(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return LayerOptions.TryGetValue(key, out var value) ? value : null;
+    }
 }
 
 /// <summary>

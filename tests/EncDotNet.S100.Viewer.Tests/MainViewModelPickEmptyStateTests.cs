@@ -43,14 +43,6 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
     }
 
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme => false;
-        public event System.EventHandler? ThemeChanged { add { } remove { } }
-        public bool ToggleTheme() => false;
-        public ChromeTheme Current => ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { }
-    }
 
     private sealed class NoopLoader : IDatasetLoaderService
     {
@@ -79,25 +71,24 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
+        var settingsVm = new ViewerSettingsService(settings);
+        var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var shellLayout = new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
-            settings,
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            layout: shellLayout,
+            mapTools: TestMapTools.Create(settingsVm, routeStore),
+            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
+            mapChrome: TestMapChrome.Create(catalogues, datasets),
+            featureCatalogues: new FeatureCataloguesViewModel(settings, TestPickReport.Examiner()),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new NoopLoader()),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
-            pickReport: pick ?? new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService()),
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs);
+            palette: new PaletteMenuViewModel(settingsVm),
+            pickReport: pick ?? TestPickReport.Create(),
+            timeline: timeline,
+            routes: routeStore);
     }
 
     [Fact]
@@ -107,7 +98,7 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         // regardless of HasPick. The watermark inside the view handles the
         // empty state.
         var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
-        var pickVm = new PickReportViewModel();
+        var pickVm = TestPickReport.Create();
         var pickTab = new FakeTab
         {
             Id = "PickReport",
@@ -119,10 +110,10 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { datasets, pickTab }, pickVm);
 
         Assert.False(pickVm.HasPick);
-        vm.IsRightDockOpen = true;
+        vm.Layout.IsRightDockOpen = true;
 
-        Assert.True(vm.IsRightDockOpen);
-        Assert.Same(pickTab, vm.SelectedRightTab);
-        Assert.Same(pickVm, vm.SelectedRightTab?.ViewModel);
+        Assert.True(vm.Layout.IsRightDockOpen);
+        Assert.Same(pickTab, vm.Layout.SelectedRightTab);
+        Assert.Same(pickVm, vm.Layout.SelectedRightTab?.ViewModel);
     }
 }

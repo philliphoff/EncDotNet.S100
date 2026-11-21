@@ -40,7 +40,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     public void Folder_defaults_to_a_new_collection_named_after_the_folder()
     {
         var folder = Path.Combine(_context.Root, "Alaska Charts");
-        var vm = new AddToLibraryDialogViewModel(_library, null);
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         bool? closed = null;
         vm.Closed += (_, ok) => closed = ok;
 
@@ -65,7 +65,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var existing = _library.AddCollection("Mine", []);
         var zip = Path.Combine(_context.Root, "set.zip");
-        var vm = new AddToLibraryDialogViewModel(_library, null);
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
 
         vm.Initialize(LibrarySourceKind.ExchangeSet, zip, existing.Id);
 
@@ -82,7 +82,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public void An_empty_new_name_cannot_be_confirmed()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, null);
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders(), timeProvider: TimeProvider.System);
         vm.Initialize(LibrarySourceKind.Folder, _context.Root, null);
 
         vm.NewCollectionName = "  ";
@@ -93,7 +93,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Noaa_feed_lists_facets_and_builds_a_scoped_source()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, targetCollectionId: null);
         Assert.False(vm.ConfirmCommand.CanExecute(null));
 
@@ -120,7 +120,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     public async Task Usace_feed_lists_rivers_and_builds_a_scoped_source()
     {
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-u37.xml");
-        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture));
+        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture), timeProvider: TimeProvider.System);
         vm.Initialize(Usace, targetCollectionId: null);
 
         Assert.True(vm.IsOnlineFeed);
@@ -148,7 +148,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task An_unscoped_feed_source_is_named_after_the_catalogue()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
@@ -162,7 +162,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Noaa_feed_has_three_facet_groups()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
@@ -183,7 +183,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
                 requested = uri;
                 return Task.FromResult(UsaceIencProductCatalogReader.Read(fixture));
             },
-        });
+        }, timeProvider: TimeProvider.System);
 
         vm.Initialize(buoys, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
@@ -226,7 +226,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
         {
             CommunityList = (_, _) => Task.FromResult(EncDotNet.S100.Collections.ChartCatalogs.ChartCatalogsProductCatalogReader.Read(fixture)),
-        });
+        }, timeProvider: TimeProvider.System);
 
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(LibrarySourceKind.CommunityFeed, vm.Kind);
@@ -275,7 +275,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
             EncDotNet.S100.Collections.Feeds.S100Feed.FormatName, 1, "Shared charts",
             new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), "f1",
             [Item("A", "S-57", 1024), Item("B", "S-101", 2048), Item("C", "S-101", 2048)]);
-        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) });
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) }, timeProvider: TimeProvider.System);
 
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(LibrarySourceKind.S100Feed, vm.Kind);
@@ -319,7 +319,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
                 described = uri;
                 return Task.FromResult(description);
             },
-        });
+        }, timeProvider: TimeProvider.System);
 
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(LibrarySourceKind.Secom, vm.Kind);
@@ -361,7 +361,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
                     Truncated: area is null, EncDotNet.S100.Collections.Secom.SecomApiVersion.V2));
             },
             CurrentMapView = () => new GeoBounds(49, -124, 49.6, -122.8),
-        });
+        }, timeProvider: TimeProvider.System);
 
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
@@ -407,7 +407,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
                     .ToDictionary(u => u, u => new EncDotNet.S100.Collections.RemoteCatalogues.S3Object(u, 3_000_000, null));
                 return Task.FromResult<IReadOnlyDictionary<Uri, EncDotNet.S100.Collections.RemoteCatalogues.S3Object>?>(sizes);
             },
-        });
+        }, timeProvider: TimeProvider.System);
 
         var one = LibraryItemViewModel.FormatBytes(3_000_000);
         var two = LibraryItemViewModel.FormatBytes(6_000_000);
@@ -463,7 +463,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Ticking_a_value_chooses_only_what_is_selected()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.IncludeAll);
@@ -490,7 +490,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Include_all_builds_an_unscoped_source_and_keeps_the_ticks()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         var alaska = vm.Choices("States").Single(s => s.Value == "AK");
@@ -515,7 +515,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     public async Task A_typed_name_is_kept_and_chooses_a_new_collection()
     {
         var existing = _library.AddCollection("Mine", []);
-        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, existing.Id);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.AddToExisting);
@@ -540,7 +540,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var buoys = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("usace-ienc-buoys")!;
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-buoy.xml");
-        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture));
+        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture), timeProvider: TimeProvider.System);
         vm.Initialize(buoys, targetCollectionId: null);
         Assert.False(vm.IsSingleEntry);
 
@@ -556,7 +556,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => throw new HttpRequestException("offline") });
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => throw new HttpRequestException("offline") }, timeProvider: TimeProvider.System);
         vm.Initialize(Noaa, targetCollectionId: null);
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);

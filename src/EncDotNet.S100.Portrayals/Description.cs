@@ -25,4 +25,15 @@ public sealed class Description
     /// or <c>en</c>), or <see langword="null"/> when absent.
     /// </summary>
     public string? Language { get; init; }
+
+    /// <summary>
+    /// What the item is in words: <see cref="DescriptionText"/> when given
+    /// (a symbol's <c>"can buoy, paper-chart"</c>; its <see cref="Name"/> is
+    /// usually just its id), else <see cref="Name"/>, else
+    /// <see langword="null"/>.
+    /// </summary>
+    public string? Summary =>
+        !string.IsNullOrWhiteSpace(DescriptionText) ? DescriptionText.Trim()
+        : !string.IsNullOrWhiteSpace(Name) ? Name.Trim()
+        : null;
 }

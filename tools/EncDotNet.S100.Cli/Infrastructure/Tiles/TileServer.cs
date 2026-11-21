@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
+using EncDotNet.S100.Rendering.Scene;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -17,8 +17,16 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <summary>
 /// Serves an <see cref="ITileSource"/> over HTTP on the standard XYZ URLs
 /// (issue #865): <c>{z}/{x}/{y}.{ext}</c> tiles, a <c>tiles.json</c> TileJSON
-/// document whose tile URL is absolute, and optionally a preview page at the
-/// root. With a token, every route lives under <c>/&lt;token&gt;/</c>.
+/// document whose tile URL is absolute, an OGC WMTS 1.0.0 service under
+/// <c>wmts</c> (<see cref="WmtsService"/>), an OGC WMS 1.3.0 service at
+/// <c>wms</c> (<see cref="WmsService"/>), and optionally the web page at
+/// the root (<see cref="Web.ServeWeb"/>, issue #1573). With a token, every
+/// route lives under <c>/&lt;token&gt;/</c>, as the request's path base,
+/// except the <c>/healthz</c> health check. Rendered datasets grouped into
+/// layers (issue #1495) also serve each layer's tiles and TileJSON under
+/// <c>layers/{layer}/</c>. A PMTiles archive is also served whole at
+/// <c>archive.pmtiles</c>, with range requests (issue #1590), so PMTiles
+/// clients read it as they would from a static host.
 /// </summary>
 /// <remarks>
 /// Every response allows any origin (CORS), so a web map on another local
@@ -29,6 +37,15 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// </remarks>
 internal sealed class TileServer : IAsyncDisposable
 {
+    /// <summary>The path, under the server's base URL, of the layers' tiles: <c>layers/{layer}/…</c>.</summary>
+    public const string LayersPath = "layers";
+
+    /// <summary>The path, under the server's base URL, of a served PMTiles archive's whole file (issue #1590).</summary>
+    public const string PmTilesArchivePath = "archive.pmtiles";
+
+    /// <summary>The media type of a PMTiles archive.</summary>
+    public const string PmTilesContentType = "application/vnd.pmtiles";
+
     private readonly WebApplication _app;
 
     private TileServer(WebApplication app, Uri baseUri)
@@ -44,50 +61,133 @@ internal sealed class TileServer : IAsyncDisposable
     public int Port => BaseUri.Port;
 
     /// <summary>Starts serving <paramref name="source"/> on <paramref name="address"/>:<paramref name="port"/> (0 for any free port).</summary>
+    /// <remarks>With <paramref name="datasets"/>, a <c>POST</c> or <c>DELETE</c> of <c>datasets</c> adds or removes datasets (issue #1494).</remarks>
     public static async Task<TileServer> StartAsync(
         ITileSource source,
         IPAddress address,
         int port,
         string? token,
         bool viewer = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ServedDatasets? datasets = null,
+        TextWriter? errors = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(address);
 
-        var builder = WebApplication.CreateSlimBuilder();
+        var builder = ServeHost.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(k => k.Listen(address, port));
         builder.Services.AddResponseCompression(o =>
         {
             o.Providers.Add<BrotliCompressionProvider>();
             o.Providers.Add<GzipCompressionProvider>();
-            o.MimeTypes = ["application/json", "text/html"];
+            o.MimeTypes = ["application/json", "application/xml", "text/html"];
         });
+        if (viewer)
+            Web.ServeWeb.AddServices(builder, source, hasToken: token is not null);
 
         var app = builder.Build();
-        app.Use((context, next) =>
+        errors ??= Console.Error;
+        app.Use(async (context, next) =>
         {
             context.Response.Headers.AccessControlAllowOrigin = "*";
-            return next(context);
+            try
+            {
+                await next(context).ConfigureAwait(false);
+            }
+            catch (Exception e) when (!(e is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+            {
+                // Logging providers are cleared, so an unhandled error would
+                // otherwise be an unexplained 500: report it with its route.
+                ReportError(errors, context, e);
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.Clear();
+                    context.Response.Headers.AccessControlAllowOrigin = "*";
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                }
+            }
         });
         app.UseResponseCompression();
 
-        var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
-        // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
+        // With the page, a path nothing answers (or a wrong token) gets a
+        // small static 404 page (issue #1584); the API's own 404s stay empty.
         if (viewer)
-            app.MapGet(prefix + "/", ServeViewerAsync);
+            Web.ServeNotFound.Use(app);
 
-        app.MapGet(prefix + "/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix, palette: null));
-        app.MapGet(prefix + "/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
+        var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
+        if (token is not null)
+            UseTokenPathBase(app, PathString.FromUriComponent(prefix), viewer);
+
+        // Routing runs after the token's path base is taken off the path, so
+        // the routes below are the same with a token and without (issue #1575).
+        app.UseRouting();
+
+        // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
+        ServeHost.MapHealth(app, () => source.Revision);
+
+        app.MapGet("/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, palette: null));
+        app.MapGet("/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
+        if (PmTilesArchive(source) is { } archive)
+        {
+            // The archive itself, with range requests (issue #1590), for
+            // clients that read PMTiles directly (MapLibre's pmtiles:// protocol).
+            app.MapMethods("/" + PmTilesArchivePath, [HttpMethods.Get, HttpMethods.Head], context => ServePmTilesArchiveAsync(context, archive));
+        }
+
         if (source.Palettes.Count > 0)
         {
             // The same tiles in each palette, under /{palette}/.
-            app.MapGet(prefix + "/{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
-                TryPalette(context, source, out var palette) ? ServeTileJsonAsync(context, source, prefix, palette) : Task.CompletedTask);
-            app.MapGet(prefix + "/{palette}/{z}/{x}/{tile}", context =>
+            app.MapGet("/{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
+                TryPalette(context, source, out var palette) ? ServeTileJsonAsync(context, source, palette) : Task.CompletedTask);
+            app.MapGet("/{palette}/{z}/{x}/{tile}", context =>
                 TryPalette(context, source, out var palette) ? ServeTileAsync(context, source, palette) : Task.CompletedTask);
         }
+
+        if (source.HasDatasets)
+        {
+            // Each layer's tiles (issue #1495), under /layers/{layer}/, as the
+            // tiles of every dataset are under the root. Layers can come and
+            // go with --manage-datasets, so they are looked up at each request.
+            var layers = "/" + LayersPath + "/{layer}/";
+            app.MapGet(layers + XyzDirectoryTileSink.TileJsonFileName, context =>
+                TryLayer(context, source, out var layer) ? ServeTileJsonAsync(context, layer, palette: null, LayerOf(context)) : Task.CompletedTask);
+            app.MapGet(layers + "{z}/{x}/{tile}", context =>
+                TryLayer(context, source, out var layer) ? ServeTileAsync(context, layer, palette: null) : Task.CompletedTask);
+            app.MapGet(layers + "{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
+                TryLayer(context, source, out var layer) && TryPalette(context, layer, out var palette)
+                    ? ServeTileJsonAsync(context, layer, palette, LayerOf(context))
+                    : Task.CompletedTask);
+            app.MapGet(layers + "{palette}/{z}/{x}/{tile}", context =>
+                TryLayer(context, source, out var layer) && TryPalette(context, layer, out var palette)
+                    ? ServeTileAsync(context, layer, palette)
+                    : Task.CompletedTask);
+        }
+
+        // OGC WMTS 1.0.0: the capabilities document, the KVP endpoint and the
+        // RESTful tile URLs, with and without the Time dimension.
+        app.MapGet("/" + WmtsService.CapabilitiesPath, context => ServeWmtsCapabilitiesAsync(context, source));
+        app.MapGet("/" + WmtsService.KvpPath, context => ServeWmtsKvpAsync(context, source));
+        app.MapGet("/wmts/1.0.0/{layer}/{style}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+        app.MapGet("/wmts/1.0.0/{layer}/{style}/{time}/{tileMatrixSet}/{tileMatrix}/{tileRow}/{tile}", context => ServeWmtsRestTileAsync(context, source));
+
+        // Each dataset's metadata (issue #1504).
+        app.MapGet("/" + DatasetsDocument.Path, context => DatasetsDocument.ServeAsync(context, source));
+
+        // Mariner settings sets, served as {palette}-{hash} styles (issue #1493).
+        MarinerStyleRegistry.Map(app, () => source.MarinerStyles, () => source.Palettes);
+
+        // OGC WMS 1.3.0: GetCapabilities, GetMap and GetFeatureInfo.
+        app.MapGet("/" + WmsService.Path, context => WmsService.HandleAsync(context, source, RequestBaseUri(context.Request)));
+
+        // Adding and removing datasets, with --manage-datasets (issue #1494).
+        if (datasets is not null)
+            ServedDatasets.Map(app, datasets);
+
+        // The web page (issue #1573), at the root.
+        if (viewer)
+            Web.ServeWeb.Map(app);
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
@@ -95,9 +195,57 @@ internal sealed class TileServer : IAsyncDisposable
         return new TileServer(app, ServeHost.BaseUri(address, bound.Port, token));
     }
 
-    /// <summary>The tile URL template under a base URL, e.g. <c>http://127.0.0.1:8200/{z}/{x}/{y}.png</c>.</summary>
-    public static string TileUrlTemplate(Uri baseUri, TileImageFormat format) =>
-        baseUri.AbsoluteUri + "{z}/{x}/{y}." + TileSetMetadata.FormatToken(format);
+    /// <summary>
+    /// Serves every route under <paramref name="prefix"/>, <c>/{token}</c>: a
+    /// request under it continues with the token moved to its path base, so
+    /// links the page builds keep it; any other request but the health check
+    /// is not found. The prefix alone redirects to the page's slashed URL.
+    /// </summary>
+    private static void UseTokenPathBase(WebApplication app, PathString prefix, bool viewer)
+    {
+        app.Use((context, next) =>
+        {
+            var request = context.Request;
+            if (request.Path.StartsWithSegments(prefix, out var matched, out var rest))
+            {
+                if (!rest.HasValue && viewer)
+                {
+                    // The page loads its files relative to itself, so it's
+                    // served from the slashed URL.
+                    context.Response.Redirect(request.PathBase + prefix + "/" + request.QueryString);
+                    return Task.CompletedTask;
+                }
+
+                request.PathBase = request.PathBase.Add(matched);
+                request.Path = rest.HasValue ? rest : "/";
+                return next(context);
+            }
+
+            if (request.Path == ServeHost.HealthPath)
+                return next(context);
+
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>The suffix of a high-DPI tile's row in its URL (issue #1563): <c>{z}/{x}/{y}@2x.png</c>.</summary>
+    public const string HighDpiSuffix = "@2x";
+
+    /// <summary>
+    /// The tile URL template under a base URL, e.g. <c>http://127.0.0.1:8200/{z}/{x}/{y}.png</c>,
+    /// or with <paramref name="highDpi"/> its 512-pixel tiles', <c>…/{z}/{x}/{y}@2x.png</c>.
+    /// </summary>
+    public static string TileUrlTemplate(Uri baseUri, TileImageFormat format, bool highDpi = false) =>
+        baseUri.AbsoluteUri + "{z}/{x}/{y}" + (highDpi ? HighDpiSuffix : string.Empty) + "." + TileSetMetadata.FormatToken(format);
+
+    /// <summary>
+    /// The file of the PMTiles archive <paramref name="source"/> reads, which
+    /// is served whole at <see cref="PmTilesArchivePath"/>; <see langword="null"/>
+    /// for any other source.
+    /// </summary>
+    public static string? PmTilesArchive(ITileSource source) =>
+        source is ITileSetSource { Container: TileContainer.PmTiles } set ? set.Path : null;
 
     /// <summary>
     /// Runs until the host shuts down — on Ctrl-C (SIGINT) or SIGTERM, which
@@ -112,6 +260,24 @@ internal sealed class TileServer : IAsyncDisposable
         await _app.DisposeAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Writes an error a request failed with to <paramref name="errors"/>:
+    /// the method, the path and query, the layer when the route names one
+    /// (<c>{layer}</c>, or the WMTS <c>LAYER</c> parameter), and the exception.
+    /// </summary>
+    private static void ReportError(TextWriter errors, HttpContext context, Exception exception)
+    {
+        var request = context.Request;
+        var layer = request.RouteValues.TryGetValue("layer", out var routed) ? routed as string
+            : request.Query.TryGetValue("LAYER", out var queried) ? queried.ToString()
+            : null;
+        var message = $"Error serving {request.Method} {request.Path}{request.QueryString}"
+            + (string.IsNullOrEmpty(layer) ? string.Empty : $" (layer '{layer}')")
+            + $": {exception}";
+        lock (errors)
+            errors.WriteLine(message);
+    }
+
     /// <summary>Reads the <c>{palette}</c> route value; answers 404 when the source has no such palette.</summary>
     private static bool TryPalette(HttpContext context, ITileSource source, out string palette)
     {
@@ -122,6 +288,22 @@ internal sealed class TileServer : IAsyncDisposable
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return false;
     }
+
+    /// <summary>Reads the <c>{layer}</c> route value; answers 404 when the source has no such layer.</summary>
+    private static bool TryLayer(HttpContext context, ITileSource source, out ITileSource layer)
+    {
+        if (source.Layer(LayerOf(context)) is { } found)
+        {
+            layer = found;
+            return true;
+        }
+
+        layer = source;
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return false;
+    }
+
+    private static string LayerOf(HttpContext context) => (string)context.Request.RouteValues["layer"]!;
 
     /// <summary>
     /// Reads the optional <c>t</c> query parameter, an ISO 8601 instant (UTC
@@ -145,20 +327,50 @@ internal sealed class TileServer : IAsyncDisposable
         return false;
     }
 
-    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette)
+    /// <param name="context">The request.</param>
+    /// <param name="source">The tiles: of every dataset, or of <paramref name="layer"/>.</param>
+    /// <param name="palette">The palette, or <see langword="null"/> for the default.</param>
+    /// <param name="layer">The layer (issue #1495), or <see langword="null"/> for every dataset.</param>
+    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string? palette, string? layer = null)
     {
-        if (!TryTime(context, out var time))
+        if (!TryTime(context, out var time) || !TryScale(context, source, out bool highDpi))
             return;
 
         // The tile URL is absolute, built from the request, so it works from
         // whichever address the client reached this server on.
-        var request = context.Request;
-        var baseUri = new Uri($"{request.Scheme}://{request.Host}{prefix}/{(palette is null ? string.Empty : palette + "/")}");
+        var root = RequestBaseUri(context.Request);
+        var layerPath = layer is null ? string.Empty : LayersPath + "/" + Uri.EscapeDataString(layer) + "/";
+        var baseUri = new Uri(root, layerPath + (palette is null ? string.Empty : palette + "/"));
         var json = source.ToTileJson(palette, time);
-        var tiles = TileUrlTemplate(baseUri, source.Format);
+        var tiles = TileUrlTemplate(baseUri, source.Format, highDpi);
+        if (highDpi)
+            json["tileSize"] = 2 * XyzTileGrid.TileSize;
+        if (source.CanReadPixelRatio(2) && json["s100"] is System.Text.Json.Nodes.JsonObject ratios)
+            ratios["pixelRatios"] = new System.Text.Json.Nodes.JsonArray(1, 2);
         if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
             tiles += "?t=" + Uri.EscapeDataString((string)step!);
         json["tiles"] = new System.Text.Json.Nodes.JsonArray(tiles);
+        if (layer is null && palette is null && PmTilesArchive(source) is not null)
+        {
+            if (json["s100"] is not System.Text.Json.Nodes.JsonObject archiveS100)
+                json["s100"] = archiveS100 = [];
+            archiveS100["pmtilesUrl"] = root.AbsoluteUri + PmTilesArchivePath;
+        }
+        if (source.HasDatasets && json["s100"] is System.Text.Json.Nodes.JsonObject s100)
+            s100["datasetsUrl"] = root.AbsoluteUri + DatasetsDocument.Path;
+        if (layer is not null && json["s100"] is System.Text.Json.Nodes.JsonObject layerS100)
+            layerS100["datasetsUrl"] = root.AbsoluteUri + DatasetsDocument.Path;
+
+        // The layers of the datasets (issue #1495), each with its TileJSON.
+        if (layer is null && source.Layers.Count > 0 && json["s100"] is System.Text.Json.Nodes.JsonObject withLayers)
+        {
+            withLayers["layers"] = new System.Text.Json.Nodes.JsonArray([.. source.Layers.Select(id => (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject
+            {
+                ["id"] = id,
+                ["tilejson"] = root.AbsoluteUri + LayersPath + "/" + Uri.EscapeDataString(id) + "/"
+                    + (palette is null ? string.Empty : palette + "/") + XyzDirectoryTileSink.TileJsonFileName,
+            })]);
+        }
 
         context.Response.ContentType = "application/json";
         context.Response.Headers.CacheControl = "no-cache";
@@ -170,12 +382,20 @@ internal sealed class TileServer : IAsyncDisposable
         var values = context.Request.RouteValues;
         var tile = (string)values["tile"]!;
         int dot = tile.IndexOf('.', StringComparison.Ordinal);
+        var row = dot < 0 ? tile : tile[..dot];
+
+        // {y}@2x: the 512-pixel tile, drawn at twice the pixel density
+        // (issue #1563), from a source that renders its tiles.
+        bool highDpi = row.EndsWith(HighDpiSuffix, StringComparison.Ordinal);
+        if (highDpi)
+            row = row[..^HighDpiSuffix.Length];
         if (dot < 0
             || !TryParse((string)values["z"]!, out int zoom)
             || !TryParse((string)values["x"]!, out int x)
-            || !TryParse(tile[..dot], out int y)
+            || !TryParse(row, out int y)
             || !TileSource.IsValid(zoom, x, y)
-            || !MatchesFormat(tile[(dot + 1)..], source.Format))
+            || !MatchesFormat(tile[(dot + 1)..], source.Format)
+            || (highDpi && !source.CanReadPixelRatio(2)))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -184,7 +404,46 @@ internal sealed class TileServer : IAsyncDisposable
         if (!TryTime(context, out var time))
             return;
 
-        var data = await source.ReadAsync(zoom, x, y, palette, time, context.RequestAborted).ConfigureAwait(false);
+        await WriteTileAsync(context, source, zoom, x, y, palette, time, highDpi ? 2 : null).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the optional <c>scale</c> query parameter of a TileJSON request:
+    /// <c>1</c>, or <c>2</c> for the 512-pixel <c>@2x</c> tiles. Answers 400
+    /// when it's neither, and 404 for <c>2</c> when the source can't draw them.
+    /// </summary>
+    private static bool TryScale(HttpContext context, ITileSource source, out bool highDpi)
+    {
+        highDpi = false;
+        if (!context.Request.Query.TryGetValue("scale", out var values) || string.IsNullOrWhiteSpace(values.ToString()))
+            return true;
+
+        switch (values.ToString().Trim())
+        {
+            case "1":
+                return true;
+            case "2" when source.CanReadPixelRatio(2):
+                highDpi = true;
+                return true;
+            case "2":
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return false;
+            default:
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes tile <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>,
+    /// at <paramref name="pixelRatio"/> when given (an <c>@2x</c> tile), 204
+    /// when empty, 304 when the ETag matches.
+    /// </summary>
+    private static async Task WriteTileAsync(HttpContext context, ITileSource source, int zoom, int x, int y, string? palette, DateTime? time, int? pixelRatio = null)
+    {
+        var data = pixelRatio is { } ratio
+            ? await source.ReadAsync(zoom, x, y, palette, time, ratio, context.RequestAborted).ConfigureAwait(false)
+            : await source.ReadAsync(zoom, x, y, palette, time, context.RequestAborted).ConfigureAwait(false);
         context.Response.Headers.CacheControl = "no-cache";
         if (data is null)
         {
@@ -205,20 +464,118 @@ internal sealed class TileServer : IAsyncDisposable
         await context.Response.Body.WriteAsync(data, context.RequestAborted).ConfigureAwait(false);
     }
 
-    private static Task ServeViewerAsync(HttpContext context)
+    /// <summary>
+    /// Serves the PMTiles archive at <paramref name="path"/> whole, with range
+    /// requests (issue #1590). The file is opened once per request, so every
+    /// byte of a response comes from one version of it even when an export
+    /// replaces it meanwhile; its ETag (length and write time) and
+    /// <c>Last-Modified</c> change when it's replaced, so a client's
+    /// <c>If-Range</c> or ETag check notices a new archive.
+    /// </summary>
+    private static Task ServePmTilesArchiveAsync(HttpContext context, string path)
     {
-        // Routing ignores a trailing slash, but the page loads tiles.json
-        // relative to itself, so it must be served from the slashed URL.
-        var path = context.Request.PathBase + context.Request.Path;
-        if (!path.Value!.EndsWith('/'))
+        FileStream stream;
+        try
         {
-            context.Response.Redirect(path + "/");
+            stream = new FileStream(
+                File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete),
+                FileAccess.Read,
+                bufferSize: 0);
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return Task.CompletedTask;
         }
 
-        context.Response.ContentType = "text/html; charset=utf-8";
+        var lastModified = new DateTimeOffset(File.GetLastWriteTimeUtc(stream.SafeFileHandle), TimeSpan.Zero);
+        var etag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue(
+            string.Create(CultureInfo.InvariantCulture, $"\"{stream.Length:x}-{lastModified.UtcTicks:x}\""));
         context.Response.Headers.CacheControl = "no-cache";
-        return context.Response.Body.WriteAsync(ViewerPage, context.RequestAborted).AsTask();
+        return TypedResults.Stream(stream, PmTilesContentType, lastModified: lastModified, entityTag: etag, enableRangeProcessing: true)
+            .ExecuteAsync(context);
+    }
+
+    /// <summary>
+    /// The base URL a client reached this server on, ending in <c>/</c> and
+    /// with the token when there is one, so documents carry URLs that work
+    /// from there. It's the request's scheme, host and path base, so it
+    /// follows whatever the host's forwarded-headers handling makes of
+    /// <c>X-Forwarded-*</c>. The TileJSON, WMTS and WMS documents and the web
+    /// page all build their links on it (issue #1582).
+    /// </summary>
+    internal static Uri RequestBaseUri(HttpRequest request) =>
+        new($"{request.Scheme}://{request.Host.ToUriComponent()}{request.PathBase.ToUriComponent()}/");
+
+    private static Task ServeWmtsCapabilitiesAsync(HttpContext context, ITileSource source)
+    {
+        context.Response.ContentType = "application/xml; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-cache";
+        return context.Response.WriteAsync(WmtsService.BuildCapabilities(source, RequestBaseUri(context.Request)), context.RequestAborted);
+    }
+
+    /// <summary>The WMTS KVP endpoint: <c>REQUEST=GetCapabilities</c> or <c>REQUEST=GetTile</c>. Parameter names are case-insensitive.</summary>
+    private static Task ServeWmtsKvpAsync(HttpContext context, ITileSource source)
+    {
+        var query = context.Request.Query;
+        string? Get(string name) => query.TryGetValue(name, out var values) ? values.ToString() : null;
+
+        var service = Get("SERVICE");
+        if (string.IsNullOrEmpty(service))
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "MissingParameterValue", "SERVICE", "The SERVICE parameter is required.");
+        if (!string.Equals(service, "WMTS", StringComparison.OrdinalIgnoreCase))
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "InvalidParameterValue", "SERVICE", $"Unknown service '{service}'; this is WMTS.");
+
+        var request = Get("REQUEST");
+        if (string.Equals(request, "GetCapabilities", StringComparison.OrdinalIgnoreCase))
+            return ServeWmtsCapabilitiesAsync(context, source);
+        if (!string.Equals(request, "GetTile", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.IsNullOrEmpty(request)
+                ? WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "MissingParameterValue", "REQUEST", "The REQUEST parameter is required.")
+                : WmtsErrorAsync(context, StatusCodes.Status501NotImplemented, "OperationNotSupported", "REQUEST", $"Operation '{request}' isn't supported; use GetCapabilities or GetTile.");
+        }
+
+        var (tile, error) = WmtsService.ParseTile(
+            source, Get("LAYER"), Get("STYLE"), Get("FORMAT"), Get("TILEMATRIXSET"),
+            Get("TILEMATRIX"), Get("TILEROW"), Get("TILECOL"), Get(WmtsService.TimeDimension));
+        return ServeWmtsTileAsync(context, source, tile, error);
+    }
+
+    private static Task ServeWmtsRestTileAsync(HttpContext context, ITileSource source)
+    {
+        var values = context.Request.RouteValues;
+        var file = (string)values["tile"]!;
+        int dot = file.IndexOf('.', StringComparison.Ordinal);
+        if (dot < 0 || !MatchesFormat(file[(dot + 1)..], source.Format))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }
+
+        var (tile, error) = WmtsService.ParseTile(
+            source, (string?)values["layer"], (string?)values["style"], format: null, (string?)values["tileMatrixSet"],
+            (string?)values["tileMatrix"], (string?)values["tileRow"], file[..dot], (string?)values["time"]);
+        return ServeWmtsTileAsync(context, source, tile, error);
+    }
+
+    private static Task ServeWmtsTileAsync(HttpContext context, ITileSource source, WmtsService.TileRequest? tile, WmtsService.TileRequestError? error)
+    {
+        if (error is { } e)
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, e.Code, e.Locator, e.Message);
+
+        var t = tile!.Value;
+        var layer = t.Layer == WmtsService.LayerIdentifier ? source : source.Layer(t.Layer);
+        if (layer is null)
+            return WmtsErrorAsync(context, StatusCodes.Status400BadRequest, "InvalidParameterValue", "LAYER", $"Unknown layer '{t.Layer}'.");
+        return WriteTileAsync(context, layer, t.Zoom, t.X, t.Y, t.Palette, t.Time);
+    }
+
+    private static Task WmtsErrorAsync(HttpContext context, int status, string code, string? locator, string message)
+    {
+        context.Response.StatusCode = status;
+        context.Response.ContentType = "application/xml; charset=utf-8";
+        return context.Response.WriteAsync(WmtsService.ExceptionReport(code, locator, message), context.RequestAborted);
     }
 
     private static bool TryParse(string text, out int value) =>
@@ -227,97 +584,4 @@ internal sealed class TileServer : IAsyncDisposable
     private static bool MatchesFormat(string extension, TileImageFormat format) =>
         string.Equals(extension, TileSetMetadata.FormatToken(format), StringComparison.OrdinalIgnoreCase)
         || (format == TileImageFormat.Jpeg && string.Equals(extension, "jpeg", StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>
-    /// A MapLibre GL JS page showing the tiles over OpenStreetMap, framed on
-    /// the set's bounds. It loads MapLibre and the basemap from the internet;
-    /// the chart tiles come from this server.
-    /// </summary>
-    private static readonly byte[] ViewerPage = Encoding.UTF8.GetBytes("""
-        <!doctype html>
-        <html lang="en">
-        <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>s100 tiles</title>
-        <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-        <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-        <style>html, body, #map { margin: 0; height: 100%; } #status { position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: #fffc; font: 13px system-ui, sans-serif; border-radius: 4px; } #status select { margin-left: 6px; font: inherit; }</style>
-        </head>
-        <body>
-        <div id="map"></div>
-        <div id="status"></div>
-        <script>
-        (async () => {
-          const status = document.getElementById("status");
-          const tileJsonUrl = new URL("tiles.json", location.href).href;
-          let tileJson;
-          try {
-            tileJson = await (await fetch(tileJsonUrl)).json();
-          } catch (e) {
-            status.textContent = "Couldn't load tiles.json: " + e;
-            return;
-          }
-          status.textContent = (tileJson.name || "Tiles") + " · zoom " + tileJson.minzoom + "–" + tileJson.maxzoom;
-          const palettes = (tileJson.s100 && tileJson.s100.palettes) || [];
-          const times = (tileJson.s100 && tileJson.s100.times) || [];
-          const map = new maplibregl.Map({
-            container: "map",
-            style: {
-              version: 8,
-              sources: {
-                osm: {
-                  type: "raster",
-                  tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-                  tileSize: 256,
-                  attribution: "© OpenStreetMap contributors",
-                },
-                chart: { type: "raster", url: tileJsonUrl, tileSize: 256 },
-              },
-              layers: [
-                { id: "osm", type: "raster", source: "osm" },
-                { id: "chart", type: "raster", source: "chart" },
-              ],
-            },
-            center: tileJson.center ? [tileJson.center[0], tileJson.center[1]] : [0, 0],
-            zoom: tileJson.center ? tileJson.center[2] : 1,
-          });
-          map.addControl(new maplibregl.NavigationControl());
-          if (palettes.length > 0) {
-            // Each palette has its own TileJSON under /{palette}/.
-            const select = document.createElement("select");
-            select.setAttribute("aria-label", "Palette");
-            for (const palette of palettes) {
-              const option = new Option(palette, palette, false, palette === tileJson.s100.palette);
-              select.add(option);
-            }
-            select.addEventListener("change", update);
-            status.append(select);
-          }
-          if (times.length > 0) {
-            // Each time step is a t query parameter on the same URLs.
-            const time = document.createElement("select");
-            time.id = "time";
-            time.setAttribute("aria-label", "Time");
-            for (const t of times)
-              time.add(new Option(t.replace("T", " ").replace(":00Z", "Z"), t));
-            time.addEventListener("change", update);
-            status.append(time);
-          }
-          function update() {
-            const palette = document.querySelector("#status select[aria-label=Palette]");
-            const time = document.getElementById("time");
-            const url = new URL((palette ? palette.value + "/" : "") + "tiles.json", location.href);
-            if (time) url.searchParams.set("t", time.value);
-            map.getSource("chart").setUrl(url.href);
-          }
-          if (tileJson.bounds) {
-            const [w, s, e, n] = tileJson.bounds;
-            map.fitBounds([[w, s], [e, n]], { padding: 20, animate: false });
-          }
-        })();
-        </script>
-        </body>
-        </html>
-        """);
 }

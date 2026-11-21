@@ -24,6 +24,7 @@
   <ItemGroup>
     <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\_shared\WeatherFakeServer.cs" Link="TestSupport\WeatherFakeServer.cs" />
+    <Compile Include="..\_shared\SyntheticAmlCell.cs" Link="TestSupport\SyntheticAmlCell.cs" />
   </ItemGroup>
 
 </Project>

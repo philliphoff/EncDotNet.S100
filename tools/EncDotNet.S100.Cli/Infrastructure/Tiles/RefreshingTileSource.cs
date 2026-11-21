@@ -34,11 +34,15 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
     private readonly Task _loop;
     private readonly List<Task> _retiring = [];
 
+    // Serialises checks and replacements (issue #1494), so they don't open the datasets twice at once.
+    private readonly SemaphoreSlim _changing = new(1, 1);
+
     private Generation _current;
     private string _servedFingerprint;
     private string? _pendingFingerprint;
     private string? _failedFingerprint;
     private int _reloads;
+    private volatile bool _updating;
 
     /// <param name="initial">The datasets as first opened.</param>
     /// <param name="fingerprint">The fingerprint <paramref name="initial"/> was opened at.</param>
@@ -59,11 +63,22 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         _fingerprint = computeFingerprint;
         _open = open;
         _log = log;
+        Interval = interval;
         _loop = interval == Timeout.InfiniteTimeSpan ? Task.CompletedTask : RunAsync(interval, _stopping.Token);
     }
 
-    /// <summary>The datasets currently served.</summary>
-    public RenderedTileSource Current
+    /// <summary>The datasets currently served; <see langword="null"/> while none are (issue #1601).</summary>
+    public RenderedTileSource? Current
+    {
+        get
+        {
+            lock (_gate)
+                return _current.Rendered;
+        }
+    }
+
+    /// <summary>What serves now: the datasets, or the empty source while none are.</summary>
+    private ITileSource Serving
     {
         get
         {
@@ -72,16 +87,88 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         }
     }
 
+    /// <summary>How often the files are checked; <see cref="Timeout.InfiniteTimeSpan"/> when only on request.</summary>
+    public TimeSpan Interval { get; }
+
+    /// <summary>
+    /// The datasets are changing or have changed (issue #1583): a reload
+    /// started or ended, or a dataset was added or removed. Raised on the
+    /// thread making the change; a handler that throws is reported and skipped.
+    /// </summary>
+    public event Action<DatasetsUpdate>? Updated;
+
+    /// <summary>Whether the datasets are being opened again now.</summary>
+    public bool IsUpdating => _updating;
+
     /// <summary>How many times the datasets have been reopened.</summary>
     public int Reloads => Volatile.Read(ref _reloads);
 
-    public string Path => Current.Path;
+    public string Path => Serving.Path;
 
-    public TileImageFormat Format => Current.Format;
+    public TileImageFormat Format => Serving.Format;
 
-    public IReadOnlyList<string> Palettes => Current.Palettes;
+    public IReadOnlyList<string> Palettes => Serving.Palettes;
 
-    public IReadOnlyList<DateTime> Times => Current.Times;
+    public IReadOnlyList<DateTime> Times => Serving.Times;
+
+    public IReadOnlyList<string> Layers => Serving.Layers;
+
+    /// <summary>
+    /// The tiles of the layer <paramref name="id"/>, from whichever datasets
+    /// serve at each call; <see langword="null"/> when the datasets served now
+    /// have no such layer.
+    /// </summary>
+    public ITileSource? Layer(string id) => Serving.Layer(id) is null ? null : new LayerSource(this, id);
+
+    public DatasetFeatureQuery? FeatureQuery => Serving.FeatureQuery;
+
+    public MarinerStyleRegistry? MarinerStyles => Serving.MarinerStyles;
+
+    public bool HasDatasets => true;
+
+    public bool HasLegend => Serving.HasLegend;
+
+    public (int Width, int Height)? LegendSize(string? style)
+    {
+        var generation = Acquire();
+        try
+        {
+            return generation.Source.LegendSize(style);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    public async ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.ReadLegendAsync(style, options, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    public JsonObject? ToDatasetsJson()
+    {
+        var generation = Acquire();
+        try
+        {
+            return generation.Source.ToDatasetsJson();
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    /// <summary>The revision of the datasets currently served; changes when they are reopened.</summary>
+    public string? Revision => Serving.Revision;
 
     public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
@@ -89,6 +176,38 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         try
         {
             return await generation.Source.ReadAsync(zoom, x, y, palette, time, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    public bool CanReadPixelRatio(int pixelRatio) => RenderedTileSource.IsPixelRatio(pixelRatio);
+
+    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.ReadAsync(zoom, x, y, palette, time, pixelRatio, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release(generation);
+        }
+    }
+
+    public bool CanRenderViews => true;
+
+    public async ValueTask<SkiaSharp.SKBitmap?> RenderViewAsync(
+        int zoom, double minX, double minY, double maxX, double maxY, int width, int height,
+        string? palette, DateTime? time, CancellationToken cancellationToken)
+    {
+        var generation = Acquire();
+        try
+        {
+            return await generation.Source.RenderViewAsync(zoom, minX, minY, maxX, maxY, width, height, palette, time, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -111,11 +230,91 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     /// <summary>
     /// Checks the input files once, and reopens the datasets when a change has
-    /// held since the previous check. Not to be called concurrently; the
-    /// refresh loop is its only caller while serving.
+    /// held since the previous check. Waits for a <see cref="ReplaceAsync"/>
+    /// under way, and the other way round.
     /// </summary>
     /// <returns>Whether the datasets were reopened.</returns>
     public async Task<bool> CheckAsync()
+    {
+        await _changing.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await CheckCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _changing.Release();
+        }
+    }
+
+    /// <summary>
+    /// Opens other datasets now and serves them in place of the current ones
+    /// once they are ready (<c>--manage-datasets</c>, issue #1494). The current
+    /// ones keep serving until then, and when they can't be opened.
+    /// </summary>
+    /// <param name="open">Opens and prepares the datasets; <see langword="null"/> when they can't be (having said why). An exception it throws is thrown here.</param>
+    /// <param name="fingerprint">The fingerprint the datasets are opened at, which later checks compare with.</param>
+    /// <param name="replaced">Called once they serve, before any later check or replacement starts.</param>
+    /// <returns>Whether the datasets were replaced.</returns>
+    public async Task<bool> ReplaceAsync(Func<RenderedTileSource?> open, string fingerprint, Action? replaced = null)
+    {
+        await _changing.WaitAsync().ConfigureAwait(false);
+        bool served = false;
+        try
+        {
+            var before = Current?.Session;
+            Raise(new DatasetsUpdate(true, Revision, []));
+            var opened = await Task.Run(open).ConfigureAwait(false);
+            if (opened is null)
+                return false;
+
+            Serve(opened, fingerprint, $"Now serving {opened.Path}, zoom {opened.Layout.MinZoom}–{opened.Layout.MaxZoom}.");
+            _pendingFingerprint = null;
+            replaced?.Invoke();
+            served = true;
+            Raise(DatasetsUpdate.Between(before, opened.Session, opened.Revision));
+            return true;
+        }
+        finally
+        {
+            // Not replaced (or the open threw): nothing changed, and nothing's changing now.
+            if (!served)
+                Raise(new DatasetsUpdate(false, Revision, []));
+            _changing.Release();
+        }
+    }
+
+    /// <summary>
+    /// Stops serving every dataset (<c>--manage-datasets</c>, issue #1601):
+    /// tiles are then empty, the TileJSON says nothing is served, and
+    /// <c>/datasets</c> lists none, until <see cref="ReplaceAsync"/> serves
+    /// datasets again. Waits for a check or replacement under way.
+    /// </summary>
+    /// <param name="fingerprint">The fingerprint of the start-up datasets with every one removed: the revision while none are served, which later checks compare with.</param>
+    /// <param name="replaced">Called once nothing serves, before any later check or replacement starts.</param>
+    /// <returns>Whether datasets were served until now.</returns>
+    public async Task<bool> ServeNothingAsync(string fingerprint, Action? replaced = null)
+    {
+        await _changing.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (Current is not { } rendered)
+                return false;
+
+            Raise(new DatasetsUpdate(true, Revision, []));
+            Serve(new NoDatasetsTileSource(rendered, fingerprint), fingerprint, "No datasets are served now.");
+            _pendingFingerprint = null;
+            replaced?.Invoke();
+            Raise(DatasetsUpdate.Between(rendered.Session, null, Revision));
+            return true;
+        }
+        finally
+        {
+            _changing.Release();
+        }
+    }
+
+    private async Task<bool> CheckCoreAsync()
     {
         string fingerprint;
         try
@@ -143,7 +342,11 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         }
 
         _pendingFingerprint = null;
+        var before = Current?.Session;
+        var reloading = DatasetsUpdate.Reloading(before, Revision);
+        Raise(reloading);
         RenderedTileSource? reopened;
+        string reason = "They couldn't be opened; the server's console says why";
         try
         {
             reopened = await Task.Run(_open).ConfigureAwait(false);
@@ -151,30 +354,58 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         catch (Exception e)
         {
             _log($"The datasets changed but couldn't be reopened ({e.Message}); still serving the previous version.");
+            reason = e.Message;
             reopened = null;
         }
 
         if (reopened is null)
         {
             _failedFingerprint = fingerprint;
+            Raise(DatasetsUpdate.Failed(reloading, Revision, reason));
             return false;
         }
 
+        Serve(reopened, fingerprint, $"The datasets changed; now serving {reopened.Path}, zoom {reopened.Layout.MinZoom}–{reopened.Layout.MaxZoom}.");
+        Raise(DatasetsUpdate.Between(before, reopened.Session, reopened.Revision));
+        return true;
+    }
+
+    /// <summary>Tells the <see cref="Updated"/> handlers, each on its own: one that throws doesn't stop the others or the change.</summary>
+    private void Raise(DatasetsUpdate update)
+    {
+        _updating = update.InProgress;
+        if (Updated is not { } handlers)
+            return;
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<DatasetsUpdate>>())
+        {
+            try
+            {
+                handler(update);
+            }
+            catch (Exception e)
+            {
+                _log($"Telling a listener about a change to the datasets failed: {e.Message}");
+            }
+        }
+    }
+
+    /// <summary>Switches new requests to <paramref name="opened"/>, and retires the datasets they replace.</summary>
+    private void Serve(ITileSource opened, string fingerprint, string message)
+    {
         Generation retired;
         lock (_gate)
         {
             retired = _current;
-            _current = new Generation(reopened);
+            _current = new Generation(opened);
         }
 
         _servedFingerprint = fingerprint;
         _failedFingerprint = null;
         Interlocked.Increment(ref _reloads);
-        _log($"The datasets changed; now serving {reopened.Path}, zoom {reopened.Layout.MinZoom}–{reopened.Layout.MaxZoom}.");
+        _log(message);
 
         lock (_retiring)
             _retiring.Add(RetireAsync(retired));
-        return true;
     }
 
     public async ValueTask DisposeAsync()
@@ -188,6 +419,9 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         {
         }
 
+        // Let a replacement under way finish; none starts after this.
+        await _changing.WaitAsync().ConfigureAwait(false);
+
         Task[] retiring;
         lock (_retiring)
             retiring = [.. _retiring];
@@ -199,6 +433,7 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
         await RetireAsync(current).ConfigureAwait(false);
         _stopping.Dispose();
+        _changing.Dispose();
     }
 
     private async Task RunAsync(TimeSpan interval, CancellationToken cancellationToken)
@@ -246,14 +481,92 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
             await Task.Delay(10).ConfigureAwait(false);
         }
 
-        await generation.Source.DrainAsync().ConfigureAwait(false);
-        generation.Source.Dispose();
+        if (generation.Rendered is { } rendered)
+        {
+            await rendered.DrainAsync().ConfigureAwait(false);
+            rendered.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A layer of the datasets served (issue #1495), read from the current
+    /// opening at each call. A layer that a change removes reads as empty.
+    /// </summary>
+    private sealed class LayerSource(RefreshingTileSource owner, string id) : ITileSource
+    {
+        public string Path => owner.Path + " layer " + id;
+
+        public TileImageFormat Format => owner.Format;
+
+        public IReadOnlyList<string> Palettes => owner.Palettes;
+
+        public IReadOnlyList<DateTime> Times => owner.Serving.Layer(id)?.Times ?? [];
+
+        public MarinerStyleRegistry? MarinerStyles => owner.MarinerStyles;
+
+        public string? Revision => owner.Revision;
+
+        // The style's legend, of every dataset (issue #1501).
+        public bool HasLegend => owner.HasLegend;
+
+        public (int Width, int Height)? LegendSize(string? style) => owner.LegendSize(style);
+
+        public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+            owner.ReadLegendAsync(style, options, cancellationToken);
+
+        public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
+        {
+            var generation = owner.Acquire();
+            try
+            {
+                return generation.Source.Layer(id) is { } layer
+                    ? await layer.ReadAsync(zoom, x, y, palette, time, cancellationToken).ConfigureAwait(false)
+                    : null;
+            }
+            finally
+            {
+                owner.Release(generation);
+            }
+        }
+
+        public bool CanReadPixelRatio(int pixelRatio) => RenderedTileSource.IsPixelRatio(pixelRatio);
+
+        public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken)
+        {
+            var generation = owner.Acquire();
+            try
+            {
+                return generation.Source.Layer(id) is { } layer
+                    ? await layer.ReadAsync(zoom, x, y, palette, time, pixelRatio, cancellationToken).ConfigureAwait(false)
+                    : null;
+            }
+            finally
+            {
+                owner.Release(generation);
+            }
+        }
+
+        public JsonObject ToTileJson(string? palette, DateTime? time = null)
+        {
+            var generation = owner.Acquire();
+            try
+            {
+                return (generation.Source.Layer(id) ?? generation.Source).ToTileJson(palette, time);
+            }
+            finally
+            {
+                owner.Release(generation);
+            }
+        }
     }
 
     /// <summary>One opening of the datasets, and how many requests are reading from it.</summary>
-    private sealed class Generation(RenderedTileSource source)
+    private sealed class Generation(ITileSource source)
     {
-        public RenderedTileSource Source { get; } = source;
+        public ITileSource Source { get; } = source;
+
+        /// <summary>The datasets rendered; <see langword="null"/> while none are served.</summary>
+        public RenderedTileSource? Rendered => Source as RenderedTileSource;
 
         public int Readers { get; set; }
     }

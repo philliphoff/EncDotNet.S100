@@ -12,7 +12,7 @@ public sealed class GetRecentLogsToolTests
 
     private static LogBuffer Filled()
     {
-        var buffer = new LogBuffer(capacity: 50, minimumLevel: LogLevel.Debug);
+        var buffer = new LogBuffer(capacity: 50, minimumLevel: LogLevel.Debug, timeProvider: TimeProvider.System);
         buffer.Add(LogLevel.Debug, Category, "debug");
         buffer.Add(LogLevel.Information, Category, "Checked for updates");
         buffer.Add(LogLevel.Warning, Category, "Update check failed", new HttpRequestException("offline"));

@@ -140,8 +140,8 @@ contains the same code and a bundled test dataset.
 
 ## Command-line tool
 
-`s100` inspects datasets and renders them to PNG. It uses the same portrayal
-code as the library.
+`s100` inspects datasets, renders them to images and serves them as map tiles.
+It uses the same portrayal code as the library.
 
 ### Install
 
@@ -162,6 +162,15 @@ On Windows, extract `s100-<version>-win-x64.zip` and run `s100.exe list-specs`.
 names per platform and the macOS Gatekeeper prompt, see
 [Command-line rendering](cli.md).
 
+To run `s100` in a container instead, use the `ghcr.io/philliphoff/s100` image.
+Arguments after the image name are an `s100` command:
+
+```bash
+docker run --rm ghcr.io/philliphoff/s100 list-specs
+```
+
+See [Run s100 in Docker](docker.md) for mounting your data.
+
 ### Inspect and render a dataset
 
 Show the detected product, the bounds and, for time series, the available time
@@ -179,8 +188,12 @@ Render it to a PNG:
 
 ### Next steps
 
-[Command-line rendering](cli.md) lists every command and option, including
-palettes, image size, time steps and rendering several layers into one image.
+- [Command-line rendering](cli.md) lists every command and option, including
+  palettes, image size, time steps and rendering several layers into one image.
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): serve a
+  folder of charts as XYZ tiles, WMTS and WMS.
+- [Find when the tide is above a height](scenarios/tide-above-a-height.md):
+  predict tides at NOAA stations, offline.
 
 ## Get sample data
 

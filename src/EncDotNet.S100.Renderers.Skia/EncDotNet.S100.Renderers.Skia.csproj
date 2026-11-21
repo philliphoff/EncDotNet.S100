@@ -16,6 +16,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.VisualRegression.Tests" />
     <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Pipelines" />
+    <InternalsVisibleTo Include="EncDotNet.S100.Rendering.Engine" />
   </ItemGroup>
 
   <ItemGroup>

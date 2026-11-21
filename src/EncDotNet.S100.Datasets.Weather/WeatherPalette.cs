@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals.Application;
 
 namespace EncDotNet.S100.Datasets.Weather;
@@ -6,10 +7,11 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <summary>
 /// The colours of the weather styles: the band fills of
 /// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/>,
-/// <see cref="SeaTemperatureStyle"/>, <see cref="VisibilityStyle"/> and
-/// <see cref="FreezingSprayStyle"/>, and the inks of the wind barbs, wave
-/// arrows, pressure isobars and isotherms, each with a Day, Dusk and Night
-/// value.
+/// <see cref="SeaTemperatureStyle"/>, <see cref="VisibilityStyle"/>,
+/// <see cref="FreezingSprayStyle"/>, <see cref="PrecipitationStyle"/>,
+/// <see cref="ThunderstormRiskStyle"/> and <see cref="CloudCoverStyle"/>, and the inks of the wind barbs, wave
+/// arrows, pressure isobars, isotherms and fronts, each with a Day, Dusk and
+/// Night value.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -40,6 +42,18 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// in Day the heavier classes are darker, in Dusk and Night lighter. The air
 /// isotherms are a warm grey, set apart from the sea isotherms' neutral
 /// grey and dashed.
+/// </para>
+/// <para>
+/// Precipitation is the other exception to the hue rule: it's read by the
+/// rain radar's colour convention, pale green for light rain through green,
+/// yellow, orange and red to violet for violent rain. Like the sea
+/// temperature it's drawn at half opacity, and only where it rains, so no
+/// colour of it covers a large area alone. The thunderstorm risk (CAPE) is a
+/// low-chroma ochre ramp (OKLCH hue about 100), drawn only where storms can
+/// grow; in Day the higher classes are darker, in Dusk and Night lighter.
+/// Cloud cover is a neutral grey veil, drawn at
+/// <see cref="WeatherCoverageStyle.VeilOpacity"/>: in Day the cloudier bands
+/// are darker, in Dusk and Night lighter.
 /// </para>
 /// <para>
 /// Every Night colour stays under relative luminance 0.2, as the S-104
@@ -89,8 +103,56 @@ public static class WeatherPalette
     /// <summary>The colour token prefix of the visibility bands, followed by the band number: <c>WXVIS1</c> (very poor) to <c>WXVIS3</c> (moderate).</summary>
     public const string VisibilityTokenPrefix = "WXVIS";
 
+    /// <summary>The colour token prefix of the precipitation rate bands, followed by the band number: <c>WXRAIN1</c> (light) to <c>WXRAIN6</c> (violent).</summary>
+    public const string PrecipitationTokenPrefix = "WXRAIN";
+
+    /// <summary>The colour token prefix of the thunderstorm risk (CAPE) bands, followed by the band number: <c>WXCAPE1</c> (moderate) to <c>WXCAPE3</c> (extreme).</summary>
+    public const string CapeTokenPrefix = "WXCAPE";
+
+    /// <summary>The colour token prefix of the cloud cover bands, followed by the band number: <c>WXCLD1</c> (partly cloudy) to <c>WXCLD3</c> (overcast).</summary>
+    public const string CloudTokenPrefix = "WXCLD";
+
     /// <summary>Colour token of the outline of the current arrows (<see cref="CurrentArrowStyle"/>).</summary>
     public const string CurrentOutlineToken = "WXCUROUT";
+
+    /// <summary>
+    /// Colour token of the tropical cyclone storm ink (vector weather V2):
+    /// the tracks, symbols, labels and the outlines of the cone and radii, a
+    /// low-chroma plum-grey (<see cref="TropicalCycloneStyle"/>).
+    /// </summary>
+    public const string TropicalCycloneInkToken = "WXTCINK";
+
+    /// <summary>Colour token of the halo under tropical cyclone labels and symbols: the chart's paper.</summary>
+    public const string TropicalCycloneHaloToken = "WXTCHALO";
+
+    /// <summary>Colour token of the tropical cyclone forecast cone's fill, drawn at <see cref="TropicalCycloneFillOpacity"/>.</summary>
+    public const string TropicalCycloneConeToken = "WXTCCONE";
+
+    /// <summary>Colour token of the 34 kt wind radius fill, drawn at <see cref="TropicalCycloneFillOpacity"/>.</summary>
+    public const string TropicalCyclone34Token = "WXTC34";
+
+    /// <summary>Colour token of the 50 kt wind radius fill, drawn at <see cref="TropicalCycloneFillOpacity"/>.</summary>
+    public const string TropicalCyclone50Token = "WXTC50";
+
+    /// <summary>Colour token of the 64 kt wind radius fill, drawn at <see cref="TropicalCycloneFillOpacity"/>.</summary>
+    public const string TropicalCyclone64Token = "WXTC64";
+
+    // The storm fills' opacity in each palette (V2): Day, Dusk, Night.
+    private static readonly IReadOnlyDictionary<string, (double Day, double Dusk, double Night)> TropicalCycloneOpacities =
+        new Dictionary<string, (double, double, double)>(StringComparer.Ordinal)
+        {
+            [TropicalCycloneConeToken] = (0.14, 0.12, 0.18),
+            [TropicalCyclone34Token] = (0.16, 0.14, 0.10),
+            [TropicalCyclone50Token] = (0.26, 0.22, 0.18),
+            [TropicalCyclone64Token] = (0.38, 0.32, 0.28),
+        };
+
+    /// <summary>
+    /// Colour token of the fronts, troughs and pressure centres of a surface
+    /// analysis (<see cref="SurfaceAnalysisStyle"/>): one monochrome front
+    /// ink, darker than <see cref="IsobarInkToken"/> (vector weather V18).
+    /// </summary>
+    public const string FrontInkToken = "WXFRONT";
 
     // Day, Dusk, Night for each wave height band (WXHS01 lowest).
     private static readonly (string Day, string Dusk, string Night)[] WaveHeightColors =
@@ -201,6 +263,36 @@ public static class WeatherPalette
         ("#652873", "#C19BC8", "#6A4B71"),
     ];
 
+    // Day, Dusk, Night for each precipitation rate band (WXRAIN1 light): the
+    // rain radar's ramp, pale green to violet.
+    private static readonly (string Day, string Dusk, string Night)[] PrecipitationColors =
+    [
+        ("#B5E3B0", "#2F5A33", "#18301A"),
+        ("#62C26A", "#3E8445", "#204A25"),
+        ("#F2D64B", "#A79131", "#4E4416"),
+        ("#EE9A3A", "#B06B27", "#55331A"),
+        ("#D9473B", "#B23A30", "#5A1E1A"),
+        ("#9C3FA8", "#9A52A6", "#4A1F50"),
+    ];
+
+    // Day, Dusk, Night for each thunderstorm risk band (WXCAPE1 moderate):
+    // low-chroma ochre.
+    private static readonly (string Day, string Dusk, string Night)[] CapeColors =
+    [
+        ("#E6DE9A", "#5A5428", "#2A2712"),
+        ("#C9B852", "#7E7230", "#3A3417"),
+        ("#99832A", "#A89440", "#4A421C"),
+    ];
+
+    // Day, Dusk, Night for each cloud cover band (WXCLD1 partly cloudy):
+    // neutral greys, drawn as a veil.
+    private static readonly (string Day, string Dusk, string Night)[] CloudColors =
+    [
+        ("#C8CACE", "#4C5058", "#1E2024"),
+        ("#A9ACB2", "#666A72", "#282A2F"),
+        ("#8A8E96", "#80848C", "#33363B"),
+    ];
+
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
     /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
@@ -210,7 +302,11 @@ public static class WeatherPalette
     /// (<see cref="SeaTemperatureToken"/>), and the current speed bands
     /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>,
     /// the visibility bands (<see cref="VisibilityToken"/>), the freezing spray
-    /// bands (<see cref="FreezingSprayToken"/>) and <see cref="AirIsothermInkToken"/>.
+    /// bands (<see cref="FreezingSprayToken"/>), the precipitation, thunderstorm
+    /// risk and cloud cover bands (<see cref="PrecipitationToken"/>,
+    /// <see cref="CapeToken"/>, <see cref="CloudToken"/>), <see cref="AirIsothermInkToken"/>
+    /// <see cref="FrontInkToken"/> and the tropical cyclone storm ink
+    /// (<see cref="TropicalCycloneInkToken"/> and its family).
     /// </summary>
     public static ApplicationPalette Palette { get; } = new("Weather", BuildTokens());
 
@@ -231,6 +327,15 @@ public static class WeatherPalette
 
     /// <summary>The number of visibility bands: 3 (very poor, poor and moderate).</summary>
     public static int VisibilityBandCount => VisibilityColors.Length;
+
+    /// <summary>The number of precipitation rate bands: 6 (light to violent).</summary>
+    public static int PrecipitationBandCount => PrecipitationColors.Length;
+
+    /// <summary>The number of thunderstorm risk bands: 3 (moderate, high and extreme).</summary>
+    public static int CapeBandCount => CapeColors.Length;
+
+    /// <summary>The number of cloud cover bands: 3 (partly cloudy, mostly cloudy and overcast).</summary>
+    public static int CloudBandCount => CloudColors.Length;
 
     /// <summary>The colour token of wave height band <paramref name="band"/>, 1 (lowest) to <see cref="WaveHeightBandCount"/>.</summary>
     /// <param name="band">The band number.</param>
@@ -286,6 +391,50 @@ public static class WeatherPalette
         return FreezingSprayTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>The colour token of precipitation rate band <paramref name="band"/>, 1 (light) to <see cref="PrecipitationBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string PrecipitationToken(int band) => BandToken(PrecipitationTokenPrefix, band, PrecipitationBandCount);
+
+    /// <summary>The colour token of thunderstorm risk band <paramref name="band"/>, 1 (moderate) to <see cref="CapeBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string CapeToken(int band) => BandToken(CapeTokenPrefix, band, CapeBandCount);
+
+    /// <summary>The colour token of cloud cover band <paramref name="band"/>, 1 (partly cloudy) to <see cref="CloudBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string CloudToken(int band) => BandToken(CloudTokenPrefix, band, CloudBandCount);
+
+    private static string BandToken(string prefix, int band, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(band, count);
+        return prefix + band.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// The opacity a tropical cyclone fill is drawn at in a palette (V2): the
+    /// cone and the 34, 50 and 64 kt radii nest, so the 64 kt core is darkest
+    /// by day and brightest at dusk and night. A palette colour has no alpha,
+    /// so the fills carry it as the area instruction's transparency.
+    /// </summary>
+    /// <param name="token">
+    /// <see cref="TropicalCycloneConeToken"/>, <see cref="TropicalCyclone34Token"/>,
+    /// <see cref="TropicalCyclone50Token"/> or <see cref="TropicalCyclone64Token"/>.
+    /// </param>
+    /// <param name="palette">The palette.</param>
+    /// <returns>The opacity, 0 (clear) to 1 (opaque).</returns>
+    public static double TropicalCycloneFillOpacity(string token, PaletteType palette)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (!TropicalCycloneOpacities.TryGetValue(token, out var opacity))
+            throw new ArgumentException($"'{token}' isn't a tropical cyclone fill token.", nameof(token));
+        return palette switch
+        {
+            PaletteType.Dusk => opacity.Dusk,
+            PaletteType.Night => opacity.Night,
+            _ => opacity.Day,
+        };
+    }
+
     private static Dictionary<string, PaletteColors> BuildTokens()
     {
         var tokens = new Dictionary<string, PaletteColors>(StringComparer.Ordinal)
@@ -306,6 +455,21 @@ public static class WeatherPalette
             [CurrentOutlineToken] = PaletteColors.FromHex(day: "#000000", dusk: "#6B7F89", night: "#252D31"),
             // A warm grey for the dashed air isotherms; it shares the isobar label halo.
             [AirIsothermInkToken] = PaletteColors.FromHex(day: "#5A4A40", dusk: "#E3D6CC", night: "#6E6158"),
+            // The front ink (V18): near-black slate by day, near-white at
+            // dusk, a dim grey at night (luminance 0.14), each stronger than
+            // the isobar ink so a front reads over the isobar it lies along.
+            [FrontInkToken] = PaletteColors.FromHex(day: "#1A2030", dusk: "#E3E6EE", night: "#646A76"),
+            // Tropical cyclone storm ink (V2, decided Q1): one plum-grey family,
+            // OKLCH hue about 330 at chroma under 0.05, so it reads as a tinted
+            // grey far from S-101's magenta, CAP's ramp and the other weather
+            // hues. The Night ink is at luminance 0.12. The fills are drawn at
+            // TropicalCycloneFillOpacity.
+            [TropicalCycloneInkToken] = PaletteColors.FromHex(day: "#2A1F2D", dusk: "#EADFEA", night: "#6B5F6B"),
+            [TropicalCycloneHaloToken] = PaletteColors.FromHex(day: "#FFFFFF", dusk: "#2A2530", night: "#000000"),
+            [TropicalCycloneConeToken] = PaletteColors.FromHex(day: "#6F5E70", dusk: "#EADFEA", night: "#6B5F6B"),
+            [TropicalCyclone34Token] = PaletteColors.FromHex(day: "#7A5C78", dusk: "#D9C7D7", night: "#6B5F6B"),
+            [TropicalCyclone50Token] = PaletteColors.FromHex(day: "#5E3F5C", dusk: "#E3D3E1", night: "#6B5F6B"),
+            [TropicalCyclone64Token] = PaletteColors.FromHex(day: "#43243F", dusk: "#F1E6EF", night: "#6B5F6B"),
         };
 
         for (int i = 0; i < WaveHeightColors.Length; i++)
@@ -342,6 +506,24 @@ public static class WeatherPalette
         {
             var (day, dusk, night) = VisibilityColors[i];
             tokens[VisibilityToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < PrecipitationColors.Length; i++)
+        {
+            var (day, dusk, night) = PrecipitationColors[i];
+            tokens[PrecipitationToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < CapeColors.Length; i++)
+        {
+            var (day, dusk, night) = CapeColors[i];
+            tokens[CapeToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < CloudColors.Length; i++)
+        {
+            var (day, dusk, night) = CloudColors[i];
+            tokens[CloudToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
         }
 
         return tokens;

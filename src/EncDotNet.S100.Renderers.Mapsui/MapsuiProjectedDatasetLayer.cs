@@ -35,4 +35,10 @@ public sealed class MapsuiProjectedDatasetLayer
 
     /// <summary>Gets the projected Mapsui layer.</summary>
     public ILayer Layer { get; }
+
+    /// <summary>
+    /// The feature references an S-98 rule suppressed from <see cref="Layer"/>,
+    /// or <see langword="null"/>; see <see cref="EncDotNet.S100.Datasets.Pipelines.Interoperability.LayerStackEntry.SuppressedFeatures"/>.
+    /// </summary>
+    public IReadOnlySet<string>? SuppressedFeatures { get; init; }
 }

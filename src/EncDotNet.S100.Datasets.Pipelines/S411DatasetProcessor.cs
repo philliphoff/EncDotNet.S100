@@ -1,8 +1,8 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
@@ -18,8 +18,10 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="IDatasetProcessor"/> for S-411 Ice Information GML datasets,
 /// accepting both the JCOMM operational encoding and the IHO sample encoding.
 /// Drives the standard S-100 Part 9 XSLT vector portrayal pipeline inherited
-/// from <see cref="GmlDatasetProcessorBase{TFeature}"/> and adds the WMO ice
-/// "egg code" to sea-ice and lake-ice pick reports.
+/// from <see cref="GmlDatasetProcessorBase{TFeature}"/>. The WMO ice "egg
+/// code" of sea-ice and lake-ice features comes from
+/// <see cref="IceEggCodeContributor"/>, which resolves its definitions through
+/// this processor's feature catalogue.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -138,114 +140,6 @@ public sealed class S411DatasetProcessor :
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S411FeatureXmlSource(_dataset);
 
-    /// <summary>
-    /// Feature-type element names (JCOMM short codes and IHO PascalCase) whose
-    /// Feature Catalogue class carries the WMO egg code (S-411 Edition 1.2.1
-    /// Annex A — sea ice and lake ice).
-    /// </summary>
-    private static readonly HashSet<string> EggCodeFeatureTypes =
-        new(StringComparer.OrdinalIgnoreCase) { "seaice", "SeaIce", "lacice", "LakeIce" };
-
-    /// <summary>
-    /// Projects an S-411 sea-ice / lake-ice feature's WMO concentration, stage
-    /// of development, and form-of-ice attributes into an <see cref="IceEggCode"/>
-    /// for the pick report. Other feature classes have no egg code.
-    /// </summary>
-    protected override IceEggCode? BuildEggCode(S411Feature feature)
-    {
-        if (!EggCodeFeatureTypes.Contains(feature.FeatureType))
-            return null;
-
-        var attributes = feature.Attributes;
-        double? snowDepth = null;
-        if (attributes.TryGetValue("snowDepth", out var snowRaw)
-            && double.TryParse(snowRaw, NumberStyles.Float, CultureInfo.InvariantCulture, out var snow))
-        {
-            snowDepth = snow;
-        }
-
-        string? totalConcentration = null;
-        var totalConcentrationSourceCode = "iceact";
-        foreach (var code in new[] { "iceact", "totalConcentration" })
-        {
-            // Skip empty source values so canonical totalConcentration can fill
-            // Ct when a producer emits an empty JCOMM iceact element.
-            if (attributes.TryGetValue(code, out var value) && !string.IsNullOrWhiteSpace(value))
-            {
-                totalConcentration = value;
-                totalConcentrationSourceCode = code;
-                break;
-            }
-        }
-
-        var egg = IceEggCodeBuilder.Build(
-            totalConcentration,
-            attributes.GetValueOrDefault("iceapc"),
-            attributes.GetValueOrDefault("icesod"),
-            attributes.GetValueOrDefault("iceflz"),
-            snowDepth,
-            totalConcentrationSourceCode);
-
-        return egg is null ? null : EnrichWithDefinitions(egg);
-    }
-
-    /// <summary>
-    /// JCOMM short and canonical attribute codes (as carried on <see cref="IceEggValue.SourceCode"/>)
-    /// mapped to their S-411 Feature Catalogue simple-attribute codes, so an
-    /// egg value's numeric SIGRID-3 code can be resolved to its prose meaning.
-    /// </summary>
-    private static readonly Dictionary<string, string> EggAttributeCatalogueCodes =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["iceact"] = "totalConcentration",
-            ["totalConcentration"] = "totalConcentration",
-            ["iceapc"] = "partialConcentration",
-            ["icesod"] = "iceStageofDevelopment",
-            ["iceflz"] = "floeSizes",
-        };
-
-    /// <summary>
-    /// Resolves each egg value's enumerated definition from the Feature
-    /// Catalogue (when a decoder is available) so the pick report can show the
-    /// prose meaning (e.g. <c>"Grey Ice"</c>) on hover.
-    /// </summary>
-    private IceEggCode EnrichWithDefinitions(IceEggCode egg)
-    {
-        if (Decoder is not { } decoder)
-            return egg;
-
-        IceEggValue? Define(IceEggValue? value)
-        {
-            if (value is null || value.SourceCode is not { } source
-                || !EggAttributeCatalogueCodes.TryGetValue(source, out var catalogueCode))
-                return value;
-            var definition = decoder.ResolveListedValueDefinition(catalogueCode, value.Text);
-            return definition is null ? value : value with { Definition = definition };
-        }
-
-        ImmutableArray<IceEggValue> DefineRow(ImmutableArray<IceEggValue> row)
-        {
-            if (row.IsDefaultOrEmpty)
-                return row;
-            var builder = ImmutableArray.CreateBuilder<IceEggValue>(row.Length);
-            foreach (var value in row)
-                builder.Add(Define(value)!);
-            return builder.ToImmutable();
-        }
-
-        return egg with
-        {
-            TotalConcentration = Define(egg.TotalConcentration),
-            PartialConcentrations = DefineRow(egg.PartialConcentrations),
-            StagesOfDevelopment = DefineRow(egg.StagesOfDevelopment),
-            FormsOfIce = DefineRow(egg.FormsOfIce),
-            TrailingPartialConcentrations = DefineRow(egg.TrailingPartialConcentrations),
-            TrailingStagesOfDevelopment = DefineRow(egg.TrailingStagesOfDevelopment),
-            TrailingFormsOfIce = DefineRow(egg.TrailingFormsOfIce),
-            Annotations = DefineRow(egg.Annotations),
-        };
-    }
-
     /// <inheritdoc />
     protected override ValidationReport? ValidateDataset()
     {
@@ -279,5 +173,60 @@ public sealed class S411DatasetProcessor :
             return $"S-411 Sea Ice — {FileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})";
         }
         return null;
+    }
+
+    /// <summary>
+    /// The ice key for the active display mode: one swatch per WMO colour of
+    /// the total concentration or stage of development table
+    /// (<see cref="S411IceColours"/>), labelled from the feature catalogue's
+    /// definitions of its codes. The provisional navigational mode has no
+    /// catalogue colours, so it has no legend.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions just emitted (unused: the key shows the whole table).</param>
+    /// <param name="legend">The legend builder over the catalogue's assets.</param>
+    protected override IReadOnlyList<LegendEntry>? BuildLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend) =>
+        BuildIceLegend(Catalogue.DisplayModes.ActiveDisplayModeId, Decoder, legend);
+
+    /// <inheritdoc />
+    protected override string? LegendCaption => IceLegendCaption(Catalogue.DisplayModes.ActiveDisplayModeId);
+
+    /// <summary>
+    /// The S-411 key for <paramref name="modeId"/> (see <see cref="BuildLegend"/>),
+    /// or <see langword="null"/> for the navigational mode.
+    /// </summary>
+    /// <param name="modeId">The active display mode id, or <see langword="null"/> for the default (concentration).</param>
+    /// <param name="decoder">The S-411 feature catalogue, for the labels; codes are shown bare without it.</param>
+    /// <param name="legend">The legend builder.</param>
+    internal static IReadOnlyList<LegendEntry>? BuildIceLegend(
+        string? modeId, FeatureCatalogueDecoder? decoder, CatalogueLegendBuilder legend)
+    {
+        var (table, attribute) = Table(modeId) ?? default;
+        if (table is null)
+            return null;
+
+        return [.. table.Select(c => (LegendEntry)legend.Swatch(
+            c.Color,
+            S411IceColours.Label(c.Codes, code => decoder?.ResolveListedValueDefinition(attribute!, code.ToString(CultureInfo.InvariantCulture))),
+            S411IceColours.FillTransparency))];
+    }
+
+    /// <summary>The caption naming the ice key's WMO table, or <see langword="null"/> for the navigational mode.</summary>
+    /// <param name="modeId">The active display mode id, or <see langword="null"/> for the default.</param>
+    internal static string? IceLegendCaption(string? modeId) =>
+        Table(modeId) is { Attribute: var attribute }
+            ? attribute == StageOfDevelopmentAttribute ? "Stage of development (WMO colour code)" : "Total concentration (WMO colour code)"
+            : null;
+
+    private const string ConcentrationAttribute = "totalConcentration";
+    private const string StageOfDevelopmentAttribute = "iceStageofDevelopment";
+
+    private static (IReadOnlyList<S411IceColours.ColourClass> Table, string Attribute)? Table(string? modeId)
+    {
+        if (S411DisplayModes.IsProvisional(modeId))
+            return null;
+        return string.Equals(modeId, S411DisplayModes.StageOfDevelopmentModeId, StringComparison.OrdinalIgnoreCase)
+            ? (S411IceColours.StageOfDevelopment, StageOfDevelopmentAttribute)
+            : (S411IceColours.Concentration, ConcentrationAttribute);
     }
 }

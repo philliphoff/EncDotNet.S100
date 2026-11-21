@@ -36,7 +36,7 @@ public sealed class DepthBasisEvaluatorTests
             kind);
 
     private static DepthBasis Evaluate(IWaterLevelAdjustmentState? adjustment, params DepthBasisDataset[] datasets) =>
-        DepthBasisEvaluator.Evaluate(new DepthBasisInputs(datasets, View, ViewTime, adjustment ?? NoWaterLevelAdjustment.Instance));
+        DepthBasisEvaluator.Evaluate(new DepthBasisInputs(datasets, View, ViewTime, adjustment ?? NoWaterLevelAdjustment.Instance, TidePredictionsInView.None));
 
     private static DepthBasis Evaluate(params DepthBasisDataset[] datasets) => Evaluate(null, datasets);
 
@@ -271,6 +271,33 @@ public sealed class DepthBasisEvaluatorTests
         Assert.Equal(DepthBasisKind.Charted, basis.Kind);
         Assert.Equal(DepthBasisReason.WaterLevel, basis.Reason);
         Assert.Equal(status, basis.WaterLevelStatus);
+    }
+
+    [Fact]
+    public void Only_translated_S57_cells_in_view_is_product_not_adjusted_not_a_datum_mismatch()
+    {
+        // NOAA charts are S-57: with water level on the same datum, the
+        // chart stays charted because of the product, not the datum.
+        var basis = Evaluate(new FakeAdjustment(State()), Chart("US5WA22M", spec: "S-57"), WaterLevel("104US00_CBOFS"));
+
+        Assert.Equal(DepthBasisKind.Charted, basis.Kind);
+        Assert.Equal(DepthBasisReason.ProductNotAdjusted, basis.Reason);
+        Assert.Null(basis.WaterLevelStatus);
+        Assert.Equal(DatumAgreement.Same, basis.Datum);
+        Assert.Equal("US5WA22M", Assert.Single(basis.NotAdjustedSources).DatasetId);
+    }
+
+    [Fact]
+    public void An_S57_cell_and_a_refused_datum_is_still_a_datum_mismatch()
+    {
+        var basis = Evaluate(
+            new FakeAdjustment(State()),
+            Chart("US5WA22M", spec: "S-57"),
+            Chart("101US5WA22M", datum: Lat),
+            WaterLevel("104US00_CBOFS"));
+
+        Assert.Equal(DepthBasisReason.WaterLevel, basis.Reason);
+        Assert.Equal(WaterLevelStatus.DatumMismatch, basis.WaterLevelStatus);
     }
 
     [Fact]

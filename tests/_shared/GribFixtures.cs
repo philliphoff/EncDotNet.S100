@@ -187,6 +187,12 @@ internal static class GribFixtures
         /// <summary>The first fixed surface's value (metres for 103, the partition for 241).</summary>
         public int SurfaceValue { get; init; }
 
+        /// <summary>The second fixed surface type, for a layer such as GFS's 180–0 hPa above ground (108); 255 for none.</summary>
+        public byte SecondSurfaceType { get; init; } = 255;
+
+        /// <summary>The second fixed surface's value, when <see cref="SecondSurfaceType"/> isn't 255.</summary>
+        public int SecondSurfaceValue { get; init; }
+
         /// <summary>
         /// For product template 4.8: the length of the interval in hours, ending
         /// at the forecast time plus the length (a maximum, statistical process 2).
@@ -242,7 +248,10 @@ internal static class GribFixtures
             w.U8(m.Category).U8(m.Number).U8(2).U8(0).U8(m.Process).U16(0).U8(0);
             w.U8(1).S32(m.ForecastHours);
             w.U8(m.SurfaceType).S8(0).S32(m.SurfaceValue);
-            w.U8(255).U8(255).U32(0xFFFF_FFFF);
+            if (m.SecondSurfaceType == 255)
+                w.U8(255).U8(255).U32(0xFFFF_FFFF);
+            else
+                w.U8(m.SecondSurfaceType).S8(0).S32(m.SecondSurfaceValue);
             if (m.IntervalHours is { } length)
             {
                 var end = m.ReferenceTime.AddHours(m.ForecastHours + length);

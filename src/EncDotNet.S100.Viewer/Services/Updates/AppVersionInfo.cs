@@ -67,7 +67,7 @@ internal sealed class AssemblyAppVersionProvider : IAppVersionProvider
     /// Creates a provider reading from <paramref name="assembly"/>, or the
     /// entry/executing assembly when none is supplied.
     /// </summary>
-    public AssemblyAppVersionProvider(Assembly? assembly = null)
+    public AssemblyAppVersionProvider(Assembly? assembly)
     {
         var asm = assembly
             ?? Assembly.GetEntryAssembly()

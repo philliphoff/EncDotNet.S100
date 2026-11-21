@@ -1,4 +1,5 @@
-using Avalonia.Threading;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
+using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -6,37 +7,58 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Default <see cref="IGeographicPickPresenter"/>: marshals an MCP-driven
 /// pick onto the UI thread and forwards it to <see cref="IPickService"/>,
 /// which updates the shared <see cref="ViewModels.PickReportViewModel"/>
-/// (and thereby the on-screen panel and pick highlight).
+/// (and thereby the on-screen panel and pick highlight). Dynamic-source
+/// features at the point (a predicted tide station, an AIS target) are
+/// hit-tested at the live map resolution, as a click is.
 /// </summary>
 internal sealed class DispatcherGeographicPickPresenter : IGeographicPickPresenter
 {
     private readonly IPickService _pickService;
     private readonly Action<Action> _marshal;
+    private readonly IDynamicSourcePickService? _dynamicPicks;
+    private readonly Func<double?> _resolution;
 
-    /// <summary>Creates a new presenter.</summary>
-    /// <param name="pickService">Pick service that owns pick-report updates.</param>
-    /// <param name="marshal">
-    /// Optional UI-thread marshalling override. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
-    /// implementation.
-    /// </param>
-    public DispatcherGeographicPickPresenter(IPickService pickService, Action<Action>? marshal = null)
+    /// <summary>Creates the presenter.</summary>
+    /// <param name="pickService">The pick service it forwards to.</param>
+    /// <param name="marshal">Runs an action on the UI thread.</param>
+    /// <param name="dynamicPicks">Hit-tests the dynamic sources; null for none.</param>
+    /// <param name="resolution">The live map's Web Mercator resolution, or null when unknown.</param>
+    public DispatcherGeographicPickPresenter(
+        IPickService pickService,
+        Action<Action> marshal,
+        IDynamicSourcePickService? dynamicPicks,
+        Func<double?> resolution)
     {
         ArgumentNullException.ThrowIfNull(pickService);
+        ArgumentNullException.ThrowIfNull(marshal);
+        ArgumentNullException.ThrowIfNull(resolution);
         _pickService = pickService;
-        _marshal = marshal ?? DispatcherMarshal;
+        _marshal = marshal;
+        _dynamicPicks = dynamicPicks;
+        _resolution = resolution;
     }
 
     /// <inheritdoc />
-    public void Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features)
+    public IReadOnlyList<PickHit> Present(double latitude, double longitude, IReadOnlyList<GeographicPickFeature> features)
     {
         ArgumentNullException.ThrowIfNull(features);
-        _marshal(() => _pickService.PresentGeographicPick(latitude, longitude, features));
-    }
+        IReadOnlyList<PickHit> dynamicHits = [];
+        if (_dynamicPicks is not null && _resolution() is { } resolution and > 0)
+        {
+            var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(longitude, latitude);
+            var point = new Mapsui.MPoint(x, y);
+            var picks = _dynamicPicks;
+            // Hit-test on the UI thread, as a click does.
+            dynamicHits = Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
+                ? picks.Pick(point, resolution)
+                : Avalonia.Threading.Dispatcher.UIThread.Invoke(() => picks.Pick(point, resolution));
+        }
 
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
+        if (features.Count > 0 || dynamicHits.Count > 0)
+        {
+            _marshal(() => _pickService.PresentGeographicPick(latitude, longitude, features, dynamicHits));
+        }
+
+        return dynamicHits;
     }
 }

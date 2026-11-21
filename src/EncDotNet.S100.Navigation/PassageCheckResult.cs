@@ -64,6 +64,31 @@ public enum ConfidenceReasons
     /// and water level can't be confirmed to share a reference.
     /// </summary>
     DatumUnconfirmed = 2,
+
+    /// <summary>
+    /// The water level is a harmonic prediction
+    /// (<see cref="WaterLevelSourceKind.Prediction"/>): the astronomical tide
+    /// only. Wind, pressure and river flow can move the real water level
+    /// 0.5 m or more.
+    /// </summary>
+    WaterLevelPredicted = 4,
+
+    /// <summary>
+    /// No water-level dataset covers part of the passage, and the departure
+    /// sweep judged it with the lowest water level applied anywhere on the
+    /// route during that departure's passage, capped at chart datum (0 m): the
+    /// charted depth at that level meets the setting there. Only departure
+    /// options carry this; the passage check itself reports the stretch as a
+    /// gap (<see cref="PassageStretchKind.NoWaterLevelCoverage"/>).
+    /// </summary>
+    WaterLevelFromLowestLow = 8,
+
+    /// <summary>
+    /// As <see cref="WaterLevelFromLowestLow"/>, but no water level was applied
+    /// anywhere on the route during that departure's passage, so the gap was
+    /// judged at chart datum (0 m), which may be above the real low.
+    /// </summary>
+    WaterLevelAtChartDatum = 16,
 }
 
 /// <summary>How the clearance compares with the required UKC, ignoring confidence.</summary>
@@ -155,6 +180,9 @@ public enum PassageStretchKind
 
     /// <summary>The charted-depth or water-level datum isn't declared, so agreement can't be confirmed (low confidence).</summary>
     DatumUnconfirmed,
+
+    /// <summary>The water level is a harmonic prediction, not S-104 (low confidence).</summary>
+    WaterLevelPredicted,
 }
 
 /// <summary>A run of consecutive samples that share a gap or a low-confidence reason.</summary>

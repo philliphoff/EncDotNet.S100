@@ -67,6 +67,12 @@ internal sealed record ChartAdjustmentState(
         _ => false,
     };
 
+    /// <summary>
+    /// The part of <see cref="Footprint"/> where tide predictions adjust, not
+    /// S-104 (tide predictions design D13): where the seam is drawn.
+    /// </summary>
+    public IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> PredictedFootprint { get; init; } = [];
+
     /// <summary>The bounds of each <see cref="Footprint"/> area.</summary>
     public IReadOnlyList<GeoBounds> FootprintBounds { get; } = [.. Footprint.Select(BoundsOf)];
 

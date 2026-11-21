@@ -55,13 +55,13 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
 
         // The weather formats (GRIB2, NetCDF, CAP, CODSUS) aren't S-100
         // products and have no portrayal catalogue: SoundCharts draws them in
-        // code. The coded surface bulletins aren't drawn yet (#1233).
+        // code, and every one renders headless.
         foreach (var registration in WeatherProducts.All)
         {
             table.AddRow(
                 Markup.Escape(registration.Spec),
                 "[grey]SoundCharts, in code[/]",
-                registration.Spec == WeatherProducts.Codsus.Spec ? "[yellow]no[/]" : "[green]yes[/]");
+                "[green]yes[/]");
         }
 
         AnsiConsole.Write(table);

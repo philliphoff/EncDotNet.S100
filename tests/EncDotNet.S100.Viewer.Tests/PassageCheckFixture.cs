@@ -27,6 +27,10 @@ internal sealed class PassageCheckFixture
 
     private static readonly Lock SerialGate = new();
 
+    /// <summary>A fresh set of route-check sources over ProjNet, as the app's shared one.</summary>
+    public static EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache NewSources() =>
+        new(new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
     /// <summary>
     /// A <c>post</c> that runs each result under one lock, standing in for the
     /// UI thread: without it, a result lands on a pool thread while the test
@@ -62,7 +66,7 @@ internal sealed class PassageCheckFixture
         if (extraDatasets is not null)
             datasets.AddRange(extraDatasets);
         Catalog = new FixedCatalog(datasets);
-        Routes = new RoutesService(viewTime);
+        Routes = new RoutesService(viewTime ?? new ClockViewTime(TimeProvider.System));
         Route = Routes.Routes.CreateRoute("Fixture");
         for (var i = 0; i < 9; i++)
             Route.AppendWaypoint(new GeoPosition(0, i * 0.02));
@@ -74,10 +78,18 @@ internal sealed class PassageCheckFixture
         Check = new PassageCheckService(
             Routes,
             Catalog,
-            checks: allChecks ? null : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
+            checks: allChecks ? PassageCheckService.BuiltInChecks : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
             debounce: debounce ?? TimeSpan.Zero,
-            post: post ?? SerialPost);
+            post: post ?? SerialPost,
+            weather: Weather,
+            sources: PassageCheckFixture.NewSources(),
+            warnings: null,
+            mariner: null,
+            options: null);
     }
+
+    /// <summary>The mariner's weather limits the check reads; none until a test sets them.</summary>
+    public FixedWeatherLimits Weather { get; } = new();
 
     public FixedCatalog Catalog { get; }
 
@@ -219,4 +231,34 @@ internal sealed class PassageCheckFixture
 
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
     }
+}
+
+/// <summary>Mariner weather limits a test sets (#1093).</summary>
+internal sealed class FixedWeatherLimits : EncDotNet.S100.Viewer.Services.PassageCheck.IRouteWeatherLimits
+{
+    private EncDotNet.S100.Navigation.WeatherLimits? _limits;
+
+    public EncDotNet.S100.Navigation.WeatherLimits? Limits
+    {
+        get => _limits;
+        set
+        {
+            _limits = value;
+            RouteWeatherLimitsChanged?.Invoke();
+        }
+    }
+
+    private EncDotNet.S100.Navigation.TropicalCycloneCheckSettings _cyclones = EncDotNet.S100.Navigation.TropicalCycloneCheckSettings.Default;
+
+    public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings Cyclones
+    {
+        get => _cyclones;
+        set
+        {
+            _cyclones = value;
+            RouteWeatherLimitsChanged?.Invoke();
+        }
+    }
+
+    public event Action? RouteWeatherLimitsChanged;
 }

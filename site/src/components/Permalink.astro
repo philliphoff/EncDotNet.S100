@@ -1,0 +1,35 @@
+---
+/**
+ * A heading's link to its own section, for pointing a post or a message at one
+ * part of the page. It sits beside the heading (wrap both in `.anchored`) so the
+ * heading's accessible name stays its text. Clicking it moves to the section and
+ * copies the link.
+ */
+interface Props {
+  /** The id of the element to link to (a section, feature row or card). */
+  to: string;
+  /** What the link points at, for screen readers: "Link to <label>". */
+  label: string;
+}
+
+const { to, label } = Astro.props;
+---
+<a class="permalink" href={`#${to}`} data-permalink aria-label={`Link to ${label}`} title="Copy link to this section">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"></path></svg>
+</a>
+
+<script>
+  // Copy the section's full URL as well as following the link, and say so briefly.
+  document.querySelectorAll<HTMLAnchorElement>('a[data-permalink]').forEach((link) => {
+    link.addEventListener('click', () => {
+      const url = new URL(link.getAttribute('href') ?? '', location.href).href;
+      navigator.clipboard?.writeText(url).then(
+        () => {
+          link.dataset.copied = '';
+          setTimeout(() => delete link.dataset.copied, 1600);
+        },
+        () => {},
+      );
+    });
+  });
+</script>

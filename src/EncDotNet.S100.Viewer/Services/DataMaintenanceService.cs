@@ -1,4 +1,4 @@
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -51,13 +51,14 @@ internal sealed class DataMaintenanceService : IDataMaintenanceService
     }
 
     public IReadOnlyList<string> CacheDirectories =>
-        new[]
-        {
-            _paths.PatternClipCacheDirectory,
-            _paths.PortrayalInstructionCacheDirectory,
-            // The effective tile-cache root (data-dir, env, or OS-temp).
-            S100VectorTileRenderer.ResolveTileDiskDirectory(),
-        };
+    [
+        _paths.PatternClipCacheDirectory,
+        _paths.PortrayalInstructionCacheDirectory,
+        // S100_VECTOR_TILE_DISK_DIR gives the engine its own store for tiles.
+        ChartEngine.Options.TileDiskDirectoryEnvExplicit
+            ? Path.Combine(S100VectorTileRenderer.ResolveTileDiskDirectory(), ChartEngine.TileKindName)
+            : _paths.TileDiskCacheDirectory,
+    ];
 
     public void ClearCaches()
     {

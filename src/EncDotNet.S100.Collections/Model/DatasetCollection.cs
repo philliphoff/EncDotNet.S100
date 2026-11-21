@@ -43,6 +43,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(S100ForecastFeedSource), "s100ForecastFeed")]
 [JsonDerivedType(typeof(SecomSource), "secom")]
 [JsonDerivedType(typeof(WeatherFeedSource), "weatherFeed")]
+[JsonDerivedType(typeof(LiveFeedSource), "liveFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName)
 {
     /// <summary>
@@ -276,4 +277,27 @@ public sealed record WeatherFeedSource(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Attribution { get; init; }
+}
+
+/// <summary>
+/// A live feed the user subscribed to, such as NDBC observations or AIS
+/// targets (data source design note D8): a host builds its dataset from the
+/// source registration named <see cref="RegistrationId"/> and keeps it in its
+/// datasets while the source is in the Library. It has no items: its data is
+/// live, not files to index or download.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label; the registration's name when null.</param>
+/// <param name="RegistrationId">The source registration's id, such as <c>ndbc.realtime</c>.</param>
+public sealed record LiveFeedSource(Guid Id, string? DisplayName, string RegistrationId)
+    : CollectionSource(Id, DisplayName)
+{
+    /// <summary>
+    /// The feed's options from its settings page, by option name, as
+    /// invariant text (<c>SourceOptionsForm</c>); a secret is a
+    /// <c>sc-secret:</c> reference. <see langword="null"/> for the
+    /// registration's defaults.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, string>? Options { get; init; }
 }

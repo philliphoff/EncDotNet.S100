@@ -49,6 +49,9 @@ public static class SupportedSpecEditions
             // Catalogue and encoding guide. Both are read.
             ["S-401"] = [new SpecVersion(1, 2, 0), new SpecVersion(1, 3, 0)],
             ["S-411"] = [new SpecVersion(1, 2, 1)],
+            // S-412 is a draft: the upstream sample declares 1.0.0 and the
+            // bundled Feature Catalogue is the 1.1.0 draft (issue #841).
+            ["S-412"] = [new SpecVersion(1, 0, 0), new SpecVersion(1, 1, 0)],
             ["S-421"] = [new SpecVersion(1, 0, 0)],
         };
 

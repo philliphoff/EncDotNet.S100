@@ -29,13 +29,16 @@ public sealed class PickReportWarningCardsViewTests
         FeatureRef = id,
         DatasetFileName = Dataset.DisplayName,
         ProductSpec = "S-124",
-        NavigationalWarning = new NavigationalWarningInfo
-        {
-            Series = "P",
-            Number = number,
-            WarningType = "Warnings in force",
-            Texts = [new NavigationalWarningText("eng", text)],
-        },
+        Sections =
+        [
+            new NavigationalWarningSection(new NavigationalWarningInfo
+            {
+                Series = "P",
+                Number = number,
+                WarningType = "Warnings in force",
+                Texts = [new NavigationalWarningText("eng", text)],
+            }),
+        ],
     };
 
     private static NavigationalWarningEntry Entry(PickHit hit, bool located) => new(
@@ -50,7 +53,7 @@ public sealed class PickReportWarningCardsViewTests
         var p477 = Hit("p477", "477/20");
         var navigator = new PickReportWarningCardsTests.FakeNavigator();
         navigator.Entries.AddRange([Entry(bulletin, false), Entry(p477, true)]);
-        var pick = new PickReportViewModel { WarningNavigator = navigator };
+        var pick = TestPickReport.Create(navigator: navigator);
         pick.SetPicks([bulletin]);
 
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
@@ -81,7 +84,7 @@ public sealed class PickReportWarningCardsViewTests
         var second = Hit("b", "478/20");
         var navigator = new PickReportWarningCardsTests.FakeNavigator();
         navigator.Entries.AddRange([Entry(first, true), Entry(second, true)]);
-        var pick = new PickReportViewModel { WarningNavigator = navigator };
+        var pick = TestPickReport.Create(navigator: navigator);
         pick.SetPicks([second, first]);
 
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
@@ -94,21 +97,21 @@ public sealed class PickReportWarningCardsViewTests
         host.Click(headers[1]);
 
         Assert.Same(second, pick.SelectedHit);
-        Assert.Equal([false, true], pick.WarningCards.Select(c => c.IsOpen));
+        Assert.Equal([false, true], pick.Warnings.Cards.Select(c => c.IsOpen));
     }
 
     [AvaloniaFact]
     public void A_not_for_navigation_warning_shows_the_footer_label_and_monospaced_text()
     {
         var hit = Hit("a", "477/20");
-        var pick = new PickReportViewModel();
+        var pick = TestPickReport.Create();
         pick.SetPicks([new PickHit
         {
             FeatureType = hit.FeatureType,
             FeatureRef = hit.FeatureRef,
             DatasetFileName = hit.DatasetFileName,
             ProductSpec = hit.ProductSpec,
-            NavigationalWarning = hit.NavigationalWarning,
+            Sections = hit.Sections,
             NotForNavigation = true,
         }]);
 
@@ -121,7 +124,7 @@ public sealed class PickReportWarningCardsViewTests
     [AvaloniaFact]
     public void Referenced_text_and_long_values_share_the_body_set_proportional_without_the_label()
     {
-        var pick = new PickReportViewModel();
+        var pick = TestPickReport.Create();
         pick.SetPicks([new PickHit
         {
             FeatureType = "CautionArea",

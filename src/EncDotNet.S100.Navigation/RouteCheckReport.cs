@@ -117,7 +117,7 @@ public sealed class RouteCheckReport
         Settings = context.Settings;
         Schedule = context.Schedule;
         Track = context.Track;
-        Findings = RouteFinding.Sort(outcomes.SelectMany(o => o.Outcome.Findings));
+        Findings = RouteFinding.Sort(outcomes.SelectMany(o => o.Outcome.Findings).Concat(CurrentFindings.Build(context)));
         Counts = RouteFindingCounts.Of(Findings);
         Checks = outcomes.Select(o => new RouteCheckStatus(o.Check.Name, o.Outcome.State, o.Outcome.Reason, o.Outcome.Findings.Count)).ToArray();
         var byName = new Dictionary<string, RouteCheckOutcome>(StringComparer.Ordinal);
@@ -133,6 +133,7 @@ public sealed class RouteCheckReport
         Departures = clearance?.Departures;
         Areas = Detail<AreaCheckResult>(AreaCheck.CheckName)?.Matches ?? [];
         Warnings = Detail<WarningCheckResult>(WarningCheck.CheckName)?.Matches ?? [];
+        Weather = Detail<WeatherCheckResult>(WeatherCheck.CheckName);
         Verdict = RouteCheckVerdict.From(Findings, Clearance);
         DatasetsUsed = Datasets(context.Sources);
     }
@@ -177,9 +178,17 @@ public sealed class RouteCheckReport
     public IReadOnlyList<RouteWarningMatch> Warnings { get; }
 
     /// <summary>
+    /// The weather check's result, with the limits it used, its samples and
+    /// its departure sweep, or <c>null</c> when it didn't run.
+    /// </summary>
+    public WeatherCheckResult? Weather { get; }
+
+    /// <summary>
     /// The ids of the datasets behind the report, sorted: the chart cells
-    /// along the corridors, the datasets behind the findings, and the depth
-    /// and water-level datasets the clearance check read.
+    /// along the corridors, the datasets behind the findings, the depth and
+    /// water-level datasets the clearance check read, the weather
+    /// datasets the weather check read, and the S-111 datasets the ETAs
+    /// read currents from.
     /// </summary>
     public IReadOnlyList<string> DatasetsUsed { get; }
 
@@ -228,6 +237,14 @@ public sealed class RouteCheckReport
             datasets.UnionWith(used.FallbackDatasets);
             datasets.UnionWith(used.WaterLevelSources.Select(s => s.DatasetId));
         }
+
+        if (Weather is { } weather)
+        {
+            datasets.UnionWith(weather.DatasetsUsed);
+        }
+
+        // The S-111 datasets the ETAs read currents from (#1033).
+        datasets.UnionWith(Schedule.CurrentSources.Where(s => s.Origin == RouteCurrentOrigin.S111).Select(s => s.Id));
 
         return datasets.ToArray();
     }

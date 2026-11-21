@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// correct product specification by the per-registration
 /// <see cref="ProductRegistration.MatchGml"/> recognizers that back
 /// <see cref="DatasetPipelineFactory"/>'s GML detection. This exercises the real
-/// namespaces / <c>productIdentifier</c> shapes of all ten GML products (rather
+/// namespaces / <c>productIdentifier</c> shapes of all eleven GML products (rather
 /// than a single hand-written sample), so a regression in any one product's
 /// recognizer is caught. The <c>tests/datasets/&lt;folder&gt;</c> layout names
 /// each fixture's product, giving the expected spec.
@@ -23,7 +23,7 @@ public class DatasetPipelineFactoryGmlDetectionTests
             ("S122", "S-122"), ("S124", "S-124"), ("S125", "S-125"),
             ("S127", "S-127"), ("S128", "S-128"), ("S129", "S-129"),
             ("S131", "S-131"), ("S201", "S-201"), ("S411", "S-411"),
-            ("S421", "S-421"),
+            ("S412", "S-412"), ("S421", "S-421"),
         };
 
         var data = new TheoryData<string, string>();
@@ -37,7 +37,9 @@ public class DatasetPipelineFactoryGmlDetectionTests
                     $"Committed GML fixture folder 'tests/datasets/{folder}' was not found; " +
                     "GML detection coverage requires it.");
 
-            var gmls = Directory.EnumerateFiles(dir, "*.gml").ToList();
+            // Case-insensitive: the upstream S-412 sample is *.GML.
+            var gmls = Directory.EnumerateFiles(
+                dir, "*.gml", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive }).ToList();
             if (gmls.Count == 0)
                 throw new InvalidOperationException(
                     $"Committed GML fixture folder 'tests/datasets/{folder}' contains no .gml files.");

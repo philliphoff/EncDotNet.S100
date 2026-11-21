@@ -138,7 +138,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nupkgs
-          path: nupkgs/*.nupkg
+          # Include symbol packages; `dotnet nuget push *.nupkg` pushes each
+          # matching .snupkg to the NuGet.org symbol server alongside it.
+          path: |
+            nupkgs/*.nupkg
+            nupkgs/*.snupkg
 
   format:
     name: Format check
@@ -284,6 +288,16 @@ jobs:
     with:
       version: ${{ needs.build.outputs.version }}
     secrets: inherit
+
+  container:
+    needs: [build, publish]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      release: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
   publish-nuget:
     if: startsWith(github.ref, 'refs/tags/v')

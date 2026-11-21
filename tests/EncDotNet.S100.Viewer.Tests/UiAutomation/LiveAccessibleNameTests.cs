@@ -35,13 +35,18 @@ public sealed partial class LiveAccessibleNameTests
         library.Initialize();
         library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, context.CreateS57ExchangeSet("Charts"))]);
         await library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
-            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action());
+        using var panel = TestLibrary.Panel(
+            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
+            feedHealth: null,
+            notifications: null,
+            viewTime: null,
+            timeFormat: null,
+            sync: null);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
-        Assert.NotEmpty(panel.Items);
-        host.Click(host.Find<Avalonia.Controls.ListBoxItem>(r => ReferenceEquals(r.DataContext, panel.Items[0])));
+        Assert.NotEmpty(panel.List.Items);
+        host.Click(host.Find<Avalonia.Controls.ListBoxItem>(r => ReferenceEquals(r.DataContext, panel.List.Items[0])));
 
-        await AssertRealNamesAsync(host, minimumRows: panel.Items.Count + 2);
+        await AssertRealNamesAsync(host, minimumRows: panel.List.Items.Count + 2);
     }
 
     [AvaloniaFact]
@@ -76,7 +81,7 @@ public sealed partial class LiveAccessibleNameTests
             StackEntry("US5SEAFL.000", S98DisplayPlane.BaseChartUnder, 10),
             StackEntry("102US00_BATHY.h5", S98DisplayPlane.Bathymetry, 20),
             LayerStackLegendTests.FillEntry("gfswave-20261025.grib2", [new SwatchLegendEntry("#F3EEFF", "0–0.5 m"), new SwatchLegendEntry("#E5DFFC", "0.5–1 m")]));
-        var stack = new LayerStackViewModel(loader);
+        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 700);
 
         await AssertRealNamesAsync(host, minimumRows: 0);
@@ -85,8 +90,8 @@ public sealed partial class LiveAccessibleNameTests
     [AvaloniaFact]
     public async Task Route_rows_have_real_names()
     {
-        var service = new RoutesService();
-        var routes = new RoutesPanelViewModel(service);
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var routes = TestRoutesPanel.Create(service);
         var route = service.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(0, 1));
@@ -101,7 +106,11 @@ public sealed partial class LiveAccessibleNameTests
     {
         var service = new GlobalTimeService();
         var timeline = new TimelineViewModel(
-            service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+            service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(),
+            refresher: null,
+            progress: null,
+            scope: null,
+            library: null);
         var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
@@ -128,9 +137,10 @@ public sealed partial class LiveAccessibleNameTests
         using var library = context.CreateService();
         library.Initialize();
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library));
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
+            () => new AddToLibraryDialogViewModel(library, readers: new EncDotNet.S100.Collections.Library.LibraryCatalogueReaders(), timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
 

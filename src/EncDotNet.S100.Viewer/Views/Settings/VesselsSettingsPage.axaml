@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.VesselsSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:VesselsSettingsPageViewModel">
 
     <!-- Settings → Vessels: own vessel and the AIS overlay (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -75,47 +75,9 @@
 
             <Separator Margin="0,8,0,0" />
             <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_AisSection}" />
-            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_AisSection_Help}" />
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Settings_AisEnabledTooltip}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_AisEnabled}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding AisEnabled}"  AutomationProperties.AutomationId="Settings.AisEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_AisEnabled}"/>
-            </Grid>
-            <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_AisApiKey}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
-                <TextBox Text="{Binding AisApiKey, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                         AutomationProperties.AutomationId="Settings.AisApiKey"
-                         AutomationProperties.Name="{x:Static loc:Strings.Settings_AisApiKey}"
-                         PasswordChar="•"
-                         ToolTip.Tip="{x:Static loc:Strings.Settings_AisApiKeyTooltip}"
-                         MinWidth="280"
-                         HorizontalAlignment="Left" />
-                <TextBlock Text="{Binding AisApiKeyHint}"
-                           FontSize="11"
-                           Opacity="0.6"
-                           TextWrapping="Wrap" />
-            </StackPanel>
-            <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_AisActivationSpan}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
-                <NumericUpDown Value="{Binding AisActivationViewportSpanDegrees, Mode=TwoWay}"
-                               AutomationProperties.AutomationId="Settings.AisActivationViewportSpanDegrees"
-                               AutomationProperties.Name="{x:Static loc:Strings.Settings_AisActivationSpan}"
-                               Minimum="0"
-                               Maximum="360"
-                               Increment="5"
-                               FormatString="0.##"
-                               ToolTip.Tip="{x:Static loc:Strings.Settings_AisActivationSpanTooltip}"
-                               MinWidth="160"
-                               HorizontalAlignment="Left" />
-                <TextBlock Text="{x:Static loc:Strings.Settings_AisActivationSpanHint}"
-                           FontSize="11"
-                           Opacity="0.6"
-                           TextWrapping="Wrap" />
-            </StackPanel>
+            <!-- Data source design note D8: AIS targets' key and zoom threshold are on its Library settings page. -->
+            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_AisMovedToLibrary}"
+                       AutomationProperties.AutomationId="Settings.AisMovedToLibrary" />
 
         </StackPanel>
     </ScrollViewer>

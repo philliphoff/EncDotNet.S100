@@ -103,11 +103,11 @@ These read an `IDatasetCatalog` and never change it.
 | `NearestFeaturesTool` | `nearest_features` | Ranks features by true distance to a point, including the nearest point on a segment, with the bearing. An area that contains the point has distance 0. |
 | `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. |
 | `CountFeaturesTool` | `count_features` | Counts features by type, for each dataset. |
-| `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. |
-| `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. |
+| `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. `FinestOnly` keeps a chart-cell hit only where its cell is in the finest band at the feature (`CellScaleRanking.FinestBand`). |
+| `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. `IncludeGeometry = false` replaces an S-101 geometry's coordinates with counts (`WithoutCoordinates`). |
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
-| `SampleCoverageTool` | `sample_coverage` | Samples a coverage at a point, at one time or over a time window: S-102, S-104, S-111, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). |
-| `SampleCoverageAlongTool` | `sample_coverage_along` | Samples a coverage at each vertex of a polyline. A vertex with no value has an error instead of failing the whole call. |
+| `SampleTool` | `sample` | Samples a quantity at a point or along a polyline (vertices, or every `SpacingMeters`). `Depth` is charted depth by the route check's rule (S-102, else the finest S-101 cell), with the water mask and, at a time, the water level and available depth, from the host's `RouteCheckSourceCache`. `WaterLevel`, `Current` and `Weather` sample S-104, S-111 and GRIB2 or NetCDF at one time or over a time window, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). A point along a polyline with no value has an error instead of failing the whole call. |
+| `PlanRouteTool` | `plan_route` | Plans a route through stops with `RoutePlanner` on the navigability grid, moving stops to navigable water, then checks it with `CheckRouteTool` and summarises the check. With `RouteName` and a host `IPassageRouteWriter`, creates the route. |
 | `CheckRouteTool` | `check_route` | Checks a polyline or a host route (through `IPassageRouteProvider`) with `RouteChecker`: charts, areas, S-124 warnings and, with a draft, under-keel clearance. Returns the whole `RouteCheckReport` as a `CheckRouteResult`; `CheckRouteResult.From` projects a report you ran yourself. |
 
 The vector tools (`identify_features`, `nearest_features`, `query_features`,
@@ -150,6 +150,27 @@ These are in the `Library/` folder and read or change a Library through
 `HeadlessLibrary` implements both interfaces over the Library core, for a host
 without view models.
 
+### Tide tools
+
+These are in the `Tides/` folder and read a tide station catalogue
+([`EncDotNet.S100.Tides.Stations`](../EncDotNet.S100.Tides.Stations/README.md))
+through `ITideCatalogueSource`. `TideCatalogueFileSource` reads a catalogue
+file and reloads it when the file changes.
+
+| Type | MCP name | What it does |
+|---|---|---|
+| `ListTideStationsTool` | `list_tide_stations` | Lists tide stations near a point or in a box, nearest first, with their kind, reference station, offsets and datums, and the catalogue's age. |
+| `PredictTideTool` | `predict_tide` | Predicts the astronomical tide at a station or the nearest station to a point, as a series or highs and lows. `ResolveAsync` finds the station and predictor without predicting. |
+| `ListCurrentStationsTool` | `list_current_stations` | Lists tidal current stations (one per depth bin) near a point or in a box, nearest first, with their kind, depth, flood and ebb directions and a subordinate station's offsets. |
+| `PredictCurrentTool` | `predict_current` | Predicts the astronomical tidal current at a station or the nearest station to a point, as a series of speeds and directions or the slacks and maxima. `ResolveAsync` finds the station and predictor without predicting. |
+
+SoundCharts and `s100 mcp serve` both run them, and the `s100 tides` commands
+call them directly. `SampleCoverageTool` and `SampleCoverageAlongTool`, given
+a `RouteCheckSourceCache` with tide predictions, fill S-104 gaps with a
+tide prediction and S-111 gaps with a tidal current prediction, and say so in
+the result's `Source`. To build them as MCP tools, use `TideMcpTools` in
+[`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md#add-host-tools).
+
 ### Viewer-only tools
 
 Some tools need the live viewer UI, such as `pick_features`,
@@ -185,6 +206,15 @@ is a typed `ToolError` with a stable `Code` and a `Message`.
 | `library_source_not_found` | No Library collection or source has the ID. |
 | `library_item_not_found` | No Library item has the ID. |
 | `library_change_rejected` | A Library change can't be done as asked; the message says why. |
+| `tide_catalogue_not_available` | There's no tide station catalogue; `hint` says how to get one. |
+| `tide_station_not_found` | No tide station has the id or name, or a name matches several (`candidates`). |
+| `no_tide_station_near` | No tide station that can be predicted on the datum is within the radius. |
+| `tide_datum_not_available` | The station can't be predicted on the datum; `available` lists the datums it can. |
+| `current_station_not_found` | No current station has the id or name, or a name matches several stations (`candidates`). |
+| `no_current_station_near` | No predictable current station is within the radius. |
+| `current_station_not_predictable` | The current station's constituents, or its reference station, are missing. |
+| `no_route_planned` | `plan_route` found no route: a stop has no navigable water near it (`stop_not_navigable`) or no way joins two stops (`no_navigable_way`). |
+| `no_station_within_reach` | `sample` tried a tide or current prediction and no station reaches the point; `nearestStation` names the nearest and its distance. |
 
 ## `IDatasetCatalog`
 
@@ -289,3 +319,11 @@ A `DatasetId` is a plain JSON string in both directions, through
 `DatasetIdJsonConverter`, so an ID from one tool's result can go straight into
 another tool's request. A wrapped `{"value":"…"}` ID is still accepted as
 input.
+
+## Positions
+
+Tools take a position as `latitude` and `longitude` in decimal degrees,
+WGS-84. `PositionArguments.Resolve` accepts older alias pairs (`lat`/`lon`,
+`centerLat`/`centerLon`) beside them and refuses a conflicting or half-given
+pair; `PositionArguments.TryRead` reads a position value given as
+`{"latitude", "longitude"}`, `{"lat", "lon"}` or a `[lat, lon]` pair.

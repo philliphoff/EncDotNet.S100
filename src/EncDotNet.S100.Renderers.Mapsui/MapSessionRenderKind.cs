@@ -14,4 +14,10 @@ public enum MapSessionRenderKind
 
     /// <summary>A full presentation refresh (<see cref="MapsuiDatasetLayerSession.RefreshAsync"/>).</summary>
     PresentationRefresh,
+
+    /// <summary>
+    /// A coalesced render after a live processor's data changed
+    /// (<see cref="Datasets.Pipelines.ILiveDatasetProcessor.Changed"/>).
+    /// </summary>
+    LiveRefresh,
 }

@@ -4,28 +4,36 @@ using Mapsui;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Dispatches Mapsui pick hits (single-tap, modifier-click, long-press)
-/// to the pick report view-model. Lifts the find-owning-entry +
+/// Resolves map picks (single-tap, modifier-click, long-press) and publishes
+/// them as <see cref="PickResult"/>s, which Object Information shows. Lifts the find-owning-entry +
 /// <see cref="EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor.GetFeatureInfo"/>
 /// logic out of <see cref="MainWindow"/>; the window keeps the gesture
-/// detection and routes the resolved <see cref="MapInfo"/> here.
+/// detection and routes the clicked world position here.
 /// </summary>
 internal interface IPickService
 {
     /// <summary>
-    /// Resolves the supplied hit (or null for an empty-map tap) into a
-    /// pick-report update and a status-text message. Safe to call with
-    /// null or with hits that don't carry a feature reference.
+    /// Raised with every pick result: a map pick, a geographic pick, a feature
+    /// opened by search or a followed reference. An empty result clears
+    /// Object Information. Raised on the UI thread.
     /// </summary>
-    /// <remarks>
-    /// Also accepts an optional list of dynamic-source hits collected
-    /// in parallel by <see cref="DynamicSources.IDynamicSourcePickService"/>.
-    /// When non-empty the dynamic hits are published into the pick
-    /// report's dynamic section; an empty list is equivalent to no
-    /// dynamic hits. Either list (or both) being non-empty causes the
-    /// panel to open.
-    /// </remarks>
-    void HandlePick(MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null);
+    event EventHandler<PickResult>? Picked;
+
+    /// <summary>
+    /// Picks the drawn features at <paramref name="worldPosition"/> (EPSG:3857;
+    /// null for a tap off the map) through the map session's engine pick and
+    /// publishes them to the pick report, with a coverage sample when no
+    /// feature is hit. Must be called on the UI thread.
+    /// </summary>
+    /// <param name="worldPosition">The clicked point in EPSG:3857 metres, or null.</param>
+    /// <param name="resolution">The map resolution, metres per DIP, which sizes the click tolerance.</param>
+    /// <param name="overlayHits">
+    /// The overlay sources' hits (own-ship) collected by
+    /// <see cref="DynamicSources.IDynamicSourcePickService"/>, published ahead
+    /// of the datasets' hits; an empty list is equivalent to none.
+    /// </param>
+    /// <returns>A task that completes once the pick report is updated.</returns>
+    Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null);
 
     /// <summary>
     /// Publishes a pick at a geographic location whose features have already
@@ -46,13 +54,29 @@ internal interface IPickService
         IReadOnlyList<GeographicPickFeature> features);
 
     /// <summary>
+    /// As <see cref="PresentGeographicPick(double, double, IReadOnlyList{GeographicPickFeature})"/>,
+    /// with the overlay sources' features at the point too (own-ship), as a
+    /// click shows them. Must be called on the UI thread.
+    /// </summary>
+    /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
+    /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
+    /// <param name="features">Resolved features under the pick, most-specific first.</param>
+    /// <param name="overlayHits">The overlay sources' features at the point.</param>
+    void PresentGeographicPick(
+        double latitude,
+        double longitude,
+        IReadOnlyList<GeographicPickFeature> features,
+        IReadOnlyList<PickHit> overlayHits) =>
+        PresentGeographicPick(latitude, longitude, features);
+
+    /// <summary>
     /// Resolves an xlink-style reference from the currently selected hit
     /// to its target feature within the same dataset and re-opens the
     /// Object Info panel on it. Returns <c>true</c> when navigation
-    /// succeeded, <c>false</c> when the target could not be found (the
-    /// caller is responsible for surfacing
-    /// <see cref="EncDotNet.S100.Viewer.Resources.Strings.Status_FeatureRefNotFound"/>
-    /// or equivalent).
+    /// succeeded, <c>false</c> when the target could not be found, after
+    /// showing a toast
+    /// (<see cref="EncDotNet.S100.Viewer.Resources.Strings.Status_FeatureRefNotFound"/>)
+    /// so the user knows the click registered.
     /// </summary>
     bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference);
 

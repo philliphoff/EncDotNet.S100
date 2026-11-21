@@ -8,7 +8,7 @@ public class RoutesServiceTests
     [Fact]
     public void Changed_FiresWhenRouteEdited()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         var fired = 0;
         svc.Changed += (_, _) => fired++;
@@ -21,7 +21,7 @@ public class RoutesServiceTests
     [Fact]
     public void SelectedWaypointIndex_ClampsToActiveRouteWaypoints()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(1, 1));
@@ -36,7 +36,7 @@ public class RoutesServiceTests
     [Fact]
     public void SelectedWaypointIndex_NegativeBecomesNull()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
 
@@ -47,7 +47,7 @@ public class RoutesServiceTests
     [Fact]
     public void SelectionChanged_RaisedOnChange()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(1, 1));
@@ -66,7 +66,7 @@ public class RoutesServiceTests
     [Fact]
     public void RemovingWaypoint_NormalizesNowInvalidSelection()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R1");
         route.AppendWaypoint(new GeoPosition(0, 0));
         route.AppendWaypoint(new GeoPosition(1, 1));
@@ -80,7 +80,7 @@ public class RoutesServiceTests
     [Fact]
     public void ChangingActiveRoute_ClearsSelectionWhenOutOfRange()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var r1 = svc.Routes.CreateRoute("R1");
         r1.AppendWaypoint(new GeoPosition(0, 0));
         r1.AppendWaypoint(new GeoPosition(1, 1));
@@ -95,7 +95,7 @@ public class RoutesServiceTests
     [Fact]
     public void Selecting_a_leg_clears_the_waypoint_and_the_other_way_round()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R");
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 0));
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 1));
@@ -116,7 +116,7 @@ public class RoutesServiceTests
     [Fact]
     public void The_selected_leg_is_cleared_when_it_no_longer_exists()
     {
-        var svc = new RoutesService();
+        var svc = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = svc.Routes.CreateRoute("R");
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 0));
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 1));

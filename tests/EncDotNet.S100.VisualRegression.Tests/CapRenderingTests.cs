@@ -1,6 +1,8 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.TestSupport;
 
@@ -26,13 +28,13 @@ public sealed class CapRenderingTests
         var polygon = new CapDatasetProcessor(CapFixtures.Fixture(CapFixtures.GeoJson));
         var circle = new CapDatasetProcessor(CapFixtures.Fixture(CapFixtures.Circle));
 
-        HeadlessCompositeInput[] inputs =
+        ChartCompositeInput[] inputs =
         [
-            HeadlessCompositeInput.ForVector(await circle.BuildVectorPortrayalAsync(context, Ct)),
-            HeadlessCompositeInput.ForVector(await polygon.BuildVectorPortrayalAsync(context, Ct)),
+            ChartCompositeInput.ForVector(await circle.BuildVectorPortrayalAsync(context, Ct)),
+            ChartCompositeInput.ForVector(await polygon.BuildVectorPortrayalAsync(context, Ct)),
         ];
-        var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory())
-            .Render(inputs, new HeadlessCompositeOptions { Viewport = CentredViewport(-74.55, 39.4, 3.4, 640, 1_500_000) });
+        var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes))
+            .Render(inputs, new ChartCompositeOptions { Viewport = CentredViewport(-74.55, 39.4, 3.4, 640, 1_500_000) });
 
         Assert.True(TestHelpers.CountNonBackgroundPixels(bitmap) > 20_000);
         await TestHelpers.VerifyBitmap(bitmap);

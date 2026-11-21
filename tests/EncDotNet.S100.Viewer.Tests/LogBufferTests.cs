@@ -17,7 +17,7 @@ public sealed class LogBufferTests
     [Fact]
     public void Keeps_the_newest_entries_up_to_its_capacity()
     {
-        using var buffer = new LogBuffer(capacity: 3);
+        using var buffer = new LogBuffer(capacity: 3, timeProvider: TimeProvider.System);
         for (var i = 1; i <= 5; i++)
             buffer.Add(LogLevel.Information, Category, $"message {i}");
 
@@ -57,7 +57,7 @@ public sealed class LogBufferTests
     [Fact]
     public void Does_not_collapse_messages_that_differ_in_level_category_or_exception()
     {
-        using var buffer = new LogBuffer();
+        using var buffer = new LogBuffer(timeProvider: TimeProvider.System);
         buffer.Add(LogLevel.Warning, Category, "same");
         buffer.Add(LogLevel.Error, Category, "same");
         buffer.Add(LogLevel.Error, "Other.Category", "same");
@@ -69,7 +69,7 @@ public sealed class LogBufferTests
     [Fact]
     public void Has_its_own_minimum_level()
     {
-        using var buffer = new LogBuffer(minimumLevel: LogLevel.Information);
+        using var buffer = new LogBuffer(minimumLevel: LogLevel.Information, timeProvider: TimeProvider.System);
         buffer.Add(LogLevel.Debug, Category, "hidden");
         buffer.Add(LogLevel.Information, Category, "kept");
 
@@ -84,7 +84,7 @@ public sealed class LogBufferTests
     [Fact]
     public void Clear_removes_entries_but_sequences_keep_counting()
     {
-        using var buffer = new LogBuffer();
+        using var buffer = new LogBuffer(timeProvider: TimeProvider.System);
         buffer.Add(LogLevel.Information, Category, "one");
         buffer.Add(LogLevel.Information, Category, "two");
         buffer.Clear();
@@ -123,7 +123,7 @@ public sealed class LogBufferTests
     [Fact]
     public async Task Concurrent_writers_lose_no_messages()
     {
-        using var buffer = new LogBuffer(capacity: 10_000);
+        using var buffer = new LogBuffer(capacity: 10_000, timeProvider: TimeProvider.System);
         const int writers = 8;
         const int perWriter = 1_000;
 
@@ -154,7 +154,7 @@ public sealed class LogBufferTests
     {
         // The pipeline's global floor stays at Information (what OTLP gets);
         // the buffer's own level decides what the Logs panel records.
-        using var buffer = new LogBuffer(minimumLevel: LogLevel.Information);
+        using var buffer = new LogBuffer(minimumLevel: LogLevel.Information, timeProvider: TimeProvider.System);
         using var provider = new ServiceCollection()
             .AddLogging(builder =>
             {
@@ -186,7 +186,7 @@ public sealed class LogBufferTests
     {
         // MCP and HTTP traffic logs several entries per request; even with
         // Debug capture on, only its warnings and errors reach the buffer.
-        using var buffer = new LogBuffer(minimumLevel: LogLevel.Debug);
+        using var buffer = new LogBuffer(minimumLevel: LogLevel.Debug, timeProvider: TimeProvider.System);
         using var provider = new ServiceCollection()
             .AddLogging(builder =>
             {

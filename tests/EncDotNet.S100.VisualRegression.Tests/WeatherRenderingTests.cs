@@ -7,6 +7,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
@@ -168,10 +169,10 @@ public sealed class WeatherRenderingTests
             "waves.grb2",
             cancellationToken: Ct);
 
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-        var options = new HeadlessCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) };
-        using var chart = compositor.Render([HeadlessCompositeInput.ForVector(s101)], options);
-        var bitmap = compositor.Render([HeadlessCompositeInput.ForVector(s101), HeadlessCompositeInput.ForCoverage(waves)], options);
+        var compositor = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
+        var options = new ChartCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) };
+        using var chart = compositor.Render([ChartCompositeInput.ForVector(s101)], options);
+        var bitmap = compositor.Render([ChartCompositeInput.ForVector(s101), ChartCompositeInput.ForCoverage(waves)], options);
 
         // The fill covers the whole view, so only pixels it left alone — the
         // land it was clipped from — match the chart drawn on its own.
@@ -295,12 +296,12 @@ public sealed class WeatherRenderingTests
             using var s111Processor = new S111DatasetProcessor(s111Path, manager, new ProjNetCrsTransformFactory());
             var s111 = await s111Processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
 
-            HeadlessCompositeInput[] inputs =
+            ChartCompositeInput[] inputs =
             [
-                HeadlessCompositeInput.ForVector(s101),
-                HeadlessCompositeInput.ForCoverage(s111),
-                HeadlessCompositeInput.ForCoverage(wind),
-                HeadlessCompositeInput.ForCoverage(waves),
+                ChartCompositeInput.ForVector(s101),
+                ChartCompositeInput.ForCoverage(s111),
+                ChartCompositeInput.ForCoverage(wind),
+                ChartCompositeInput.ForCoverage(waves),
             ];
 
             // S-98 order, whatever the input order: chart fills, then the wave
@@ -315,8 +316,8 @@ public sealed class WeatherRenderingTests
             Assert.True(areas >= 0 && areas < waveFill && waveFill < lines && lines < currents && currents < barbs,
                 $"Paint order: {string.Join(", ", order.Select(i => $"{i.SourceDatasetId}/{i.SourceFeatureType}@{i.Plane}:{i.WithinPlanePriority}"))}");
 
-            var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory())
-                .Render(inputs, new HeadlessCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) });
+            var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes))
+                .Render(inputs, new ChartCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) });
 
             await TestHelpers.VerifyBitmap(bitmap);
         }
@@ -338,9 +339,9 @@ public sealed class WeatherRenderingTests
             source, [style], "weather.grb2", new RenderContext { Palette = palette }, cancellationToken: Ct);
         Assert.Single(result.SubLayers);
 
-        return new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
-            [HeadlessCompositeInput.ForCoverage(result)],
-            new HeadlessCompositeOptions
+        return new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
+            [ChartCompositeInput.ForCoverage(result)],
+            new ChartCompositeOptions
             {
                 Width = width,
                 Height = height,
@@ -371,7 +372,7 @@ public sealed class WeatherRenderingTests
     }
 
     // The order the compositor paints the inputs' sub-layers in, bottom first.
-    private static List<SubLayerStackItem> PaintOrder(IReadOnlyList<HeadlessCompositeInput> inputs)
+    private static List<SubLayerStackItem> PaintOrder(IReadOnlyList<ChartCompositeInput> inputs)
     {
         var items = new List<SubLayerStackItem>();
         foreach (var input in inputs)

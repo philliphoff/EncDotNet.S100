@@ -48,6 +48,53 @@ for stations. Nothing is converted on read. Directions are in degrees true,
 the direction the current flows towards. For more, see
 [Reading product data](../../docs/reading-product-data.md).
 
+## Write a station series
+
+`S111StationSeriesWriter.Encode` turns an `S111StationSeriesDataset` into an
+S-111 Edition 2.0.0 file in data coding format 8 (time series at fixed
+stations), the layout the reader reads back. It returns an HDF5 tree
+(`Hdf5WriteGroup`, in `EncDotNet.S100.Core`); `PureHdfWriter` in
+`EncDotNet.S100.Hdf5.PureHdf` writes it out.
+
+To write tidal current predictions for a station,
+`S111CurrentPredictions.CreateDataset` runs a current predictor from
+[`EncDotNet.S100.Tides`](../EncDotNet.S100.Tides/README.md#predict-tidal-currents)
+and fills in the dataset:
+
+```csharp
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.S111.Writing;
+using EncDotNet.S100.Hdf5.PureHdf;
+
+// A predictor from the Tides package, or from TideStationCatalogue.TryCreateCurrentPrediction.
+var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+var dataset = S111CurrentPredictions.CreateDataset(
+    predictor,
+    "PUG1701_33",
+    "Deception Pass (Narrows)",
+    new GeoPosition(48.40619, -122.64312),
+    depthMeters: 5.49,
+    startUtc: start,
+    endUtc: start.AddDays(7),
+    step: TimeSpan.FromMinutes(6),
+    issuedUtc: DateTime.UtcNow);
+
+PureHdfWriter.Write(
+    S111StationSeriesWriter.Encode(dataset),
+    S111CurrentPredictions.FileName("PUG1701_33"));   // 111ZZ01PUG170133.h5
+```
+
+A predicted dataset isn't an official product, and says so, as predicted
+S-104 does: producer code `ZZ01`, `typeOfCurrentData` 3 (astronomical
+prediction), and a `methodCurrentsProduct` that names the station and says
+the data is a harmonic prediction, not an official product and not for
+navigation. `S111CurrentPredictions.IsPrediction` recognises it. Speeds are
+knots and directions degrees true; the depth, when known, is written as
+`surfaceCurrentDepth`, negative below the sea surface (`depthTypeIndex` 2).
+
+PureHDF's writer needs runtime code generation, so writing works in a
+trimmed application but not under NativeAOT. Reading works under both.
+
 ## Main types
 
 - **`S111Dataset`**: a gridded dataset, with its horizontal CRS, depth, data

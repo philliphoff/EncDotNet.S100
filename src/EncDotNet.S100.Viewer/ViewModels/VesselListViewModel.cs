@@ -73,10 +73,10 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
 
-    private readonly IDynamicFeatureSource? _ais;
+    private IDynamicFeatureSource? _ais;
     private readonly IDynamicFeatureSource? _ownShip;
     private readonly IHelmStatusProvider? _helmStatus;
-    private readonly IDynamicFeatureSource? _helmTargetSource;
+    private IDynamicFeatureSource? _helmTargetSource;
     private readonly ICapabilityAccessor<IMapViewportController> _viewportAccessor;
     private readonly DispatcherTimer? _timer;
     private readonly Dictionary<string, VesselListItem> _itemsById = new(StringComparer.Ordinal);
@@ -157,6 +157,26 @@ internal sealed class VesselListViewModel : ViewModelBase
         // Surface any targets that already exist before the panel was
         // constructed (the sources are long-lived singletons).
         Refresh();
+    }
+
+    /// <summary>
+    /// Follows the loaded AIS entry's source (data source design note D8), or
+    /// none when it's removed.
+    /// </summary>
+    /// <param name="ais">The AIS source the list shows, with the followed target hidden.</param>
+    /// <param name="helmTargetSource">The raw AIS source, which still has the followed target.</param>
+    public void SetAisSource(IDynamicFeatureSource? ais, IDynamicFeatureSource? helmTargetSource)
+    {
+        if (ReferenceEquals(_ais, ais) && ReferenceEquals(_helmTargetSource, helmTargetSource))
+            return;
+        if (_ais is not null)
+            _ais.Changed -= OnSourceChanged;
+        _ais = ais;
+        _helmTargetSource = helmTargetSource;
+        if (_ais is not null)
+            _ais.Changed += OnSourceChanged;
+        Refresh();
+        UpdateEmptyState();
     }
 
     /// <summary>Vessels ordered nearest-first.</summary>
@@ -309,15 +329,11 @@ internal sealed class VesselListViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Whether an AIS overlay is actively configured for this session.
-    /// The overlay singleton is fixed at startup, so a
-    /// <see cref="DisabledAisFeatureSource"/> (or no AIS source at all)
-    /// means the overlay is off and the panel can never populate until
-    /// the user enables it and restarts; any other source — including the
-    /// zoom-gated <c>DeferredAisFeatureSource</c> — is "active" and merely
-    /// awaiting data.
+    /// Whether an AIS entry is loaded (data source design note D8): without
+    /// one the panel can't populate until the user adds the AIS live feed;
+    /// with one it's merely waiting for data (or for the user to zoom in).
     /// </summary>
-    private bool IsAisActive => _ais is not null and not DisabledAisFeatureSource;
+    private bool IsAisActive => _ais is not null;
 
     private void OnSourceChanged(object? sender, DynamicFeaturesChanged e) => MarkDirty();
 

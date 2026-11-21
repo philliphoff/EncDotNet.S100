@@ -77,7 +77,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     private readonly string _datasetContentHash;
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private IReadOnlyList<SoundingDatumArea>? _soundingDatums;
     private Dictionary<long, S101FeatureRecord>? _featureRecords;
     private FeatureCatalogueDecoder? _decoder;
@@ -759,6 +759,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            if (context?.SafetyContourHalo == true)
+                prepared = SafetyContourHalo.Apply(prepared);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
 
@@ -891,6 +893,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         _portrayalTimeIntervals = PortrayalTimeFilter.Intervals(unfiltered);
         var prepared = PortrayalTimeFilter.Apply(
             VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
+        // AML CLB drawn over the chart: the safety contour keeps its weight
+        // and gains a halo (AML design handoff decision 22).
+        if (context?.SafetyContourHalo == true)
+            prepared = SafetyContourHalo.Apply(prepared);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
         _drawingPriorities = DrawingPriorities(prepared);
 
@@ -1001,12 +1007,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
+            SymbolGeometryProvider = name => prewarm.ResolveSymbol(name)?.Geometry,
+            CatalogueSymbols = new CatalogueSymbolSet(s101Cat),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             LayerNames = new[] { $"{LayerKeyPrefix}.areas", $"{LayerKeyPrefix}.linework" },
             FeatureTags = featureTags,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
+            CellMaximumDisplayScale = ResolveCellMaximumDisplayScale(_featureIndex.Values),
             CoverageAreas = coverageAreas,
         };
     }
@@ -1171,6 +1181,54 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         return minDisplayScale;
     }
 
+    /// <summary>
+    /// Resolves the cell's finest intended display scale as the smallest
+    /// <c>maximumDisplayScale</c> denominator across the <c>DataCoverage</c>
+    /// features (S-101 FC §3.1.1), each coverage's pair normalised first via
+    /// <see cref="DisplayScaleRange.FromDeclared"/>. It breaks ties between
+    /// overlapping cells of the same minimum display scale (see
+    /// <see cref="CellScaleRanking"/>).
+    /// </summary>
+    /// <param name="features">The dataset's vector features.</param>
+    /// <returns>
+    /// The smallest usable <c>maximumDisplayScale</c> denominator, or
+    /// <see langword="null"/> when no <c>DataCoverage</c> feature carries one.
+    /// </returns>
+    internal static int? ResolveCellMaximumDisplayScale(
+        IEnumerable<EncDotNet.S100.Pipelines.Vector.Feature> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+
+        int? maxDisplayScale = null;
+        foreach (var feature in features)
+        {
+            if (!string.Equals(feature.FeatureType, "DataCoverage", StringComparison.Ordinal))
+                continue;
+
+            var window = DisplayScaleRange.FromDeclared(
+                ParseDenominator(feature, "minimumDisplayScale"),
+                ParseDenominator(feature, "maximumDisplayScale"));
+            if (window.Maximum is not int denom)
+                continue;
+
+            maxDisplayScale = maxDisplayScale is null ? denom : Math.Min(maxDisplayScale.Value, denom);
+        }
+
+        return maxDisplayScale;
+    }
+
+    /// <summary>
+    /// The cell's rank among overlapping cells (see <see cref="CellScaleRanking"/>):
+    /// <paramref name="compilationScale"/> when known, otherwise the cell's
+    /// minimum display scale with its maximum display scale as the tie-break.
+    /// </summary>
+    internal static CellRank? ResolveCellRank(
+        IReadOnlyCollection<EncDotNet.S100.Pipelines.Vector.Feature> features, int? compilationScale = null) =>
+        CellScaleRanking.Rank(
+            compilationScale,
+            ResolveOutOfBandMinDisplayScale(features),
+            ResolveCellMaximumDisplayScale(features));
+
     private static int? ParseDenominator(EncDotNet.S100.Pipelines.Vector.Feature feature, string attribute)
     {
         if (!feature.Attributes.TryGetValue(attribute, out var raw) || raw is null)
@@ -1238,7 +1296,25 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     /// cell under a finer one. Smaller is finer; <see langword="null"/> when the
     /// cell declares none.
     /// </summary>
-    public int? CellRankingScale => CellExtent.RankingScale;
+    public CellRank? CellRank => CellExtent.Rank;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// DSID <c>DSED</c> (its leading whole number), the dataset reference date,
+    /// and the last update applied (<see cref="UpdateReport"/>) or else the
+    /// update number in the file name.
+    /// </remarks>
+    public ChartCellEdition? Edition =>
+        _dataset.Document.Identification is { EditionNumber: int edition } id
+            ? new ChartCellEdition(
+                edition,
+                _updateReport?.AppliedThroughUpdateNumber ?? id.UpdateNumber,
+                ChartCellEditions.Date(id.DatasetReferenceDate))
+            : null;
+
+    /// <inheritdoc/>
+    /// <remarks>The finest <c>DataCoverage.maximumDisplayScale</c>.</remarks>
+    public int? CompilationScale => Metadata.DisplayScale?.Maximum;
 
     /// <summary>
     /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell
@@ -1262,7 +1338,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         return false;
     }
 
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage) CellExtent
     {
         get
         {
@@ -1271,7 +1347,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
 
             _featureIndex ??= BuildFeatureIndex();
             extent = (
-                CellScaleRanking.RankingScale(null, ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                ResolveCellRank(_featureIndex.Values),
                 CoverageAreaResolver.Resolve(_featureIndex.Values));
             _cellExtent = extent;
             return extent;

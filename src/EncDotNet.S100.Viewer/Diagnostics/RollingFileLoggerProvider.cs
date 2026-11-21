@@ -95,29 +95,29 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     /// </summary>
     /// <param name="directory">Directory holding the rolling log files.</param>
     /// <param name="minLevel">Lowest level written to the files.</param>
-    /// <param name="maxFileBytes">Size at which a file is rolled over.</param>
-    /// <param name="maxFiles">Number of log files kept in the directory.</param>
-    /// <param name="sessionStartUtc">Session start used in file names;
-    /// defaults to now.</param>
-    /// <param name="processId">Process id used in file names; defaults to
-    /// the current process.</param>
+    /// <param name="sessionStartUtc">Session start used in file names.</param>
+    /// <param name="processId">Process id used in file names.</param>
     /// <param name="isSessionAlive">Decides whether another session, given
     /// its process id and start time (UTC), is still running; its files are
-    /// then kept. Defaults to a process check that treats a reused process
-    /// id as a dead session.</param>
+    /// then kept. The app passes <see cref="IsSessionAlive"/>, a process
+    /// check that treats a reused process id as a dead session.</param>
     /// <param name="unreportedCrashes">Returns the sessions whose crash no
     /// launch has reported yet (their unclean-shutdown markers); the newest
-    /// file of each, when dead, is kept beyond the cap. Defaults to none.</param>
+    /// file of each, when dead, is kept beyond the cap. <see langword="null"/>
+    /// for none.</param>
+    /// <param name="maxFileBytes">Size at which a file is rolled over.</param>
+    /// <param name="maxFiles">Number of log files kept in the directory.</param>
     public RollingFileLoggerProvider(
         string directory,
         LogLevel minLevel,
+        DateTime sessionStartUtc,
+        int processId,
+        Func<int, DateTime, bool> isSessionAlive,
+        Func<IEnumerable<PreviousSession>>? unreportedCrashes,
         long maxFileBytes = DefaultMaxFileBytes,
-        int maxFiles = DefaultMaxFiles,
-        DateTime? sessionStartUtc = null,
-        int? processId = null,
-        Func<int, DateTime, bool>? isSessionAlive = null,
-        Func<IEnumerable<PreviousSession>>? unreportedCrashes = null)
+        int maxFiles = DefaultMaxFiles)
     {
+        ArgumentNullException.ThrowIfNull(isSessionAlive);
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFileBytes, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFiles, 1);
@@ -126,10 +126,10 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
         _minLevel = minLevel;
         _maxFileBytes = maxFileBytes;
         _maxFiles = maxFiles;
-        _isSessionAlive = isSessionAlive ?? IsSessionAlive;
+        _isSessionAlive = isSessionAlive;
         _unreportedCrashes = unreportedCrashes ?? (() => []);
-        _processId = processId ?? Environment.ProcessId;
-        var start = (sessionStartUtc ?? DateTime.UtcNow).ToUniversalTime();
+        _processId = processId;
+        var start = sessionStartUtc.ToUniversalTime();
         var stamp = start.ToString(TimestampFormat, CultureInfo.InvariantCulture);
         _sessionStartUtc = DateTime.ParseExact(stamp, TimestampFormat, CultureInfo.InvariantCulture,
             DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
@@ -416,7 +416,7 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     /// with its id exists and started no later than the session did. A
     /// process id reused by a later process therefore counts as dead.
     /// </summary>
-    private static bool IsSessionAlive(int processId, DateTime sessionStartUtc)
+    internal static bool IsSessionAlive(int processId, DateTime sessionStartUtc)
     {
         if (processId <= 0)
         {

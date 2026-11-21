@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,40 @@ public partial class DatasetsView : UserControl
         EmptyAddButton.Click += OnAddClick;
         ToolbarAddButton.Click += OnAddClick;
         SourcesAddButton.Click += OnAddClick;
+        ((MenuFlyout)EmptyAddSourceButton.Flyout!).Opening += OnAddSourceFlyoutOpening;
+    }
+
+    /// <summary>
+    /// Lists the data sources a user can add (design note D3): those that
+    /// need no options, or have defaults. One already in the list is shown
+    /// as added, and choosing it selects it.
+    /// </summary>
+    private void OnAddSourceFlyoutOpening(object? sender, EventArgs e)
+    {
+        if (DataContext is not DatasetsViewModel vm || sender is not MenuFlyout flyout)
+            return;
+        var sources = App.Services.GetService<Services.Sources.SourceDatasetService>();
+        flyout.Items.Clear();
+        if (sources is null)
+            return;
+        foreach (var registration in sources.Registrations)
+        {
+            if (registration.OptionsType is not null && registration.DefaultOptions is null)
+                continue; // Needs settings first (slice 9's settings pages).
+            var added = vm.FindSource(registration.Id) is not null;
+            var item = new MenuItem
+            {
+                Header = added
+                    ? string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Label_DataSourceAlreadyAddedFormat, registration.DisplayName)
+                    : registration.DisplayName,
+            };
+            ToolTip.SetTip(item, registration.Description);
+            Avalonia.Automation.AutomationProperties.SetAutomationId(item, "Datasets.Toolbar.AddSource." + registration.Id);
+            Avalonia.Automation.AutomationProperties.SetName(item, registration.DisplayName);
+            // D8: subscribing puts it in the Library's Live feeds, which puts it on the map.
+            item.Click += (_, _) => App.Services.GetService<Services.Sources.LiveFeedLibrary>()?.Subscribe(registration);
+            flyout.Items.Add(item);
+        }
     }
 
     private async void OnAddClick(object? sender, RoutedEventArgs e)

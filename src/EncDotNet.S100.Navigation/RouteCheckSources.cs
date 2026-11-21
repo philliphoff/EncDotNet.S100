@@ -6,8 +6,8 @@ namespace EncDotNet.S100.Navigation;
 
 /// <summary>
 /// Everything the route checks read from loaded data, as one bundle: the
-/// charted features, charted depth, water level, regulated areas and
-/// navigational warnings. A host builds one per set of loaded datasets
+/// charted features, charted depth, water level, regulated areas,
+/// navigational warnings, weather and tropical cyclones. A host builds one per set of loaded datasets
 /// (<c>CatalogRouteCheckSources</c> in <c>EncDotNet.S100.Datasets.Pipelines</c>)
 /// and checks as often as the route changes.
 /// </summary>
@@ -39,14 +39,42 @@ public sealed class RouteCheckSources
     /// </summary>
     public IChartedDepthSource? Depth { get; init; }
 
-    /// <summary>S-104 water level, for the clearance check.</summary>
+    /// <summary>
+    /// Water level for the clearance check: S-104, then harmonic tide
+    /// predictions where no S-104 covers a point and time, when the host
+    /// turns them on.
+    /// </summary>
     public IWaterLevelSource? WaterLevel { get; init; }
+
+    /// <summary>
+    /// Where the loaded charts have land and water: what a station's reach is
+    /// measured through (<see cref="WaterReach"/>), and what the
+    /// adjusted-area edge is clipped to. <c>null</c> when the host has none.
+    /// </summary>
+    public IWaterMask? WaterMask { get; init; }
 
     /// <summary>S-101 regulated areas and S-122 protected areas, for the area check.</summary>
     public IRouteAreaSource? Areas { get; init; }
 
     /// <summary>S-124 navigational warnings, for the warning check.</summary>
     public IRouteWarningSource? Warnings { get; init; }
+
+    /// <summary>GRIB2 and NetCDF weather grids (wind and waves), for the weather check.</summary>
+    public IRouteWeatherSource? Weather { get; init; }
+
+    /// <summary>
+    /// Tropical cyclone advisories (their wind radii and forecast cones), for
+    /// the weather check's tropical cyclone rule (#1299). <c>null</c> or empty
+    /// when none is loaded.
+    /// </summary>
+    public IReadOnlyList<IRouteCyclone>? Cyclones { get; init; }
+
+    /// <summary>
+    /// Currents, for the timing check's running times, gates and leg limits
+    /// (#1561): current-station predictions when the host turns them on.
+    /// <c>null</c> when there are none.
+    /// </summary>
+    public IRouteCurrentSource? Currents { get; init; }
 }
 
 /// <summary>

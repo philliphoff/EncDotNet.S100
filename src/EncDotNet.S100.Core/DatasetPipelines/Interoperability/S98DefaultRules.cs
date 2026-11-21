@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
@@ -7,8 +8,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 /// <summary>
 /// The inter-product rules shipped in PR-L2 (S-98 Edition 2.0.0), plus the
-/// SoundCharts weather rules <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>
-/// and <see cref="R_111_WX_B_HideModelCurrentsUnderS111"/>. Three
+/// SoundCharts rules <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>,
+/// <see cref="R_111_WX_B_HideModelCurrentsUnderS111"/> and
+/// <see cref="R_102_102_A_JoinS102Cells"/>. Three
 /// rules (<see cref="R_101_102_A"/>, <see cref="R_104_A"/>,
 /// <see cref="R_111_A"/>) are pure plane-assignment properties already
 /// satisfied by the default plane table; they carry an identity
@@ -176,6 +178,36 @@ public static class S98DefaultRules
         Effect: HideModelCurrentsUnderS111);
 
     /// <summary>
+    /// R-102-102-A (Level 2, SoundCharts) — when several S-102 datasets are
+    /// loaded and active, hide each one's limit-of-data line
+    /// (<see cref="S102CoverageLimitLayerKey"/>) where another active S-102
+    /// dataset has depths beyond it
+    /// (<see cref="CoveragePortrayalResult.DataArea"/>). Neighbouring cells
+    /// overlap or abut, so one cell's data can end where the other's carries
+    /// on. The line marks where S-102 gives way to S-101 (S-98 Part A §A-6.9.1), so it
+    /// belongs only on the limit of all the S-102 data, not across a junction
+    /// the surface continues over. Where both cells' data end together, as
+    /// along a shared coastline, each keeps its line. The rule also hands each
+    /// S-102 surface its neighbours' data areas
+    /// (<see cref="GridCoverageSubLayer.NeighbourDataAreas"/>), so a renderer
+    /// that fades the surface's edge carries it on under the neighbour instead
+    /// of leaving a light seam. Only cells whose extents meet are neighbours;
+    /// a dataset that reports no data area joins nothing. Cites S-98 Ed.2.0.0
+    /// Annex A §A-6.9.1.
+    /// </summary>
+    public static readonly S98InteroperabilityRule R_102_102_A_JoinS102Cells = new(
+        RuleId: "R-102-102-A",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1",
+        Condition: HasActiveProductSet("S-102"),
+        Effect: JoinS102Cells);
+
+    /// <summary>
+    /// The layer key of the S-102 limit-of-data line, as the S-102 processor
+    /// sets it (<c>S102DatasetProcessor.CoverageLimitLayerKey</c>).
+    /// </summary>
+    public const string S102CoverageLimitLayerKey = "s102.coveragelimit";
+
+    /// <summary>
     /// The default rule collection in evaluation order. Declaration order is
     /// the evaluation order; each rule's output is the next rule's input.
     /// </summary>
@@ -184,6 +216,7 @@ public static class S98DefaultRules
         {
             R_101_102_A,
             R_101_102_B_SuppressDepthFeatures,
+            R_102_102_A_JoinS102Cells,
             R_101_124_A,
             R_104_A,
             R_101_104_B_ClipSurfaceToWater,
@@ -281,6 +314,229 @@ public static class S98DefaultRules
             }
         }
         return result;
+    }
+
+    // The joined sub-layers, kept per source sub-layer while the data areas
+    // stay the same: the rule runs on every stack compose, and the viewer
+    // re-rasters a surface only when its ruled sub-layer is a new one.
+    private static readonly ConditionalWeakTable<CoverageSubLayerBase, Joined> JoinedSubLayers = new();
+
+    private sealed record Joined(ICoverageDataArea Own, ICoverageDataArea[] Neighbours, CoverageSubLayerBase SubLayer);
+
+    private static IReadOnlyList<SubLayerStackItem> JoinS102Cells(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        var cells = new List<(CoveragePortrayalResult Result, ICoverageDataArea Area)>();
+        var seen = new HashSet<CoveragePortrayalResult>(ReferenceEqualityComparer.Instance);
+        foreach (var item in stack)
+        {
+            if (item.Payload is CoverageStackPayload coverage
+                && seen.Add(coverage.Result)
+                && coverage.Result.DataArea is { } area
+                && IsProductItem(item, context, "S-102"))
+            {
+                cells.Add((coverage.Result, area));
+            }
+        }
+
+        if (cells.Count < 2)
+        {
+            return stack;
+        }
+
+        var neighboursOf = new Dictionary<CoveragePortrayalResult, ICoverageDataArea[]>(ReferenceEqualityComparer.Instance);
+        var result = new List<SubLayerStackItem>(stack.Count);
+        foreach (var item in stack)
+        {
+            if (item.Payload is not CoverageStackPayload coverage
+                || coverage.Result.DataArea is not { } own
+                || coverage.SubLayer is not (GridCoverageSubLayer or IsolineCoverageSubLayer { LayerKey: S102CoverageLimitLayerKey })
+                || !IsProductItem(item, context, "S-102"))
+            {
+                result.Add(item);
+                continue;
+            }
+
+            if (!neighboursOf.TryGetValue(coverage.Result, out var neighbours))
+            {
+                neighbours = [.. cells
+                    .Where(c => !ReferenceEquals(c.Result, coverage.Result) && Touch(c.Result, coverage.Result))
+                    .Select(c => c.Area)];
+                neighboursOf.Add(coverage.Result, neighbours);
+            }
+
+            var joined = Join(coverage.SubLayer, own, neighbours);
+            result.Add(ReferenceEquals(joined, coverage.SubLayer) ? item : item with { Payload = coverage.WithSubLayer(joined) });
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Whether two cells' extents meet, or either has none. Cells that don't
+    /// meet can't join, so they stay out of each other's neighbours and a
+    /// cell landing far away doesn't change this one's sub-layers.
+    /// </summary>
+    private static bool Touch(CoveragePortrayalResult a, CoveragePortrayalResult b) =>
+        a.CoverageExtent is not { } x || b.CoverageExtent is not { } y
+        || (x.MinLatitude <= y.MaxLatitude && y.MinLatitude <= x.MaxLatitude
+            && x.MinLongitude <= y.MaxLongitude && y.MinLongitude <= x.MaxLongitude);
+
+    private static CoverageSubLayerBase Join(CoverageSubLayerBase subLayer, ICoverageDataArea own, ICoverageDataArea[] neighbours)
+    {
+        if (neighbours.Length == 0)
+        {
+            return subLayer;
+        }
+
+        if (JoinedSubLayers.TryGetValue(subLayer, out var cached)
+            && ReferenceEquals(cached.Own, own)
+            && SameAreas(cached.Neighbours, neighbours))
+        {
+            return cached.SubLayer;
+        }
+
+        CoverageSubLayerBase joined = subLayer switch
+        {
+            GridCoverageSubLayer surface => surface.WithNeighbourDataAreas(neighbours),
+            IsolineCoverageSubLayer limit => HideJoined(limit, own, neighbours),
+            _ => subLayer,
+        };
+        JoinedSubLayers.AddOrUpdate(subLayer, new Joined(own, neighbours, joined));
+        return joined;
+    }
+
+    /// <summary>The same data areas, in any order: the stack order changes as cells land.</summary>
+    private static bool SameAreas(ICoverageDataArea[] a, ICoverageDataArea[] b)
+    {
+        if (a.Length != b.Length)
+        {
+            return false;
+        }
+
+        foreach (var area in a)
+        {
+            if (Array.IndexOf(b, area) < 0)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// <paramref name="limit"/> without the segments a neighbour's data carries
+    /// on past: each isoline splits into the runs of segments that stay.
+    /// </summary>
+    /// <remarks>
+    /// The limit is traced one grid cell per segment, halfway between a node
+    /// with data and one without. The segment's two sides are probed about a
+    /// cell away (the line's mean segment length): the side where the cell
+    /// itself has no data is beyond its limit, and the segment is hidden when
+    /// a neighbour has data there. Where both cells' data end together, as
+    /// along a shared coastline, no neighbour has data beyond the line and it
+    /// stays. A segment whose sides can't be told apart stays too.
+    /// </remarks>
+    private static IsolineCoverageSubLayer HideJoined(
+        IsolineCoverageSubLayer limit, ICoverageDataArea own, ICoverageDataArea[] neighbours)
+    {
+        bool changed = false;
+        var kept = new List<Isoline>(limit.Isolines.Count);
+        foreach (var line in limit.Isolines)
+        {
+            var points = line.MercatorCoordinates;
+            int vertices = points.Length / 2;
+            double reach = MeanSegmentLength(points);
+            int runStart = 0;
+            bool lineChanged = false;
+            for (int i = 0; i < vertices - 1; i++)
+            {
+                if (!IsJoined(points, i, reach, own, neighbours))
+                {
+                    continue;
+                }
+
+                // Segment i is hidden: keep the run of segments before it.
+                lineChanged = true;
+                AddRun(kept, line, runStart, i);
+                runStart = i + 1;
+            }
+
+            if (!lineChanged)
+            {
+                kept.Add(line);
+                continue;
+            }
+
+            changed = true;
+            AddRun(kept, line, runStart, vertices - 1);
+        }
+
+        return changed ? limit.WithIsolines(kept) : limit;
+    }
+
+    private static bool IsJoined(double[] points, int segment, double reach, ICoverageDataArea own, ICoverageDataArea[] neighbours)
+    {
+        double x0 = points[2 * segment], y0 = points[(2 * segment) + 1];
+        double x1 = points[(2 * segment) + 2], y1 = points[(2 * segment) + 3];
+        double length = Math.Sqrt(((x1 - x0) * (x1 - x0)) + ((y1 - y0) * (y1 - y0)));
+        if (length == 0 || reach == 0)
+        {
+            return false;
+        }
+
+        // The unit normal, a reach long, from the segment's midpoint.
+        double nx = -(y1 - y0) / length * reach, ny = (x1 - x0) / length * reach;
+        double mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+        bool left = own.HasData(mx + nx, my + ny), right = own.HasData(mx - nx, my - ny);
+        if (left == right)
+        {
+            return false;
+        }
+
+        var (bx, by) = left ? (mx - nx, my - ny) : (mx + nx, my + ny);
+        foreach (var area in neighbours)
+        {
+            if (area.HasData(bx, by))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static double MeanSegmentLength(double[] points)
+    {
+        int segments = (points.Length / 2) - 1;
+        if (segments <= 0)
+        {
+            return 0;
+        }
+
+        double total = 0;
+        for (int i = 0; i < segments; i++)
+        {
+            double dx = points[(2 * i) + 2] - points[2 * i];
+            double dy = points[(2 * i) + 3] - points[(2 * i) + 1];
+            total += Math.Sqrt((dx * dx) + (dy * dy));
+        }
+        return total / segments;
+    }
+
+    /// <summary>Adds the polyline through vertices <paramref name="first"/> to <paramref name="last"/>, when it has a segment.</summary>
+    private static void AddRun(List<Isoline> kept, Isoline line, int first, int last)
+    {
+        if (last <= first)
+        {
+            return;
+        }
+
+        kept.Add(new Isoline
+        {
+            Level = line.Level,
+            Label = line.Label,
+            MercatorCoordinates = line.MercatorCoordinates[(2 * first)..((2 * last) + 2)],
+        });
     }
 
     private static bool IsS101Item(SubLayerStackItem item, S98RuleContext context)
@@ -477,6 +733,7 @@ public static class S98DefaultRules
             NoDataValue = layer.NoDataValue,
             Georeferencer = layer.Georeferencer,
             SymbolScheme = layer.SymbolScheme,
+            ReliefShade = layer.ReliefShade,
         };
     }
 
@@ -667,6 +924,8 @@ public static class S98DefaultRules
             PatternClipCacheKey = subLayer.PatternClipCacheKey,
             ApplyOutOfBandCap = subLayer.ApplyOutOfBandCap,
             Legend = subLayer.Legend,
+            LegendCaption = subLayer.LegendCaption,
+            LegendTitle = subLayer.LegendTitle,
         };
     }
 

@@ -81,7 +81,7 @@ public class StationTimeSeriesViewModelTests
     public void S104_ProjectionMatchesSnapshotPoints()
     {
         var snap = SyntheticWaterLevel(n: 4);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context());
 
         Assert.Single(vm.HeightSeries);
         var series = (LiveChartsCore.SkiaSharpView.LineSeries<DateTimePoint>)vm.HeightSeries[0];
@@ -99,7 +99,7 @@ public class StationTimeSeriesViewModelTests
     public void S104_FillValueSamplesAreDropped()
     {
         var snap = SyntheticWaterLevel(n: 4, withFillAt: 2);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context());
         var series = (LiveChartsCore.SkiaSharpView.LineSeries<DateTimePoint>)vm.HeightSeries[0];
         var points = series.Values!.Cast<DateTimePoint>().ToList();
         Assert.Equal(3, points.Count);
@@ -110,7 +110,7 @@ public class StationTimeSeriesViewModelTests
     public void S111_ProducesSpeedAndDirectionSeries()
     {
         var snap = SyntheticSurfaceCurrent(n: 5);
-        using var vm = new S111StationTimeSeriesViewModel(snap, globalTime: null);
+        using var vm = new S111StationTimeSeriesViewModel(snap, TestStationCharts.Context());
 
         var speed = (LiveChartsCore.SkiaSharpView.LineSeries<DateTimePoint>)vm.SpeedSeries[0];
         var direction = (LiveChartsCore.SkiaSharpView.LineSeries<DateTimePoint>)vm.DirectionSeries[0];
@@ -130,7 +130,7 @@ public class StationTimeSeriesViewModelTests
         var adapter = new FakeTimeAware(snap.Times);
         globalTime.Register(new DatasetEntry("/tmp/x.h5", "S-104"), adapter);
 
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context(globalTime));
         var initialXi = vm.Sections[0].Xi;
 
         globalTime.SetCurrentTime(snap.Times[2]);
@@ -142,7 +142,7 @@ public class StationTimeSeriesViewModelTests
     public void UpdateNowMarker_SetsBothEndsToSameTime()
     {
         var snap = SyntheticWaterLevel(n: 3);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null);
+        using var vm = new S104StationTimeSeriesViewModel(snap, TestStationCharts.Context());
         var t = new DateTime(2030, 6, 1, 12, 0, 0, DateTimeKind.Utc);
         vm.UpdateNowMarker(t);
         Assert.Equal((double)t.Ticks, vm.Sections[0].Xi);
@@ -153,16 +153,15 @@ public class StationTimeSeriesViewModelTests
     public void PickHit_StationSeriesPopulatedFromFeatureInfo()
     {
         var snap = SyntheticWaterLevel(n: 3);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null);
 
         var hit = new PickHit
         {
             FeatureType = "WaterLevel",
             FeatureRef = "station:ST01",
-            StationSeries = vm,
+            Sections = [new StationSeriesSection(snap)],
         };
         Assert.NotNull(hit.StationSeries);
-        Assert.Same(vm, hit.StationSeries);
+        Assert.Same(snap, hit.StationSeries);
     }
 
     [Fact]
@@ -180,20 +179,21 @@ public class StationTimeSeriesViewModelTests
     public void PickReportViewModel_SurfacesSelectedStationSeries()
     {
         var snap = SyntheticWaterLevel(n: 3);
-        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null);
 
-        var report = new PickReportViewModel();
+        var report = TestPickReport.Create();
         report.SetPicks(new[]
         {
             new PickHit
             {
                 FeatureType = "WaterLevel",
                 FeatureRef = "station:ST01",
-                StationSeries = vm,
+                ProductSpec = "S-104",
+                Sections = [new StationSeriesSection(snap)],
             },
         });
         Assert.True(report.HasStationSeries);
-        Assert.Same(vm, report.SelectedStationSeries);
+        var chart = Assert.IsType<S104StationTimeSeriesViewModel>(report.SelectedStationSeries);
+        Assert.Same(snap, chart.Snapshot);
 
         report.SetPicks(new[]
         {
@@ -201,6 +201,46 @@ public class StationTimeSeriesViewModelTests
         });
         Assert.False(report.HasStationSeries);
         Assert.Null(report.SelectedStationSeries);
+        // The next pick disposes the chart of the one before.
+        Assert.True(chart.IsDisposed);
+    }
+
+    [Fact]
+    public void PickReportViewModel_ChoosesTheChartByChannel_WhateverTheProduct()
+    {
+        var report = TestPickReport.Create();
+
+        // A tide prediction or another source's station: no S-104 or S-111
+        // product name, but the channels say which chart draws it.
+        report.SetPicks([new PickHit
+        {
+            FeatureType = "PredictedStation",
+            FeatureRef = "station:9447130",
+            Sections = [new StationSeriesSection(SyntheticSurfaceCurrent())],
+        }]);
+
+        Assert.IsType<S111StationTimeSeriesViewModel>(report.SelectedStationSeries);
+        Assert.False(report.HasSections);
+    }
+
+    [Fact]
+    public void PickReportViewModel_StationSeriesWithNoChart_ShowsItsRows()
+    {
+        var snap = new StationTimeSeriesSnapshot
+        {
+            StationId = "B1",
+            Latitude = 0,
+            Longitude = 0,
+            Times = [new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc)],
+            Channels = [new StationTimeSeriesChannel { Key = "waveHeight", DisplayName = "Wave height", Unit = "m", Values = [1.5f] }],
+        };
+        var report = TestPickReport.Create();
+
+        report.SetPicks([new PickHit { FeatureType = "Buoy", FeatureRef = "station:B1", Sections = [new StationSeriesSection(snap)] }]);
+
+        Assert.False(report.HasStationSeries);
+        var rows = Assert.IsType<PickSectionRowsViewModel>(Assert.Single(report.SelectedSections));
+        Assert.Contains(rows.Rows, r => r.DisplayName == "Wave height" && r.DisplayText == "1.5 to 1.5 m");
     }
 
     private sealed class FakeTimeAware : ITimeAwareDataset

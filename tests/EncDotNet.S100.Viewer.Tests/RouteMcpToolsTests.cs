@@ -26,7 +26,7 @@ public class RouteMcpToolsTests
     }
 
     private static (RoutesService routes, InlineRouteEditInvoker invoker) Make()
-        => (new RoutesService(), new InlineRouteEditInvoker());
+        => (new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)), new InlineRouteEditInvoker());
 
     private static T Value<T>(ToolResult<T> result)
     {
@@ -489,11 +489,11 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_success_payload_is_camel_case_route_detail()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = routes.Routes.CreateRoute("Demo", "rid");
         var detail = RouteProjection.Detail(route, routes);
 
-        var call = CreateRouteMcpAdapter.TranslateResult(ToolResult<RouteDetail>.Ok(detail));
+        var call = McpAdapterShared.Translate(ToolResult<RouteDetail>.Ok(detail));
 
         Assert.False(call.IsError);
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
@@ -507,7 +507,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_failure_payload_has_code_message_details()
     {
-        var call = GetRouteMcpAdapter.TranslateResult(
+        var call = McpAdapterShared.Translate(
             ToolResult<RouteDetail>.Err(new RouteNotFound("ghost")));
 
         Assert.True(call.IsError);
@@ -521,7 +521,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_route_detail_reports_passage_and_effective_and_overridden_leg_values()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = routes.Routes.CreateRoute("Demo", "rid");
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.0, -1.0));
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.1, -1.1));
@@ -529,7 +529,7 @@ public class RouteMcpToolsTests
         route.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Speed, 10);
         route.SetLegOverride(1, EncDotNet.S100.Viewer.Routing.RoutePassageField.Speed, 6);
 
-        var call = GetRouteMcpAdapter.TranslateResult(ToolResult<RouteDetail>.Ok(RouteProjection.Detail(route, routes)));
+        var call = McpAdapterShared.Translate(ToolResult<RouteDetail>.Ok(RouteProjection.Detail(route, routes)));
 
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
         using var doc = JsonDocument.Parse(text);
@@ -546,13 +546,13 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_get_passage_payload_is_camel_case()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = routes.Routes.CreateRoute("Demo", "rid");
         route.Info.Vessel = new EncDotNet.S100.Viewer.Routing.RouteVesselInfo { Name = "MV Test" };
         route.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, 4.8);
         route.SetDeparture(new DateTimeOffset(2026, 10, 12, 6, 40, 0, TimeSpan.Zero));
 
-        var call = GetPassageMcpAdapter.TranslateResult(
+        var call = McpAdapterShared.Translate(
             ToolResult<GetPassageResult>.Ok(new GetPassageResult(route.Id, RouteProjection.Passage(route))));
 
         Assert.False(call.IsError);
@@ -732,7 +732,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Edit_mode_adapter_payload_names_the_mode()
     {
-        var call = SetRouteEditModeMcpAdapter.TranslateResult(
+        var call = McpAdapterShared.Translate(
             ToolResult<RouteEditModeResult>.Ok(new RouteEditModeResult(true, "r1")));
 
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
@@ -805,7 +805,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Passage_card_adapter_payload_names_the_state()
     {
-        var call = SetPassageCardMcpAdapter.TranslateResult(ToolResult<PassageCardResult>.Ok(new PassageCardResult(true)));
+        var call = McpAdapterShared.Translate(ToolResult<PassageCardResult>.Ok(new PassageCardResult(true)));
 
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
         using var doc = JsonDocument.Parse(text);

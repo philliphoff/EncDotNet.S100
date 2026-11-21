@@ -13,7 +13,7 @@ using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class DatasetEntry : ViewModelBase
+internal sealed partial class DatasetEntry : ViewModelBase
 {
     private readonly MapDatasetId _id;
     private MapDataset? _mapDataset;
@@ -276,7 +276,11 @@ internal sealed class DatasetEntry : ViewModelBase
     public bool IsLoading
     {
         get => _isLoading;
-        set => SetProperty(ref _isLoading, value);
+        set
+        {
+            if (SetProperty(ref _isLoading, value) && IsAml)
+                OnPropertyChanged(nameof(AmlStateText));
+        }
     }
 
     /// <summary>
@@ -338,6 +342,25 @@ internal sealed class DatasetEntry : ViewModelBase
     }
 
     /// <summary>
+    /// How the dataset's values were produced (S-104 and S-111
+    /// <c>dataDynamicity</c>; #1505), or null when it doesn't say. The Legend
+    /// labels the product with it.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.DataDynamicity? DataDynamicity { get; private set; }
+
+    /// <summary>When the producer issued the dataset (UTC): a forecast's run time in its label; null when unknown.</summary>
+    public DateTime? IssueTime { get; private set; }
+
+    /// <summary>Records how the dataset's values were produced and when it was issued (#1505).</summary>
+    /// <param name="kind">How the values were produced, or null when the dataset doesn't say.</param>
+    /// <param name="issueTime">When the producer issued it (UTC), or null.</param>
+    public void SetDataDynamicity(EncDotNet.S100.Datasets.Pipelines.DataDynamicity? kind, DateTime? issueTime)
+    {
+        DataDynamicity = kind;
+        IssueTime = issueTime;
+    }
+
+    /// <summary>
     /// True when the dataset row shows the warning badge: a significant
     /// spec-version divergence (<see cref="HasVersionWarning"/>) or an
     /// axis-order warning (<see cref="HasAxisOrderWarning"/>).
@@ -395,7 +418,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public bool IsVisible
     {
-        get => _mapDataset?.IsVisible ?? _isVisible;
+        get => _isVisible;
         set
         {
             if (IsVisible != value)
@@ -404,7 +427,29 @@ internal sealed class DatasetEntry : ViewModelBase
                 UpdateMapDataset();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RowOpacity));
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
             }
+        }
+    }
+
+    private bool _isHiddenByDisplay;
+    /// <summary>
+    /// Whether a display control hides this dataset on the map, whatever
+    /// <see cref="IsVisible"/> says: today the AML product switches and scale
+    /// bands (<c>AmlDisplayService</c>, AML handoff decisions 24 and 26). Unlike
+    /// <see cref="IsVisible"/> it isn't the row's own setting, so the row's eye
+    /// keeps its state. Changing it doesn't re-render the dataset.
+    /// </summary>
+    public bool IsHiddenByDisplay
+    {
+        get => _isHiddenByDisplay;
+        set
+        {
+            if (_isHiddenByDisplay == value) return;
+            _isHiddenByDisplay = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 
@@ -633,6 +678,15 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when the layer has no data near the view time and hides (the amber Hidden tag).</summary>
     public bool IsLayerHidden => _layerTime?.IsHidden == true;
 
+    /// <summary>True when the layer time is a warning with a tag: hidden, or out of range such as a storm beyond its forecast (V11).</summary>
+    public bool IsLayerWarning => _layerTime?.IsWarning == true;
+
+    /// <summary>The warning tag: "Hidden", or why, such as "Beyond forecast" for a tropical cyclone (V11).</summary>
+    public string LayerTagText => _layerTime?.TagText ?? Strings.LayerTime_Hidden;
+
+    /// <summary>True when the layer draws stale data at the view time: the Stale tag (a surface analysis over 6 hours old, §7).</summary>
+    public bool IsLayerStale => _layerTime?.IsStale == true;
+
     /// <summary>True while the layer is drawing the view time.</summary>
     public bool IsLayerDrawing => _layerTime?.State == EncDotNet.S100.Viewer.Services.LayerTimeState.Drawing;
 
@@ -650,7 +704,10 @@ internal sealed class DatasetEntry : ViewModelBase
         OnPropertyChanged(nameof(HasLayerTime));
         OnPropertyChanged(nameof(LayerTimeText));
         OnPropertyChanged(nameof(IsLayerHidden));
+        OnPropertyChanged(nameof(IsLayerWarning));
+        OnPropertyChanged(nameof(LayerTagText));
         OnPropertyChanged(nameof(IsLayerDrawing));
+        OnPropertyChanged(nameof(IsLayerStale));
     }
 
     /// <summary>
@@ -832,7 +889,8 @@ internal sealed class DatasetEntry : ViewModelBase
         ExchangeSets.BoundingBox? geographicBounds = null,
         bool notForNavigation = false,
         int? compilationScale = null,
-        NetTopologySuite.Geometries.Geometry? catalogueCoverage = null)
+        NetTopologySuite.Geometries.Geometry? catalogueCoverage = null,
+        MapDatasetId? id = null)
     {
         FilePath = filePath;
         CompilationScale = compilationScale;
@@ -847,7 +905,7 @@ internal sealed class DatasetEntry : ViewModelBase
         GeographicBounds = geographicBounds;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
-        _id = new MapDatasetId(
+        _id = id ?? new MapDatasetId(
             filePath is { Length: > 0 }
                 ? System.IO.Path.GetFileName(filePath)
                 : DisplayName);
@@ -869,6 +927,7 @@ internal sealed class DatasetEntry : ViewModelBase
             ReconcileSubLayerProjectionSubscriptions();
             UpdateMapDataset();
             OnPropertyChanged(nameof(HasSubLayers));
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         };
     }
 
@@ -894,7 +953,7 @@ internal sealed class DatasetEntry : ViewModelBase
         _id,
         DisplayName,
         metadata,
-        _isVisible,
+        _isVisible && !_isHiddenByDisplay,
         _isActive,
         _opacity,
         _availableTimes,
@@ -926,6 +985,8 @@ internal sealed class DatasetEntry : ViewModelBase
         if (e.PropertyName == nameof(DatasetSubLayer.State))
         {
             UpdateMapDataset();
+            if (_aml is not null)
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 }
@@ -1303,6 +1364,39 @@ internal sealed class DatasetsViewModel : ViewModelBase
     public ICommand ResetOpacityCommand { get; }
 
     /// <summary>
+    /// Opens the Legend tab at the dataset's section: <b>Show legend</b> in a
+    /// row's menu (#1410, legends design note D3). Enabled, and shown, only
+    /// for a dataset that draws legend rows; nothing until
+    /// <see cref="AttachLegend"/>.
+    /// </summary>
+    public IRelayCommand<DatasetEntry> ShowLegendCommand { get; }
+
+    private Services.Legends.LegendService? _legend;
+
+    /// <summary>Connects <see cref="ShowLegendCommand"/> to the Legend tab's service.</summary>
+    /// <param name="legend">The legend service.</param>
+    internal void AttachLegend(Services.Legends.LegendService legend)
+    {
+        ArgumentNullException.ThrowIfNull(legend);
+        if (_legend is not null)
+            _legend.Changed -= OnLegendChanged;
+        _legend = legend;
+        legend.Changed += OnLegendChanged;
+        ShowLegendCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnLegendChanged(object? sender, EventArgs e) => ShowLegendCommand.NotifyCanExecuteChanged();
+
+    private string? LegendSectionOf(DatasetEntry? entry) =>
+        entry is null ? null : _legend?.SectionIdOfDataset(entry.Id.Value);
+
+    private void ShowLegend(DatasetEntry? entry)
+    {
+        if (LegendSectionOf(entry) is { } sectionId)
+            _legend!.Show(sectionId);
+    }
+
+    /// <summary>
     /// Raised with the file's path when <see cref="LoadFromPathAsync"/> (or
     /// <see cref="ReportUnrecognizedFile"/>) rejects a file because no product
     /// recognised it. The window shows it as a warning toast, saying why when
@@ -1363,6 +1457,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         HideAllCommand = new RelayCommand(HideAll);
         IsolateCommand = new RelayCommand<DatasetEntry>(Isolate);
         ResetOpacityCommand = new RelayCommand(ResetOpacity);
+        ShowLegendCommand = new RelayCommand<DatasetEntry>(ShowLegend, entry => LegendSectionOf(entry) is not null);
 
         // Re-apply paint order whenever the entries collection is
         // mutated by reorder commands. Add/remove side-effects flow
@@ -1417,6 +1512,34 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 }
             }
         };
+    }
+
+    /// <summary>The entry for the data source <paramref name="sourceId"/>, if it's in the list.</summary>
+    /// <param name="sourceId">The source's registration id.</param>
+    public DatasetEntry? FindSource(string sourceId)
+    {
+        var id = DatasetEntry.SourceDatasetId(sourceId);
+        return Entries.FirstOrDefault(e => e.Id == id);
+    }
+
+    /// <summary>
+    /// Adds a data source to the top of the list (design note D3), or selects
+    /// it when it's already there.
+    /// </summary>
+    /// <param name="registration">The source.</param>
+    /// <param name="options">Its options; <see langword="null"/> for the registration's defaults.</param>
+    /// <returns>The new entry, to load; <see langword="null"/> when the source was already in the list.</returns>
+    public DatasetEntry? AddSource(SourceRegistration registration, object? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        if (FindSource(registration.Id) is { } existing)
+        {
+            SelectedDataset = existing;
+            return null;
+        }
+        var entry = DatasetEntry.ForSource(registration, options);
+        Entries.Insert(0, entry);
+        return entry;
     }
 
     public DatasetEntry Add(string filePath, string productSpec)
@@ -1712,6 +1835,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void MoveUp(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         if (i > 0) Entries.Move(i, i - 1);
@@ -1719,6 +1845,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void MoveDown(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         if (i >= 0 && i < Entries.Count - 1) Entries.Move(i, i + 1);
@@ -1726,6 +1855,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void BringToFront(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         if (i >= 0 && i != 0) Entries.Move(i, 0);
@@ -1733,6 +1865,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     private void SendToBack(DatasetEntry? entry)
     {
+        // A live feed's place comes from the layer order, not the list (data source design D8).
+        if (entry is { IsSource: true })
+            return;
         if (entry is null) return;
         var i = Entries.IndexOf(entry);
         var last = Entries.Count - 1;

@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Mcp.Tools.Tides;
 using ModelContextProtocol;
 
 namespace EncDotNet.S100.Mcp;
@@ -86,12 +87,16 @@ public static class McpJson
 [JsonSerializable(typeof(QueryFeaturesResult))]
 [JsonSerializable(typeof(CountFeaturesResult))]
 [JsonSerializable(typeof(SearchFeaturesResult))]
-[JsonSerializable(typeof(SampleCoverageAlongResult))]
+[JsonSerializable(typeof(ChartedDepthSampleResult))]
+[JsonSerializable(typeof(SampleProfileResult))]
 [JsonSerializable(typeof(ListSpecsResult))]
 [JsonSerializable(typeof(ListTimeStepsResult))]
 [JsonSerializable(typeof(CheckRouteResult))]
+[JsonSerializable(typeof(CheckRouteRequest))]
 // Mutating tool results.
 [JsonSerializable(typeof(OpenDatasetResult))]
+[JsonSerializable(typeof(ListDataSourcesResult))]
+[JsonSerializable(typeof(AddDataSourceResult))]
 [JsonSerializable(typeof(CloseDatasetResult))]
 [JsonSerializable(typeof(CloseAllDatasetsResult))]
 [JsonSerializable(typeof(SetPaletteResult))]
@@ -112,6 +117,12 @@ public static class McpJson
 [JsonSerializable(typeof(RemoveSourceResult))]
 [JsonSerializable(typeof(SetSourceOptionsResult))]
 [JsonSerializable(typeof(LibraryIdleResult))]
+// Tide prediction tool results (#1452).
+[JsonSerializable(typeof(ListTideStationsResult))]
+[JsonSerializable(typeof(PredictTideResult))]
+// Tidal current prediction tool results (#1454).
+[JsonSerializable(typeof(ListCurrentStationsResult))]
+[JsonSerializable(typeof(PredictCurrentResult))]
 // Sampled values, written polymorphically.
 [JsonSerializable(typeof(DepthSample))]
 [JsonSerializable(typeof(WaterLevelSample))]
@@ -119,6 +130,9 @@ public static class McpJson
 [JsonSerializable(typeof(SurfaceCurrentSample))]
 [JsonSerializable(typeof(SurfaceCurrentStationSample))]
 [JsonSerializable(typeof(CoverageFieldsSample))]
+// plan_route (#1560).
+[JsonSerializable(typeof(PlanRouteRequest))]
+[JsonSerializable(typeof(PlanRouteResult))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(InvalidArgument))]
 [JsonSerializable(typeof(DatasetNotFound))]
@@ -138,6 +152,15 @@ public static class McpJson
 [JsonSerializable(typeof(LibrarySourceNotFound))]
 [JsonSerializable(typeof(LibraryItemNotFound))]
 [JsonSerializable(typeof(LibraryChangeRejected))]
+[JsonSerializable(typeof(TideCatalogueNotAvailable))]
+[JsonSerializable(typeof(TideStationNotFound))]
+[JsonSerializable(typeof(NoTideStationNear))]
+[JsonSerializable(typeof(TideDatumNotAvailable))]
+[JsonSerializable(typeof(CurrentStationNotFound))]
+[JsonSerializable(typeof(NoCurrentStationNear))]
+[JsonSerializable(typeof(CurrentStationNotPredictable))]
+[JsonSerializable(typeof(NoStationWithinReach))]
+[JsonSerializable(typeof(NoRoutePlanned))]
 // Tool parameter types the SDK binds.
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonElement?))]

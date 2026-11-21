@@ -1,10 +1,11 @@
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
 
 /// <summary>
 /// One row of a sub-layer's legend: a glyph and its label. A viewer shows a
-/// sub-layer's legend (<see cref="GridCoverageSubLayer.Legend"/>,
+/// sub-layer's legend (<see cref="CoverageSubLayerBase.Legend"/>,
 /// <see cref="VectorSubLayer.Legend"/>) under its layer stack entry; the
 /// renderers don't draw legends.
 /// </summary>
@@ -106,6 +107,35 @@ public sealed record LegendLineSample
 
     /// <summary>The symbols placed in each interval.</summary>
     public IReadOnlyList<LegendLineSymbol> Symbols { get; init; } = [];
+
+    /// <summary>
+    /// A plain line sample from a screen-space pen: width and dash pattern in
+    /// device-independent pixels, converted to millimetres (one pixel is
+    /// 0.32 mm, the S-100 display pixel).
+    /// </summary>
+    /// <param name="color">The pen colour.</param>
+    /// <param name="width">The pen width in device-independent pixels.</param>
+    /// <param name="dashPattern">Alternating dash and gap lengths in device-independent pixels; empty for a solid line.</param>
+    public static LegendLineSample FromPixels(RgbaColor color, double width, IReadOnlyList<double> dashPattern)
+    {
+        ArgumentNullException.ThrowIfNull(dashPattern);
+        const double millimetresPerPixel = 0.32;
+        var dashes = new List<(double Start, double Length)>();
+        double position = 0;
+        for (int i = 0; i + 1 < dashPattern.Count; i += 2)
+        {
+            dashes.Add((position * millimetresPerPixel, dashPattern[i] * millimetresPerPixel));
+            position += dashPattern[i] + dashPattern[i + 1];
+        }
+
+        return new LegendLineSample
+        {
+            Color = color.ToHex(),
+            Width = width * millimetresPerPixel,
+            Dashes = dashes,
+            IntervalLength = dashes.Count == 0 ? 0 : position * millimetresPerPixel,
+        };
+    }
 }
 
 /// <summary>A symbol a <see cref="LegendLineSample"/> places along its line.</summary>

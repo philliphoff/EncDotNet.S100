@@ -2,10 +2,12 @@
 
 `s100` is a cross-platform command-line tool for S-100 datasets. It renders one
 dataset, or a composite of several, to a PNG, JPEG or WebP image, or to a
-raster tile set for web maps. It also
+raster tile set for web maps, and serves those tiles to web maps and GIS
+desktops. It also
 validates datasets and exchange sets, reports what a dataset contains, picks
-the features at a point, checks routes, converts S-57 cells, serves datasets to
-AI agents over MCP, and publishes datasets as an S-100 feed.
+the features at a point, checks routes, converts S-57 and S-101 cells, predicts
+tides and tidal currents, serves datasets to AI agents over MCP, and publishes
+datasets as an S-100 feed.
 
 `s100` uses the same portrayal and validation code as the `EncDotNet.S100`
 library and SoundCharts. It renders through headless Skia renderers, so it
@@ -89,6 +91,11 @@ stable build, install the archive from the
 [latest release](https://github.com/philliphoff/EncDotNet.S100/releases/latest)
 in its place.
 
+### Docker
+
+The `ghcr.io/philliphoff/s100` container image runs `s100` on Linux x64 and
+arm64, with no other install. See [Run s100 in Docker](docker.md).
+
 ### The copy inside SoundCharts
 
 SoundCharts ships the same `s100` executable in a `cli/` folder:
@@ -115,16 +122,23 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | Command | What it does |
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
-| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
-| [`tiles serve`](#tiles-serve) | Serves a built tile set on XYZ URLs, as a tile source for web maps on this or another computer. |
+| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive, an MBTiles database, a GeoPackage or a GeoTIFF. |
+| [`tiles serve`](#tiles-serve) | Serves a built tile set or datasets on XYZ URLs and as WMTS and WMS services, for web maps and GIS desktops on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
 | [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
+| [`tides stations`](#tides-stations) | Lists tide stations near a point, from the offline station catalogue. |
+| [`tides predict`](#tides-predict) | Predicts the tide at a station, as heights, highs and lows, or an S-104 dataset. |
+| [`tides currents stations`](#tides-currents-stations) | Lists tidal current stations near a point, from the offline station catalogue. |
+| [`tides currents predict`](#tides-currents-predict) | Predicts the tidal current at a station, as speeds and directions, slacks and maxima, or an S-111 dataset. |
+| [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, or checks for newer data. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
+| [`sources`](#sources) | Lists the live data sources `--source` takes, with their options and what each still needs. |
+| [`health`](#health) | Checks that a `tiles serve`, `feed serve` or `mcp serve --transport http` on this computer answers, for container health checks. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
-| [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
+| [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools for a set of datasets, over standard input and output or HTTP. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
 
@@ -148,6 +162,8 @@ Update available: s100 0.25.0 (current 0.24.0): https://github.com/philliphoff/E
 
 Standard output and the exit code don't change, so you can still parse JSON
 output. Network and cache failures are silent. Development builds don't check.
+To turn the check off, set the `S100_NO_UPDATE_CHECK` environment variable to
+`1`, `true` or `yes`. The [container image](docker.md) sets it.
 
 ## render
 
@@ -184,11 +200,14 @@ other extension writes PNG, unless you set `--format`.
 | `--exchange-set`, `--from <path>` | none | Composites an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
 | `--only <specs>` | all | Exchange-set form only. Composites only these product specifications, comma-separated, for example `--only S101,S128`. Hyphens and case are ignored. |
 | `-o`, `--output <path>` | positional | The output path. Use it instead of the positional output argument. |
+| `--source <source>` | none | Composite and exchange-set forms only. Also draws a live data source above the datasets, such as NDBC observations or AIS targets. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options. Needs `--bbox` or `--center` and `--scale`: the source is started for that area. See [Live sources in a render](#live-sources-in-a-render). |
+| `--source-timeout <seconds>` | `30` | How long to wait for each `--source`'s first data. |
 | `-w`, `--width <pixels>` | `1024` | Image width. |
 | `-h`, `--height <pixels>` | `768` | Image height. |
 | `--format <format>` | from the extension, else `png` | `png`, `jpeg` (or `jpg`), `webp` or `json`. A `--format` that contradicts a recognised output extension is an error. `json` works in the single-dataset form only. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
 | `--palette <palette>` | `day` | `day`, `dusk` or `night`. |
+| `--national-language <code>` | the catalogue's, `eng` | ISO 639-2 language, such as `fra`, to prefer for chart text where the product's portrayal supports it (S-101, S-131). A feature with no name in that language shows its default name. |
 | `--symbol-scale <factor>` | `1.0` | Symbol scale factor. |
 | `--text-scale <factor>` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111, GRIB2, NetCDF, CAP). `s100 info` lists the steps. |
@@ -200,11 +219,27 @@ other extension writes PNG, unless you set `--format`.
 | `--hide <categories>` | none | Hides drawing-instruction categories, comma-separated: `text`, `points`, `lines`, `areas`. Adds to `--no-text`. |
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth 1:10m land layer under the chart, in a parchment tone (`238,232,220`). Online tile basemaps aren't available. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. `ice-concentration`, `ice-sod` (stage of development), or `ice-navigational`. See [Sea-ice display modes](#sea-ice-display-modes). |
+| `--show-layer <keys>` | none | Single-dataset form only. Draws sub-layers that are off by default, comma-separated by key, as the SoundCharts Display controls switches do: for example `weather.precipitation,weather.cape,weather.cloud`. `s100 info` lists a dataset's layer keys. |
 | `--no-updates` | off | Single-dataset form only. Renders an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
 `--hide`, `--no-text` and `--basemap` apply to every layer of a composite.
+
+### Live sources in a render
+
+`--source` draws a live data source over a composite, as SoundCharts draws a
+live feed over the chart. Each source is started for the `--bbox` or
+`--center` and `--scale` area and given `--source-timeout` for its first data.
+A source with nothing by then, or whose range is narrower than the area, is
+left out with a warning on standard error, and the image is written without
+it. An unknown source or option exits with code `2`. A source that needs a key
+reads it from its environment variable, never from `--source`.
+[`sources`](#sources) lists them.
+
+```bash
+s100 render --layer chart.000 -o buoys.png --bbox -70.9,42.2,-70.5,42.5 --source ndbc.realtime
+```
 
 ### Render examples
 
@@ -262,9 +297,13 @@ With an explicit viewport:
   so it usually has no visible effect. For example, an S-102 surface already
   draws above an S-101 chart.
 - **Overlapping cells.** Where a finer chart cell's data coverage overlaps a
-  coarser cell, the coarser cell is hidden there, as in SoundCharts. Cells are
-  ranked by compilation scale, or by minimum display scale when a cell has
-  none. Cells of the same scale don't hide each other.
+  coarser cell, the coarser cell is hidden there, as in SoundCharts. A cell's
+  data coverage is the union of its coverage areas, and a finer cell takes part
+  only where its coverage meets the coarser cell's, not just its bounding box.
+  Cells are ranked by compilation scale, or by minimum display scale when a
+  cell has none. Between cells of the same minimum display scale, the one with
+  the finer maximum display scale ranks finer. Cells of the same rank don't hide
+  each other.
 - **No S-101 updates.** The composite and exchange-set forms don't apply S-101
   update files. To render a cell with its updates, render it on its own.
 - **Skipped datasets.** In an exchange set, datasets with an unsupported
@@ -301,49 +340,160 @@ supports.
 ### Display-list output
 
 With a `.json` output path or `--format json`, the single-dataset form writes
-the dataset's S-100 Part 9 display list instead of an image: the drawing
-instructions the portrayal produced, with their symbols, line styles, area
-fills, colours, display planes, drawing priorities, viewing groups and text.
-Use it to review, diff or snapshot-test a portrayal change as text.
+what the renderer draws as data instead of an image: every line, area, pattern
+fill, symbol and text label, with its full geometry, resolved colours and sizes,
+and the anchor it's placed at. A renderer in another process (an ArcGIS Pro or
+QGIS symbology exporter, a vector PDF or SVG writer) can draw the chart from it
+the way the viewer does. It's also handy to review, diff or snapshot-test a
+portrayal change as text.
 
 ```bash
-s100 render warnings.gml warnings.json
+s100 render 101AA00DS0008.000 chart.json
 s100 render warnings.gml out.txt --format json
 ```
 
+The entries come from the same scene the image is drawn from, so they already
+have the portrayal's decisions applied:
+
+- A line shared by several features (adjoining areas, or a line feature on an
+  area's edge) is given once, by the line drawn last, so a shared dashed edge
+  isn't drawn as overlapping copies that look solid (S-100 Part 9 line
+  suppression).
+- A multi-part curve or surface gives one entry per part.
+- A pattern fill's rings are only the part left visible after higher-priority
+  patterns and opaque fills are cut away.
+- Point symbols and text carry the anchor the viewer uses: the centroid or an
+  interior point of a surface, the position along a curve, and so on.
+- Colours are resolved for the palette, and sizes are in display pixels.
+
+Vector products (S-101, S-57 and the GML products) have display lists. Coverage
+products (S-102, S-104, S-111) don't, and `render` exits with code `3`.
+`--palette`, `--national-language`, `--symbol-scale`, `--text-scale`,
+`--display-mode`, `--time-step`, `--hide` and `--show-layer` change the output
+as they change the image. `--width`, `--height`, `--quality` and `--background`
+are ignored. `--bbox`, `--center` and `--scale` are errors, because the output
+has no viewport. The output has no timings, so two runs over the same dataset
+and options produce identical files.
+
+#### The document
+
 ```json
 {
-  "dataset": "navwarn_surface.gml",
-  "product": "S-124",
-  "spec": "S-124/2.0.0",
+  "schemaVersion": 2,
+  "dataset": "101AA00DS0008.000",
+  "product": "S-101",
+  "spec": "S-101/0.0.0",
   "palette": "day",
-  "instructionCount": 3,
-  "categoryCounts": { "areas": 0, "lines": 0, "points": 3, "text": 0 },
-  "instructions": [
+  "symbolScale": 1,
+  "textScale": 1,
+  "crs": "EPSG:4326",
+  "sizeProfile": {
+    "svgPixelsPerMillimetre": 3.7795,
+    "pointSymbolScale": 0.6,
+    "millimetresPerPixel": 0.32,
+    "patternPixelsPerMillimetre": 1.5,
+    "pixelsPerFontPoint": 1
+  },
+  "subLayerCount": 2,
+  "instructionCount": 517,
+  "opCount": 517,
+  "categoryCounts": { "areas": 43, "patterns": 17, "lines": 140, "points": 56, "text": 261 },
+  "subLayers": [
+    { "index": 0, "key": "s101.areas", "name": "S-101 (areas): 101AA00DS0008.000", "plane": "BaseChartUnder", "instructionCount": 60 }
+  ],
+  "ops": [
     {
-      "kind": "point",
-      "feature": "f1",
-      "subLayer": 0,
+      "kind": "line",
+      "order": 118,
+      "subLayer": 1,
+      "feature": "42",
       "plane": "UnderRadar",
-      "viewingGroup": 31020,
+      "viewingGroups": [12410],
       "drawingPriority": 15,
-      "symbol": "NavigationalWarningFeaturePart",
-      "geometry": { "type": "Surface", "vertexCount": 5, "anchor": [51.05, 1.2] }
+      "coordinates": [[62.7584818, -32.4908714], [62.7724818, -32.4828714]],
+      "lineStyle": "PILPNT01",
+      "stroke": true,
+      "widthPx": 1,
+      "dashArrayPx": [18.75, 18.75],
+      "symbolIntervalPx": 37.5,
+      "lineSymbols": [{ "symbol": "PILPNT02", "positionPx": 28.125, "rotation": 0, "scale": 0.8268, "pivot": [0, 0] }],
+      "color": "#4C5B63FF",
+      "colorToken": "CSTLN"
+    },
+    {
+      "kind": "text",
+      "order": 209,
+      "subLayer": 1,
+      "feature": "25",
+      "plane": "UnderRadar",
+      "viewingGroups": [33020, 90031],
+      "drawingPriority": 15,
+      "anchor": [62.7230744, -32.4746663],
+      "placement": { "kind": "Line", "part": 0, "linePosition": 0.5, "segment": 1, "segmentPosition": 0.5 },
+      "text": "3",
+      "fontSizePx": 10,
+      "fontWeight": "Medium",
+      "fontProportion": "Proportional",
+      "fontSlant": "Upright",
+      "horizontalAlignment": "Center",
+      "verticalAlignment": "Center",
+      "color": "#768C97FF",
+      "colorToken": "DEPCN"
     }
   ]
 }
 ```
 
-- Vector products (S-101, S-57 and the GML products) have display lists.
-  Coverage products (S-102, S-104, S-111) don't, and `render` exits with code
-  `3`.
-- Geometry is summarised as its type, vertex count and one latitude/longitude
-  anchor. The output has no timings, so two runs over the same dataset and
-  options produce identical files.
-- `--palette`, `--symbol-scale`, `--text-scale`, `--display-mode` and
-  `--time-step` change the instructions. `--width`, `--height`, `--quality` and
-  `--background` are ignored. `--bbox`, `--center` and `--scale` are errors,
-  because a display list has no viewport.
+`schemaVersion` changes when a field is removed or changes meaning. New fields
+can appear without a change, so ignore fields you don't know. Fields with no
+value are left out.
+
+The top level:
+
+| Field | Meaning |
+|---|---|
+| `crs` | Always `EPSG:4326`: positions are `[longitude, latitude]` in degrees, as in GeoJSON, to 7 decimal places. Near the antimeridian a line or ring can run past ±180° so it stays continuous. |
+| `sizeProfile` | How S-100 Part 9 sizes were turned into display pixels. `millimetresPerPixel` converts any `…Px` value back to millimetres. |
+| `instructionCount` | Drawing instructions in the portrayal's display list. |
+| `opCount` | Entries in `ops`. An instruction can give several (one per edge or part) or none (no geometry, or every edge drawn by another line). |
+| `subLayers` | The portrayal's sub-layers, drawn in this order. |
+| `ops` | What's drawn, in draw order. |
+
+Every entry in `ops` has:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `area`, `pattern`, `line`, `point` or `text`. |
+| `order` | Position in the draw order, from 0. Draw entries in this order. |
+| `subLayer` | Index into `subLayers`. |
+| `feature` | The dataset feature it portrays. |
+| `plane` | `UnderRadar` or `OverRadar`. |
+| `viewingGroups` | The viewing groups it belongs to. It's hidden if any of them is turned off. |
+| `drawingPriority` | Its S-100 Part 9 drawing priority. |
+| `scaleMinimum`, `scaleMaximum` | The scale denominators it's drawn between (SCAMIN, SCAMAX). Draw it when `scaleMaximum` ≤ the display's scale denominator ≤ `scaleMinimum`; a missing one is no limit. |
+
+By kind:
+
+| Kind | Fields |
+|---|---|
+| `area` | `rings`: the outer ring then any holes, each a list of positions. `fill` (`#RRGGBBAA`, with transparency applied), `fillToken` (the palette colour name), `transparency`, and `outline` (`color`, `widthPx`) when there is one. |
+| `pattern` | `rings` and `areaFill`, the catalogue area-fill name. The rings are the part left visible after clipping. |
+| `line` | `coordinates`; `lineStyle`, the catalogue line style or `_simple_`; `stroke`, `false` when the style only places symbols; `color`, `colorToken`, `widthPx`; `dashArrayPx`, alternating on and off lengths, with `dashPhasePx` where the first dash starts; `defaultDash` when the line is dashed with no dash lengths given; and `lineSymbols` repeated every `symbolIntervalPx`, each with its `symbol` name, `positionPx` within the interval, `rotation` relative to the line's direction, `scale` and `pivot`. |
+| `point` | `anchor`, `placement`, `symbol` (the catalogue symbol name), `scale` (multiply the symbol's SVG size at `svgPixelsPerMillimetre` by this), `pivot` (the symbol's pivot as a fraction of its width and height from the centre), `rotation` in degrees clockwise with `rotationCrs` (`Portrayal` keeps the angle on screen, `Geographic` turns with the chart), and `offsetPx`. A symbol that couldn't be found has `fallbackColor` instead, drawn as a dot. |
+| `text` | `anchor`, `placement`, `text`, `font` (the font reference, when given), `fontSizePx`, `fontWeight`, `fontProportion`, `fontSlant`, `color`, `colorToken`, `background`, `halo` (`color`, `widthPx`), `horizontalAlignment`, `verticalAlignment`, `offsetPx` and the portrayal's `rotation`, which the viewer doesn't apply. |
+
+`offsetPx` is `[x, y]` in display pixels from the anchor, with `y` as the
+renderer applies it on screen.
+
+`placement` says how a point symbol's or text's anchor was chosen:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `Point` (the feature's point, or the first vertex), `Coordinate` (a position given by the portrayal, such as each sounding), `Line` (a fraction along a curve), `Surface` (inside a surface), `CurveMiddleVertex` or `RingVertexMean`. |
+| `part` | The part of a multi-part feature it's on. |
+| `linePosition` | For `Line`, the fraction along the curve, from 0 to 1. |
+| `segment`, `segmentPosition` | For `Line`, the vertex that starts the segment the anchor is on and how far along that segment, in the feature's own latitude and longitude. For `CurveMiddleVertex`, `segment` is the vertex. |
+| `visibleParts` | `true` when the viewer moves the anchor into the part of the surface in view as you pan. `anchor` is where it goes with the whole surface in view. |
 
 ## tiles export
 
@@ -351,13 +501,23 @@ s100 render warnings.gml out.txt --format json
 s100 tiles export <dataset> -o <output> [options]
 s100 tiles export --layer <dataset> [--layer <dataset> ...] -o <output> [options]
 s100 tiles export <exchange-set> -o <output> [options]
+s100 tiles export <folder> -o <output> [options]
 ```
 
 `tiles export` renders datasets as raster tiles on the XYZ Web Mercator grid
 that MapLibre, Leaflet and OpenLayers use. The tiles carry the S-100 portrayal
 itself (symbols, scale minimums and palettes), so a web map shows the chart
 without styling it. It takes the same three input forms as
-[`render`](#render), and `-o` is required.
+[`render`](#render), and `-o` is required. It also takes a folder of datasets:
+
+- **Folder.** Pass any other folder, and every dataset in it and its
+  subfolders is tiled, as [`mcp serve`](#mcp-serve) finds them. An S-100
+  exchange set inside it is read through its `CATALOG.XML`. An S-57 exchange
+  set (an `ENC_ROOT` folder holding a `CATALOG.031`) is read as a folder of
+  cells, whether you pass it, its `CATALOG.031`, or a folder above it, or name
+  it with `--from`. Loose S-101 cells get their update files, as a single cell
+  does, but cells in an S-100 exchange set don't. A dataset that can't be
+  opened or tiled is skipped with a warning.
 
 The container comes from the output path:
 
@@ -373,9 +533,31 @@ The container comes from the output path:
   format many tile servers read. Rows are numbered from the south, as MBTiles
   requires. The `metadata` table holds the standard keys plus `tileSize` and
   the display settings, prefixed `s100:`.
+- **GeoPackage.** An output ending in `.gpkg` is written as one
+  [OGC GeoPackage](https://www.geopackage.org/) 1.4 tile pyramid, which
+  QGIS, ArcGIS Pro, GDAL and field apps such as QField open as an offline
+  raster layer. The tiles are in a table named `chart`, in EPSG:3857 on the
+  Web Mercator grid, so each zoom level is a tile matrix, and rows are
+  numbered from the north as in XYZ. The TileJSON is kept as GeoPackage
+  metadata. WebP tiles register the `gpkg_webp` extension, which not every
+  reader supports, so use PNG or JPEG for the widest reach.
+- **GeoTIFF.** An output ending in `.tif` or `.tiff` is written as one
+  [Cloud-Optimized GeoTIFF](https://cogeo.org/) in EPSG:3857, for tools that
+  take a single georeferenced image. The maximum zoom is the full-resolution
+  image and each lower zoom is an overview, down to an image a tile or two
+  across, so `--min-zoom` only limits how far the overviews go. The image is
+  whole tiles of its smallest overview, so it can reach past the data; tiles
+  with nothing on them are left out of the file, and read as transparent.
+  PNG and WebP tiles are stored as RGBA with Deflate compression, and JPEG
+  tiles as they are (no transparency, and empty areas read as black). The
+  file is a BigTIFF when it would pass 4 GB. It can't cross the antimeridian.
 
 Set `--container` to choose the container whatever the extension. An existing
-`.pmtiles` or `.mbtiles` file at the output path is replaced.
+`.pmtiles`, `.mbtiles`, `.gpkg` or `.tif` file at the output path is replaced only once the new
+one is finished: the new file is written beside it, with `.partial` added to
+its name, and then moved into its place. Until then a [`tiles serve`](#tiles-serve)
+reading the old file keeps serving it, and if the export fails or is stopped,
+the old file is left as it was.
 
 ### Tiles export options
 
@@ -383,16 +565,17 @@ Set `--container` to choose the container whatever the extension. An existing
 |---|---|---|
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
 | `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
-| `--only <specs>` | all | Exchange-set form only. Tiles only these product specifications, comma-separated. |
-| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file or a `.mbtiles` file. Its parent folder must exist. |
-| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles` or `mbtiles`. |
+| `--only <specs>` | all | Exchange-set and folder forms only. Tiles only these product specifications, comma-separated. |
+| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file, a `.mbtiles` file, a `.gpkg` file or a `.tif` file. Its parent folder must exist. |
+| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles`, `gpkg` or `geotiff`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
 | `--max-zoom <0-24>` | from the data | Highest zoom level. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. Datasets that can't draw in those tiles aren't portrayed. See [Zoom levels](#zoom-levels). |
 | `--tile-size <pixels>` | `256` | `256`, or `512` for high-DPI tiles of the same grid. |
 | `--format <format>` | `png` | `png`, `jpeg` (or `jpg`) or `webp`. |
 | `--quality <1-100>` | `90` | Encoder quality for `jpeg` and `webp`. Ignored for `png`. |
 | `--palette <palette>` | `day` | `day`, `dusk` or `night`. |
+| `--national-language <code>` | the catalogue's, `eng` | ISO 639-2 language, such as `fra`, to prefer for chart text where the product's portrayal supports it (S-101, S-131). A feature with no name in that language shows its default name. |
 | `--symbol-scale <factor>` | `1.0` | Symbol scale factor. |
 | `--text-scale <factor>` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111). |
@@ -401,11 +584,24 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--hide <categories>` | none | Hides drawing-instruction categories, comma-separated: `text`, `points`, `lines`, `areas`. |
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth land layer under the chart. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. See [Sea-ice display modes](#sea-ice-display-modes). |
+| `--display-category <category>` | `all` | Mariner setting: the ECDIS display category, `display-base`, `standard`, `other-information` or `all`. |
+| `--safety-contour <metres>` | `30` | Mariner setting: the safety contour. |
+| `--safety-depth <metres>` | `30` | Mariner setting: the safety depth. Shallower soundings are emphasised. |
+| `--shallow-contour <metres>` | `2` | Mariner setting: the shallow contour, used with `--four-shades`. |
+| `--deep-contour <metres>` | `30` | Mariner setting: the deep contour, used with `--four-shades`. |
+| `--four-shades` | off | Mariner setting: shades depth areas in four shades rather than two. |
+| `--no-soundings` | off | Mariner setting: doesn't draw soundings. |
+| `--no-shallow-water-dangers` | off | Mariner setting: doesn't emphasise isolated dangers in shallow water. |
+| `--symbolized-boundaries` | off | Mariner setting: draws symbolized area boundaries rather than plain ones. |
+| `--simplified-symbols` | off | Mariner setting: draws simplified point symbols rather than paper-chart ones. |
+| `--full-light-lines` | off | Mariner setting: draws light sector legs to their full nominal range. |
+| `--ignore-scamin` | off | Mariner setting: draws features at every scale, ignoring their scale minimum (SCAMIN). |
+| `--depth-unit <unit>` | `metres` | Mariner setting: the unit depths are shown in, `metres`, `feet`, `fathoms-feet` or `fathoms`. |
 | `--skip-empty` | off | Doesn't write tiles on which nothing was drawn. A web map shows a missing tile as empty. |
 | `--metatile <tiles>` | `4` | Renders blocks of this many tiles square at once, then cuts them apart. |
 | `--parallel <workers>` | processor count | Number of blocks rendered at once. |
 | `-y`, `--yes` | off | Writes a tile set of more than 100,000 tiles without asking. |
-| `--no-updates` | off | Tiles an S-101 base cell, given on its own or with `--layer`, without its update files. |
+| `--no-updates` | off | Tiles an S-101 base cell, given on its own, with `--layer` or loose in a folder, without its update files. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
@@ -417,6 +613,8 @@ s100 tiles export enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
 s100 tiles export --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
 s100 tiles export exchange-set/ -o tiles/ --format webp --skip-empty
 s100 tiles export enc.000 -o chart.mbtiles --max-zoom 16
+s100 tiles export exchange-set/ -o chart.gpkg --format jpeg
+s100 tiles export enc.000 -o chart.tif --max-zoom 15 --skip-empty
 s100 tiles export --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
 ```
 
@@ -438,7 +636,9 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 Declare `tileSize: 256` for 512-pixel tiles too: they cover the same grid at
 twice the pixel density. A folder of tiles is added the same way, with
 `tiles: ["https://example.com/tiles/{z}/{x}/{y}.png"]` in place of `url`. The
-host must answer HTTP range requests for PMTiles; most static hosts do.
+host must answer HTTP range requests for PMTiles; most static hosts do. To try
+an archive before you publish it, [`tiles serve`](#tiles-serve) it and use its
+`archive.pmtiles` URL in place of the host's.
 
 ### Zoom levels
 
@@ -457,6 +657,15 @@ minimum display scale. Without `--max-zoom`, the highest is one level past the
 finest cell's compilation scale. Products without these scales, such as GML
 products and coverages, start at the zoom where their extent fits in about one
 tile and go six levels deeper, up to zoom 18.
+
+With `--bbox`, datasets that can't draw in any of its tiles are closed before
+they're portrayed, and `tiles export` says how many it left out. A dataset is
+kept when its extent reaches the tiles that cover the box at the lowest zoom,
+or the ring of tiles around them, so symbols and text near an edge tile are
+drawn as they would be without `--bbox`. This saves time and memory when the
+box covers a small part of a large folder. The default zoom range then comes
+from the datasets that are kept. For a box that crosses the antimeridian,
+every dataset is kept.
 
 `tiles export` prints the number of tiles before it renders any. Each zoom level has
 four times the tiles of the one before, so a set grows quickly. Above 100,000
@@ -479,32 +688,42 @@ s100 tiles serve <tile-set> [options]
 s100 tiles serve <dataset> [options]
 s100 tiles serve --layer <dataset> [--layer <dataset> ...] [options]
 s100 tiles serve <exchange-set> [options]
+s100 tiles serve <folder> [options]
 ```
 
 `tiles serve` serves raster tiles over HTTP on the standard XYZ URLs, so a web
 map running on this computer can use them as a tile source. It serves either:
 
-- **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive or a
-  `.mbtiles` database that [`tiles export`](#tiles-export) or another tool
-  wrote. The tile set is read at each request, so if you export it again while
-  it's served, the next request sees the new tiles. Only PNG, JPEG and WebP
+- **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive, a
+  `.mbtiles` database or a `.gpkg` GeoPackage that [`tiles export`](#tiles-export)
+  or another tool wrote. A GeoPackage must hold tiles in EPSG:3857 on the Web
+  Mercator grid, as `tiles export` and GDAL's `GoogleMapsCompatible` tiling
+  scheme write them. The tile set is read at each request, so if you export it again while
+  it's served, the next request sees the new tiles. A `.pmtiles`, `.mbtiles` or `.gpkg`
+  file keeps serving its old tiles until the new export is finished. Only PNG, JPEG and WebP
   raster tiles are served, not vector tiles.
 - **Datasets**, rendered when each tile is first asked for. It takes the same
   inputs and display options as `tiles export`: one dataset, repeated
-  `--layer`, or an exchange set. Nothing has to be built in advance, and the
-  tiles are the same as an export of the same datasets would hold.
+  `--layer`, an exchange set, or a folder of datasets. Nothing has to be built
+  in advance, and the tiles are the same as an export of the same datasets
+  would hold.
 
-A folder that isn't an exchange set is read as a tile set, so serve a folder of
-datasets with `--layer` instead.
+A folder is served as a built tile set only when it looks like one: it holds a
+`tiles.json`, or numbered `{z}/{x}` subfolders. Any other folder is searched for
+datasets, as `tiles export` searches it.
 
 When it renders datasets, `tiles serve` renders the block of `--metatile` ×
 `--metatile` tiles around a requested tile and keeps every tile of the block in
 memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
-`--parallel` blocks render at a time.
+`--parallel` blocks render at a time. With `--verbose`, it prints a line for
+each block it renders: the zoom and tiles, the time spent waiting for a render
+slot, preparing the zoom level, drawing and encoding, and how many requests
+waited on it.
 
 While it serves datasets, `tiles serve` checks their files every `--refresh`
 seconds (default 10) and reopens them when they change: when you copy in a new
-edition, add S-101 update files, or add datasets to a served exchange set. It
+edition, add S-101 update files, or add or remove datasets in a served
+exchange set or folder. It
 waits until a change has held for two checks in a row, so a file still being
 copied isn't read half-written. The new data is opened and portrayed while the
 old keeps serving, then tiles are rendered from it with an empty cache. If it
@@ -512,16 +731,27 @@ can't be opened, the old data keeps serving until the files change again.
 `--refresh 0` turns the checks off. A built tile set needs none: it's read at
 each request.
 
-With `--cache-dir`, rendered tiles are also kept in that folder, so they come
+When rendering datasets, the server publishes the data revision: the
+fingerprint the `--cache-dir` tiles are kept under (see below), 32 hexadecimal
+characters that change whenever a dataset or a setting that changes pixels
+does, including when `--refresh` reopens changed datasets. It's in
+`s100.revision` in the TileJSON, in the `updateSequence` attribute of the WMS
+and WMTS capabilities, and in the `S100-Revision` header of `/healthz`. A client
+that keeps its own tile cache, such as ArcGIS Pro for WMTS, can poll it and put
+it in its tile URLs (as an extra query parameter, which the server ignores) to
+fetch fresh tiles after a change. A built tile set has no revision.
+
+With `--cache-dir`, rendered tiles are also kept in that folder (in its
+`served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
 the data and settings: each input file's path, size and write time (S-101
-update files and the whole of an exchange set included), the display and
+update files and the whole of an exchange set or folder included), the display and
 format options, and the `s100` version. Change any of them and new tiles are
 rendered, so a kept tile is never stale. The folder holds up to
 `--cache-dir-mb`, least recently used tiles going first, including those of
 data or settings you no longer serve. `--clear-cache` empties it before
-serving. Only the cache's own fingerprint folders are read or deleted, so other
-files in the folder are left alone, and several servers can share one folder. The zoom levels and the area served are
+serving. Only the `served` subfolder is read or deleted, so other files in the
+folder are left alone, and several servers can share one folder. The zoom levels and the area served are
 worked out as for `tiles export`, and `--min-zoom`, `--max-zoom` and `--bbox`
 narrow them. `--palette` sets the palette of the plain tile URLs; the other
 palettes are served too, under their own URLs.
@@ -529,7 +759,9 @@ palettes are served too, under their own URLs.
 The server has these routes:
 
 - `{z}/{x}/{y}.png` (or `.jpg`, `.webp`), the tiles. Rows are numbered from
-  the north for every container, MBTiles included. Each tile has an `ETag` so
+  the north for every container, MBTiles included. When rendering datasets,
+  `{z}/{x}/{y}@2x.png` is the same tile at 512 pixels, for high-DPI screens;
+  see [High-DPI tiles](#high-dpi-tiles). Each tile has an `ETag` so
   browsers can revalidate it. A tile with nothing on it, or outside the tile
   set, answers `204 No Content`, which web maps show as empty.
 - `tiles.json`, a [TileJSON](https://github.com/mapbox/tilejson-spec) document
@@ -537,6 +769,9 @@ The server has these routes:
 - When rendering datasets, `day/`, `dusk/` and `night/` hold the same two
   routes in that palette, for example `night/{z}/{x}/{y}.png` and
   `night/tiles.json`. Each palette is portrayed the first time it's asked for.
+- When rendering datasets, `settings/{hash}` registers a set of mariner
+  settings, served as the style `{palette}-{hash}`, for example
+  `day-a1b2/{z}/{x}/{y}.png`. See [Mariner settings](#mariner-settings).
 - When rendering time-varying datasets (S-104, S-111), a `t` query parameter
   on either route picks the time step, for example
   `{z}/{x}/{y}.png?t=2026-03-21T07:00Z`. The time is ISO 8601, UTC unless it
@@ -545,9 +780,51 @@ The server has these routes:
   `t` it names the chosen step in `s100.time` and carries it in its tile URL.
   Without `t`, `--time-step` applies. A `t` that isn't a time answers
   `400 Bad Request`; datasets that don't vary with time ignore it.
+- With `--strict-time`, a `t` (or WMS/WMTS `TIME`) more than half a step
+  before a time-varying dataset's first step, after its last or inside a gap
+  in its steps draws nothing for that dataset, instead of its nearest step. A
+  step is the median interval between the dataset's steps (an hour for a single
+  step). A tile on which nothing draws answers `204 No Content`. The TileJSON
+  then sets `s100.strictTime` and, with `t`, lists each time-varying dataset in
+  `s100.datasets` with its file `name`, `spec` and the step it draws in `time`,
+  `null` when it has no data at that time. When the datasets draw other than at
+  their steps nearest the nearest listed step, `s100.time` and the tile URL keep
+  the `t` asked for.
+- When rendering S-124 navigational warnings, a `t` (or WMS `TIME`, or the
+  WMTS `Time` dimension) draws only the warnings in force at that instant, as
+  the viewer's map does at its view time: a warning that has ended, been
+  cancelled or dropped from the latest in-force bulletin, or isn't in force
+  yet, isn't drawn (S-98 §12.12). Without a time every warning draws, as
+  before. Times at which the same warnings are in force share their tiles, and
+  the TileJSON for such a `t` keeps it in `s100.time` and its tile URL. With
+  S-124 alone there are no time steps to list, so the capabilities advertise
+  no `Time` dimension; a client still sends `TIME=` (WMS, WMTS KVP) or `t`.
+- With `--overview`, tiles below the datasets' minimum zoom show where the
+  datasets are instead of answering `204`. See
+  [Overview below the minimum zoom](#overview-below-the-minimum-zoom).
+- When serving a `.pmtiles` archive, `archive.pmtiles`, the archive itself,
+  with HTTP range requests, so a PMTiles client such as MapLibre's
+  `pmtiles://` protocol reads it as it would from a static host. Use it to
+  check an archive before you publish it. Its `ETag` and `Last-Modified`
+  change when the archive is exported again, so a client notices the new file
+  rather than mixing parts of the two. The TileJSON names it in
+  `s100.pmtilesUrl`.
+- `wmts/1.0.0/WMTSCapabilities.xml`, an [OGC WMTS 1.0.0](#wmts) capabilities
+  document, and `wmts`, the same service in the KVP encoding, so GIS desktops
+  such as QGIS and ArcGIS Pro can add the tiles.
+- `wms`, an [OGC WMS 1.3.0](#wms) service: GetCapabilities, GetMap, and,
+  when rendering datasets, GetFeatureInfo and [GetLegendGraphic](#legends).
+- With `--manage-datasets`, a `POST` or `DELETE` of `datasets` adds or
+  removes datasets. See [Add and remove datasets](#add-and-remove-datasets).
+- With `--layers-by product`, or datasets added to a named layer, each
+  layer's tiles and TileJSON under `layers/{layer}/`, as the tiles of every
+  dataset are under the root. See [WMTS layers](#wmts-layers).
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
   menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
+- `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
+  It never has a token. When rendering datasets, its `S100-Revision` header
+  holds the data revision. See [`health`](#health).
 
 Every response allows any origin, so a page served from another port can use
 the tiles.
@@ -569,15 +846,22 @@ area, the tile format and display settings apply too; the output options
 | `--token <token>` | generated for a non-loopback host | An access token that becomes part of every URL. Letters, digits, `-` and `_`. |
 | `--no-token` | off | Serves without a token, even on a non-loopback address. |
 | `--no-viewer` | off | Doesn't serve the preview page. |
+| `--ready-json` | off | When the server is listening, also prints one line of JSON with the bound port and URLs. See [Run under a supervising process](#run-under-a-supervising-process). |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
+| `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
+| `--manage-datasets` | off | When rendering datasets, accepts requests to add and remove datasets while serving. See [Add and remove datasets](#add-and-remove-datasets). |
+| `--overview` | off | When rendering datasets, draws each dataset's coverage outline and name below their minimum zoom instead of nothing, and advertises WMS and WMTS down to zoom 0. See [Overview below the minimum zoom](#overview-below-the-minimum-zoom). |
+| `--layers-by <grouping>` | `none` | When rendering datasets, also serves them as a WMTS layer per group, each with its own time steps and extent: `product`, or `none`. See [WMTS layers](#wmts-layers). |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
+| `--verbose` | off | When rendering datasets, prints a line for each block rendered, with where its time went. |
 
 ```bash
 s100 tiles serve chart.pmtiles
 s100 tiles serve chart.mbtiles --port 9000
+s100 tiles serve chart.gpkg
 s100 tiles serve tiles/ --host 0.0.0.0
 s100 tiles serve enc.000
 s100 tiles serve --layer enc.000 --layer bathy.h5 --palette night
@@ -598,6 +882,507 @@ map.addLayer({ id: "chart", type: "raster", source: "chart" });
 
 In Leaflet, use the tile URL:
 `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
+
+### High-DPI tiles
+
+On a high-DPI display, such as one scaled 2x, a map that stretches 256-pixel
+tiles shows soft text and lines. When it renders datasets, `tiles serve` also
+serves 512-pixel tiles of the same 256-pixel grid: each covers the same area
+at the same zoom as the 256-pixel tile, with symbols, text and line widths
+drawn at twice the pixel density, as
+[`tiles export --tile-size 512`](#tiles-export-options) writes them. They
+aren't 256-pixel tiles enlarged.
+
+Ask for them by adding `@2x` to the row in any tile URL, for example
+`{z}/{x}/{y}@2x.png`, `night/{z}/{x}/{y}@2x.png` or
+`layers/{layer}/{z}/{x}/{y}@2x.png`. So one server answers both 1x and 2x
+clients:
+
+- **TileJSON:** add `scale=2` to a TileJSON URL, as in
+  `tiles.json?scale=2`, for a document whose tile URL has `@2x` and whose
+  `tileSize` is `512`. The TileJSON lists the pixel ratios served in
+  `s100.pixelRatios`, `[1, 2]`.
+- **MapLibre GL JS:** use the `scale=2` TileJSON on a high-DPI screen, and
+  declare `tileSize: 256` for the source either way, so each tile fills 256
+  CSS pixels and the screen's extra pixels show the detail:
+
+  ```js
+  const scale = window.devicePixelRatio > 1 ? "?scale=2" : "";
+  map.addSource("chart", {
+    type: "raster",
+    url: "http://127.0.0.1:8200/tiles.json" + scale,
+    tileSize: 256,
+  });
+  ```
+
+  The preview page does this.
+- **Leaflet:** put `{r}` after the row in the tile URL. Leaflet replaces it
+  with `@2x` on a high-DPI screen and with nothing otherwise:
+  `L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}{r}.png")`. Don't also pass
+  `detectRetina`, which asks for the next zoom's tiles instead.
+
+`--tile-size 512` makes the 512-pixel tiles the plain `{z}/{x}/{y}` tiles, for
+a client that can't ask for `@2x`, such as one that uses WMTS:
+
+```bash
+s100 tiles serve exchange-set/ --tile-size 512 --cache-dir ~/.cache/s100-tiles
+```
+
+- **WMTS:** the `WebMercatorQuad` matrices have 512-pixel tiles at half the
+  scale denominator of each zoom, for every layer and style. They're no
+  longer the well-known `GoogleMapsCompatible` scale set, so a client that
+  matches tiles by scale shows each zoom's tiles at their own scale. WMTS
+  has no `@2x` tiles; its tile size is the `--tile-size`.
+- **XYZ and TileJSON:** the TileJSON says `tileSize: 512`. Declare
+  `tileSize: 256` for the source in the web map, as above. `@2x` serves the
+  same tiles.
+
+WMS GetMap needs neither: it draws at the resolution a client asks for with
+`DPI`, `MAP_RESOLUTION` or `FORMAT_OPTIONS=dpi:N`.
+
+A 512-pixel tile takes four times the pixels, so it takes more of `--cache-mb`
+and `--cache-dir-mb`, and a `--metatile` block of them takes four times the
+memory while it renders. `@2x` tiles are cached apart from the tiles of the
+served size, and tiles cached in `--cache-dir` with one `--tile-size` aren't
+reused with the other. A built tile set has the one size it was built at, so
+`tiles serve` answers `404 Not Found` for its `@2x` tiles.
+
+### Mariner settings
+
+When `tiles serve` renders datasets, one server can serve the chart with
+several sets of mariner settings, as the viewer's Mariner settings and display
+category choose them. The [mariner setting options](#tiles-export-options)
+(`--display-category`, `--safety-contour` and the rest) set those of the plain
+tile URLs; without them the tiles look as they always have.
+
+A client registers another set with a `PUT` of a JSON object to
+`settings/{hash}`. It picks the hash, 1 to 64 letters, digits or `_`, for
+example a hash of the settings. Every value is optional, and one left out
+takes the server's own:
+
+```bash
+curl -X PUT http://127.0.0.1:8200/settings/a1b2 \
+  -H "Content-Type: application/json" \
+  -d '{ "displayCategory": "Standard", "safetyContour": 10, "fourShades": true }'
+```
+
+| Name | Value |
+|---|---|
+| `displayCategory` | `DisplayBase`, `Standard`, `OtherInformation` or `All`. |
+| `safetyContour`, `safetyDepth`, `shallowContour`, `deepContour` | Depths in metres, from 0 to 12000. |
+| `fourShades`, `soundings`, `shallowWaterDangers`, `plainBoundaries`, `simplifiedSymbols`, `fullLightLines`, `ignoreScaleMinimum` | `true` or `false`. |
+| `depthUnit` | `Metres`, `Feet`, `FathomsFeet` or `Fathoms`. |
+
+The set is then served in each palette as the style `{palette}-{hash}`, such
+as `day-a1b2` or `night-a1b2`:
+
+- on the tile URLs, as `day-a1b2/{z}/{x}/{y}.png` and `day-a1b2/tiles.json`,
+- as a [WMTS](#wmts) style, and
+- as a [WMS](#wms) `STYLES` value.
+
+The WMTS and WMS capabilities list the registered styles. Each set is
+portrayed the first time it's asked for, and its tiles are cached like the
+others, under its values, so sets with the same values share them.
+
+The `PUT` answers `201 Created` for a new hash and `200 OK` when the hash is
+already registered with the same values, both with the hash, its values and
+its styles. It answers `409 Conflict` when the hash is registered with other
+values (a hash names one set for the life of the server, so a cached tile is
+never stale), `400 Bad Request` for an unknown name or a value of the wrong
+type, and `507 Insufficient Storage` past 256 sets. A `GET` of
+`settings/{hash}` returns the set, or `404 Not Found`. Registered sets last
+until the server stops, and survive the datasets being reloaded. A style whose
+hash isn't registered answers `404 Not Found` on the tile URLs and an exception
+on WMTS and WMS. A built tile set has no mariner settings; export one per set
+with the same options instead.
+
+### Dataset metadata
+
+When `tiles serve` renders datasets, `datasets` describes each of them, so a
+client needn't open the datasets itself. `tiles.json` points to it in
+`s100.datasetsUrl`. The document lists the datasets served now, so it follows
+a reload; a built tile set has none, and `datasets` answers
+`404 Not Found`.
+
+```json
+{
+  "notForNavigation": true,
+  "datasets": [
+    {
+      "id": "111US00_DBOFS_20260320T18Z_US4DE1BB",
+      "file": "111US00_DBOFS_20260320T18Z_US4DE1BB.h5",
+      "product": "S-111",
+      "edition": "1.0.0",
+      "producer": "US00",
+      "bounds": [-75.5999985, 38.7000008, -75.2999649, 39.0000343],
+      "coverage": { "type": "MultiPolygon", "coordinates": [ ... ] },
+      "coverageSource": "bounds",
+      "times": ["2026-03-20T19:00:00Z", "2026-03-20T20:00:00Z", ...],
+      "issueTime": "2026-03-20T19:22:48Z",
+      "dataDynamicity": { "code": 5, "value": "hydrodynamicForecast", "label": "Forecast" },
+      "notForNavigation": true
+    }
+  ]
+}
+```
+
+| Member | Content |
+|---|---|
+| `id` | The file name without its extension, with `-2`, `-3`, … when names repeat. |
+| `file` | The file name. |
+| `product`, `edition` | The product specification, such as `S-111`, and the edition the dataset declares, or `null`. |
+| `producer` | The producer code from the file name, by the product's naming convention: `US00` from `111US00_…`, `US` from the S-57 cell `US5MA1BO.000`. `null` when the name doesn't follow it. |
+| `bounds` | The dataset's own WGS-84 bounds, `[west, south, east, north]` as in TileJSON, or `null` when unknown. Use these, not the union in `tiles.json`, to zoom to a dataset. |
+| `coverage` | A GeoJSON MultiPolygon in WGS-84: the declared data coverage (S-101 `DataCoverage`, S-57 `M_COVR`) with its holes, or else the bounds. |
+| `coverageSource` | `dataCoverage` or `bounds`, for where `coverage` came from. |
+| `times` | The dataset's time steps in UTC, ascending; empty when it doesn't vary with time. |
+| `issueTime` | When a time-varying dataset was issued (a forecast's run), or `null`. |
+| `dataDynamicity` | How S-104 water levels and S-111 currents were produced: the S-104 `dataDynamicity` code, its name (`observation`, `astronomicalPrediction`, `analysisOrHybrid`, `hydrodynamicHindcast` or `hydrodynamicForecast`) and the viewer's label (`Observed`, `Predicted`, `Analysis`, `Hindcast` or `Forecast`). `null` when the dataset doesn't say. |
+| `layer` | The [WMTS layer](#wmts-layers) the dataset is in besides `s100`, or `null` for none. Present only when the server has such layers. |
+| `notForNavigation` | Always `true`: nothing `tiles serve` serves is for navigation. |
+
+### Overview below the minimum zoom
+
+The chart is drawn from a minimum zoom level that suits the datasets' scale,
+for a harbour cell about zoom 12. Below it the tiles are empty, the WMS
+capabilities give the minimum zoom's scale as `MaxScaleDenominator`, and
+GIS clients hide the layer, so a user who zooms out loses sight of where the
+charts are. With `--overview`, the server draws an overview there instead:
+
+```bash
+s100 tiles serve ./ENC_ROOT --overview
+```
+
+- Below the chart's minimum zoom, XYZ and WMTS tiles and WMS GetMap draw each
+  dataset's coverage, outlined and lightly filled in magenta (dimmer at dusk
+  and night), with its name (the `id` of [Dataset metadata](#dataset-metadata)).
+  The coverage is the one `datasets` gives: the declared data coverage, or the
+  dataset's bounds when it declares none. A dataset too small to outline at a
+  zoom is drawn as a small square. Names are left out where they would overlap
+  one already drawn, the first dataset's first.
+- A tile with no coverage on it still answers `204 No Content`.
+- `tiles.json` gives `minzoom` 0, the chart's minimum zoom in
+  `s100.chartMinzoom` and the overview's zoom range in `s100.overview`. The
+  WMS layer's `MaxScaleDenominator` and the WMTS `TileMatrixSetLimits` reach
+  zoom 0 to match, so clients keep the layer visible.
+- The overview is the same for every set of mariner settings and at every
+  time, and follows the datasets when `--refresh` reloads them or
+  `--manage-datasets` changes them.
+- The [legends](#legends) describe the chart only; they have no row for the
+  overview outline.
+- With `--layers-by`, each [WMTS layer](#wmts-layers) has its own overview
+  below its own minimum zoom, of the datasets in that layer only, on its
+  `layers/{layer}/` tiles and its WMTS layer; its TileJSON and
+  `TileMatrixSetLimits` reach zoom 0 in the same way.
+
+It is off by default, because it changes what existing clients get below the
+minimum zoom. Without it, a client that wants footprints can draw the
+coverage polygons from `datasets` itself, as a separate layer, and show the
+chart from `s100.chartMinzoom` (or the `minzoom` without `--overview`) up.
+It applies only when rendering datasets; a built tile set has no coverage to
+draw.
+
+### Run under a supervising process
+
+A program that starts `tiles serve` itself, such as a GIS add-in, can pass
+`--port 0` to get a free port and `--ready-json` to learn which one. When the
+server is listening, `tiles serve` then prints one line of JSON on standard
+output, before the usual start-up text:
+
+```json
+{"event":"ready","host":"127.0.0.1","port":49731,"token":null,"baseUrl":"http://127.0.0.1:49731/","tiles":"http://127.0.0.1:49731/{z}/{x}/{y}.png","tilesHighDpi":"http://127.0.0.1:49731/{z}/{x}/{y}@2x.png","tileJson":"http://127.0.0.1:49731/tiles.json","wmts":"http://127.0.0.1:49731/wmts/1.0.0/WMTSCapabilities.xml","wms":"http://127.0.0.1:49731/wms","healthz":"http://127.0.0.1:49731/healthz","preview":"http://127.0.0.1:49731/"}
+```
+
+Read standard output until a line starts with `{` and parse it. Lines printed
+while datasets are portrayed can come before it. The members are:
+
+| Member | Content |
+|---|---|
+| `event` | Always `ready`. |
+| `host` | The address to connect to: the `--host` address, or `127.0.0.1` (`::1`) when listening on `0.0.0.0` (`::`). |
+| `port` | The bound port. |
+| `token` | The access token, or `null` when there's none. |
+| `baseUrl` | The base URL, with the token. |
+| `tiles` | The XYZ tile URL template. |
+| `tilesHighDpi` | The URL template of the 512-pixel [`@2x` tiles](#high-dpi-tiles), or `null` when serving a built tile set. |
+| `tileJson`, `wmts`, `wms` | The TileJSON, WMTS capabilities and WMS URLs. |
+| `pmtiles` | The URL of the served PMTiles archive's file, or `null` when not serving a `.pmtiles` archive. |
+| `healthz` | The [health check](#health) URL, which has no token. |
+| `preview` | The preview page URL, or `null` with `--no-viewer`. |
+
+```bash
+s100 tiles serve exchange-set/ --port 0 --ready-json
+```
+
+### Add and remove datasets
+
+With `--manage-datasets`, a client can change the datasets `tiles serve`
+renders without restarting it, with a `POST` or `DELETE` of `datasets`.
+Like every other route it lives under the token, if there is one. Without
+the option the datasets can't be changed.
+
+A `GET` of `datasets` describes the datasets served, with or without the
+option; see [Dataset metadata](#dataset-metadata).
+
+- `POST datasets` with `{"paths": ["…"]}` (or `{"path": "…"}`) adds
+  datasets. The paths are files on the server's computer, relative to the
+  folder it was started in unless absolute. Those already served are left as
+  they are. With `"layer": "…"`, every dataset named, added or already
+  served, is put in that [WMTS layer](#wmts-layers), whatever `--layers-by`
+  says. A layer is named with 1 to 64 letters, digits, `_`, `-` and `.`,
+  starting with a letter or digit, and can't be `s100`.
+- `DELETE datasets` with the same body removes datasets. Any served dataset
+  can be removed, including one of those it started with, but at least one
+  must remain.
+
+The body must be sent as `application/json`. Each request answers with the
+datasets then served, in drawing order, each with its `path`, file `name`
+and `spec`, and its `layer` when there are layers:
+
+```bash
+curl -X POST http://127.0.0.1:8200/datasets \
+  -H "Content-Type: application/json" \
+  -d '{ "paths": ["/charts/US5MA1BO.000"] }'
+```
+
+```json
+{
+  "datasets": [
+    { "path": "/charts/US4MA1BO.000", "name": "US4MA1BO.000", "spec": "S-57" },
+    { "path": "/charts/US5MA1BO.000", "name": "US5MA1BO.000", "spec": "S-57" }
+  ]
+}
+```
+
+A change opens and portrays the new set of datasets while the old one keeps
+serving, and the request returns once the new set serves. The TileJSON, WMTS
+and WMS documents and the [dataset metadata](#dataset-metadata) then describe
+it: its area, zoom levels and time steps. Its
+data revision (`s100.revision` in the TileJSON, `updateSequence` in the
+capabilities, the `S100-Revision` header on `/healthz`) changes too, and is
+the same again when the set is. Changes are made one at a time. A request answers `400 Bad Request`
+for a malformed body, a path that isn't a file or a file that isn't a dataset,
+`404 Not Found` for removing a dataset that isn't served, `409 Conflict` for
+removing every dataset, `415 Unsupported Media Type` for a body that isn't
+JSON, and `422 Unprocessable Entity` when the new set can't be opened; the old
+set then keeps serving. Each error response has an `error` member saying why.
+
+Each tile is cached under the datasets that reach it (those whose extent comes
+within a tile of its block), not under every dataset served, in memory and in
+`--cache-dir`. Adding a cell therefore renders only the tiles it reaches, and
+the others are served from the cache. The latitude the zoom levels' scales are
+measured at is kept from the datasets the server started with, so adding a
+dataset elsewhere doesn't change how the others draw; it can differ slightly
+from a server started with the new set. A dataset whose extent isn't known
+reaches every tile. `--refresh` still reopens the datasets when their files
+change, the added ones included.
+
+Changes last until the server stops. To serve the same set again after a
+restart, pass it on the command line. A removed dataset leaves its layer; one
+added again without `layer` goes back to the layer `--layers-by` gives it.
+
+### WMTS
+
+`tiles serve` is also an OGC WMTS 1.0.0 service, for GIS desktops and
+libraries that add tiles from a capabilities document. Its URL is printed at
+startup:
+
+```text
+http://127.0.0.1:8200/wmts/1.0.0/WMTSCapabilities.xml
+```
+
+- **QGIS:** choose **Layer > Add Layer > Add WMS/WMTS Layer**, add a
+  connection with the capabilities URL, connect, and add the `s100` layer.
+- **ArcGIS Pro:** choose **Insert > Connections > Server > New WMTS Server**
+  and enter the capabilities URL.
+- **GDAL:** open `WMTS:http://127.0.0.1:8200/wmts/1.0.0/WMTSCapabilities.xml`.
+
+The service has one layer, `s100`, on the `WebMercatorQuad` tile matrix set
+in EPSG:3857. The tile matrices are numbered by zoom level, from 0 to the
+maximum zoom, so a WMTS tile is the XYZ tile of the same zoom, column and row.
+With `--tile-size 512`, the matrices have 512-pixel tiles (see
+[High-DPI tiles](#high-dpi-tiles)). Below the minimum zoom the tiles are empty, as on the XYZ URLs, so zoom in to
+see the chart; with `--overview` they show the datasets' coverage and names
+(see [Overview below the minimum zoom](#overview-below-the-minimum-zoom)). When rendering datasets, each palette is a WMTS style and the
+`--palette` one is the default, and each registered set of
+[mariner settings](#mariner-settings) adds a style per palette; a built tile
+set has one style, `default`.
+For time-varying datasets (S-104, S-111), a `Time` dimension lists the time
+steps and defaults to `--time-step`.
+
+Tiles are served in both WMTS encodings:
+
+- **KVP:** `wmts?SERVICE=WMTS&REQUEST=GetTile&LAYER=s100&STYLE=night&TILEMATRIXSET=WebMercatorQuad&TILEMATRIX=13&TILEROW=2750&TILECOL=4066`,
+  with `TIME=` for a time step.
+- **RESTful:** `wmts/1.0.0/s100/{Style}/WebMercatorQuad/{TileMatrix}/{TileRow}/{TileCol}.png`,
+  with a `{Time}` segment after the style for time-varying datasets.
+
+When rendering datasets, each style has a `LegendURL`: the WMS
+[GetLegendGraphic](#legends) image of its key.
+
+A request the service can't answer gets an OWS exception report that names
+the parameter at fault. The service has no GetFeatureInfo; use [WMS](#wms)
+to identify features.
+
+#### WMTS layers
+
+When it renders datasets, `tiles serve` can also serve them as several WMTS
+layers, one per group of datasets, so a GIS client can add, hide and step
+through each on its own, for example the chart, water levels and currents,
+from one server. The `s100` layer of every dataset stays as it is, so clients
+that use it see no change.
+
+- `--layers-by product` puts each dataset in the layer of its product:
+  `chart` for S-57, S-101 and S-102, and the product without its hyphen for
+  the rest (`S104`, `S111`, `S124`, …).
+- With [`--manage-datasets`](#add-and-remove-datasets), a client puts datasets
+  in a layer it names by adding them with `"layer": "…"`. That works with or
+  without `--layers-by`, and wins over it.
+
+Without `--layers-by` and without layers named by a client, the capabilities
+have the `s100` layer only, as before. The groups aren't the default because
+each layer is a scene of its own to compose (the vector datasets' portrayals
+are shared) and because, with one product, its layer would repeat `s100`.
+
+Each layer draws only its datasets, in the same styles, zoom range and tile
+matrix set as `s100`, and its styles link the same [legends](#legends),
+of every dataset. In the capabilities it has its own extent, the union of
+its datasets' bounds, and its own `Time` dimension, listing only its
+datasets' time steps, or none when they don't vary with time. Its tiles are
+at `wmts/1.0.0/{layer}/…` and `LAYER={layer}` like `s100`'s. A time snaps to
+the nearest of the layer's own steps. For XYZ clients, `tiles.json` lists the
+layers in `s100.layers`, each with the URL of its own TileJSON,
+`layers/{layer}/tiles.json` (or `layers/{layer}/{palette}/tiles.json`), whose
+tiles are `layers/{layer}/{z}/{x}/{y}.png`; it names the layer in `s100.layer`.
+The [dataset metadata](#dataset-metadata) gives each dataset's `layer`.
+
+```bash
+s100 tiles serve --layer enc.000 --layer water-levels.h5 --layer currents.h5 --layers-by product
+```
+
+[WMS](#wms) still has the one layer, `s100`, of every dataset.
+
+### WMS
+
+`tiles serve` is also an OGC WMS 1.3.0 service, for clients that ask for one
+image of the area they show, and to identify what's at a point. Its URL is
+printed at startup:
+
+```text
+http://127.0.0.1:8200/wms
+```
+
+- **QGIS:** choose **Layer > Add Layer > Add WMS/WMTS Layer**, add a
+  connection with the URL, connect, and add the `s100` layer. With the
+  **Identify Features** tool, click the chart to see what's there.
+- **ArcGIS Pro:** choose **Insert > Connections > Server > New WMS Server**
+  and enter the URL.
+- **GDAL:** open `WMS:http://127.0.0.1:8200/wms?SERVICE=WMS&REQUEST=GetCapabilities`.
+
+The service has one layer, `s100`, in EPSG:3857, EPSG:4326 and CRS:84. As for
+WMTS, each palette is a style, the `--palette` one first and the default,
+each registered set of [mariner settings](#mariner-settings) adds a style per
+palette, and S-104 and S-111 time steps are a `time` dimension.
+
+**GetMap** draws its image from the same tiles the XYZ URLs serve, stitched
+and resampled to the requested area and size, at the zoom level a WMTS client
+shows at the same scale, so WMS and WMTS show the same features (SCAMIN) at
+the same scale:
+
+- WMTS clients read each tile matrix's `ScaleDenominator` at OGC's 0.28 mm
+  pixel, which gives its resolution in metres per pixel (zoom 14 is
+  1:34,124, or 9.55 m a pixel; zoom 15 is 1:17,062, or 4.78 m). ArcGIS Pro
+  shows the same levels as 1:36,112 and 1:18,056, at its 96 DPI pixel.
+- A client draws the finest tile matrix whose resolution is no finer than its
+  view's, and enlarges its tiles until it reaches the next one. ArcGIS Pro at
+  1:23,374 draws zoom 14.
+- GetMap does the same with the request's resolution, the box's width in
+  Web Mercator metres over its width in pixels: the finest zoom level no
+  finer than that, so 1:23,374 draws zoom 14 too. A request less than 1%
+  coarser than a level's resolution, such as one at its rounded scale, draws
+  that level.
+
+Symbols and text are therefore between 1 and 2 times their portrayed size,
+as in a WMTS client. A request coarser than the minimum zoom draws nothing,
+and the capabilities give the minimum zoom's scale as `MaxScaleDenominator`,
+so clients hide the layer there; with `--overview` it draws the datasets'
+coverage and names and the layer has no practical scale limit (see
+[Overview below the minimum zoom](#overview-below-the-minimum-zoom)). It draws PNG or JPEG images up to 4096 pixels on
+a side; set `TRANSPARENT=TRUE` for a PNG to overlay other layers.
+
+**Printing.** A client exporting a layout at a resolution higher than the
+screen's, such as ArcGIS Pro or QGIS, asks for more pixels for the same view
+and says how many dots per inch they're for, with `DPI`, `MAP_RESOLUTION` or
+`FORMAT_OPTIONS=dpi:N` (the first of these given counts; 24 to 1200, 96 by
+default). GetMap then draws the 96 DPI map of the same view, sharper: the zoom
+level, and so which features show at that scale (SCAMIN), comes from the
+display scale, and symbols and text are scaled by DPI / 96, so they print at
+the size they have on screen. When the server renders from datasets, it draws
+the requested area directly at the print resolution rather than from the
+tiles; a built tile set's tiles are resampled, so they print at the right size
+but no sharper. Above 96 DPI, images may be up to 4096 × DPI / 96 pixels on a
+side (at most 16,384) and 67 million pixels in all; ask for a larger print in
+parts. Without these parameters GetMap is unchanged.
+
+**GetFeatureInfo** answers from the datasets, as
+[`identify`](#identify) does: the vector features at the clicked pixel, with
+their attributes, and the coverage values there (S-102 depths, S-104 water
+levels, S-111 currents, weather grids). Point and curve features within 5
+pixels of the click (at 96 DPI; scaled with `DPI`) are matched. `FEATURE_COUNT` limits the features (1 by
+default, as WMS defines it), and `TIME` picks the time step sampled. The
+answer is in one of these formats (`INFO_FORMAT`):
+
+| Format | Content |
+|---|---|
+| `text/html` | A table per feature with its attributes, and the coverage values. |
+| `application/json`, `application/geo+json` | A GeoJSON FeatureCollection: a feature per vector feature and per coverage value, each a point at the clicked position, with what `identify --format json --attributes` reports as its properties. |
+| `text/plain` | The same as `text/html`, as text. |
+
+A built tile set has no datasets behind it, so its layer isn't queryable.
+
+**GetLegendGraphic** draws the key of a style; see [Legends](#legends).
+
+Requests in WMS 1.1.1 are answered too: their `SRS`, `X` and `Y` parameters,
+and EPSG:4326 boxes in longitude, latitude order. In 1.3.0, EPSG:4326 boxes
+are latitude first and CRS:84 boxes longitude first. A request the service
+can't answer gets a WMS service exception report.
+
+### Legends
+
+When rendering datasets, `tiles serve` draws the key of each style as one
+PNG image, for the legend GIS clients show next to the layer (ArcGIS Pro's
+Contents pane, QGIS's layer tree). The rows are the ones the viewer's Legend
+tab shows, from the same portrayal: a section per product (S-102 depth
+shades and safety contour, S-104 water levels, S-111 speed bands, S-124
+warnings, weather fields and so on) with its caption, and its group titles
+when it has more than one. Each style draws its rows in its palette, on a
+light sheet by day and a dark one at dusk and night, and with its
+[mariner settings](#mariner-settings), so four shades or another safety
+contour change the S-102 rows. A catalogue product with no legend of its own,
+such as S-101, has no rows: the viewer lists the symbols drawn in its view,
+and a server has no view.
+
+The WMS capabilities give each style a `LegendURL` with the image's size, and
+list the `sld:GetLegendGraphic` operation; the WMTS capabilities give each
+style a `LegendURL` to the same image. The request is:
+
+```text
+wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetLegendGraphic&LAYER=s100&STYLE=night&FORMAT=image/png
+```
+
+| Parameter | Meaning |
+|---|---|
+| `LAYER` | `s100`. Required. |
+| `STYLE` | A style of the capabilities: a palette, or `{palette}-{hash}` of a registered settings set. The default style when left out. |
+| `FORMAT` | `image/png`, the only format and the default. |
+| `WIDTH`, `HEIGHT` | The size of each row's glyph in pixels, 1 to 256, as GeoServer reads them. 28 × 14 by default. |
+| `DPI`, `MAP_RESOLUTION`, `FORMAT_OPTIONS=dpi:N` | The display resolution, as for GetMap: text and glyphs scale by DPI / 96. |
+
+`SLD_VERSION` is accepted and ignored. The rows are those of the default time
+step; they don't change with time. The size in the capabilities is the
+default image's; for a registered set whose legend hasn't been drawn yet, it
+is the default style's until it has. A built tile set has no legend, and
+GetLegendGraphic answers a service exception.
 
 The server runs until you press Ctrl+C or it receives SIGTERM.
 
@@ -669,6 +1454,7 @@ s100 info al092022_5day_020.zip
 s100 identify <dataset> --lat <latitude> --lon <longitude> [options]
 s100 identify --layer <dataset> [--layer <dataset> ...] --lat <latitude> --lon <longitude> [options]
 s100 identify <exchange-set> --lat <latitude> --lon <longitude> [options]
+s100 identify [<dataset>] --source <source> --lat <latitude> --lon <longitude> [options]
 ```
 
 `identify` reports the vector features at a point and samples the coverage
@@ -685,8 +1471,17 @@ reported as features of type `CapWarningArea`; `--attributes` adds their
 event, severity, times and description. When the result includes weather
 data, a not-for-navigation notice is printed first.
 
-`identify` uses the same code as the MCP `identify_features` and
-`sample_coverage` tools, so the results match.
+`identify` uses the same code as the MCP `identify_features` and `sample`
+tools, so the results match.
+
+`--source` also picks from a live data source, such as NDBC observations or
+AIS targets, with or without datasets. Each source is started for the area
+around the point and given `--source-timeout` for its first data; one with
+nothing by then is left out with a warning on standard error rather than
+failing the command, unless it was the only input. An unknown source or option
+exits with code 2. A source that needs a key reads it from its environment
+variable, such as `ENCDOTNET_AIS_STREAM_KEY`: a key is never accepted as a
+`--source` option. [`sources`](#sources) lists them.
 
 | Option | Default | Description |
 |---|---|---|
@@ -696,6 +1491,8 @@ data, a not-for-navigation notice is printed first.
 | `--from`, `--exchange-set <path>` | none | Picks across every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--radius <metres>` | `50` | Search distance for point and curve features, from 0 to 100,000. Area features must contain the point, so they ignore it. |
+| `--source <source>` | none | Also picks from a live data source. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options, such as `nmea.weather:Input=udp:10110`. |
+| `--source-timeout <seconds>` | `30` | How long to wait for each `--source`'s first data. |
 | `--spec <spec>` | all | Reports only this product specification or format, for example `S-124` or `GRIB2`. |
 | `--time <iso8601>` | first step | A UTC time for S-104, S-111, GRIB2 and NetCDF coverages. The nearest time step is sampled. Ignored for S-102. |
 | `--max-results <n>` | `20` | Maximum features to report, from 1 to 200. |
@@ -709,6 +1506,7 @@ s100 identify --layer enc.000 --layer bathy.h5 --lat 50.1 --lon -1.4
 s100 identify --from exchange-set.zip --lat 50.1 --lon -1.4 --format json
 s100 identify chart.000 --lat 50.1 --lon -1.4 --attributes
 s100 identify --layer gfswave.grib2 --layer alerts.atom --lat 38.5 --lon -74.5 --time 2026-10-25T03:00Z
+s100 identify chart.000 --source ndbc.realtime --lat 42.35 --lon -70.65
 ```
 
 The JSON output is an object with `point`, `totalMatched`, `truncated`,
@@ -824,7 +1622,13 @@ Other options:
 |---|---|---|
 | `--safety-contour <metres>` | `30` | Safety contour, as the mariner setting. |
 | `--safety-depth <metres>` | `30` | Safety depth, for charted dangers and soundings. |
-| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window. Needs a draft. |
+| `--max-wind <knots>` | the file's | Wind limit for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are Check findings. Replaces an RTZ route's `vesselMaxWind`. |
+| `--max-wave <metres>` | the file's | Significant wave height limit for the weather check. Replaces an RTZ route's `vesselMaxWave`. |
+| `--cyclone-radius <knots>` | `34` | Tropical cyclones (loaded NHC advisories): the outermost wind radius tested, 34, 50 or 64 kt. The cone is always tested. |
+| `--cyclone-must-review <knots>` | `50` | The weakest radius whose findings are Must review: 64, 50, 34 or `never`. Weaker radii and the cone are Check. |
+| `--no-cyclone-cpa` | off | Doesn't report the route's closest approach to each storm. |
+| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit). |
+| `--tide-predictions <file>` | off | A tide station list (the `tide-stations` file, `.json` or `.json.gz`) to predict water level from where no S-104 covers. A station reaches 10 km through the loaded charts' water. Predictions are the astronomical tide only, not a forecast: the text output names the stations and says so. |
 | `--only <specs>` | all | Exchange set or folder only. Loads only these product specifications, comma-separated. |
 | `--fail-on <level>` | `must-review` | When to exit with code `7`: `must-review`, `check` or `never`. See [Exit codes for CI](#exit-codes-for-ci). |
 | `--format <format>` | `text` | `text` or `json`. |
@@ -838,10 +1642,15 @@ s100 route check route.rtz exchange-set/ --safety-contour 10 --safety-depth 10
 s100 route check route.gml enc.000 bathy.h5 tides.h5 warnings.gml --draft 7 --required-ukc 1
 s100 route check route.rtz exchange-set.zip --corridor 100 --fail-on check
 s100 route check route.gml exchange-set/ --departure 2026-03-01T06:00Z --speed 8 --window --format json
+s100 route check route.rtz enc.000 gfs.t06z.pgrb2.0p25 gfswave.t06z.grib2 --max-wind 25 --max-wave 3
+s100 route check route.rtz enc.000 al142026_5day_017.zip --cyclone-radius 50 --cyclone-must-review 64
+s100 route check route.rtz enc/ bathy.h5 --draft 7 --tide-predictions tide-stations.json.gz
 ```
 
 The text output gives the verdict, the checks that didn't run in full, the
-findings by group, then the clearance verdict and its minimum. The JSON output
+findings by group, then the clearance verdict and its minimum, and the weather
+verdict with the highest wind and waves and, for each tropical cyclone near
+the route, the strongest radius it meets and its closest approach. The JSON output
 is an object with:
 
 - `route`: the `file`, `format` (`rtz` or `s421`), `version`, `routeId`
@@ -869,6 +1678,289 @@ and with code `7` when it does:
 A route file that can't be read, or datasets that can't be loaded, exit with
 code `2`.
 
+## tides stations
+
+```text
+s100 tides stations --near <lat,lon> [options]
+```
+
+`tides stations` lists the tide stations within a radius of a point, nearest
+first, from the offline station catalogue. Each station has its id, name and
+kind: **harmonic** stations are predicted from their own harmonic
+constituents, and **subordinate** stations from a reference station with time
+and height differences. The table shows a harmonic station's datums as heights
+above MLLW. A line under the table gives the catalogue's provider and age, and
+says when it's over 12 months old.
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | required | The point, latitude first, in decimal degrees: `--near 47.6,-122.34`. |
+| `--radius <distance>` | `50` (km) | How far to look: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
+| `--limit <n>` | `10` | The most stations to list, 1 to 500. |
+| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_tide_stations` MCP result, with each station's datums, predictable datums and a subordinate station's offsets. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file (`.json`, or `.json.gz` for gzip). |
+
+```bash
+s100 tides stations --near 47.6,-122.34
+s100 tides stations --near 47.6,-122.34 --radius 20nm --limit 5 --format json
+```
+
+```text
+╭─────────┬───────────────┬─────────────┬───────────┬──────────┬───────────────╮
+│ Id      │ Name          │ Kind        │ Reference │ Distance │ Datums (m     │
+│         │               │             │           │          │ above MLLW)   │
+├─────────┼───────────────┼─────────────┼───────────┼──────────┼───────────────┤
+│ 9447130 │ SEATTLE       │ harmonic    │ —         │   0.3 km │ MHHW 3.46 MSL │
+│         │ (Madison      │             │           │          │ 2.02 LAT      │
+│         │ St.), Elliott │             │           │          │ -1.31         │
+│         │ Bay           │             │           │          │               │
+│ 9446486 │ Tacoma        │ subordinate │ 9447130   │  39.9 km │ MLLW only     │
+│         │ Narrows       │             │           │          │               │
+│         │ Bridge        │             │           │          │               │
+╰─────────┴───────────────┴─────────────┴───────────┴──────────┴───────────────╯
+Stations: NOAA CO-OPS, retrieved 2026-11-11 (0 days ago), 3502 stations.
+```
+
+## tides predict
+
+```text
+s100 tides predict <station> [options]
+s100 tides predict --near <lat,lon> [options]
+```
+
+`tides predict` predicts the astronomical tide at a station from the offline
+catalogue. Name the station by id (`9447130`) or name (`Seattle`; a unique
+part of a name will do), or use `--near` for the nearest station within
+`--radius` that can be predicted on the datum. It prints heights in metres
+above the datum at each step, or with `--highs-lows` the high and low waters,
+with a note that the values are predicted.
+
+A prediction is astronomical: it leaves out wind, pressure and river flow,
+which can move the water 0.5 m or more. It isn't a forecast, isn't S-104, and
+isn't for navigation. The engine is
+[`EncDotNet.S100.Tides`](../src/EncDotNet.S100.Tides/README.md) and the
+catalogue is
+[`EncDotNet.S100.Tides.Stations`](../src/EncDotNet.S100.Tides.Stations/README.md).
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | none | Predict at the nearest station to this point instead of a named one. |
+| `--radius <distance>` | `10` (km) | With `--near`, how far away the station may be: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
+| `--from <time>` | now, rounded down to the step | The first time: ISO 8601 (`2026-11-18T12:00`, `2026-11-18T20:00Z`) or a date. Without an offset, it's in this computer's time zone. |
+| `--to <time>` | 24 hours after `--from` | The last time, like `--from`. At most 366 days after it. |
+| `--step <step>` | `30` (minutes) | The time between heights: minutes, or with a unit (`10m`, `1h`, `90s`). |
+| `--highs-lows` | off | Lists the high and low waters instead of heights at each step. |
+| `--datum <datum>` | `MLLW` | `MLLW`, `MLW`, `MSL`, `MHW`, `MHHW`, `LAT` or `HAT`. A harmonic station can use any datum NOAA gives it; a subordinate station is MLLW only. |
+| `--utc` | off | Reads and prints times in UTC rather than this computer's time zone. |
+| `--format <format>` | `table` | `table`, `csv`, `json` or `s104`. JSON is the `predict_tide` MCP result, with times in UTC. |
+| `-o`, `--output <file>` | `104ZZ01<station>.h5` | With `--format s104`, the file to write. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file. |
+
+```bash
+s100 tides predict 9447130
+s100 tides predict Seattle --from 2026-11-18T12:00 --to 2026-11-18T18:00 --step 10m
+s100 tides predict 9447130 --highs-lows --from 2026-11-18 --to 2026-11-25
+s100 tides predict --near 47.27,-122.55 --format csv
+```
+
+```text
+SEATTLE (Madison St.), Elliott Bay 9447130, harmonic, predicted on MLLW
+╭─────────────────────────┬──────────┬──────────────────────────╮
+│ Time                    │ High/low │ Predicted (m above MLLW) │
+├─────────────────────────┼──────────┼──────────────────────────┤
+│ 2026-11-18 04:35 -08:00 │ Low      │                     0.80 │
+│ 2026-11-18 11:55 -08:00 │ High     │                     3.42 │
+│ 2026-11-18 18:55 -08:00 │ Low      │                     1.41 │
+╰─────────────────────────┴──────────┴──────────────────────────╯
+Astronomical tide only, not a forecast. Weather and river flow can move the
+water 0.5 m or more. Not for navigation.
+Stations: NOAA CO-OPS, retrieved 2026-11-11 (7 days ago).
+```
+
+CSV has a header row (`time,predicted_m_above_mllw`, or
+`time,kind,predicted_m_above_mllw` with `--highs-lows`) and ISO 8601 times
+with their offset. The station and the note go to standard error.
+
+### Write an S-104 dataset
+
+`--format s104` writes the series as an S-104 Edition 2.0.0 dataset with one
+station (data coding format 8), which SoundCharts and the other `s100`
+commands open like any S-104 file:
+
+```bash
+s100 tides predict 9447130 --from 2026-11-18 --to 2026-11-25 --step 6m --format s104 -o seattle.h5
+```
+
+The dataset says it's a prediction: its producer code is `ZZ01`, which no
+real producer has, its data dynamicity is astronomical prediction, and its
+method text names the station and says it's not an official product. The
+step must be a whole number of seconds up to 65,535 (18 h 12 min), and the
+datum must have an S-100 code (all the datums above do). The file is written
+with PureHDF, whose writer doesn't work in a NativeAOT build; the `s100`
+release builds aren't NativeAOT.
+
+## tides currents stations
+
+```text
+s100 tides currents stations --near <lat,lon> [options]
+```
+
+`tides currents stations` lists the tidal current stations within a radius of
+a point, nearest first, from the offline station catalogue. NOAA lists each
+depth bin at a station as its own station, such as `PUG1701_33`, so one place
+can appear several times. Each station has its id, name, kind (**harmonic**,
+or **subordinate** with a reference station), depth below the surface, and
+the directions the flood and ebb set toward, in degrees true. A line under
+the table gives the catalogue's provider and age.
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | required | The point, latitude first, in decimal degrees: `--near 48.406,-122.643`. |
+| `--radius <distance>` | `50` (km) | How far to look: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
+| `--limit <n>` | `10` | The most stations to list, 1 to 500. Each depth bin counts as one. |
+| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_current_stations` MCP result, with a subordinate station's time differences and speed ratios. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file (`.json`, or `.json.gz` for gzip). |
+
+```bash
+s100 tides currents stations --near 48.406,-122.643
+s100 tides currents stations --near 37.82,-122.46 --radius 5nm --format json
+```
+
+A catalogue downloaded before current stations were added lists none: run
+[`tides update`](#tides-update) again.
+
+## tides currents predict
+
+```text
+s100 tides currents predict <station> [options]
+s100 tides currents predict --near <lat,lon> [options]
+```
+
+`tides currents predict` predicts the astronomical tidal current at a current
+station from the offline catalogue. Name the station by id (`PUG1701_33`),
+by NOAA's id without its depth bin (`PUG1701`) or by name (`Deception Pass`);
+the last two take the shallowest bin. Or use `--near` for the nearest station
+within `--radius`. It prints the speed in knots, the direction the current
+sets toward and whether it floods or ebbs at each step, or with `--events`
+the slack waters and the maximum and minimum floods and ebbs.
+
+A prediction is astronomical: wind and river flow change real currents, and
+the strongest stream in a pass can be away from the station. It isn't a
+forecast, isn't S-111, and isn't for navigation. The engine is
+[`EncDotNet.S100.Tides`](../src/EncDotNet.S100.Tides/README.md#predict-tidal-currents).
+
+| Option | Default | Description |
+|---|---|---|
+| `--near <lat,lon>` | none | Predict at the nearest station to this point instead of a named one. |
+| `--radius <distance>` | `10` (km) | With `--near`, how far away the station may be. |
+| `--from <time>` | now, rounded down to the step | The first time: ISO 8601 or a date. Without an offset, it's in this computer's time zone. |
+| `--to <time>` | 24 hours after `--from` | The last time, like `--from`. At most 366 days after it. |
+| `--step <step>` | `30` (minutes) | The time between values: minutes, or with a unit (`10m`, `1h`, `90s`). |
+| `--events` | off | Lists the slacks and maximum and minimum floods and ebbs instead of values at each step. |
+| `--utc` | off | Reads and prints times in UTC rather than this computer's time zone. |
+| `--format <format>` | `table` | `table`, `csv`, `json` or `s111`. JSON is the `predict_current` MCP result, with times in UTC. |
+| `-o`, `--output <file>` | `111ZZ01<station>.h5` | With `--format s111`, the file to write. |
+| `--catalogue <file>` | the offline cache | A tide-stations JSON file. |
+
+```bash
+s100 tides currents predict PUG1701_33
+s100 tides currents predict "Deception Pass" --events --from 2026-11-18 --to 2026-11-19
+s100 tides currents predict --near 37.82,-122.46 --step 10m --format csv
+```
+
+```text
+Deception Pass (Narrows) PUG1701_33, harmonic, 5.5 m below the surface, flood
+108°, ebb 277°
+╭─────────────────────────┬─────────────────────┬────────────────┬───────────╮
+│ Time                    │ Event               │ Predicted (kn) │ Direction │
+├─────────────────────────┼─────────────────────┼────────────────┼───────────┤
+│ 2026-11-18 09:44 -08:00 │ Slack, ebb begins   │            0.0 │         — │
+│ 2026-11-18 12:42 -08:00 │ Max ebb             │            5.5 │      277° │
+│ 2026-11-18 17:00 -08:00 │ Slack, flood begins │            0.0 │         — │
+╰─────────────────────────┴─────────────────────┴────────────────┴───────────╯
+Astronomical tidal current only, not a forecast. Wind and river flow change real
+currents, and the strongest stream in a pass can be away from the station. Not
+for navigation.
+Stations: NOAA CO-OPS, retrieved 2026-11-11 (7 days ago).
+```
+
+CSV has a header row (`time,predicted_speed_kn,direction_deg_true,phase`, or
+`time,event,predicted_speed_kn,direction_deg_true` with `--events`) and ISO
+8601 times with their offset. At slack the direction is empty. The station and
+the note go to standard error. A rotary station gives its direction at each
+maximum and minimum as well.
+
+### Write an S-111 dataset
+
+`--format s111` writes the series as an S-111 Edition 2.0.0 dataset with one
+station (data coding format 8), which SoundCharts and the other `s100`
+commands open like any S-111 file:
+
+```bash
+s100 tides currents predict PUG1701_33 --from 2026-11-18 --to 2026-11-25 --step 10m --format s111 -o deception-pass.h5
+```
+
+The dataset says it's a prediction: its producer code is `ZZ01`, which no
+real producer has, its type of current data is astronomical prediction, and
+its method text names the station and says it's not an official product. The
+station's depth is written as `surfaceCurrentDepth`. The step must be a whole
+number of seconds up to 65,535 (18 h 12 min). As for S-104, the file is
+written with PureHDF, which doesn't work in a NativeAOT build.
+
+## tides update
+
+```text
+s100 tides update [--check] [--catalogue <file>]
+```
+
+`tides update` downloads NOAA CO-OPS's tide and tidal current stations, with
+their harmonic constituents, datums and subordinate-station offsets, into the
+offline catalogue. It reads about 2,100 pages from NOAA's metadata API at a
+pace the API accepts, so it takes about 10 minutes. The other `tides`
+commands and `s100 mcp serve` read the catalogue with no network.
+SoundCharts reads its own station list; pass its path with `--catalogue` to
+fill it.
+
+The catalogue is `noaa-tide-stations.json.gz` in an `EncDotNet.S100/Tides`
+folder in your local application data:
+
+| Platform | Folder |
+|---|---|
+| Windows | `%LOCALAPPDATA%\EncDotNet.S100\Tides` |
+| macOS | `~/Library/Application Support/EncDotNet.S100/Tides` |
+| Linux | `~/.local/share/EncDotNet.S100/Tides` |
+
+`--catalogue` keeps it somewhere else. The file format is documented in the
+[station catalogue README](../src/EncDotNet.S100.Tides.Stations/README.md#bring-your-own-stations),
+so you can also write your own.
+
+`--check` asks NOAA whether it has newer data than the catalogue, with a few
+requests: a new datum epoch, stations added, removed or moved, and datums
+accepted again. It exits with code `8` when there's newer data. Without a
+network, a catalogue over 12 months old counts as stale.
+
+| Option | Default | Description |
+|---|---|---|
+| `--check` | off | Only checks for newer data. Exits with `0` when the catalogue is current and `8` when it isn't. |
+| `--catalogue <file>` | the offline cache | Where to keep the catalogue. |
+
+```bash
+s100 tides update
+s100 tides update --check
+```
+
+## sources
+
+```text
+s100 sources
+```
+
+`sources` prints a table of the live data sources that `identify --source`,
+`mcp serve --source` and the MCP `add_data_source` tool take: each source's
+id, what it shows, the widest view it runs in, its options (`*` marks a
+required one, and a key shows its environment variable) and whether it's
+ready or what it still needs, such as a key's environment variable.
+
 ## list-specs
 
 ```text
@@ -881,6 +1973,33 @@ headlessly. S-57 is listed with its portrayal shown as "via S-101". The
 weather formats GRIB2, NetCDF, CAP, CODSUS and TC (tropical cyclone advisories) are listed last, with their portrayal
 shown as "SoundCharts, in code", and a line under the table says they aren't
 S-100 products. See [Supported specifications](#supported-specifications).
+
+## health
+
+```text
+s100 health [--host <address>] [--port <port>] [--timeout <seconds>]
+```
+
+`health` asks a running `tiles serve`, `feed serve` or `mcp serve --transport http` for its `/healthz` route
+and exits with `0` when it answers `200 OK`, or `1` when nothing is listening,
+the server answers with an error, or there's no answer in time. It prints what
+it asked and what came back. Use it as a container health check: the
+[container image](docker.md) has no shell or `curl`.
+
+| Option | Default | Description |
+|---|---|---|
+| `--host <address>` | `127.0.0.1` | The server's address. |
+| `--port <port>` | `8200` | The server's port. `tiles serve` listens on 8200 by default, `feed serve` on 8100 and `mcp serve --transport http` on 8300. |
+| `--timeout <seconds>` | `5` | How long to wait for an answer. |
+
+```bash
+s100 health
+s100 health --port 8100
+```
+
+```text
+Healthy: http://127.0.0.1:8200/healthz
+```
 
 ## s57 convert
 
@@ -964,7 +2083,9 @@ s100 mcp serve --layer <dataset> [--layer <dataset> ...] [options]
 
 `mcp serve` runs an [MCP server](mcp-server.md) over standard input and
 output, so an AI agent that starts the process can query and render datasets
-without SoundCharts. It takes the same input forms as `render`. Datasets that
+without SoundCharts. With `--transport http`, it serves the same tools over
+HTTP instead, so agents on other computers, or in other containers, can
+connect to it. See [MCP over HTTP](#mcp-over-http). It takes the same input forms as `render`. Datasets that
 fail to load are skipped with a warning.
 
 To use it, configure your MCP client to run the command `s100` with the
@@ -976,7 +2097,9 @@ The server provides the read-only query tools and these session tools:
 and `render_to_image`. The session tools change only the server's in-memory
 state: they never edit the source datasets or write files. `open_dataset`
 adds more datasets while the server runs. Each process is one session, so
-start another process for a separate session. [MCP tools](mcp-server.md#mcp-tools)
+start another process for a separate session. The tide tools
+`list_tide_stations` and `predict_tide` read the offline station catalogue
+(see [`tides update`](#tides-update)). [MCP tools](mcp-server.md#mcp-tools)
 lists them all.
 
 | Option | Default | Description |
@@ -984,6 +2107,18 @@ lists them all.
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
+| `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
+| `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample` uses the nearest current station within `--current-station-reach` where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
+| `--current-station-reach <metres>` | `2000` | With `--tide-predictions` only. How far, by water, a current station's prediction applies. Much shorter than a tide station's 10 km, because tidal currents change over short distances. |
+| `--transport <transport>` | `stdio` | `stdio`, or `http` to serve over HTTP. |
+| `--host <address>` | `127.0.0.1` | HTTP only. The address to listen on. `0.0.0.0` accepts other computers. |
+| `--port <port>` | `8300` | HTTP only. The port. `0` picks a free one. |
+| `--token <token>` | generated for a non-loopback host | HTTP only. The bearer token clients must send. Letters, digits, `-` and `_`. |
+| `--no-token` | off | HTTP only. Serves without a token, even on a non-loopback address. |
+| `--source <source>` | none | Adds a live data source at startup, as `add_data_source` does. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options, such as `nmea.weather:Input=udp:10110`; keys come from environment variables. An unknown source or option exits with code 2. It runs once `set_viewport` narrows the view to its range. See [`sources`](#sources). |
+| `--live-feeds` | off | With `--collections` on SoundCharts' `collections.json`, also adds the live feeds subscribed to in its Library, such as NDBC observations or AIS targets, with their saved settings; keys come from environment variables. They run once `set_viewport` narrows the view to their range. |
+| `--allow-changes` | off | HTTP only. Also serves the tools that open datasets by path and change the Library. |
+| `--toolsets <names>` | all | Serves only these toolsets, comma-separated: `query`, `datasets`, `presentation`, `routes`, `tides` and `library`, or a profile such as `route-planning`. See [Choose toolsets](mcp-server.md#choose-toolsets). An unknown name exits with code 2. |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
@@ -991,11 +2126,58 @@ lists them all.
 s100 mcp serve dataset.h5
 s100 mcp serve --layer enc.000 --layer bathy.h5
 s100 mcp serve --from exchange-set.zip --only S101,S102
+s100 mcp serve --layer enc.000 --source ndbc.realtime
+s100 mcp serve charts/ --toolsets route-planning
 ```
 
 Standard output carries the MCP protocol. Startup messages, load warnings and
 errors go to standard error. The server runs until the client closes standard
 input, or until you interrupt it.
+
+### MCP over HTTP
+
+```bash
+s100 mcp serve charts/ --transport http
+s100 mcp serve charts/ --transport http --host 0.0.0.0 --token my-token
+```
+
+With `--transport http`, `mcp serve` serves the MCP
+[Streamable HTTP](https://modelcontextprotocol.io/specification/latest/basic/transports#streamable-http)
+transport at `http://<host>:<port>/mcp`, and prints that URL for each network
+address. It runs until you interrupt it or it's sent SIGTERM. Several clients
+can connect at once, and they share one session: one client's `set_palette`
+changes what `render_to_image` draws for the others.
+
+By default only this computer can connect. With `--host 0.0.0.0`, other
+computers can, and `mcp serve` generates a random token unless you pass
+`--token` or `--no-token`. It prints a token it generates at startup, but not
+one you pass. Clients send the token in a header:
+
+```text
+Authorization: Bearer <token>
+```
+
+A request without the token is answered `401 Unauthorized`. Pass `--token` to
+keep the same token across restarts. A request whose `Origin` header names
+another host is answered `403 Forbidden`, so a web page open in a browser
+can't use a server on your computer.
+
+Over HTTP, `mcp serve` leaves out the tools that reach beyond the datasets
+you served, because a client could use them to read any file the server can
+read or make it fetch any URL:
+
+- `open_dataset`, `close_dataset` and `close_all_datasets`.
+- The Library tools that change it: `add_library_source`,
+  `refresh_library_source`, `remove_library_source`,
+  `set_library_source_options`, `library_action`, `await_library_idle` and
+  `set_secom_identity`.
+
+The query, session, Library listing and tide tools are served. Pass
+`--allow-changes` to serve every tool, as over standard input and output.
+Sources you add with `--collection` are in the Library either way.
+
+`/healthz` answers `200 OK` without a token, so `s100 health --port 8300`
+checks the server. See [`health`](#health).
 
 ## feed serve
 
@@ -1013,12 +2195,14 @@ checks it again at most every `--refresh` seconds, so datasets you add or
 change while it runs appear in the feed. Files that can't be read are reported
 at startup and left out.
 
-The server has two routes:
+The server has these routes:
 
 - `feed.json`, the feed, with an `ETag` so readers can revalidate it. It's
   compressed when the client asks.
 - `items/<id>.zip`, one for each dataset, holding its updates and exchange-set
   catalogue.
+- `/healthz`, which answers `200 OK` with the text `ok` while the server runs.
+  It never has a token. See [`health`](#health).
 
 By default only this computer can connect. With `--host 0.0.0.0`, other
 computers can, and `feed serve` adds a random access token to every URL unless
@@ -1103,22 +2287,23 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 | Family | Specifications | Notes |
 |---|---|---|
 | Vector, ISO 8211 | S-101, S-401, S-57 | S-57 is translated to S-101, or to S-401 for an inland ENC, and drawn with that product's portrayal, not S-52. |
-| Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | |
+| Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-412, S-421 | |
 | Coverage, HDF5 | S-102; S-104 data coding formats 1, 2 and 8; S-111 data coding formats 1, 2, 3 and 8 | Gridded data is drawn as a coverage; station and node data as glyphs. S-104 has no IHO portrayal, so its stations and grids use SoundCharts' own gauges and isolines; see [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal). S-111 draws current arrows over the coverage. Other data coding formats exit with code `4`. |
-| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS), NHC tropical cyclone GIS zips (`TC`) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; surface analyses (fronts and pressure centres) read and described, not drawn yet. Tropical cyclone advisories are read and described by `info`, not drawn yet. Not for navigation. See [Show wind and waves on the chart](weather.md). |
+| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS), NHC tropical cyclone GIS zips (`TC`) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; and surface analyses drawn as fronts and pressure centres. Tropical cyclone advisories are drawn in storm ink: the cone, wind radii, tracks, forecast points and storm. Not for navigation. See [Show wind and waves on the chart](weather.md). |
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | Success. |
-| `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. An HDF5 file is detected only from its root `productSpecification` attribute, which S-100 requires; when that's missing, names a product the CLI doesn't read, or the file can't be read as HDF5 (for example an encrypted S-100 dataset outside its exchange set), the message says so. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. |
+| `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. For `health`, the server didn't answer `200 OK`. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. An HDF5 file is detected only from its root `productSpecification` attribute, which S-100 requires; when that's missing, names a product the CLI doesn't read, or the file can't be read as HDF5 (for example an encrypted S-100 dataset outside its exchange set), the message says so. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. For `tides stations` and `tides predict`: there's no station catalogue, no station matches, or the station can't be predicted on the datum. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
 | `6` | `validate` only: failing findings, or failed signature or checksum checks. |
 | `7` | `route check` only: findings at or above `--fail-on`. |
+| `8` | `tides update --check` only: NOAA has newer data than the catalogue. |
 | other non-zero | Invalid arguments, such as a missing file or an unknown palette. |
 
 ## See also
@@ -1127,6 +2312,12 @@ in its light description. Lua-CSharp lists them as reference Lua does.
   the `render` command.
 - [Compose S-101 and S-102](scenarios/compose-s101-s102.md): a composite
   render of a chart and a bathymetry surface.
+- [Find when the tide is above a height](scenarios/tide-above-a-height.md):
+  `tides predict` and the `predict_tide` MCP tool at Seattle.
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): a worked
+  example of `tiles serve` with QGIS, MapLibre and Leaflet.
+- [Run s100 in Docker](docker.md): the container image, with Docker Compose
+  examples for `tiles serve` and `mcp serve`.
 - [S-98 interoperability](design/s98-interoperability.md): how composite
   layers are ordered.
 - [PMTiles](https://docs.protomaps.com/pmtiles/): the single-file tile

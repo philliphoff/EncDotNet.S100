@@ -7,13 +7,17 @@ command offers it, and treat paths as local filesystem paths.
 | Goal | Command |
 |---|---|
 | Discover supported product specifications | `s100 list-specs` |
+| Discover live data sources for `--source` and their options | `s100 sources` |
 | Detect a dataset's product and available time steps | `s100 info` |
 | Validate a dataset or verify an exchange set | `s100 validate` |
 | Query features or coverage values at a position | `s100 identify` |
 | Check an RTZ or S-421 route against datasets (land, depths, dangers, areas, S-124 warnings, UKC) | `s100 route check` |
+| Find tide stations near a point | `s100 tides stations` |
+| Predict the tide at a station (series, highs and lows, CSV, JSON or S-104) | `s100 tides predict` |
+| Download or check the offline tide station catalogue | `s100 tides update` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
-| Write XYZ raster tiles (folder, PMTiles or MBTiles) for a web map | `s100 tiles export` |
-| Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs | `s100 tiles serve` |
+| Write XYZ raster tiles (folder, PMTiles, MBTiles or GeoPackage) or one GeoTIFF for a web map or GIS | `s100 tiles export` |
+| Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs or to a GIS as WMTS or WMS | `s100 tiles serve` |
 | Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
 | Convert an S-101 dataset to an S-57 cell or exchange set for testing or S-57-only tools (not a production ENC) | `s100 s101 convert --to s57` |
 | Serve the read-only query tools to an MCP client over stdio | `s100 mcp serve` |
@@ -56,10 +60,11 @@ and no network update check.
 | Code | Meaning |
 |---|---|
 | `0` | Success. |
-| `1` | Unexpected processing or I/O error. |
+| `1` | Unexpected processing or I/O error; for `health`, the server didn't answer `200 OK`. |
 | `2` | Invalid input, unresolved dataset, or undetected product. |
 | `3` | Render output or viewport could not be produced. |
 | `4` | Recognized operation or dataset capability is not supported. |
 | `5` | Dataset schema is non-conforming. |
 | `6` | Validation findings failed the selected validation policy. |
 | `7` | `route check` findings reached the `--fail-on` level. |
+| `8` | `tides update --check` found newer NOAA data than the catalogue. |

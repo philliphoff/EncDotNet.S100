@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
-using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -17,8 +17,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// OpenLayers.
 /// </summary>
 /// <remarks>
-/// The datasets are opened and portrayed once; every tile is then painted from
-/// the same prepared composite (<see cref="HeadlessTileRenderer"/>), with each
+/// The datasets are opened and portrayed once, in parallel; every tile is then
+/// painted from the same prepared composite (<see cref="ChartTileRenderer"/>,
+/// as Visible jobs on the work scheduler in write order), with each
 /// zoom level drawing only what is visible at its scale. Coverage products
 /// (S-102, S-104, S-111) are portrayed again for each zoom level so their
 /// sampling and arrow density suit its resolution. The input grammar matches
@@ -33,11 +34,11 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
     internal sealed class Settings : TilesRenderSettings
     {
         [CommandOption("-o|--output <PATH>")]
-        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, or a .mbtiles file for --container mbtiles. An existing archive file is replaced. Required.")]
+        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, a .mbtiles file for --container mbtiles, a .gpkg file for --container gpkg, or a .tif file for --container geotiff. An existing archive file is replaced. Required.")]
         public string? Output { get; init; }
 
         [CommandOption("--container <KIND>")]
-        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) or mbtiles (one MBTiles 1.3 SQLite database, for tile servers). Default: from the output extension (.pmtiles or .mbtiles), otherwise xyz.")]
+        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) mbtiles (one MBTiles 1.3 SQLite database, for tile servers) gpkg (one OGC GeoPackage 1.4 tile pyramid in Web Mercator, for GIS desktops and field apps) or geotiff (one Cloud-Optimized GeoTIFF in Web Mercator: the maximum zoom at full resolution, lower zooms as overviews). Default: from the output extension (.pmtiles, .mbtiles, .gpkg, .tif or .tiff), otherwise xyz.")]
         public string? Container { get; init; }
 
         [CommandOption("--skip-empty")]
@@ -59,7 +60,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
             if (string.IsNullOrWhiteSpace(Output))
                 return ValidationResult.Error("An output path is required (-o|--output).");
             if (!TryResolveContainer(Container, Output, out _))
-                return ValidationResult.Error($"Unknown --container '{Container}'. Use xyz, pmtiles or mbtiles.");
+                return ValidationResult.Error($"Unknown --container '{Container}'. Use xyz, pmtiles, mbtiles, gpkg or geotiff.");
             var parent = Path.GetDirectoryName(Path.GetFullPath(Output));
             if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
                 return ValidationResult.Error($"Output directory does not exist: {parent}");
@@ -102,6 +103,23 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
 
         var (area, minZoom, maxZoom) = (layout.Area, layout.MinZoom, layout.MaxZoom);
 
+        // A GeoTIFF is one image at the maximum zoom; lower zooms are its overviews,
+        // down to a tile or two across, so zooms below that aren't rendered.
+        GeoTiffGrid? geoTiff = null;
+        if (container == TileContainer.GeoTiff)
+        {
+            geoTiff = GeoTiffGrid.For(area, minZoom, maxZoom);
+            if (geoTiff is null)
+            {
+                AnsiConsole.MarkupLine("[red]A GeoTIFF can't cross the antimeridian; pass --bbox to tile one side of it.[/]");
+                return 2;
+            }
+
+            minZoom = geoTiff.MinZoom;
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]GeoTIFF: {(long)geoTiff.Columns * settings.TileSize:N0} × {(long)geoTiff.Rows * settings.TileSize:N0} px at zoom {maxZoom}, {geoTiff.Levels} overview(s).[/]");
+        }
+
         // Plan every zoom level first, so the size is known before any work.
         var plans = new List<(int Zoom, IReadOnlyList<TileBlock> Blocks)>();
         long totalTiles = 0;
@@ -109,7 +127,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
         {
             var columns = XyzTileGrid.Columns(zoom, area.MinX, area.MaxX);
             var (firstRow, lastRow) = XyzTileGrid.Rows(zoom, area.MinY, area.MaxY);
-            var blocks = HeadlessTileRenderer.PlanBlocks(zoom, columns, firstRow, lastRow, settings.Metatile);
+            var blocks = ChartTileRenderer.PlanBlocks(zoom, columns, firstRow, lastRow, settings.Metatile);
             plans.Add((zoom, blocks));
             totalTiles += blocks.Sum(b => (long)b.TileCount);
         }
@@ -129,44 +147,47 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
         {
             TileContainer.PmTiles => new PmTilesTileSink(outputPath),
             TileContainer.MbTiles => new MbTilesTileSink(outputPath),
+            TileContainer.GeoPackage => new GeoPackageTileSink(outputPath),
+            TileContainer.GeoTiff => new GeoTiffTileSink(outputPath, geoTiff!, format),
             _ => new XyzDirectoryTileSink(outputPath, format),
         };
 
         long written = 0;
         long skipped = 0;
-        var parallelOptions = new ParallelOptions
-        {
-            MaxDegreeOfParallelism = settings.Parallel ?? Environment.ProcessorCount,
-        };
+        var jobOptions = new ChartTileJobOptions { MaxInFlight = settings.Parallel };
+        double urgency = 0;
 
         foreach (var (zoom, blocks) in plans)
         {
             var renderer = scene.RendererFor(zoom, layout);
             long zoomWritten = 0;
 
-            System.Threading.Tasks.Parallel.ForEach(blocks, parallelOptions, block =>
-            {
-                var tiles = renderer.Render(block);
-                try
+            // Each block renders and encodes as a Visible job on the work
+            // scheduler, queued in the order the blocks are written.
+            ChartRenderer.RenderTilesAsync(
+                renderer,
+                blocks,
+                tiles => tiles
+                    .Select(tile => (tile.Zoom, tile.X, tile.Y, Data: settings.SkipEmpty && tile.IsEmpty ? null : session.Encode(tile)))
+                    .ToList(),
+                encoded =>
                 {
-                    foreach (var tile in tiles)
+                    foreach (var (z, x, y, data) in encoded)
                     {
-                        if (settings.SkipEmpty && tile.IsEmpty)
+                        if (data is null)
                         {
-                            Interlocked.Increment(ref skipped);
+                            skipped++;
                             continue;
                         }
 
-                        sink.Write(tile.Zoom, tile.X, tile.Y, session.Encode(tile));
-                        Interlocked.Increment(ref zoomWritten);
+                        sink.Write(z, x, y, data);
+                        zoomWritten++;
                     }
-                }
-                finally
-                {
-                    foreach (var tile in tiles)
-                        tile.Dispose();
-                }
-            });
+
+                    return ValueTask.CompletedTask;
+                },
+                jobOptions with { UrgencyOffset = urgency }).GetAwaiter().GetResult();
+            urgency += blocks.Count;
 
             written += zoomWritten;
             // Same culture as the summary line written through AnsiConsole.
@@ -211,6 +232,8 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
                 {
                     ".pmtiles" => TileContainer.PmTiles,
                     ".mbtiles" => TileContainer.MbTiles,
+                    ".gpkg" => TileContainer.GeoPackage,
+                    ".tif" or ".tiff" => TileContainer.GeoTiff,
                     _ => TileContainer.Xyz,
                 };
                 return true;
@@ -224,6 +247,16 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
                 return true;
             case "mbtiles":
                 resolved = TileContainer.MbTiles;
+                return true;
+            case "gpkg":
+            case "geopackage":
+                resolved = TileContainer.GeoPackage;
+                return true;
+            case "geotiff":
+            case "tiff":
+            case "tif":
+            case "cog":
+                resolved = TileContainer.GeoTiff;
                 return true;
             default:
                 resolved = TileContainer.Xyz;

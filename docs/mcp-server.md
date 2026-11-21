@@ -10,7 +10,7 @@ Two hosts run the server:
 | Host | Transport | Datasets | Tools |
 |---|---|---|---|
 | SoundCharts | Streamable HTTP on the loopback address | The datasets loaded in the app | All the tools on this page, except where marked |
-| `s100 mcp serve` | Standard input and output | The datasets you name when you start it, plus any `open_dataset` adds | The [query tools](#query-tools) and [session tools](#session-tools) |
+| `s100 mcp serve` | Standard input and output, or Streamable HTTP with `--transport http` | The datasets you name when you start it, plus any `open_dataset` adds | The [query tools](#query-tools) and [session tools](#session-tools); over HTTP, `open_dataset`, the close tools and the Library edit tools only with `--allow-changes` |
 
 To host the tools in your own application, see the
 [EncDotNet.S100.Mcp README](../src/EncDotNet.S100.Mcp/README.md).
@@ -52,6 +52,7 @@ dotnet run --project src/EncDotNet.S100.Viewer -- --ephemeral --mcp --mcp-port-f
 | `--mcp-bind <address>` | The address to listen on. Keep the loopback address unless you have a reason to change it; see [Security](#security). Implies `--mcp`. |
 | `--mcp-port-file <path>` | Writes the endpoint URI to this file once the server is listening, so an agent can find a port the system picked. Implies `--mcp`. |
 | `--mcp-test-hooks` | Also registers the [test tools](#test-tools). Implies `--mcp`. It's never saved, so turning on the server in Settings never adds these tools. |
+| `--mcp-toolsets <names>` | Serves only these [toolsets](#choose-toolsets) for this run, comma-separated, such as `route-planning` or `query,routes,tides`. Implies `--mcp`. It's never saved, and overrides the toolsets chosen in Settings. |
 
 SoundCharts also prints the endpoint to standard output as
 `[MCP] listening on <uri>`.
@@ -82,6 +83,12 @@ with no app running. Configure your MCP client to start it, for example:
 The exact shape of the configuration depends on your client. For the input
 forms and options, see [`mcp serve`](cli.md#mcp-serve).
 
+To run it as a service that clients connect to, possibly from other
+computers, pass `--transport http`. It then listens at
+`http://127.0.0.1:8300/mcp`, with a bearer token on any address other than
+loopback. See [MCP over HTTP](cli.md#mcp-over-http). To run it in a
+container, see [Give an agent the MCP tools](docker.md#give-an-agent-the-mcp-tools).
+
 ## Connect with mcp-inspector
 
 1. Start the inspector:
@@ -99,6 +106,52 @@ some in SoundCharts first: the server only sees what's loaded. If the agent
 can't connect, check the endpoint again. With port `0`, the port changes each
 time the server restarts.
 
+## Choose toolsets
+
+Every tool's name, description and arguments sit in an agent's context before
+it does anything, so a server that offers every tool leaves less room for the
+task. Each tool belongs to one toolset; serve only the toolsets the task needs.
+
+- **SoundCharts:** choose **Settings**, then **Integrations**, and turn the
+  toolsets on or off under **Toolsets**. A change restarts a running server,
+  so connected agents reconnect. For one run, start SoundCharts with
+  `--mcp-toolsets`.
+- **`s100 mcp serve`:** pass `--toolsets`, such as
+  `s100 mcp serve charts/ --toolsets route-planning`.
+
+Both take toolset names and profiles, comma-separated, or `all` (the default).
+
+The sizes are the `tools/list` reply each toolset adds, measured in November
+2026, at about four characters to a token. They change as tools are added and
+edited.
+
+| Toolset | What its tools do | SoundCharts | `s100 mcp serve` |
+|---|---|---|---|
+| `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 12 tools, ~6,200 tokens | 12 tools, ~6,200 tokens |
+| `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
+| `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
+| `routes` | Check and plan routes and map where a boat can go; in SoundCharts, also create, edit, import and export them | 24 tools, ~10,200 tokens | 3 tools, ~4,600 tokens |
+| `passage` | Check mode, departure, findings, clearance and route weather settings | 12 tools, ~2,900 tokens | none |
+| `tides` | Tide and current stations and their predictions | 4 tools, ~2,100 tokens | 4 tools, ~2,100 tokens |
+| `library` | The Library: sources, items, downloads and SECOM services | 12 tools, ~4,300 tokens | 12 tools, ~4,300 tokens |
+| `warnings` | The navigational warnings panel and display | 9 tools, ~2,300 tokens | none |
+| `display` | Weather, bathymetry, AML and tide display, depth basis, display combinations and the legend | 13 tools, ~3,100 tokens | none |
+| `map` | Viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing | 15 tools, ~5,200 tokens | none |
+| `ui` | Panels and app screenshots; with `--mcp-test-hooks`, the [test tools](#test-tools) too | 13 tools with test hooks, ~4,200 tokens | none |
+| `diagnostics` | Render and performance diagnostics and recent logs | 7 tools, ~1,700 tokens | none |
+| `all` | Every toolset | 129 tools with test hooks, ~43,700 tokens | 42 tools, ~20,100 tokens |
+
+Profiles name a set of toolsets for a kind of task:
+
+| Profile | Toolsets | SoundCharts | `s100 mcp serve` |
+|---|---|---|---|
+| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 55 tools, ~21,800 tokens | 24 tools, ~14,500 tokens |
+| `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 61 tools, ~20,200 tokens | 23 tools, ~8,700 tokens |
+
+Over HTTP, `s100 mcp serve` still leaves out the tools that open datasets by
+path and change the Library unless you pass `--allow-changes`, whatever the
+toolsets.
+
 ## Field conventions
 
 Every tool follows the same conventions in the JSON it returns, so agents don't
@@ -109,6 +162,7 @@ so in its description.
 |---|---|
 | Coordinate reference system | WGS-84 (EPSG:4326). |
 | Coordinate values | Decimal degrees. Latitude `-90..+90`; longitude `-180..+180`. |
+| Positions you pass | A single position is two arguments, `latitude` and `longitude` (`centerLatitude`/`centerLongitude` for a centre). A position inside a value is `{"latitude": …, "longitude": …}` or a `[lat, lon]` pair, and a list of positions is `[[lat, lon], …]`. Tools that took `lat`/`lon` (the route tools, `set_own_ship`, the Library queries, the measure and range/bearing points) or `centerLat`/`centerLon` (SoundCharts' `set_viewport`) still accept those names. |
 | Bounding boxes | Four labelled values, `southLatitude`, `westLongitude`, `northLatitude`, `eastLongitude`, never a bare pair. |
 | Times | UTC, ISO 8601. Time intervals include both ends. |
 | Distances | Metres. |
@@ -149,16 +203,17 @@ Both hosts provide these tools.
 | `list_specs` | No | Lists the product specifications the host can read: every product in its product registry, with how many datasets of each are loaded and `capabilities` (`canQueryFeatures`, `canDescribeFeature`, `canSampleCoverage`, `canListTimeSteps`). `isS100` is `false` for a product that isn't S-100: the weather formats `GRIB2`, `NetCDF` and `CAP`, which aren't for navigation. A product whose specification defines no portrayal carries a `portrayalNote`: S-104 has `"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology"`, because its station gauges and surface isolines are SoundCharts' own ([S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal)), and the weather formats have `"SoundCharts portrayal: GRIB2 defines no symbology"`, `"… NetCDF-CF …"` and `"… CAP 1.2 …"`. GRIB2 and NetCDF can be sampled and have time steps; CAP has time steps and its warning areas are features, but there's no coverage to sample. |
 | `list_time_steps` | No | Lists the time steps of a dataset by `datasetId`, ascending, with `firstTime`, `lastTime` and the `cadence` when the steps are evenly spaced: S-104 and S-111 samples, the valid times of a GRIB2 or NetCDF grid, and for CAP warnings the times warnings start and the tick after each ends. S-102 has no time axis and returns no steps; other products return `not_supported_yet`. |
 | `find_at` | No | Returns every loaded dataset whose declared bounding box contains a point. It checks the bounding box only, not per-cell coverage or no-data masks. To find the features at a point, use `identify_features`. |
-| `identify_features` | No | Identifies the vector features at a point, as an ECDIS cursor pick does, ranked most specific first: points before curves before areas, and within a primitive the smaller or nearer feature first. Areas must contain the point (holes count); points and curves match within `radiusMeters` (default 50). Works for every vector product, including S-101. `longitude` can be anywhere in `[-540, 540]`: data kept in a 0…360 or other continuous frame, such as the NWS Alaska S-411 (175°E to 225°E), matches at its own longitude and one world east or west (210 and −150 find the same feature). CAP weather warnings (`spec` `CAP`) answer too: each area that isn't superseded or cancelled is a surface of type `CapWarningArea`. Each match reports the dataset id, spec, feature id and type, primitive, bounds, `containment` (`inside` or `near`) and approximate `distanceMeters`. `maxResults` (default 20) caps the list and sets `truncated`. For S-101 features with a `fileReference`, `TXTDSC` or `NTXTDS` attribute, each match also reports `referencedTexts`: the name and content of the text files from the dataset's exchange set. |
-| `describe_feature` | No | Returns the spec, feature type, attributes and, for S-101, resolved geometry for a feature id in a dataset. Numeric attributes whose feature catalogue declares a unit, such as `depthRangeMinimumValue` or `valueOfSounding`, carry `unit` (for example `"m"`) and `unitName` (`"metre"`); the sounding `depths` in an S-101 `geometry` block carry `depthUnit` (`"metres"`). Supported: S-101, S-401 and S-57 cells (RCID; the result has a `geometry` block with primitive, bounding box and coordinates); S-102 (`BathymetryCoverage[.01]`; `boundingBox` is in WGS-84 degrees, while `gridMetadata` and `nativeExtent` stay in the grid's native CRS, such as metres for a UTM tile); S-104 and S-111 (`WaterLevel` or `SurfaceCurrent[.NN][.Group_KKK]`, or a bare station identifier); S-124 (`gml:id`); S-129 (`gml:id` of a plan, plan area, control point or non-navigable area); and CAP warning areas (the feature id from `identify_features`; the attributes are the pick report's: `notice`, `headline`, `event`, `severity`, `urgency`, `certainty`, `onset` or `effective`, `expires`, `ends`, `sent`, `sender`, `areaDesc`, `zones`, `msgType`, `description`, `instruction`, `identifier`, each when the alert has it). For S-104 and CAP the result has the same `portrayalNote` as `list_specs`. |
+| `identify_features` | No | Identifies the vector features at a point, as an ECDIS cursor pick does, ranked most specific first: points before curves before areas, and within a primitive the smaller or nearer feature first. Areas must contain the point (holes count); points and curves match within `radiusMeters` (default 50). Works for every vector product, including S-101. `longitude` can be anywhere in `[-540, 540]`: data kept in a 0…360 or other continuous frame, such as the NWS Alaska S-411 (175°E to 225°E), matches at its own longitude and one world east or west (210 and −150 find the same feature). CAP weather warnings (`spec` `CAP`) answer too: each area is a surface of type `CapWarningArea`. Time-dependent products return only what's drawn at a time: S-412 and CAP warnings in force then, the surface analysis valid then and a tropical cyclone's position then. Pass `time` (ISO-8601, UTC) to choose the time. Without it, SoundCharts uses its map's view time and also leaves out the S-124 parts the map hides, so the result matches what's on screen; a headless host (`s100 mcp serve`) returns every warning that isn't superseded or cancelled and the first analysis. Each match reports the dataset id, spec, feature id and type, primitive, bounds, `containment` (`inside` or `near`) and approximate `distanceMeters`. `maxResults` (default 20) caps the list and sets `truncated`. For S-101 features with a `fileReference`, `TXTDSC` or `NTXTDS` attribute, each match also reports `referencedTexts`: the name and content of the text files from the dataset's exchange set. NATO Additional Military Layers (AML) cells answer whether or not they're drawn, without their meta features (`M_COVR`, `m_clas` and so on). Each AML match also reports what Object Information shows: `featureTypeName` from the cell's catalogue, `attributes` (each with `code`, catalogue `name`, decoded `value`, `rawValue`, and `mark` `"AML"` on an attribute AML adds to a standard S-57 class, listed after the standard ones), and `aml` with the `tag`, `product`, `productName`, `cell`, `protectiveMarking`, `classKind` (`aml` or `standard`), `drawn` and, when it isn't drawn, the `note` "Not drawn. Picked from its position.". A feature with Object Information content that isn't attribute rows also reports `sections`: each has a `kind` (such as `ice.egg-code` for the WMO egg code of an S-411 sea-ice or lake-ice area), a `description`, its `rows` (`code`, `name`, `value`, `rawValue`) and its typed `data`. `pick_features` returns the same fields. Each match has `depth`, the feature's depth values as numbers in metres where it has any, named as `sample`'s depth result names them: `depthRangeMinimumMeters` (DRVAL1), `depthRangeMaximumMeters` (DRVAL2), `valueOfSoundingMeters` (VALSOU) and the `waterLevelEffect` code (WATLEV). `includeAttributes: true` adds `attributes`, every attribute as encoded (`code` and `rawValue`; a complex attribute's parts as `complex.sub`); use `describe_feature` for decoded values and geometry. |
+| `describe_feature` | No | Returns the spec, feature type, attributes and, for S-101, resolved geometry for a feature id in a dataset. Numeric attributes whose feature catalogue declares a unit, such as `depthRangeMinimumValue` or `valueOfSounding`, carry `unit` (for example `"m"`) and `unitName` (`"metre"`); the sounding `depths` in an S-101 `geometry` block carry `depthUnit` (`"metres"`). Supported: S-101, S-401 and S-57 cells (RCID; the result has a `geometry` block with primitive, bounding box and coordinates); S-102 (`BathymetryCoverage[.01]`; `boundingBox` is in WGS-84 degrees, while `gridMetadata` and `nativeExtent` stay in the grid's native CRS, such as metres for a UTM tile); S-104 and S-111 (`WaterLevel` or `SurfaceCurrent[.NN][.Group_KKK]`, or a bare station identifier); S-124 (`gml:id`); S-129 (`gml:id` of a plan, plan area, control point or non-navigable area); S-412 weather warnings (`gml:id`; the result adds a `warning` block with the `kind`, the `threshold`, `beaufortForce`, `iceAccretionRate` and `sourceOfIcing` as a `code` and the feature catalogue's `label`, the `messages` and `maximumWindSpeed` in each language, `validFrom`, `validTo`, `cancellationDate`, `inForceUntil`, `issuedAt`, `nextUpdateDateTime` and the `dataProvider`); and CAP warning areas (the feature id from `identify_features`; the attributes are the pick report's: `notice`, `headline`, `event`, `severity`, `urgency`, `certainty`, `onset` or `effective`, `expires`, `ends`, `sent`, `sender`, `areaDesc`, `zones`, `msgType`, `description`, `instruction`, `identifier`, each when the alert has it). For S-104 and CAP the result has the same `portrayalNote` as `list_specs`. A feature with Object Information content that isn't attribute rows, such as the egg code of an S-411 sea-ice area, also has `sections`, as `identify_features` reports them. An S-101 area, line or sounding group's coordinates can run to hundreds of kilobytes: `includeGeometry: false` keeps the geometry's `primitive` and `boundingBox` and gives `coordinateCount` and `interiorRingCount` (with `coordinatesOmitted: true`) instead. For only depths or attribute values, the `depth` and `includeAttributes` of `identify_features`, `query_features` and `nearest_features` are smaller still. |
 | `describe_feature_type` | No | Describes a spec's bundled feature catalogue (ISO 19110, S-100 Part 5). With only `spec` (for example `S-101` or `S-124/1.5.0`), lists every feature type with its attribute count. Add `featureType` (code, name or alias) to get that type's attributes: value type, whether mandatory or repeatable, and listed values (`includeListedValues=false` omits large enumerations). Use it to build attribute filters without a loaded dataset. Casing and an edition suffix in `spec` are accepted, and the edition is ignored. A spec with no bundled catalogue returns `feature_catalogue_not_available`, whose `details.acceptedSpecs` lists the specs that have one. |
-| `query_features` | No | Returns features whose geometry intersects a spatial query, from every GML vector product and from S-101 and S-401. Intersection uses bounding boxes by default; `precise=true` tests the full geometry, with point-in-polygon containment for areas (holes count) and real segment crossings, for questions such as "which features does this route leg cross?". For S-101, `featureType` matches the acronym (for example `LIGHTS` or `BOYLAT`) and each `featureId` is the record's decimal RCID. `attributes` filters on values: a code-to-value map for equality (`{"categoryOfLateralMark":"1"}`), or an array of predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`). Operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt` and `le`, combined with AND. The result's `typeBreakdown` counts every match by feature type, across all pages, so you can size a result before paging. |
+| `query_features` | No | Returns features whose geometry intersects a spatial query, from every GML vector product and from S-101 and S-401. Intersection uses bounding boxes by default; `precise=true` tests the full geometry, with point-in-polygon containment for areas (holes count) and real segment crossings, for questions such as "which features does this route leg cross?". For S-101, `featureType` matches the acronym (for example `LIGHTS` or `BOYLAT`) and each `featureId` is the record's decimal RCID. `attributes` filters on values: a code-to-value map for equality (`{"categoryOfLateralMark":"1"}`), or an array of predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`). Operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt` and `le`, combined with AND. The result's `typeBreakdown` counts every match by feature type, across all pages, so you can size a result before paging. The optional `times` filter compares a feature's `fixedDateRange` and `periodicDateRange` with the window only; it doesn't apply cancellation dates, supersession or the S-124 not-yet-in-force setting. To find what's drawn at a time, use `identify_features` with `time`. Each match has `depth`, the feature's depth values as numbers in metres where it has any, named as `sample`'s depth result names them: `depthRangeMinimumMeters` (DRVAL1), `depthRangeMaximumMeters` (DRVAL2), `valueOfSoundingMeters` (VALSOU) and the `waterLevelEffect` code (WATLEV). `includeAttributes: true` adds `attributes`, every attribute as encoded (`code` and `rawValue`; a complex attribute's parts as `complex.sub`); use `describe_feature` for decoded values and geometry. For a point, `latitude` and `longitude` can stand in for `query`. |
 | `count_features` | No | Lists the feature types in the loaded vector datasets and how many features of each there are, to answer "what's in this cell?" before you have any ids. Works for every vector product, including S-101. Filters: `spec`, `datasetId` and a spatial `query`. Each count reports `count` and `withGeometry` (how many have geometry). |
-| `nearest_features` | No | Ranks vector features by true distance from a point, for questions such as "nearest light to my position?" or "is this point inside a restricted area?". An area that contains the point is returned at `distanceMeters` 0 with `containment` `inside`. Every other feature reports the distance to the nearest point on its geometry (on a segment, not only a vertex) and `bearingDegrees` toward it. Works for every vector product, including S-101. Filters: `spec`, `datasetId`, `featureType` and `maxDistanceMeters`. `limit` (default 10) caps the list and sets `truncated`. |
-| `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Each match reports `matchedName` and `matchedAttribute`. Paged. |
-| `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset, or wind and waves from a GRIB2 or NetCDF grid (`spec` `"GRIB2"` or `"NetCDF"`). For S-104, S-111 and the grids, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
-| `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
-| `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers; with a draft, the under-keel clearance. Returns the verdict, each check's status, the findings and the clearance. See [Check a route](#check-a-route). |
+| `nearest_features` | No | Ranks vector features by true distance from a point, for questions such as "nearest light to my position?" or "is this point inside a restricted area?". An area that contains the point is returned at `distanceMeters` 0 with `containment` `inside`. Every other feature reports the distance to the nearest point on its geometry (on a segment, not only a vertex) and `bearingDegrees` toward it. Works for every vector product, including S-101. Filters: `spec`, `datasetId`, `featureType` and `maxDistanceMeters`. `limit` (default 10) caps the list and sets `truncated`. Each match has `depth`, the feature's depth values as numbers in metres where it has any, named as `sample`'s depth result names them: `depthRangeMinimumMeters` (DRVAL1), `depthRangeMaximumMeters` (DRVAL2), `valueOfSoundingMeters` (VALSOU) and the `waterLevelEffect` code (WATLEV). `includeAttributes: true` adds `attributes`, every attribute as encoded (`code` and `rawValue`; a complex attribute's parts as `complex.sub`); use `describe_feature` for decoded values and geometry. |
+| `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Overlapping chart cells of different usage bands each chart the same object, so a search returns one hit per cell. Set `finestOnly` to keep a chart-cell hit (S-101, S-401 or S-57) only where its cell is in the finest band at the feature's position, ranked as `check_route` ranks cells; cells of the same scale are peers and both copies stay. Each match reports `matchedName` and `matchedAttribute`. Paged. |
+| `sample` | No | Samples a `quantity` at a point (`latitude`, `longitude`) or along a `polyline`. `depth` is charted depth by the route check's rule: S-102 first, otherwise the finest overlapping S-101, S-401 or translated S-57 cell's dredged area, depth area or nearest sounding (within 250 m). The result has `waterMask` (`water`, `land` or `uncharted`) and `depth` with its `kind` (`bathymetry`, `dredged_area`, `depth_area` or `sounding`), `datasetId`, `featureId` (for `describe_feature`) or S-102 `gridCell`, an area's `depthRangeMinimumMeters` and `depthRangeMaximumMeters`, `verticalDatum` and `lowConfidence`; `depth` is `null` where nothing charts one. With a `time`, it adds `waterLevel` (S-104, otherwise a tide prediction where the host has them on; `status` `applied`, `datum_mismatch`, `no_coverage`, `before_start`, `after_end` or `no_data`) and `availableDepthMeters`, the depth plus the water level where it applies, as `check_route` computes clearance. `water_level` (S-104), `current` (S-111) and `weather` (a GRIB2 or NetCDF grid) sample the nearest grid cell or station: `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it, and a time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. `spec` pins one product (`S-102` for depth reads the bathymetry only); with a `spec`, `quantity` can be left out. A `polyline` returns `samples` in order, each with `legIndex`, `vertexIndex` (`null` between vertices), `distanceMeters` and its `result` (or `depth`), or an `error` (`code`, `message`) where that point has no value; `spacingMeters` adds points between the vertices along each rhumb-line leg, up to 2,000 samples. For depth, `shoalest` names the shallowest sample, by available depth when a time is given. When no point has a value because of the requested time, the call returns `time_out_of_range`. For depth at a point, `minDepthMeters` (with optional `clearanceMeters`, default 0, and `searchRadiusMeters`, default 5,000 and at most 20,000; it looks within 500 m on 5 m cells first, then widens on coarser ones) also checks whether the point is navigable: charted water at least that deep, with no danger in it and that much room from land, shoal water, dangers and uncharted water. The result adds `navigable`, and when it's false, `notNavigableReason` (`land`, `uncharted`, `shoal`, `hazard`, `no_depth` or `too_close`) and `nearestNavigable`: the nearest point that qualifies, with its `latitude`, `longitude`, `depthMeters` (the least round it), `depth` (as a depth sample gives it, the finest cell winning), `clearanceMeters`, and the `distanceMeters` and `bearingDegrees` from the point; or a `reason` when nothing in the radius qualifies. It searches the same grid `get_navigability_grid` builds. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
+| `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers; with a draft, the under-keel clearance; with wind or wave limits, the weather forecast along the route at the ETAs. Returns the verdict, each check's status, the findings, the clearance and the weather. See [Check a route](#check-a-route). |
+| `plan_route` | Only with `routeName` | Suggests a route between stops (`from`, `to` and, for a whole itinerary in one call, `via`) for a `vessel` (the object `check_route` takes), and checks it. See [Plan a route](#plan-a-route). |
+| `get_navigability_grid` | No | Returns water, land and charted depth over a box on a regular grid, with overlapping chart cells resolved as `check_route` resolves them. The reply is a summary: cell counts by class, the shoalest navigable cell, the largest connected navigable area, and, with `connect`, whether two positions join through navigable water. The grid itself goes to a file for code to read; `includeImage` adds a PNG. See [Navigability over an area](#navigability-over-an-area). |
 
 ### Session tools
 
@@ -169,6 +224,8 @@ Both hosts provide these tools. They change the host's in-memory state only.
 | `open_dataset` | Yes | Loads a dataset through the host's normal open path. `path` is a file (S-101 `.000`, HDF5 `.h5`, GML and others) or an exchange set (a folder with `CATALOG.XML`, or a `.zip` of one), detected automatically. `spec` optionally forces the product for a single file. Returns the new dataset ids, `spec`, bounding box, `count`, `loadDurationMs`, `timedOut` (for exchange sets) and `skipped` (why listed datasets were skipped). When nothing loads, the `dataset_load_failed` reason quotes the first five problems, such as an unreadable catalogue, unsupported products or orphan updates. For a single file no product recognises, it says why, for example an HDF5 file with no `productSpecification` attribute; pass `spec` to open such a file anyway. |
 | `close_dataset` | Yes | Unloads a dataset by its `id` from `list_datasets` or `open_dataset`. An unknown id returns `removed = false`, not an error. Returns `removed`, `count` and `removedDatasets` (`id` and `spec`). |
 | `close_all_datasets` | Yes | Unloads every dataset. Useful for loops that load, render and unload without restarting. Returns `removed`, `count` and `removedDatasets`. |
+| `list_data_sources` | No | `s100 mcp serve` only. Lists the live data sources it can add: NDBC buoy observations (`ndbc.realtime`), own-ship weather from NMEA (`nmea.weather`) and AIS targets from aisstream.io (`ais.aisstream`). Each has its `id`, `name`, `description`, `group`, `maxViewportSpanDegrees` (the widest view it runs in; `null` for any), its `options` (`name`, `label`, `kind`, `required`, and for a key the `environmentVariable` that supplies it), `missing` (what it still needs, such as a key's environment variable) and the `datasets` already added, each with its `status` (`live`, `waiting`, `paused` or `failing`), `lastUpdated` and `lastError`. |
+| `add_data_source` | Yes | `s100 mcp serve` only. Adds a live source to the catalog: `id`, and `options` as an object of values by name, such as `{"Input": "udp:10110"}` for `nmea.weather`. Its features then answer `identify_features` and the other query tools as they are when asked, and `render_to_image` draws them. It runs for the area set with `set_viewport`, and only while that's narrower than its range, so set the viewport first and allow a moment for its first data. A key is never an argument: set its environment variable (such as `ENCDOTNET_AIS_STREAM_KEY`) before starting the server. Returns the `datasetId` and its `status`. Remove it with `close_dataset`. `s100 mcp serve --source` adds one at startup, and `s100 sources` lists them. Served with the other tools that open datasets (over HTTP, only with `--allow-changes`). |
 | `set_palette` | Yes | Sets the palette to `Day`, `Dusk` or `Night` (case-insensitive). Calling it with the current palette does nothing. Returns the applied and previous palette. |
 | `set_display_category` | Yes | Sets the ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation` or `All` (case-insensitive). Calling it with the current category does nothing. In SoundCharts it matches the `--display-category` startup option. |
 | `set_display_mode` | Yes | Sets a product's display mode (S-100 Part 9 §11.7). Only S-411 sea ice has more than one: `ice-concentration` (default), `ice-sod` (stage of development) or `ice-navigational`, a provisional preview derived from concentration that isn't a POLARIS or RIO product. Accepts the same values as `s100 render --display-mode`, and the product's own mode ids. `spec` selects the product (default `S-411`). Returns the applied and previous mode ids and whether the applied mode is `provisional`. Independent of `set_display_category`. |
@@ -182,17 +239,19 @@ SoundCharts only.
 
 | Tool | Changes state | What it does |
 |---|---|---|
-| `pick_features` | Only with `select: true` | Finds the vector features under a point on the live map. Pass a screen pixel (`x`/`y`) or a geographic point (`latitude`/`longitude`), not both. For a pixel measured on a `render_to_image` capture, also pass `imageWidth`/`imageHeight` set to the `width`/`height` that tool returned, so the pick uses the capture's exact framing. Without them, `x`/`y` are in the on-screen map's pixels. The result has the same shape as `identify_features` (matches, `totalMatched`, `truncated`) plus `source` (`pixel` or `geo`) and the resolved `latitude`/`longitude`. Pixels outside the image or map, or before the map is laid out, are rejected. With `select: true`, the pick is also shown in SoundCharts, as a click does: the features fill the Object Information panel and the map highlights the point and the selected feature's outline. The result then has `selected: true`. Coverage picks (S-102, S-104, S-111) have no outline and aren't shown. |
+| `pick_features` | Only with `select: true` | Finds the vector features under a point on the live map. Pass a screen pixel (`x`/`y`) or a geographic point (`latitude`/`longitude`), not both. For a pixel measured on a `render_to_image` capture, also pass `imageWidth`/`imageHeight` set to the `width`/`height` that tool returned, so the pick uses the capture's exact framing. Without them, `x`/`y` are in the on-screen map's pixels. Like a click, it finds only what the map draws: S-412 and CAP warnings, surface analyses and tropical cyclones at the view time, and no S-124 part the map hides. The result has the same shape as `identify_features` (matches, `totalMatched`, `truncated`) plus `source` (`pixel` or `geo`) and the resolved `latitude`/`longitude`. Pixels outside the image or map, or before the map is laid out, are rejected. With `select: true`, the pick is also shown in SoundCharts, as a click does: the features fill the Object Information panel and the map highlights the point and the selected feature's outline. The result then has `selected: true`, and `dynamicFeatures` lists the overlay features at the point that Object Information shows too, such as own-ship (`sourceId`, `featureId`, `label`); a pick with only those is shown as well. Live feeds such as AIS targets and predicted tide stations are datasets, so they're among the matches. Coverage picks (S-102, S-104, S-111) have no outline and aren't shown. |
 | `capture_app_screenshot` | No | Captures the whole app window, including panels, timeline and status bar, as a PNG with a JSON block (`imageFormat`, `byteLength`, `width`, `height`, and `displayCombinationId` and `displayCombinationModified` for the view the map shows). Use it to see the UI, for example to confirm that `set_panel` opened a panel. `scale` (device pixels per logical pixel, `0.5` to `3`, default `1`) gives a sharper image, such as `2` for a high-DPI capture. `panel` crops to one panel: an id from `list_panels` (its dock, while it is showing) or `map` (the map with its overlays, such as the Time HUD). A smaller image costs an agent fewer tokens. Returns `window_not_ready` before the window is shown, `panel_not_found` for an unknown id and `panel_not_showing` for a panel that isn't on screen. |
 | `list_panels` | No | Lists the activity panels in the left, right and bottom docks. Each reports `id`, `title`, `dock` (`Left`, `Right` or `Bottom`), `available` (some panels appear only in some states, such as `Vessels` while the AIS overlay is on and `Helm` while own-ship tracking is on), `selected` (the active tab in its dock), `dockOpen`, and `showing` (`available`, `selected` and `dockOpen` together, and the dock on screen: a window under 900 px wide hides the bottom dock, and Check passage can fold the right dock to its edge). Use it to find panel ids for `set_panel` and to confirm a change. |
 | `set_panel` | Yes | Shows or hides a panel. `panel` is an id from `list_panels` (case-insensitive), such as `Datasets`, `LayerStack`, `PickReport` or `Timeline`. `visible` defaults to `true`, which selects the panel's tab and opens its dock. `false` closes the dock if that panel is the one showing. A panel already in the requested state is left alone. Returns `showing`, `previousShowing` and `changed`. Errors: `panel_not_found` for an unknown id, and `panel_unavailable` for a panel that can't be shown now. |
-| `set_own_ship` | Yes | Positions and steers the simulated own ship. Pass any of `lat` and `lon` (together), `cog` (course over ground, degrees true, `[0, 360)`), `sog` (speed over ground, m/s, at least 0), `heading` (degrees true, applied only with `lat`/`lon`) and `hold` (`true` stops the vessel, `false` resumes). At least one is required. Works whether or not the own-ship overlay is visible. Matches the `--own-ship-pos`, `--own-ship-cog` and `--own-ship-sog` startup options. |
+| `set_own_ship` | Yes | Positions and steers the simulated own ship. Pass any of `latitude` and `longitude` (together; `lat`/`lon` also work), `cog` (course over ground, degrees true, `[0, 360)`), `sog` (speed over ground, m/s, at least 0), `heading` (degrees true, applied only with a position) and `hold` (`true` stops the vessel, `false` resumes). At least one is required. Works whether or not the own-ship overlay is visible. Matches the `--own-ship-pos`, `--own-ship-cog` and `--own-ship-sog` startup options. |
 | `await_render_idle` | No | Waits until the live map settles, with no paint, refresh request or layer fetch for `quietPeriodMs` (default 250, `0` to `10000`), or until `timeoutMs` (default 5000, `50` to `120000`). Call it between `set_viewport` and `render_to_image` so the capture shows a settled view. It always waits at least the quiet period and watches the on-screen map, not the `render_to_image` copy. A layer that reports busy but stops painting doesn't hold the wait open. Returns `wentIdle`, `timedOut`, `waitedMs` and `paintsObserved`. |
 | `get_render_stats` | No | Reports the cost of the latest on-screen map paint: `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a breakdown by `style` (`calls`, `durationMs`, slowest first). A rolling `window` covers up to 4,096 recent paints, so an expensive frame isn't lost once the view settles: `count`, `firstSequence`/`lastSequence`, the maximum, mean, median and 95th percentile of frame time (`frameMaxMs`, `frameMeanMs`, `frameP50Ms`, `frameP95Ms`) and vector style time (`vectorMaxMs`, `vectorMeanMs`, `vectorP95Ms`), and `maxTotalDrawCalls`. `window.slowestFrame` gives the slowest paint's sequence, time, duration, instrumented and uninstrumented time and draw calls. Pass `resetWindow: true` to clear the window after reading, for example before and after an interaction. Returns `hasData = false` before the first paint. `totalDrawCalls` counts map style draws (basemap, overlays, untiled layers) but not chart content from the tile cache, so a count of 1 or 2 doesn't mean the chart is empty; check with `render_to_image`. |
 | `await_settled` | No | Waits until the view is settled: every chart cell the load-as-you-pan coordinator ranks as visible for the current view is loaded (cells ahead of the view, covered by finer cells or without a footprint don't count), and every visible tile slot of every visible tiled layer shows its own target tile, not a fallback band, a replaced layer's tile, a tile held for a sibling layer or another scale class, with no visible tile work left. The state must hold for `confirmMs` (default 250, `0` to `10000`). Returns `settled`, `timedOut`, `settleMs` (from the last `set_viewport` to the frame that completed the view, not counting `confirmMs`), `waitedMs`, `hadTrigger`, and the last reading: `loads` (`evaluationPending`, `queuedVisible`, `runningVisible`, `queuedOther`, `runningOther`, `loaded`, `deferred`) and `tiles` (`layersConsidered`, `layersNotPainted`, `layersIncomplete`, `missingTiles`, `pendingVisibleTiles`). `timeoutMs` defaults to 60000 (`50` to `600000`). The tile renderer starts recording what each layer shows at the first `set_viewport` or `await_settled`. Used by PerfRunner's settle runs. |
-| `get_process_metrics` | No | Reports process CPU, GC and memory for performance runs. `window` is `read` (default), `start` (open a window and sample peaks every 100 ms), `restart` (report and open the next window at the same reading) or `stop`. `window` in the reply gives `wallMs`, `cpuMs`, `coresBusy` (CPU ÷ wall), `cpuUtilisation` (÷ processor count), `gcPauseMs`, `gcPauseShare`, collections by generation, `allocatedBytes`, `allocationRateBytesPerSecond`, and sampled peaks of working set, GC heap, GC committed and tile-cache native bytes. `memory` gives the current `gcHeapBytes`, `gcCommittedBytes`, `workingSetBytes`, `privateBytes`, `tileNativeBytes` and `tileCount`; `frames` the paint `p50Ms`, `p95Ms` and `maxMs` over `get_render_stats`' window; `environment` the `luaEngine`, GC mode, processor count, OS, runtime, `renderCacheDirectory` and whether the build is `optimized`. |
-| `portrayal_prewarm` | With `enabled` | Reads the background portrayal pre-warm, which portrays load-as-you-pan cells into the portrayal cache while the map is idle: `state` (`off`, `idle`, `working`, `paused`, `cache_full` or `complete`), `warm` and `total` cells, and whether it's `enabled`. `enabled: "on"` or `"off"` overrides the setting for this session without saving it; `"setting"` drops the override. |
-| `get_depth_basis` | No | Reports what the depths and safety contour drawn on the chart are relative to, as the status bar's **DEPTHS** indicator shows it. `kind` is `charted` (charted depths, relative to each dataset's vertical datum), `adjusted` (charted depth plus S-104 water level, when **Water level adjustment** is on; `waterLevelStepTime` is then the time the drawn layers are for, `coversWholeView` is false when part of the view isn't adjusted, and `datum` is `unknown` when water level is applied over an undeclared datum) or `none` (no active S-101, S-57 or S-102 dataset, so the indicator is hidden). `reason` is `not_applied` when an active S-104 dataset meets the view but isn't applied to the chart. `waterLevelStatus` uses the `check_route` codes (`no_coverage`, `before_start`, `after_end`, `no_data`, `datum_mismatch`). It also returns `viewTime`, `coversWholeView`, `datum` (`same`, `different` or `unknown` between the depth and water-level sources in view), `display` (the indicator's text as the user reads it, such as "Charted · water level not applied"), and the `depthSources` and `waterLevelSources` in view, each with its `id`, `spec`, `verticalDatum` code and `verticalDatumLabel`, and for S-104 its `kind` (`grid` or `station`), `start`, `end` and `run`. |
+| `get_process_metrics` | No | Reports process CPU, GC and memory for performance runs. `window` is `read` (default), `start` (open a window and sample peaks every 100 ms), `restart` (report and open the next window at the same reading) or `stop`. `window` in the reply gives `wallMs`, `cpuMs`, `coresBusy` (CPU ÷ wall), `cpuUtilisation` (÷ processor count), `gcPauseMs`, `gcPauseShare`, collections by generation, `allocatedBytes`, `allocationRateBytesPerSecond`, and sampled peaks of working set, GC heap, GC committed and tile-cache native bytes. `memory` gives the current `gcHeapBytes`, `gcCommittedBytes`, `workingSetBytes`, `privateBytes`, `tileNativeBytes` and `tileCount`; `frames` the paint `p50Ms`, `p95Ms` and `maxMs` over `get_render_stats`' window; `environment` the `luaEngine`, GC mode, processor count, OS, runtime, `renderCacheDirectory` and whether the build is `optimized`; `scheduler` (while a window is open) the work scheduler's `workers`, `busyMs` and `coresBusy`, job waits by class (`visibleWait`, `predictedWait`, `backgroundWait`: `count`, `p50Ms`, `p95Ms`, `maxMs`), how long jobs held a worker (`visibleRun`, `run`), jobs `completed` and `cancelled`, `queuedNow` by class and the GC pause governor's `allocationHeavyLimit`. |
+| `portrayal_prewarm` | With `enabled` | Reads the background portrayal pre-warm, which portrays load-as-you-pan cells into the portrayal cache while the map is idle: `state` (`off`, `idle`, `working`, `paused`, `cache_full` or `complete`), `warm` and `total` cells, whether it's `enabled`, and `concurrencyLimit`, how many cells it may portray at once. That limit is the work scheduler's admission of allocation-heavy background jobs, which every such job shares: it grows while GC pauses take little of the wall time and halves when they climb, up to the processor count less two; `S100_PREWARM_CONCURRENCY=<n>` fixes it at `n`. `enabled: "on"` or `"off"` overrides the setting for this session without saving it; `"setting"` drops the override. |
+| `get_depth_basis` | No | Reports what the depths and safety contour drawn on the chart are relative to, as the status bar's **DEPTHS** indicator shows it. `kind` is `charted` (charted depths, relative to each dataset's vertical datum), `adjusted` (charted depth plus S-104 water level, when **Water level adjustment** is on; `waterLevelStepTime` is then the time the drawn layers are for, `coversWholeView` is false when part of the view isn't adjusted, and `datum` is `unknown` when water level is applied over an undeclared datum) or `none` (no active S-101, S-57 or S-102 dataset, so the indicator is hidden). `reason` is `not_applied` when an active S-104 dataset meets the view but isn't applied to the chart. It is `product_not_adjusted` when adjustment is on and water level is available, but every depth source in view is drawn as charted (translated S-57 cells): `display` then reads "Charted · S-57 not adjusted". `waterLevelStatus` uses the `check_route` codes (`no_coverage`, `before_start`, `after_end`, `no_data`, `datum_mismatch`). It also returns `viewTime`, `coversWholeView`, `datum` (`same`, `different` or `unknown` between the depth and water-level sources in view), `display` (the indicator's text as the user reads it, such as "Charted · water level not applied"), and the `depthSources` and `waterLevelSources` in view, each with its `id`, `spec`, `verticalDatum` code and `verticalDatumLabel`, and for S-104 its `kind` (`grid` or `station`), `start`, `end` and `run`. With tide predictions in use and stations in reach of the view, `waterLevelSources` also has one row with `spec` and `kind` `prediction`; `predicted` is `none`, `part` (S-104 covers the rest) or `all`, and `display` says so ("+ water level 14:20 · predicted"); `predictedStations` names the stations in reach; `offersPredictions` is true when the flyout offers **Use tide predictions** (they're off, no S-104 meets the view and a station is in reach); and `predictionsStale` is true when NOAA has newer data than the station list. |
+| `get_legend` | No | Reads the legends of what the map draws: one section per product or overlay (several datasets of a product, such as seven S-102 tiles, make one section; each weather grid field, such as wave height, is its own), in draw order, top first. Each section gives its `id` (the spec, or a weather field's sub-layer key such as `weather.wave.height`), `spec`, `title`, `source` (the dataset's name or "7 datasets"), `datasets`, `inView` (whether one of its datasets meets the map view; the service updates it on pan end, and `get_legend` takes the current view), `expanded`, `timeState` (`none`, `data`, or `no_data` when none of its datasets has data at the view time) with `time`, the Datasets row's time text, `caption`, `marinerSettings`, and `groups` of `rows` per sub-layer (each with `kind`: `swatch`, `area`, `symbol` or `line`, `label` and, for a swatch or area, `color` in the current palette). Only sections in view unless `all: true`; `notInViewCount` counts the rest. While Check route is on, the route check's section (`id` `RouteCheck`) is on top, always in view: "UKC at ETA" (when the checked route's clearance check ran), "Findings" (the marker shapes for Must review, Check and Info, a sleeve for a stretch of the route, and the cross-track corridor's dotted edge) and "Weather" (the storm at ETA); without a draft its `caption` says the line isn't coloured by clearance. Also returns `tabShown` (whether the Legend tab is showing) and the `palette`. |
+| `set_legend` | Yes | Changes the Legend tab; every argument is optional and omitted ones are left as they are. `open: true` shows the tab (opening the right dock), `open: false` closes it (the dock goes back to the tab it showed before, or closes). `inView` sets the tab's scope (`true` In view, `false` All loaded). `section` with `expanded` expands or collapses that section (remembered per section); with `open: true` the tab also scrolls to the section, switching to All loaded or clearing the filter if they hide it. While the tab is shown, the Check route map card at the map's bottom left hides and the map's legend reserve drops to 0. `section` with `findRow` (a row label from `get_legend`) rings that row's features drawn in the map view, as hovering the row does (up to 100), or for a band of a colour or arrow ramp tints the band's area in view; the rings and tint clear when the map moves, and `findRow: ""` clears them. Returns the `scope` (`in_view` or `all_loaded`), as `legend` what `get_legend` returns for that scope, and as `find` what is ringed now (`section`, `row`, `kind` — `features`, `band` for a colour or arrow ramp band, or `none` — `matched` (for a band, the coverage layers that tint), `ringed`, the `rings` with their geometry kind and centre, and for a band `tint`: `viewPercent`, `areaSquareKilometres`, the tinted bounds and the mask size), or null. Replaces `get_map_legend` and `set_map_legend`; the card's fold to its "Legend" chip is kept per user but has no tool. |
 
 ### Timeline tools
 
@@ -200,7 +259,7 @@ SoundCharts only.
 
 | Tool | Changes state | What it does |
 |---|---|---|
-| `get_timeline_state` | No | Reads the Timeline as the user sees it: `mode` (`live` while the view time follows now, else `pinned`), `now`, `viewTime`, the loaded range (`minimum`, `maximum`, `sampleCount`), `coverage` windows (gaps lie between them), forecast `runs`, `nowInCoverage`, `forecastEnded`, the displayed `readout`, `offset` and `summary`, the status `message` and `messageAction`, the axis `window`, its `preset`, the `step` and its `stepDriver`, and the collapsed `gaps` with their `length`. For each time-aware layer (`layers`) it gives its `drawnTime` (null when it has no data near the view time and hides), `previousSample` and `nextSample`, its `time` as the Datasets list shows it (`08:00Z · T+20 h`, `no data · last 18:00Z, 6 h earlier`, `drawing…`), and whether it's `hidden` or `drawing`. `inMapView` says whether **In map view** is on, `layout` is `lanes` or `strip`, and `showOnline` says whether lanes also show Library data that isn't loaded. `lanes` lists each lane: `id`, `label`, product `group`, whether it's `listed` or folded away, whether its footprint is `inMapView`, `expired`, its `time`, whether it's a `library` lane, `newRun`, and its Library `windows` (item id, `online`/`on_disk`/`loaded`, start, end, run), whose ids work with `library_action`. While the map draws a new time, `message` reads `Drawing … · N of M layers ready`. While Check route is on and the passage has ETAs, `passage` describes the passage lanes above the product groups: the `departure`, `arrival`, `minUkcTime` and `verdict`, whether it's `stale`, the bar's `start` and `end` and the `minUkcPosition` tick on the axis (0 to 1), `canFollow`, and the departure-window lane's `departurePosition`, `windows` label and `windowSegments` (each with its `kind` and axis `start`/`end`). `followPassage` says whether **Follow passage** is on. Layer times settle after the map refreshes, so call `await_render_idle` after `set_view_time` before reading them. |
+| `get_timeline_state` | No | Reads the Timeline as the user sees it: `mode` (`live` while the view time follows now, else `pinned`), `now`, `viewTime`, the loaded range (`minimum`, `maximum`, `sampleCount`), `coverage` windows (gaps lie between them), forecast `runs`, `nowInCoverage`, `forecastEnded`, the displayed `readout`, `offset` and `summary`, the status `message` and `messageAction`, the axis `window`, its `preset`, the `step` and its `stepDriver`, and the collapsed `gaps` with their `length`. For each time-aware layer (`layers`) it gives its `drawnTime` (null when it has no data near the view time and hides), `previousSample` and `nextSample`, its `time` as the Datasets list shows it (`08:00Z · T+20 h`, `no data · last 18:00Z, 6 h earlier`, `No analysis at view time`, `drawing…`), whether it's `hidden` or `drawing`, and, for a layer drawing stale data such as a surface analysis over 6 hours old, `staleHours`, its age to the nearest hour, and its row's warning `tag`: `Hidden` for a hidden layer, or `Beyond forecast` or `Before track` for a tropical cyclone outside its track and forecast, whose cone still draws so it isn't `hidden`. `inMapView` says whether **In map view** is on, `layout` is `lanes` or `strip`, and `showOnline` says whether lanes also show Library data that isn't loaded. `lanes` lists each lane: `id`, `label`, product `group`, whether it's `listed` or folded away, whether its footprint is `inMapView`, `expired`, its `time`, whether it's a `library` lane, `newRun`, and its Library `windows` (item id, `online`/`on_disk`/`loaded`, start, end, run), whose ids work with `library_action`, its `sub` line (`adv 20 · 6 h` for a tropical cyclone), and for a tropical cyclone the `issued` and `nextIssue` times of its diamonds and its `stepTicks`, one per forecast point. While the map draws a new time, `message` reads `Drawing … · N of M layers ready`. While Check route is on and the passage has ETAs, `passage` describes the passage lanes above the product groups: the `departure`, `arrival`, `minUkcTime` and `verdict`, whether it's `stale`, the bar's `start` and `end` and the `minUkcPosition` tick on the axis (0 to 1), `canFollow`, and the departure-window lane's `departurePosition`, `windows` label and `windowSegments` (each with its `kind` and axis `start`/`end`). `followPassage` says whether **Follow passage** is on. While the **Tide predictions** lane shows, `tidePredictions` gives the `stationId` it follows (the station nearest the map centre), its `station` text as displayed, and its `extremes`: each high or low's `kind`, UTC `time`, `heightMeters` above the station's datum, `label` and axis `position` (0 to 1). With only that lane, `summary` reads "Tide predictions only: no time-varying datasets loaded." Layer times settle after the map refreshes, so call `await_render_idle` after `set_view_time` before reading them. |
 | `set_view_time` | Yes | Moves the Timeline as scrubbing or **Now** does. `time` is `now` (the view then follows now), an ISO 8601 time, or an offset from the view time (`+6h`, `-30m`, `+1d`). `snap` is `exact` (default; layers apply their own time limits, so you can test times between samples) or `nearest` (the nearest loaded sample). Choosing a time leaves Live mode. Returns the `get_timeline_state` payload, or `view_time_not_applied` when no time-aware dataset is loaded. `now` works past every loaded window: Live follows the clock and layers without data hide. |
 | `step_time` | Yes | Steps the Timeline as its step buttons and arrow keys do. `direction` is `next` or `previous`. `unit` is `10min`, `1h`, `6h` or `1d` (landing on whole units), `sample` (of the step-driver layer), `boundary` (dataset and run starts and ends), `data` (the next or previous cluster, skipping gaps) or `current` (the Timeline's chosen step). `count` repeats it. Pins the time. Returns `view_time_not_applied` when there's nothing further that way. |
 | `set_timeline_view` | Yes | Changes what the Timeline shows, as its preset menu, wheel, drag, **In map view** and **Collapse to strip** do. Pass at most one of a `preset` (`now_6h`, `today`, `next_48h`, `this_run`, `in_view` for the data of the layers in the map view, or `all_loaded`), `zoom` (`in` or `out` around the view time), or a custom `start` and `end`. You can also pass `inMapView` (list only the layers whose footprint intersects the map view, which then set the axis; the rest fold into one row), `showOnline` (show Library data that isn't loaded: online dashed, on disk outlined) and `layout` (`lanes` or `strip`), which apply first. Leaves the view time alone. |
@@ -215,6 +274,14 @@ SoundCharts only.
 | `select_dataset` | Yes | Selects a loaded dataset in the Datasets panel, as clicking its row does, so the inspector and the map's validation overlay follow it. `tab` (`dataset`, `layers` or `validation`) switches the inspector tab; otherwise the tab is kept. It doesn't open the panel; call `set_panel Datasets` first to see it. Returns `id`, `spec`, `previousId`, the `tab` shown, `deferred`, and a `validation` summary: `state` (`ready`, `no_rule_pack` or `not_loaded`), `total`, `errors`, `warnings`, `infos`, `located` (findings with a location, which the overlay draws) and `message` (the Validation tab's summary or empty-state text). Validation runs when a dataset loads, and `open_dataset` returns after it. For a dataset still loading, the tool waits up to `timeoutMs` (default 10000). An exchange-set cell that isn't loaded until it's in view reports `not_loaded`. Call `await_render_idle` before `capture_app_screenshot` so the overlay has painted. Returns `dataset_not_found` for an unknown id. |
 | `list_display_combinations` | No | Lists the display combinations, as the map's **View** menu does: the built-ins (`charted`, `charted-bathymetry`, `pilotage`, `passage-planning`, `all-loaded`) and the user's own views. Each has `id`, `label`, `origin` (`built_in` or `user`), `products` (`S-101` covers S-57 and S-401 cells, `Weather` covers GRIB2 and NetCDF; empty means every product), `loadedProducts`, `notLoadedProducts`, `category`, `description` and `ladderStep`. Also returns the `loadedProducts`, the `activeId` (null for **Custom**), whether it's `modified`, and the `changes` the Display controls show (`Changed: Display category Standard → All.`). |
 | `set_display_combination` | Yes | Applies a display combination by `id`, or the active one again with `reapply: true`, as the **View** menu and **Reapply** do. Datasets of products it leaves out are made inactive, which takes them out of the S-98 rules and pick, not only the drawing; datasets of products it includes are made active. It also sets the combination's display category, viewing groups, layers and sub-layers. It never changes mariner safety settings, the **Navigational warnings** switch, display planes, the palette, own ship, AIS or routes, and route checks still use every loaded dataset. Products it names that aren't loaded aren't fetched. Returns `previousId`, `activeId`, the `datasets` whose Active flag changed and the `notLoadedProducts`. There's no tool to save, rename or delete views. Returns `display_combination_not_found` or `no_active_display_combination`. |
+| `get_weather_display` | No | Returns the **Weather** section of **Display controls**: `isobars`, `windSpeedFill`, `waveArrows`, `isotherms`, `currents`, `airTemperature`, `precipitation`, `thunderstormRisk` and `cloudCover` for weather grids, and `windRadii`, `pastTrack` and `forecastTimes` for tropical cyclones, each `true` when drawn; `sectionShown` (a GRIB2, NetCDF, tropical cyclone or surface analysis dataset is loaded) and `cycloneSwitchesShown` (a tropical cyclone is). |
+| `set_weather_display` | Yes | Sets **Weather** switches of **Display controls**, as their toggles do; an omitted argument is left as it is, and all are kept after a restart. The switches apply to every weather dataset whether or not the section shows. Returns what `get_weather_display` returns. |
+| `get_tide_display` | No | Returns SoundCharts' tide prediction state: `tideStations` (the **Tide stations · predicted** live feed is on the map and shown), `currentStations` (the **Current stations · predicted** live feed, with `currentStationsInView` and `currentStationsDrawn`, which leaves out stations S-111 covers), `usePredictions` (**Use tide predictions where there's no S-104** in Mariner Settings) and `predictionState` (`off`, `loading`, `in_use` or `no_station_list`), `stationsInView` (stations in view at 1:500,000 and larger) and `stationsDrawn` (after thinning to 40 px and leaving out stations S-104 covers at the view time), and `stationList`: `present`, `provider`, `date`, `tideStations`, `currentStations`, `stale` (NOAA has newer data, or the list is over 12 months old when it can't check), `activity` (`idle`, `loading`, `downloading` or `checking`), download progress and `lastError`. |
+| `set_tide_display` | Yes | Sets `tideStations`, `currentStations` and `usePredictions`: the first two subscribe to or unsubscribe from the live feed in the Library's **Live feeds**, the last is the setting; an omitted one is left as it is, and all are kept after a restart. A feed turns on once its entry has loaded, a moment after the call, so read `get_tide_display` again to see it. Turning either on with no station list cached starts NOAA's download (about 10 minutes); `refreshStationList: true` downloads it again. Returns what `get_tide_display` returns. |
+| `get_bathymetry_display` | No | Returns the **Bathymetry** section of **Display controls**: `reliefShading` (a hillshade over the S-102 depth bands, off by default), `true` when drawn; `sectionShown` (an S-102 dataset is loaded). |
+| `set_bathymetry_display` | Yes | Sets **Bathymetry** switches of **Display controls**, as their toggles do; an omitted argument is left as it is, and all are kept after a restart. The switch applies to every S-102 dataset whether or not the section shows. Returns what `get_bathymetry_display` returns. |
+| `get_aml_display` | No | Returns the **Additional Military Layers** section of **Display controls**: `products` (every AML product, loaded ones first, with `code`, `name`, `visible`, `cellCount` and `shownCount`), `followScaleBands`, the `scaleDenominator` the bands were applied at, `clbChipShown` (the "AML · CLB not used for depth checks" chip) and `sectionShown` (an AML cell is loaded). |
+| `set_aml_display` | Yes | Sets the **Additional Military Layers** switches, as their checkboxes do: `products` maps product codes (`CLB`, `ESB`, `LBO`, `SBO`, `MFF`, `RAL`, or `3.0` for the AML 3.0 integrated product) to `true` or `false`, and `followScaleBands` turns **Follow AML scale bands** on or off. An omitted switch is left as it is, and all are kept after a restart. A product switch hides whole cells without changing their Datasets rows; an unknown code is rejected and nothing changes. Returns what `get_aml_display` returns. |
 | `list_notifications` | No | Lists the notifications on screen, oldest first: `id`, `severity`, `title`, `message`, `createdUtc`, `persistent` and their action labels. |
 | `dismiss_notification` | Yes | Dismisses the notification with `id`, or all of them (`all`, the default), as the close button does. Returns the ids dismissed, or `notification_not_found`. Useful before a screenshot. |
 | `get_recent_logs` | No | Returns the viewer's recent log messages, as the **Logs** tab shows them, without `--log-file`: each entry's `sequence`, `time`, `lastTime`, `level`, `area` (`Library`, `SECOM`, `Updates`, `AIS`, `Datasets`…), `category`, `message`, `exception` and `count` (identical consecutive messages collapse into one entry). `minLevel` is `debug`, `information` (default), `warning` or `error`; `limit` keeps the newest (default 200, at most 1000); `afterSequence` returns only newer entries, so you can poll with the previous call's `lastSequence`; `search` filters by text. Also returns `matched`, `truncated`, `captureLevel` (`debug` while the tab's level filter is **Everything, Debug included** or with `--verbose`) and `capacity`. The home directory shows as `~`. |
@@ -235,6 +302,140 @@ SoundCharts only.
 | `follow_warning_link` | Yes | Follows the link `text` (such as `106/26`; `occurrence` picks among repeats, default 1) in the open card, or in the card `datasetId`/`featureId`, as clicking it does: the linked warning is selected in the **Navigational warnings** panel and its card opens. Returns what `get_warning_cards` returns. |
 | `preview_warning_card` | Yes | Previews the part `featureId` of `datasetId` on the map with the pick highlight, as pointing at its card does when a pick hits several warnings; omit `featureId` to end the preview. Returns what `get_warning_cards` returns. |
 
+### Tide tools
+
+Both hosts provide these tools. They read the offline tide station catalogue
+that [`s100 tides update`](cli.md#tides-update) downloads from NOAA CO-OPS,
+and need no network. `s100 mcp serve` takes another catalogue with
+`--tide-catalogue`. SoundCharts reads its own station list,
+`tide-stations.json.gz` beside its settings (or under `--data-dir`), the one
+**Use tide predictions where there's no S-104** reads. Without a catalogue,
+both tools return `tide_catalogue_not_available`, whose `hint` says how to
+get one.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_tide_stations` | No | Lists tide stations within `radiusMeters` (default 50,000) of `latitude` and `longitude`, or in a box (`south`, `west`, `north`, `east`), nearest first, up to `limit` (default 10, at most 500). Each station has its `id`, `name`, `type` (`tide`), `kind` (`harmonic` or `subordinate`), `position`, `distanceMeters`, `datums` (heights above `datumsReference`, MLLW where the station has it), `predictableDatums`, and for a subordinate station `referenceStationId`, `referenceStationName` and `offsets` (`highMinutes`, `lowMinutes`, `heightAdjustment`, and `highFactor` and `lowFactor` or `highOffsetMeters` and `lowOffsetMeters`). `catalogue` gives the `provider`, `date`, `ageDays`, `stale` (over 12 months old) and `stationCount`. `truncated` is `true` when more stations matched than `limit`. |
+| `predict_tide` | No | Predicts the astronomical tide at a `station` (id or name), or at the nearest station within `radiusMeters` (default 10,000) of `latitude` and `longitude` that can be predicted on the datum. `from` and `to` set the window (default: now, rounded down to the step, for 24 hours; at most 366 days). `mode` is `series` (default: heights every `stepMinutes`, default 30, at most 2,000), `extremes` (highs and lows, to the minute) or `both`. `datum` is `MLLW` (default), `MLW`, `MSL`, `MHW`, `MHHW`, `LAT` or `HAT`; subordinate stations are MLLW only. Returns the `station` (with `kind`, `referenceStationId` and `distanceMeters`), `kind: "prediction"`, the `datum` and its S-100 `verticalDatum` code, `series` and `extremes` with UTC times and heights in metres above the datum (positive up), `method` for a subordinate station, `caveat` and `catalogueDate`. |
+
+Errors: `tide_station_not_found` (with up to ten `candidates` when a name
+matches several stations), `no_tide_station_near`, and
+`tide_datum_not_available` (with the datums the station has).
+
+A prediction leaves out wind, pressure and river flow, which can move the
+water 0.5 m or more. Quote `caveat` ("Astronomical tide only, not a
+forecast.") with any value. Predictions aren't S-104 and aren't for
+navigation.
+
+### Tidal current tools
+
+Both hosts provide these tools too. They read the current stations in the
+same catalogue as the [tide tools](#tide-tools); a catalogue downloaded
+before current stations were added has none, and `s100 tides update` adds
+them. NOAA lists each depth bin at a current station as its own station, such
+as `PUG1701_33`.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_current_stations` | No | Lists tidal current stations within `radiusMeters` (default 50,000) of `latitude` and `longitude`, or in a box (`south`, `west`, `north`, `east`), nearest first, up to `limit` (default 10, at most 500). Each station has its `id`, `name`, `type` (`current`), `kind` (`harmonic` or `subordinate`), `position`, `distanceMeters`, `depthMeters` below the surface, `floodDirectionDegrees` and `ebbDirectionDegrees` (where the current sets, degrees true), `isRotary`, and for a subordinate station `referenceStationId`, `referenceStationName` and `offsets` (`slackBeforeFloodMinutes`, `maximumFloodMinutes`, `slackBeforeEbbMinutes`, `maximumEbbMinutes`, `maximumFloodRatio`, `maximumEbbRatio`). `catalogue` is as for `list_tide_stations`, with `currentStationCount`. |
+| `predict_current` | No | Predicts the astronomical tidal current at a `station` (an id, NOAA's id without its depth bin, or a name; the last two take the shallowest bin), or at the nearest station within `radiusMeters` (default 10,000) of `latitude` and `longitude`, the shallowest bin where several share a place. `from` and `to` set the window as for `predict_tide`. `mode` is `series` (default: every `stepMinutes`, default 30, at most 2,000), `events` (slacks and maxima, to the minute) or `both`. Returns the `station` (with `kind`, `referenceStationId`, `distanceMeters`, `depthMeters`, flood and ebb directions and `isRotary`), `kind: "prediction"`, `unit: "kn"`, `series` (`time`, `speedKnots`, `directionDegrees`, `phase`: `flood` or `ebb`), `events` (`time`, `kind`: `slack_before_flood`, `max_flood`, `min_flood`, `slack_before_ebb`, `max_ebb` or `min_ebb`, `speedKnots`, and `directionDegrees` except at slack), `method` for a subordinate station, `caveat` and `catalogueDate`. Times are UTC. |
+
+Errors: `current_station_not_found` (with up to ten `candidates` when a name
+matches several stations), `no_current_station_near` and
+`current_station_not_predictable`.
+
+Wind and river flow change real currents, and the strongest stream in a pass
+can be away from the station. Quote `caveat` ("Astronomical tidal current
+only, not a forecast.") with any value. Predicted currents aren't S-111,
+aren't for navigation and aren't used in route checks.
+
+### Predicted values in sampling
+
+Where the host has tide predictions on (SoundCharts' **Use tide predictions
+where there's no S-104**, or `s100 mcp serve --tide-predictions`),
+`sample` for water level (`S-104`) falls back to a
+prediction where no S-104 dataset covers the point and time: the station
+nearest by water within 10 km, as the route check uses. The result's
+`datasetId` is `tide-predictions`, its `value` is a `water_level_station`
+sample (height on the station's chart datum, with a trend from the rise over
+the hour round it), and it adds a `source`:
+
+```json
+"source": {
+  "kind": "prediction",
+  "station": { "id": "9447130", "name": "SEATTLE (Madison St.), Elliott Bay", "type": "tide", "kind": "harmonic", "referenceStationId": null, "distanceMeters": 420 },
+  "verticalDatum": 12,
+  "caveat": "Astronomical tide only, not a forecast.",
+  "catalogueDate": "2026-11-12T00:00:00+00:00"
+}
+```
+
+A value from a loaded dataset has no `source`. A `series` query is predicted
+at each instant; a `range` query every 30 minutes, at most 2,000 heights.
+With predictions off, the S-104 error stands.
+
+With predictions on and no station in reach, `sample` returns
+`no_station_within_reach` rather than `no_dataset_covers_point`, so an agent
+can tell "out of every station's reach" from "nothing loaded here". It carries
+the `quantity` (`water_level` or `current`), the `reachMeters` that applies,
+and the `nearestStation` that can be predicted: its `id`, `name`, position,
+`distanceMeters`, and `distanceByWater` (false when it's a straight line,
+past 20 km). An S-104 or S-111 error that says more, such as
+`time_out_of_range` or `no_data_at_point`, still stands. Along a `polyline`,
+each sample out of reach has this `error`.
+
+```json
+{
+  "code": "no_station_within_reach",
+  "message": "No current station is within reach of 48.399, -122.587: the nearest, Deception Pass (Narrows) (PUG1701_33), is 4.8 km away by water, beyond the 2 km a current station reaches. Load an S-111 dataset that covers the point, or predict at the station with predict_current.",
+  "quantity": "current",
+  "reachMeters": 2000,
+  "nearestStation": { "id": "PUG1701_33", "name": "Deception Pass (Narrows)", "latitude": 48.4065, "longitude": -122.6431, "distanceMeters": 4790, "distanceByWater": true }
+}
+```
+
+The same switch fills S-111 gaps, with a much shorter reach.
+`sample` for current (`S-111`) falls back to the
+predicted tidal current at the current station nearest by water within
+**2 km**, the shallowest bin where several share a place. Tide heights change
+slowly over 10 km, but tidal currents don't: a station in a narrows such as
+Deception Pass says little about the open water either side of it, so a point
+farther than that from every current station returns
+`no_station_within_reach`. Change the
+reach with `s100 mcp serve --current-station-reach <metres>` (or, in code,
+`RouteCheckSourceOptions.MaxCurrentStationDistanceMeters`). The tide-station
+reach stays 10 km.
+
+The `datasetId` is `current-predictions`, the `value` is a
+`surface_current_station` sample (speed in m/s and knots, and the direction
+the current sets toward), and `source` names the station with
+`type: "current"`, no `verticalDatum`, and the caveat "Astronomical tidal
+current only, not a forecast." It also adds a `confidence` that falls with the
+station's distance, and a `note` to quote with the value:
+
+| `confidence` | Station distance |
+|---|---|
+| `high` | 500 m or less |
+| `medium` | 500 m to 1 km |
+| `low` | more than 1 km |
+
+```json
+"source": {
+  "kind": "prediction",
+  "station": { "id": "PUG1701_33", "name": "Deception Pass (Narrows)", "type": "current", "kind": "harmonic", "referenceStationId": null, "distanceMeters": 1480 },
+  "verticalDatum": null,
+  "caveat": "Astronomical tidal current only, not a forecast.",
+  "catalogueDate": "2026-11-12T00:00:00+00:00",
+  "confidence": "low",
+  "note": "Predicted at Deception Pass (Narrows), 1.5 km away by water. Tidal currents change over short distances, most of all either side of a narrows: the current here may differ a lot."
+}
+```
+
+A tide prediction's `source` has no `confidence` or `note`. The reach doesn't
+yet check that the way by water stays in the station's channel: a station just
+inside a narrows still reaches the open water at its mouth.
+`check_route` doesn't use predicted currents.
+
 ### Library tools
 
 SoundCharts only.
@@ -242,7 +443,7 @@ SoundCharts only.
 | Tool | Changes state | What it does |
 |---|---|---|
 | `list_library_sources` | No | Lists the Library. Each collection (top-level node) has its kind tag (`DIR`, `ZIP`, `WEB`, `AWS`, `LIST`, `FEED`, `SECOM`, `JSON` or `S-128`), item count and status line. Each source has its index state, `indexedAt` (how old a cached online catalogue is), URL (shared-feed tokens masked), item counts by state unless `counts: false`, for a source kept downloaded its last `sync` (objects local and listed, downloaded, pruned, failed, bytes needed when too large), and `showOnMap`. |
-| `query_library_items` | No | Finds Library datasets, paged (`page`; `pageSize` 1 to 500, default 50). Filters: `sourceId` (collection or source), `states` (`online`, `local`, `loaded`, `on_pan`, `update`, `expired`, `missing`, `listed`), `validAt` (`view_time`, as the Library's valid-at-view-time toggle does, or an ISO 8601 time: data whose run or time coverage includes it), `spec`, `text` (as the Library filter box), a bounding box (`south`, `west`, `north`, `east`), or a point (`lat`, `lon`: what covers it, most detailed first, as tapping the map does). Each item reports `id` (`<sourceId>:<key>`), spec, state and tags as its row shows them, edition, issue date, size, bounds, local path and, for forecasts, the model, run and `validUntil`. |
+| `query_library_items` | No | Finds Library datasets, paged (`page`; `pageSize` 1 to 500, default 50). Filters: `sourceId` (collection or source), `states` (`online`, `local`, `loaded`, `on_pan`, `update`, `expired`, `missing`, `listed`), `validAt` (`view_time`, as the Library's valid-at-view-time toggle does, or an ISO 8601 time: data whose run or time coverage includes it), `spec`, `text` (as the Library filter box), a bounding box (`south`, `west`, `north`, `east`), or a point (`latitude`, `longitude`, or the older `lat`, `lon`: what covers it, most detailed first, as tapping the map does). Each item reports `id` (`<sourceId>:<key>`), spec, state and tags as its row shows them, edition, issue date, size, bounds, local path and, for forecasts, the model, run and `validUntil`. |
 | `describe_library_item` | No | Returns one item (`itemId`) with its details pane: groups of labelled fields (Forecast, Product, Coverage, Source and so on). Returns `library_item_not_found` for an unknown id. |
 | `list_known_sources` | No | Lists the online catalogue directory: the curated sources and the user's own (`userAdded`), with provider, region, format, URL, edition and size support, product, pilot and not-for-navigation flags, and forecast feeds' models (cadence, horizon). |
 | `add_library_source` | Yes | Adds a Library source the way the add dialogs do. Pass a known source (`knownSourceId`), a catalogue or feed `url` (including a SECOM service endpoint), or a local `path` (folder, exchange set, manifest or S-128 catalogue; `kind` overrides the guess). `sync` keeps an online source's items downloaded and current (a SECOM service also prunes). `inMapView` limits a SECOM service to the current map view. For a SECOM service, `identity` sets the MCP identity it presents and signs with (`default`, the default; `none`; or an `sc-ident:…` reference), and `wait: true` adds a service that can't be read yet (it needs a certificate or a signed request, refused the identity, has an untrusted server or can't be reached) with no datasets, scoped to `choices` or the product it is known for. It lists by itself once it can be read; the result's `waitingBecause` says why it couldn't be. `showOnMap` keeps a source's local datasets loading as you pan, under one Datasets row; it's on by default for a synced SECOM service. Call with `preview: true` first to read the catalogue and list its `choices` (NOAA states, districts and regions, USACE rivers, S-111 models, S-102 areas, manifest groups, feed or SECOM products) with sizes, and the forecast `shapes`, S-100 `resolutions` and existing `collections`. Then add with `choices` (values or labels) or `includeAll`, into `collectionId` or a new collection (`collectionName`). It only indexes; nothing is downloaded. Returns the new collection and source ids. |
@@ -358,9 +559,9 @@ reports this as the dataset's `viewingGroups`.
 | `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm`, `isActive`, `readOnly`, `source` (for a received route) and `displayMode` (`native` or `planning`), the collection's `activeRouteId`, `editMode` (whether the route editor is on), and `passageCardExpanded` (whether the **Routes** panel's Passage card is expanded). |
 | `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs`, `totalDistanceNm`, the undo state (`canUndo`, `canRedo`, `undoLabel` and `redoLabel`, for example `move waypoint`), `readOnly`, `source` and `displayMode` (as `list_routes` reports them), `passageFields` (as `get_passage` reports `fields`), and, for the active route, the selection: `selectedWaypointIndex` and `selectedLegIndex`. Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), the rest of its S-421 navigational envelope, and `durationMinutes` when it has a speed. Once any leg has a speed, each waypoint has an `eta` and the route has `times`: `departure` (the passage departure, or the view time when none is set, with `fromViewTime: true`), `arrival`, `durationMinutes`, and `etasStopAtLeg`, the first leg with no speed. ETAs use each leg's entered speed over ground; S-111 currents aren't applied. |
 | `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
-| `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
-| `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same optional fields as `append_waypoint`. Returns the updated route. |
-| `move_waypoint` | Yes | Moves the waypoint at `index` (`0` to `waypointCount - 1`) to a new `lat` and `lon`. Returns the updated route. |
+| `append_waypoint` | Yes | Adds a waypoint (`latitude`, `longitude`; `lat`/`lon` also work) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route, with `water`: what the charts show at the point, as `sample` reads it (`waterMask`, `depth`). With `minDepthMeters`, or when the route has a draft (then draft + squat + required UKC, `minDepthFrom: "route"`), `water` also says whether the point is `navigable`, and if not, the `notNavigableReason` (`land`, `uncharted`, `shoal`, `hazard`, `no_depth`) and the `nearestNavigable` point to move it to. `validate: true` reports `water` without adding the waypoint (`applied: false`). |
+| `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same fields as `append_waypoint`, including `minDepthMeters` and `validate`, and returns `water` the same way. |
+| `move_waypoint` | Yes | Moves the waypoint at `index` (`0` to `waypointCount - 1`) to a new `latitude` and `longitude` (`lat`/`lon` also work). Returns the updated route, with `water` for the new position as `append_waypoint` gives it; `minDepthMeters` and `validate` work the same way. |
 | `delete_waypoint` | Yes | Removes the waypoint at `index`, merging the legs either side. Returns the updated route. |
 | `set_leg_attributes` | Yes | Updates one leg (`legIndex`): its `geometryType` (`loxodrome` or `geodesic`), its passage overrides (`speedKnots`, `draftMeters`, `portCrossTrackDistanceLimitMeters`, `starboardCrossTrackDistanceLimitMeters`, `staticUnderKeelClearanceMeters`) and the rest of its navigational envelope (channel limits, safety contour and depth, minimum and maximum SOG and STW, dynamic UKC, safety margin, note; metres and knots as in S-421). Values you pass overwrite, and values you omit are unchanged. An override equal to the route's passage value isn't stored, so the leg keeps inheriting. `clear` lists parameter names to unset; clearing an override resets the leg to inherit. Returns the updated route. |
 | `set_route_info` | Yes | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`, `validityEnd`) and vessel particulars (`vesselName`, `vesselMmsi`, `vesselImo`, `vesselCallsign`, `vesselLengthMeters`, `vesselBeamMeters`; passing any vessel field creates the vessel block). Values you pass overwrite. Returns the updated route. |
@@ -376,27 +577,27 @@ reports this as the dataset's `viewingGroups`.
 | `export_route` | No | **Export…**: writes a route in a `format`: `RTZ` (`version` `1.2`, `1.1` or `1.0`; 1.2 when omitted) or `S-421` (version `1.0`). Pass `includeCheckSettings: true` to also write your draft, required UKC and departure; RTZ writes the departure as a calculated schedule and the draft and required UKC on each leg. Writes to `path`, or returns the file's `content` when you omit it. Returns the `identity`, `cannotHold` (the fields of this route the format can't hold, empty when nothing is lost) and the dialog's `suggestedFileName`. |
 | `set_route_display_mode` | Yes | Sets how the map draws a route (`mode`): `native` draws a received S-421 route with its dataset's own portrayal, and `planning` hides the dataset and draws the route on the route overlay. The dataset's visibility in the Datasets panel follows the mode, and turning the dataset on or off there switches the mode. Only received S-421 routes have a Native mode. Returns the updated route. |
 | `set_check_mode` | Yes | Turns **Check route** on (`on: true`) or off for the active route, or for `routeId` (made active first), as the Routes panel's toggle does. The route needs at least two waypoints; without a draft only the route checks run, and the clearance parts (minimum UKC, Clearance tab, window) are absent (`hasDraft: false`) and the route keeps its normal colour. While it's on, the map colours the route by UKC state at ETA when a draft is set, Object Information folds to its edge tab, and the panel shows the verdict card and leg chips. By default it waits for the result (`wait: false` returns at once). Returns what `get_check_state` returns. |
-| `get_check_state` | No | Returns what Check route is showing: `on`, `routeId`, `hasDraft` (false when the clearance check doesn't run), `clearanceChecked`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), and the verdict card: one verdict over every check, worst first, as `verdictKind` (`must_review`, `data_ends`, `check` or `clear`), `verdictTone`, `verdictTitle` (naming the worst finding, such as "Crosses drying ground", or without a draft "2 to review"), `verdictSubtitle`, the `summary` rows (`clearance`, `route` and, when S-124 warnings were checked, `warnings`, each with `text`, `chip`, `chipTone` and a `link` such as "+ Add draft") and the `footer`. `verdict` is the clearance band (null without a draft), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. `depthBasis` is what `get_depth_basis` returns, so a reported clearance also says whether the chart beside it is adjusted. Waits for a pending result unless `wait: false`. For the full numbers, call `check_route`. |
+| `get_check_state` | No | Returns what Check route is showing: `on`, `routeId`, `hasDraft` (false when the clearance check doesn't run), `clearanceChecked`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), and the verdict card: one verdict over every check, worst first, as `verdictKind` (`must_review`, `data_ends`, `check` or `clear`), `verdictTone`, `verdictTitle` (naming the worst finding, such as "Crosses drying ground", or without a draft "2 to review"), `verdictSubtitle`, the `summary` rows (`clearance`, `route`, when S-124 warnings were checked `warnings`, and while a weather forecast is loaded `weather`, each with `text`, `chip`, `chipTone`, a `link` such as "+ Add draft" and its `tooltip`, which on the weather row names the limits in use) and the `footer`. `verdict` is the clearance band (null without a draft), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. `depthBasis` is what `get_depth_basis` returns, so a reported clearance also says whether the chart beside it is adjusted. Waits for a pending result unless `wait: false`. For the full numbers, call `check_route`. |
 | `set_departure` | Yes | Sets the route's `departure`, as dragging the Clearance tab's departure band does, or with `nearestMeeting: true` jumps to the departure nearest the current one that meets your settings, as the verdict card's **Depart {HH:MM}** does (Check route must be on). One undoable edit. Waits for the new result and window unless `wait: false`, and returns what `get_check_state` returns. |
 | `set_follow_passage` | Yes | Turns **Follow passage** on (`on: true`) or off, as the Timeline header's toggle does. While it's on, the view time is pinned to the ETA at the Clearance cursor (`set_passage_cursor`), or at the minimum UKC when there's no cursor, so S-104 and S-111 show what the ship meets. Turning it on pins the Timeline; when the route has no departure, it first sets the departure to the one being checked, as one undoable edit. Turning it off leaves the view time where it is. Choosing another time (`set_view_time`, `step_time`, Go live) or turning Check route off stops it. Needs Check route on with ETAs; otherwise returns `invalid_argument`. Returns what `get_timeline_state` returns. |
 | `set_passage_cursor` | Yes | Moves the Check route cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
 | `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check route is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `check_route`'s `clearance.samples`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
-| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check route mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor`, `route_check.enters_prohibited_area`, `route_check.protected_area` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `category` (`chart`, `depth`, `area`, `warning`, `clearance`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), a `feature` reference (dataset and feature id) when one is behind it, and the `details` behind it (as `check_route`'s, plus a clearance stretch's `minimumClearanceMeters`, `requiredUkcMeters`, `marginMeters` and `minutesBelow`). An `s124` finding also has its `warning`: `number`, `title`, `locality`, `relation` (`crosses` or `near`), `status` at the ETA (`in_force`, `not_in_force` or `cancelled`; the view time when the route has no speed, see `atEta`), `from` and `until`, `validity`, `cancellationDate`, the full `text` per language, and the inline Warning card's `statusText` ("In force at 06:08", "Not in force at 06:15" or "Cancelled") and `statusReasonText` (why another warning ended it). Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. It also reports the list's view: the `filter` chip (`all`, `clearance`, `route` or `warnings`) and the `counts` per chip, the `merged` rows (check and info findings that share a code show once with a count; each gives its `id`, `code`, `group`, `count`, `meta`, member `ids` and whether it's `expanded`), `infoOpen` (INFO is folded by default), `expandedId`, and `warningCardId`: the selected S-124 finding, whose row is expanded into its Warning card. |
+| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check route mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor`, `route_check.enters_prohibited_area`, `route_check.protected_area` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `category` (`chart`, `depth`, `area`, `warning`, `clearance`, `confidence`, `data` or `weather`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), a `feature` reference (dataset and feature id) when one is behind it, and the `details` behind it (as `check_route`'s, plus a clearance stretch's `minimumClearanceMeters`, `requiredUkcMeters`, `marginMeters` and `minutesBelow`). An `s124` finding also has its `warning`: `number`, `title`, `locality`, `relation` (`crosses` or `near`), `status` at the ETA (`in_force`, `not_in_force` or `cancelled`; the view time when the route has no speed, see `atEta`), `from` and `until`, `validity`, `cancellationDate`, the full `text` per language, and the inline Warning card's `statusText` ("In force at 06:08", "Not in force at 06:15" or "Cancelled") and `statusReasonText` (why another warning ended it). Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. It also reports the list's view: the `filter` chip (`all`, `clearance`, `route`, `warnings` or `weather`) and the `counts` per chip, the `merged` rows (check and info findings that share a code show once with a count; each gives its `id`, `code`, `group`, `count`, `meta`, member `ids` and whether it's `expanded`), `infoOpen` (INFO is folded by default), `expandedId`, and `warningCardId`: the selected S-124 finding, whose row is expanded into its Warning card. |
 | `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row or its map marker does: the map zooms to it (unless `zoom: false`) with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. A route-check or S-124 finding's marker gets a ring in its tone and the one pill ("{title} · {ETA}"), a span's sleeve draws wider, and the leg's corridor is filled; a clearance-check finding is outlined dashed. Selecting an S-124 finding also expands its row into the warning's Warning card, with its status at the ETA and the text clipped at 5 lines (`warningCardId`; a folded INFO group or a collapsed merged row that holds it opens); selecting another finding or clearing the selection closes it. Omit `id` to clear the selection. Needs Check route on. Returns what `get_findings` returns, whose `highlight` says what the map shows: its `kind` (`marker`, `marker_and_sleeve`, `outline` or `none`), the marker `shape` (`octagon` for must review, `triangle` for check, `circle` for info), whether a dotted `leader` runs to an off-track feature, and `corridorFilledLegs`. |
-| `set_findings_view` | Yes | Sets the checked route's findings list view, as its controls do: the `filter` chip (`all`, `clearance`, `route` or `warnings`; the verdict card's summary rows set it too), `infoOpen` to unfold or fold the INFO group (remembered per route), and `expandedId` to expand a merged row from `get_findings`' `merged` (an empty string collapses it). Needs Check route on. Returns what `get_findings` returns. |
-| `get_map_legend` | No | Returns the Check route map legend at the map's bottom left: `shown` (Check route is on), `open` (otherwise it's folded to a "Legend" chip; remembered per user) and its `sections`, each with a `title` and `rows`: "UKC AT ETA" (only with a draft) and "FINDINGS" (the marker shapes for Must review, Check and Info, a sleeve for a stretch of the route, and the cross-track corridor's dotted edge). |
-| `set_map_legend` | Yes | Opens (`open: true`) or folds the Check route map legend, as clicking its header does; remembered per user. Returns what `get_map_legend` returns. |
+| `set_findings_view` | Yes | Sets the checked route's findings list view, as its controls do: the `filter` chip (`all`, `clearance`, `route`, `warnings` or `weather`; the verdict card's summary rows set it too), `infoOpen` to unfold or fold the INFO group (remembered per route), and `expandedId` to expand a merged row from `get_findings`' `merged` (an empty string collapses it). Needs Check route on. Returns what `get_findings` returns. |
+| `get_route_weather_settings` | No | Returns Check route's weather limits, as **Settings** > **Chart display** > **Mariner Settings** > **Weather on a route** shows them: `maxWindKnots` and `maxWaveHeightMeters`, each null when off (the default). The weather check compares the loaded GRIB2 or NetCDF forecast along the route at each ETA with them; where one is off, an RTZ route's own `vesselMaxWind` or `vesselMaxWave` is used. Also the **Tropical cyclones on a route** rows: `cycloneCheckAgainstKnots` (34, 50 or 64; default 34), `cycloneReportClosestApproach` (default true), `cycloneMustReviewInsideKnots` (64, 50, 34, or 0 for never; default 50) and the `cycloneMapping` line under them. |
+| `set_route_weather_settings` | Yes | Sets Check route's weather limits and tropical cyclone settings, as the Settings rows do: values you pass overwrite, values you omit are unchanged, and names in `clear` (`maxWindKnots`, `maxWaveHeightMeters`) are turned off. A limit must be positive. Narrowing `cycloneCheckAgainstKnots` past `cycloneMustReviewInsideKnots` moves that in too, and a `cycloneMustReviewInsideKnots` outside the radius checked against is refused. They're kept with the mariner settings, not with a route, and after a restart; a change re-runs an open route check. Returns what `get_route_weather_settings` returns. |
 | `get_measure` | No | Returns the measure tool: `active`, the `geometry` (`rhumb` or `greatCircle`), the `earthModel` (`wgs84` and the card's text), the `phase`, the path's `points`, and per leg the `from` and `to` positions (decimal degrees and the app's text), `distanceMetres`, `distanceNm`, `bearingDeg` and `reverseBearingDeg`, all unrounded. Also the `selectedLeg`, `totalMetres` and `totalNm`, and the measure `card`'s values as displayed. |
-| `set_measure` | Yes | Turns the measure tool on and sets its `points` (each a position string the card accepts or `{lat, lon}`; an empty array clears the path), its `geometry` (`rhumb` or `greatCircle`, remembered per user) and the `selectedLeg` its card shows. Returns what `get_measure` returns. Frame the result with `set_viewport` for a capture. |
-| `set_range_bearing` | Yes | Turns the **Range & bearing** map tool on (any other map tool goes off) and sets what it's given, as typing on its card does. `origin` is a position string the card accepts (`32°35.224'S 061°17.710'E`, `-32.587, 61.295`) or `{lat, lon}`. `range` is metres as a number, or a string with a unit (`2,000 km`, `1079.9 NM`, `1.2 mi`, `500 m`; a bare `M` is refused); a string without a unit is in the Distance unit setting. `bearing` is degrees true. A given range or bearing is locked, and with an origin, range and bearing the end is fixed. `geometry` (`rhumb` or `greatCircle`, remembered) sets how the bearing line runs and the end is computed; the range ring and `rings` (`{interval, count}`, or `false` to turn them off) are geodesic circles either way. Returns what `get_range_bearing` returns. |
+| `set_measure` | Yes | Turns the measure tool on and sets its `points` (each a position string the card accepts, `{latitude, longitude}` (or `{lat, lon}`) or a `[lat, lon]` pair; an empty array clears the path), its `geometry` (`rhumb` or `greatCircle`, remembered per user) and the `selectedLeg` its card shows. Returns what `get_measure` returns. Frame the result with `set_viewport` for a capture. |
+| `set_range_bearing` | Yes | Turns the **Range & bearing** map tool on (any other map tool goes off) and sets what it's given, as typing on its card does. `origin` is a position string the card accepts (`32°35.224'S 061°17.710'E`, `-32.587, 61.295`), `{latitude, longitude}` (or `{lat, lon}`) or a `[lat, lon]` pair. `range` is metres as a number, or a string with a unit (`2,000 km`, `1079.9 NM`, `1.2 mi`, `500 m`; a bare `M` is refused); a string without a unit is in the Distance unit setting. `bearing` is degrees true. A given range or bearing is locked, and with an origin, range and bearing the end is fixed. `geometry` (`rhumb` or `greatCircle`, remembered) sets how the bearing line runs and the end is computed; the range ring and `rings` (`{interval, count}`, or `false` to turn them off) are geodesic circles either way. Returns what `get_range_bearing` returns. |
 | `get_range_bearing` | No | Returns the Range & bearing tool: `active`, `phase` (`placing_origin`, `following` or `fixed`), `geometry`, the `origin` and `end` (decimal degrees and the card's text), `rangeMetres`, `rangeNauticalMiles`, `bearingDegrees`, `rangeLocked`, `bearingLocked`, `reverseBearingDegrees` (on a great circle not the bearing + 180°), the `rings` and the `earthModel` with its `earthRadiusMetres`. Values are unrounded; the card shows them rounded. |
 
 A typical sequence:
 
 1. `create_route` makes a new active route.
 2. `append_waypoint` and `insert_waypoint` lay down the geometry. Use the query
-   tools, such as `sample_coverage`, `nearest_features` and `find_at`, to check
+   tools, such as `sample`, `nearest_features` and `find_at`, to check
    each leg.
 3. `move_waypoint` and `delete_waypoint` refine it, and `undo_route_edit`
    steps back.
@@ -419,7 +620,7 @@ do.
 | Tool | Changes state | What it does |
 |---|---|---|
 | `set_test_clock` | Yes | Moves (`now`, or `advance` such as `+1h`), freezes (`freeze`) or resets (`reset`) the app's notion of now, so forecasts age, runs expire and a Live Timeline advances without waiting. The Timeline and the Library's expiry check react at once. |
-| `ui_tree` | No | Lists the UI as an accessibility client sees it: one root per window and open popup (`kind` `window` or `popup`, such as context menus and flyouts), each a tree of elements. Each element has a `ref` (such as `e12`, valid while the element stays on screen), `id` (its automation id, such as `Datasets.DatasetsTab`, `Library.Tree` or `ActivityBar.Datasets`; see the convention in the [viewer tests README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md)), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem` and so on), `name`, `text` (a row's visible text, or an icon button's tooltip, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and lifts the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree. `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) limit the size. The map is one element; use the map tools for chart content. |
+| `ui_tree` | No | Lists the UI as an accessibility client sees it: one root per window and open popup (`kind` `window` or `popup`, such as context menus and flyouts), each a tree of elements. Each element has a `ref` (such as `e12`, valid while the element stays on screen), `id` (its automation id, such as `Datasets.DatasetsTab`, `Library.Tree` or `ActivityBar.Datasets`; see the convention in the [viewer tests README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md)), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem` and so on), `name`, `text` (a row's visible text, or an icon button's tooltip, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and lifts the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree. `depth` (0–25, default 25) and `maxNodes` (default 400) limit the size, and `truncated` says when either cut. An element where depth ran out above elements the listing would show has `more: true`: pass its `ref` as `root` to list the next levels. The map is one element; use the map tools for chart content. |
 | `ui_invoke`, `ui_set_value`, `ui_toggle`, `ui_select`, `ui_expand`, `ui_collapse`, `ui_focus`, `ui_context_menu` | Yes | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on` or `off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target an element by `id` or `ref`, not both. An id repeated in every row (such as `Datasets.Row.Remove`) is ambiguous alone: scope it with `within` (the row's ref or an ancestor's id), or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled` and `ui_action_not_supported` (with the element's `patterns`). A closing dialog or popup animates briefly after the call returns, so read `ui_tree` again before relying on it being gone. |
 
 ## Check a route
@@ -433,6 +634,8 @@ same checks as SoundCharts' Check route and `s100 route check`:
 - **areas**: S-101 regulated areas and S-122 protected areas.
 - **warnings**: S-124 navigational warnings.
 - **clearance**: the under-keel clearance, when every leg has a draft.
+- **weather**: wind and significant wave height from loaded GRIB2 and NetCDF
+  forecasts along the route at the ETAs, against the vessel's limits.
 
 It returns the whole report: the verdict, whether each check ran, every
 finding with the numbers behind it, and the clearance.
@@ -451,28 +654,148 @@ Pass the route in one of two ways:
   `set_passage`, `set_leg_attributes`). `s100 mcp serve` has no routes and
   returns `invalid_argument` for this form.
 
-`corridorHalfWidthMeters` overrides every leg's limits. It's a **half-width**:
-how far the corridor reaches to port, and to starboard, of the track, so the
-corridor is twice as wide. Any side without a limit uses 50 m.
+The other arguments come in groups, each an object:
 
-Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
+- `vessel`: the boat and its safety settings. The same object is meant for
+  every tool that judges water against a boat.
+- `window`: the departure sweep.
+- `weather`: forecast limits and tropical cyclones.
+- `limits`: distances and kinds that tune the chart and area checks.
+- `samples`: clearance sampling, and whether the samples are returned.
+
+For example:
+
+```json
+{
+  "polyline": "{\"vertices\":[[48.40,-122.66],[48.41,-122.64]]}",
+  "departure": "2026-11-20T15:00:00Z",
+  "vessel": { "draftMeters": 2.0, "requiredUkcMeters": 0.5, "speedKnots": 6,
+              "safetyContourMeters": 5, "safetyDepthMeters": 5 },
+  "window": { "from": "2026-11-20T12:00:00Z", "to": "2026-11-20T20:00:00Z", "stepMinutes": 15 }
+}
+```
+
+`vessel.safetyContourMeters` and `vessel.safetyDepthMeters` (together) add the
 depth and danger checks, as SoundCharts' findings list runs them with the
-mariner's settings (`get_mariner_settings`). Without them the chart check is
-`partial`. Each leg's dangers are also judged against that leg's draft +
+mariner's settings. Without them no depth area, sounding, S-102 shoal or
+charted danger is checked: the chart check is `partial` with the reason
+`safety_settings_missing`, so check it before reading a `clear` verdict as
+clear water. Each leg's dangers are also judged against that leg's draft +
 squat + required UKC.
 
-These arguments override every leg's value:
+These `vessel` values override every leg's value:
 
 - `draftMeters`. With a draft on every leg, the clearance check runs.
-- `speedKnots`: the speed over ground. S-111 currents aren't applied.
+- `speedKnots`: the speed, over the ground unless `speedThroughWater` is
+  true.
+- `speedThroughWater`: the speeds are through the water. Every check's ETAs
+  (water level, warnings, areas, weather and timing) then add the current
+  along the track to each 500 m stretch: S-111 where it covers the place and
+  time, else a current-station prediction within reach (with
+  `--tide-predictions`). Where neither has a value at the ETA, the speed is
+  taken as over the ground and the stretch is a `data.no_current_coverage`
+  finding (info). The result's `currents` gives `applied`, the `sources`
+  read (`origin` `s111` or `prediction`) and `withoutCurrentNm`; it's `null`
+  with speeds over the ground. Set across the track isn't applied.
 - `squatMeters`: a fixed allowance; it isn't modelled from speed.
 - `requiredUkcMeters`: when unset, the clearance check uses 0 m and sets
   `noMarginSet`.
 
+`window` sweeps departures for the departure window: from `from` to `to`
+every `stepMinutes` (default 5), or, as `{}`, across the S-104 range that
+covers the route. It needs a draft.
+
+`window.constraints` adds the **timing** check, which judges the planned
+departure and every swept departure against passage timing constraints and
+returns the result as `timing`. It needs a speed on every leg; without
+`from` and `to` it sweeps the 24 hours from `departure`.
+
+- `applyCurrents`: the speeds are through the water, as
+  `vessel.speedThroughWater` says: the timing check's ETAs and running times,
+  and every other check's ETAs, include the stream.
+- `gates`: tidal gates, each at a `waypoint` (zero-based) or a `latitude`
+  and `longitude` snapped to the track, with a `station` (a current station
+  id or name, as `predict_current` takes) or the nearest station that
+  reaches the gate. Each gate has one or more of `slackWithinMinutes` (the
+  ETA within that many minutes of slack water, which needs a station),
+  `maxCurrentKnots` and `fairOnly` (the current with the track, or slack).
+- `legLimits`: `[{leg?, maxOpposingKnots}]`, the strongest current against
+  the track allowed on a leg, or on every leg without `leg`. A leg with no
+  current data isn't judged.
+- `arriveBy` and `arriveNotBefore`: the latest and earliest arrival.
+- `arrivalTide`: `{minMeters?, maxMeters?}`, the water level at the arrival
+  waypoint at the ETA (S-104, else tide predictions).
+
+Currents come from loaded S-111 and, where it doesn't cover the place and
+time, current-station predictions (`--tide-predictions`); without either,
+`applyCurrents`, leg limits and current gates leave the check `partial`
+with `currents_missing`. Gates that name a station read its prediction. A station reaches
+2 km by water (`--current-station-reach`). Predictions are the astronomical
+tidal current only: quote `timing.caveat` with the times.
+
+`timing` has `planned` (the planned departure in full: arrival, running
+time, each leg's running minutes with and without currents, its mean
+current along the track and the strongest against it, each gate's ETA,
+current and nearest slack, and each constraint with `code`, `holds`,
+`detail`, `value` and `limit`), `departures` (each swept departure with its
+running time and the codes of the constraints that fail), and `windows`:
+each run of departures that meets every constraint, with its `best`
+departure, nearest slack at the slack gates or else the shortest running
+time. The constraint codes are `gate.slack`, `gate.max_current`,
+`gate.fair`, `leg.opposing_current`, `arrival.by`, `arrival.not_before` and
+`arrival.tide`.
+
+`weather.maxWindKnots` or `weather.maxWaveHeightMeters` runs the weather
+check. Each replaces the route's own limit (RTZ `vesselMaxWind` and
+`vesselMaxWave`); SoundCharts' Check route uses the mariner's limits instead
+(`get_route_weather_settings`). Without a limit from either, the weather check
+is `skipped` with `weather_limits_missing`, and without a weather dataset with
+`weather_missing`.
+
+With an NHC tropical cyclone advisory loaded, the weather check also tests
+the route against each storm within 600 NM, with or without limits, as
+`weather.cyclones` says: `checkAgainstKnots` (34, 50 or 64; default 34),
+`reportClosestApproach` (default true) and `mustReviewInside`
+(`"64"`, `"50"`, `"34"` or `"never"`; default `"50"`). SoundCharts uses the
+mariner's settings (`get_route_weather_settings`). See
+[Tropical cyclones](route-checks.md#tropical-cyclones).
+
+`limits` tunes the chart and area checks:
+
+- `corridorHalfWidthMeters` overrides every leg's limits. It's a
+  **half-width**: how far the corridor reaches to port, and to starboard, of
+  the track, so the corridor is twice as wide. Any side without a limit uses
+  50 m.
+- `trackClearanceMeters`: how close to the track line an aid to navigation,
+  structure or overhead feature counts as on the track (default 30 m).
+- `nearbyDistanceMeters`: how far beyond the cross-track limits a danger or
+  hazard counts as near the route (default 185.2 m, 0.1 NM).
+- `berthRadiusMeters`: how far from the departure and arrival waypoints
+  structures that raise the safety contour alert count as the berth (default
+  100 m; 0 turns it off). They're one info `route_check.berth_structures`
+  finding per end instead of crossings. Pontoons, piers and wharves within
+  60 m of one already grouped join it, out to four times the radius, so a
+  large marina's docks count as one berth.
+- `areaKindsOff`: kinds of prohibited area and area with special conditions
+  to turn off, by name (such as `anchorage_area` or `marine_farm`). Their
+  areas aren't reported; one `route_check.area_kind_off` finding per kind
+  says the route meets them.
+
+`samples` sets the clearance sampling: `spacingMeters` (default 50; each
+sample keeps the shoalest depth of its stretch), `include` to return the
+per-leg results and samples, and `max` (default 500; extra samples are
+thinned, keeping the tightest of each run).
+
+An invalid value is `invalid_argument` with its path as the parameter, such
+as `vessel.draftMeters`.
+
+SoundCharts and `s100 mcp serve` take the same arguments: the tool's schema
+is built from the request the check runs on.
+
 The legs' speeds give ETAs from `departure` (default: the route's departure,
 or SoundCharts' view time when it has none; for a polyline, now). Areas,
 warnings and water levels are judged at the ETAs, and where a leg has no
-speed, at the departure.
+speed, at the departure. So is the weather.
 
 The result has:
 
@@ -481,18 +804,20 @@ The result has:
   `water_level_ends_before_arrival`, `check` (Check findings, or a tight or
   incomplete clearance) or `clear`. `title` says it in the app's words, and
   `headlineId` is the finding that names it.
-- `checks`: each check's `name` (`chart`, `areas`, `warnings`, `clearance`),
+- `checks`: each check's `name` (`chart`, `areas`, `warnings`, `clearance`,
+  `weather`),
   its `state` (`ran`, `partial` or `skipped`), the `reason` when it didn't
   run in full (such as `safety_settings_missing` or `draft_missing`) and its
   `findingCount`.
 - `findings`, sorted by group and then by distance. Each has an `id`, `code`,
   `group`, `category` (`chart`, `depth`, `area`, `warning`, `clearance`,
-  `confidence` or `data`), `title`, `meta`, `legIndex`, `distanceNm`, a
+  `confidence`, `data` or `weather`), `title`, `meta`, `legIndex`, `distanceNm`, a
   `location` and the `feature` behind it. Its `details` carry the numbers,
   so clients needn't parse the text: a danger's depth, side, offset and the
   threshold that fired, a shoal's least depth and threshold, an area's
   restrictions, categories, dates and whether it's in force, a clearance
-  stretch's minimum, margin and minutes below. An S-124 finding has its
+  stretch's minimum, margin and minutes below, and a weather stretch's
+  quantity, state, time window, limit and highest value. An S-124 finding has its
   `warning` instead: its number, title, locality, `relation`, `status`,
   `from`, `until`, `atEta`, validity, cancellation date and text.
 - `summary`: the counts per group and its `text` ("2 to review", "1 to
@@ -500,6 +825,20 @@ The result has:
 - `legs`: each leg's corridor, with `portMeters` and `starboardMeters`.
 - `clearance`: the under-keel clearance (below), or null when the clearance
   check didn't run.
+- `weather`: the weather check, or null when it didn't run: its `verdict`
+  (`inside_cyclone_radius`, `above_limits`, `forecast_ends_before_arrival`,
+  `incomplete` or `within_limits`), the `limits` it used with their `origin` (`settings` or
+  `route`), `maxWind` and `maxWaveHeight` with where and when, `sampleCount`
+  and `notCheckedCount`, the `datasets` it read, and with `window` the
+  departure sweep across the forecast (`window`), each departure with the
+  `cycloneRadiusKnots` it meets and its `cycloneClosestNm`. With a storm near
+  the route, `cyclones` lists each one's `strongestRadiusKnots`, `inCone`,
+  `beyondForecast` and `closestApproach` (distance, ETA, the storm's centre
+  and whether it's a forecast point, an estimate or the best track), and
+  `cycloneSettings` gives the settings used. Grid weather findings are always
+  `check`; a storm's radii follow `cycloneMustReviewInside` and its closest
+  approach is `info`. See
+  [Weather along the route](route-checks.md#weather-along-the-route).
 - `datasets`: the datasets behind the result, and the `disclaimer`.
 
 In SoundCharts, `get_findings` shows the same findings in the route's list.
@@ -519,12 +858,17 @@ How it samples and classifies:
   `DepthArea` (DRVAL1), then a `Sounding` within 250 m. S-101 depths are
   lower confidence (`charted_depth_from_s101`).
 - **Spacing.** Along S-102, the check steps at half the finest grid cell so no
-  cell is skipped. Each sample stands for at most `sampleSpacingMeters`
+  cell is skipped. Each sample stands for at most `samples.spacingMeters`
   (default 50) and keeps the shallowest depth in its stretch.
 - **Water level** comes from S-104 at the ETA, interpolated between time
-  steps. Grids are used first, then the nearest station within 10 km. Outside
-  the S-104 extent or time range, or where a value is NoData, the sample is
-  `no_data` ("water level not applied").
+  steps. Grids are used first, then the nearest station within 10 km
+  measured through the loaded charts' water. Where the host has turned tide
+  predictions on, a harmonic prediction at the tide station nearest by water
+  fills in where no S-104 covers; its `waterLevels` entry has `kind:
+  "prediction"`, the station, its name, any reference station and the caveat
+  "Astronomical tide only, not a forecast." Outside the S-104 extent or time
+  range, with no prediction in reach, or where a value is NoData, the sample
+  is `no_data` ("water level not applied").
 - **Datums.** When the S-102 or S-101 and S-104 vertical datums differ, the
   water level is reported but not applied, and the stretch is a
   `datum_mismatch` gap. When a datum isn't declared, or isn't an S-100 code,
@@ -536,8 +880,14 @@ How it samples and classifies:
   - `below_setting`
   - `no_data`
 - **Confidence** is reported separately from the state, as a list of
-  reasons: `charted_depth_from_s101` and `datum_unconfirmed`, or an empty
-  list at full confidence. A sample on S-101 depth that meets the required
+  reasons: `charted_depth_from_s101`, `datum_unconfirmed` and
+  `water_level_predicted`, or an empty
+  list at full confidence. A swept departure can also carry
+  `water_level_from_lowest_low`: no water level covers part of the route,
+  and the charted depth meets the setting there at the lowest water level
+  applied on the route during that departure's passage, capped at 0 m.
+  `water_level_at_chart_datum` is the same with no water level applied
+  during the passage, so the gap was judged at 0 m. A sample on S-101 depth that meets the required
   UKC is `meets_settings` with `confidence: ["charted_depth_from_s101"]`.
   SoundCharts draws it in the band's colour, dashed. The result, `minimum`,
   each leg, each sample and each swept departure has a `confidence` list.
@@ -564,19 +914,19 @@ How it samples and classifies:
 - `sources`: the S-102 and S-101 datasets, the S-104 datasets and stations,
   the datums and the largest S-102 uncertainty.
 
-Set `includeSamples` to add `legs` and `samples`. Each leg has the values
+Set `samples.include` to add `legs` and `samples`. Each leg has the values
 used, the minimum, the `worstState`, the minutes below the setting,
 `lowConfidence`, its `confidence` reasons and `noWaterLevel`. Each sample has
 its depth source, dataset and cell, uncertainty, water level, station, time
-step and datum agreement. `maxSamples` (default 500) caps the list, and the
+step and datum agreement. `samples.max` (default 500) caps the list, and the
 samples with the least clearance are kept.
 
-To find a departure window, set `includeWindow`. It sweeps the whole S-104
+To find a departure window, pass `window`. It sweeps the whole S-104
 time range that covers the passage, as SoundCharts' departure band does, or
-from `windowFrom` to `windowTo` when you give them (`windowStepMinutes`,
+from `window.from` to `window.to` when you give them (`window.stepMinutes`,
 default 5, between departures). The S-104 sweep starts at the first whole
 step after the data starts and ends where it ends; over a long forecast the
-step widens to stay under 2000 departures. `window` then lists every
+step widens to stay under 2000 departures. The result's `window` lists every
 departure's verdict and confidence, the runs of departures that meet your
 settings, the meeting departure nearest `departure`, `windowConfidence`, and
 `arrivalAfterDataEnds`: the departures that arrive after the S-104 data ends,
@@ -584,9 +934,126 @@ which never meet your settings. A departure that meets your settings with
 lower confidence still counts as meeting them; `windowConfidence` lists the
 reasons among the meeting departures, as the caveat on the window.
 
+## Navigability over an area
+
+`get_navigability_grid` answers "where can this boat go?" for a whole area at
+once, for planning a route or explaining one. Give the box (`south`, `west`,
+`north`, `east`), a `cellMeters` (default 50 m), and `draftMeters`,
+`safetyContourMeters` or both. Each cell is one of:
+
+- **navigable**: charted water at least the larger of the draft and the
+  safety contour deep, with no danger in it.
+- **shoal**: charted water shallower than that, drying ground included.
+- **hazard**: charted water with a wreck, obstruction or rock in the cell at
+  or shallower than `hazardDepthMeters` (default the minimum depth), or of
+  unknown depth; or with a structure standing in the water that `check_route`
+  flags when a track cuts or passes it: one that raises the SafetyContour
+  alert, such as a breakwater, pier, pontoon or hulk, or a pile, platform or
+  other structure (not an aid to navigation or a bridge). `includeHazards:
+  false` leaves dangers and structures out.
+- **land**, **uncharted** (no loaded chart covers it), or **no_depth**
+  (charted water without a charted depth).
+
+A cell's class comes from the finest chart cell at its centre, as the route
+check's water mask does. Its depth is the least charted depth at its centre and
+four corners: S-102 where a surface has a value, otherwise the finest S-101
+or S-57 cell's dredged or depth area. Depths are charted, with no water
+level, and aren't reduced to a common vertical datum.
+
+The reply is a summary, not the grid:
+
+- `grid`: the edges, `rows`, `columns`, `cellMeters` and the degrees per row
+  and column. Row 0 is the southernmost row and column 0 the westernmost.
+- `counts` per class and `navigableAreaKm2`.
+- `shoalestNavigable`: the navigable cell with the least depth, with the kind
+  and dataset of its centre's depth.
+- `largestNavigableArea`: its cells and area, how many separate navigable
+  areas there are, and its most open cell. Cells join through their sides.
+- `connection`, with `connect: [[lat,lon],[lat,lon]]`: whether a navigable way
+  joins the two positions. If not, `reason` says why (`from_not_navigable`,
+  `to_not_navigable`, `no_navigable_way`, or off the grid). If so,
+  `narrowest` is where the widest way between them is narrowest, with its
+  `clearanceMeters` to the nearest cell that isn't navigable. A position at a
+  berth is often in a shoal or land cell, so test from the water outside it.
+- `datasets`: the chart and S-102 datasets overlapping the box.
+- `file`: the grid, written on the server under the system's temporary
+  directory, with its `path` and `layout`. `format: "npy"` (the default) is a
+  NumPy structured array with fields `depth_dm` (int16, decimetres, −32768
+  for none) and `class` (uint8: 0 uncharted, 1 land, 2 navigable, 3 shoal,
+  4 hazard, 5 no_depth); `numpy.load(path)` reads it. `"raw"` is the int16
+  depths then the class bytes, both row-major from the south-west. `"none"`
+  writes nothing.
+
+The path is on the server's machine, so a client on another machine (the HTTP
+transport) can't open it. `includeImage: true` adds a PNG of the grid, north
+up, at most 1024 pixels a side: tan land, grey uncharted, pale blue shoal,
+blue navigable water (darker deeper) and red hazards.
+
+A grid has at most 6,000,000 cells. A bigger one returns `grid_too_large` with
+`suggestedCellMeters`, a cell size that fits the box. A 25 m grid of the San
+Juan Islands (about 4.9 million cells over 45 NOAA cells) takes about a
+second once the cells are loaded.
+
+## Plan a route
+
+`plan_route` suggests a route through a list of stops: `from`, `to`, and
+`via` in between for a whole itinerary in one call. Points are
+`{"latitude":…,"longitude":…}` or `[lat, lon]`. It plans on the same grid as
+`get_navigability_grid`, so a plan, the grid and `check_route` read the
+charts the same way.
+
+- **Depths.** `vessel` is the object `check_route` takes. Between the stops
+  the route keeps to charted water at least the larger of draft + squat +
+  required UKC and the safety contour deep, with no danger or structure in
+  the cell. Within `limits.berthRadiusMeters` (default 300 m) of a stop it
+  may use water down to draft + squat, so it can reach a berth or anchorage.
+  Give a draft, a safety contour or both.
+- **Stops.** A stop on land, in water too shallow, or on a structure moves to
+  the nearest navigable water within `limits.snapRadiusMeters` (default
+  5 km), as `sample`'s `nearestNavigable` finds it. `stops` gives where each
+  stop was asked for, where the route uses it, and for one that `moved`, the
+  `reason`, `movedMeters` and `bearingDegrees`.
+- **The way.** A least-cost search through the grid: each step costs its
+  length, more within `limits.comfortMeters` (default 200 m) of anything
+  that isn't navigable, so the route keeps to open water where there's room.
+  `clearanceMeters` sets a hard minimum room away from the stops (default
+  0). `prefer` (`fairways`, `dredged_areas`, `recommended_tracks`) makes
+  charted Fairway, DredgedArea and RecommendedTrack water cheaper, as a
+  dredged channel needs. Round each stop the grid has 5 m cells, for marina
+  entrances; in between, 20 m cells (coarser on a long leg), and 5 m again
+  where a channel is too narrow for those.
+- **Waypoints.** The way is cut to the turns a straight line can't skip. A
+  shortcut stays in navigable cells and keeps the room of the stretch it
+  replaces (up to half the comfort distance).
+
+The result has `distanceNm`, the `legs` (each with its stops, `distanceNm`,
+`runningMinutes` at `vessel.speedKnots` with no current, the range of its
+waypoints, and its least depth and clearance away from the stops),
+`waypoints` in the shape `append_waypoint` takes (stops named `from`,
+`via 1`, … `to`), and `polyline`, the route as `check_route`'s `polyline`
+argument. With `check` (default true) it runs `check_route` with the same
+vessel and `departure` and adds a summary: the `verdict`, counts by group,
+`mustReviewAwayFromStops` (must-review findings farther than the berth
+radius from every stop: the ones the plan answers for), the five worst
+findings and any check that didn't fully run. Run `check_route` on
+`polyline` for the full report.
+
+In SoundCharts, `routeName` creates the route, makes it active and returns
+its `routeId`. Elsewhere it returns `invalid_argument`.
+
+When there's no route it returns `no_route_planned` with `reason`
+`stop_not_navigable` (and `stopIndex`) or `no_navigable_way` (and
+`legIndex`). The route doesn't account for tides, tidal gates or currents:
+check timing with `check_route`'s `window.constraints`.
+
+On the 45 NOAA cells of the San Juan Islands, planning the seven-day loop
+from Cap Sante (1.1 m draft, 1.5 m safety contour) as one itinerary takes
+about 50 seconds, within about 10 % of hand-checked routes' distances, with
+no must-review finding away from the stops.
+
 ## Times outside the data
 
-`sample_coverage` and `sample_coverage_along` don't return a value for a time
+`sample` doesn't return a water level, current or weather value for a time
 the data doesn't cover unless you ask for one. This matches the Timeline, which
 shows that there's no data at that time instead of a stale frame.
 
@@ -642,7 +1109,10 @@ In SoundCharts:
   view, palette, time step and loaded datasets match what the user sees.
 
 In `s100 mcp serve`, the image is a headless composite of the session's
-datasets. It fits all of them unless `set_viewport` has set a view.
+datasets. It fits all of them unless `set_viewport` has set a view. `width` and
+`height` are device-independent pixels, as in SoundCharts: with a
+`pixelDensity` of 2 the PNG is twice as wide and tall, and its symbols, text
+and lines are twice as many pixels across.
 
 ## Differences between the hosts
 
@@ -653,9 +1123,11 @@ Most tools run the same code in both hosts. These differ:
 SoundCharts moves the live map. Pass exactly one of:
 
 - a bounding box: `south`, `west`, `north`, `east`;
-- a centre and Web Mercator zoom: `centerLat`, `centerLon`, `zoom`;
-- a centre and scale: `centerLat`, `centerLon`, `scaleDenominator` (for
-  example `50000` for 1:50,000).
+- a centre and Web Mercator zoom: `centerLatitude`, `centerLongitude`, `zoom`;
+- a centre and scale: `centerLatitude`, `centerLongitude`, `scaleDenominator`
+  (for example `50000` for 1:50,000).
+
+`centerLat` and `centerLon` are accepted as older names for the centre.
 
 Mixing forms, including `zoom` with `scaleDenominator`, is rejected.
 `scaleDenominator` is converted at the centre latitude with the same 0.28 mm
@@ -700,7 +1172,7 @@ previous one.
 
 ### Tools only SoundCharts has
 
-`pick_features`, `capture_app_screenshot`, `set_own_ship`, `get_depth_basis`, the panel, Timeline,
+`pick_features`, `capture_app_screenshot`, `set_own_ship`, `get_depth_basis`, `get_legend`, the panel, Timeline,
 dataset-state, display combination, notification, log, navigational warning, Library, SECOM and route tools, and the render
 statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
 
@@ -709,6 +1181,10 @@ statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
 - "List the datasets loaded in the viewer and their bounding boxes."
 - "What is the depth at 47.6062°N, 122.3321°W in the loaded S-102 dataset?"
 - "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
+- "When is the tide above 2 m at Seattle tomorrow afternoon?" See
+  [Find when the tide is above a height](scenarios/tide-above-a-height.md).
+- "When is slack water at Deception Pass tomorrow afternoon?" See
+  [Find slack water in a pass](scenarios/slack-water-in-a-pass.md).
 - "Plan a mid-channel route from the harbour entrance to the marina: create a
   route, then add waypoints that stay clear of the charted safety contour, and
   set each leg's safety contour and cross-track limits."
@@ -726,5 +1202,9 @@ statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
   [MCP tools](#mcp-tools) lists them. None can write arbitrary files.
 - The `ui_*` tools can do anything a user can do, so they're registered only
   with `--mcp-test-hooks`, which is never saved.
-- `s100 mcp serve` has no network listener. Only the process that starts it can
-  talk to it.
+- `s100 mcp serve` has no network listener by default. Only the process that
+  starts it can talk to it. With `--transport http` it listens on loopback
+  unless you pass `--host`, requires a bearer token on any other address,
+  refuses requests from web pages on other origins, and leaves out the tools
+  that open files by path or change the Library unless you pass
+  `--allow-changes`. See [MCP over HTTP](cli.md#mcp-over-http).

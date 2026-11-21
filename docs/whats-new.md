@@ -6,6 +6,785 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **One MCP `sample` tool, with charted depth.** `sample` replaces
+  `sample_coverage` and `sample_coverage_along`: it takes a `quantity`
+  (`depth`, `water_level`, `current` or `weather`, or a `spec` to pin one
+  product) at a point or along a polyline, with `spacingMeters` to add points
+  between the vertices. `depth` is the charted depth the route check reads:
+  S-102 first, otherwise the finest S-101, S-401 or translated S-57 cell, with
+  its kind, source feature, an area's depth range and the water mask; with a
+  time, also the water level and the available depth, as `check_route`
+  computes clearance. A polyline's depth profile names its shoalest sample.
+  Breaking changes: the two old tools are gone, and `SampleCoverageTool` and
+  `SampleCoverageAlongTool` are replaced by `SampleTool`, which needs the
+  host's `RouteCheckSourceCache`. `ChartedDepth` gains
+  `DepthRangeMaximumMeters`. See the [MCP server](mcp-server.md).
+
+- **Navigability over an area.** The MCP tool `get_navigability_grid` says
+  where a boat can go over a whole box: each cell is navigable, shoal,
+  hazard, land, uncharted or without depth, from the finest chart cell and
+  S-102, as `check_route` resolves them. The reply is a summary (counts, the
+  shoalest navigable cell, the largest connected area, and whether two
+  positions join); the grid goes to a NumPy or raw file, with an optional
+  PNG. The engine is `NavigabilityGrid` in `EncDotNet.S100.Navigation`, and
+  `IChartedDepthSource` can now fill a whole grid at once.
+
+- **Departure windows from tidal gates and currents.** `check_route`'s
+  `window.constraints` adds a timing check: tidal gates (slack within N
+  minutes at a current station, a current limit, or fair only), limits on
+  the current against each leg, the latest and earliest arrival, and the
+  water level at the arrival. With `applyCurrents`, speeds are through the
+  water and the check's ETAs and running times include the predicted
+  current along the track. It returns each departure's running time and
+  constraints, and the windows that meet them all with the best departure
+  in each. Currents come from current-station predictions
+  (`--tide-predictions`). In Navigation: `TimingCheck`,
+  `PassageTimingSettings` and `IRouteCurrentSource`
+  (`RouteCheckSources.Currents`).
+
+- **MCP toolsets.** Every MCP tool now belongs to a toolset, such as `query`,
+  `routes`, `tides` or `library`, and a server can offer only some of them, so
+  an agent's context holds only the tools its task needs.
+  `s100 mcp serve --toolsets` and SoundCharts' `--mcp-toolsets` take toolset
+  names or a profile (`route-planning`, `visual-check`), and SoundCharts has a
+  switch per toolset under **Settings > Integrations**. Hosts that compose
+  their own tools declare each one's toolset with `McpToolsets.Assign`;
+  `S100McpServerOptions.Toolsets` selects them. See
+  [Choose toolsets](mcp-server.md#choose-toolsets).
+
+- **`check_route` takes grouped arguments.** Its 25 flat arguments are now
+  nine: `routeId`, `polyline`, `greatCircle`, `departure`, and the groups
+  `vessel` (draft, squat, required UKC, safety contour and depth, speed),
+  `window` (the departure sweep: `from`, `to`, `stepMinutes`; `{}` sweeps the
+  S-104 range, replacing `includeWindow`), `weather` (wind and wave limits,
+  and `cyclones`), `limits` (corridor, track clearance, nearby distance,
+  berth radius, area kinds off) and `samples` (`spacingMeters`, `include`,
+  `max`). Errors name the argument by its path, such as
+  `vessel.draftMeters`. This is a breaking change for MCP clients. The
+  `VesselArguments` type is meant for the route tools to share.
+
+- **`--source` and `s100 sources`.** `s100 identify --source ndbc.realtime`
+  picks from a live data source, alone or with datasets: it's started for the
+  area around the point, and left out with a warning if it has no data within
+  `--source-timeout`. `s100 mcp serve --source` adds sources at startup, and
+  `s100 sources` lists them with their options and what each still needs.
+  Options follow the id (`nmea.weather:Input=udp:10110`); keys come from
+  environment variables only. `s100 render --layer … --bbox … --source` draws
+  live sources over a composite, through a new
+  `PngS100DatasetRenderer.RenderAsync(layers, overlays, …)` overload.
+
+- **Live sources in `s100 mcp serve`.** `list_data_sources` and
+  `add_data_source` add NDBC observations, own-ship weather from NMEA or AIS
+  targets to the session's catalog, where they answer the query tools and
+  render like datasets. A source runs for the area set with `set_viewport`,
+  within its range. Keys come from environment variables, never arguments.
+  `--live-feeds` with `--collections` adds the live feeds subscribed to in
+  SoundCharts' Library.
+- **Live sources are queryable in a catalog.** A `DynamicSourceProcessor`
+  now projects to a `LoadedDataset` (`LiveSourceDatasetData`) whose features
+  the query tools read as they are when asked, so a live source added to a
+  headless catalog answers `identify_features` and the other queries like a
+  file. The MCP tools and `--source` that add one come next.
+- **AIS targets are a library source.** `S100Sources.AisStream`
+  (`ais.aisstream`, with `AisFeedOptions`) joins NDBC observations and NMEA
+  weather in `SourceRegistry.CreateDefault()`, so any host can add it.
+  `SourceRegistry.AddDataSource(registration, replace: true)` lets a host
+  put its own wrapper in place of a built-in source, and
+  `SourceOptionsForm.MissingRequired` says which required option, such as a
+  key, is unset.
+- **`tiles serve` serves a PMTiles archive whole.** When it serves a
+  `.pmtiles` archive, `tiles serve` also serves the file at `archive.pmtiles`
+  with range requests, so you can check an archive with MapLibre's
+  `pmtiles://` protocol before publishing it. The TileJSON
+  (`s100.pmtilesUrl`), the `--ready-json` line (`pmtiles`) and the start-up
+  text name the URL.
+- **AIS targets are a live feed.** Add **AIS targets** with **Add a live
+  feed** in the Datasets panel instead of turning on a Settings switch, and
+  without restarting; if the switch was on, they're added for you. Selecting a target shows a
+  vessel section and a **Take helm** action in the Pick report, the Vessels
+  tab appears while AIS targets are added, and removing them stops pirate
+  mode. `AisDynamicFeatureSource` can defer its subscription until it's
+  started (`deferSubscription`), and follows the area through
+  `IAreaFilteredDynamicSource`.
+- **Pick actions and a vessel section.** A host can offer actions on a
+  picked feature, such as "Take helm", through `PickActionRegistry`; each
+  `PickAction` decides from the pick's `PickContext`, which now carries the
+  feature's sections. A live source's vessel features get a `VesselSection`
+  (name, MMSI, course, speed, heading, length and beam), which MCP's
+  `identify_features` and `describe_feature` include. SoundCharts shows a
+  pick's actions as buttons, and offers "Take helm" on any picked vessel
+  with an MMSI.
+- **Feeds say when they need a key.** A live feed that can't start without
+  a setting, such as AIS targets without an aisstream.io key or own-ship
+  weather without an NMEA input, is listed with **Key needed** or **Needs
+  settings** on its row (the tooltip says where to set it) instead of
+  failing to load, and starts once the setting is saved in the Library.
+- **Own ship is picked like any feature.** Picking own ship shows it in
+  Object information like a chart feature or an AIS target, first in the
+  list (it's drawn on top), with its size and motion in a vessel section,
+  rather than in a separate "live" block above the list. The separate block
+  is gone, since every live feed is now a dataset.
+- **Tide and current stations are live feeds.** **Tide stations ·
+  predicted** and **Current stations · predicted** move from their Layer
+  stack rows to the Library's **Live feeds**, and show as Datasets rows
+  under **Predictions**; a row that was on is subscribed for you. Picking a
+  station still shows its card with the predicted curve. MCP's
+  `set_tide_display` subscribes and unsubscribes them. For developers, a
+  `DynamicFeatureDescription` can now carry pick `Sections`.
+- **Live feed settings in the Library.** Select a live feed in the Library's
+  **Live feeds** collection to set it up: the aisstream.io key and zoom
+  threshold for AIS targets (moved from Settings › Vessels, with a key you'd
+  entered carried over), or the input for own-ship weather (NMEA), which no
+  longer needs an environment variable. Keys go to the computer's secret
+  store. Saving restarts the feed. For developers, `[SourceOption]` marks
+  the options a host shows, `SourceOptionsForm` reads and builds them, and
+  `SourceRegistration.ActivationFromOptions` lets the options set when a
+  source runs.
+- **Live feeds live in the Library.** The Library's **Add** menu lists live
+  feeds such as NDBC observations and AIS targets under **Live feeds**;
+  choosing one subscribes to it, in a **Live feeds** collection, and puts it
+  on the map. Removing a feed's row in the Datasets panel takes it off the
+  map until SoundCharts next starts; removing it from the Library
+  unsubscribes. Feeds you'd added before move into the Library, and the
+  Datasets panel's plug button is gone. `LiveFeedSource` is the new
+  collection source kind.
+- **Live feed rows say what they're doing.** In the Datasets panel, a live
+  feed such as NDBC observations shows its status instead of a product
+  name: waiting for zoom, paused while hidden, live with the time of its
+  last update, stale or not connecting (with the error in the tooltip). Its
+  row is labelled with what it shows, such as **Observations**, and has no
+  move buttons or Validation tab. **Add a live feed** is also offered when
+  the panel is empty. `IHostedDatasetProcessor` gains `LastUpdated` and `LastError`,
+  and `SourceRegistration` gains `Group` and `StaleAfter`; NDBC now waits
+  for a view narrower than 25° through its activation range.
+- **Faster `tiles serve` with S-102.** Tiles that include S-102 bathymetry
+  now render in tens of milliseconds a block instead of around 14 seconds,
+  and the first tile at each zoom level no longer lowers every chart again.
+  A WMTS layer that holds every dataset, such as `chart` from
+  `--layers-by product` over S-57 and S-102, now shares the tiles of the
+  `s100` layer instead of rendering its own. With `--verbose`, the server
+  prints where each block's time went.
+- **The drawn chart as JSON.** `s100 render --format json` now writes what
+  the renderer draws rather than a summary of the display list: every line
+  edge, area ring, pattern fill, symbol and label with its full geometry in
+  longitude and latitude, resolved colours, sizes in display pixels, font
+  fields, offsets, rotation, drawing priority, viewing groups, scale limits,
+  and the anchor each symbol and label is placed at. Line suppression, pattern
+  clipping and multi-part splitting are already applied, so a GIS or vector
+  renderer in another process can draw the chart the way the viewer does. The
+  document has a `schemaVersion` (now 2) and its entries are in `ops`, which
+  replaces `instructions`. See [Display-list output](cli.md#display-list-output).
+- **An overview below the minimum zoom.** With `--overview`,
+  `s100 tiles serve` draws each dataset's coverage outline and name where the
+  chart's zoom levels end, on XYZ and WMTS tiles and WMS GetMap, and the WMS
+  and WMTS capabilities reach zoom 0, so a GIS layer no longer disappears when
+  zoomed out. Without it, tiles below the minimum zoom stay empty, as before.
+  See [Overview below the minimum zoom](cli.md#overview-below-the-minimum-zoom).
+- **Several WMTS layers from one `tiles serve`.** With `--layers-by product`,
+  `s100 tiles serve` also serves its datasets as a WMTS layer per product
+  (`chart` for S-57, S-101 and S-102; `S104`, `S111`, `S124`, … for the
+  rest), each with its own time steps and extent, so a GIS client can show
+  the chart, water levels and currents as separate layers from one server.
+  With `--manage-datasets`, a client can put the datasets it adds in a layer
+  it names. Each layer also has its own TileJSON, listed in `tiles.json`, and
+  the dataset metadata says which layer each dataset is in. The `s100` layer
+  is unchanged, and without the option the server is as before. Each layer's
+  styles link the same legends as `s100`'s. See
+  [WMTS layers](cli.md#wmts-layers).
+- **Legends for GIS clients.** When it renders datasets, `s100 tiles serve`
+  draws the key of each style as a PNG, from the rows the viewer's Legend tab
+  shows: WMS `GetLegendGraphic`, linked from a `LegendURL` on each WMS and
+  WMTS style, so ArcGIS Pro and QGIS show the S-102 shades, S-111 speed bands
+  and the rest next to the layer. Each style's key is in its palette and with
+  its mariner settings. The grouping of sub-layer legends into product
+  sections moved from the viewer into `EncDotNet.S100.Core`
+  (`ProductLegends`), and `EncDotNet.S100.Renderers.Skia` draws the image
+  (`LegendSheetRenderer`). See [Legends](cli.md#legends).
+- **WMS and WMTS agree on the zoom level.** `s100 tiles serve` WMS GetMap
+  draws the zoom level a WMTS client such as ArcGIS Pro shows at the same
+  scale: the finest one no finer than the view, rather than the nearest. At
+  1:23,374, for example, both draw zoom 14, so WMS no longer shows soundings
+  and other features that WMTS hides there. The layer's
+  `MaxScaleDenominator` is now the minimum zoom's scale. See [WMS](cli.md#wms).
+- **Add and remove datasets while serving.** With `--manage-datasets`,
+  `s100 tiles serve` adds and removes datasets on a `POST` or `DELETE` of
+  `datasets`, without restarting. The new set serves once it's portrayed,
+  and the TileJSON, WMTS, WMS and dataset metadata documents and the data
+  revision follow it.
+  Tiles are cached under the datasets that reach them, so adding a cell
+  renders only its own tiles. Without the option nothing changes. See
+  [Add and remove datasets](cli.md#add-and-remove-datasets).
+- **Navigational warnings by validity in served tiles.** `s100 tiles serve`
+  draws only the S-124 warnings in force at the time a client asks for, with
+  `t`, WMS `TIME` or the WMTS `Time` dimension, as the viewer's map does at its
+  view time: ended, cancelled and not-yet-in-force warnings are left out.
+  Without a time every warning draws, as before. See
+  [`tiles serve`](cli.md#tiles-serve).
+- **Dataset metadata from `tiles serve`.** When it renders datasets,
+  `s100 tiles serve` describes each one as JSON under `datasets`, and
+  `tiles.json` points to it in `s100.datasetsUrl`: the file, product and
+  edition, producer, the dataset's own bounds and coverage polygon, its time
+  steps and issue time, and its data dynamicity with the viewer's label. A GIS
+  client can zoom to one dataset instead of the union of all of them, without
+  opening the datasets itself. See [Dataset metadata](cli.md#dataset-metadata).
+- **The data revision of served tiles.** When `s100 tiles serve` renders
+  datasets, it publishes the fingerprint of the data and settings as
+  `s100.revision` in the TileJSON, as `updateSequence` in the WMS and WMTS
+  capabilities and in an `S100-Revision` header on `/healthz`. It changes when
+  `--refresh` reloads changed datasets, so a GIS client can put it in its tile
+  URLs to bust its own tile cache. See [`tiles serve`](cli.md#tiles-serve).
+- **Print from WMS at layout DPI.** `s100 tiles serve` WMS GetMap reads the
+  `DPI`, `MAP_RESOLUTION` and `FORMAT_OPTIONS=dpi:N` parameters that ArcGIS
+  Pro and QGIS send when they export a layout. A 300 DPI map shows the same
+  features as the screen, with symbols and text at the same printed size,
+  drawn directly at the print resolution, and may be larger than 4096 pixels.
+  Requests without them are drawn as before. See
+  [WMS](cli.md#wms).
+- **Mariner settings in served and exported tiles.** `s100 tiles serve` and
+  `s100 tiles export` take the viewer's mariner settings as options: the
+  display category, safety contour and depth, shallow and deep contours, four
+  shades, soundings, shallow-water dangers, plain boundaries, simplified
+  symbols, full light lines, ignoring SCAMIN and the depth unit. A
+  `tiles serve` client can also register more sets of settings under
+  `settings/{hash}` and ask for each as the WMTS or WMS style
+  `{palette}-{hash}`, so one server serves the chart as several mariners set
+  it. Without them the tiles are as before. See
+  [Mariner settings](cli.md#mariner-settings).
+- **Observed, predicted or forecast.** The viewer labels S-104 water levels
+  and S-111 currents by how they were produced, from S-104 `dataDynamicity`
+  and S-111 `typeOfCurrentData`: **Observed**, **Predicted · astronomical
+  tide only, not a forecast**, **Analysis**, **Hindcast** or **Forecast, run
+  {time}**, the run from the dataset's issue time. Object information shows it
+  in a **Data** row and the Legend after the section's source. A dataset that
+  doesn't say gets no label. SoundCharts for ArcGIS uses the same words.
+  Processors report it as `ITimeAwareDatasetProcessor.DataDynamicity`.
+- **`s100` as a container image.** `ghcr.io/philliphoff/s100` runs `s100`
+  on Linux x64 and arm64 with nothing else to install. It runs as a non-root
+  user, reads datasets from `/data`, and keeps tiles in `/cache` and the tide
+  station catalogue and MCP Library in `/state`. Releases publish the version
+  tags and `latest`; nightly builds publish `nightly`. `tiles serve`,
+  `feed serve` and `mcp serve --transport http` answer `GET /healthz` without
+  a token, and the new `s100 health` command checks it, for health checks in
+  an image with no shell. `S100_NO_UPDATE_CHECK` turns off the update check.
+  See [Run s100 in Docker](docker.md).
+- **Serve and export a folder of charts.** `s100 tiles serve` and
+  `s100 tiles export` take a folder and render every dataset in it and its
+  subfolders: S-57 cells, an S-57 `ENC_ROOT` with its `CATALOG.031`, S-100
+  exchange sets and loose datasets. `--only` keeps some product
+  specifications. A folder is a built tile set only when it holds a
+  `tiles.json` or numbered `{z}/{x}` subfolders. A cell copied into a served
+  folder, or removed from it, is picked up at the next check.
+- **`--bbox` portrays less.** `s100 tiles export` and `s100 tiles serve` leave
+  out datasets that can't draw in the `--bbox` tiles before portraying them,
+  so a small area of a large folder needs much less memory. The tiles written
+  are the same.
+- **Re-export a served archive.** `tiles export` writes a PMTiles or MBTiles
+  archive beside the old one and moves it into place when it's finished, so
+  `tiles serve` keeps serving the old tiles during an export, and a failed
+  export leaves the old archive as it was. A Compose example renders tiles in
+  advance for a small computer; see
+  [Serve prebuilt tiles](docker.md#serve-prebuilt-tiles).
+- **MCP over HTTP.** `s100 mcp serve --transport http` serves the MCP tools
+  at `http://127.0.0.1:8300/mcp`, so agents on other computers or in other
+  containers can connect. On an address other than loopback it requires a
+  bearer token, it refuses requests from web pages on other origins, and it
+  leaves out the tools that open files by path or change the Library unless
+  you pass `--allow-changes`. See [MCP over HTTP](cli.md#mcp-over-http).
+- **A start-up line for programs.** `s100 tiles serve --ready-json` prints
+  one line of JSON when the server is listening, with the bound port, the
+  token and the tile, TileJSON, WMTS, WMS and health check URLs, so a program
+  that starts it with `--port 0` needn't read the start-up text. See
+  [Run under a supervising process](cli.md#run-under-a-supervising-process).
+- **Serve charts to a web map or GIS.** A new task page walks through
+  `tiles serve` with QGIS, MapLibre and Leaflet; see
+  [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md).
+- **A display plane for vessels.** `S98DisplayPlane.Vessels` (75) sits
+  between the mariner's data and ECDIS alerts, so AIS targets drawn as a
+  dataset stay above the chart. It's a stopgap until the layer order is
+  derived from information categories. The Layer stack lists it as
+  **Vessels**.
+- **Own-ship weather in the Datasets panel.** With `SOUNDCHARTS_NMEA_INPUT`
+  set, SoundCharts adds **Own-ship weather (NMEA)** to the Datasets panel at
+  each start, instead of a Layer stack row; the barb still follows the own
+  ship while it's shown.
+- **API keys in the secret store.** SoundCharts saves the aisstream.io key
+  in the computer's secret store (Credential Manager, the macOS Keychain or
+  the Linux Secret Service) instead of `settings.json`, which keeps only a
+  reference; a key already in `settings.json` moves there at the next start.
+  Sources mark secret options with `[Secret]`, and
+  `SourceCreationContext.ResolveSecret` reads the environment variable, then
+  the store.
+- **Data sources in the Datasets panel.** SoundCharts lists a live source
+  with your datasets: **Add a data source** in the Datasets panel adds it,
+  and you show, hide, reorder and remove it like a file. Sources you add are
+  added again the next time SoundCharts starts. NDBC observations are the
+  first: they've moved from the Layer stack to the Datasets panel, and if you
+  had them turned on they're added for you. A source runs only while it's
+  shown, and fetches only the area in view.
+- **Sources that aren't files.** A `SourceRegistration` describes a live feed
+  or polled service: its id, name, spec, options and when a host runs it,
+  and `Create` builds its processor from the saved options, loggers, a clock
+  and an HTTP client factory. `SourceRegistry.Default` holds the NDBC
+  observations (`ndbc.realtime`) and own-ship weather from NMEA
+  (`nmea.weather`). A host starts, pauses and points the processor at the
+  area in view through `IHostedDatasetProcessor`, and disposing it stops the
+  source. `NmeaInput.Parse` turns an input spec such as `udp:10110` or
+  `tcp://host:10110` into an NMEA input.
+- **Vessel symbology as a portrayal.** Own-ship and AIS targets are drawn by
+  `VesselPortrayal`, a code-defined portrayal of S-100 Part 9 drawing
+  instructions, so they render headless and in any backend, not only on the
+  Mapsui map. The symbology is the same: course vector and arrowhead, and a
+  disc or the true-scale outline with the antenna cross. The outline is now a
+  line without the translucent fill, as S-52 draws it, and it switches with
+  the disc at the same scale at every latitude. `InstructionBuilder` gains
+  `PointAt` and `Path` for augmented geometry. `OwnShipRenderer` and
+  `AisVesselRenderer` are obsolete.
+- **Live sources as datasets.** `DynamicSourceProcessor` wraps any
+  `IDynamicFeatureSource` and its `IDynamicFeaturePortrayal` as a dataset
+  processor, so a live source can be picked, described, rendered headless and
+  ordered by S-98 plane like a file, and is drawn again when it changes. The
+  NDBC observations and own-ship weather from NMEA work through it, under the
+  new `SpecName.Ndbc` and `SpecName.Nmea` format names. SoundCharts still
+  draws them as overlays for now.
+- **Datasets that change after loading.** A processor that implements
+  `ILiveDatasetProcessor` raises `Changed` when its data changes, such as a
+  feed polled on a timer, and the Mapsui map session draws the dataset again:
+  it waits 250 ms for more changes, picks up new available times for the
+  timeline, and renders with the presentation the dataset was last drawn
+  with. Failures are reported through `DatasetRenderFailed` with the new
+  `MapSessionRenderKind.LiveRefresh`.
+- **Station series and warnings are pick sections.** An S-104 or S-111
+  station's time series is now a `StationSeriesSection`, and an S-124
+  warning part's message a `NavigationalWarningSection`, both in
+  `FeatureInfo.Sections`. SoundCharts chooses a station's chart from the
+  series' channels rather than the product name, so a station from another
+  source with a water level height, or a current speed and direction, gets
+  the same chart, and a series with other channels shows its rows.
+  `FeatureInfo.StationSeries` and `FeatureInfo.NavigationalWarning` are
+  obsolete and read the sections.
+- **GeoPackage tiles.** `s100 tiles export -o chart.gpkg` writes the tiles as
+  an OGC GeoPackage 1.4 tile pyramid in Web Mercator, a single file that QGIS,
+  ArcGIS Pro, GDAL and field apps such as QField open offline.
+  `s100 tiles serve` serves a GeoPackage too, including Web Mercator ones that
+  GDAL writes. See [Tiles export](cli.md#tiles-export).
+- **GeoTIFF export.** `s100 tiles export -o chart.tif` writes one
+  Cloud-Optimized GeoTIFF in Web Mercator for tools that take a single
+  georeferenced image: the maximum zoom at full resolution, lower zooms as
+  overviews. See [Tiles export](cli.md#tiles-export).
+- **`s100 tiles serve` is a WMS service.** `tiles serve` now also answers
+  OGC WMS 1.3.0 (and 1.1.1) requests at `wms`. GetMap draws any area in
+  EPSG:3857, EPSG:4326 or CRS:84 from the served tiles. GetFeatureInfo
+  reports the features and coverage values at a clicked point, as
+  `s100 identify` does, in HTML, GeoJSON or plain text, so the QGIS
+  Identify Features tool works on the chart. See [WMS](cli.md#wms).
+- **Pick sections.** Object Information content that isn't attribute rows
+  now comes through one extension point. `FeatureInfo.Sections` holds a
+  feature's sections; `IPickContributor`s registered in
+  `PickContributorRegistry` add them for any product or source, and each kind
+  is registered in `PickSectionKindRegistry` so MCP can serialize it. The ice
+  egg code is the first: `IceEggCodeContributor` gives an egg code to an S-411
+  sea-ice or lake-ice feature, or to a feature from any other source that
+  carries S-411 concentration codes. `identify_features`, `pick_features` and
+  `describe_feature` now report a feature's `sections`, so agents get the egg
+  code too. `FeatureInfo.EggCode` is obsolete, and
+  `GmlDatasetProcessorBase.BuildEggCode` is gone.
+- **Tide stations in SoundCharts.** A **Tide stations · predicted** row
+  under *Other chart overlays* draws NOAA's tide stations from 1:500,000 as
+  S-104 gauges with a dashed frame: rising, falling or turning at the view
+  time, with the height from 1:150,000 and the name from 1:50,000. Stations
+  are thinned to 40 px and hidden where S-104 covers them. Their key is a
+  section in the Legend tab. A station's Object Information card has the
+  predicted height now, the curve 12 hours each side of the view time, the
+  last high or low and the next four, the reference station and offsets of a
+  subordinate station, whether depths use it, and the "not a forecast" note.
+  The station list's date and **Refresh** sit under the tide predictions
+  setting, and it's downloaded from NOAA on first use. The MCP tools
+  `get_tide_display` and `set_tide_display` read and set it, and
+  `pick_features` with `select` now shows live overlay features such as a
+  station.
+- **Current stations in SoundCharts.** A **Current stations · predicted**
+  row draws NOAA's tidal current stations from 1:500,000: S-111's arrow in
+  its speed band's colour rising from a dashed station frame, with the speed,
+  or a slack bar and the turn time. Stations are hidden where S-111 covers
+  them, and the Legend tab has their speed bands. A station's card has the
+  current now, the speed 12 hours each side of the view time, the slacks and
+  maxima, the flood and ebb directions and the depth; currents are for
+  display only, not route checks. `set_tide_display` turns them on with
+  `currentStations`.
+- **Predicted water level on the chart and the Timeline.** The DEPTHS pill
+  says when depths are adjusted by a prediction ("+ water level 14:20 ·
+  predicted", or "partly predicted" beside S-104), its flyout lists the
+  predicted stations, offers **Use tide predictions** where no S-104 meets the
+  view, and says when NOAA has revised the station list. The adjusted-area
+  edge and the new seam where S-104 hands over to predictions are clipped to
+  the loaded charts' water, and a picked station outlines its cell. With
+  predictions on, the Timeline and its time HUD show even with nothing timed
+  loaded: a **Tide predictions** lane follows the station nearest the map
+  centre, and *All loaded* shows the next 48 hours. `get_depth_basis` reports
+  `predicted` and the stations.
+- **`s100 tiles serve` is a WMTS service.** Besides its XYZ URLs and
+  TileJSON, `tiles serve` now answers OGC WMTS 1.0.0 requests: a
+  capabilities document at `wmts/1.0.0/WMTSCapabilities.xml`, and GetTile in
+  the KVP and RESTful encodings, with palettes as styles and S-104 and S-111
+  time steps as a `Time` dimension. QGIS, ArcGIS Pro and GDAL can add the
+  tiles from that one URL. See [WMTS](cli.md#wmts).
+- **Tide predictions from the shell and for agents.** `s100 tides stations`
+  lists tide stations near a point, `s100 tides predict` predicts a station's
+  heights or highs and lows as a table, CSV, JSON or an S-104 file, and
+  `s100 tides update` downloads NOAA's stations into an offline catalogue.
+  The MCP tools `list_tide_stations` and `predict_tide` do the same for
+  agents, in SoundCharts and `s100 mcp serve`, and with tide predictions on,
+  `sample_coverage` fills S-104 gaps with a prediction whose `source` names
+  the station and carries the caveat. See
+  [`tides predict`](cli.md#tides-predict) and
+  [Find when the tide is above a height](scenarios/tide-above-a-height.md).
+- **Tidal current predictions from the shell and for agents.**
+  `s100 tides currents stations` lists current stations near a point, and
+  `s100 tides currents predict` predicts a station's speeds and directions or
+  its slacks and maxima as a table, CSV, JSON or an S-111 file. The MCP tools
+  `list_current_stations` and `predict_current` do the same for agents, and
+  with tide predictions on, `sample_coverage` fills S-111 gaps with a
+  predicted current. See
+  [`tides currents predict`](cli.md#tides-currents-predict) and
+  [Find slack water in a pass](scenarios/slack-water-in-a-pass.md).
+- **Tidal current predictions.** `EncDotNet.S100.Tides` predicts tidal
+  currents: `CurrentPredictor` for a harmonic current station (major axis,
+  or both axes for a rotary current) and `SubordinateCurrentPredictor` for a
+  subordinate one by NOAA's method. Each gives the current at a time, a
+  velocity series, and slack waters and maximum floods and ebbs, matching
+  NOAA's own 2026 predictions to a minute and a few mm/s. The
+  `EncDotNet.S100.Tides.Stations` catalogue now holds NOAA's current
+  stations too, per depth bin, with subordinate stations' differences and
+  ratios. See the [Tides README](../src/EncDotNet.S100.Tides/README.md#predict-tidal-currents).
+- **Current predictions as S-111.** `EncDotNet.S100.Datasets.S111` writes
+  station series as S-111 Edition 2.0.0 files (data coding format 8), and
+  `S111CurrentPredictions` turns a station's current predictions into one,
+  marked as a non-authoritative astronomical prediction (producer `ZZ01`).
+  See the [S-111 README](../src/EncDotNet.S100.Datasets.S111/README.md#write-a-station-series).
+- **Tide predictions as S-104.** `EncDotNet.S100.Datasets.S104` writes
+  station series as S-104 Edition 2.0.0 files (data coding format 8), and
+  `S104TidePredictions` turns a station's harmonic predictions into one, on
+  the station's chart datum. Predicted files carry the producer code `ZZ01`
+  and say they're astronomical predictions, not an official product and not
+  for navigation. They read back through `S104DatasetReader` unchanged and
+  pass the S-104 validation pack. The HDF5 tree they're built from,
+  `Hdf5WriteGroup`, and `PureHdfWriter` are the project's first HDF5 writers.
+  See the [S-104 README](../src/EncDotNet.S100.Datasets.S104/README.md#write-a-station-series).
+- **Tide predictions.** The new `EncDotNet.S100.Tides` package predicts the
+  astronomical tide at a station from its harmonic constituents: the height
+  at a time, a series at a fixed step without allocating per sample, and the
+  high and low waters in a period. It knows NOAA's 37 standard constituents
+  and the 83 further ones NOAA lists at some stations, and gives heights on
+  mean sea level or a chart datum such as MLLW. Against NOAA's published
+  predictions at five stations it agrees to under a millimetre RMS. See the
+  [package README](../src/EncDotNet.S100.Tides/README.md).
+- **Tide stations.** The new `EncDotNet.S100.Tides.Stations` package is the
+  catalogue the predictions come from. It reads NOAA CO-OPS's tide stations,
+  harmonic constants, datums and subordinate-station offsets, keeps them in
+  a JSON file that works offline, finds stations near a point or in a box,
+  and predicts a station on a chart datum such as MLLW or LAT with its
+  provenance ("from Seattle 9447130, with offsets"). A cheap check says when
+  NOAA has newer data, such as a new tidal datum epoch. The same JSON format
+  lets you bring your own stations. `EncDotNet.S100.Tides` gains
+  `SubordinateTidePredictor`, which predicts a subordinate station by NOAA's
+  method; its highs and lows match NOAA's at three Puget Sound stations to
+  under a minute and a millimetre. See the
+  [package README](../src/EncDotNet.S100.Tides.Stations/README.md).
+- **Relief shading strength.** The S-102 Relief shading switch in Display
+  controls gains a **Strength** control while it is on: Subtle, Medium (the
+  default) or Strong. It is kept with the display settings and saved with
+  display combinations, and the MCP tool `set_bathymetry_display` takes
+  `reliefStrength`. At Dusk and Night, slopes facing the light are lightened
+  less (half and 30 %), so they don't glare on a dark display. The new
+  `EcdisDisplaySettings.LayerOptions` carries map-wide layer settings that
+  are more than on or off.
+- **Relief shading is marked on the map.** While S-102 relief shading is on
+  and S-102 is in view, the status bar's `DEPTHS` pill reads
+  `Charted · Relief`, and its popup says relief is on, as a display aid that
+  leaves depth colours and values unchanged, with an **Off** button. The
+  S-102 legend ends with a *Relief shading (display aid)* row.
+- **Neighbouring S-102 cells join up.** Where two loaded S-102 cells meet,
+  the dashed "limit of S-102 data" line no longer runs through the water
+  between them, and SoundCharts no longer shows a light seam along the
+  join. The limit line stays wherever S-102 data ends and S-101 takes over.
+  A new S-98 rule, R-102-102-A, does this. It reads where each cell has
+  data from the new `CoveragePortrayalResult.DataArea`.
+- **Legend tab.** SoundCharts' right dock gains a tab strip, **Object
+  information** · **Legend**, and the legends of what the map draws move to
+  the Legend tab: one collapsible section per product or overlay (weather
+  fields, tropical cyclones, fronts, AML), in draw order, with **In view |
+  All loaded**, a filter and **Collapse all**. Swatches sit on the chart
+  background of the current palette. Open it with **View** > **Legend**
+  (Ctrl+Shift+L) or the **Legend** link under a Layer stack entry, which
+  replaces the entry's inline legend. It never opens by itself, and a pick
+  switches the dock back to Object information. When the dock is too narrow
+  for the tab labels, the tabs show icons only.
+- **Route check in the Legend tab.** While Check route is on, the route
+  check's legend (UKC at ETA, findings, storm at ETA) is the top section of
+  the Legend tab. The compact card at the map's bottom left shows the same
+  rows while the tab isn't shown, and hides when it is. The MCP tool
+  `set_legend` opens or closes the tab, sets In view and expands or collapses
+  a section; it and `get_legend` replace `get_map_legend` and
+  `set_map_legend`, which are removed.
+- **Hover to find in the Legend tab.** Resting the pointer on a Legend row,
+  or moving keyboard focus to it, rings the features that row describes on
+  the map, in the pick highlight's accent: a catalogue symbol (S-101, S-57),
+  a front, a warning area or an AML class, up to 100 features drawn in the
+  current view. A band of a colour or arrow ramp (S-102 depths, a weather
+  field, S-111 speeds) tints its area in view instead
+  ([#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433)). The
+  rings and tint clear when you leave the row or move the map. The MCP tool
+  `set_legend` takes `findRow` to ring a row and returns what is ringed, or
+  tinted, as `find`.
+- **S-102 relief shading.** An optional hillshade over the S-102 depth bands
+  shows the shape of the seabed (dredged pits, sand waves, berth toes) in
+  high-resolution bathymetry. It lights the depth surface from the north-west
+  and darkens or lightens each band colour by slope, so the bands and the
+  safety contour keep their meaning. It isn't part of the S-102 portrayal, so
+  it's off by default. In SoundCharts, switch it on in the new **Bathymetry**
+  section of Display controls, shown while an S-102 dataset is loaded, or with
+  the `get_bathymetry_display` and `set_bathymetry_display` MCP tools.
+  `s100 render --show-layer s102.relief` draws it. `ReliefShading` and
+  `S102Relief` are the library types, and `StyledCoverageLayer.ReliefShade`
+  carries the shading to the coverage renderers. Zoomed out, SoundCharts draws
+  the shaded surface with mipmaps (`SmoothRasterStyle`), so the shading
+  averages out smoothly instead of turning into a speckled pattern. The shaded
+  surface goes to the map as an image, without a PNG round trip, so relief
+  costs about the same as the flat surface: on six 1 m BSH cells, portrayal
+  takes 7.1 s with relief against 9.2 s without (it was 16.8 s).
+- **Additional Military Layers portrayal.** The new
+  `EncDotNet.S100.Datasets.Aml` package draws NATO AML cells with
+  SoundCharts' own portrayal (not the restricted official one): dash-dot lines
+  on a halo, unfilled areas with inward ticks, framed point symbols and italic
+  labels, in air, operational, seabed and environmental colour families for
+  Day, Dusk and Night. It covers the RAL air and operational classes, which
+  the AML 3.0 air trials share; airspace shows its limits as a stacked
+  fraction. Styles are data in modules, and the legend is built from them. A
+  new S-98 plane, `S98DisplayPlane.AdditionalMilitaryLayers` (45), sits
+  between the chart overlays and the cautions. Text instructions gain
+  `FontSlant` for italic labels. See the
+  [Datasets.Aml README](../src/EncDotNet.S100.Datasets.Aml/README.md).
+- **Additional Military Layers display controls.** SoundCharts' display
+  panel gains an **Additional Military Layers** section while an AML cell is
+  loaded: a switch per AML product with its cell count, **Follow AML scale
+  bands** (on by default) and a **Legend** flyout built from the AML styles.
+  With the bands followed, each AML cell shows out to its scale band's
+  coarsest display scale, and a finer band of the same product wins where its
+  cells cover a coarser cell (`AmlScaleBandVisibility`). A corner chip says
+  CLB isn't used for depth checks while CLB is drawn. The switches are kept
+  after a restart, and the `get_aml_display` and `set_aml_display` MCP tools
+  read and set them.
+- **S-412 Marine Weather Warnings (draft).** The new
+  `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
+  significant wave height, restricted visibility, thunderstorm and ice
+  accretion warnings) and portrays them with the draft WMO portrayal
+  catalogue, now bundled with the feature catalogue in
+  `EncDotNet.S100.Specifications`. `s100 render` and the other
+  hosts detect S-412 and draw it on the S-98 cautions and warnings plane, with
+  S-124. `S412MarineWeatherWarnings` is the typed model. S-412 isn't
+  approved yet, so expect its catalogues to change. Its validation pack
+  (`S412MarineWeatherWarningRules`, 14 rules, all warnings while the
+  specification is a draft) checks the feature catalogue's mandatory
+  attributes and listed values, times, references and geometry.
+  Warnings follow the Timeline: each is drawn only from the start to the end
+  of its date range and until its cancellation date, by the rule S-124 and
+  CAP warnings use, and `s100 render --time-step` draws a step.
+  `describe_feature` decodes a warning's threshold, Beaufort force and
+  message in each language. See the
+  [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
+- **Picks match the map's time.** MCP `identify_features` takes an optional
+  `time` and returns only the S-412 and CAP warnings in force then, the
+  surface analysis valid then and a tropical cyclone's position then. In
+  SoundCharts, `identify_features` without a time and `pick_features` follow
+  the map: its view time and the S-124 parts it hides. Hosts supply what
+  their map draws through `IMapDrawState` (`S100McpServerOptions.MapDrawState`),
+  and `FeatureAccessor.GetFeatures` has an overload that takes the time.
+  `PickFeaturesTool` now takes the `IdentifyFeaturesTool` it uses.
+- **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
+  The CLI and `s100 mcp serve` now render through the chart engine
+  (`EncDotNet.S100.Rendering.Engine`): cells parse, portray and build their
+  scenes in parallel, so a 17-cell composite renders in about 10 s instead of
+  14 s, and tile blocks render as scheduled jobs in the order they're written.
+  `render_to_image`'s `pixelDensity` now applies in `mcp serve`, as in
+  SoundCharts. Finer cells hide coarser ones by their coverage footprint, not
+  its bounding box, so composites where a coarse cell's coverage isn't
+  rectangular can change slightly. Breaking changes: `HeadlessCompositor`,
+  `HeadlessCompositeScene`, `HeadlessCompositeInput`, `HeadlessCompositeOptions`,
+  `HeadlessTileRenderer`, `HeadlessTileOptions`, `HeadlessTile` and `TileBlock`
+  leave `EncDotNet.S100.Datasets.Pipelines`; use `ChartCompositor`,
+  `ChartComposition`, `ChartCompositeInput`, `ChartCompositeOptions`,
+  `ChartTileRenderer`, `ChartTileOptions`, `ChartTile` and `TileBlock` in
+  `EncDotNet.S100.Rendering.Engine`, where `ChartCompositor` now takes its S-98
+  authority explicitly. `S100CompositeOptions.PixelDensity` is new. See the
+  [Rendering.Engine README](../src/EncDotNet.S100.Rendering.Engine/README.md#render-images-and-tile-sets).
+- **Tropical cyclones on a route.** With an NHC advisory loaded, Check
+  route, `check_route` and `s100 route check` test the route against the
+  storm at each ETA: stretches inside its 34, 50 or 64 kt wind radius (in the
+  quadrant the vessel is in) and inside the forecast cone, the closest
+  approach to its centre, and stretches reached after the forecast ends (not
+  checked). By default the 34 kt radius is tested, the 50 and 64 kt radii are
+  Must review, and the 34 kt radius and the cone are Check; SoundCharts sets
+  these in **Settings** > **Chart display** > **Mariner Settings** >
+  **Tropical cyclones on a route**, MCP with `set_route_weather_settings` and
+  `check_route`'s `cyclone*` arguments, and the CLI with `--cyclone-radius`,
+  `--cyclone-must-review` and `--no-cyclone-cpa`. The verdict card's
+  **Weather** row counts the storm's findings and gives the closest approach,
+  and the map draws the storm at that ETA. In the libraries,
+  `RouteCheckSources.Cyclones` (`IRouteCyclone`),
+  `RouteCheckSettings.TropicalCyclones` (`TropicalCycloneCheckSettings`),
+  `WeatherCheckResult.Cyclones`, `TropicalCycloneDetails` and the
+  `weather.tc_*` codes are new. Breaking changes: `WeatherVerdict` gains
+  `InsideCycloneRadius` as its first value, `CycloneCheckStorm` and
+  `WeatherSample.Cyclones` are new, and the weather check runs, rather than
+  being skipped, when only an advisory is loaded. See
+  [Tropical cyclones](route-checks.md#tropical-cyclones).
+
+- **Weather along a route.** Check route, `check_route` and
+  `s100 route check` gain a weather check: with a GRIB2 or NetCDF forecast
+  loaded, they sample the route every nautical mile at the ETA and compare
+  the wind at 10 m and the significant wave height with the vessel's limits.
+  Stretches above a limit are Check findings with their time window ("Wind
+  above 25 kn for 3 h", `weather.wind_above_limit`,
+  `weather.waves_above_limit`); where the forecast ends before the vessel
+  gets there, or a grid doesn't cover it, the stretch is reported as not
+  checked (`weather.forecast_ends` and others), never passed. Each sample
+  reads the nearest grid node and time step, and the finest grid with the
+  newest run wins where grids overlap. In SoundCharts the limits are in
+  **Settings** > **Chart display** > **Mariner Settings** > **Weather on a
+  route** (`get_route_weather_settings`, `set_route_weather_settings`), the
+  verdict card gains a **Weather** row whose tooltip names the limits in use,
+  and **Findings** gains a **Weather** chip. An RTZ route's `vesselMaxWind`
+  (knots) and `vesselMaxWave` are used where no limit is set. `check_route`
+  takes `maxWindKnots` and `maxWaveHeightMeters` and returns a `weather`
+  section with an optional departure sweep; the CLI takes `--max-wind` and
+  `--max-wave`. In the libraries, `WeatherCheck` joins the built-in checks,
+  with `IRouteWeatherSource` (on `RouteCheckSources.Weather`), `WeatherLimits`
+  on `RouteCheckSettings` and `PassagePlan.VesselLimits`, `WeatherDetails`,
+  `WeatherFindings`, `RouteFindingCategory.Weather` and
+  `RtzPassagePlan.VesselLimits`. Breaking changes: `RouteChecker` runs five
+  built-in checks, so `RouteCheckReport.Checks` has a `weather` entry; the
+  `PassageRouteSnapshot` record has a new last positional parameter. See
+  [Weather along the route](route-checks.md#weather-along-the-route).
+
+- **Precipitation, thunderstorm risk and cloud cover on the chart.** GRIB2
+  and NetCDF files with a precipitation rate, CAPE or total cloud cover,
+  such as GFS, can now draw them: precipitation in rain radar colours from
+  0.1 mm/h, thunderstorm risk in ochre where CAPE is 1000 J/kg or more
+  (moderate, high and extreme), and cloud cover as a light grey veil from
+  25 %. All three are off by default, behind new **Precipitation**,
+  **Thunderstorm risk** and **Cloud cover** switches in Display controls
+  (and in `set_weather_display`), and each has a legend. Picks give the rate
+  in mm/h, CAPE in J/kg with its risk, and cloud cover in percent, and the
+  Library's GFS sources can fetch PRATE, CAPE and TCDC. `s100 render` gains
+  `--show-layer` to draw layers that are off by default. In the libraries,
+  `WeatherParameters` gains `PrecipitationRate`, `Cape` and `CloudCover`,
+  `WeatherUnit` gains `KilogramsPerSquareMetrePerSecond`, `JoulesPerKilogram`
+  and `Percent`, `WeatherLevel` gains `EntireAtmosphere` (GRIB2 fixed
+  surface 10), and the new styles are `PrecipitationStyle`,
+  `ThunderstormRiskStyle` and `CloudCoverStyle`. `WeatherCoverageStyle.Opacity`
+  is now set per style, and `StyleVersion` is 7. See
+  [Show wind and waves on the chart](weather.md).
+
+- **Tropical cyclones from the Library.** A new Library source,
+  **Tropical cyclones — NHC** (`FEED`), lists every storm NHC is issuing
+  advisories for in the Atlantic, East and Central Pacific, one item each,
+  named by the storm with its class symbol. An item downloads the advisory's
+  forecast, wind radii and best track zips, and NHC's next advisory replaces
+  it in place. While a storm is loaded, the Library reads NHC's list every
+  hour and announces a new advisory for it, with **Load latest run**; nothing
+  is loaded on its own, and a storm newly active doesn't notify. An advisory
+  is stale 7 hours after it's issued ("Advisory 17 is over 7 hours old"); a
+  stale storm isn't faded but says its age on its label and in Object
+  information. A loaded storm NHC stops listing is drawn as its final
+  advisory: past track and a post-tropical storm, "Final advisory issued".
+  **Display controls** shows its **Weather** section for cyclones and surface
+  analyses too, and ends it with **Wind radii**, **Past track** and
+  **Forecast times** switches while a cyclone is loaded; the new
+  `get_weather_display` and `set_weather_display` MCP tools read and set every
+  Weather switch. In the libraries, `WeatherServiceKind` gains `NhcStorms`
+  (`NhcActiveStorms` reads `CurrentStorms.json`), `RemotePart` gains
+  `FileName` (a download's parts saved side by side), `TimeSemantics` gains
+  `StaleAfterIssue`, `TropicalCycloneAdvisory` gains `IsFinal`,
+  `NhcAdvisoryFiles` gains `IsFinal` and `FinalMarkerName`, and
+  `TropicalCycloneStyle` gains the switch keys. Breaking changes:
+  `MapsuiMapTimedDataset.StaleAgeAt` takes an optional clock, and
+  `TimeSemantics` has a new last positional parameter. See
+  [Get active storms from the Library](weather.md#get-active-storms-from-the-library).
+
+- **Tropical cyclones follow the Timeline.** The cone and forecast always
+  draw; the storm and its wind radii are drawn at the view time, so
+  scrubbing moves them smoothly along the track. Between forecast points the
+  storm is an estimate, in a dashed ring labelled "est.", with its position
+  on the great circle and its wind and radii in between; before the advisory
+  it follows the best track; beyond the forecast the cone stays and the
+  Datasets row has a **Beyond forecast** tag. Object information gives the storm at the view
+  time and says when it's an estimate. The Timeline groups storms under
+  **Tropical cyclones**, in a lane named for the storm with a tick at each
+  forecast point and diamonds at the issue time and the next advisory due;
+  the step menu lists the storm, so ‹ › step its forecast points. In Live
+  mode the storm follows the clock. In the libraries:
+  `TropicalCycloneAdvisory.StormAt` and `TropicalCycloneStormAt`,
+  `TimeStepSelection.Continuous` (and `MapsuiTimeSelectionKind.Continuous`),
+  `ITimeAwareDatasetProcessor.NextIssueTime`, `TimelineLabel` and
+  `TimelineDetail` (on `MapsuiMapTimedDataset` too), and
+  `TropicalCycloneStyle.StormDetailLabel`; `TropicalCycloneDatasetProcessor`
+  is time-aware. `get_timeline_state` reports a lane's `sub`, `issued`,
+  `nextIssue` and `stepTicks` and a layer's warning `tag`. Breaking
+  change: a storm's own parts (the storm and its radii) now come after the
+  advisory's other parts in `EnumerateFeatures`. See
+  [Show tropical cyclones](weather.md#storm-at-the-view-time).
+
+- **Surface analyses follow the Timeline, from the Library.** A WPC
+  bulletin's analysis or forecast is now drawn from its valid time for 12
+  hours: after 6 it's stale, at half opacity with its age on each **H** and
+  **L**, a **Stale** tag in the Datasets panel and a warning line in Object
+  information; beyond 12 hours the Datasets row says "No analysis at view
+  time". Of several loaded bulletins, the one valid latest at or before the
+  view time draws, so a newer analysis or a nearer forecast takes over. The
+  Timeline groups them under **Surface analysis** in a **WPC** lane. A new
+  Library source, **Surface analysis — WPC** (`FEED`), lists the latest
+  analysis and, when chosen, the forecast fronts; a loaded analysis is
+  replaced by the next every 3 hours, and is stale after 6. In the
+  libraries, `TimeSemantics` gains `StaleAfter` and `Supersession`,
+  `RenderContext` gains `TimeStepAge`, `VectorSubLayer` gains `Opacity`,
+  `PickAttribute` gains `StaleNotice`, and `WeatherServiceKind` gains
+  `WpcBulletins`, with `WeatherService.StaleAfterHours` and `RefreshHours`
+  and `WeatherServiceDataset.File`. `get_timeline_state` reports a stale
+  layer's `staleHours`. Breaking changes:
+  `SurfaceAnalysisDatasetProcessor.DrawnAnalysisOf` takes a time step, and
+  `SurfaceAnalysisStyle.BuildCentre` takes the analysis's stale age. See
+  [Show a surface analysis](weather.md#show-a-surface-analysis).
+
+- **Tropical cyclones on the chart.** SoundCharts and `s100 render` now draw
+  an NHC advisory in one plum-grey storm ink: the cone, tinted and stippled
+  beyond 72 hours, the 34, 50 and 64 kt wind radii, the forecast and past
+  tracks, a WMO weather-map symbol at each forecast point (mirrored south of
+  the equator), and the storm with its name, wind, pressure, advisory and
+  motion. Times on the chart follow the Local or UTC setting. In the Layer
+  stack a storm has two entries, one for its lines and symbols and one for
+  its cone and radii, each with a legend. Picking any part shows one storm in
+  Object information, with the advisory, the next advisory due, the
+  intensity, the part picked and the radii by quadrant. Not for navigation.
+  New in the libraries: `TropicalCycloneStyle` and the `WXTC*` tokens in
+  `EncDotNet.S100.Datasets.Weather`, `RenderContext.DisplayTimeZone`,
+  `MapPresentationState.DisplayTimeZone`, `InstructionBuilder.Point`'s
+  `symbolScale` and `TropicalCycloneWindRadii.QuadrantSurface`. Breaking
+  changes: `EncDotNet.S100.Datasets.Weather` now depends on
+  `EncDotNet.S100.Datasets.TropicalCyclones`, and
+  `TropicalCycloneDatasetProcessor.NotForNavigationNotice` reads "Tropical
+  cyclone forecast, not for navigation. Follow official NHC advisories." See
+  [Show tropical cyclones](weather.md#show-tropical-cyclones).
+
+- **Fronts and pressure centres on the chart.** A WPC coded surface
+  bulletin now draws its cold, warm, occluded and stationary fronts and its
+  troughs with the triangles and semicircles of a printed weather map, on
+  the side each front moves towards, and its highs and lows as a bold **H**
+  or **L** with the pressure. Everything is in one dark ink (`WXFRONT`) over
+  the isobars, with a Layer stack legend and a pick in Object information.
+  `s100 render` draws bulletins too. Feature ids are now the bulletin's code
+  and number, such as `COLD 3`, and the pick notice is "Weather analysis,
+  not for navigation." See
+  [Show a surface analysis](weather.md#show-a-surface-analysis).
 - **Tropical cyclone advisories.** A new
   `EncDotNet.S100.Datasets.TropicalCyclones` package reads the National
   Hurricane Center's GIS shapefile zips for an advisory: the forecast track
@@ -112,6 +891,12 @@ month. For package versions and release assets, see
   Annex C leaves to the converter. It's for testing the S-57 → S-101
   translation and for tools that read only S-57, not for producing ENCs. See
   [Converting S-101 to S-57](s101-to-s57.md).
+
+- **`tiles serve` no longer exits on a file rename.** `tiles serve`,
+  `feed serve` and `mcp serve --transport http` no longer watch the working
+  directory for configuration changes. On Windows, a server started from a
+  short (8.3) path could end with an `ArgumentOutOfRangeException` when a
+  file under that folder was renamed.
 
 ## October 2026
 

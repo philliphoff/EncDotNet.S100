@@ -30,7 +30,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
     }
 
     private LibraryPanelViewModel Panel() =>
-        new(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), a => a(), sync: _sync);
+        TestLibrary.Panel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), a => a(), a => a(), TimeProvider.System, sync: _sync, feedHealth: null, notifications: null, viewTime: null, timeFormat: null);
 
     [Fact]
     public void An_online_source_can_be_kept_downloaded_from_its_menu()
@@ -39,25 +39,25 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
         var folder = new LocalFolderSource(Guid.NewGuid(), "Charts", _context.Root);
         _library.AddCollection("Mixed", [noaa, folder]);
         using var panel = Panel();
-        var collection = Assert.Single(panel.Nodes);
+        var collection = Assert.Single(panel.Tree.Nodes);
 
-        panel.SelectedNode = collection.Children.Single(n => n.Source?.Id == folder.Id);
-        Assert.False(panel.CanSyncSelected);  // a local folder is always current
+        panel.Tree.SelectedNode = collection.Children.Single(n => n.Source?.Id == folder.Id);
+        Assert.False(panel.Tree.CanSyncSelected);  // a local folder is always current
 
-        panel.SelectedNode = collection.Children.Single(n => n.Source?.Id == noaa.Id);
-        Assert.True(panel.CanSyncSelected);
-        Assert.False(panel.SelectedSyncs);
+        panel.Tree.SelectedNode = collection.Children.Single(n => n.Source?.Id == noaa.Id);
+        Assert.True(panel.Tree.CanSyncSelected);
+        Assert.False(panel.Tree.SelectedSyncs);
 
-        panel.ToggleSyncCommand.Execute(null);
+        panel.Tree.ToggleSyncCommand.Execute(null);
 
         var stored = _library.Collections.Single().Sources.Single(s => s.Id == noaa.Id).Definition;
         Assert.True(stored.Sync);
         Assert.False(_library.Collections.Single().Sources.Single(s => s.Id == folder.Id).Definition.Sync);
 
         // On the collection: the toggle applies to its online sources only.
-        panel.SelectedNode = panel.Nodes.Single();
-        Assert.True(panel.SelectedSyncs);
-        panel.ToggleSyncCommand.Execute(null);
+        panel.Tree.SelectedNode = panel.Tree.Nodes.Single();
+        Assert.True(panel.Tree.SelectedSyncs);
+        panel.Tree.ToggleSyncCommand.Execute(null);
         Assert.False(_library.Collections.Single().Sources.Single(s => s.Id == noaa.Id).Definition.Sync);
     }
 
@@ -71,7 +71,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
             EncDotNet.S100.Collections.Feeds.S100Feed.FormatName, 1, "Shared charts",
             new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), "f1",
             [new CollectionItem { Key = "A", ProductSpec = "S-101", Name = "A", Location = new RemoteItemLocation(new Uri(feedUri, "items/A.zip"), 1024) }]);
-        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) });
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) }, timeProvider: TimeProvider.System);
 
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);

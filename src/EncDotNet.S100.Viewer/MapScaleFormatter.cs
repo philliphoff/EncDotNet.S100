@@ -34,6 +34,17 @@ internal static class MapScaleFormatter
         if (ResolutionToScaleDenominator(mercatorResolution, latitudeDegrees) is not { } denominator)
             return Placeholder;
 
+        return FormatDenominator(denominator);
+    }
+
+    /// <summary>
+    /// Formats a scale denominator as the status bar does: rounded to three
+    /// significant figures with space-grouped thousands.
+    /// </summary>
+    /// <param name="denominator">The scale denominator, e.g. <c>21_873</c>.</param>
+    /// <returns>A string like <c>"1:21 900"</c>.</returns>
+    public static string FormatDenominator(double denominator)
+    {
         var rounded = RoundToSignificant(denominator);
 
         // Space-grouped thousands, e.g. "180 000", to read cleanly on charts.

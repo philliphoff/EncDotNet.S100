@@ -31,6 +31,9 @@ internal static class SettleReport
         ("settleMs", "Settle", "ms", true),
         ("cpuMs", "CPU", "ms", true),
         ("coresBusy", "Cores busy", "x", false),
+        ("schedulerCoresBusy", "Scheduler cores busy", "x", false),
+        ("visibleWaitP95Ms", "Visible job wait p95", "ms", true),
+        ("jobRunP95Ms", "Job run p95", "ms", true),
         ("gcPauseShare", "GC pause share", "%", true),
         ("gcPauseMs", "GC pause", "ms", true),
         ("gen2Collections", "Gen 2", "n", true),
@@ -42,6 +45,8 @@ internal static class SettleReport
         ("frameP50Ms", "Frame p50", "ms", true),
         ("frameP95Ms", "Frame p95", "ms", true),
         ("frameMaxMs", "Frame max", "ms", true),
+        ("uiMaxMs", "Longest UI task", "ms", true),
+        ("uiOver8Ms", "UI tasks > 8 ms", "n", true),
     ];
 
     /// <summary>Whether <paramref name="node"/> is a settle manifest.</summary>
@@ -82,6 +87,7 @@ internal static class SettleReport
         var window = metrics?["window"];
         var memory = metrics?["memory"];
         var frames = renderStats?["window"];
+        var scheduler = metrics?["scheduler"];
         return new JsonObject
         {
             ["name"] = name,
@@ -109,11 +115,21 @@ internal static class SettleReport
             ["gcHeapBytes"] = Number(memory, "gcHeapBytes"),
             ["gcCommittedBytes"] = Number(memory, "gcCommittedBytes"),
             ["tileNativeBytes"] = Number(memory, "tileNativeBytes"),
+            ["schedulerCoresBusy"] = Number(scheduler, "coresBusy"),
+            ["visibleWaitP95Ms"] = Number(scheduler?["visibleWait"], "p95Ms"),
+            ["visibleWaitMaxMs"] = Number(scheduler?["visibleWait"], "maxMs"),
+            ["visibleJobs"] = Number(scheduler?["visibleWait"], "count"),
+            ["jobRunP95Ms"] = Number(scheduler?["run"], "p95Ms"),
             ["frameCount"] = Number(frames, "count"),
             ["frameP50Ms"] = Number(frames, "frameP50Ms"),
             ["frameP95Ms"] = Number(frames, "frameP95Ms"),
             ["frameMaxMs"] = Number(frames, "frameMaxMs"),
+            ["uiMaxMs"] = Number(window?["uiThread"], "maxMs"),
+            ["uiP99Ms"] = Number(window?["uiThread"], "p99Ms"),
+            ["uiOver8Ms"] = Number(window?["uiThread"], "over8Ms"),
+            ["uiOver50Ms"] = Number(window?["uiThread"], "over50Ms"),
             ["loadedCells"] = Number(settle?["loads"], "loaded"),
+            ["prediction"] = metrics?["prediction"]?.DeepClone(),
             ["raw"] = new JsonObject
             {
                 ["settle"] = settle?.DeepClone(),
@@ -126,13 +142,15 @@ internal static class SettleReport
     /// <summary>
     /// Totals over the steps: summed settle, CPU, wall, GC pause and
     /// allocation; cores busy and pause share over the summed wall time; the
-    /// largest settle, peaks and frame times. <c>settleMs</c> is null when any
+    /// largest settle, peaks, frame times, longest UI task and scheduler job-wait p95 (the
+    /// largest step p95, not a pooled one). <c>settleMs</c> is null when any
     /// step timed out.
     /// </summary>
     public static JsonObject Totals(JsonArray steps)
     {
         double settle = 0, maxSettle = 0, cpu = 0, wall = 0, pause = 0, allocated = 0, gen2 = 0;
         double peakWs = 0, peakHeap = 0, peakCommitted = 0, peakTiles = 0, frameP95 = 0, frameMax = 0;
+        double schedulerBusy = 0, visibleWaitP95 = 0, visibleWaitMax = 0, jobRunP95 = 0, uiMax = 0, uiOver8 = 0;
         var timedOut = 0;
         foreach (var step in steps)
         {
@@ -157,6 +175,12 @@ internal static class SettleReport
             peakTiles = Math.Max(peakTiles, Number(step, "peakTileNativeBytes") ?? 0);
             frameP95 = Math.Max(frameP95, Number(step, "frameP95Ms") ?? 0);
             frameMax = Math.Max(frameMax, Number(step, "frameMaxMs") ?? 0);
+            schedulerBusy += (Number(step, "schedulerCoresBusy") ?? 0) * (Number(step, "wallMs") ?? 0);
+            visibleWaitP95 = Math.Max(visibleWaitP95, Number(step, "visibleWaitP95Ms") ?? 0);
+            visibleWaitMax = Math.Max(visibleWaitMax, Number(step, "visibleWaitMaxMs") ?? 0);
+            jobRunP95 = Math.Max(jobRunP95, Number(step, "jobRunP95Ms") ?? 0);
+            uiMax = Math.Max(uiMax, Number(step, "uiMaxMs") ?? 0);
+            uiOver8 += Number(step, "uiOver8Ms") ?? 0;
         }
 
         return new JsonObject
@@ -178,6 +202,12 @@ internal static class SettleReport
             ["peakTileNativeBytes"] = peakTiles,
             ["frameP95Ms"] = frameP95,
             ["frameMaxMs"] = frameMax,
+            ["schedulerCoresBusy"] = wall > 0 ? schedulerBusy / wall : 0,
+            ["visibleWaitP95Ms"] = visibleWaitP95,
+            ["visibleWaitMaxMs"] = visibleWaitMax,
+            ["jobRunP95Ms"] = jobRunP95,
+            ["uiMaxMs"] = uiMax,
+            ["uiOver8Ms"] = uiOver8,
         };
     }
 
@@ -200,7 +230,8 @@ internal static class SettleReport
             writer.WriteLine(
                 $"- **Viewer:** Lua {Text(viewer, "luaEngine")}, {(Bool(viewer, "serverGc") == true ? "server" : "workstation")} GC, "
                 + $"{Text(viewer, "processorCount")} cores, {Text(viewer, "os")} {Text(viewer, "architecture")}, "
-                + $"{Text(viewer, "runtime")}{(Bool(viewer, "optimized") == false ? ", **Debug build**" : string.Empty)}");
+                + $"{Text(viewer, "runtime")}{(Bool(viewer, "optimized") == false ? ", **Debug build**" : string.Empty)}"
+                + $"{(Bool(viewer, "appNapDisabled") == false && Text(viewer, "os").Contains("Darwin", StringComparison.OrdinalIgnoreCase) ? ", **App Nap on**" : string.Empty)}");
         }
 
         if (manifest["prewarm"] is { } prewarm)

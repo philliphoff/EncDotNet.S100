@@ -160,6 +160,47 @@ public sealed class IdentifyCommandTests
         Assert.NotEqual(0, exit);
     }
 
+    [Fact]
+    public void Identify_with_an_unknown_source_and_no_dataset_returns_two()
+    {
+        int exit = CliApp.Build().Run(
+            ["identify", "--lat", "47.6", "--lon", "-122.4", "--source", "acme.gone"], TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, exit);
+    }
+
+    [Fact]
+    public void Identify_with_a_negative_source_timeout_returns_nonzero()
+    {
+        int exit = CliApp.Build().Run(
+            ["identify", "--lat", "47.6", "--lon", "-122.4", "--source", "ndbc.realtime", "--source-timeout", "-1"], TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Render_source_needs_a_composite_form_and_a_viewport()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+        var output = Path.Combine(Path.GetTempPath(), $"render-source-{Guid.NewGuid():N}.png");
+        var ct = TestContext.Current.CancellationToken;
+
+        // Single-dataset form: refused.
+        Assert.NotEqual(0, CliApp.Build().Run(["render", dataset, output, "--source", "ndbc.realtime"], ct));
+        // Composite without a viewport: refused.
+        Assert.NotEqual(0, CliApp.Build().Run(["render", "--layer", dataset, "-o", output, "--source", "ndbc.realtime"], ct));
+        // An unknown source: exit 2, nothing written.
+        Assert.Equal(2, CliApp.Build().Run(["render", "--layer", dataset, "-o", output, "--bbox", "1.2,51.0,1.4,51.2", "--source", "acme.gone"], ct));
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Sources_lists_the_live_sources()
+    {
+        Assert.Equal(0, CliApp.Build().Run(["sources"], TestContext.Current.CancellationToken));
+    }
+
     private static (int Exit, string Stdout) RunCapturingStdout(string[] args)
     {
         var original = Console.Out;

@@ -14,6 +14,13 @@ internal interface IWaterLevelAdjustmentSettings
     /// <summary>The "Apply anyway when datum is not declared" override.</summary>
     bool WaterLevelApplyUndeclaredDatum { get; }
 
+    /// <summary>
+    /// Whether harmonic tide predictions are used where there's no S-104
+    /// (tide predictions design D1). A source, not an adjustment mode: it
+    /// feeds the Depth card and the route check with adjustment off too.
+    /// </summary>
+    bool UseTidePredictions { get; }
+
     /// <summary>Raised after either setting changes.</summary>
     event Action? WaterLevelAdjustmentChanged;
 }
@@ -35,16 +42,19 @@ internal interface IDepthAdjustmentRequests
     void MarkApplied(IDepthAdjustment? adjustment);
 }
 
-/// <summary>The loaded S-104 water level, as the route check and the pick report read it.</summary>
+/// <summary>
+/// The loaded S-104 water level, and tide predictions where they're on, as
+/// the route check and the pick report read it.
+/// </summary>
 internal interface IWaterLevelCatalog
 {
     /// <summary>The water level of the loaded datasets, or <see langword="null"/> when none is loaded.</summary>
     IWaterLevelSource? WaterLevel { get; }
 
-    /// <summary>Changes whenever the loaded datasets change, so an adjustment built from them can be told apart.</summary>
+    /// <summary>Changes whenever the loaded datasets or the tide-prediction source change, so an adjustment built from them can be told apart.</summary>
     string Key { get; }
 
-    /// <summary>Raised when the loaded datasets change.</summary>
+    /// <summary>Raised when the loaded datasets or the tide-prediction source change.</summary>
     event EventHandler? Changed;
 }
 
@@ -69,10 +79,17 @@ internal sealed class ViewerWaterLevelCatalog : IWaterLevelCatalog, IDisposable
         _catalog = catalog;
         _sources = sources;
         _catalog.Changed += OnCatalogChanged;
+        _sources.Changed += OnSourcesChanged;
     }
 
     /// <inheritdoc />
     public IWaterLevelSource? WaterLevel => _sources.Get(_catalog.Datasets).WaterLevel;
+
+    /// <summary>
+    /// Where the loaded charts have water, land or nothing (tide predictions
+    /// design D19, D23): the adjusted-area edge is clipped to it.
+    /// </summary>
+    public IWaterMask? WaterMask => _sources.Get(_catalog.Datasets).WaterMask;
 
     /// <inheritdoc />
     public string Key => Interlocked.Read(ref _generation).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -81,9 +98,19 @@ internal sealed class ViewerWaterLevelCatalog : IWaterLevelCatalog, IDisposable
     public event EventHandler? Changed;
 
     /// <inheritdoc />
-    public void Dispose() => _catalog.Changed -= OnCatalogChanged;
+    public void Dispose()
+    {
+        _catalog.Changed -= OnCatalogChanged;
+        _sources.Changed -= OnSourcesChanged;
+    }
 
-    private void OnCatalogChanged(object? sender, DatasetCatalogChangedEventArgs e)
+    private void OnCatalogChanged(object? sender, DatasetCatalogChangedEventArgs e) => Bump();
+
+    // Tide predictions turned on or off: the water level changes as if the
+    // loaded datasets had.
+    private void OnSourcesChanged(object? sender, EventArgs e) => Bump();
+
+    private void Bump()
     {
         Interlocked.Increment(ref _generation);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -119,6 +146,7 @@ internal sealed class ChartWaterLevelAdjustmentService : IWaterLevelAdjustmentSt
     private WaterLevelDepthAdjustment? _requested;
     private IReadOnlyList<WaterLevelSourceInfo> _requestedSources = [];
     private IReadOnlyList<DataModel.CoverageArea> _requestedFootprint = [];
+    private IReadOnlyList<DataModel.CoverageArea> _requestedPredictedFootprint = [];
     private bool _disposed;
 
     /// <summary>Creates the service and builds the first request.</summary>
@@ -179,7 +207,10 @@ internal sealed class ChartWaterLevelAdjustmentService : IWaterLevelAdjustmentSt
                 _requested?.Field.Basis.Start,
                 _requestedSources,
                 _requestedFootprint,
-                _settings.WaterLevelApplyUndeclaredDatum);
+                _settings.WaterLevelApplyUndeclaredDatum)
+            {
+                PredictedFootprint = _requestedPredictedFootprint,
+            };
         if (state == Current)
             return;
 
@@ -231,11 +262,14 @@ internal sealed class ChartWaterLevelAdjustmentService : IWaterLevelAdjustmentSt
             next = new WaterLevelDepthAdjustment(field, _settings.WaterLevelApplyUndeclaredDatum, _catalog.Key);
             _requestedSources = source.Datasets;
             _requestedFootprint = source.Footprint;
+            // Where predictions adjust, apart from S-104, for the seam (D13).
+            _requestedPredictedFootprint = source is IFallbackWaterLevelSource fallback ? fallback.Fallback.Footprint : [];
         }
         else
         {
             _requestedSources = [];
             _requestedFootprint = [];
+            _requestedPredictedFootprint = [];
         }
 
         if (next is null && _requested is null)

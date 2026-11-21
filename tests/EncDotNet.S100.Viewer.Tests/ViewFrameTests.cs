@@ -43,7 +43,11 @@ public sealed class ViewFrameTests
     {
         var service = new GlobalTimeService();
         var timeline = new TimelineViewModel(
-            service, new UtcTimeFormat(), new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+            service, new UtcTimeFormat(), new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(),
+            refresher: null,
+            progress: null,
+            scope: null,
+            library: null);
         var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {

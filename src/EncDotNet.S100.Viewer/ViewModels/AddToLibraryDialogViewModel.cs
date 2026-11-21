@@ -104,13 +104,15 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 
     /// <param name="library">The Library the source is added to.</param>
     /// <param name="readers">Reads online catalogues; a catalogue without a reader cannot be added.</param>
-    /// <param name="timeProvider">The clock (catalogue age, forecast end); the system clock when null.</param>
-    public AddToLibraryDialogViewModel(CollectionLibrary library, LibraryCatalogueReaders? readers = null, TimeProvider? timeProvider = null)
+    /// <param name="timeProvider">The clock (catalogue age, forecast end).</param>
+    public AddToLibraryDialogViewModel(CollectionLibrary library, LibraryCatalogueReaders readers, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(library);
+        ArgumentNullException.ThrowIfNull(readers);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _library = library;
-        _readers = readers ?? new LibraryCatalogueReaders();
-        _time = timeProvider ?? TimeProvider.System;
+        _readers = readers;
+        _time = timeProvider;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
         CancelCommand = new RelayCommand(() => Closed?.Invoke(this, false));

@@ -14,4 +14,11 @@ internal static partial class Strings
     public static string Map_LegendNoDraft => Get(nameof(Map_LegendNoDraft));
     public static string Tooltip_MapLegendFold => Get(nameof(Tooltip_MapLegendFold));
     public static string Tooltip_MapLegendOpen => Get(nameof(Tooltip_MapLegendOpen));
+
+    // The route check's section of the Legend tab (#1408).
+    public static string Legend_RouteCheckSpec => Get(nameof(Legend_RouteCheckSpec));
+    public static string Legend_RouteCheckTitle => Get(nameof(Legend_RouteCheckTitle));
+    public static string Legend_RouteCheckUkc => Get(nameof(Legend_RouteCheckUkc));
+    public static string Legend_RouteCheckFindings => Get(nameof(Legend_RouteCheckFindings));
+    public static string Legend_RouteCheckWeather => Get(nameof(Legend_RouteCheckWeather));
 }

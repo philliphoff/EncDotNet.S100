@@ -324,32 +324,65 @@ public sealed class FeatureInfo
         = System.Array.Empty<FeatureReference>();
 
     /// <summary>
-    /// Full time-series snapshot for the feature when it represents a
-    /// fixed-station observation (S-104 / S-111 data-coding-format-8
-    /// stations). <c>null</c> for every other feature shape — including
-    /// gridded coverage samples synthesised by
-    /// <see cref="IDatasetProcessor.GetCoverageInfo"/>. Viewers use this
-    /// to render the pick panel's time-series chart without re-querying
-    /// the processor as the global clock moves.
+    /// The full time series of a fixed-station observation (S-104 / S-111
+    /// data-coding-format-8 stations): the first
+    /// <see cref="StationSeriesSection"/> in <see cref="Sections"/>, or
+    /// <c>null</c>.
     /// </summary>
-    public StationTimeSeriesSnapshot? StationSeries { get; init; }
+    [Obsolete("Read the StationSeriesSection in Sections instead. This property will be removed in a later release.")]
+    public StationTimeSeriesSnapshot? StationSeries => Sections.OfType<StationSeriesSection>().FirstOrDefault()?.Series;
 
     /// <summary>
-    /// WMO / SIGRID-3 ice "egg code" projection for the feature when it is an
-    /// S-411 sea-ice / lake-ice feature carrying concentration, stage of
-    /// development, and form-of-ice attributes; <c>null</c> for every other
-    /// feature shape. Object-information UIs use it to render the egg diagram
-    /// in the pick report (S-411 Edition 1.2.1 Annex A).
+    /// The feature's pick report content that isn't attribute rows, such as an
+    /// ice egg code (<see cref="IceEggCodeSection"/>), a station's time series
+    /// (<see cref="StationSeriesSection"/>) or a navigational warning
+    /// (<see cref="NavigationalWarningSection"/>), at most one per
+    /// <see cref="PickSection.Kind"/>. Empty for most features.
     /// </summary>
-    public IceEggCode? EggCode { get; init; }
+    /// <remarks>
+    /// A processor may set sections itself when only it has the data;
+    /// <see cref="IPickContributor"/>s add the rest when the feature is
+    /// described.
+    /// </remarks>
+    public IReadOnlyList<PickSection> Sections { get; init; } = [];
+
+    /// <summary>
+    /// The WMO / SIGRID-3 ice egg code of a sea-ice or lake-ice feature: the
+    /// first <see cref="IceEggCodeSection"/> in <see cref="Sections"/>, or
+    /// <c>null</c>.
+    /// </summary>
+    [Obsolete("Read the IceEggCodeSection in Sections instead. This property will be removed in a later release.")]
+    public IceEggCode? EggCode => Sections.OfType<IceEggCodeSection>().FirstOrDefault()?.Egg;
+
+    /// <summary>
+    /// A copy of this feature info with <paramref name="sections"/> as its
+    /// <see cref="Sections"/>.
+    /// </summary>
+    /// <param name="sections">The sections.</param>
+    public FeatureInfo WithSections(IReadOnlyList<PickSection> sections)
+    {
+        ArgumentNullException.ThrowIfNull(sections);
+        return new FeatureInfo
+        {
+            FeatureRef = FeatureRef,
+            FeatureType = FeatureType,
+            FeatureTypeName = FeatureTypeName,
+            Attributes = Attributes,
+            DrawingPriority = DrawingPriority,
+            Geometry = Geometry,
+            References = References,
+            Sections = sections,
+        };
+    }
 
     /// <summary>
     /// The warning message when the feature is part of a navigational warning
-    /// (an S-124 <c>NavwarnPart</c>): its identification, type, validity and
-    /// full text in every language; <c>null</c> for every other feature.
-    /// Object-information UIs show it as one card in place of attribute rows.
+    /// (an S-124 <c>NavwarnPart</c>): the first
+    /// <see cref="NavigationalWarningSection"/> in <see cref="Sections"/>, or
+    /// <c>null</c>.
     /// </summary>
-    public NavigationalWarningInfo? NavigationalWarning { get; init; }
+    [Obsolete("Read the NavigationalWarningSection in Sections instead. This property will be removed in a later release.")]
+    public NavigationalWarningInfo? NavigationalWarning => Sections.OfType<NavigationalWarningSection>().FirstOrDefault()?.Warning;
 }
 
 /// <summary>

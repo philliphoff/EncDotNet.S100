@@ -1,0 +1,34 @@
+@* The server-state pill (handoff D28). Live and Updating… come from the server; when the live link drops the page can't
+   render, so js/serve-live.js marks <html data-link="…"> and CSS shows one of the link labels instead (SW7, #1583).
+   On a phone it's a round button with the dot only (D4). *@
+<span class="state-pill" data-state="@State.ToString().ToLowerInvariant()" role="status" title="@Tooltip">
+    <span class="state-dot" aria-hidden="true"></span>
+    <span class="state-label state-own">@Label</span>
+    <span class="state-label state-link" data-link-state="reconnecting">@Text(ServerState.Reconnecting)</span>
+    <span class="state-label state-link" data-link-state="disconnected">@Text(ServerState.Disconnected)</span>
+    <span class="state-label state-link" data-link-state="stopped">@Text(ServerState.Stopped)</span>
+</span>
+
+@code {
+    /// <summary>The state drawn.</summary>
+    [Parameter]
+    public ServerState State { get; set; }
+
+    /// <summary>What the tooltip adds: the revision and the refresh interval.</summary>
+    [Parameter]
+    public string? Detail { get; set; }
+
+    private string Label => Text(State);
+
+    /// <summary>The label of a state.</summary>
+    public static string Text(ServerState state) => state switch
+    {
+        ServerState.Updating => "Updating…",
+        ServerState.Reconnecting => "Reconnecting…",
+        ServerState.Disconnected => "Disconnected",
+        ServerState.Stopped => "Server stopped",
+        _ => "Live",
+    };
+
+    private string Tooltip => Detail is null ? Label : Label + " · " + Detail;
+}

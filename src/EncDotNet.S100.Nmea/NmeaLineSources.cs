@@ -291,16 +291,17 @@ public sealed class NmeaTcpLineSource : INmeaLineSource
     /// <param name="host">The server's host name or address.</param>
     /// <param name="port">The server's port.</param>
     /// <param name="reconnectDelay">The wait before reconnecting; <see langword="null"/> for 5 seconds.</param>
-    /// <param name="timeProvider">The clock the wait runs on; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
-    public NmeaTcpLineSource(string host, int port = NmeaUdpLineSource.DefaultPort, TimeSpan? reconnectDelay = null, TimeProvider? timeProvider = null)
+    /// <param name="timeProvider">The clock the wait runs on.</param>
+    public NmeaTcpLineSource(string host, TimeProvider timeProvider, int port = NmeaUdpLineSource.DefaultPort, TimeSpan? reconnectDelay = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentException.ThrowIfNullOrEmpty(host);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(port);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(port, IPEndPoint.MaxPort);
         Host = host;
         Port = port;
         ReconnectDelay = reconnectDelay ?? TimeSpan.FromSeconds(5);
-        _time = timeProvider ?? TimeProvider.System;
+        _time = timeProvider;
     }
 
     /// <summary>The server's host.</summary>
@@ -376,4 +377,62 @@ public sealed class NmeaTcpLineSource : INmeaLineSource
             }
         }
     }
+}
+
+/// <summary>Builds an <see cref="INmeaLineSource"/> from a short input spec.</summary>
+public static class NmeaInput
+{
+    /// <summary>The pause between replayed lines: 100 ms, about an instrument bus's rate.</summary>
+    public static readonly TimeSpan ReplayLineInterval = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// Parses an input spec: <c>udp</c>, <c>udp:PORT</c>, <c>udp://ADDRESS:PORT</c>,
+    /// <c>tcp://HOST:PORT</c>, <c>file://PATH</c> or a plain path to a recording,
+    /// which is replayed in a loop at <see cref="ReplayLineInterval"/>.
+    /// </summary>
+    /// <param name="spec">The spec.</param>
+    /// <param name="timeProvider">The clock for TCP reconnects and replay pauses; <see cref="TimeProvider.System"/> when <see langword="null"/>.</param>
+    /// <returns>The input, or <see langword="null"/> when the spec is empty or not understood.</returns>
+    public static INmeaLineSource? Parse(string? spec, TimeProvider? timeProvider = null)
+    {
+        if (string.IsNullOrWhiteSpace(spec))
+            return null;
+        spec = spec.Trim();
+        var time = timeProvider ?? TimeProvider.System;
+
+        if (spec.Equals("udp", StringComparison.OrdinalIgnoreCase))
+            return new NmeaUdpLineSource();
+
+        if (spec.StartsWith("udp:", StringComparison.OrdinalIgnoreCase) && !spec.StartsWith("udp://", StringComparison.OrdinalIgnoreCase))
+            return int.TryParse(spec.AsSpan(4), out int udpPort) && udpPort is > 0 and <= IPEndPoint.MaxPort
+                ? new NmeaUdpLineSource(udpPort)
+                : null;
+
+        if (Uri.TryCreate(spec, UriKind.Absolute, out var uri))
+        {
+            switch (uri.Scheme)
+            {
+                case "udp":
+                    return new NmeaUdpLineSource(
+                        uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port,
+                        IPAddress.TryParse(uri.Host, out var address) ? address : null);
+                case "tcp":
+                    return string.IsNullOrEmpty(uri.Host)
+                        ? null
+                        : new NmeaTcpLineSource(uri.Host, time, uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port);
+                case "file":
+                    return Replay(uri.LocalPath, timeProvider);
+                default:
+                    // A Windows path such as C:\logs\nmea.txt parses as scheme "c".
+                    if (uri.Scheme.Length > 1)
+                        return null;
+                    break;
+            }
+        }
+
+        return Replay(spec, timeProvider);
+    }
+
+    private static NmeaReplayFile Replay(string path, TimeProvider? timeProvider) =>
+        new(Path.GetFullPath(path), new NmeaReplayOptions { LineInterval = ReplayLineInterval, Loop = true, TimeProvider = timeProvider });
 }

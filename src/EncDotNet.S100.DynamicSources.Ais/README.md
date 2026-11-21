@@ -76,8 +76,8 @@ without wire-format fixtures.
 ## Draw the targets
 
 The source sets `RendererKey = "vessel.ais"`. To draw its features, register a
-matching `IDynamicFeatureRenderer` in `EncDotNet.S100.Renderers.Mapsui`;
-`AisVesselRenderer` there does this.
+`PortrayedDynamicFeatureRenderer` (`EncDotNet.S100.Renderers.Mapsui`) over
+`VesselPortrayal.Ais` (`EncDotNet.S100.Portrayals`) under that key.
 
 ## See also
 

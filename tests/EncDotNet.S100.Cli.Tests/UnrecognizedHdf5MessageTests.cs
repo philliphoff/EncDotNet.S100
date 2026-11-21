@@ -110,7 +110,7 @@ public sealed class UnrecognizedHdf5MessageTests : IDisposable
     public async Task Mcp_open_dataset_reports_the_reason_as_a_problem()
     {
         var path = WriteUndeclaredS102();
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
 
         var outcome = await catalog.LoadAsync(path, specHint: null, TestContext.Current.CancellationToken);
 
@@ -125,7 +125,7 @@ public sealed class UnrecognizedHdf5MessageTests : IDisposable
         // The escape hatch for a producer that omits the attribute: name the
         // product (`open_dataset` `spec`, or a Library item's declared spec).
         var path = WriteUndeclaredS102();
-        using var catalog = new HeadlessMutableCatalog();
+        using var catalog = new HeadlessMutableCatalog(transforms: null, factory: CliTestProcessors.Bundled);
 
         var outcome = await catalog.LoadAsync(path, "S-102", TestContext.Current.CancellationToken);
 

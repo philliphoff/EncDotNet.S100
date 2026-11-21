@@ -62,12 +62,21 @@ public sealed record ChartedDepth(
     /// surveyed surface, so the check marks it low confidence.
     /// </summary>
     public bool IsLowConfidence => Kind != ChartedDepthKind.Bathymetry;
+
+    /// <summary>
+    /// For a <see cref="ChartedDepthKind.DepthArea"/> or
+    /// <see cref="ChartedDepthKind.DredgedArea"/>, the area's maximum depth
+    /// (<c>depthRangeMaximumValue</c>, DRVAL2) in metres; <c>null</c> when the
+    /// area doesn't carry one, and for other kinds. <see cref="DepthMeters"/>
+    /// is the area's minimum depth.
+    /// </summary>
+    public double? DepthRangeMaximumMeters { get; init; }
 }
 
 /// <summary>
 /// Supplies charted depth at a point: S-102 bathymetry, with S-101 as the
 /// fallback where no S-102 covers it. The clearance check reads the whole
-/// chain (<see cref="Sample"/>); the chart check's S-102 shoal test reads
+/// chain (<see cref="Sample(GeoPosition)"/>); the chart check's S-102 shoal test reads
 /// S-102 only (<see cref="SampleBathymetry"/>), so one source serves both.
 /// </summary>
 /// <remarks>
@@ -101,6 +110,38 @@ public interface IChartedDepthSource
     /// <param name="position">The point, in WGS-84.</param>
     /// <returns>The depth, or <c>null</c>.</returns>
     ChartedDepth? SampleBathymetry(GeoPosition position);
+
+    /// <summary>
+    /// The charted depth at every point of a regular grid, by the same
+    /// priority as <see cref="Sample(GeoPosition)"/>, for a whole area at
+    /// once (the navigability grid, #1558). An implementation can do it much
+    /// faster than one point at a time, by filling depth areas row by row.
+    /// </summary>
+    /// <remarks>
+    /// A grid implementation may leave out the nearest-sounding fallback,
+    /// which only applies where no depth or dredged area covers a point: the
+    /// depth areas of a chart cover all of its water, so a point without one
+    /// is land or off the chart.
+    /// </remarks>
+    /// <param name="grid">The grid.</param>
+    /// <param name="depthMeters">
+    /// Receives the depths in metres (positive down), row by row from the
+    /// south-west, with <see cref="float.NaN"/> where there's none; at least
+    /// <see cref="WaterMaskGrid.Count"/> long.
+    /// </param>
+    void Sample(WaterMaskGrid grid, Span<float> depthMeters)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(depthMeters.Length, grid.Count, nameof(depthMeters));
+        for (var row = 0; row < grid.Rows; row++)
+        {
+            for (var col = 0; col < grid.Columns; col++)
+            {
+                depthMeters[(row * grid.Columns) + col] = Sample(grid.PositionAt(row, col)) is { } depth
+                    ? (float)depth.DepthMeters
+                    : float.NaN;
+            }
+        }
+    }
 }
 
 /// <summary>
@@ -118,6 +159,16 @@ public static class ChartedDepthResolver
     [
         "depthRangeMinimumValue",
         "DRVAL1",
+    ];
+
+    /// <summary>
+    /// Attribute codes that carry an S-101 area's maximum depth
+    /// (<c>depthRangeMaximumValue</c>, and its S-57 acronym DRVAL2).
+    /// </summary>
+    public static IReadOnlyList<string> MaximumDepthAttributeCodes { get; } =
+    [
+        "depthRangeMaximumValue",
+        "DRVAL2",
     ];
 
     /// <summary>Picks the highest-priority candidate that is present.</summary>

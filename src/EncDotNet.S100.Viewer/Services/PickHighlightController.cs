@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
@@ -39,7 +38,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Appearance combines the user's accent colour (from the shared
 /// <see cref="IMeasureOverlayAppearanceProvider"/>, so the highlight tracks
 /// accent changes exactly like the measure overlay) with the active chart
-/// palette (from <see cref="SettingsViewModel"/>): the marker's white casing
+/// palette (from <see cref="ViewerSettingsService"/>): the marker's white casing
 /// is dimmed against a dark Dusk/Night basemap to avoid glare.
 /// </para>
 /// </remarks>
@@ -49,7 +48,7 @@ internal sealed class PickHighlightController : IDisposable
     private readonly PickReportViewModel _pickReport;
     private readonly IDatasetCatalog _catalog;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
-    private readonly SettingsViewModel _settings;
+    private readonly ViewerSettingsService _settings;
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
     private readonly NavigationalWarningDrawingService? _warningDrawing;
@@ -66,14 +65,10 @@ internal sealed class PickHighlightController : IDisposable
     /// <param name="catalog">Loaded-dataset catalog used to resolve feature geometry.</param>
     /// <param name="appearance">Accent/theme provider for the highlight colours.</param>
     /// <param name="settings">
-    /// Settings view-model supplying the active chart palette, which drives the
+    /// Settings service supplying the active chart palette, which drives the
     /// marker's casing colour (dimmed against a dark Dusk/Night basemap).
     /// </param>
-    /// <param name="marshal">
-    /// Optional UI-thread marshalling override. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
-    /// implementation.
-    /// </param>
+    /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
     /// <param name="warningDrawing">
     /// Which S-124 warnings the map draws; with its Navigational warnings
     /// switch off, a warning's pick isn't highlighted either (#995).
@@ -84,22 +79,23 @@ internal sealed class PickHighlightController : IDisposable
         PickReportViewModel pickReport,
         IDatasetCatalog catalog,
         IMeasureOverlayAppearanceProvider appearance,
-        SettingsViewModel settings,
-        Action<Action>? marshal = null,
-        NavigationalWarningDrawingService? warningDrawing = null)
+        ViewerSettingsService settings,
+        Action<Action> marshal,
+        NavigationalWarningDrawingService? warningDrawing)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(marshal);
 
         _layers = layers;
         _pickReport = pickReport;
         _catalog = catalog;
         _appearance = appearance;
         _settings = settings;
-        _marshal = marshal ?? DispatcherMarshal;
+        _marshal = marshal;
         _warningDrawing = warningDrawing;
 
         _layer = PickHighlightOverlayLayer.Create();
@@ -125,7 +121,8 @@ internal sealed class PickHighlightController : IDisposable
         if (e.PropertyName is nameof(PickReportViewModel.Location)
             or nameof(PickReportViewModel.SelectedHit)
             or nameof(PickReportViewModel.PreviewHit)
-            or nameof(PickReportViewModel.HasPick))
+            or nameof(PickReportViewModel.HasPick)
+            or nameof(PickReportViewModel.SelectedSections))
         {
             _marshal(Rebuild);
         }
@@ -157,6 +154,19 @@ internal sealed class PickHighlightController : IDisposable
         PickHighlightGeometry? geometry =
             !hidden && hit is not null ? TryResolveGeometry(hit) : null;
 
+        // A picked live feature with an area of its own: a tide station's cell
+        // (D13), from its card among the selected hit's sections (slice 7d).
+        if (!hidden && hit is not null
+            && _pickReport.SelectedSections.OfType<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicPickCard>()
+                .Select(c => c.Outline).FirstOrDefault(o => o is { Count: > 2 }) is { } cell)
+        {
+            geometry = new PickHighlightGeometry(
+                ExteriorRing: cell,
+                InteriorRings: Array.Empty<IReadOnlyList<GeoPosition>>(),
+                Curves: Array.Empty<IReadOnlyList<GeoPosition>>(),
+                Points: Array.Empty<GeoPosition>());
+        }
+
         var state = new PickHighlightState(location, geometry);
 
         // The marker's casing dims against a dark chart basemap. That is the
@@ -177,6 +187,9 @@ internal sealed class PickHighlightController : IDisposable
     {
         var featureRef = hit.FeatureRef;
         if (string.IsNullOrEmpty(featureRef)) return null;
+        // An overlay source's hit (own-ship) has no dataset to find it in;
+        // the location marker shows where it is.
+        if (hit.OwningProcessor is null && hit.DatasetFileName is null) return null;
 
         var datasets = _catalog.Datasets;
         foreach (var dataset in datasets)
@@ -240,12 +253,6 @@ internal sealed class PickHighlightController : IDisposable
         var list = new List<IReadOnlyList<GeoPosition>>(source.Count);
         foreach (var ring in source) list.Add(ToList(ring));
         return list;
-    }
-
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
     }
 
     /// <summary>Detaches the overlay layer and unsubscribes. Idempotent.</summary>

@@ -6,8 +6,11 @@ It includes:
 - **.NET libraries** that read each supported product, run its portrayal
   catalogue and render the result to an image or an interactive map.
 - **SoundCharts**, a desktop viewer for macOS, Windows and Linux.
-- **`s100`**, a command-line tool that inspects, validates and renders datasets.
-- **An MCP server** that gives AI agents access to loaded datasets.
+- **`s100`**, a command-line tool that inspects, validates, renders and
+  converts datasets, checks routes, predicts tides, and serves datasets as map
+  tiles, S-100 feeds and MCP tools. It's also published as a container image.
+- **An MCP server** that gives AI agents access to datasets, in SoundCharts or
+  from `s100`.
 
 ## Get started
 
@@ -16,6 +19,7 @@ It includes:
 - [Open a dataset in the desktop app](getting-started.md#desktop-app)
 - [Read and render a dataset from .NET](getting-started.md#net-library)
 - [Render a dataset from the command line](getting-started.md#command-line-tool)
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md)
 
 ## Supported products
 
@@ -34,6 +38,7 @@ It includes:
 | **S-131** | Marine Harbour Infrastructure | GML | Lua (Part 9A) | ✅ | [Datasets.S131](../src/EncDotNet.S100.Datasets.S131/README.md) |
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ | [Datasets.S201](../src/EncDotNet.S100.Datasets.S201/README.md) |
 | **S-411** | Sea Ice Information | GML | XSLT | ✅ | [Datasets.S411](../src/EncDotNet.S100.Datasets.S411/README.md) |
+| **S-412** *(draft)* | Marine Weather Warnings | GML | XSLT | ✅ | [Datasets.S412](../src/EncDotNet.S100.Datasets.S412/README.md) |
 | **S-421** | Route Plans | GML | XSLT | ✅ | [Datasets.S421](../src/EncDotNet.S100.Datasets.S421/README.md) |
 | **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — | [Specifications/content/S401](../src/EncDotNet.S100.Specifications/content/S401/README.md) |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) | [Datasets.S57](../src/EncDotNet.S100.Datasets.S57/README.md) |
@@ -71,6 +76,8 @@ flowchart LR
   testing and S-57-only tools, following S-65 Annex C.
 - [S-57 and ISO 8211 libraries](../external/EncDotNet/docs/index.md): read S-57
   cells, update cells and exchange sets, and ISO 8211 files, with EncDotNet.
+- [SoundCharts for ArcGIS](../external/EncDotNet.ArcGIS/docs/index.md): show
+  S-100 charts in ArcGIS Pro, with the add-in built on these libraries.
 - [Route checks and under-keel clearance](route-checks.md): what each route
   finding means, UKC and confidence, and the RTZ and S-421 route formats.
 
@@ -79,8 +86,15 @@ flowchart LR
 - [Render S-102 to PNG](scenarios/render-s102-to-png.md)
 - [Inspect S-124 warnings](scenarios/inspect-s124-warnings.md)
 - [Compose S-101 and S-102](scenarios/compose-s101-s102.md)
+- [Find when the tide is above a height](scenarios/tide-above-a-height.md)
+- [Find slack water in a pass](scenarios/slack-water-in-a-pass.md)
+- [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): XYZ
+  tiles, WMTS and WMS from a folder of charts, for MapLibre, Leaflet and QGIS.
 - [Show wind and waves on the chart](weather.md): GRIB2 and NetCDF forecasts,
   CAP warnings, NDBC buoys and own-ship wind, which aren't for navigation.
+- [Run s100 in Docker](docker.md): serve tiles from a mounted folder, prebuilt
+  tiles on a small computer, and the MCP tools over standard input and output
+  or HTTP.
 
 **Rendering and integration**
 

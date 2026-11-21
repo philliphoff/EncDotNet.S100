@@ -42,7 +42,7 @@ internal sealed class RangeBearingState
     private bool _isToolActive;
 
     /// <param name="settings">Where the geometry persists; <c>null</c> keeps it for the session only.</param>
-    public RangeBearingState(ViewerSettings? settings = null)
+    public RangeBearingState(ViewerSettings? settings)
     {
         _settings = settings;
         _geometry = Enum.TryParse<LegGeometry>(settings?.RangeBearingGeometry, ignoreCase: true, out var g)

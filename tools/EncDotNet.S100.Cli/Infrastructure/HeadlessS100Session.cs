@@ -31,9 +31,9 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// be rotated; the chart then turns about the image centre, labels upright.
 /// </description></item>
 /// <item><description>
-/// <c>render_to_image</c>'s <c>pixelDensity</c> is not applied — the render
-/// uses the requested width/height as literal output pixels, so the PNG matches
-/// the reported dimensions. HiDPI scaling would need a DPI-aware composite pass.
+/// <c>render_to_image</c>'s <c>pixelDensity</c> is the chart engine's device
+/// scale: the requested width/height are device-independent pixels, and the
+/// PNG is that size times the density, as the viewer's capture is.
 /// </description></item>
 /// </list>
 /// </remarks>
@@ -142,6 +142,19 @@ internal sealed class HeadlessS100Session
         }
     }
 
+    /// <summary>Raised after <see cref="Set"/> or <see cref="SetToBounds"/> changed the viewport.</summary>
+    public event EventHandler? ViewportChanged;
+
+    /// <summary>
+    /// The area the viewport shows at the reference render size, or
+    /// <see langword="null"/> while it auto-fits the datasets: the area a live
+    /// source runs for (data source design note D9).
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Portrayal.GeographicBounds? ViewArea =>
+        ResolveViewport(ReferenceWidthPx, ReferenceHeightPx) is { } v
+            ? new EncDotNet.S100.Datasets.Pipelines.Portrayal.GeographicBounds(v.MinLongitude, v.MinLatitude, v.MaxLongitude, v.MaxLatitude)
+            : null;
+
     public void Set(MapViewport viewport)
     {
         ArgumentNullException.ThrowIfNull(viewport);
@@ -171,6 +184,7 @@ internal sealed class HeadlessS100Session
             _viewport = viewport;
             _bounds = null;
         }
+        ViewportChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetToBounds(BoundingBox bounds)
@@ -203,6 +217,7 @@ internal sealed class HeadlessS100Session
             _bounds = bounds;
             _viewport = null;
         }
+        ViewportChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private const double MaxLongitude = 180.0;
@@ -269,12 +284,12 @@ internal sealed class HeadlessS100Session
         // disposed by a concurrent close_dataset / close_all_datasets mid-render.
         // The dimensions are captured in the closure (no shared render state).
         return _catalog.RenderAsync(
-            (processors, token) => RenderCoreAsync(processors, widthPx, heightPx, token),
+            (processors, token) => RenderCoreAsync(processors, widthPx, heightPx, pixelDensity, token),
             cancellationToken);
     }
 
     private async Task<byte[]?> RenderCoreAsync(
-        IReadOnlyList<IDatasetProcessor> processors, int widthPx, int heightPx, CancellationToken cancellationToken)
+        IReadOnlyList<IDatasetProcessor> processors, int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken)
     {
         if (processors.Count == 0)
         {
@@ -293,6 +308,7 @@ internal sealed class HeadlessS100Session
         {
             Width = widthPx,
             Height = heightPx,
+            PixelDensity = pixelDensity,
             Palette = presentation.Palette,
             SymbolScale = presentation.SymbolScale,
             TextScale = presentation.TextScale,
@@ -310,8 +326,6 @@ internal sealed class HeadlessS100Session
         };
 
         // Composite the resident processors directly — no per-render re-parse.
-        // The literal output pixel dimensions are used (pixelDensity is not
-        // applied — the composite renderer has no DPI-aware pass; a v1 gap).
         return await _renderer.RenderAsync(processors, options, cancellationToken).ConfigureAwait(false);
     }
 

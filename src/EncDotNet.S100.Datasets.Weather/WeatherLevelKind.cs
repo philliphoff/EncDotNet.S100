@@ -14,4 +14,7 @@ public enum WeatherLevelKind
 
     /// <summary>Mean sea level (GRIB2 code table 4.5, fixed surface type 101).</summary>
     MeanSeaLevel,
+
+    /// <summary>The entire atmosphere considered as a single layer (GRIB2 code table 4.5, fixed surface type 10), as for total cloud cover.</summary>
+    EntireAtmosphere,
 }

@@ -14,6 +14,7 @@ using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
+using EncDotNet.S100.Datasets.S412;
 using EncDotNet.S100.Datasets.S421;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -101,6 +102,9 @@ public sealed record S201DatasetData(S201Dataset Model) : LoadedDatasetData;
 /// <summary>S-411 Sea Ice Information typed model.</summary>
 public sealed record S411DatasetData(S411Dataset Model) : LoadedDatasetData;
 
+/// <summary>S-412 Marine Weather Warnings typed model.</summary>
+public sealed record S412DatasetData(S412Dataset Model) : LoadedDatasetData;
+
 /// <summary>S-421 Route Plans typed model.</summary>
 public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 
@@ -114,7 +118,7 @@ public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 /// <see cref="EncDotNet.S100.Datasets.Pipelines.Query.DatasetClosedDuringQuery"/>.
 /// <para>
 /// The coverage variants implement <see cref="ICoverageSampler"/>, the same
-/// sampling their processors offer, which is how the <c>sample_coverage</c>
+/// sampling their processors offer, which is how the <c>sample</c>
 /// tools read them. A product with no variant of its own reaches the catalog
 /// as a <see cref="ProductDatasetData"/> that also implements
 /// <see cref="ICoverageSampler"/>.
@@ -168,7 +172,7 @@ public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : L
 /// <see cref="LoadedDatasetProjector"/> takes the catalog entry's spec, bounds
 /// and time coverage, so the projector needs no case for the product. A
 /// coverage product's payload also implements <see cref="ICoverageSampler"/>,
-/// so the <c>sample_coverage</c> tools sample it with no tool changes.
+/// so the <c>sample</c> tool samples it with no tool changes.
 /// </summary>
 public abstract record ProductDatasetData : LoadedDatasetData
 {

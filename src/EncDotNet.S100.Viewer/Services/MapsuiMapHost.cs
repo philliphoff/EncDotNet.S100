@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -40,7 +41,8 @@ internal sealed class MapsuiMapHost :
         CaptureSynchronizedMapControl mapControl,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer datasetRenderer,
-        IInteroperabilityAuthorityProvider authorityProvider)
+        IInteroperabilityAuthorityProvider authorityProvider,
+        DemandPlanner? planner)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(processorOwner);
@@ -62,6 +64,7 @@ internal sealed class MapsuiMapHost :
                 ProcessorOwner = processorOwner,
                 DatasetRenderer = datasetRenderer,
                 InteroperabilityAuthorityProvider = authorityProvider,
+                DemandPlanner = planner,
             });
     }
 
@@ -94,6 +97,14 @@ internal sealed class MapsuiMapHost :
         _session.Navigator.SetViewportToCenterAndResolution(mercatorCenter, resolution);
 
     public void SetRotation(double degrees) => _session.Navigator.SetRotation(degrees);
+
+    public void AnimateToCenterAndResolution(MPoint mercatorCenter, double resolution, long durationMs) =>
+        _session.Navigator.CenterOnAndZoomTo(mercatorCenter, resolution, durationMs);
+
+    public (double CenterX, double CenterY, double Resolution)? Fling(double velocityX, double velocityY) =>
+        _session.Navigator.Fling(velocityX, velocityY) is { } target
+            ? (target.CenterX, target.CenterY, target.Resolution)
+            : null;
 
     public void CenterOn(
         double latitudeWgs84,

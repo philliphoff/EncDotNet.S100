@@ -53,42 +53,47 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     [Fact]
     public void Contains_ReportsPersistedEntriesWithoutCountingAHit()
     {
-        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         Assert.False(cache.Contains("k"));
 
         cache.GetOrCompute("k", () => Sample("f1"));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.True(cache.Contains("k"));
         Assert.False(cache.Contains("other"));
         Assert.Equal(0, cache.Hits);
         // A fresh instance (a restart) sees the persisted entry too.
-        Assert.True(new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024).Contains("k"));
+        Assert.True(new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)).Contains("k"));
     }
 
     [Fact]
     public void TotalBytes_OnAFreshInstance_ReadsWhatTheDirectoryHolds()
     {
-        var writer = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var writer = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         writer.GetOrCompute("a", () => Sample("f1"));
+        Assert.True(writer.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         writer.GetOrCompute("b", () => Sample("f2"));
+        Assert.True(writer.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         var onDisk = Directory.EnumerateFiles(_dir, "*.dlist").Sum(f => new FileInfo(f).Length);
 
         // No write on this instance has loaded the index; TotalBytes must still be right.
-        var reader = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var reader = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
 
         Assert.True(onDisk > 0);
         Assert.Equal(onDisk, reader.TotalBytes);
-        Assert.Equal(16 * 1024 * 1024, reader.MaxBytes);
+        Assert.Equal(16 * 1024 * 1024, reader.Kind.ShareBytes);
     }
 
     [Fact]
     public void RoundTrip_PreservesFieldsAndOrder()
     {
-        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         var expected = Sample("f1");
 
         var first = cache.GetOrCompute("k", () => expected);
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         var second = cache.GetOrCompute("k", () => throw new InvalidOperationException("should not recompute"));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.Equal(1, cache.Misses);
         Assert.Equal(1, cache.Hits);
@@ -99,13 +104,15 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     [Fact]
     public void SecondInstance_SameDirectory_ReturnsHit_ProvingPersistence()
     {
-        var writer = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var writer = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         writer.GetOrCompute("k", () => Sample("f1"));
+        Assert.True(writer.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         Assert.Equal(1, writer.Misses);
 
         // A brand-new instance over the same directory simulates a restart.
-        var reader = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var reader = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         var hit = reader.GetOrCompute("k", () => throw new InvalidOperationException("should be served from disk"));
+        Assert.True(reader.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.Equal(1, reader.Hits);
         Assert.Equal(0, reader.Misses);
@@ -115,11 +122,13 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     [Fact]
     public void DifferentKey_IsMiss()
     {
-        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         cache.GetOrCompute("scope-A|portrayal", () => Sample("a"));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         var recomputed = false;
         cache.GetOrCompute("scope-B|portrayal", () => { recomputed = true; return Sample("b"); });
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.True(recomputed);
         Assert.Equal(2, cache.Misses);
@@ -129,8 +138,9 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     [Fact]
     public void FormatVersionMismatch_IsMiss()
     {
-        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         cache.GetOrCompute("k", () => Sample("f1"));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         // Corrupt the leading FormatVersion int (first 4 bytes) of the only file.
         var file = Directory.GetFiles(_dir, "*.dlist").Single();
@@ -139,8 +149,9 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
         File.WriteAllBytes(file, bytes);
 
         var recomputed = false;
-        var fresh = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var fresh = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         fresh.GetOrCompute("k", () => { recomputed = true; return Sample("f1"); });
+        Assert.True(fresh.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.True(recomputed);
         Assert.Equal(1, fresh.Misses);
@@ -151,15 +162,17 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     public void CorruptOrTruncatedFile_IsMiss_NoThrow()
     {
         var expected = Sample("f1");
-        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         cache.GetOrCompute("k", () => expected);
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         var file = Directory.GetFiles(_dir, "*.dlist").Single();
         File.WriteAllBytes(file, [1, 2, 3]);
 
         var recomputed = false;
-        var fresh = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        var fresh = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 16 * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
         var result = fresh.GetOrCompute("k", () => { recomputed = true; return expected; });
+        Assert.True(fresh.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.True(recomputed);
         Assert.Equal(1, fresh.Misses);
@@ -177,43 +190,47 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
         ];
 
         var probeDir = Path.Combine(_dir, "probe");
-        var probe = new DiskPortrayalInstructionCache(probeDir, maxBytes: long.MaxValue);
+        var probe = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(probeDir, maxBytes: long.MaxValue, DiskPortrayalInstructionCache.KindOptions));
         probe.GetOrCompute("x", () => Entry(1));
+        Assert.True(probe.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         var oneSize = new FileInfo(Directory.GetFiles(probeDir, "*.dlist").Single()).Length;
 
         var capDir = Path.Combine(_dir, "cap2");
         Directory.CreateDirectory(capDir);
         // Cap holds two entries; a third write evicts the least-recently-used.
-        var cache = new DiskPortrayalInstructionCache(capDir, maxBytes: oneSize * 2 + oneSize / 2);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(capDir, maxBytes: oneSize * 2 + oneSize / 2, DiskPortrayalInstructionCache.KindOptions));
 
         cache.GetOrCompute("a", () => Entry(1));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         Thread.Sleep(1100);
         cache.GetOrCompute("b", () => Entry(2));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         Thread.Sleep(1100);
         cache.GetOrCompute("a", () => throw new InvalidOperationException("a should be a hit"));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         Thread.Sleep(1100);
         cache.GetOrCompute("c", () => Entry(3));
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
 
         Assert.Equal(2, Directory.GetFiles(capDir, "*.dlist").Length);
 
         var bRecomputed = false;
         cache.GetOrCompute("b", () => { bRecomputed = true; return Entry(2); });
+        Assert.True(cache.Kind.WaitForWritesIdle(TimeSpan.FromSeconds(10)));
         Assert.True(bRecomputed); // "b" (the LRU) was evicted.
     }
 
     [Fact]
     public void GetOrCompute_NullArguments_Throw()
     {
-        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 1024);
+        var cache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(_dir, maxBytes: 1024, DiskPortrayalInstructionCache.KindOptions));
         Assert.Throws<ArgumentNullException>(() => cache.GetOrCompute(null!, () => []));
         Assert.Throws<ArgumentNullException>(() => cache.GetOrCompute("k", null!));
     }
 
     [Fact]
-    public void Constructor_InvalidArguments_Throw()
+    public void Constructor_NullKind_Throws()
     {
-        Assert.Throws<ArgumentException>(() => new DiskPortrayalInstructionCache("", 1024));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DiskPortrayalInstructionCache(_dir, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DiskPortrayalInstructionCache(_dir, -1));
+        Assert.Throws<ArgumentNullException>(() => new DiskPortrayalInstructionCache(null!));
     }
 }

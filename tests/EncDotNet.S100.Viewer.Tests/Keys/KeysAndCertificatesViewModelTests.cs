@@ -1,4 +1,5 @@
 using EncDotNet.S100.Collections.Secom;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Secom;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Keys;
@@ -117,7 +118,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     public async Task Import_unlocks_checks_and_uses_the_identity()
     {
         using var page = _keys.Page();
-        var dialog = new ImportIdentityDialogViewModel(_keys.Identities, () => Task.FromResult<string?>(_keys.IdentityFile(daysLeft: 12)), time: _keys.Time);
+        var dialog = new ImportIdentityDialogViewModel(_keys.Identities, () => Task.FromResult<string?>(_keys.IdentityFile(daysLeft: 12)), time: _keys.Time, replacing: null);
         Assert.True(await dialog.PickFileAsync());
         Assert.Equal("Step 1 of 3 · File", dialog.StepLabel);
 
@@ -156,7 +157,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
                 ["2.25.291283622413876360871493815653100799259"] = "9876543",
                 ["2.25.328433707816814908768060331477217690907"] = "440123456",
                 ["2.25.323100633285601570573910217875371967771"] = "KR",
-            })), time: _keys.Time);
+            })), time: _keys.Time, replacing: null);
         await dialog.PickFileAsync();
         dialog.Password = "secret";
 
@@ -224,9 +225,11 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     public void Settings_can_open_keys_and_certificates_on_a_tab()
     {
         using var page = _keys.Page();
-        var settings = new SettingsViewModel(_keys.Settings, keysAndCertificates: page);
+        var settings = TestSettings.Shell(new ViewerSettingsService(_keys.Settings), page);
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, _keys.Time, dispatch: UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
+        var layout = new ShellLayoutViewModel(_keys.Settings, [], timeline, UiThread.Post);
 
-        settings.ShowKeysAndCertificates(KeysTab.Authorities);
+        new KeysNavigator(() => page, () => settings, () => layout).Open(KeysTab.Authorities);
 
         Assert.Equal(SettingsCategory.KeysAndCertificates, settings.SelectedCategory);
         Assert.Equal(KeysTab.Authorities, page.SelectedTab);

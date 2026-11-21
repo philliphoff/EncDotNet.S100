@@ -1,0 +1,111 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:activities="using:EncDotNet.S100.Viewer.ViewModels.Activities"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
+             x:Class="EncDotNet.S100.Viewer.Views.DockTabStrip"
+             x:Name="Root">
+
+    <UserControl.Styles>
+        <!-- A dock's tabs (#902 D1, legends D2): upper-case labels, the selected
+             one underlined in the accent colour. -->
+        <Style Selector="ToggleButton.dockTab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="LetterSpacing" Value="1" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="Underline"
+                            BorderThickness="0,0,0,2"
+                            BorderBrush="Transparent"
+                            Padding="0,6,0,4"
+                            Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Setter Property="Opacity" Value="0.65" />
+        </Style>
+        <Style Selector="ToggleButton.dockTab:checked">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="ToggleButton.dockTab:checked /template/ Border#Underline">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!-- Icons only when the labels don't fit (D13, D21): DockTabStripPanel gives each
+             tab its name as tooltip; the accessible name is always the name. -->
+        <Style Selector="Viewbox.dockTabIcon">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="views|DockTabStripPanel.compact Viewbox.dockTabIcon">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="views|DockTabStripPanel.compact TextBlock.dockTabLabel">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </UserControl.Styles>
+
+    <ItemsControl x:Name="Items"
+                  ItemsSource="{Binding #Root.Tabs}">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <views:DockTabStripPanel />
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="activities:IActivityTab">
+                <ToggleButton Classes="dockTab"
+                              AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}}"
+                              AutomationProperties.Name="{Binding Name}"
+                              Command="{Binding #Root.SelectCommand}"
+                              CommandParameter="{Binding}">
+                    <!-- The title, and a count badge such as the Logs tab's
+                         new warnings (#1080). -->
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Viewbox Classes="dockTabIcon"
+                                 Width="15"
+                                 Height="15"
+                                 VerticalAlignment="Center"
+                                 AutomationProperties.AccessibilityView="Raw">
+                            <ContentControl Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}" />
+                        </Viewbox>
+                        <TextBlock Classes="dockTabLabel"
+                                   Text="{Binding Title, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                   VerticalAlignment="Center" />
+                        <Border IsVisible="{Binding HasBadge}"
+                                IsHitTestVisible="False"
+                                VerticalAlignment="Center"
+                                MinWidth="15"
+                                Height="15"
+                                Padding="4,0"
+                                CornerRadius="7.5"
+                                Background="{DynamicResource AccentBrush}"
+                                AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}Badge}"
+                                AutomationProperties.Name="{Binding BadgeName}">
+                            <TextBlock Text="{Binding BadgeCount}"
+                                       FontSize="9.5"
+                                       LetterSpacing="0"
+                                       FontWeight="SemiBold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                    </StackPanel>
+                    <ToggleButton.IsChecked>
+                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                            <Binding Path="#Root.SelectedTabId" />
+                            <Binding Path="Id" />
+                        </MultiBinding>
+                    </ToggleButton.IsChecked>
+                </ToggleButton>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

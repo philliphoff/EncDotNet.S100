@@ -27,7 +27,11 @@ public sealed class TimeHudViewTests
     {
         var service = new GlobalTimeService();
         var timeline = new TimelineViewModel(
-            service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+            service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(),
+            refresher: null,
+            progress: null,
+            scope: null,
+            library: null);
         var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {

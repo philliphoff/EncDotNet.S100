@@ -1,0 +1,219 @@
+---
+import Permalink from './Permalink.astro';
+import Shot from './Shot.astro';
+import { docs, withBase } from '../data/content';
+
+const sizes = '(max-width: 900px) 100vw, 690px';
+const miniSizes = '(max-width: 900px) 100vw, 360px';
+---
+<section id="weather" aria-labelledby="weather-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Weather</span>
+      <div class="anchored"><h2 id="weather-title">The weather, on the chart you're using.</h2><Permalink to="weather" label="Weather" /></div>
+      <p class="lede">
+        Forecast grids, tropical cyclone advisories and surface analyses draw over your charts, on the same timeline as
+        tides and currents, and Check route reads them at your ETA. Weather data isn't S-100 data and isn't for
+        navigation: use official forecasts and warnings to plan and make a passage.
+      </p>
+    </div>
+
+    <div class="features">
+      <div id="weather-wind-waves" class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Wind and waves</span>
+          <div class="anchored"><h3>Wind and waves over the chart.</h3><Permalink to="weather-wind-waves" label="Wind and waves" /></div>
+          <p>
+            Open GRIB2 and NetCDF forecasts, such as NOAA's GFS and GFS-Wave, and see wave height, wind barbs and
+            isobars. Step through the run on the Timeline. Marine warnings, buoy reports and your own wind instruments
+            join them.
+          </p>
+          <ul>
+            <li>GRIB2 (including JPEG 2000), NetCDF-CF and CAP warnings</li>
+            <li>Isobars, a Beaufort wind fill and wave arrows in Display controls</li>
+            <li>NDBC buoys and own-ship wind from NMEA 0183</li>
+          </ul>
+          <a class="more" href={withBase(docs.weather)}>Weather guide</a>
+        </div>
+        <Shot
+          id="W1"
+          alt="Hurricane Erin off Cape Hatteras: NOAA GFS-Wave wave height and GFS wind barbs and isobars over the NOAA charts"
+          title="Wind and waves"
+          detail="Hurricane Erin, 21 Aug 2025: GFS-Wave wave height, GFS 10 m wind barbs and isobars over NOAA charts off Cape Hatteras, Display controls open"
+          sizes={sizes}
+        />
+      </div>
+
+      <div id="weather-ocean" class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Ocean</span>
+          <div class="anchored"><h3>Sea temperature and currents.</h3><Permalink to="weather-ocean" label="Ocean" /></div>
+          <p>
+            Sea surface temperature fills in a band for each degree, so fronts such as the edge of the Gulf Stream
+            show as closely spaced bands, with isotherms every 2 °C if you want them. Ocean currents draw in S-111's
+            speed bands and colours, so a model current reads the same as an S-111 dataset.
+          </p>
+          <ul>
+            <li>Daily MUR, OISST and Geo-polar Blended analyses from NOAA ERDDAP</li>
+            <li>Currents from satellite altimetry and US coastal HF radar</li>
+            <li>HYCOM and Copernicus Marine files open too</li>
+          </ul>
+          <a class="more" href={withBase(docs.weatherShow)}>Show a forecast</a>
+        </div>
+        <Shot
+          id="W2"
+          alt="The Gulf Stream in the Florida Straits: NASA JPL MUR sea surface temperature with isotherms and NOAA AOML current arrows over the NOAA charts"
+          title="Sea temperature and currents"
+          detail="Florida Straits, 10 Feb 2025: MUR SST fill + isotherms, AOML altimetry currents, NOAA charts"
+          sizes={sizes}
+        />
+      </div>
+
+      <div id="weather-hazards" class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Hazards</span>
+          <div class="anchored"><h3>Ice, fog, rain and thunderstorms.</h3><Permalink to="weather-hazards" label="Hazards" /></div>
+          <p>
+            Freezing spray is worked out from the wind, air temperature and sea temperature with the icing predictor
+            NOAA's Ocean Prediction Center uses, and drawn in four classes from light to extreme. Restricted visibility
+            uses the bands of a marine forecast, and nothing is drawn where it's good, so the chart stays clear.
+          </p>
+          <ul>
+            <li>Freezing spray, with dashed air temperature isotherms</li>
+            <li>Very poor, poor and moderate visibility</li>
+            <li>Precipitation rate, thunderstorm risk from CAPE, and cloud cover</li>
+          </ul>
+          <a class="more" href={withBase(docs.weatherShow)}>Show a forecast</a>
+        </div>
+        <Shot
+          id="W3"
+          alt="Freezing spray round Kodiak Island and Shelikof Strait in an Arctic outbreak, with air temperature isotherms and isobars from NOAA GFS over the NOAA charts"
+          title="Freezing spray"
+          detail="Kodiak, Alaska, 15 Dec 2025: GFS freezing spray, air isotherms, isobars, NOAA charts"
+          sizes={sizes}
+        />
+      </div>
+
+      <div id="weather-cyclones" class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Tropical cyclones</span>
+          <div class="anchored"><h3>The storm, where it will be.</h3><Permalink to="weather-cyclones" label="Tropical cyclones" /></div>
+          <p>
+            Add the storms NHC is issuing advisories for from the Library, or open an advisory's files. SoundCharts draws
+            the cone, forecast track, wind radii and past track, and the storm at the view time, estimated between
+            forecast points, so stepping through the Timeline moves it along its track.
+          </p>
+          <ul>
+            <li>34, 50 and 64 kt wind radii</li>
+            <li>Marked stale once a newer advisory is likely, and final when NHC stops issuing</li>
+            <li>Atlantic and East and Central Pacific storms</li>
+          </ul>
+          <a class="more" href={withBase(docs.weatherCyclones)}>Show tropical cyclones</a>
+        </div>
+        <Shot
+          id="W4"
+          alt="Hurricane Erin passing north of Puerto Rico and the Virgin Islands: the NHC cone, forecast track, wind radii and the storm at the view time, with the wind radii over the NOAA charts"
+          title="Tropical cyclones"
+          detail="Hurricane Erin, NHC advisory 22 (16 Aug 2025 21Z): cone, track, radii, storm at view time, NOAA charts"
+          sizes={sizes}
+        />
+      </div>
+
+      <div id="weather-surface-analysis" class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Surface analysis</span>
+          <div class="anchored"><h3>Fronts and pressure centres.</h3><Permalink to="weather-surface-analysis" label="Surface analysis" /></div>
+          <p>
+            The Weather Prediction Center's coded surface analysis draws like a printed weather map: cold, warm, occluded
+            and stationary fronts, troughs, and highs and lows with their central pressure. The Library fetches each new
+            analysis as WPC issues it, every 3 hours, and an analysis fades once it's 6 hours old.
+          </p>
+          <ul>
+            <li>The analysis and WPC's forecast fronts, each at its own time</li>
+            <li>North America and the waters around it, WPC's area</li>
+          </ul>
+          <a class="more" href={withBase(docs.weatherFronts)}>Show a surface analysis</a>
+        </div>
+        <Shot
+          id="W5"
+          alt="WPC surface analysis off the Carolinas: a low and its cold front with GFS isobars over the NOAA charts"
+          title="Surface analysis"
+          detail="WPC high-resolution analysis, 28 Oct 2025 00Z, with GFS isobars, Southeast NOAA charts"
+          sizes={sizes}
+        />
+      </div>
+
+      <div id="weather-route" class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">On a route</span>
+          <div class="anchored"><h3>Weather at your ETA.</h3><Permalink to="weather-route" label="Weather on a route" /></div>
+          <p>
+            Set a wind or wave limit and Check route reads the loaded forecast at the time you'd reach each point. It
+            lists the stretches above a limit, with their time window and highest value, and the stretches the forecast
+            doesn't reach. With an NHC advisory loaded, it also tests the route against the storm where it will be at
+            each ETA. The findings are for planning, not navigation.
+          </p>
+          <ul>
+            <li>10 m wind and significant wave height</li>
+            <li>The storm's 34, 50 and 64 kt wind radii, its cone and your closest approach, with Must review inside the 50 kt radius</li>
+            <li>The departures that keep the route within your limits and out of the storm</li>
+            <li>The same check in <code>s100 route check</code></li>
+          </ul>
+          <a class="more" href={withBase(docs.routeWeather)}>Weather along the route</a>
+        </div>
+        <Shot
+          id="W6"
+          alt="Check route from Charleston to the Chesapeake Bay entrance as Hurricane Erin passed offshore: the stretch off Cape Hatteras inside Erin's 34 kt wind radius, and wind and wave findings above the limits"
+          title="Weather on a route"
+          detail="Charleston → Chesapeake, departing 20 Aug 2025 12Z: GFS wind + GFS-Wave, NHC advisory 36, 25 kn / 3.5 m limits, Weather findings"
+          sizes={sizes}
+        />
+      </div>
+    </div>
+
+    <div class="minis three">
+      <div id="weather-fog" class="mini">
+        <Shot
+          id="W8"
+          alt="Sea fog off eastern Maine: NOAA GFS restricted visibility over the NOAA charts of Penobscot Bay and Mount Desert"
+          title="Restricted visibility"
+          detail="Gulf of Maine, 20 Jun 2025: GFS visibility bands"
+          sizes={miniSizes}
+        />
+        <div class="body">
+          <div class="anchored"><h3>Fog</h3><Permalink to="weather-fog" label="Fog" /></div>
+          <p>Visibility under 5 nautical miles in three greys, from moderate to fog.</p>
+        </div>
+      </div>
+      <div id="weather-rain" class="mini">
+        <Shot
+          id="W9"
+          alt="Rain and thunderstorm risk over south Florida from NOAA GFS, over the NOAA charts"
+          title="Rain and thunderstorms"
+          detail="Florida, 10 Aug 2025: GFS precipitation and CAPE"
+          sizes={miniSizes}
+        />
+        <div class="body">
+          <div class="anchored"><h3>Rain and thunderstorms</h3><Permalink to="weather-rain" label="Rain and thunderstorms" /></div>
+          <p>Precipitation in rain radar colours, thunderstorm risk where CAPE is high, and a light cloud veil.</p>
+        </div>
+      </div>
+      <div id="weather-sources" class="mini">
+        <Shot
+          id="W7"
+          alt="The Library listing its weather sources: GFS, sea surface temperature from ERDDAP, NHC's active storms and WPC's surface analysis"
+          title="Weather sources"
+          detail="Library: GFS, ERDDAP SST, NHC storms, WPC analysis"
+          sizes={miniSizes}
+        />
+        <div class="body">
+          <div class="anchored"><h3>Sources in the Library</h3><Permalink to="weather-sources" label="Weather sources" /></div>
+          <p>
+            GFS runs, ERDDAP analyses, NHC storms and WPC analyses for the map view, refreshed as new ones are issued and
+            tagged Stale when they're old.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

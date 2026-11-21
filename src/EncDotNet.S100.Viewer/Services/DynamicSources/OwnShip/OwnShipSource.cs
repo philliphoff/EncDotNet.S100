@@ -24,7 +24,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 /// </para>
 /// <para>
 /// <c>RendererKey</c> is <c>"ownship"</c>, resolving to
-/// <c>EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer</c>
+/// <c>EncDotNet.S100.Portrayals.Application.VesselPortrayal.OwnShip</c>
 /// — true-scale hull outline when zoomed in, disc pictogram when
 /// zoomed out, arrowhead on the heading vector. The renderer reads
 /// the per-feature <c>DynamicVesselGeometry</c> sidecar populated

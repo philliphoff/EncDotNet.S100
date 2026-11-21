@@ -31,6 +31,9 @@ public sealed record WeatherLevel
     /// <summary>Mean sea level.</summary>
     public static WeatherLevel MeanSeaLevel { get; } = new(WeatherLevelKind.MeanSeaLevel, null, "mean sea level");
 
+    /// <summary>The entire atmosphere, as a single layer: the level of total cloud cover.</summary>
+    public static WeatherLevel EntireAtmosphere { get; } = new(WeatherLevelKind.EntireAtmosphere, null, "entire atmosphere");
+
     /// <summary>A height above the ground or sea surface.</summary>
     /// <param name="height">The height.</param>
     public static WeatherLevel AboveGround(Length height) =>

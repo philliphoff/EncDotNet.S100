@@ -31,12 +31,13 @@ internal sealed class NavigationalWarningNewOptionsViewModel : ViewModelBase
     private int _markSinceIndex = 1;
     private string? _markedText;
 
-    public NavigationalWarningNewOptionsViewModel(NavigationalWarningsService service, ViewerSettings? settings = null, TimeProvider? clock = null)
+    public NavigationalWarningNewOptionsViewModel(NavigationalWarningsService service, ViewerSettings? settings, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(clock);
         _service = service;
         _settings = settings;
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock;
         if (settings?.NavigationalWarningsNewWithinHours is { } hours and > 0)
         {
             _withinHoursEnabled = true;

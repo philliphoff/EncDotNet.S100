@@ -321,6 +321,31 @@ public sealed class FacadeTests
     }
 
     [Fact]
+    public async Task PngRenderer_DrawsOverlaysAboveLayers_WithoutDisposingThem()
+    {
+        // Data source design note D9: a live source's processor is drawn above
+        // the parsed layers and left to its owner.
+        Assert.SkipUnless(File.Exists(S124Surface) && File.Exists(S125Point),
+            "S-124 and S-125 fixtures not both present.");
+
+        using var layer = S100Dataset.Open(S124Surface);
+        using var overlay = S100Dataset.Open(S125Point);
+        using var renderer = new PngS100DatasetRenderer();
+        var options = new S100CompositeOptions { Width = 256, Height = 256 };
+        var ct = TestContext.Current.CancellationToken;
+
+        byte[] layersOnly = await renderer.RenderAsync([new S100Layer { Dataset = layer }], [], options, ct);
+        byte[] withOverlay = await renderer.RenderAsync([new S100Layer { Dataset = layer }], [overlay.Processor], options, ct);
+        byte[] overlayOnly = await renderer.RenderAsync([], [overlay.Processor], options, ct);
+
+        AssertIsPng(layersOnly);
+        AssertIsPng(withOverlay);
+        AssertIsPng(overlayOnly);
+        Assert.False(layersOnly.SequenceEqual(withOverlay), "The overlay should be drawn.");
+        await Assert.ThrowsAsync<ArgumentException>(() => renderer.RenderAsync([], [], options, ct));
+    }
+
+    [Fact]
     public void ProjectFromProcessor_MatchesStreamProjection()
     {
         // Issue #566: projecting a LoadedDataset from a resident processor must

@@ -25,13 +25,14 @@ internal sealed class TrustedAuthorityStore
     private readonly SecomServerTrust _trust;
     private readonly SecomTrustAnchors _builtIn;
 
-    public TrustedAuthorityStore(ViewerSettings settings, SecomServerTrust trust, SecomTrustAnchors? builtIn = null)
+    public TrustedAuthorityStore(ViewerSettings settings, SecomServerTrust trust, SecomTrustAnchors builtIn)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(trust);
         _settings = settings;
         _trust = trust;
-        _builtIn = builtIn ?? SecomTrustAnchors.BuiltIn;
+        ArgumentNullException.ThrowIfNull(builtIn);
+        _builtIn = builtIn;
     }
 
     /// <summary>Raised after the list or the anchors change.</summary>

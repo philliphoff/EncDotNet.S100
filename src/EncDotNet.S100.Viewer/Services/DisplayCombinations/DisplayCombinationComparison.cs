@@ -128,6 +128,13 @@ internal static class DisplayCombinationComparison
                 changes.Add(new(DisplayCombinationChangeKind.Layer, key));
         }
 
+        foreach (var (key, value) in combination.LayerOptions.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            // As for the switches: an unset option follows its default.
+            if (display.LayerOptions.TryGetValue(key, out var actual) && !string.Equals(actual, value, StringComparison.Ordinal))
+                changes.Add(new(DisplayCombinationChangeKind.Layer, key));
+        }
+
         foreach (var (key, visible) in combination.SubLayerVisibility.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             if (snapshot.Datasets.Any(d => d.SubLayers.TryGetValue(key, out var actual) && actual != visible))

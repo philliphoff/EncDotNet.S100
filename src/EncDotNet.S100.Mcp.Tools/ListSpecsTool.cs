@@ -52,7 +52,7 @@ public sealed record SpecSummary(
 /// for this spec.
 /// </param>
 /// <param name="CanSampleCoverage">
-/// <c>true</c> when <see cref="SampleCoverageTool"/> can sample a
+/// <c>true</c> when <see cref="SampleTool"/> can sample a
 /// scalar / vector value at a point for this spec.
 /// </param>
 /// <param name="CanListTimeSteps">
@@ -63,7 +63,7 @@ public sealed record SpecSummary(
 public sealed record SpecCapabilities(
     [property: Description("True when query_features can enumerate features for this spec.")] bool CanQueryFeatures,
     [property: Description("True when describe_feature has a describer registered for this spec.")] bool CanDescribeFeature,
-    [property: Description("True when sample_coverage can sample a scalar/vector value at a point for this spec.")] bool CanSampleCoverage,
+    [property: Description("True when the sample tool can sample a scalar/vector value at a point for this spec.")] bool CanSampleCoverage,
     [property: Description("True when list_time_steps can enumerate time steps for this spec: time-varying coverages (S-104, S-111, GRIB2, NetCDF) and CAP warnings.")] bool CanListTimeSteps);
 
 /// <summary>Result of <see cref="ListSpecsTool"/>.</summary>
@@ -99,11 +99,11 @@ public sealed class ListSpecsTool
     {
         "S-101",
         "S-122", "S-124", "S-125", "S-127", "S-128",
-        "S-129", "S-131", "S-201", "S-401", "S-411", "S-421",
+        "S-129", "S-131", "S-201", "S-401", "S-411", "S-412", "S-421",
         SpecName.Cap,
     };
 
-    // Specs SampleCoverageTool routes to a sampler: the S-100 coverages and
+    // Specs SampleTool routes to a sampler: the S-100 coverages and
     // the weather grids, whose catalog payload is a sampler (issue #1063).
     private static readonly HashSet<string> CoverageSpecs = new(StringComparer.Ordinal)
     {
@@ -123,7 +123,7 @@ public sealed class ListSpecsTool
     {
         "S-101", "S-102", "S-104", "S-111", "S-124",
         "S-122", "S-125", "S-127", "S-128", "S-129",
-        "S-131", "S-201", "S-401", "S-411", "S-421",
+        "S-131", "S-201", "S-401", "S-411", "S-412", "S-421",
         SpecName.Cap,
     };
 
@@ -133,14 +133,15 @@ public sealed class ListSpecsTool
     /// <summary>Creates a new <see cref="ListSpecsTool"/>.</summary>
     /// <param name="catalog">The host's dataset catalog.</param>
     /// <param name="registry">
-    /// The products the host can load; <see langword="null"/> for
-    /// <see cref="ProductRegistry.Default"/>.
+    /// The products the host can load (hosts usually pass
+    /// <see cref="ProductRegistry.Default"/>).
     /// </param>
-    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry? registry = null)
+    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
-        _registry = registry ?? ProductRegistry.Default;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
     }
 
     /// <summary>Executes the tool.</summary>

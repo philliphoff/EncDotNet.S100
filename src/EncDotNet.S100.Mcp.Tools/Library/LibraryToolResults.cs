@@ -49,11 +49,15 @@ public static class LibraryToolResults
     public static LibraryItemDetail Detail(LibraryItemState state, IEnumerable<string> tags, IEnumerable<LibraryDetailGroup> details)
     {
         ArgumentNullException.ThrowIfNull(details);
+        var aml = AmlLibraryProperties.Read(state.Item.Properties, state.Item.Name);
         return new LibraryItemDetail(
             Item(state, tags),
             [.. details.Select(group => new LibraryDetailGroupInfo(
                 group.Title,
-                [.. group.Fields.Select(field => new LibraryDetailFieldInfo(field.Label, field.Value))]))]);
+                [.. group.Fields.Select(field => new LibraryDetailFieldInfo(field.Label, field.Value))]))],
+            aml is null ? null : AmlReport.Drawn,
+            aml is null ? null : AmlReport.StatusOf(AmlReport.Drawn),
+            aml is null ? null : AmlReport.From(aml));
     }
 
     /// <summary>An Online Catalogue directory entry, as list_known_sources reports it.</summary>

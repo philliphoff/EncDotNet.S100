@@ -108,7 +108,7 @@ public abstract record CoverageSampleOutcome<TSource>
 /// <summary>
 /// Samples one or more <see cref="ICoverageSampler"/>s at a point: chooses the
 /// dataset and site that answer, applies the time handling, and reads it.
-/// Shared by the <c>sample_coverage</c> tools and by
+/// Shared by the <c>sample</c> tool and by
 /// <see cref="CoverageSamplerExtensions"/>, so every product treats time the
 /// same way.
 /// </summary>

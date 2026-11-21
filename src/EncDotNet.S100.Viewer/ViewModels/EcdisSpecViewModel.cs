@@ -19,7 +19,7 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
         EcdisDisplayState state,
         string specCode,
         PortrayalCatalogue catalogue,
-        EcdisLabelOverrideProvider? labels = null)
+        EcdisLabelOverrideProvider? labels)
     {
         _state = state;
         SpecCode = specCode;

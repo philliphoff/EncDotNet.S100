@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Library;
 using ModelContextProtocol.Server;
 
@@ -93,19 +95,23 @@ public static class LibraryEditMcpAdapters
             [Description("Filter box: western longitude.")] double? west = null,
             [Description("Filter box: northern latitude.")] double? north = null,
             [Description("Filter box: eastern longitude.")] double? east = null,
-            [Description("Filter point: latitude (with lon); items covering it.")] double? lat = null,
-            [Description("Filter point: longitude.")] double? lon = null,
+            [Description("Filter point: latitude (with longitude); items covering it.")] double? latitude = null,
+            [Description("Filter point: longitude.")] double? longitude = null,
             [Description("For cancel only: true cancels every running download.")] bool? all = null,
             [Description("True reports what would happen (count, bytes, skipped by state) without doing it.")] bool? dryRun = null,
             [Description("Refuse a download larger than this many bytes.")] long? maxBytes = null,
+            [Description("Alias of latitude (older name).")] double? lat = null,
+            [Description("Alias of longitude (older name).")] double? lon = null,
             CancellationToken ct = default) =>
-            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(new LibraryActionToolRequest(
-                action,
-                itemIds,
-                new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, lat, lon, null, null),
-                all,
-                dryRun,
-                maxBytes), ct));
+            McpToolDispatch.DispatchAsync(() => PositionArguments.Resolve(latitude, longitude, lat, lon, ("latitude", "longitude", "lat", "lon"), out var point) is { } bad
+                ? Task.FromResult(ToolResult<LibraryActionResult>.Err(bad))
+                : inner.InvokeAsync(new LibraryActionToolRequest(
+                    action,
+                    itemIds,
+                    new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, point?.Latitude, point?.Longitude, null, null),
+                    all,
+                    dryRun,
+                    maxBytes), ct));
         return Tool(del, LibraryActionTool.Name,
             "Acts on Library items as the viewer's Library buttons do. Select items by id or with the query_library_items "
             + "filters; items the action does not apply to are skipped and counted by state. Downloads can be large: "

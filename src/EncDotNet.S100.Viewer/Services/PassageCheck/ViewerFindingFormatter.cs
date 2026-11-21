@@ -64,6 +64,13 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string S102CellFormat => Strings.RouteCheck_S102CellFormat;
     protected override string DepthUnknown => Strings.RouteCheck_DepthUnknown;
     protected override string Awash => Strings.RouteCheck_Awash;
+    protected override string Floating => Strings.RouteCheck_Floating;
+    protected override string CrossesStructure => Strings.RouteCheck_CrossesStructure;
+    protected override string StructureInsideLimits => Strings.RouteCheck_StructureInsideLimits;
+    protected override string SafetyContourAlert => Strings.RouteCheck_SafetyContourAlert;
+    protected override string DepartureBerthStructures => Strings.RouteCheck_DepartureBerthStructures;
+    protected override string ArrivalBerthStructures => Strings.RouteCheck_ArrivalBerthStructures;
+    protected override string BerthStructuresCountFormat => Strings.RouteCheck_BerthStructuresCountFormat;
     protected override string CoversAndUncovers => Strings.RouteCheck_CoversAndUncovers;
     protected override string AboveWater => Strings.RouteCheck_AboveWater;
     protected override string BelowSafetyDepthFormat => Strings.RouteCheck_BelowSafetyDepthFormat;
@@ -116,6 +123,11 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string OutsideS102Format => Strings.Findings_OutsideS102Format;
     protected override string DatumUnconfirmed => Strings.Findings_DatumUnconfirmed;
     protected override string DatumUnconfirmedMetaFormat => Strings.Findings_DatumUnconfirmedMetaFormat;
+    protected override string WaterLevelPredictedFormat => Strings.Findings_WaterLevelPredictedFormat;
+    protected override string TightOnPredictedFormat => Strings.Findings_TightOnPredictedFormat;
+    protected override string PredictedStationsFormat => Strings.Findings_PredictedStationsFormat;
+    protected override string MoreStationsFormat => Strings.Findings_MoreStationsFormat;
+    protected override string NotAForecast => Strings.Findings_NotAForecast;
     protected override string WaterLevelEnds => Strings.Findings_WaterLevelEnds;
     protected override string WaterLevelStartsLate => Strings.Findings_WaterLevelStartsLate;
     protected override string NoWaterLevelCoverage => Strings.Findings_NoWaterLevelCoverage;
@@ -127,4 +139,29 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string TideNotAppliedForFormat => Strings.Findings_TideNotAppliedForFormat;
     protected override string TideNotApplied => Strings.Findings_TideNotApplied;
     protected override string NoDepthSource => Strings.Findings_NoDepthSource;
+
+    protected override string WindAboveForFormat => Strings.Findings_WindAboveForFormat;
+    protected override string WavesAboveForFormat => Strings.Findings_WavesAboveForFormat;
+    protected override string WindAboveDistanceFormat => Strings.Findings_WindAboveDistanceFormat;
+    protected override string WavesAboveDistanceFormat => Strings.Findings_WavesAboveDistanceFormat;
+    protected override string WindNoun => Strings.Findings_WindNoun;
+    protected override string WavesNoun => Strings.Findings_WavesNoun;
+    protected override string WeatherForecastEndsFormat => Strings.Findings_WeatherForecastEndsFormat;
+    protected override string WeatherForecastStartsLateFormat => Strings.Findings_WeatherForecastStartsLateFormat;
+    protected override string NoWeatherCoverageFormat => Strings.Findings_NoWeatherCoverageFormat;
+    protected override string WeatherNoDataFormat => Strings.Findings_WeatherNoDataFormat;
+    protected override string WeatherMaxAtFormat => Strings.Findings_WeatherMaxAtFormat;
+    protected override string WeatherMaxFormat => Strings.Findings_WeatherMaxFormat;
+    protected override string TimeWindowFormat => Strings.Findings_TimeWindowFormat;
+    protected override string ForecastEndsAtFormat => Strings.Findings_ForecastEndsAtFormat;
+    protected override string ForecastStartsAtFormat => Strings.Findings_ForecastStartsAtFormat;
+    protected override string MinutesFormat => Strings.Findings_MinutesFormat;
+    protected override string HoursFormat => Strings.Findings_HoursFormat;
+    protected override string CycloneRadiusFormat => Strings.Findings_CycloneRadiusFormat;
+    protected override string CycloneConeTitle => Strings.Findings_CycloneConeTitle;
+    protected override string CycloneClosestFormat => Strings.Findings_CycloneClosestFormat;
+    protected override string CycloneBeyondFormat => Strings.Findings_CycloneBeyondFormat;
+    protected override string CycloneStormFormat => Strings.Findings_CycloneStormFormat;
+    protected override string CycloneEstimated => Strings.Findings_CycloneEstimated;
+    protected override string CycloneBestTrack => Strings.Findings_CycloneBestTrack;
 }

@@ -69,7 +69,7 @@ and the copies have drifted:
 | Verdict and headline finding | `RouteCheckVerdict.Build`, `MustReviewRank` (matches area codes by substring) | `SummaryText` (an English copy of `NoDraftTitle`); `VerdictTitle` for clearance only |
 | Keel for the dangers check | deepest `draft + squat + UKC` over all legs | the same, but with a request draft it takes the maximum squat and the maximum UKC from different legs |
 | Time where a leg has no ETA | view time, even when the route has a departure | the departure, else `Time ?? now` |
-| Depth checks without safety settings | taken from the mariner settings | skipped silently (MCP); 30 m / 30 m (`s100`) |
+| Depth checks without safety settings | taken from the mariner settings | skipped (MCP; now reported: the chart check is `partial` with `safety_settings_missing`); 30 m / 30 m (`s100`) |
 | UKC when some legs have no draft | not run | error (MCP); skipped silently (`s100`) |
 | Warnings checked | the warnings panel's list and set | every S-124 dataset in the catalog |
 | Datasets used | bounding-box overlap | cells near the corridor plus the datasets behind findings |
@@ -428,7 +428,7 @@ public sealed class ClearanceDetails : RouteFindingDetails { /* minimum, margin,
 | `EncDotNet.S100.Navigation` | the plan, settings, options, sources interfaces, checker, checks, report, codes and formatter. Still Core-only. |
 | `EncDotNet.S100.Datasets.Pipelines` | `CatalogRouteCheckSources` and `RouteCheckSourceCache`. |
 | `EncDotNet.S100.Routes.Rtz`, `EncDotNet.S100.Datasets.S421` | the conversion from their route to `PassagePlan`, with the format's quirks. Both now reference Navigation. |
-| `EncDotNet.S100.Mcp.Tools` | projecting `RouteCheckReport` to DTOs. One `check_route` returns the whole report, clearance included, with `includeSamples` and `includeWindow` for the detail. `get_passage_result` is removed. |
+| `EncDotNet.S100.Mcp.Tools` | projecting `RouteCheckReport` to DTOs. One `check_route` returns the whole report, clearance included, with `samples.include` and `window` for the detail. `get_passage_result` is removed. |
 | `s100 route check` | reads the file, builds the plan, calls `RouteChecker`, and maps `Verdict.Kind` to the exit code. It stops constructing MCP tools. The CLI still references the MCP packages for `s100 mcp`. |
 | SoundCharts | its route → `PassagePlan` conversion, the view time as `At`, a panel-backed `IRouteWarningSource`, a resx formatter, the verdict card, legend and follow. The producers, `PassageFindings` and `RouteCheckVerdict.Build` collapse into presentation code. |
 
@@ -516,8 +516,10 @@ settled, and the sections above reflect them.
 5. **MCP: one `check_route` tool with detail flags.** `check_route`
    returns the whole report: every finding (clearance included), the
    verdict, each check's status and the clearance summary.
-   `includeSamples` adds the thinned UKC samples and per-leg results.
-   `includeWindow` (with the window bounds) adds the departure sweep.
+   `samples.include` adds the thinned UKC samples and per-leg results.
+   `window` (with its bounds, or `{}` for the S-104 range) adds the
+   departure sweep. The arguments are grouped as `vessel`, `window`,
+   `weather`, `limits` and `samples` (#1561).
    `get_passage_result` is removed.
 6. **Names: route check, with `PassagePlan` as the input.** The whole is
    the route check (`RouteChecker`, `RouteCheckReport`,

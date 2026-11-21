@@ -140,9 +140,7 @@ internal static class PickHighlightOverlayLayer
         // Dusk/Night palettes dim the casing to a mid grey so the marker
         // doesn't glare on a dark chart — a bright-white ring harms night
         // vision, which the dark palettes exist to protect.
-        var casingColor = appearance.IsDarkBasemap
-            ? new MapsuiColor(150, 150, 150, 235)
-            : new MapsuiColor(255, 255, 255, 255);
+        var casingColor = CasingColor(appearance);
 
         // 1) Object outline (drawn first so the marker sits on top).
         if (state.Geometry is { } geometry && geometry.HasGeometry)
@@ -158,6 +156,64 @@ internal static class PickHighlightOverlayLayer
 
         layer.Features = features;
         layer.DataHasChanged();
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="layer"/>'s features with rings around each of
+    /// <paramref name="rings"/>: what a hovered Legend row describes in view
+    /// (legends design note D19, #1412). Drawn as the pick's outline is, with
+    /// a casing under each stroke so many small rings read on a busy chart,
+    /// and with no area fill so overlapping areas don't darken. An empty list
+    /// clears the layer.
+    /// </summary>
+    /// <param name="layer">The layer to fill.</param>
+    /// <param name="rings">The features to ring.</param>
+    /// <param name="appearance">The accent and basemap darkness.</param>
+    public static void UpdateRings(MemoryLayer layer, IReadOnlyList<PickHighlightGeometry> rings, PickHighlightAppearance appearance)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(rings);
+        var features = new List<IFeature>();
+        var accent = appearance.Accent;
+        var accentColor = new MapsuiColor(accent.R, accent.G, accent.B);
+        var casingColor = CasingColor(appearance);
+
+        foreach (var geometry in rings)
+        {
+            var lines = new List<IReadOnlyList<GeoPosition>>(geometry.Curves);
+            if (geometry.ExteriorRing.Count >= 3)
+            {
+                lines.Add(Closed(geometry.ExteriorRing));
+                foreach (var hole in geometry.InteriorRings)
+                    lines.Add(Closed(hole));
+            }
+            foreach (var line in lines)
+            {
+                AddPolyline(features, line, casingColor, MarkerCasingWidth);
+                AddPolyline(features, line, accentColor, MarkerRingWidth);
+            }
+            foreach (var (lat, lon) in geometry.Points)
+                AddPositionMarker(features, lat, lon, accentColor, casingColor);
+        }
+
+        layer.Features = features;
+        layer.DataHasChanged();
+    }
+
+    private static MapsuiColor CasingColor(PickHighlightAppearance appearance) =>
+        appearance.IsDarkBasemap
+            ? new MapsuiColor(150, 150, 150, 235)
+            : new MapsuiColor(255, 255, 255, 255);
+
+    private static List<GeoPosition> Closed(IReadOnlyList<GeoPosition> ring)
+    {
+        var points = new List<GeoPosition>(ring);
+        if (points.Count >= 2 &&
+            (points[0].Latitude != points[^1].Latitude || points[0].Longitude != points[^1].Longitude))
+        {
+            points.Add(points[0]);
+        }
+        return points;
     }
 
     private static void AddObjectOutline(
@@ -262,7 +318,8 @@ internal static class PickHighlightOverlayLayer
     private static void AddPolyline(
         List<IFeature> features,
         IReadOnlyList<GeoPosition> points,
-        MapsuiColor accentColor)
+        MapsuiColor accentColor,
+        double width = OutlineWidth)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
         {
@@ -276,7 +333,7 @@ internal static class PickHighlightOverlayLayer
             var feature = new GeometryFeature(new LineString(coords));
             feature.Styles.Add(new VectorStyle
             {
-                Line = new Pen { Color = accentColor, Width = OutlineWidth },
+                Line = new Pen { Color = accentColor, Width = width },
                 Opacity = OutlineOpacity,
             });
             features.Add(feature);

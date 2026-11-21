@@ -15,7 +15,8 @@ public static class SkiaSvgRasterizer
     /// <see cref="PatternTileShaderScale"/>. S-100 defines pattern dimensions in
     /// mm for paper charts (~3.78 px/mm at 96 DPI). For interactive display a
     /// lower density is used so patterns repeat more tightly relative to the
-    /// on-screen polygon size.
+    /// on-screen polygon size. This is the default
+    /// <see cref="EncDotNet.S100.Rendering.Scene.SymbolSizeProfile.PatternPixelsPerMillimetre"/>.
     /// </summary>
     public const double DefaultPixelsPerMm = 1.5;
 

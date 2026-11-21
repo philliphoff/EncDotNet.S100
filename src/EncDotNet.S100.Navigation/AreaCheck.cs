@@ -16,10 +16,11 @@ namespace EncDotNet.S100.Navigation;
 /// The corridor geometry is the S-124 check's (<see cref="WarningCheck"/>):
 /// each leg is cut into short pieces and compared with the areas, holes
 /// included, in a local plane. Where S-101 cells overlap, an area counts
-/// only when its cell is in the finest band of the cells covering the place
-/// where the route first meets it (#947), as for the chart checks, so a
+/// only along the stretches of track where its cell is in the finest band of
+/// the cells covering the track (#947, #1543), as for the chart checks, so a
 /// coarse cell's copy of an area a finer cell also charts gives no second
-/// finding.
+/// finding there. An area kept on more than one stretch gives a finding per
+/// stretch.
 /// </para>
 /// <para>
 /// Time: <c>fixedDateRange</c> and <c>periodicDateRange</c> are judged over
@@ -33,9 +34,12 @@ namespace EncDotNet.S100.Navigation;
 /// S-124 warnings that aren't in force are (#957).
 /// </para>
 /// <para>
-/// Severity: an S-101 area whose restriction is entry prohibited or entry
-/// restricted is MUST REVIEW when the track enters it, which the verdict
-/// ranks just after land and drying ground. Other areas are CHECK, or INFO
+/// Severity: an S-101 area whose restriction is entry prohibited is MUST
+/// REVIEW when the track enters it, which the verdict ranks just after land
+/// and drying ground. Entry restricted ranks below it: such an area is
+/// CHECK, since the restriction often applies only to some vessels, such as
+/// the large-vessel Regulated Navigation Areas NOAA charts cell-wide (#1546).
+/// Other areas are CHECK, or INFO
 /// when their restrictions don't bear on a passage (fishing, anchoring,
 /// dredging and the like) or for an inshore traffic zone. An area that only
 /// reaches inside the cross-track limits is one group lighter. S-122 areas
@@ -247,12 +251,18 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
         var off = new SortedDictionary<int, (RouteAreaMatch First, int Count)>();
         for (var i = 0; i < areas.Count; i++)
         {
-            var match = Match(areas[i], i, accumulators[i], track, ranked, schedule, formatter);
+            var stretches = Match(areas[i], i, accumulators[i], track, ranked, schedule, formatter);
 
-            // An area of a kind that's off isn't reported; its kind is (#1127).
+            // An area of a kind that's off isn't reported; its kind is,
+            // counting the area once however many stretches it has (#1127).
             if (areas[i].AreaKind is { } kind && kindsOff.Contains(kind))
             {
-                match = match with { Finding = null };
+                for (var k = 0; k < stretches.Count; k++)
+                {
+                    stretches[k] = stretches[k] with { Finding = null };
+                }
+
+                var match = stretches[0];
                 if (match.Relation != RouteAreaRelation.Off)
                 {
                     off[kind] = off.TryGetValue(kind, out var seen)
@@ -261,10 +271,13 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
                 }
             }
 
-            matches.Add(match);
-            if (match.Finding is { } finding)
+            foreach (var match in stretches)
             {
-                findings.Add(finding);
+                matches.Add(match);
+                if (match.Finding is { } finding)
+                {
+                    findings.Add(finding);
+                }
             }
         }
 
@@ -282,7 +295,8 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
         return (matches, RouteFinding.Sort(findings));
     }
 
-    private static RouteAreaMatch Match(RouteArea area, int index, RouteCorridor.Accumulator acc, RouteCorridor.Track track, List<RouteChartCell> cells, PassageSchedule schedule, RouteFindingFormatter formatter)
+    // The area against the route: one match per stretch where it counts, or one off match.
+    private static List<RouteAreaMatch> Match(RouteArea area, int index, RouteCorridor.Accumulator acc, RouteCorridor.Track track, List<RouteChartCell> cells, PassageSchedule schedule, RouteFindingFormatter formatter)
     {
         RouteAreaRelation relation;
         double start, end;
@@ -296,14 +310,27 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
         }
         else
         {
-            return Off(area);
+            return [Off(area)];
         }
 
-        if (area.Cell is { } cell && !Finest(cell, track.PositionAt(relation == RouteAreaRelation.Enters ? start : acc.CorridorAlong ?? start), cells))
+        var stretches = area.Cell is { } cell ? FinestStretches(cell, start, end, track, cells) : [(start, end)];
+        if (stretches.Count == 0)
         {
-            return Off(area);
+            return [Off(area)];
         }
 
+        var matches = new List<RouteAreaMatch>(stretches.Count);
+        for (var n = 0; n < stretches.Count; n++)
+        {
+            matches.Add(Stretch(area, index, n, relation, stretches[n].Start, stretches[n].End, track, schedule, formatter));
+        }
+
+        return matches;
+    }
+
+    // One stretch of an area; the first keeps the area's finding id, later ones add their number.
+    private static RouteAreaMatch Stretch(RouteArea area, int index, int stretch, RouteAreaRelation relation, double start, double end, RouteCorridor.Track track, PassageSchedule schedule, RouteFindingFormatter formatter)
+    {
         var startLeg = track.LegAt(start);
         var endLeg = track.LegAt(end);
         var startEta = schedule.EtaAt(startLeg, start - track.Legs[startLeg].Start);
@@ -329,8 +356,9 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
             }
         }
 
+        var id = area.Feature is { } feature ? $"{code.Value}.{feature.DatasetId}/{feature.FeatureId}" : $"{code.Value}.{index}";
         var finding = formatter.Render(new RouteFinding(
-            area.Feature is { } feature ? $"{code.Value}.{feature.DatasetId}/{feature.FeatureId}" : $"{code.Value}.{index}",
+            stretch == 0 ? id : FormattableString.Invariant($"{id}.{stretch + 1}"),
             code,
             group)
         {
@@ -366,8 +394,10 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
     // The code and group of an area the track enters, while it is in force.
     private static (RouteFindingCode Code, RouteFindingGroup Group) Classify(RouteArea area)
     {
-        var entry = area.Restrictions.Any(r => r is 7 or 8);
-        var bears = area.Restrictions.Count == 0 || area.Restrictions.Any(PassageRestrictions.Contains) || entry;
+        // Entry prohibited (7) is the mariner's decision; entry restricted (8)
+        // often applies only to some vessels, so it is worth checking (#1546).
+        var entry = area.Restrictions.Contains(7);
+        var bears = area.Restrictions.Count == 0 || area.Restrictions.Any(r => r is 7 or 8 || PassageRestrictions.Contains(r));
         if (area.Product == RouteAreaProduct.S122)
         {
             return (RouteFindingCodes.ProtectedArea, bears ? RouteFindingGroup.Check : RouteFindingGroup.Info);
@@ -403,12 +433,89 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
         };
     }
 
+    // The stretches of [start, end] where the area's cell is in the finest
+    // band (#1543): tested at each track sample in the span, as the chart
+    // check tests each cross-section, with each change of band found to
+    // within a metre between samples.
+    private static List<(double Start, double End)> FinestStretches(RouteChartCell cell, double start, double end, RouteCorridor.Track track, List<RouteChartCell> cells)
+    {
+        bool Kept(double along) => Finest(cell, track.PositionAt(along), cells);
+
+        var places = new List<(double Along, GeoPosition Position)> { (start, track.PositionAt(start)) };
+        foreach (var sample in track.Samples)
+        {
+            if (sample.Distance > start && sample.Distance < end)
+            {
+                places.Add((sample.Distance, sample.Position));
+            }
+        }
+
+        if (end > start)
+        {
+            places.Add((end, track.PositionAt(end)));
+        }
+
+        var stretches = new List<(double Start, double End)>();
+        double? from = null;
+        var previous = start;
+        var wasKept = false;
+        foreach (var (along, position) in places)
+        {
+            var kept = Finest(cell, position, cells);
+            if (kept != wasKept && along > start)
+            {
+                var change = Change(previous, along, wasKept);
+                if (kept)
+                {
+                    from = change;
+                }
+                else
+                {
+                    stretches.Add((from!.Value, change));
+                    from = null;
+                }
+            }
+            else if (kept && from is null)
+            {
+                from = along;
+            }
+
+            (previous, wasKept) = (along, kept);
+        }
+
+        if (from is { } open)
+        {
+            stretches.Add((open, end));
+        }
+
+        return stretches;
+
+        // Where the band changes between a and b, a's state being aKept.
+        double Change(double a, double b, bool aKept)
+        {
+            while (b - a > 1)
+            {
+                var mid = (a + b) / 2;
+                if (Kept(mid) == aKept)
+                {
+                    a = mid;
+                }
+                else
+                {
+                    b = mid;
+                }
+            }
+
+            return aKept ? a : b;
+        }
+    }
+
     // Whether the area's cell is in the finest band of the cells that cover a point; true when its cell doesn't cover it.
     private static bool Finest(RouteChartCell cell, GeoPosition position, List<RouteChartCell> cells)
     {
         var covering = cells.Where(c => c.Covers(position)).ToList();
         return !covering.Contains(cell, ReferenceEqualityComparer.Instance)
-            || CellScaleRanking.FinestBand(covering, c => c.RankingScale).Contains(cell, ReferenceEqualityComparer.Instance);
+            || CellScaleRanking.FinestBand(covering, c => c.Rank).Contains(cell, ReferenceEqualityComparer.Instance);
     }
 
     // The end of a date range: its time of day, or the end of its day.

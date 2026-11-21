@@ -9,7 +9,6 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -76,7 +75,8 @@ public sealed class CapViewerLoadPathTests : IDisposable
     {
         var path = CapFixtures.CopyFixture(CapFixtures.GaleWarning, Path.Combine(_dir, "gale.xml"));
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(Path.Combine(_dir, "cache"), 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)),
+            registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var metadata = reader.TryRead(path);
 
@@ -89,7 +89,7 @@ public sealed class CapViewerLoadPathTests : IDisposable
     [Fact]
     public void The_pick_report_leads_with_the_CAP_notice_and_names_the_portrayal()
     {
-        var vm = new PickReportViewModel();
+        var vm = TestPickReport.Create();
 
         vm.SetPick(CapDatasetProcessor.FeatureType, "Gale Warning", "alert1.info1.area1", "gale.xml", "CAP", []);
 

@@ -79,6 +79,49 @@ public class KnownCatalogueSourcesTests
     }
 
     [Fact]
+    public void Every_built_in_entry_names_its_category()
+    {
+        using var stream = typeof(KnownCatalogueSources).Assembly.GetManifestResourceStream(
+            "EncDotNet.S100.Collections.KnownSources.known-sources.json")!;
+        using var document = System.Text.Json.JsonDocument.Parse(stream);
+
+        Assert.All(document.RootElement.GetProperty("sources").EnumerateArray(), e =>
+            Assert.True(e.TryGetProperty("category", out _), e.GetProperty("id").GetString()));
+        Assert.Equal(KnownCatalogueCategory.Charts, KnownCatalogueSources.Find("noaa-enc")!.Category);
+        Assert.Equal(KnownCatalogueCategory.Depth, KnownCatalogueSources.Find("noaa-s111")!.Category);
+        Assert.Equal(KnownCatalogueCategory.Weather, KnownCatalogueSources.Find("noaa-erddap-currents")!.Category);
+        Assert.Equal(KnownCatalogueCategory.Weather, KnownCatalogueSources.Find("ioos-erddap-hfradar")!.Category);
+        Assert.Equal(KnownCatalogueCategory.Secom, KnownCatalogueSources.Find("ccg-s124-secom")!.Category);
+        Assert.DoesNotContain(KnownCatalogueSources.All, s => s.Category == KnownCatalogueCategory.User);
+    }
+
+    [Fact]
+    public void Category_is_read_and_written_and_follows_the_format_when_absent()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "sources": [
+                { "id": "a", "name": "A", "provider": "P", "format": "weather", "category": "depth", "catalogUri": "https://a.test/c.xml",
+                  "weather": { "service": "nwsAlerts", "model": "m" } },
+                { "id": "b", "name": "B", "provider": "P", "format": "s100ExchangeCatalogue", "catalogUri": "https://b.test/c.xml" },
+                { "id": "c", "name": "C", "provider": "P", "format": "noaaEnc", "category": "somethingNew", "catalogUri": "https://c.test/c.xml" }
+              ]
+            }
+            """;
+
+        var sources = KnownCatalogueSources.Read(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+        Assert.Equal([KnownCatalogueCategory.Depth, KnownCatalogueCategory.Depth, KnownCatalogueCategory.Charts], sources.Select(s => s.Category));
+
+        var user = KnownCatalogueSources.FromUrl(new Uri("https://example.test/feed.json"), KnownCatalogueFormat.S100Feed);
+        Assert.Equal(KnownCatalogueCategory.User, user.Category);
+        using var stream = new MemoryStream();
+        KnownCatalogueSources.Write(stream, [sources[0], user]);
+        stream.Position = 0;
+        Assert.Equal([KnownCatalogueCategory.Depth, KnownCatalogueCategory.User], KnownCatalogueSources.Read(stream).Select(s => s.Category));
+    }
+
+    [Fact]
     public void Entries_in_unknown_formats_or_without_a_url_are_skipped()
     {
         const string json = """

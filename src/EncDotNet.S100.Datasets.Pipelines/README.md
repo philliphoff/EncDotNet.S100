@@ -59,6 +59,24 @@ more detail.
 
 - **`IDatasetProcessor`**: a parsed dataset with rendering, picking, feature
   listing, metadata and validation.
+- **`ILiveDatasetProcessor`**: a processor whose data changes after it's
+  loaded, such as a feed polled on a timer. It raises `Changed` after
+  updating, and the map session draws the dataset again.
+- **`DynamicSourceProcessor`**: a processor over an `IDynamicFeatureSource`
+  and its `IDynamicFeaturePortrayal`, such as the NDBC observations
+  (`NdbcStationPortrayal`) or own-ship weather from NMEA
+  (`OwnShipWeatherPortrayal`). It draws the source's features on one
+  sub-layer, on the source's plane and priority; picks describe a feature
+  through the source's `IDynamicFeatureDescriber`, or list its motion and
+  attributes; and the source's changes are raised as `Changed`. Pass the
+  spec it reports as, such as `SpecName.Ndbc` or `SpecName.Nmea`. Disposing
+  the processor unsubscribes from the source and leaves it running, unless
+  it's created with `ownsSource: true`. It's an `IHostedDatasetProcessor`:
+  `Start`, `IsActive` and `UpdateArea` reach a source that implements
+  `IStartableDynamicSource`, `IPausableDynamicSource` or
+  `IAreaFilteredDynamicSource`.
+- **`SourceRegistration`** and **`SourceRegistry`**: data sources that
+  aren't files. See [Sources that aren't files](#sources-that-arent-files).
 - **`DatasetPipelineFactory`**: detects a file's product and creates its
   processor. See [Product detection](#product-detection).
 - **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
@@ -70,17 +88,15 @@ more detail.
 - **`MapPresentationState`** and **`MapDataset`**: renderer-neutral snapshots
   of a map's display settings and of each dataset on it. See
   [Map presentation](#map-presentation).
-- **`HeadlessCompositor`**: draws several datasets into one image with the
-  S-98 rules. See [S-98 interoperability](#s-98-interoperability).
 - **`ValidationRunner`**: runs any processor's validation for a host. See
   [Validation](#validation).
 - The pick services in the `.Query` namespace and the dataset catalog in
   `.Catalog`. See [Pick services and dataset catalog](#pick-services-and-dataset-catalog).
 
-Some of these types, including `IDatasetProcessor`, `DatasetProcessorOwner`,
-`MapPresentationState`, `MapDataset` and the S-98 engine, are compiled into
-`EncDotNet.S100.Core` but use the `EncDotNet.S100.Datasets.Pipelines`
-namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
+Some of these types, including `IDatasetProcessor`, `ILiveDatasetProcessor`,
+`DatasetProcessorOwner`, `MapPresentationState`, `MapDataset` and the S-98
+engine, are compiled into `EncDotNet.S100.Core` but use the
+`EncDotNet.S100.Datasets.Pipelines` namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 
 ## Processors
 
@@ -99,13 +115,14 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `S131DatasetProcessor` | S-131 | Vector, Lua |
 | `S201DatasetProcessor` | S-201 | Vector, XSLT |
 | `S411DatasetProcessor` | S-411 | Vector, XSLT |
+| `S412DatasetProcessor` | S-412 (draft) | Vector, XSLT; time-aware, drawing the warnings in force at the time step |
 | `S421DatasetProcessor` | S-421 | Vector, XSLT |
 | `S57DatasetProcessor` | S-57 | Translated to S-101 (maritime ENC) or S-401 (inland ENC), then drawn by the S-101 vector pipeline with that product's catalogues |
 | `GribDatasetProcessor` | GRIB2 wind and wave grids: GFS, GFS-Wave, ECMWF (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `CapDatasetProcessor` | CAP 1.2 marine weather warnings: CAP XML, Atom, NWS GeoJSON (not S-100) | Vector: SoundCharts CAP style (see [CAP weather warnings](#cap-weather-warnings)) |
-| `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | Not drawn yet (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
-| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Features and metadata only; drawing comes with #1233's portrayal slice |
+| `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | `TropicalCycloneStyle`, in code (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
+| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Vector: SoundCharts fronts style (`SurfaceAnalysisStyle`), one `weather.fronts` sub-layer on Other chart overlays at priority 92 |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
 S-401 catalogues.
@@ -233,10 +250,10 @@ from it and only open the file. It implements:
 - **Sampling.** `ICoverageSampler` returns `CoverageFieldsSample`s whose fields
   carry their quantity and unit (`wave.hs` in `m`, `wind.speed` in `m/s` and
   `wind.speed.kn` in `kn`, directions in `deg`), and the catalog payload
-  (`WeatherGridDatasetData`) does the same, so `sample_coverage` and
-  `sample_coverage_along` work with no MCP change.
-- **Headless rendering.** `IHeadlessImageRenderer`, through the
-  `HeadlessCompositor`, framed on the grid.
+  (`WeatherGridDatasetData`) does the same, so the MCP `sample` tool works
+  with no MCP change.
+- **Headless rendering.** `IHeadlessImageRenderer`, framed on the grid,
+  with the sub-layers in S-98 order.
 - **Metadata.** The cells' WGS-84 extent, EPSG:4326 and the time coverage.
 - **Contents.** `Contents` lists what the file holds for `s100 info`: each
   parameter with its level and step count, whether it's used, and if not, why
@@ -330,8 +347,44 @@ zip in the source.
 The processor gives `Advisory`, the `TropicalCycloneAdvisory` model, and
 `Metadata`: the extent of the cone, tracks and forecast radii, and the time
 from the first past-track point to the last forecast point. The catalog
-payload is `TropicalCycloneDatasetData`. It doesn't draw, pick or step
-through time yet. That comes with the portrayal.
+payload is `TropicalCycloneDatasetData`.
+
+It draws the advisory with `TropicalCycloneStyle` from
+[`EncDotNet.S100.Datasets.Weather`](../EncDotNet.S100.Datasets.Weather/README.md#tropical-cyclones)
+as two sub-layers: the cone and wind radii fills (`weather.tc.areas`) on the
+On-demand surface plane at priority 10, and the lines, symbols and labels
+(`weather.tc.track`) on the Other chart overlays plane at priority 95, each
+with its legend. Labels are written in `RenderContext.DisplayTimeZone` (UTC
+when it's unset) and the current culture.
+
+The processor is an `ITimeAwareDatasetProcessor` with
+`TimeStepSelection.Continuous`: its `AvailableTimes` are the forecast points,
+the steps a host's ‹ › move between, but any time from the first best-track
+point (the `Validity` before tau 0) to the last forecast point draws. The
+cone, tracks and forecast points always draw; the storm and its wind radii
+are drawn at `RenderContext.TimeStep`, through
+`TropicalCycloneAdvisory.StormAt`: on a forecast point as it is, between
+two estimated (a dashed ring and "est." in the label), before the advisory
+on the best track, and outside the track and forecast not at all. Without a
+time step they're at the advisory's first forecast point. `IssueTime` is
+the advisory's, `NextIssueTime` NHC's next regular advisory, and
+`TimelineLabel` and `TimelineDetail` name the storm's lane (`IAN`,
+`adv 20`).
+
+Each drawn part is a feature: the storm (its id is the ATCF id, such as
+`AL092022`), the cone and its two parts, both tracks, every forecast and
+best-track point, and the radii (`AL092022 +24h`, `AL092022 34 kt`). Every
+part reports the storm when it's picked, with the same `FeatureRef`, class and
+attributes, and a **Picked part** row naming the part. `HitTestFeatures` gives
+one hit per storm, on the part nearest the pick. The attributes are the
+not-for-navigation notice, the storm's name, the advisory, its issue time, the
+next advisory due (the next of 03, 09, 15 and 21 UTC); after a portrayal
+with a time step, the **At view time** row and its **Basis** (on a forecast
+point, estimated between two, or the best track), or "Beyond the forecast"
+or "Before the track"; the position, wind, pressure and movement of the
+storm drawn, the part picked, the 64, 50 and 34 knot radii by
+quadrant, and NHC's caution about the cone. `FeatureAccessor` lists the parts
+for the catalog's identify and pick.
 
 `WeatherProducts.TropicalCyclone` registers the format as `TC/1.0.0`, not
 S-100, with an application portrayal (`NHC tropical cyclone GIS data`).
@@ -339,6 +392,41 @@ S-100, with an application portrayal (`NHC tropical cyclone GIS data`).
 whatever the file is called, and `MatchFolder` claims a folder of NHC forecast
 zips for one storm. The wind radii and best track zips aren't claimed on their
 own.
+
+## Sources that aren't files
+
+A live feed or a polled web service is configured rather than detected, so
+it's a `SourceRegistration` rather than a `ProductRegistration`: an id, a
+display name, the spec it reports as, an options record, when a host runs it
+(`SourceActivation`), and a `Create` that builds its processor from a
+`SourceCreationContext` (the saved options, loggers, a clock and an HTTP
+client factory). `SourceRegistry.Default` holds the built-in sources in
+`S100Sources`: `ndbc.realtime` (NDBC observations) and `nmea.weather`
+(own-ship weather, whose `NmeaWeatherSourceSettings.Input` names the NMEA
+input).
+
+```csharp
+await using var processor = (IHostedDatasetProcessor)SourceRegistry.Default.Create(
+    S100Sources.NdbcObservationsId,
+    new SourceCreationContext { CreateHttpClient = () => myHardenedClient });
+
+processor.UpdateArea(new GeographicBounds(-71.5, 40.5, -69.5, 43.0));
+processor.Start();
+// Picks, headless rendering and the map session work as for a file dataset.
+```
+
+The processor owns its source: disposing it stops the source and disposes
+the HTTP client. A host pauses a source outside its activation range
+(`SourceActivation.BelowViewportSpan(degrees).IsActiveFor(viewport)`) by
+setting `IsActive` to `false`. Register your own sources with
+`SourceRegistry.Register` at start-up.
+
+Mark an option that holds a key with `[Secret(EnvironmentVariable = "…")]`,
+and read it in `Create` with `context.ResolveSecret(options.ApiKey,
+"MY_FEED_KEY")`: the environment variable first, then the host's secret
+store when the option holds a `sc-secret:` reference (`SecretReference`),
+then the option's plain value. SoundCharts passes its secret store as
+`ReadSecret`; `s100` and the MCP server use environment variables only.
 
 ## Processor lifetime
 
@@ -523,22 +611,22 @@ other:
 | `.Geometry` | Point, polyline and bounding box helpers for the pick services. |
 | `.Spec` | `FeatureDescriberRegistry`, which `DescribeFeatureService` uses to describe a feature per product, and the `FeatureAccessor`, `FeatureGeometryQuery` and `FeatureNames` helpers. |
 | `.Time` | `FeatureValidity` and the time window query helpers. |
-| `.Navigation` | `CatalogRouteCheckSources`, which builds the `RouteCheckSources` every route check in `EncDotNet.S100.Navigation` reads (S-101 charts and areas, S-102 depth with S-101 fallback, S-104 water level, S-122 protected areas and S-124 warnings) from a catalog snapshot, and `RouteCheckSourceCache`, which keeps one per snapshot; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
+| `.Navigation` | `CatalogRouteCheckSources`, which builds the `RouteCheckSources` every route check in `EncDotNet.S100.Navigation` reads (S-101 charts and areas, S-102 depth with S-101 fallback, S-104 water level with harmonic tide predictions after it when `RouteCheckSourceOptions.TidePredictions` is set, the charts' water mask, S-122 protected areas, S-124 warnings, and wind and waves from GRIB2 and NetCDF weather grids) from a catalog snapshot, and `RouteCheckSourceCache`, which keeps one per snapshot and lets a host switch tide predictions on and off; `TidePredictionWaterLevelSource`, the predicted water level of an `EncDotNet.S100.Tides.Stations` catalogue, nearest station by water; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
 
 SoundCharts' `ViewerDatasetCatalog` and the headless `FileDatasetCatalog` both
 use `LoadedDatasetProjector`, so a pick from `s100` produces the same catalog
 entries as one in SoundCharts. The exception is S-57: SoundCharts projects S-57
 cells from their loaded `S57DatasetProcessor`, so its entries include any
 exchange-set updates the processor applied. The MCP `identify_features`,
-`sample_coverage` and `describe_feature` tools map `ToolResult<T>` onto the MCP
+`sample` and `describe_feature` tools map `ToolResult<T>` onto the MCP
 protocol.
 
 ### Coverage sampling
 
-`SampleCoverageService` (the `sample_coverage` and `sample_coverage_along`
-tools, and `s100 identify`) doesn't know any product. It samples the catalog
-entries of the requested spec whose payload implements `ICoverageSampler`, a
-processor capability in `EncDotNet.S100.Core`:
+`SampleCoverageService` (the MCP `sample` tool, and `s100 identify`)
+doesn't know any product. It samples the catalog entries of the requested spec
+whose payload implements `ICoverageSampler`, a processor capability in
+`EncDotNet.S100.Core`:
 
 - `ICoverageSampler.FindSites(query)` says where the dataset can answer a
   point: the grid node nearest it, or every station of a station series. Each
@@ -651,8 +739,9 @@ features, so the same decision drives both renderers:
 - **SoundCharts**: `DatasetLoaderService` orders and suppresses
   `SubLayerStackItem`s, then maps the result back to the Mapsui layers it has
   built.
-- **`HeadlessCompositor`**: runs the same engine and turns each ordered vector
-  or coverage sub-layer into a Skia `CompositeLayer`. It paints all datasets in
+- **`ChartCompositor`** (in `EncDotNet.S100.Rendering.Engine`): runs the same
+  engine and turns each ordered vector or coverage sub-layer into a Skia
+  `CompositeLayer`. It paints all datasets in
   one shared viewport without Mapsui, with the same order and depth suppression
   as SoundCharts, such as drawing S-101 under S-102 (S-98 Annex A §A-6.9.1).
   The public entry point is the `EncDotNet.S100` facade's
@@ -673,10 +762,29 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   three ice types inside the oval (partial concentration `iceapc`, stage of
   development `icesod`, form of ice `iceflz`), the thinner fourth and fifth
   ice classes outside the oval (Cd/Ce, Sd/Se, Fd/Fe), and snow depth as a
-  caption. `S411DatasetProcessor` returns it in `FeatureInfo.EggCode` and adds
-  each value's feature catalogue definition (through
-  `FeatureCatalogueDecoder.ResolveListedValueDefinition`), so a pick report
-  can show the meaning on hover.
+  caption.
+- `PickSection`, `IPickContributor` and `PickContributorRegistry`: pick
+  report content that isn't attribute rows, such as the ice egg code.
+  `FeatureInfo.Sections` holds a feature's sections, at most one per kind.
+  A host runs `PickContributorRegistry.Default.Apply` on a processor's
+  `FeatureInfo`, which adds the sections each registered contributor
+  produces; SoundCharts' pick report, the map session's `PickAsync` and
+  `S100FeatureCatalogue.GetFeature` all do, and MCP's `identify_features` and
+  `describe_feature` run the same contributors. `IceEggCodeContributor` adds
+  an `IceEggCodeSection` to an S-411 sea-ice or lake-ice feature, or to any
+  feature from another product or source that carries a total or partial
+  concentration under the S-411 codes. Each value carries its feature
+  catalogue definition when the processor implements
+  `IListedValueDefinitions` (the GML processors do), so a pick report can
+  show the meaning on hover. A processor can also add sections itself:
+  `S104DatasetProcessor` and `S111DatasetProcessor` give a station feature a
+  `StationSeriesSection` with its whole time series, which hosts chart from
+  its channels, and `S124DatasetProcessor` gives a warning part a
+  `NavigationalWarningSection`. `FeatureInfo.EggCode`,
+  `FeatureInfo.StationSeries` and `FeatureInfo.NavigationalWarning` still
+  read their sections, but are obsolete. `PickSectionKindRegistry` registers each kind with a
+  description and source-generated JSON metadata, which MCP serializes it
+  with; a section of an unregistered kind reaches MCP as its rows.
 - `ExternalTextFileResolver`: reads the text of external files named by S-100
   `fileReference` attributes (S-101 feature catalogue; S-57 `TXTDSC` and
   `NTXTDS`, for example on Caution Area and Tidal Stream Panel Data) from the
@@ -693,7 +801,7 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   into their own section.
 - `GmlDatasetProcessorBase`: the base class for the GML processors (S-122,
   S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421).
-  `S124DatasetProcessor` fills `FeatureInfo.NavigationalWarning` for a
+  `S124DatasetProcessor` adds a `NavigationalWarningSection` to a
   `NavwarnPart`: a `NavigationalWarningInfo` with the series and number, type,
   validity, area, issuer and the message text in each language, read through
   the warning's preamble. `NavigationalWarningInfo.StatusAt` tells whether the

@@ -129,6 +129,9 @@ public sealed partial class EncCellDownloader
     private readonly TimeProvider _time;
 
     /// <summary>Creates a downloader writing under <paramref name="root"/>.</summary>
+    /// <param name="httpClient">The client cells are downloaded with.</param>
+    /// <param name="root">The folder cells are written under.</param>
+    /// <param name="timeProvider">The clock download records are stamped by; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
     public EncCellDownloader(HttpClient httpClient, string root, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -386,7 +389,9 @@ public sealed partial class EncCellDownloader
     /// <summary>
     /// A weather run (#1075): each part's response appended to
     /// <paramref name="partialPath"/>, then saved in <paramref name="staging"/>
-    /// as the one file the layout names.
+    /// as the one file the layout names; or, when the parts name their files
+    /// (an NHC advisory, #1298), each saved under its name in
+    /// <paramref name="staging"/>, the layout naming the main one.
     /// </summary>
     private async Task<SignatureRecord?> FetchRunAsync(
         RemoteItemLocation remote, IReadOnlyList<RemotePart> parts, string folderName, string partialPath, string staging,
@@ -394,6 +399,14 @@ public sealed partial class EncCellDownloader
     {
         if (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } single || !IsSafeName(single.RelativePath))
             throw new InvalidDataException($"The download for {folderName} has no single-file layout to save its parts as.");
+        if (parts.Any(p => p.FileName is not null))
+        {
+            await FetchFilesAsync(remote, parts, folderName, staging, bytesProgress, cancellationToken).ConfigureAwait(false);
+            if (!File.Exists(Path.Combine(staging, single.RelativePath)))
+                throw new InvalidDataException($"The download for {folderName} has no part named {single.RelativePath}.");
+            return null;
+        }
+
         await FetchPartsAsync(remote, parts, partialPath, bytesProgress, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(staging);

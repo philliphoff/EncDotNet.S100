@@ -61,16 +61,28 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         var noDataSkColor = NoDataColor.ToSkia();
         float noDataValue = layer.NoDataValue;
         bool noDataIsNaN = float.IsNaN(noDataValue);
+        // Optional relief shading (a factor per cell), applied to band colours
+        // only: no-data fill stays flat.
+        float[]? shade = layer.ReliefShade is { } rs && rs.Length == rows * cols ? rs : null;
 
+        // Written straight into the pixel buffer: SKBitmap.SetPixel is a
+        // native call per pixel, which dominated drawing large grids.
+        var pixels = bitmap.GetPixelSpan();
+        int rowBytes = bitmap.RowBytes;
         for (int row = 0; row < rows; row++)
+        {
+            // Grid row 0 is the southernmost (bottom of image), so flip vertically.
+            var line = pixels.Slice((rows - 1 - row) * rowBytes, cols * 4);
             for (int col = 0; col < cols; col++)
             {
                 int index = row * cols + col;
                 float value = fieldSpan[index];
-                SKColor color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
-                // Grid row 0 is the southernmost (bottom of image), so flip vertically.
-                bitmap.SetPixel(col, rows - 1 - row, color);
+                SKColor color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor, out bool isBand);
+                if (isBand && shade is not null)
+                    color = Shade(color, shade[index]);
+                WritePremultipliedRgba(line.Slice(col * 4, 4), color);
             }
+        }
 
         S100Diag.Telemetry.CoverageFrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
@@ -83,8 +95,10 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         ReadOnlySpan<ResolvedBand> bands,
         float noDataValue,
         bool noDataIsNaN,
-        SKColor noDataColor)
+        SKColor noDataColor,
+        out bool isBand)
     {
+        isBand = false;
         bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
         if (isNoData)
             return noDataColor;
@@ -93,11 +107,51 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         {
             ref readonly var band = ref bands[i];
             if (value >= band.MinValue && value < band.MaxValue)
+            {
+                isBand = true;
                 return band.Color;
+            }
         }
 
         return SKColors.Transparent;
     }
+
+    /// <summary>
+    /// Writes <paramref name="color"/> (unpremultiplied) as one Rgba8888
+    /// premultiplied pixel, rounding as Skia premultiplies.
+    /// </summary>
+    private static void WritePremultipliedRgba(Span<byte> pixel, SKColor color)
+    {
+        byte a = color.Alpha;
+        if (a == 255)
+        {
+            pixel[0] = color.Red;
+            pixel[1] = color.Green;
+            pixel[2] = color.Blue;
+            pixel[3] = 255;
+            return;
+        }
+
+        pixel[0] = Premultiply(color.Red, a);
+        pixel[1] = Premultiply(color.Green, a);
+        pixel[2] = Premultiply(color.Blue, a);
+        pixel[3] = a;
+
+        static byte Premultiply(byte channel, byte alpha)
+        {
+            int product = (channel * alpha) + 128;
+            return (byte)((product + (product >> 8)) >> 8);
+        }
+    }
+
+    // SKColor is unpremultiplied, so shade the channels directly.
+    private static SKColor Shade(SKColor color, float factor) => factor == 1f
+        ? color
+        : new SKColor(
+            ReliefShading.ShadeChannel(color.Red, factor),
+            ReliefShading.ShadeChannel(color.Green, factor),
+            ReliefShading.ShadeChannel(color.Blue, factor),
+            color.Alpha);
 
     private readonly record struct ResolvedBand(float MinValue, float MaxValue, SKColor Color);
 }

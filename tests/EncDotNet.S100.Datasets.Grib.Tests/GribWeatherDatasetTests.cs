@@ -165,6 +165,24 @@ public sealed class GribWeatherDatasetTests
     }
 
     [Fact]
+    public void Precipitation_CAPE_and_cloud_cover_have_NCEP_short_names_and_cloud_reads_for_the_entire_atmosphere()
+    {
+        var grid = new Grid(10, 10, 1, 1, 2);
+        var bytes = Encode(new Message { Category = 6, Number = 1, SurfaceType = 10, Grid = grid, DecimalScale = 0, Values = [40, 100] });
+
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
+        var cloud = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.CloudCover, cloud.Id);
+        Assert.Equal(WeatherLevel.EntireAtmosphere, cloud.Level);
+        Assert.Equal(WeatherLevel.EntireAtmosphere, dataset.File.Fields[0].ToWeatherLevel());
+        Assert.Equal("PRATE", GribShortNames.Get(new GribParameterCode(0, 1, 7)));
+        Assert.Equal("APCP", GribShortNames.Get(new GribParameterCode(0, 1, 8)));
+        Assert.Equal("TCDC", GribShortNames.Get(new GribParameterCode(0, 6, 1)));
+        Assert.Equal("CAPE", GribShortNames.Get(new GribParameterCode(0, 7, 6)));
+    }
+
+    [Fact]
     public void Surface_visibility_reads_in_metres()
     {
         // GFS VIS: WMO table 4.2-0-19 parameter 0, at the surface, in metres.

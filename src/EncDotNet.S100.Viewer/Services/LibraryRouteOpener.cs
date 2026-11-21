@@ -23,7 +23,7 @@ internal sealed class LibraryRouteOpener
     /// <param name="received">The received routes the dataset joins.</param>
     /// <param name="showRoutes">Shows the Routes panel.</param>
     /// <param name="notifications">Says why a dataset couldn't open as a route; none when <c>null</c>.</param>
-    public LibraryRouteOpener(ILibraryLoader loader, ReceivedRoutesService received, Action showRoutes, INotificationService? notifications = null)
+    public LibraryRouteOpener(ILibraryLoader loader, ReceivedRoutesService received, Action showRoutes, INotificationService? notifications)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(received);

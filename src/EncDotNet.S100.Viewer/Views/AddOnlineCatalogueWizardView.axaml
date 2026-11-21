@@ -7,7 +7,7 @@
              xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.AddOnlineCatalogueWizardView"
              x:DataType="vm:AddOnlineCatalogueWizardViewModel"
-             Width="640" Height="600">
+             Width="920" Height="640">
 
     <!-- Styles shared by the four steps (the step views are nested below, so these reach them). -->
     <UserControl.Styles>
@@ -55,9 +55,9 @@
         <StyleInclude Source="avares://SoundCharts/Views/WizardStyles.axaml" />
     </UserControl.Styles>
 
-    <!-- A fixed height (the header, a 452 px body and the footer), so the footer never moves
-         between steps; in a shorter window DialogWindowFit caps it, the body shrinks, lists
-         scroll, and the footer stays visible. -->
+    <!-- A fixed size (920 wide; the header, a ~492 px body and the footer), so the footer never
+         moves between steps; in a smaller window DialogWindowFit caps both, the body shrinks,
+         lists scroll, and the footer stays visible. -->
     <Grid RowDefinitions="Auto,*,Auto">
 
         <!-- Header: title and step navigation (the dialog host supplies the close button). -->
@@ -87,8 +87,10 @@
                                     </Panel>
                                     <StackPanel Grid.Column="1" Spacing="1">
                                         <TextBlock Text="{Binding Label}" FontSize="13" FontWeight="SemiBold" />
+                                        <!-- Only a completed step says what was chosen; the empty line keeps the header's height. -->
                                         <TextBlock Text="{Binding Value}" Classes="muted" FontSize="12"
-                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}"
+                                                   ToolTip.ServiceEnabled="{Binding IsDone}" />
                                     </StackPanel>
                                 </Grid>
                             </Button>
@@ -98,7 +100,7 @@
             </Border>
         </StackPanel>
 
-        <!-- Body: the height left over (452 px when there is room); lists scroll inside. -->
+        <!-- Body: the height left over (~492 px when there is room); lists scroll inside. -->
         <Panel Grid.Row="1" Margin="20,14,20,12" MinHeight="240">
             <Panel IsVisible="{Binding IsCatalogueStep}">
                 <views:CatalogueDirectoryDialogView DataContext="{Binding Directory}" />
@@ -158,16 +160,20 @@
             </Panel>
         </Panel>
 
-        <!-- Footer: Back on the left; step count (or what is missing); Cancel and the primary action. -->
+        <!-- Footer: on the first step, the selection (no Back); after it, Back and what is missing, if
+             anything; Cancel and the primary action. The stepper already says where you are. -->
         <Border Grid.Row="2" Padding="20,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderColor}"
                 Background="{DynamicResource MutedBackgroundColor}">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
                 <Button Grid.Column="0" Classes="Outline" Height="36" Content="{x:Static loc:Strings.Button_Back}"
                         AutomationProperties.AutomationId="Wizard.Back"
+                        IsVisible="{Binding !IsCatalogueStep}"
                         Command="{Binding BackCommand}" />
-                <Panel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding StepOfText}" Classes="muted" FontSize="12.5"
-                               IsVisible="{Binding !HasFooterHint}" />
+                <Panel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SelectionText}" Classes="muted" FontSize="12.5"
+                               AutomationProperties.AutomationId="Wizard.Selection"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectionText}"
+                               IsVisible="{Binding HasSelectionText}" />
                     <TextBlock Text="{Binding FooterHint}" Classes="warning" FontSize="12.5"
                                IsVisible="{Binding HasFooterHint}" />
                 </Panel>

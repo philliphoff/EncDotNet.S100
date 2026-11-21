@@ -2072,6 +2072,36 @@ public class S57ToS101TranslatorTests
         Assert.Empty(diag.UnmappedAttributes);
     }
 
+    // #1289: NOAA names the emergency wreck mark "Wreck Marking", which the
+    // Annex C table doesn't list; its CLSDEF does match, and the SYMINS still
+    // tells the two lateral types apart when only the definition matches.
+    [Theory]
+    [InlineData("Virtual AtoN, Wreck Marking", "A Virtual object marking a wreck", "SY(BOYSPP11)", "12")]
+    [InlineData("Virtual AtoN, Port Hand", "A Virtual object marking the port side of a channel", "SY(BOYLAT24)", "5")]
+    [InlineData("Virtual AtoN, Port Hand", "A Virtual object marking the port side of a channel", "SY(BOYLAT23)", "7")]
+    public void Translate_VirtualAisNewobj_UnknownName_MatchesByDefinition(string clsnam, string clsdef, string symins, string type)
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163, Attr(191, clsnam), Attr(190, clsdef), Attr(192, symins)), diag);
+
+        var feat = SingleOfClass(s101, "VirtualAISAidToNavigation");
+        Assert.Equal(type, TopLevelValue(s101, feat, "virtualAISAidToNavigationType"));
+        Assert.Empty(diag.UnmappedObjectClasses);
+    }
+
+    // A "Virtual AtoN" NEWOBJ whose name and definition both miss the table
+    // stays an unknown object.
+    [Fact]
+    public void Translate_VirtualAisNewobj_UnknownNameAndDefinition_StaysUnknownObject()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163, Attr(191, "Virtual AtoN, Something"), Attr(190, "A Virtual object")), diag);
+
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, s101.FeatureTypeCatalogue[Assert.Single(s101.Features).FeatureTypeCode]);
+    }
+
     // Any other NEWOBJ has no S-101 class and stays an unknown object (#1242).
     [Fact]
     public void Translate_OtherNewobj_StaysUnknownObject()

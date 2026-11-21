@@ -14,7 +14,54 @@ internal static class ViewerSettleCommand
 {
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
+    /// <summary>
+    /// Headroom on top of the longest tool timeout, so a tool that times out
+    /// reports its own error before the HTTP request gives up.
+    /// </summary>
+    internal static readonly TimeSpan RequestTimeoutMargin = TimeSpan.FromMinutes(1);
+
     public static async Task<int> ExecuteAsync(ViewerStressCommand.Settings settings, CancellationToken ct)
+    {
+        try
+        {
+            return await ExecuteCoreAsync(settings, ct);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested))
+        {
+            // Anything but a real Ctrl+C. Left to Spectre.Console.Cli, a
+            // TaskCanceledException from an HttpClient timeout reads as a
+            // cancellation: exit 130 and no message.
+            AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(Describe(ex))}");
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// The HTTP request timeout for the MCP transport: longer than the longest
+    /// <c>timeoutMs</c> the run passes to a viewer tool, so the tool's own
+    /// timeout fires first. The default 100 s <see cref="HttpClient.Timeout"/>
+    /// is shorter than the 120 s settle and Library-idle waits.
+    /// </summary>
+    internal static TimeSpan RequestTimeout(SettleRunOptions options) =>
+        TimeSpan.FromMilliseconds(Math.Max(options.SettleTimeoutMs, ViewerSettleRunner.LibraryIdleTimeoutMs))
+        + RequestTimeoutMargin;
+
+    /// <summary>A one-line description of a failed run, naming HTTP timeouts as such.</summary>
+    internal static string Describe(Exception ex)
+    {
+        if (ex is TaskCanceledException { InnerException: TimeoutException })
+        {
+            return $"an MCP request to the viewer timed out ({ex.Message.TrimEnd('.')}). "
+                + "The viewer stopped answering, or a tool ran past its own timeout.";
+        }
+
+        var message = $"{ex.GetType().Name}: {ex.Message}";
+        if (ex.InnerException is { } inner)
+            message += $" ({inner.GetType().Name}: {inner.Message})";
+        return message;
+    }
+
+    private static async Task<int> ExecuteCoreAsync(ViewerStressCommand.Settings settings, CancellationToken ct)
     {
         var modes = settings.ParseModes()!;
         var engines = settings.ParseEngines()!;
@@ -30,9 +77,14 @@ internal static class ViewerSettleCommand
                 : SettleRoute.DefaultPan,
             PanSteps = settings.PanSteps,
             PanStepDelayMs = settings.PanStepDelayMs,
+            GlideMs = settings.GlideMs,
+            Flings = settings.Flings is not null && SettleRoute.TryParseFlings(settings.Flings, out var flings)
+                ? flings
+                : SettleRoute.DefaultFlings,
             ScaleDenominator = settings.ScaleDenominator,
             LibrarySource = string.IsNullOrWhiteSpace(settings.LibrarySource) ? null : settings.LibrarySource,
             SettleTimeoutMs = settings.SettleTimeoutMs,
+            StartSettleTimeoutMs = settings.StartSettleTimeoutMs ?? settings.SettleTimeoutMs,
             ConfirmMs = settings.ConfirmMs,
             PrewarmTimeoutMs = settings.PrewarmTimeoutMs,
             Repeat = settings.Repeat,
@@ -50,7 +102,7 @@ internal static class ViewerSettleCommand
             for (var repeat = 1; repeat <= options.Repeat; repeat++)
             {
                 var run = options with { ExpectedEngine = engines.Count == 1 ? engines[0] : null };
-                await using var client = await ConnectAsync(endpoint, ct);
+                await using var client = await ConnectAsync(endpoint, RequestTimeout(run), ct);
                 written.Add(await RunOneAsync(client, run, output, repeat, ct));
             }
         }
@@ -107,7 +159,7 @@ internal static class ViewerSettleCommand
                 TimeSpan.FromMinutes(3),
                 ct);
             var endpoint = new Uri(File.ReadAllText(viewer.PortFile).Trim());
-            await using var client = await ConnectAsync(endpoint, ct);
+            await using var client = await ConnectAsync(endpoint, RequestTimeout(run), ct);
             return await RunOneAsync(client, run, output, repeat, ct, stem);
         }
         finally
@@ -145,13 +197,17 @@ internal static class ViewerSettleCommand
         return jsonPath;
     }
 
-    private static Task<McpClient> ConnectAsync(Uri endpoint, CancellationToken ct) =>
+    private static Task<McpClient> ConnectAsync(Uri endpoint, TimeSpan requestTimeout, CancellationToken ct) =>
         McpClient.CreateAsync(
-            new HttpClientTransport(new HttpClientTransportOptions
-            {
-                Endpoint = endpoint,
-                TransportMode = HttpTransportMode.StreamableHttp,
-                Name = "encdotnet-viewer-settle",
-            }),
+            new HttpClientTransport(
+                new HttpClientTransportOptions
+                {
+                    Endpoint = endpoint,
+                    TransportMode = HttpTransportMode.StreamableHttp,
+                    Name = "encdotnet-viewer-settle",
+                },
+                new HttpClient { Timeout = requestTimeout },
+                loggerFactory: null,
+                ownsHttpClient: true),
             cancellationToken: ct);
 }

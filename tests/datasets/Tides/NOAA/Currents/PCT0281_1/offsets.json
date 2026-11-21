@@ -1,0 +1,14 @@
+{
+  "id": "PCT0281",
+  "refStationId": "SFB1202",
+  "refStationBin": 17,
+  "meanFloodDir": 70.0,
+  "meanEbbDir": 256.0,
+  "mfcTimeAdjMin": 15,
+  "sbeTimeAdjMin": 27,
+  "mecTimeAdjMin": 43,
+  "sbfTimeAdjMin": 42,
+  "mfcAmpAdj": 0.9,
+  "mecAmpAdj": 1.4,
+  "self": "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/PCT0281_1/currentpredictionoffsets.json"
+}

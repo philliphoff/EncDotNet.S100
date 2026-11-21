@@ -30,8 +30,16 @@
       href: scenarios/inspect-s124-warnings.md
     - name: Compose S-101 and S-102
       href: scenarios/compose-s101-s102.md
+    - name: Find when the tide is above a height
+      href: scenarios/tide-above-a-height.md
+    - name: Find slack water in a pass
+      href: scenarios/slack-water-in-a-pass.md
+    - name: Serve charts to a web map or GIS
+      href: scenarios/serve-chart-tiles.md
     - name: Show wind and waves on the chart
       href: weather.md
+    - name: Run s100 in Docker
+      href: docker.md
 - name: Rendering and integration
   items:
     - name: Add S-100 data to a Mapsui app
@@ -72,6 +80,14 @@
       href: ../external/EncDotNet/docs/glossary.md
     - name: Versioning and compatibility
       href: ../external/EncDotNet/docs/versioning.md
+- name: SoundCharts for ArcGIS
+  items:
+    - name: Overview
+      href: ../external/EncDotNet.ArcGIS/docs/index.md
+    - name: Install SoundCharts for ArcGIS
+      href: ../external/EncDotNet.ArcGIS/docs/install.md
+    - name: SoundCharts Tools
+      href: ../external/EncDotNet.ArcGIS/docs/toolbox.md
 - name: Contributing
   items:
     - name: C# coding style
@@ -90,6 +106,8 @@
           href: design/ais-source.md
         - name: Dynamic source pick
           href: design/dynamic-source-pick.md
+        - name: Data source and pick extensions
+          href: design/data-source-and-pick-extensions.md
         - name: AIS zoom-gated subscription
           href: design/ais-zoom-gated-subscription.md
         - name: S-98 interoperability
@@ -108,3 +126,13 @@
           href: design/chart-wide-water-level-adjustment.md
         - name: Predefined display combinations
           href: design/predefined-display-combinations.md
+        - name: Legends
+          href: design/legends.md
+        - name: Viewer view model dependencies
+          href: design/viewer-view-model-dependencies.md
+        - name: tiles serve web page (spike)
+          href: design/serve-webapp-blazor-spike.md
+        - name: tiles serve web page (design brief)
+          href: design/serve-web/serve-web-brief.md
+        - name: tiles serve web page (design handoff)
+          href: design/serve-web/HANDOFF.md

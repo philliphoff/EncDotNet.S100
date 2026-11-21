@@ -51,14 +51,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void Series_WithoutUncertainty_HasSingleCurve()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(uncertaintyMetres: null),
-            "51.9 N, 4.4 E",
-            51.9,
-            4.4,
-            DepthUnit.Metres,
-            safetyDepthMetres: null,
-            globalTime: null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(uncertaintyMetres: null), "51.9 N, 4.4 E", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Single(vm.DepthSeries);
         Assert.False(vm.HasUncertainty);
@@ -67,14 +60,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void Series_WithUncertainty_HasBoundaryLinesPlusCurve()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(uncertaintyMetres: 0.5),
-            "loc",
-            51.9,
-            4.4,
-            DepthUnit.Metres,
-            safetyDepthMetres: null,
-            globalTime: null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(uncertaintyMetres: 0.5), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(3, vm.DepthSeries.Length);
         Assert.True(vm.HasUncertainty);
@@ -100,8 +86,7 @@ public sealed class DepthOverTimeViewModelTests
             points,
             UncertaintyMeters: null);
 
-        var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Metres, safetyDepthMetres: null, globalTime: null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(result, "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         var curve = Assert.IsType<LineSeries<DateTimePoint>>(vm.DepthSeries[^1]);
         var values = Assert.IsAssignableFrom<IEnumerable<DateTimePoint>>(curve.Values).ToList();
@@ -114,23 +99,9 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void SafetyDepth_AddsSectionBeyondNowMarker()
     {
-        var withSafety = new DepthOverTimeViewModel(
-            Result(),
-            "loc",
-            51.9,
-            4.4,
-            DepthUnit.Metres,
-            safetyDepthMetres: 8.0,
-            globalTime: null);
+        var withSafety = new DepthOverTimeViewModel(new LocationDepthCard(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, 8.0), TestStationCharts.Context());
 
-        var withoutSafety = new DepthOverTimeViewModel(
-            Result(),
-            "loc",
-            51.9,
-            4.4,
-            DepthUnit.Metres,
-            safetyDepthMetres: null,
-            globalTime: null);
+        var withoutSafety = new DepthOverTimeViewModel(new LocationDepthCard(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.True(withSafety.HasSafetyDepth);
         Assert.False(withoutSafety.HasSafetyDepth);
@@ -141,14 +112,7 @@ public sealed class DepthOverTimeViewModelTests
     public void Refusal_names_both_datums_when_they_differ()
     {
         // S-102 on MLLW (12), S-104 on LAT (23).
-        var vm = new DepthOverTimeViewModel(
-            Result(datumCode: 12, waterLevelDatumCode: 23),
-            "loc",
-            51.9,
-            4.4,
-            DepthUnit.Metres,
-            safetyDepthMetres: null,
-            globalTime: null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(datumCode: 12, waterLevelDatumCode: 23), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.True(vm.HasDatumNote);
         Assert.False(vm.HasTide);
@@ -167,9 +131,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void Refusal_names_the_product_without_a_datum()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(source: BaseDepthSource.Sounding, datumCode: null, waterLevelDatumCode: 23),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(source: BaseDepthSource.Sounding, datumCode: null, waterLevelDatumCode: 23), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.True(vm.HasDatumNote);
         Assert.Equal(
@@ -183,7 +145,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void No_refusal_when_datums_agree()
     {
-        var vm = new DepthOverTimeViewModel(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.False(vm.HasDatumNote);
         Assert.Equal(string.Empty, vm.DatumNoteText);
@@ -193,9 +155,7 @@ public sealed class DepthOverTimeViewModelTests
     public void Uncertainty_combines_s102_and_s104_at_the_timeline_time()
     {
         var globalTime = GlobalTimeOver(Times(3));
-        var vm = new DepthOverTimeViewModel(
-            Result(uncertaintyMetres: 0.5, waterLevelUncertainty: 0.3),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(uncertaintyMetres: 0.5, waterLevelUncertainty: 0.3), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context(globalTime, null, null));
 
         globalTime.SetCurrentTime(T0.AddHours(1));
 
@@ -214,9 +174,7 @@ public sealed class DepthOverTimeViewModelTests
     public void Uncertainty_says_when_s104_carries_none()
     {
         var globalTime = GlobalTimeOver(Times(3));
-        var vm = new DepthOverTimeViewModel(
-            Result(uncertaintyMetres: 0.5),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(uncertaintyMetres: 0.5), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context(globalTime, null, null));
 
         globalTime.SetCurrentTime(T0.AddHours(1));
 
@@ -226,9 +184,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void Uncertainty_band_is_the_combined_uncertainty()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(uncertaintyMetres: 0.4, waterLevelUncertainty: 0.3, depths: [10.0, 10.0, 10.0]),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(uncertaintyMetres: 0.4, waterLevelUncertainty: 0.3, depths: [10.0, 10.0, 10.0]), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         var upper = Assert.IsType<LineSeries<DateTimePoint>>(vm.DepthSeries[0]);
         var values = Assert.IsAssignableFrom<IEnumerable<DateTimePoint>>(upper.Values).ToList();
@@ -239,9 +195,7 @@ public sealed class DepthOverTimeViewModelTests
     public void Readout_interpolates_between_steps()
     {
         var globalTime = GlobalTimeOver(Times(3));
-        var vm = new DepthOverTimeViewModel(
-            Result(baseMetres: 10.0, depths: [10.0, 12.0, 14.0]),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(baseMetres: 10.0, depths: [10.0, 12.0, 14.0]), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context(globalTime, null, null));
 
         globalTime.SetCurrentTime(T0.AddMinutes(30));
 
@@ -252,9 +206,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void BaseSourceLabel_ReflectsSource()
     {
-        var sounding = new DepthOverTimeViewModel(
-            Result(source: BaseDepthSource.Sounding),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var sounding = new DepthOverTimeViewModel(new LocationDepthCard(Result(source: BaseDepthSource.Sounding), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Source_Sounding, sounding.BaseSourceLabel);
     }
@@ -262,9 +214,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void BaseSourceTooltip_UsesSourceFile_WhenPresent()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(baseSourceId: "102NL005_519N043E.H5"),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(baseSourceId: "102NL005_519N043E.H5"), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(
             string.Format(
@@ -277,9 +227,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void BaseSourceTooltip_FallsBackToLabel_WhenNoSourceFile()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(source: BaseDepthSource.Sounding, baseSourceId: null),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(source: BaseDepthSource.Sounding, baseSourceId: null), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(vm.BaseSourceLabel, vm.BaseSourceTooltip);
     }
@@ -287,9 +235,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void TideSourceTooltip_UsesTideDataset_WhenTidePresent()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(withTide: true),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(withTide: true), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(
             string.Format(
@@ -302,9 +248,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void TideSourceTooltip_IsEmpty_WhenNoTide()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(string.Empty, vm.TideSourceTooltip);
     }
@@ -312,9 +256,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void NoTide_FlagsAbsentSeries()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.False(vm.HasTide);
     }
@@ -326,8 +268,7 @@ public sealed class DepthOverTimeViewModelTests
         var result = Result(baseMetres: 10.0, depths: depths);
         var globalTime = GlobalTimeOver(Times(3));
 
-        var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(result, "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context(globalTime, null, null));
 
         globalTime.SetCurrentTime(T0.AddHours(2));
 
@@ -343,8 +284,7 @@ public sealed class DepthOverTimeViewModelTests
         var result = Result(baseMetres: 10.0, depths: depths);
         var globalTime = GlobalTimeOver(Times(3));
 
-        var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Feet, null, globalTime);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(result, "loc", 51.9, 4.4, DepthUnit.Feet, null), TestStationCharts.Context(globalTime, null, null));
 
         globalTime.SetCurrentTime(T0.AddHours(1));
 
@@ -355,9 +295,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void Readout_UnavailableWhenNoGlobalTime()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime: null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Value_Unavailable, vm.DepthNowText);
     }
@@ -365,8 +303,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void IsExpanded_DefaultsToTrue()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.True(vm.IsExpanded);
 
@@ -377,11 +314,8 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void DepthNowLabel_ReflectsTidePresence()
     {
-        var withTide = new DepthOverTimeViewModel(
-            Result(withTide: true), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
-        var noTide = new DepthOverTimeViewModel(
-            Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var withTide = new DepthOverTimeViewModel(new LocationDepthCard(Result(withTide: true), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
+        var noTide = new DepthOverTimeViewModel(new LocationDepthCard(Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Label_DepthNow, withTide.DepthNowLabel);
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Label_DepthStatic, noTide.DepthNowLabel);
@@ -390,9 +324,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void DisplayDepthText_UsesBaseWhenStatic()
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(baseMetres: 10.0, withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(baseMetres: 10.0, withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         // Static readout mirrors the base depth regardless of the global clock.
         Assert.Equal(vm.BaseDepthText, vm.DisplayDepthText);
@@ -406,8 +338,7 @@ public sealed class DepthOverTimeViewModelTests
         var result = Result(baseMetres: 10.0, depths: depths);
         var globalTime = GlobalTimeOver(Times(3));
 
-        var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(result, "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context(globalTime, null, null));
 
         globalTime.SetCurrentTime(T0.AddHours(2));
 
@@ -427,8 +358,7 @@ public sealed class DepthOverTimeViewModelTests
     private static void AssertSourceKind(
         BaseDepthSource source, bool bathymetry, bool sounding, bool chartedArea)
     {
-        var vm = new DepthOverTimeViewModel(
-            Result(source: source), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(new LocationDepthCard(Result(source: source), "loc", 51.9, 4.4, DepthUnit.Metres, null), TestStationCharts.Context());
 
         Assert.Equal(bathymetry, vm.IsBathymetrySource);
         Assert.Equal(sounding, vm.IsSoundingSource);

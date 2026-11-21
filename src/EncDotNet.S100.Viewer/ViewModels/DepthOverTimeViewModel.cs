@@ -11,6 +11,7 @@ using LiveChartsCore.Defaults;
 using LiveChartsCore.Kernel.Sketches;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
+using LiveChartsCore.SkiaSharpView.Painting.Effects;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -47,35 +48,19 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     private string _tideNowText;
     private string _uncertaintyText = string.Empty;
     private bool _isExpanded = true;
+    private WaterLevelSourceInfo? _predicted;
+    private readonly SolidColorPaint _predictedStrokePaint;
 
     /// <summary>
     /// Constructs a depth-over-time view model for a picked location.
     /// </summary>
-    /// <param name="result">The assimilated depth result for the location.</param>
-    /// <param name="locationLabel">Formatted location label shown on the card.</param>
-    /// <param name="latitude">Pick latitude in decimal degrees (WGS-84).</param>
-    /// <param name="longitude">Pick longitude in decimal degrees (WGS-84).</param>
-    /// <param name="depthUnit">The mariner's selected depth display unit.</param>
-    /// <param name="safetyDepthMetres">
-    /// The mariner safety depth in metres to draw as a reference line, or
-    /// <c>null</c> when unset.
-    /// </param>
-    /// <param name="globalTime">Global time service driving the now-marker.</param>
-    /// <param name="timeFormat">Optional time-format provider.</param>
-    /// <param name="themeService">Optional chrome-theme service.</param>
-    public DepthOverTimeViewModel(
-        LocationDepthResult result,
-        string locationLabel,
-        double latitude,
-        double longitude,
-        DepthUnit depthUnit,
-        double? safetyDepthMetres,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
-        : base(BuildSnapshot(result, locationLabel, latitude, longitude, depthUnit), globalTime, timeFormat, themeService)
+    /// <param name="card">The assimilated depth at the location, and how to show it.</param>
+    /// <param name="context">The time, formatting and theme the chart follows.</param>
+    public DepthOverTimeViewModel(LocationDepthCard card, StationChartContext context)
+        : base(BuildSnapshot(card), context)
     {
-        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(card);
+        var (result, locationLabel, _, _, depthUnit, safetyDepthMetres) = card;
         Result = result;
         LocationLabel = locationLabel;
         _depthUnit = depthUnit;
@@ -84,6 +69,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         _tideNowText = Strings.Pick_Depth_Value_Unavailable;
 
         _depthStrokePaint = new SolidColorPaint(CurrentChartTheme.SeriesPrimary, 2f);
+        _predictedStrokePaint = new SolidColorPaint(CurrentChartTheme.SeriesPrimary, 2f) { PathEffect = new DashEffect([6, 4]) };
         _uncertaintyStrokePaint = new SolidColorPaint(CurrentChartTheme.SeriesPrimary.WithAlpha(0x55), 1f);
         _safetyStrokePaint = new SolidColorPaint(CurrentChartTheme.NowMarker, 1.5f);
         _depthAxisLabelsPaint = new SolidColorPaint(CurrentChartTheme.AxisLabel);
@@ -123,7 +109,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
         DepthSections = sections;
 
-        RefreshNow(globalTime?.CurrentTime);
+        RefreshNow(context.Time.CurrentTime);
     }
 
     /// <summary>The assimilated depth result backing this view model.</summary>
@@ -195,9 +181,28 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     /// Hover tooltip for the tide label: "Source data: &lt;file&gt;" naming the
     /// selected S-104 dataset, or empty when no tide overlaps.
     /// </summary>
-    public string TideSourceTooltip => string.IsNullOrEmpty(TideDatasetId)
-        ? string.Empty
-        : string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_SourceData, TideDatasetId);
+    public string TideSourceTooltip => _predicted is { } predicted
+        ? TidePredictedText
+        : string.IsNullOrEmpty(TideDatasetId)
+            ? string.Empty
+            : string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_SourceData, TideDatasetId);
+
+    /// <summary>
+    /// <c>true</c> when the water level at the timeline's time is a harmonic
+    /// tide prediction rather than S-104 (tide predictions design D10).
+    /// </summary>
+    public bool IsTidePredicted => _predicted is not null;
+
+    /// <summary>"Predicted · Seattle 9447130" when the water level is predicted; otherwise empty.</summary>
+    public string TidePredictedText => _predicted is { } p
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_PredictedSourceFormat, p.StationLabel)
+        : string.Empty;
+
+    /// <summary>
+    /// "4.2 km away · harmonic · not a forecast", or for a subordinate
+    /// station "… · from Seattle 9447130, with offsets · …"; empty when not predicted.
+    /// </summary>
+    public string TidePredictedDetail => _predicted is { } p ? PredictedDetail(p) : string.Empty;
 
     /// <summary>The formatted base depth in the mariner's depth unit.</summary>
     public string BaseDepthText => DepthFormatting.Format(_baseDepthMetres, _depthUnit);
@@ -219,9 +224,9 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     /// step), or "CHARTED DEPTH · WATER LEVEL NOT APPLIED" when only the charted depth is
     /// available.
     /// </summary>
-    public string DepthNowLabel => HasTide
-        ? Strings.Pick_Depth_Label_DepthNow
-        : Strings.Pick_Depth_Label_DepthStatic;
+    public string DepthNowLabel => !HasTide
+        ? Strings.Pick_Depth_Label_DepthStatic
+        : IsTidePredicted ? Strings.Pick_Depth_Label_DepthNowPredicted : Strings.Pick_Depth_Label_DepthNow;
 
     /// <summary>
     /// The value shown in the prominent readout: the tide-adjusted depth at the
@@ -329,6 +334,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     {
         base.OnChartThemeChanged(theme);
         _depthStrokePaint.Color = theme.SeriesPrimary;
+        _predictedStrokePaint.Color = theme.SeriesPrimary;
         _uncertaintyStrokePaint.Color = theme.SeriesPrimary.WithAlpha(0x55);
         _safetyStrokePaint.Color = theme.NowMarker;
         _depthAxisLabelsPaint.Color = theme.AxisLabel;
@@ -353,7 +359,36 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
             TideNowText = Strings.Pick_Depth_Value_Unavailable;
         }
 
+        var predicted = water is { Source: { IsPredicted: true } source } ? source : null;
+        if (predicted != _predicted)
+        {
+            _predicted = predicted;
+            OnPropertyChanged(nameof(IsTidePredicted));
+            OnPropertyChanged(nameof(TidePredictedText));
+            OnPropertyChanged(nameof(TidePredictedDetail));
+            OnPropertyChanged(nameof(TideSourceTooltip));
+            OnPropertyChanged(nameof(DepthNowLabel));
+        }
+
         UncertaintyText = FormatUncertainty(Result.UncertaintyMeters, water);
+    }
+
+    private static string PredictedDetail(WaterLevelSourceInfo source)
+    {
+        var parts = new List<string>(3);
+        if (source.DistanceMeters is { } d)
+        {
+            parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_PredictedAwayFormat, d / 1000));
+        }
+
+        parts.Add(source.ReferenceStationId is { } reference
+            ? string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.Pick_Depth_PredictedFromReferenceFormat,
+                string.IsNullOrWhiteSpace(source.ReferenceStationName) ? reference : $"{source.ReferenceStationName} {reference}")
+            : Strings.Pick_Depth_PredictedHarmonic);
+        parts.Add(Strings.Pick_Depth_PredictedNotAForecast);
+        return string.Join(" · ", parts);
     }
 
     private string FormatUncertainty(double? charted, AppliedWaterLevel? water)
@@ -377,7 +412,9 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
                 F(a),
                 F(b)),
             (null, { } b) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_WaterLevelUncertainty, F(b)),
+            ({ } a, null) when sample.Source.IsPredicted => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_ChartedUncertaintyPredictedFormat, F(a)),
             ({ } a, null) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_ChartedUncertaintyOnly, F(a)),
+            _ when sample.Source.IsPredicted => Strings.Pick_Depth_PredictionUncertainty,
             _ => Strings.Pick_Depth_WaterLevelUncertaintyNotProvided,
         };
     }
@@ -389,7 +426,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         {
             return string.Format(
                 CultureInfo.CurrentCulture,
-                Strings.Pick_Depth_Refused_DifferentDatum,
+                refusal.Predicted ? Strings.Pick_Depth_Refused_DifferentDatumPredicted : Strings.Pick_Depth_Refused_DifferentDatum,
                 product,
                 VerticalDatums.GetLabel(refusal.DepthDatumCode),
                 VerticalDatums.GetLabel(refusal.WaterLevelDatumCode));
@@ -401,7 +438,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         {
             (false, false) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_Refused_Both, product),
             (false, true) => product,
-            _ => "S-104",
+            _ => refusal.Predicted ? Strings.Pick_Depth_PredictionNoun : "S-104",
         };
         return string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_Refused_UndeclaredDatum, undeclared);
     }
@@ -416,15 +453,46 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
             series.Add(BoundarySeries(result, depthUnit, -1));
         }
 
-        var points = new List<DateTimePoint>(result.DepthOverTime.Count);
-        foreach (var point in result.DepthOverTime)
+        // S-104 steps on the solid line, predicted ones on a dashed line
+        // (D7). A step where the source changes is on both, so the two join.
+        var curve = result.DepthOverTime;
+        var points = new List<DateTimePoint>(curve.Count);
+        var predicted = new List<DateTimePoint>();
+        for (var i = 0; i < curve.Count; i++)
         {
+            var point = curve[i];
+            var nextPredicted = i + 1 < curve.Count && curve[i + 1].Predicted;
+            var previousPredicted = i > 0 && curve[i - 1].Predicted;
+
             // Emit a point for every time step, using a null value at NoData
             // steps so LiveCharts breaks the line at the gap rather than
             // connecting across missing tide data.
-            points.Add(point.DepthMeters is { } depth
-                ? new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth, depthUnit))
-                : new DateTimePoint(point.Time, null));
+            var value = point.DepthMeters is { } depth ? DepthFormatting.ToDisplay(depth, depthUnit) : (double?)null;
+            var onSolid = !point.Predicted || (i + 1 < curve.Count && !curve[i + 1].Predicted) || (i > 0 && !curve[i - 1].Predicted);
+            var onDashed = point.Predicted || nextPredicted || previousPredicted;
+            points.Add(new DateTimePoint(point.Time, onSolid ? value : null));
+            if (onDashed || predicted.Count > 0)
+            {
+                predicted.Add(new DateTimePoint(point.Time, onDashed ? value : null));
+            }
+        }
+
+        if (predicted.Count > 0)
+        {
+            series.Add(new LineSeries<DateTimePoint>
+            {
+                Name = Strings.Pick_Depth_Series_Predicted,
+                Values = predicted,
+                Stroke = _predictedStrokePaint,
+                Fill = null,
+                GeometrySize = 0,
+                GeometryStroke = null,
+                GeometryFill = null,
+                XToolTipLabelFormatter = p => FormatTooltipDateTime(
+                    new DateTime((long)p.Coordinate.SecondaryValue, DateTimeKind.Utc)),
+                YToolTipLabelFormatter = p => p.Coordinate.PrimaryValue.ToString("0.##", CultureInfo.InvariantCulture)
+                    + " " + DepthFormatting.UnitAbbreviation(depthUnit),
+            });
         }
 
         series.Add(new LineSeries<DateTimePoint>
@@ -470,14 +538,10 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         };
     }
 
-    private static StationTimeSeriesSnapshot BuildSnapshot(
-        LocationDepthResult result,
-        string locationLabel,
-        double latitude,
-        double longitude,
-        DepthUnit depthUnit)
+    private static StationTimeSeriesSnapshot BuildSnapshot(LocationDepthCard card)
     {
-        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(card);
+        var (result, locationLabel, latitude, longitude, depthUnit, _) = card;
 
         var times = result.DepthOverTime.Select(p => p.Time).ToList();
         var values = result.DepthOverTime
@@ -503,3 +567,25 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         };
     }
 }
+
+/// <summary>
+/// The data of a depth-over-time card (#1401): the assimilated depth at a
+/// picked location, where it is, and the depth unit and safety depth it is
+/// shown with.
+/// </summary>
+/// <param name="Result">The assimilated depth result for the location.</param>
+/// <param name="LocationLabel">Formatted location label shown on the card.</param>
+/// <param name="Latitude">Pick latitude in decimal degrees (WGS-84).</param>
+/// <param name="Longitude">Pick longitude in decimal degrees (WGS-84).</param>
+/// <param name="DepthUnit">The mariner's selected depth display unit.</param>
+/// <param name="SafetyDepthMetres">
+/// The mariner safety depth in metres to draw as a reference line, or
+/// <see langword="null"/> for none.
+/// </param>
+internal sealed record LocationDepthCard(
+    LocationDepthResult Result,
+    string LocationLabel,
+    double Latitude,
+    double Longitude,
+    DepthUnit DepthUnit,
+    double? SafetyDepthMetres);

@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.AdvancedSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:AdvancedSettingsPageViewModel">
 
     <!-- Settings → Advanced: renderer tuning and maintenance (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -139,19 +139,6 @@
                                        FormatString="0"
                                        IsEnabled="{Binding TileGpuBudgetMbEditable}"
                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGpuBudgetMb}"
-                                       MinWidth="140"
-                                       HorizontalAlignment="Left" />
-                        <TextBlock Text="{x:Static loc:Strings.Settings_TileWorkerCount}"
-                                   FontSize="12" />
-                        <NumericUpDown Value="{Binding TileWorkerCount}"
-                                       AutomationProperties.AutomationId="Settings.TileWorkerCount"
-                                       AutomationProperties.Name="{x:Static loc:Strings.Settings_TileWorkerCount}"
-                                       Minimum="1"
-                                       Maximum="8"
-                                       Increment="1"
-                                       FormatString="0"
-                                       IsEnabled="{Binding TileWorkerCountEditable}"
-                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileWorkerCount}"
                                        MinWidth="140"
                                        HorizontalAlignment="Left" />
                         <TextBlock Text="{x:Static loc:Strings.Settings_RenderKnob_RestartHint}"

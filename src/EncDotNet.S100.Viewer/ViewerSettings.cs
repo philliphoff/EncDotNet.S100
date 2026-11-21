@@ -56,6 +56,14 @@ internal sealed partial class ViewerSettings
     [JsonIgnore]
     public bool McpTestHooks { get; set; }
 
+    /// <summary>
+    /// The MCP toolsets to serve for this run only (set from
+    /// <c>--mcp-toolsets</c>), overriding <see cref="McpToolsets"/>;
+    /// <see langword="null"/> to use the persisted choice. Never persisted.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string>? McpToolsetsOverride { get; set; }
+
     /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
     public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -171,7 +179,7 @@ internal sealed partial class ViewerSettings
     // Mariner settings (S-100 Part 9 §4.2). Depth values are stored in
     // metres regardless of the user's chosen DepthUnit. All fields are
     // nullable so older settings.json files keep working — defaults are
-    // applied by SettingsViewModel / MarinerSettingsProvider when null.
+    // applied by ViewerSettingsService / MarinerSettingsProvider when null.
 
     /// <summary>Safety contour depth in metres.</summary>
     public double? SafetyContour { get; set; }
@@ -209,17 +217,50 @@ internal sealed partial class ViewerSettings
     public bool? WaterLevelApplyUndeclaredDatum { get; set; }
 
     /// <summary>
+    /// Whether harmonic tide predictions are used for water level where
+    /// there's no S-104 (tide predictions design D1). Null is false.
+    /// </summary>
+    public bool? UseTidePredictions { get; set; }
+
+    /// <summary>
+    /// Check route's wind limit in knots for the weather check (#1093), or
+    /// null when wind isn't checked (the default).
+    /// </summary>
+    public double? RouteMaxWindKnots { get; set; }
+
+    /// <summary>
+    /// Check route's significant wave height limit in metres for the weather
+    /// check (#1093), or null when waves aren't checked (the default).
+    /// </summary>
+    public double? RouteMaxWaveHeightMetres { get; set; }
+
+    /// <summary>
+    /// The tropical cyclone wind radius Check route tests (#1299): 34, 50 or
+    /// 64 knots. Null is 34.
+    /// </summary>
+    public int? RouteCycloneCheckAgainstKnots { get; set; }
+
+    /// <summary>Whether Check route reports the closest approach to each tropical cyclone (#1299). Null is on.</summary>
+    public bool? RouteCycloneReportClosestApproach { get; set; }
+
+    /// <summary>
+    /// The weakest tropical cyclone radius whose findings are Must review
+    /// (#1299): 34, 50 or 64 knots, or 0 for never. Null is 50.
+    /// </summary>
+    public int? RouteCycloneMustReviewInsideKnots { get; set; }
+
+    /// <summary>
     /// The base-plane scene mode (issue #331).
     /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
-    /// matching <see cref="Renderers.Mapsui.VectorSceneMode"/>.
+    /// matching <see cref="Rendering.Engine.VectorSceneMode"/>.
     /// <see langword="null"/> → best default ("Tiled"). Mirrors
-    /// <c>RenderingOptimizations.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
+    /// <c>ChartEngine.Options.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
     /// </summary>
     public string? VectorSceneMode { get; set; }
 
     /// <summary>
     /// Tiled-base-plane gutter, in DIP (issue #331). <see langword="null"/> →
-    /// best default. Mirrors <c>RenderingOptimizations.TileGutterDip</c> /
+    /// best default. Mirrors <c>ChartEngine.Options.TileGutterDip</c> /
     /// <c>S100_VECTOR_TILE_GUTTER</c>.
     /// </summary>
     public double? TileGutterDip { get; set; }
@@ -227,7 +268,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Process-wide hot-cache native budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
-    /// <c>RenderingOptimizations.TileBudgetMb</c> /
+    /// <c>ChartEngine.Options.TileBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
     /// </summary>
     public double? TileBudgetMb { get; set; }
@@ -235,7 +276,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether tiled-base-plane speculative prediction / pre-warm is enabled
     /// (issue #331). <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TilePredictionEnabled</c> /
+    /// <c>ChartEngine.Options.TilePredictionEnabled</c> /
     /// <c>S100_VECTOR_TILE_PREDICT</c>.
     /// </summary>
     public bool? TilePredictionEnabled { get; set; }
@@ -244,7 +285,7 @@ internal sealed partial class ViewerSettings
     /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
     /// <see langword="null"/> → best default (on, except off by default on the
     /// LowEnd tier; an explicit opt-in is still honoured there). Mirrors
-    /// <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
+    /// <c>ChartEngine.Options.TileCrossBandPrewarmEnabled</c> /
     /// <c>S100_VECTOR_TILE_XBAND</c>.
     /// </summary>
     public bool? TileCrossBandPrewarmEnabled { get; set; }
@@ -253,7 +294,7 @@ internal sealed partial class ViewerSettings
     /// Whether adjacent cold tile misses may be rasterised as a 2&#215;2
     /// metatile and sliced into tile-granular cache entries (issue&#160;#427).
     /// <see langword="null"/> → conservative default (off). Mirrors
-    /// <c>RenderingOptimizations.TileMetatileEnabled</c> /
+    /// <c>ChartEngine.Options.TileMetatileEnabled</c> /
     /// <c>S100_VECTOR_TILE_METATILE</c>.
     /// </summary>
     public bool? TileMetatileEnabled { get; set; }
@@ -261,14 +302,14 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether the warm disk tile cache is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /
+    /// <c>ChartEngine.Options.TileDiskCacheEnabled</c> /
     /// <c>S100_VECTOR_TILE_DISK</c>.
     /// </summary>
     public bool? TileDiskCacheEnabled { get; set; }
 
     /// <summary>
     /// Warm disk tile-cache budget, in MB (issue #331). <see langword="null"/> →
-    /// best default. Mirrors <c>RenderingOptimizations.TileDiskMb</c> /
+    /// best default. Mirrors <c>ChartEngine.Options.TileDiskMb</c> /
     /// <c>S100_VECTOR_TILE_DISK_MB</c>.
     /// </summary>
     public double? TileDiskMb { get; set; }
@@ -276,7 +317,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether tiled-base-plane GPU texture residency is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TileGpuResidencyEnabled</c> /
+    /// <c>ChartEngine.Options.TileGpuResidencyEnabled</c> /
     /// <c>S100_VECTOR_TILE_GPU</c>.
     /// </summary>
     public bool? TileGpuResidencyEnabled { get; set; }
@@ -284,24 +325,16 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Process-wide GPU-residency budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
-    /// <c>RenderingOptimizations.TileGpuBudgetMb</c> /
+    /// <c>ChartEngine.Options.TileGpuBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_GPU_MB</c>.
     /// </summary>
     public double? TileGpuBudgetMb { get; set; }
 
     /// <summary>
-    /// Number of concurrent tile-rasterisation workers per layer.
-    /// <see langword="null"/> → best default for the resolved profile (one on
-    /// low-end hosts, scaling with cores on high-end). Mirrors
-    /// <c>RenderingOptimizations.TileWorkerCount</c> / <c>S100_VECTOR_TILE_WORKERS</c>.
-    /// </summary>
-    public int? TileWorkerCount { get; set; }
-
-    /// <summary>
     /// Overall performance profile that sets the default tile budgets + worker
     /// cap. One of <c>Auto</c> / <c>HighEnd</c> / <c>Balanced</c> / <c>LowEnd</c>;
     /// <see langword="null"/> → Auto (derive from cores + RAM). Mirrors
-    /// <c>RenderingOptimizations.Profile</c> / <c>S100_PERF_PROFILE</c>.
+    /// <c>ChartEngine.Options.Profile</c> / <c>S100_PERF_PROFILE</c>.
     /// </summary>
     public string? PerformanceProfile { get; set; }
 
@@ -331,17 +364,42 @@ internal sealed partial class ViewerSettings
     public bool EcdisShowNavigationalWarnings { get; set; } = true;
 
     /// <summary>
+    /// The AML products the display panel's Additional Military Layers section
+    /// has switched off, as a comma-separated list of product codes
+    /// (<c>CLB</c>, <c>RAL</c>, …, <c>3.0</c>). Empty by default: every
+    /// product shows (AML handoff decision 24).
+    /// </summary>
+    public string EcdisHiddenAmlProducts { get; set; } = "";
+
+    /// <summary>
+    /// The Additional Military Layers section's Follow AML scale bands switch
+    /// (AML handoff decision 26). On by default.
+    /// </summary>
+    public bool EcdisFollowAmlScaleBands { get; set; } = true;
+
+    /// <summary>
     /// The Display controls' map-wide switches for optional product layers,
     /// keyed by the processor's sub-layer key: today the Weather section's
     /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
     /// <c>weather.wave.direction</c> (#1072), and
     /// <c>weather.sea.temperature.isotherms</c> (#1227),
     /// <c>weather.current.arrows</c> (#1228) and
-    /// <c>weather.air.temperature.isotherms</c> (#1231). A missing key follows
-    /// the layer's default (isobars and currents on; the wind speed fill, wave
-    /// arrows and both kinds of isotherms off).
+    /// <c>weather.air.temperature.isotherms</c> (#1231), and
+    /// <c>weather.precipitation</c>, <c>weather.cape</c> and
+    /// <c>weather.cloud</c> (#1230). A missing key follows the layer's default
+    /// (isobars and currents on; the wind speed fill, wave arrows, both kinds
+    /// of isotherms, precipitation, thunderstorm risk and cloud cover off).
     /// </summary>
     public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
+        = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Map-wide settings of optional layers that are more than on or off
+    /// (<c>EcdisDisplaySettings.LayerOptions</c>), such as
+    /// <c>s102.relief.strength</c> (<c>subtle</c>, <c>medium</c>, <c>strong</c>).
+    /// A missing key follows the layer's default.
+    /// </summary>
+    public Dictionary<string, string> EcdisLayerOptions { get; set; }
         = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -537,6 +595,12 @@ internal sealed partial class ViewerSettings
         = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The data sources added to the Datasets panel, by
+    /// <c>SourceRegistration.Id</c> (design note D3), added again at start-up.
+    /// </summary>
+    public List<string> SourceDatasets { get; set; } = [];
+
+    /// <summary>
     /// User-configured own-ship vessel dimensions (length, beam,
     /// CCRP / GPS antenna offsets). <see langword="null"/> in legacy
     /// settings files; the consuming
@@ -612,6 +676,24 @@ internal sealed partial class ViewerSettings
     /// pin to a specific loopback variant.
     /// </summary>
     public string McpBindAddress { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// The MCP toolsets the server exposes (#1608), by name
+    /// (<see cref="EncDotNet.S100.Mcp.McpToolsets"/>); <see langword="null"/>
+    /// for every toolset. Unknown names are ignored.
+    /// </summary>
+    public List<string>? McpToolsets { get; set; }
+
+    /// <summary>
+    /// The MCP toolsets to serve: <see cref="McpToolsetsOverride"/>, else
+    /// <see cref="McpToolsets"/> without unknown names; <see langword="null"/>
+    /// for every toolset.
+    /// </summary>
+    public IReadOnlyList<string>? ResolveMcpToolsets() =>
+        McpToolsetsOverride
+        ?? (McpToolsets is { } names
+            ? [.. EncDotNet.S100.Mcp.McpToolsets.All.Select(t => t.Name).Where(names.Contains)]
+            : null);
 
     /// <summary>
     /// Whether "open in S-100 Feature Catalogue eXaminer" deep-links are
@@ -758,6 +840,13 @@ internal sealed partial class ViewerSettings
                     settings.DynamicSourceVisibility[OwnShipVisibilityKey] = settings.OwnShipVisible;
                 }
 
+                // Slice 7 (data source design D3): NDBC observations moved
+                // from a Layer Stack overlay to a data source in the Datasets
+                // panel. A user who had the overlay on gets the source added.
+                MigrateNdbcOverlay(settings);
+                MigrateAisOverlay(settings);
+                MigrateTideOverlays(settings);
+
                 // #883: round 1's identity in use becomes the default.
                 if (settings.SecomIdentityInUse is { } inUse)
                 {
@@ -807,6 +896,55 @@ internal sealed partial class ViewerSettings
     /// migration / mirror logic.
     /// </summary>
     internal const string OwnShipVisibilityKey = "ownship";
+
+    /// <summary>
+    /// Slice 7c (data source design note D8): AIS targets moved from the
+    /// Settings switch to a live feed in the Datasets panel. A user who had the
+    /// switch on gets the feed added; the switch is cleared either way.
+    /// </summary>
+    internal static void MigrateAisOverlay(ViewerSettings settings)
+    {
+        if (settings.AisOverlay is not { Enabled: true } overlay)
+            return;
+        overlay.Enabled = false;
+        if (!settings.SourceDatasets.Contains(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id, StringComparer.OrdinalIgnoreCase))
+            settings.SourceDatasets.Add(EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisSource.Id);
+    }
+
+    /// <summary>The visibility key of the NDBC overlay before NDBC became a data source.</summary>
+    internal const string LegacyNdbcVisibilityKey = "ndbc";
+
+    /// <summary>
+    /// Moves the NDBC overlay's Layer Stack toggle to the saved data sources:
+    /// on becomes an added <c>ndbc.realtime</c> source, and the toggle is
+    /// dropped either way.
+    /// </summary>
+    internal static void MigrateNdbcOverlay(ViewerSettings settings)
+    {
+        if (!settings.DynamicSourceVisibility.Remove(LegacyNdbcVisibilityKey, out var wasVisible) || !wasVisible)
+            return;
+        if (!settings.SourceDatasets.Contains(EncDotNet.S100.Datasets.Pipelines.S100Sources.NdbcObservationsId, StringComparer.OrdinalIgnoreCase))
+            settings.SourceDatasets.Add(EncDotNet.S100.Datasets.Pipelines.S100Sources.NdbcObservationsId);
+    }
+
+    /// <summary>
+    /// Slice 7d (data source design note D8): the predicted tide and current
+    /// stations' Layer stack toggles become live feeds. One that was on
+    /// becomes a subscribed feed; the toggles are dropped either way.
+    /// </summary>
+    internal static void MigrateTideOverlays(ViewerSettings settings)
+    {
+        Move(EncDotNet.S100.Viewer.Services.Tides.TideStationSource.SourceId, EncDotNet.S100.Viewer.Services.Tides.TideFeeds.TideStationsId);
+        Move(EncDotNet.S100.Viewer.Services.Tides.CurrentStationSource.SourceId, EncDotNet.S100.Viewer.Services.Tides.TideFeeds.CurrentStationsId);
+
+        void Move(string overlayId, string feedId)
+        {
+            if (!settings.DynamicSourceVisibility.Remove(overlayId, out var wasVisible) || !wasVisible)
+                return;
+            if (!settings.SourceDatasets.Contains(feedId, StringComparer.OrdinalIgnoreCase))
+                settings.SourceDatasets.Add(feedId);
+        }
+    }
 
     /// <summary>Source-generated metadata for the settings file (issue #764).</summary>
     [JsonSerializable(typeof(ViewerSettings))]

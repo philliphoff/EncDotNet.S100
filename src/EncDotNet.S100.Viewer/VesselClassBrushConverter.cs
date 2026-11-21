@@ -7,8 +7,8 @@ namespace EncDotNet.S100.Viewer;
 
 /// <summary>
 /// Maps an <see cref="AisShipTypeClass"/> to the brush used to tint the
-/// vessel pictogram in the Vessels panel. Mirrors the stroke palette of
-/// <c>AisVesselRenderer</c> so the list row and the on-map symbol read as
+/// vessel pictogram in the Vessels panel. Mirrors the day stroke colours of
+/// <c>VesselPortrayal.Ais</c> so the list row and the on-map symbol read as
 /// the same colour family.
 /// </summary>
 internal sealed class VesselClassBrushConverter : IValueConverter

@@ -17,7 +17,7 @@ public sealed class ClearanceViewTests
         try
         {
             var fixture = new PassageCheckFixture(post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
-            var vm = new ClearanceViewModel(fixture.Check);
+            var vm = new ClearanceViewModel(fixture.Check, mariner: null, timeFormat: null, theme: null);
             using var host = ViewHost.Show(new ClearanceView { DataContext = vm }, width: 900, height: 260);
 
             Assert.True(host.IsShown("Clearance.Empty"));

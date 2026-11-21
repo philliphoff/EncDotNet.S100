@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
-using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Cli.Tests;
@@ -61,7 +61,7 @@ public sealed class TilesServeRenderTests : IDisposable
         var area = Area(west, south, east, north);
         var columns = XyzTileGrid.Columns(zoom, area.MinX, area.MaxX);
         var (firstRow, lastRow) = XyzTileGrid.Rows(zoom, area.MinY, area.MaxY);
-        var blocks = HeadlessTileRenderer.PlanBlocks(zoom, columns, firstRow, lastRow, blockSize);
+        var blocks = ChartTileRenderer.PlanBlocks(zoom, columns, firstRow, lastRow, blockSize);
 
         foreach (var block in blocks)
         {
@@ -266,7 +266,11 @@ public sealed class TilesServeRenderTests : IDisposable
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
 
         Assert.False(new TilesServeCommand.Settings { Input = S57 }.ServesTileSet);
-        Assert.True(new TilesServeCommand.Settings { Input = _root }.ServesTileSet);
+        var tileSet = Path.Combine(_root, "tiles");
+        Directory.CreateDirectory(tileSet);
+        File.WriteAllText(Path.Combine(tileSet, XyzDirectoryTileSink.TileJsonFileName), """{"format":"png"}""");
+        Assert.True(new TilesServeCommand.Settings { Input = tileSet }.ServesTileSet);
+        Assert.False(new TilesServeCommand.Settings { Input = _root }.ServesTileSet);
         Assert.False(new TilesServeCommand.Settings { Layers = [S57] }.ServesTileSet);
 
         var result = new TilesServeCommand.Settings { Input = S57, CacheMegabytes = 0 }.Validate();

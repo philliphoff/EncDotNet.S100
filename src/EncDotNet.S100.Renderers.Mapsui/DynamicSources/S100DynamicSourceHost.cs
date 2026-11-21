@@ -95,7 +95,7 @@ public sealed class S100DynamicSourceHost : IDisposable, IS100DynamicSourceRegis
     /// Optional marshal onto the map thread. Defaults to inline (synchronous)
     /// execution. A UI host passes a dispatcher-backed marshal.
     /// </param>
-    /// <param name="logger">Optional logger.</param>
+    /// <param name="logger">A logger, or <see langword="null"/> for none.</param>
     /// <param name="coalesceWindow">
     /// Minimum interval between full rebuilds of a single source's layer.
     /// <see langword="null"/> uses the default 250 ms. Pass

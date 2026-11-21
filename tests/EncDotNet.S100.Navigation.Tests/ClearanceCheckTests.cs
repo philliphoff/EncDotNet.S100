@@ -601,6 +601,111 @@ public class ClearanceCheckTests
         Assert.Equal(ConfidenceReasons.DatumUnconfirmed, sweep.MeetingConfidence());
     }
 
+    // A rising tide (0 m at the fixture departure, +1 m an hour) that covers
+    // either the whole leg or only its first half; the second half is the gap.
+    private static FakeWater RisingTide(bool gapInSecondHalf)
+    {
+        var origin = Fixture.Departure.UtcDateTime;
+        var series = new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => (t - origin).TotalHours);
+        return new FakeWater((_, lon) => gapInSecondHalf && lon > 0.05 ? [] : [series]);
+    }
+
+    private static DepartureRange GapWindow =>
+        DepartureRange.Between(Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30));
+
+    [Fact]
+    public void A_water_level_gap_over_deep_water_leaves_the_window_unchanged()
+    {
+        // #1544: 12 m in the first half needs +2 m of tide for draft 12 and UKC 2;
+        // the second half is 20 m, which clears the keel at any tide.
+        var depth = new FakeDepth((_, lon) => FakeDepth.Bathymetry(lon > 0.05 ? 20 : 12));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+
+        var covered = Sweep(depth, RisingTide(gapInSecondHalf: false), legs, GapWindow)!;
+        var gap = Sweep(depth, RisingTide(gapInSecondHalf: true), legs, GapWindow)!;
+
+        Assert.NotEmpty(covered.Windows());
+        Assert.Equal(covered.Windows(), gap.Windows());
+        Assert.Equal(covered.Options.Select(o => o.Verdict), gap.Options.Select(o => o.Verdict));
+        Assert.All(gap.Options.Where(o => o.MeetsSettings), o => Assert.True(o.Confidence.HasFlag(ConfidenceReasons.WaterLevelFromLowestLow)));
+        Assert.All(covered.Options, o => Assert.False(o.Confidence.HasFlag(ConfidenceReasons.WaterLevelFromLowestLow)));
+        Assert.True(gap.MeetingConfidence().HasFlag(ConfidenceReasons.WaterLevelFromLowestLow));
+        Assert.False(gap.MeetingConfidence().HasFlag(ConfidenceReasons.WaterLevelAtChartDatum));
+
+        // The passage check still reports the gap, and doesn't pass it on charted depth alone.
+        var clearance = Clearance(depth, RisingTide(gapInSecondHalf: true), new PassagePlan(legs, Fixture.Departure.AddHours(4)));
+        Assert.Contains(clearance.Gaps, g => g.Kind == PassageStretchKind.NoWaterLevelCoverage);
+        Assert.Equal(PassageVerdict.IncompleteData, clearance.Verdict);
+    }
+
+    [Fact]
+    public void A_water_level_gap_over_shallow_water_still_removes_departures()
+    {
+        // As above, but the second half is 13 m: at most 1 m of UKC at chart datum,
+        // below the 2 m setting. With the tide it would meet; without it, it's unknown.
+        var depth = new FakeDepth((_, lon) => FakeDepth.Bathymetry(lon > 0.05 ? 13 : 12));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+
+        var covered = Sweep(depth, RisingTide(gapInSecondHalf: false), legs, GapWindow)!;
+        var gap = Sweep(depth, RisingTide(gapInSecondHalf: true), legs, GapWindow)!;
+
+        Assert.NotEmpty(covered.Windows());
+        Assert.Empty(gap.Windows());
+        Assert.All(gap.Options, o => Assert.Contains(o.Verdict, new[] { PassageVerdict.IncompleteData, PassageVerdict.BelowSetting }));
+        Assert.Contains(gap.Options, o => o.Verdict == PassageVerdict.IncompleteData);
+    }
+
+    [Fact]
+    public void A_water_level_gap_is_judged_at_the_lowest_low_of_each_departures_own_passage()
+    {
+        // The covered first half (20 m) sees +0.5 m, except a −1 m low from 08:00
+        // to 09:00. The gap (14.5 m) has 0.5 m spare at datum: enough at 0 m,
+        // not at −1 m. Only departures whose passage (about an hour) meets the
+        // low on the covered half lose the gap.
+        var origin = Fixture.Departure.UtcDateTime;
+        var series = new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => t >= origin.AddHours(2) && t < origin.AddHours(3) ? -1 : 0.5);
+        var water = new FakeWater((_, lon) => lon > 0.05 ? [] : [series]);
+        var depth = new FakeDepth((_, lon) => FakeDepth.Bathymetry(lon > 0.05 ? 14.5 : 20));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+
+        var sweep = Sweep(depth, water, legs, GapWindow)!;
+
+        DepartureOption At(double hours) => sweep.Options.Single(o => o.Departure == Fixture.Departure.AddHours(hours));
+        Assert.All(new[] { -2.0, -1, 0, 1, 3.5, 4, 5, 6 }, h => Assert.True(At(h).MeetsSettings, $"departure +{h} h"));
+        Assert.All(new[] { 2.0, 2.5 }, h => Assert.Equal(PassageVerdict.IncompleteData, At(h).Verdict));
+        Assert.True(At(0).Confidence.HasFlag(ConfidenceReasons.WaterLevelFromLowestLow));
+        Assert.Equal(0.5, At(0).MinimumMarginMeters!.Value, 6);
+    }
+
+    [Fact]
+    public void Lows_above_chart_datum_still_judge_a_gap_at_chart_datum()
+    {
+        // The covered half sees +1 m all day; the gap (14.6 m) is judged at 0 m,
+        // not +1 m: 2.6 m of UKC, not 3.6 m.
+        var origin = Fixture.Departure.UtcDateTime;
+        var series = new FakeSeries(origin.AddHours(-6), origin.AddHours(8), _ => 1);
+        var water = new FakeWater((_, lon) => lon > 0.05 ? [] : [series]);
+        var depth = new FakeDepth((_, lon) => FakeDepth.Bathymetry(lon > 0.05 ? 14.6 : 20));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+
+        var sweep = Sweep(depth, water, legs, GapWindow)!;
+
+        Assert.All(sweep.Options, o =>
+        {
+            Assert.True(o.MeetsSettings);
+            Assert.Equal(2.6, o.MinimumClearanceMeters!.Value, 6);
+            Assert.True(o.Confidence.HasFlag(ConfidenceReasons.WaterLevelFromLowestLow));
+        });
+
+        // With no water level anywhere on the passage, the gap falls back to 0 m and says so.
+        var none = Sweep(new FakeDepth((_, _) => FakeDepth.Bathymetry(20)), new FakeWater((_, _) => []), legs, GapWindow)!;
+        Assert.All(none.Options, o =>
+        {
+            Assert.True(o.MeetsSettings);
+            Assert.Equal(ConfidenceReasons.WaterLevelAtChartDatum, o.Confidence);
+        });
+    }
+
     [Fact]
     public void The_water_level_range_sweep_starts_at_a_whole_step_and_hatches_late_arrivals()
     {

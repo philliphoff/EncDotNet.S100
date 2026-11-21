@@ -34,7 +34,8 @@ public sealed class DepthBasisServiceTests : IDisposable
         adjustment ?? NoWaterLevelAdjustment.Instance,
         scope: null,
         post: _posted.Enqueue,
-        readDatum: read => Task.FromResult(read()));
+        readDatum: read => Task.FromResult(read()),
+        predictions: FixedTidePredictions.None);
 
     private int RunPosted()
     {

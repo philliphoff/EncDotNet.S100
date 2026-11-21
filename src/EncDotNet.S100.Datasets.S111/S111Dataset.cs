@@ -55,6 +55,12 @@ public sealed class S111Dataset
     public int? TypeOfCurrentData { get; init; }
 
     /// <summary>
+    /// The <c>methodCurrentsProduct</c> attribute of the <c>/SurfaceCurrent</c>
+    /// group: how the currents were produced, or <c>null</c> when absent.
+    /// </summary>
+    public string? MethodCurrentsProduct { get; init; }
+
+    /// <summary>
     /// The outcome of the dataset-level axis-order check on the grid
     /// footprints (issue #650), or <c>null</c> when it was not run (no
     /// coverages, or a projected horizontal CRS). Grid georeferencing is

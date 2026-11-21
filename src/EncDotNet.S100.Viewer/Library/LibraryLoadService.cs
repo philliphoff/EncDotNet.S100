@@ -61,7 +61,7 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
     private readonly LibraryLoader _loader;
     private readonly INotificationService? _notifications;
 
-    public LibraryLoadService(IExchangeSetService exchangeSets, DatasetsViewModel datasets, INotificationService? notifications = null)
+    public LibraryLoadService(IExchangeSetService exchangeSets, DatasetsViewModel datasets, INotificationService? notifications)
     {
         _opener = new ExchangeSetOpener(exchangeSets, datasets);
         _loader = new LibraryLoader(_opener);

@@ -29,6 +29,80 @@ internal interface ITileSource
     IReadOnlyList<DateTime> Times => [];
 
     /// <summary>
+    /// The identifiers of the WMTS layers served besides the layer of every
+    /// dataset (issue #1495, <see cref="TileLayers"/>), each a group of the
+    /// datasets; empty when there are none.
+    /// </summary>
+    IReadOnlyList<string> Layers => [];
+
+    /// <summary>
+    /// The tiles of the layer <paramref name="id"/> (one of <see cref="Layers"/>),
+    /// with its own time steps and bounds; <see langword="null"/> when there is no such layer.
+    /// </summary>
+    ITileSource? Layer(string id) => null;
+
+    /// <summary>
+    /// Finds the features and coverage values at a point in the datasets the
+    /// tiles are rendered from, for WMS GetFeatureInfo; <see langword="null"/>
+    /// when the tiles have no datasets behind them (a built tile set).
+    /// </summary>
+    DatasetFeatureQuery? FeatureQuery => null;
+
+    /// <summary>
+    /// The mariner settings sets clients can register and ask for as
+    /// <c>{palette}-{hash}</c> styles (issue #1493), each listed in
+    /// <see cref="Palettes"/> once registered; <see langword="null"/> when the
+    /// tiles aren't rendered here (a built tile set).
+    /// </summary>
+    MarinerStyleRegistry? MarinerStyles => null;
+
+    /// <summary>
+    /// The legend graphics of the styles (issue #1501): WMS
+    /// <c>GetLegendGraphic</c> and the capabilities' <c>LegendURL</c>s;
+    /// <see langword="null"/> when the tiles aren't rendered here (a built
+    /// tile set). Read it through <see cref="ReadLegendAsync"/> and
+    /// <see cref="LegendSize"/>, which keep the datasets open while they draw.
+    /// </summary>
+    bool HasLegend => false;
+
+    /// <summary>
+    /// The size of <paramref name="style"/>'s legend graphic with the default
+    /// options (<see cref="TileLegend.SizeOf"/>), or <see langword="null"/>
+    /// when there is none.
+    /// </summary>
+    (int Width, int Height)? LegendSize(string? style) => null;
+
+    /// <summary>
+    /// <paramref name="style"/>'s legend graphic as a PNG
+    /// (<see cref="TileLegend.Render"/>), or <see langword="null"/> when the
+    /// style isn't served or the source has no legend.
+    /// </summary>
+    ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<byte[]?>(null);
+
+    /// <summary>
+    /// Whether <see cref="ToDatasetsJson"/> describes the datasets the tiles
+    /// are rendered from; <see langword="false"/> for a built tile set.
+    /// </summary>
+    bool HasDatasets => false;
+
+    /// <summary>
+    /// The <c>/datasets</c> document (issue #1504): each dataset the tiles are
+    /// rendered from, as they are now; <see langword="null"/> when there are
+    /// none behind the tiles (a built tile set).
+    /// </summary>
+    JsonObject? ToDatasetsJson() => null;
+
+    /// <summary>
+    /// The revision of the data and render settings the tiles are drawn from
+    /// (issue #1497): the disk-cache fingerprint, which changes whenever a
+    /// dataset or a setting that changes pixels does. Clients put it in their
+    /// URLs to bust their own tile caches. <see langword="null"/> when the
+    /// tiles aren't rendered here (a built tile set).
+    /// </summary>
+    string? Revision => null;
+
+    /// <summary>
     /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
     /// (rows numbered from the north) in <paramref name="palette"/> (one of
     /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at
@@ -37,6 +111,47 @@ internal interface ITileSource
     /// <see langword="null"/> when there is none there.
     /// </summary>
     ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether <see cref="ReadAsync(int, int, int, string?, DateTime?, int, CancellationToken)"/>
+    /// draws tiles at <paramref name="pixelRatio"/> image pixels per tile
+    /// pixel (issue #1563): 1 for 256-pixel tiles, 2 for 512-pixel ("@2x")
+    /// tiles of the same grid. Only tiles rendered here can; a built tile set
+    /// has the one size it was built at.
+    /// </summary>
+    bool CanReadPixelRatio(int pixelRatio) => false;
+
+    /// <summary>
+    /// The tile <see cref="ReadAsync(int, int, int, string?, DateTime?, CancellationToken)"/>
+    /// reads, drawn at <paramref name="pixelRatio"/> image pixels per tile
+    /// pixel whatever the source's own tile size: a <c>256 × pixelRatio</c>
+    /// pixel image with symbols, text and line widths scaled to match.
+    /// <see langword="null"/> when there is no tile there, or the source can't
+    /// draw at that ratio (<see cref="CanReadPixelRatio"/>).
+    /// </summary>
+    ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<byte[]?>(null);
+
+    /// <summary>
+    /// Whether <see cref="RenderViewAsync"/> draws any box directly from the
+    /// datasets (issue #1500, WMS GetMap at a print DPI); a built tile set can't.
+    /// </summary>
+    bool CanRenderViews => false;
+
+    /// <summary>
+    /// Draws the Web Mercator box <paramref name="minX"/>, <paramref name="minY"/>,
+    /// <paramref name="maxX"/>, <paramref name="maxY"/> as a
+    /// <paramref name="width"/> × <paramref name="height"/> image with the
+    /// content of <paramref name="zoom"/>'s tiles, its symbols and text scaled
+    /// as resampling those tiles would scale them (see
+    /// <see cref="Rendering.Engine.ChartTileRenderer.RenderView"/>), or
+    /// <see langword="null"/> when the source can't (<see cref="CanRenderViews"/>)
+    /// or <paramref name="zoom"/> isn't served. The caller disposes the image.
+    /// </summary>
+    ValueTask<SkiaSharp.SKBitmap?> RenderViewAsync(
+        int zoom, double minX, double minY, double maxX, double maxY, int width, int height,
+        string? palette, DateTime? time, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<SkiaSharp.SKBitmap?>(null);
 
     /// <summary>
     /// A TileJSON 3.0.0 document describing the tiles in <paramref name="palette"/>
@@ -100,21 +215,26 @@ internal static class TileSource
         if (read >= 7 && Encoding.ASCII.GetString(signature, 0, 7) == "PMTiles")
             return new PmTilesTileSource(path);
         if (read == 16 && Encoding.ASCII.GetString(signature) == "SQLite format 3\0")
-            return new MbTilesTileSource(path);
+        {
+            return IsGeoPackage(path)
+                ? new GeoPackageTileSource(path)
+                : new MbTilesTileSource(path);
+        }
 
         throw new InvalidDataException(
-            $"'{path}' is not a tile set: expected an XYZ directory, a PMTiles archive or an MBTiles database.");
+            $"'{path}' is not a tile set: expected an XYZ directory, a PMTiles archive, an MBTiles database or a GeoPackage.");
     }
 
     /// <summary>
     /// Whether <paramref name="path"/> looks like a built tile set rather than a
-    /// dataset or an exchange set: a directory that isn't an exchange set, or a
-    /// PMTiles or SQLite (MBTiles) file.
+    /// dataset, a folder of datasets or an exchange set: an XYZ directory (one
+    /// holding a <c>tiles.json</c>, or <c>{z}/{x}</c> folders with numeric names),
+    /// or a PMTiles or SQLite (MBTiles or GeoPackage) file.
     /// </summary>
     public static bool IsTileSet(string path)
     {
         if (Directory.Exists(path))
-            return !ExchangeSetInput.LooksLikeExchangeSet(path);
+            return LooksLikeXyzDirectory(path);
         if (!File.Exists(path))
             return false;
 
@@ -132,6 +252,62 @@ internal static class TileSource
 
         return (read >= 7 && Encoding.ASCII.GetString(signature, 0, 7) == "PMTiles")
             || (read == 16 && Encoding.ASCII.GetString(signature) == "SQLite format 3\0");
+    }
+
+    /// <summary>
+    /// Whether <paramref name="directory"/> holds a <c>tiles.json</c>, or a zoom
+    /// folder (named 0–26) that itself holds a numerically named column folder.
+    /// </summary>
+    private static bool LooksLikeXyzDirectory(string directory)
+    {
+        try
+        {
+            if (File.Exists(System.IO.Path.Combine(directory, XyzDirectoryTileSink.TileJsonFileName)))
+                return true;
+
+            return Directory.EnumerateDirectories(directory)
+                .Where(z => int.TryParse(System.IO.Path.GetFileName(z), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var zoom)
+                    && zoom <= 26)
+                .Any(z => Directory.EnumerateDirectories(z)
+                    .Any(x => int.TryParse(System.IO.Path.GetFileName(x), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the SQLite database at <paramref name="path"/> is a GeoPackage:
+    /// its application id is <c>GPKG</c> (or <c>GP10</c>/<c>GP11</c>), or it has
+    /// a <c>gpkg_contents</c> table. Any other SQLite file is read as MBTiles.
+    /// </summary>
+    internal static bool IsGeoPackage(string path)
+    {
+        // The application id is the big-endian integer at offset 68 of the header.
+        var header = new byte[72];
+        using (var stream = File.OpenRead(path))
+        {
+            if (stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false) < header.Length)
+                return false;
+        }
+
+        int applicationId = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(68));
+        if (applicationId == GeoPackage.ApplicationId || GeoPackage.LegacyApplicationIds.Contains(applicationId))
+            return true;
+        if (applicationId != 0)
+            return false;
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gpkg_contents'";
+        return command.ExecuteScalar() is not null;
     }
 
     /// <summary>The tile format named by a TileJSON or MBTiles <c>format</c> value.</summary>

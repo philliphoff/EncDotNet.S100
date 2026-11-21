@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
-using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Engine.Diagnostics;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -119,7 +119,7 @@ public class TileColdLatencyTelemetryTests
         using var listener = new System.Diagnostics.ActivityListener
         {
             ShouldListenTo = source =>
-                source.Name == "EncDotNet.S100.Renderers.Mapsui",
+                source.Name == "EncDotNet.S100.Rendering.Engine",
             Sample = (ref System.Diagnostics.ActivityCreationOptions<
                 System.Diagnostics.ActivityContext> _) =>
                 System.Diagnostics.ActivitySamplingResult.AllData,

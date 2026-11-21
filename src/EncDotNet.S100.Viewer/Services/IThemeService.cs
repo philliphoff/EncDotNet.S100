@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// "Theme" here refers exclusively to the chrome <see cref="Avalonia.Styling.ThemeVariant"/>
 /// (Light, Dark, or the bundled custom <see cref="ChromeThemes.S100Night"/>) —
 /// it is unrelated to the S-100 map palette (Day / Dusk / Night) which is
-/// exposed by <see cref="ViewModels.SettingsViewModel.SelectedPalette"/>.
+/// exposed by <see cref="Services.ViewerSettingsService.SelectedPalette"/>.
 /// </remarks>
 internal interface IThemeService
 {

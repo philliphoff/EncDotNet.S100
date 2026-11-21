@@ -7,9 +7,11 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Persistence;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Library;
 using EncDotNet.S100.Mcp.MutableTools;
+using EncDotNet.S100.Mcp.Tides;
 using EncDotNet.S100.Mcp.Tools.Library;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -20,8 +22,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 mcp serve</c> hosts the S-100 MCP tool set over the <b>stdio</b>
 /// transport, so an agent that spawns this process can query features, sample
 /// coverages, drive a stateful session (palette, time step, headless render)
-/// and work with a dataset-collection Library without a GUI viewer or an
-/// out-of-band HTTP endpoint.
+/// and work with a dataset-collection Library without a GUI viewer. With
+/// <c>--transport http</c> it serves the same tools over Streamable HTTP
+/// instead (<see cref="McpHttpServer"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -53,13 +56,25 @@ namespace EncDotNet.S100.Cli.Commands;
 /// an in-process headless Skia session.
 /// </para>
 /// <para>
-/// Standard output carries the MCP protocol, so every human-readable message
+/// Over HTTP (#1464), the listening rules are <c>tiles serve</c>'s
+/// (<see cref="ServeHost"/>): localhost by default, and a bearer token
+/// generated for any other address. Several clients can connect, so by
+/// default the tools that reach beyond the served datasets are left out:
+/// <c>open_dataset</c> and the close tools (which open any path the server can
+/// read) and the Library edit tools (which add sources, fetch catalogue URLs
+/// and download). <c>--allow-changes</c> adds them.
+/// </para>
+/// <para>
+/// Over stdio, standard output carries the MCP protocol, so every human-readable message
 /// (startup banner, load warnings, errors) is written to standard error.
 /// The server runs until the client disconnects (stdin EOF) or Ctrl-C.
 /// </para>
 /// </remarks>
 internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
 {
+    /// <summary>The default port of <c>--transport http</c>.</summary>
+    public const int DefaultHttpPort = 8300;
+
     internal sealed class Settings : CommandSettings
     {
         [CommandArgument(0, "[input]")]
@@ -90,6 +105,59 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [Description("Keep the Library's index cache, catalogue cache, downloads (and collections.json) here between runs. Defaults to a temporary directory that is removed on exit.")]
         public string? DataDir { get; init; }
 
+        [CommandOption("--tide-catalogue <FILE>")]
+        [Description("The tide and current station catalogue for list_tide_stations, predict_tide, list_current_stations and predict_current: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
+        public string? TideCatalogue { get; init; }
+
+        [CommandOption("--tide-predictions")]
+        [Description("Fill S-104 and S-111 gaps with predictions from the tide catalogue: sample and check_route use the nearest tide station within 10 km by water where no S-104 covers a point and time, and sample uses the nearest current station within --current-station-reach where no S-111 does. Astronomical tide and tidal current only, not a forecast.")]
+        public bool TidePredictions { get; init; }
+
+        [CommandOption("--current-station-reach <METRES>")]
+        [Description("With --tide-predictions: how far, by water, a current station's prediction applies (default 2000). Much shorter than a tide station's 10 km: tidal currents change over short distances, most of all either side of a narrows.")]
+        public double? CurrentStationReach { get; init; }
+
+        [CommandOption("--transport <TRANSPORT>")]
+        [Description("How clients connect: stdio (the client starts s100 and talks over its standard input and output) or http (clients connect to a Streamable HTTP endpoint at /mcp).")]
+        [DefaultValue("stdio")]
+        public string Transport { get; init; } = "stdio";
+
+        [CommandOption("--host <ADDRESS>")]
+        [Description("HTTP only: the address to listen on (default 127.0.0.1). Use 0.0.0.0 to serve other machines.")]
+        public string? Host { get; init; }
+
+        [CommandOption("--port <PORT>")]
+        [Description("HTTP only: the port to listen on (default 8300; 0 picks a free port).")]
+        public int? Port { get; init; }
+
+        [CommandOption("--token <TOKEN>")]
+        [Description("HTTP only: the bearer token clients must send in an 'Authorization: Bearer <token>' header. Generated automatically when --host is not a loopback address.")]
+        public string? Token { get; init; }
+
+        [CommandOption("--no-token")]
+        [Description("HTTP only: serve without a token even on a non-loopback address.")]
+        public bool NoToken { get; init; }
+
+        [CommandOption("--source <SOURCE>")]
+        [Description("Add a live data source at startup (repeatable): an id from 's100 sources', optionally with options as id:name=value,name=value, such as nmea.weather:Input=udp:10110. It runs once set_viewport narrows the view to its range. Keys come from environment variables, never this option.")]
+        public string[] Sources { get; init; } = [];
+
+        [CommandOption("--live-feeds")]
+        [Description("Also add the live feeds subscribed to in the Library (--collections on SoundCharts' collections.json), such as NDBC observations or AIS targets, with their saved settings. Keys come from environment variables. Off by default: the server then fetches from the network or opens an NMEA port only when an add_data_source call asks it to.")]
+        public bool LiveFeeds { get; init; }
+
+        [CommandOption("--allow-changes")]
+        [Description("HTTP only: also serve the tools that open and close datasets by path and change the Library (add, refresh and remove sources, download and open items, set a SECOM identity). Over stdio they're always served.")]
+        public bool AllowChanges { get; init; }
+
+        [CommandOption("--toolsets <NAMES>")]
+        [Description("Serve only these toolsets, comma-separated, so a client's context holds only the tools its task needs: query, datasets, presentation, routes, tides, library (passage, warnings, display, map, ui and diagnostics are SoundCharts' own), or a profile: route-planning, visual-check. Default: all.")]
+        public string? Toolsets { get; init; }
+
+        /// <summary>The toolsets <see cref="Toolsets"/> selects; <c>null</c> for all. Valid after <see cref="Validate"/>.</summary>
+        public IReadOnlyList<string>? SelectedToolsets =>
+            McpToolsets.TryParse(Toolsets ?? McpToolsets.AllName, out var toolsets, out _) ? toolsets : null;
+
         [CommandOption(LuaEngineOption.Template)]
         [Description(LuaEngineOption.Description)]
         [DefaultValue(LuaEngineOption.Default)]
@@ -98,6 +166,15 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [CommandOption("--debug")]
         [Description("Show full stack traces on error.")]
         public bool Debug { get; init; }
+
+        /// <summary>True for <c>--transport http</c>.</summary>
+        public bool IsHttp => string.Equals(Transport, "http", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The HTTP listening address, <c>127.0.0.1</c> unless given.</summary>
+        public string HttpHost => Host ?? "127.0.0.1";
+
+        /// <summary>The HTTP port, <see cref="DefaultHttpPort"/> unless given.</summary>
+        public int HttpPort => Port ?? DefaultHttpPort;
 
         public override ValidationResult Validate()
         {
@@ -114,10 +191,26 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             if (Collections.Any(string.IsNullOrWhiteSpace))
                 return ValidationResult.Error("--collection needs a path, known-source id or URL.");
 
+            if (CurrentStationReach is { } reach && !(reach > 0 && double.IsFinite(reach)))
+                return ValidationResult.Error("--current-station-reach must be a positive number of metres.");
+            if (CurrentStationReach is not null && !TidePredictions)
+                return ValidationResult.Error("--current-station-reach applies only with --tide-predictions.");
             if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
                 return luaEngineError;
+            if (Toolsets is not null && !McpToolsets.TryParse(Toolsets, out _, out var toolsetError))
+                return ValidationResult.Error($"--toolsets: {toolsetError}");
 
-            return ValidationResult.Success();
+            if (!IsHttp && !string.Equals(Transport, "stdio", StringComparison.OrdinalIgnoreCase))
+                return ValidationResult.Error("--transport must be stdio or http.");
+
+            if (!IsHttp)
+            {
+                if (Host is not null || Port is not null || Token is not null || NoToken || AllowChanges)
+                    return ValidationResult.Error("--host, --port, --token, --no-token and --allow-changes apply only with --transport http.");
+                return ValidationResult.Success();
+            }
+
+            return ServeHost.Validate(HttpHost, HttpPort, Token, NoToken);
         }
     }
 
@@ -151,8 +244,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // it holds each dataset both as a projected LoadedDataset (read tools)
             // and an open render handle (headless renderer), and is what
             // open_dataset / close_dataset and the Library's loads mutate.
-            using var catalog = new HeadlessMutableCatalog(
-                new ProjNetCrsTransformFactory(), luaEngine: LuaEngineOption.Resolve(settings.LuaEngine));
+            using var processors = BundledDatasetProcessorFactory.Create(LuaEngineOption.Resolve(settings.LuaEngine));
+            using var catalog = new HeadlessMutableCatalog(new ProjNetCrsTransformFactory(), processors);
 
             // Ownership of any exchange-set extraction transfers to the catalog,
             // which keeps it alive for the whole session (the composite renderer
@@ -185,9 +278,9 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 });
             services.Library.Initialize();
             var operations = new LibraryOperations(services.Library, services.Downloads, new LibraryLoader(opener));
-            var adder = new LibrarySourceAdder(services.Readers, probe: services.ProbeCatalogue);
+            var adder = new LibrarySourceAdder(services.Readers, userCatalogues: null, new EncDotNet.S100.Collections.KnownSources.CatalogueUrlRecognizer(services.ProbeCatalogue), TimeProvider.System);
             var library = new HeadlessLibrary(
-                operations, services.Sync, readers: services.Readers, probe: services.ProbeCatalogue);
+                operations, services.Sync, userCatalogues: null, health: null, TimeProvider.System, services.Readers, services.ProbeCatalogue);
 
             foreach (var collection in settings.Collections)
             {
@@ -199,24 +292,94 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // catalog / presentation / time / render tools, backed by an
             // in-process headless session over the catalog above, and the
             // Library tools.
+            //
+            // Over HTTP without --allow-changes, the tools that open any path the
+            // server can read, or that change the Library (and so fetch URLs and
+            // download), are left out.
+            var allowChanges = !settings.IsHttp || settings.AllowChanges;
             using var session = new HeadlessS100Session(catalog);
+            // Data source design note D9: live sources, run for the session's viewport.
+            using var liveSources = new HeadlessLiveSources(
+                EncDotNet.S100.Datasets.Pipelines.SourceRegistry.CreateDefault(), catalog, session);
+            foreach (var text in settings.Sources)
+            {
+                if (SourceArgument.TryParse(text, out var parseError) is not { } source)
+                {
+                    Console.Error.WriteLine(parseError);
+                    return 2;
+                }
+                var added = liveSources.Add(source.Id, source.Options);
+                if (added.TryGetError(out var error))
+                {
+                    Console.Error.WriteLine($"--source {text}: {error!.Message}");
+                    return 2;
+                }
+            }
+            if (settings.LiveFeeds)
+            {
+                var feeds = services.Library.Collections
+                    .SelectMany(c => c.Sources)
+                    .Select(s => s.Definition)
+                    .OfType<EncDotNet.S100.Collections.LiveFeedSource>()
+                    .Select(f => (f.RegistrationId, f.Options));
+                var added = liveSources.AddFeeds(feeds, message => Console.Error.WriteLine(message));
+                Console.Error.WriteLine($"Added {added} live feed(s) from the Library; they run once set_viewport narrows the view to their range.");
+            }
             var additionalTools = S100MutableTools.Create(
                 presentation: new StaticCapabilityAccessor<IPresentationController>(session),
                 time: new StaticCapabilityAccessor<ITimeController>(session),
                 renderer: new StaticCapabilityAccessor<IImageRenderer>(session),
-                catalog: catalog,
-                viewport: new StaticCapabilityAccessor<IViewportController>(session))
-                .Concat(LibraryMcpTools.Create(library, library, services.SecomRegistry, services.SecomTrust))
+                catalog: allowChanges ? catalog : null,
+                viewport: new StaticCapabilityAccessor<IViewportController>(session),
+                // Adding a source fetches from the network or opens a port, like opening a path.
+                liveSources: allowChanges ? liveSources : null)
+                .Concat(LibraryMcpTools.Create(
+                    library,
+                    allowChanges ? library : null,
+                    new EncDotNet.S100.Collections.Secom.SecomServiceDirectory(services.SecomRegistry),
+                    services.SecomTrust))
+                // Tide predictions (#1452), from the offline station catalogue.
+                .Concat(TideMcpTools.Create(TideCli.Source(TideCli.CataloguePath(settings.TideCatalogue)), TimeProvider.System))
                 .ToList();
 
             var collections = services.Library.Collections.Count(c => !c.IsSession);
+            var mode = settings.IsHttp ? "over HTTP" : "over stdio";
+            var changes = allowChanges ? "changes allowed" : "no dataset or Library changes; --allow-changes allows them";
             Console.Error.WriteLine(
-                $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) and a Library of {collections} collection(s) over stdio (mutable). Ctrl-C to stop.");
+                $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) and a Library of {collections} collection(s) {mode} ({changes}). Ctrl-C to stop.");
+            if (settings.SelectedToolsets is { } selectedToolsets)
+                Console.Error.WriteLine($"Toolsets: {string.Join(", ", selectedToolsets)}.");
             Console.Error.WriteLine(temporaryDataDir is null
                 ? $"Library data: {root}"
                 : $"Library data: {root} (temporary; pass --data-dir to keep it)");
 
-            await S100McpStdioHost.RunAsync(catalog, additionalTools);
+            // Tide and current predictions fill S-104 and S-111 gaps only when asked for, as in SoundCharts (D1).
+            RouteCheckSourceCache? routeCheckSources = null;
+            if (settings.TidePredictions)
+            {
+                var tidePath = TideCli.CataloguePath(settings.TideCatalogue);
+                var stations = await TideCli.Source(tidePath).GetAsync(cancellationToken).ConfigureAwait(false);
+                if (stations is null)
+                {
+                    Console.Error.WriteLine($"--tide-predictions: no tide station catalogue. {TideCli.MissingHint(tidePath)}");
+                    return 2;
+                }
+
+                routeCheckSources = new RouteCheckSourceCache(
+                    new ProjNetCrsTransformFactory(), new RouteCheckSourceOptions
+                    {
+                        TidePredictions = stations,
+                        MaxCurrentStationDistanceMeters = settings.CurrentStationReach ?? RouteCheckSourceOptions.Default.MaxCurrentStationDistanceMeters,
+                    });
+                Console.Error.WriteLine($"Tide predictions fill S-104 gaps: {stations.Stations.Count} stations from {tidePath}.");
+                if (stations.CurrentStations.Count > 0)
+                    Console.Error.WriteLine($"Current predictions fill S-111 gaps: {stations.CurrentStations.Count} current stations, each within {routeCheckSources.Options.MaxCurrentStationDistanceMeters:0} m by water.");
+            }
+
+            if (settings.IsHttp)
+                return await ServeHttpAsync(settings, catalog, additionalTools, routeCheckSources, cancellationToken).ConfigureAwait(false);
+
+            await S100McpStdioHost.RunAsync(catalog, additionalTools, routeCheckSources, settings.SelectedToolsets, cancellationToken);
             return 0;
         }
         catch (Exception ex)
@@ -235,6 +398,36 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             if (temporaryDataDir is not null)
                 TryDelete(temporaryDataDir);
         }
+    }
+
+    /// <summary>Serves the tools over Streamable HTTP until Ctrl-C or SIGTERM.</summary>
+    private static async Task<int> ServeHttpAsync(
+        Settings settings,
+        HeadlessMutableCatalog catalog,
+        IReadOnlyList<ModelContextProtocol.Server.McpServerTool> additionalTools,
+        RouteCheckSourceCache? routeCheckSources,
+        CancellationToken cancellationToken)
+    {
+        var address = System.Net.IPAddress.Parse(settings.HttpHost);
+        var token = ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
+        var tools = McpToolsets.Select(
+            S100McpTools.Create(catalog, routeCheckSources: routeCheckSources).Concat(additionalTools),
+            settings.SelectedToolsets);
+
+        await using var server = await McpHttpServer.StartAsync(tools, address, settings.HttpPort, token, cancellationToken).ConfigureAwait(false);
+        var shownAddresses = ServeHost.DisplayAddresses(address);
+        foreach (var shown in shownAddresses)
+            Console.Error.WriteLine($"MCP endpoint: {McpHttpServer.EndpointUri(shown, server.Port)}");
+        // A token given with --token isn't echoed, so it stays out of logs.
+        Console.Error.WriteLine(token is null
+            ? "No token: any client that can reach the endpoint can use it."
+            : settings.Token is null
+                ? $"Bearer token: {token} (send 'Authorization: Bearer {token}')"
+                : "Clients must send the --token value as 'Authorization: Bearer <token>'.");
+        Console.Error.WriteLine($"Health check: {new Uri(ServeHost.BaseUri(shownAddresses[0], server.Port, null), ServeHost.HealthPath.TrimStart('/'))}");
+
+        await server.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
+        return 0;
     }
 
     /// <summary>

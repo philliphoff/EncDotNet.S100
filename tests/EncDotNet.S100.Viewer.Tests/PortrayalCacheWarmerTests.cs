@@ -8,9 +8,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// <see cref="PortrayalCacheWarmer"/> (#1266): portrays registered cells one at
-/// a time while the map is idle, nearest the view first; gives way when the map
-/// gets busy; stops short of the cache cap; and resumes from its ledger.
+/// <see cref="PortrayalCacheWarmer"/> (#1266, map rendering slice 3): portrays
+/// registered cells while the map is idle, several at once and nearest the view
+/// first; gives way when the map gets busy; stops short of the cache cap; and
+/// resumes from its ledger.
 /// </summary>
 public sealed class PortrayalCacheWarmerTests : IDisposable
 {
@@ -79,6 +80,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         public string Signature = "sig-1";
         public MapViewportSnapshot? View;
         public Func<DatasetEntry, CancellationToken, Task<IReadOnlyList<string>?>>? Portray;
+        public int Concurrency = 1;
 
         public PortrayalCacheWarmer Create(PortrayalWarmLedger ledger) => new(
             candidates: () => { lock (Cells) return Cells.ToList(); },
@@ -91,6 +93,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
             signature: () => Volatile.Read(ref Signature),
             ledger: ledger,
             options: FastOptions,
+            concurrencyLimit: () => Volatile.Read(ref Concurrency),
             time: TimeProvider.System,
             logger: NullLogger<PortrayalCacheWarmer>.Instance);
 
@@ -118,6 +121,129 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         Assert.Equal(["near", "mid", "far"], host.Portrayed.ToArray());
         Assert.Equal(new PortrayalWarmStatus(PortrayalWarmState.Complete, 3, 3), warmer.Status);
         Assert.Contains(statuses, s => s.State == PortrayalWarmState.Working);
+    }
+
+    [Fact]
+    public async Task PortraysUpToTheLimitAtOnce_NearestTheViewFirst()
+    {
+        var host = new Host { View = ViewAt(47.6, -122.4), Concurrency = 3 };
+        for (var i = 0; i < 6; i++)
+            host.Cells.Add(Cell("c" + i, 47.6 + (i * 0.5), -122.4));
+        var running = 0;
+        var peak = 0;
+        var started = new ConcurrentQueue<string>();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.Portray = async (entry, ct) =>
+        {
+            started.Enqueue(entry.DisplayName);
+            var now = Interlocked.Increment(ref running);
+            InterlockedMax(ref peak, now);
+            try { await release.Task.WaitAsync(ct); }
+            finally { Interlocked.Decrement(ref running); }
+            return await host.Default(entry);
+        };
+        using var warmer = host.Create(new PortrayalWarmLedger(null));
+
+        warmer.Start();
+
+        // Three start together, nearest first, and no more while they run.
+        Assert.True(await WaitUntilAsync(() => started.Count == 3));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Equal(["c0", "c1", "c2"], started.ToArray());
+        Assert.Equal(new PortrayalWarmStatus(PortrayalWarmState.Working, 0, 6), warmer.Status);
+
+        release.SetResult();
+        Assert.True(await WaitUntilAsync(() => warmer.Status.State == PortrayalWarmState.Complete));
+        Assert.Equal(new PortrayalWarmStatus(PortrayalWarmState.Complete, 6, 6), warmer.Status);
+        Assert.Equal(3, Volatile.Read(ref peak));
+        Assert.Equal(6, host.Portrayed.Count);
+    }
+
+    [Fact]
+    public async Task GivesWayWithEveryRunningCell_WhenTheMapGetsBusy()
+    {
+        var host = new Host { Concurrency = 4 };
+        for (var i = 0; i < 4; i++)
+            host.Cells.Add(Cell("c" + i, 47.6 + i, -122.4));
+        var attempts = 0;
+        var cancelled = 0;
+        host.Portray = async (entry, ct) =>
+        {
+            if (Interlocked.Increment(ref attempts) <= 4)
+            {
+                try { await Task.Delay(Timeout.Infinite, ct); }
+                catch (OperationCanceledException) { Interlocked.Increment(ref cancelled); throw; }
+            }
+            return await host.Default(entry);
+        };
+        using var warmer = host.Create(new PortrayalWarmLedger(null));
+
+        warmer.Start();
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref attempts) == 4));
+        var busyAt = System.Diagnostics.Stopwatch.StartNew();
+        host.Busy = true;
+
+        // All four are cancelled within a few poll intervals, and none restart while busy.
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref cancelled) == 4));
+        Assert.True(busyAt.ElapsedMilliseconds < 2000, $"gave way after {busyAt.ElapsedMilliseconds} ms");
+        Assert.True(await WaitUntilAsync(() => warmer.Status.State == PortrayalWarmState.Paused));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Equal(4, Volatile.Read(ref attempts));
+        Assert.Empty(host.Portrayed);
+
+        host.Busy = false;
+        Assert.True(await WaitUntilAsync(() => warmer.Status.State == PortrayalWarmState.Complete));
+        Assert.Equal(8, Volatile.Read(ref attempts));
+        Assert.Equal(4, host.Portrayed.Count);
+    }
+
+    [Fact]
+    public async Task KeepsAsManyCellsGoingAsTheSchedulerAdmits()
+    {
+        // The work scheduler's GC pause governor sets the limit (map rendering
+        // slice 5); the warmer follows it as it rises and falls.
+        var host = new Host { Concurrency = 1 };
+        for (var i = 0; i < 400; i++)
+            host.Cells.Add(Cell("c" + i, 47.6 + (i * 0.001), -122.4));
+        var running = 0;
+        var peak = 0;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.Portray = async (entry, ct) =>
+        {
+            InterlockedMax(ref peak, Interlocked.Increment(ref running));
+            try { await gate.Task.WaitAsync(ct); }
+            finally { Interlocked.Decrement(ref running); }
+            return await host.Default(entry);
+        };
+        using var warmer = host.Create(new PortrayalWarmLedger(null));
+
+        warmer.Start();
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref running) == 1));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Equal(1, Volatile.Read(ref peak));
+
+        Volatile.Write(ref host.Concurrency, 4);
+        Assert.Equal(4, warmer.ConcurrencyLimit);
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref running) == 4));
+
+        // The limit falls: running cells finish, and only one at a time replaces them.
+        Volatile.Write(ref host.Concurrency, 1);
+        gate.SetResult();
+        Assert.True(await WaitUntilAsync(() => host.Portrayed.Count >= 12));
+        Assert.True(Volatile.Read(ref running) <= 1);
+        Assert.Equal(4, Volatile.Read(ref peak));
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        var current = Volatile.Read(ref target);
+        while (value > current)
+        {
+            var seen = Interlocked.CompareExchange(ref target, value, current);
+            if (seen == current)
+                return;
+            current = seen;
+        }
     }
 
     [Fact]

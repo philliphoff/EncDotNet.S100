@@ -53,6 +53,14 @@ public enum RouteFindingCategory
 
     /// <summary>Missing or ending data: water-level gaps, no charted depth, leaving chart coverage.</summary>
     Data,
+
+    /// <summary>
+    /// Forecast weather along the route at its ETAs: wind or waves above the
+    /// vessel's limits, tropical cyclone wind radii and cones, and the stretches
+    /// the forecast doesn't reach. Advisory: weather model data and cyclone
+    /// advisories aren't official S-100 data and aren't for navigation.
+    /// </summary>
+    Weather,
 }
 
 /// <summary>

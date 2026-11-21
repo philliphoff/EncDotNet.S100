@@ -1,5 +1,5 @@
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// 4). They must hold exactly the pixels the old guttered tiles held there, so
 /// the clipped blit draws the same picture at every seam.
 /// </summary>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class TileApronTests
 {
     private const int Band = 12;

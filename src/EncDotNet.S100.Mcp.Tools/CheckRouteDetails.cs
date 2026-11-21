@@ -11,10 +11,14 @@ namespace EncDotNet.S100.Mcp.Tools;
 public sealed record CheckRouteDetails(
     [property: Description("A charted danger in or near the corridor (route_check.danger_in_corridor, route_check.danger_near_route).")] CheckRouteDangerDetails? Danger = null,
     [property: Description("Water shallower than a safety setting: depth areas, soundings and S-102 shoals.")] CheckRouteShoalDetails? Shoal = null,
+    [property: Description("A feature other than a depth area whose S-101 portrayal raises the SafetyContour alert (route_check.crosses_safety_contour, route_check.safety_contour_in_corridor): a structure such as a pontoon, floating dock or shoreline construction, an unsurveyed area, or land charted as a point or curve.")] CheckRouteSafetyContourFeatureDetails? SafetyContourFeature = null,
+    [property: Description("The structures that raise the SafetyContour alert within the berth radius (except a non-berth structure the track line cuts) of the departure or arrival, in one finding (route_check.berth_structures).")] CheckRouteBerthStructuresDetails? BerthStructures = null,
     [property: Description("A regulated area: what it is, what it restricts and when it's in force.")] CheckRouteAreaDetails? Area = null,
     [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null,
     [property: Description("Areas of a kind whose indication is off (route_check.area_kind_off): the kind and how many the route meets.")] CheckRouteAreaKindOffDetails? AreaKindOff = null,
-    [property: Description("A navigational hazard other than a danger: an aid to navigation, structure or overhead feature whose S-101 portrayal raises the NavHazard alert (route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route).")] CheckRouteHazardDetails? Hazard = null)
+    [property: Description("A navigational hazard other than a danger: an aid to navigation, structure or overhead feature whose S-101 portrayal raises the NavHazard alert (route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route).")] CheckRouteHazardDetails? Hazard = null,
+    [property: Description("A finding of the weather check: a stretch above a wind or wave limit, or not checked, with its time window.")] CheckRouteWeatherDetails? Weather = null,
+    [property: Description("A finding of the weather check's tropical cyclone rule (weather.tc_*): a stretch inside a wind radius or the cone, the closest approach, or a stretch beyond the forecast.")] CheckRouteCycloneDetails? Cyclone = null)
 {
     /// <summary>
     /// Projects a finding's details, or returns <c>null</c> when it has none
@@ -27,6 +31,7 @@ public sealed record CheckRouteDetails(
         DangerDetails d => new(Danger: new CheckRouteDangerDetails(
             d.FeatureType,
             d.Depth?.TotalMetres,
+            d.DepthIsDefault,
             d.WaterLevelEffect,
             d.ThresholdKind is { } kind ? Threshold(kind) : null,
             d.Threshold?.TotalMetres,
@@ -63,6 +68,12 @@ public sealed record CheckRouteDetails(
             a.Until.ToUniversalTime(),
             a.AtEta,
             a.AreaKind is { } areaKind && RouteAreaKinds.Names.TryGetValue(areaKind, out var kindName) ? kindName : null)),
+        SafetyContourFeatureDetails f => new(SafetyContourFeature: new CheckRouteSafetyContourFeatureDetails(f.FeatureType, f.IsStructure, f.IsBerth, f.CutByTrack)),
+        BerthStructuresDetails b => new(BerthStructures: new CheckRouteBerthStructuresDetails(
+            Snake(b.End.ToString()),
+            b.Radius.TotalMetres,
+            b.Features.Select(f => new CheckRouteBerthStructure(f.DatasetId, f.FeatureId, f.FeatureType)).ToList(),
+            b.CrossingCount)),
         AreaKindOffDetails o => new(AreaKindOff: new CheckRouteAreaKindOffDetails(
             RouteAreaKinds.Names.TryGetValue(o.AreaKind, out var offName) ? offName : o.AreaKind.ToString(System.Globalization.CultureInfo.InvariantCulture),
             o.Count)),
@@ -77,6 +88,41 @@ public sealed record CheckRouteDetails(
             c.Margin?.TotalMetres,
             c.MinimumTime?.ToUniversalTime(),
             c.MinutesBelow is { } minutes ? Math.Round(minutes, 1) : null)),
+        WeatherDetails w => new(Weather: new CheckRouteWeatherDetails(
+            CheckRouteWeather.QuantityCode(w.Quantity),
+            w.Gap is { } gap ? Snake(gap.ToString()) : "above_limit",
+            w.FirstLegIndex,
+            w.LastLegIndex,
+            Math.Round(w.Length.TotalNauticalMiles, 4),
+            w.StartTime.ToUniversalTime(),
+            w.EndTime?.ToUniversalTime(),
+            CheckRouteWeather.Unit(w.Quantity),
+            w.Limit is { } limit ? CheckRouteWeather.Value(w.Quantity, limit) : null,
+            w.LimitOrigin is { } origin ? (origin == WeatherLimitOrigin.Route ? "route" : "settings") : null,
+            w.Maximum is { } max ? CheckRouteWeather.Value(w.Quantity, max) : null,
+            w.MaximumTime?.ToUniversalTime(),
+            w.MaximumStepTime?.ToUniversalTime(),
+            w.DatasetId,
+            w.ModelRun?.ToUniversalTime(),
+            w.ForecastStart?.ToUniversalTime(),
+            w.ForecastEnd?.ToUniversalTime())),
+        TropicalCycloneDetails c => new(Cyclone: new CheckRouteCycloneDetails(
+            Snake(c.Kind.ToString()),
+            c.Storm.DatasetId,
+            c.Storm.StormId,
+            c.Storm.Name,
+            c.Storm.Advisory,
+            c.Radius is { } r ? (int)r : null,
+            c.FirstLegIndex,
+            c.LastLegIndex,
+            Math.Round(c.Length.TotalNauticalMiles, 4),
+            c.StartTime.ToUniversalTime(),
+            c.EndTime?.ToUniversalTime(),
+            c.ClosestDistance is { } d ? Math.Round(d.TotalNauticalMiles, 2) : null,
+            c.StormAtClosest?.Centre.Latitude,
+            c.StormAtClosest?.Centre.Longitude,
+            c.StormAtClosest is { } at ? CheckRouteCycloneApproach.BasisCode(at.Basis) : null,
+            c.ForecastEnd?.ToUniversalTime())),
         _ => null,
     };
 
@@ -105,8 +151,9 @@ public sealed record CheckRouteDetails(
 /// <summary>A charted danger behind a finding.</summary>
 public sealed record CheckRouteDangerDetails(
     [property: Description("Its feature type: Wreck, Obstruction or UnderwaterAwashRock.")] string FeatureType,
-    [property: Description("Its charted depth (valueOfSounding) in metres, or null when unknown.")] double? DepthMeters,
-    [property: Description("Its waterLevelEffect code when its depth is unknown (1 or 2 above water, 4 covers and uncovers, 5 awash), or null.")] int? WaterLevelEffect,
+    [property: Description("Its charted depth (valueOfSounding) in metres, else the defaultClearanceDepth it was judged by (depthIsDefault), or null when unknown.")] double? DepthMeters,
+    [property: Description("True when depthMeters is the S-101 defaultClearanceDepth rather than a sounding: a stand-in for judging the danger (such as -15 for a floating obstruction), not a charted depth.")] bool DepthIsDefault,
+    [property: Description("Its waterLevelEffect code (1 or 2 above water, 3 always submerged, 4 covers and uncovers, 5 awash, 7 floating), or null.")] int? WaterLevelEffect,
     [property: Description("The threshold that made it a danger: safety_contour (its depth is no deeper than the safety contour) or keel (shallower than the leg's draft + squat + required UKC); null when its depth is unknown, which is always a danger.")] string? Threshold,
     [property: Description("The threshold in metres, or null.")] double? ThresholdMeters,
     [property: Description("Which side of the track it's on: on_track, port or starboard.")] string Side,
@@ -154,6 +201,26 @@ public sealed record CheckRouteAreaKindOffDetails(
     [property: Description("The kind, as areaKindsOff names it.")] string AreaKind,
     [property: Description("How many areas of the kind the route meets.")] int Count);
 
+/// <summary>A feature that raises the SafetyContour alert, behind a finding.</summary>
+public sealed record CheckRouteSafetyContourFeatureDetails(
+    [property: Description("Its feature type, such as Pontoon, ShorelineConstruction or UnsurveyedArea.")] string FeatureType,
+    [property: Description("True for a structure (anything but an unsurveyed area or land): its finding is titled for the structure, not for depth.")] bool IsStructure,
+    [property: Description("True for a berthing structure (pontoon, floating dock, pier, wharf, landing steps or fender, not ruined, submerged or awash): grouped as route_check.berth_structures near the departure and arrival even when the track cuts it.")] bool IsBerth,
+    [property: Description("True when the track line itself cuts the feature (crosses the area, or passes within 1 m of the point or curve), not just passes within the track clearance. Near the departure and arrival, a structure that isn't a berth stays a crossing only when this is true.")] bool CutByTrack);
+
+/// <summary>The structures at a berth, behind a finding.</summary>
+public sealed record CheckRouteBerthStructuresDetails(
+    [property: Description("Which end of the route: departure or arrival.")] string End,
+    [property: Description("The berth radius they are within, metres.")] double RadiusMeters,
+    [property: Description("The structures, in route order.")] IReadOnlyList<CheckRouteBerthStructure> Features,
+    [property: Description("How many of their findings crossed the track (would have been route_check.crosses_safety_contour).")] int CrossingCount);
+
+/// <summary>One structure at a berth.</summary>
+public sealed record CheckRouteBerthStructure(
+    [property: Description("The dataset that holds it.")] string DatasetId,
+    [property: Description("Its feature id in the dataset.")] string FeatureId,
+    [property: Description("Its feature type.")] string? FeatureType);
+
 /// <summary>An S-100 date range, as the dataset writes it.</summary>
 public sealed record CheckRouteDateRange(
     [property: Description("dateStart (an S100_TruncatedDate, e.g. 2026-03-01 or --03-01), or null when open.")] string? DateStart,
@@ -173,3 +240,42 @@ public sealed record CheckRouteClearanceDetails(
     [property: Description("Below the setting: the least clearance minus the required UKC, metres (negative).")] double? MarginMeters,
     [property: Description("Below the setting: when the margin is least, ISO 8601 UTC, or null without an ETA.")] DateTimeOffset? MinimumTime,
     [property: Description("Below the setting: minutes below it, or null when part of the stretch has no ETA.")] double? MinutesBelow);
+
+/// <summary>A weather-check stretch behind a finding.</summary>
+public sealed record CheckRouteWeatherDetails(
+    [property: Description("wind_speed or significant_wave_height.")] string Quantity,
+    [property: Description("above_limit, or why the stretch isn't checked: forecast_ends, forecast_starts_late, no_coverage or no_data.")] string State,
+    [property: Description("Zero-based first leg of the stretch.")] int FirstLegIndex,
+    [property: Description("Zero-based last leg of the stretch.")] int LastLegIndex,
+    [property: Description("The stretch's length, nautical miles.")] double LengthNm,
+    [property: Description("When the vessel reaches the stretch, ISO 8601 UTC (the departure without ETAs).")] DateTimeOffset StartTime,
+    [property: Description("When the vessel leaves the stretch, ISO 8601 UTC; null without ETAs.")] DateTimeOffset? EndTime,
+    [property: Description("Unit of limit and maximum: kn for wind, m for waves.")] string Unit,
+    [property: Description("Above the limit: the limit, in unit.")] double? Limit,
+    [property: Description("Above the limit: settings or route (RTZ vesselMaxWind/vesselMaxWave).")] string? LimitOrigin,
+    [property: Description("Above the limit: the highest value in the stretch, in unit.")] double? Maximum,
+    [property: Description("Above the limit: ETA at the highest value, ISO 8601 UTC; null without one.")] DateTimeOffset? MaximumTime,
+    [property: Description("Above the limit: the forecast time step the highest value is from, ISO 8601 UTC.")] DateTimeOffset? MaximumStepTime,
+    [property: Description("The weather dataset read, or null for a stretch no grid covers.")] string? DatasetId,
+    [property: Description("That dataset's model run, ISO 8601 UTC, or null.")] DateTimeOffset? ModelRun,
+    [property: Description("forecast_starts_late: the forecast's first step, ISO 8601 UTC.")] DateTimeOffset? ForecastStart,
+    [property: Description("forecast_ends: the forecast's last step, ISO 8601 UTC.")] DateTimeOffset? ForecastEnd);
+
+/// <summary>A tropical cyclone finding's numbers (#1299).</summary>
+public sealed record CheckRouteCycloneDetails(
+    [property: Description("radius, cone, closest_approach or beyond_forecast.")] string Kind,
+    [property: Description("The advisory's dataset id.")] string DatasetId,
+    [property: Description("The storm's ATCF id.")] string StormId,
+    [property: Description("The storm's name.")] string Name,
+    [property: Description("The advisory number.")] string Advisory,
+    [property: Description("radius: the wind radius, knots (34, 50 or 64); otherwise null.")] int? RadiusKnots,
+    [property: Description("Zero-based first leg of the stretch (the closest approach's leg).")] int FirstLegIndex,
+    [property: Description("Zero-based last leg of the stretch.")] int LastLegIndex,
+    [property: Description("The stretch's length, nautical miles (0 for the closest approach).")] double LengthNm,
+    [property: Description("When the vessel reaches the stretch, or is at the closest approach, ISO 8601 UTC (the departure without ETAs).")] DateTimeOffset StartTime,
+    [property: Description("When the vessel leaves the stretch, ISO 8601 UTC; null without ETAs.")] DateTimeOffset? EndTime,
+    [property: Description("closest_approach: the distance to the storm's centre, nautical miles.")] double? ClosestNm,
+    [property: Description("closest_approach: latitude of the storm's centre then.")] double? StormLatitude,
+    [property: Description("closest_approach: longitude of the storm's centre then.")] double? StormLongitude,
+    [property: Description("closest_approach: forecast, estimated or best_track.")] string? Basis,
+    [property: Description("beyond_forecast: the storm's last forecast point, ISO 8601 UTC.")] DateTimeOffset? ForecastEnd);

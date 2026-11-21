@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
-using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Core.Scheduling;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 
@@ -24,9 +26,25 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// (<see cref="DiskTileCache"/>) and read from there before rendering.
 /// At most <c>--parallel</c> blocks render at once. Each palette, and each
 /// time step asked for with a <c>t</c> query parameter (snapped to the nearest
-/// of <see cref="Times"/>), is portrayed the first time it is asked for
+/// of <see cref="Times"/>; with <c>--strict-time</c>, each dataset to its own
+/// step within half a step, or left out), is portrayed the first time it is asked for
 /// (<see cref="SceneCache"/>). Tiles outside the tiled area or its zoom
 /// range, and tiles on which nothing was drawn, read as <see langword="null"/>.
+/// </para>
+/// <para>
+/// Mariner settings registered with <see cref="MarinerStyles"/> are served as
+/// the styles <c>{palette}-{hash}</c> (issue #1493), each portrayed with the
+/// registered values over the start-up ones. Tiles are cached under a key of
+/// the settings' values rather than the client's hash, so they are shared by
+/// hashes with the same values and never reused for other values.
+/// </para>
+/// <para>
+/// Datasets grouped into WMTS layers (issue #1495, <see cref="TileLayers"/>)
+/// are also served as each layer's own tiles (<see cref="Layer"/>), drawn
+/// from a scene of the layer's datasets alone. Vector datasets' portrayals
+/// are shared with the scene of every dataset, so a layer costs little more
+/// than compositing its datasets again. Its tiles are cached under the
+/// style and the layer.
 /// </para>
 /// </remarks>
 internal sealed class RenderedTileSource : ITileSource, IDisposable
@@ -42,8 +60,17 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly TileCache _cache;
     private readonly DiskTileCache? _diskCache;
     private readonly SceneCache _scenes;
-    private readonly ConcurrentDictionary<(string Palette, DateTime? Time, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
+    private readonly MarinerStyleRegistry _styles;
+    private readonly DatasetTileKeys? _contentKeys;
+    private readonly IReadOnlyList<string?> _datasetLayers;
+    private readonly IReadOnlyDictionary<string, LayerSource> _layers;
+    private StyleList _palettes = new(0, AllPalettes);
+    private readonly ConcurrentDictionary<(string Style, DateTime? Time, string? Variant, TileBlock Block, int PixelRatio), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
+
+    // With --verbose: a line per block rendered, and the requests waiting on each block render.
+    private readonly Action<string>? _blockLog;
+    private readonly ConcurrentDictionary<(string Style, DateTime? Time, string? Variant, TileBlock Block, int PixelRatio), int> _waiting = new();
 
     /// <param name="session">The opened datasets. The source disposes it.</param>
     /// <param name="scene">The datasets prepared in <paramref name="defaultPalette"/>.</param>
@@ -53,6 +80,28 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <param name="parallel">The most blocks rendered at once.</param>
     /// <param name="cacheBytes">The most encoded tile bytes kept in memory.</param>
     /// <param name="diskCache">Tiles kept on disk across runs, behind the memory cache; <see langword="null"/> for none.</param>
+    /// <param name="featureQuery">Finds the features at a point in the same datasets, for WMS GetFeatureInfo; <see langword="null"/> for none. The source disposes it.</param>
+    /// <param name="marinerStyles">The mariner settings sets clients register; <see langword="null"/> for a new, empty one.</param>
+    /// <param name="strictTime">
+    /// Whether a time-varying dataset draws nothing at a time more than half a
+    /// step from its own steps (<c>--strict-time</c>), instead of its step
+    /// nearest the nearest of <see cref="Times"/>.
+    /// </param>
+    /// <param name="memoryCache">
+    /// The memory cache, shared with the sources the datasets are reopened as;
+    /// <see langword="null"/> for one of its own of <paramref name="cacheBytes"/>.
+    /// </param>
+    /// <param name="contentKeys">
+    /// Keys tiles by the datasets that reach them (<c>--manage-datasets</c>,
+    /// issue #1494), so a shared <paramref name="memoryCache"/> and the
+    /// <paramref name="diskCache"/> reuse them for other sets of datasets;
+    /// <see langword="null"/> to key them by every dataset served.
+    /// </param>
+    /// <param name="layers">
+    /// The WMTS layer of each dataset besides the layer of every dataset
+    /// (issue #1495), by input index, <see langword="null"/> for one in no
+    /// other layer (<see cref="TileLayers.Assign"/>); <see langword="null"/> for none.
+    /// </param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -61,8 +110,16 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         int blockSize,
         int parallel,
         long cacheBytes,
-        DiskTileCache? diskCache = null)
+        DiskTileCache? diskCache = null,
+        DatasetFeatureQuery? featureQuery = null,
+        MarinerStyleRegistry? marinerStyles = null,
+        bool strictTime = false,
+        TileCache? memoryCache = null,
+        DatasetTileKeys? contentKeys = null,
+        IReadOnlyList<string?>? layers = null,
+        Action<string>? blockLog = null)
     {
+        _blockLog = blockLog;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
 
@@ -71,22 +128,156 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _defaultPalette = defaultPalette.Trim().ToLowerInvariant();
         _blockSize = blockSize;
         _renderSlots = new SemaphoreSlim(parallel, parallel);
-        _cache = new TileCache(cacheBytes);
+        _cache = memoryCache ?? new TileCache(cacheBytes);
+        _contentKeys = contentKeys;
         _diskCache = diskCache;
+        FeatureQuery = featureQuery;
+        _styles = marinerStyles ?? new MarinerStyleRegistry();
+        StrictTime = strictTime;
         _scenes = new SceneCache(session);
         _scenes.Seed(_defaultPalette, null, scene);
+        Revision = diskCache?.Fingerprint ?? session.Fingerprint();
+        _datasetLayers = layers ?? new string?[session.Paths.Count];
+        _layers = OpenLayers();
+        Legend = new TileLegend(requested => TryResolveStyle(requested, out var palette, out var mariner, out var key)
+            ? new TileLegend.Resolved(key, palette, () => _scenes.Get(key, palette, mariner, new TimeChoice(null)))
+            : null);
     }
+
+    /// <summary>The layers the datasets are grouped into, in the order their first dataset comes.</summary>
+    private Dictionary<string, LayerSource> OpenLayers()
+    {
+        var layers = new Dictionary<string, LayerSource>(StringComparer.Ordinal);
+        var members = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        var order = new List<string>();
+        for (int i = 0; i < _datasetLayers.Count; i++)
+        {
+            if (_datasetLayers[i] is not { } id)
+                continue;
+            if (!members.TryGetValue(id, out var set))
+            {
+                members[id] = set = [];
+                order.Add(id);
+            }
+
+            set.Add(i);
+        }
+
+        foreach (var id in order)
+            layers[id] = new LayerSource(this, id, members[id], _session.TimesOf(members[id]), LayerBounds(members[id]));
+        return layers;
+    }
+
+    /// <summary>
+    /// The bounds of a layer's datasets, within the area served: the union of
+    /// their extents, or the area's bounds when one isn't known or crosses the
+    /// antimeridian.
+    /// </summary>
+    private (double West, double South, double East, double North) LayerBounds(IReadOnlySet<int> datasets)
+    {
+        var all = _layout.Bounds;
+        var crs = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+        double west = double.PositiveInfinity, south = double.PositiveInfinity, east = double.NegativeInfinity, north = double.NegativeInfinity;
+        foreach (int i in datasets)
+        {
+            EncDotNet.S100.Pipelines.BoundingBox? extent;
+            try
+            {
+                extent = _session.Processors[i].Metadata.GetGeographicExtent(crs);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                extent = null;
+            }
+
+            if (extent is null || extent.WestLongitude > extent.EastLongitude
+                || !double.IsFinite(extent.SouthLatitude) || !double.IsFinite(extent.NorthLatitude))
+            {
+                return all;
+            }
+
+            west = Math.Min(west, extent.WestLongitude);
+            south = Math.Min(south, extent.SouthLatitude);
+            east = Math.Max(east, extent.EastLongitude);
+            north = Math.Max(north, extent.NorthLatitude);
+        }
+
+        // An area kept in a 0…360° frame or across the antimeridian is left whole.
+        if (all.West > all.East || all.West < -180 || all.East > 180)
+            return all;
+
+        var bounds = (Math.Max(west, all.West), Math.Max(south, all.South), Math.Min(east, all.East), Math.Min(north, all.North));
+        return bounds.Item1 < bounds.Item3 && bounds.Item2 < bounds.Item4 ? bounds : all;
+    }
+
+    /// <summary>The WMTS layers besides the layer of every dataset (issue #1495), in order.</summary>
+    public IReadOnlyList<string> Layers => [.. _layers.Keys];
+
+    /// <summary>The tiles of the layer <paramref name="id"/>, or <see langword="null"/> when there is none.</summary>
+    public ITileSource? Layer(string id) => _layers.GetValueOrDefault(id);
+
+    /// <summary>The layer of each dataset besides the layer of every dataset, by input index; <see langword="null"/> for none.</summary>
+    public IReadOnlyList<string?> DatasetLayers => _datasetLayers;
 
     public string Path => $"{_session.Specs.Count} dataset(s) ({string.Join(", ", _session.Specs.Distinct())})";
 
     public TileImageFormat Format => _session.Format;
 
-    public IReadOnlyList<string> Palettes => AllPalettes;
+    /// <summary>The palettes, then each registered mariner settings set in each palette (<c>{palette}-{hash}</c>).</summary>
+    public IReadOnlyList<string> Palettes
+    {
+        get
+        {
+            // Read at every tile request: rebuilt only when a set is registered.
+            int sets = _styles.Count;
+            var cached = Volatile.Read(ref _palettes);
+            if (cached.Sets == sets)
+                return cached.Styles;
+
+            var styles = new StyleList(sets, [.. AllPalettes, .. _styles.Styles(AllPalettes)]);
+            Volatile.Write(ref _palettes, styles);
+            return styles.Styles;
+        }
+    }
+
+    public MarinerStyleRegistry MarinerStyles => _styles;
+
+    public bool HasDatasets => true;
+
+    /// <summary>The legend graphics of the styles (issue #1501).</summary>
+    public TileLegend Legend { get; }
+
+    public bool HasLegend => Legend.HasRows;
+
+    public (int Width, int Height)? LegendSize(string? style) => Legend.SizeOf(style);
+
+    // Building a style's legend may portray, so it runs off the request thread.
+    public async ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+        await Task.Run(() => Legend.Render(style, options), cancellationToken).ConfigureAwait(false);
+
+    // Coverage polygons come from the default scene's portrayal, which is
+    // cached (and prepared at start-up).
+    public JsonObject ToDatasetsJson() => DatasetsDocument.Build(_session, _scenes.Get(_defaultPalette, null), _layers.Count > 0 ? _datasetLayers : null);
 
     public IReadOnlyList<DateTime> Times => _session.Times;
 
+    public DatasetFeatureQuery? FeatureQuery { get; }
+
+    /// <summary>
+    /// The fingerprint of the datasets and settings these tiles are drawn from
+    /// (<see cref="TileRenderSession.Fingerprint()"/>), taken when the source
+    /// was opened: the same one the disk cache keeps them under.
+    /// </summary>
+    public string Revision { get; }
+
+    /// <summary>Whether times outside a dataset's steps draw nothing for it (<c>--strict-time</c>).</summary>
+    public bool StrictTime { get; }
+
     /// <summary>The area and zoom range served.</summary>
     public TileLayout Layout => _layout;
+
+    /// <summary>The datasets rendered.</summary>
+    internal TileRenderSession Session => _session;
 
     /// <summary>The number of prepared scenes (palette and time step) held.</summary>
     internal int ScenesHeld => _scenes.Count;
@@ -94,11 +285,26 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <summary>The number of blocks rendered so far.</summary>
     public long BlocksRendered => Interlocked.Read(ref _blocksRendered);
 
-    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
+    /// <summary>The pixel ratios tiles can be drawn at: 256- and 512-pixel tiles.</summary>
+    internal static bool IsPixelRatio(int pixelRatio) => pixelRatio is 1 or 2;
+
+    public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
+        ReadAsync(zoom, x, y, palette, time, layer: null, _layout.TileOptions.PixelRatio, cancellationToken);
+
+    public bool CanReadPixelRatio(int pixelRatio) => IsPixelRatio(pixelRatio);
+
+    public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken) =>
+        ReadAsync(zoom, x, y, palette, time, layer: null, pixelRatio, cancellationToken);
+
+    /// <summary>A tile of every dataset, or of <paramref name="layer"/>'s alone, at <paramref name="pixelRatio"/>.</summary>
+    private async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, LayerSource? layer, int pixelRatio, CancellationToken cancellationToken)
     {
-        palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
-        time = time is { } requested ? _session.SnapTime(requested) : null;
-        if (!AllPalettes.Contains(palette)
+        if (!IsPixelRatio(pixelRatio))
+            return null;
+
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime, layer?.Members) : new TimeChoice(null);
+        if (choice.Empty
+            || !TryResolveStyle(palette, out var paletteName, out var mariner, out var style)
             || zoom < _layout.MinZoom || zoom > _layout.MaxZoom
             || !TileSource.IsValid(zoom, x, y)
             || BlockFor(_layout.Area, _blockSize, zoom, x, y) is not { } block)
@@ -106,7 +312,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        var key = new TileKey(palette, zoom, x, y, time);
+        var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
+        var key = new TileKey(style, zoom, x, y, choice.Time, choice.Variant, content, layer?.Id, PixelRatioKey(pixelRatio));
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -116,9 +323,12 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
         else
         {
+            var renderKey = (SceneStyle(style, layer), choice.Time, choice.Variant, block, pixelRatio);
             var render = _rendering.GetOrAdd(
-                (palette, time, block),
-                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Palette, k.Time, k.Block)));
+                renderKey,
+                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(style, paletteName, mariner, choice, k.Block, layer, k.PixelRatio)));
+            if (_blockLog is not null)
+                _waiting.AddOrUpdate(renderKey, 1, (_, n) => n + 1);
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -126,24 +336,120 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         return data.Length == 0 ? null : data;
     }
 
-    public JsonObject ToTileJson(string? palette, DateTime? time = null)
+    public bool CanRenderViews => true;
+
+    public async ValueTask<SKBitmap?> RenderViewAsync(
+        int zoom, double minX, double minY, double maxX, double maxY, int width, int height,
+        string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
         time = time is { } requested ? _session.SnapTime(requested) : null;
+        if (!AllPalettes.Contains(palette) || zoom < _layout.MinZoom || zoom > _layout.MaxZoom)
+            return null;
+
+        await _renderSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // As for a block: the scene and the zoom level's renderer are
+            // prepared off the request thread, outside a job.
+            var renderer = await Task.Run(() => _scenes.Get(palette, time).RendererFor(zoom, _layout), cancellationToken).ConfigureAwait(false);
+            return await WorkScheduler.Shared.RunAsync(
+                WorkStage.Raster,
+                _ => ClipToTiles(renderer.RenderView(zoom, minX, minY, maxX, maxY, width, height), zoom, minX, maxY, (maxX - minX) / width, (maxY - minY) / height),
+                cancellationToken,
+                WorkPriority.Visible()).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderSlots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Clears what <paramref name="view"/> shows outside the tiles served at
+    /// <paramref name="zoom"/> (those that cover the tiled area), as the tiles
+    /// themselves would leave it.
+    /// </summary>
+    private SKBitmap ClipToTiles(SKBitmap view, int zoom, double originX, double originY, double pixelX, double pixelY)
+    {
+        // A box past ±180° shows the world's copies; leave it whole.
+        if (originX < -XyzTileGrid.Extent || originX + (view.Width * pixelX) > XyzTileGrid.Extent)
+            return view;
+
+        var area = _layout.Area;
+        double size = XyzTileGrid.TileWorldSize(zoom);
+        var (firstRow, lastRow) = XyzTileGrid.Rows(zoom, area.MinY, area.MaxY);
+        double top = XyzTileGrid.Extent - (firstRow * size), bottom = XyzTileGrid.Extent - ((lastRow + 1) * size);
+
+        // An area across the antimeridian or round the world is left whole
+        // east to west; its tiles wrap.
+        double west = double.NegativeInfinity, east = double.PositiveInfinity;
+        if (area.MinX >= -XyzTileGrid.Extent && area.MaxX <= XyzTileGrid.Extent)
+        {
+            west = (Math.Floor((area.MinX + XyzTileGrid.Extent) / size) * size) - XyzTileGrid.Extent;
+            east = (Math.Ceiling((area.MaxX + XyzTileGrid.Extent) / size) * size) - XyzTileGrid.Extent;
+        }
+
+        float Px(double x) => (float)Math.Clamp((x - originX) / pixelX, -1, view.Width + 1);
+        float Py(double y) => (float)Math.Clamp((originY - y) / pixelY, -1, view.Height + 1);
+        var inside = new SKRect(Px(west), Py(top), Px(east), Py(bottom));
+        if (inside.Left <= 0 && inside.Top <= 0 && inside.Right >= view.Width && inside.Bottom >= view.Height)
+            return view;
+
+        using var canvas = new SKCanvas(view);
+        canvas.ClipRect(inside, SKClipOperation.Difference);
+        canvas.Clear(SKColors.Transparent);
+        return view;
+    }
+
+    public JsonObject ToTileJson(string? palette, DateTime? time = null) => ToTileJson(palette, time, layer: null);
+
+    /// <summary>The TileJSON of every dataset, or of <paramref name="layer"/>'s alone.</summary>
+    private JsonObject ToTileJson(string? palette, DateTime? time, LayerSource? layer)
+    {
+        if (!TryResolveStyle(palette, out var paletteName, out var mariner, out _))
+            (paletteName, mariner) = (_defaultPalette, null);
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime, layer?.Members) : new TimeChoice(null);
+        var specs = layer is null ? _session.Specs : [.. layer.Members.Order().Select(i => _session.Specs[i])];
+        var times = layer?.Times ?? Times;
         var json = new TileSetMetadata
         {
-            Name = "s100 tiles",
-            Description = $"S-100 portrayal of {string.Join(", ", _session.Specs.Distinct())} rendered on demand by s100 tiles serve.",
+            Name = layer is null ? "s100 tiles" : "s100 tiles: " + layer.Id,
+            Description = $"S-100 portrayal of {string.Join(", ", specs.Distinct())} rendered on demand by s100 tiles serve.",
             Format = Format,
             MinZoom = _layout.MinZoom,
             MaxZoom = _layout.MaxZoom,
-            Bounds = _layout.Bounds,
+            Bounds = layer?.Bounds ?? _layout.Bounds,
             TilePixelSize = _layout.TileOptions.PixelRatio * XyzTileGrid.TileSize,
-            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, palette, time),
+            // With --strict-time, a time at which datasets draw other than at
+            // their steps nearest a listed time is echoed as asked, so tile
+            // URLs built from it draw the same.
+            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, paletteName, choice.Variant is null ? choice.Time : time, mariner),
         }.ToTileJson(tilesUrl: null);
+        json["s100"]!["revision"] = Revision;
         json["s100"]!["palettes"] = new JsonArray(AllPalettes.Select(p => (JsonNode?)p).ToArray());
-        if (Times.Count > 0)
-            json["s100"]!["times"] = new JsonArray(Times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
+        if (mariner is not null)
+            json["s100"]!["style"] = palette!.Trim().ToLowerInvariant();
+        if (layer is not null)
+            json["s100"]!["layer"] = layer.Id;
+        if (times.Count > 0)
+            json["s100"]!["times"] = new JsonArray(times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
+        if (StrictTime && times.Count > 0)
+        {
+            // Each time-varying dataset and the step it draws, null when it
+            // has no data at the time asked for.
+            json["s100"]!["strictTime"] = true;
+            if (choice.Time is not null)
+            {
+                json["s100"]!["datasets"] = new JsonArray([.. _session.DescribeTime(choice, layer?.Members).Select(d => (JsonNode?)new JsonObject
+                {
+                    ["name"] = d.Name,
+                    ["spec"] = d.Spec,
+                    ["time"] = d.Step is { } step ? TileRenderSession.FormatTime(step) : null,
+                })]);
+            }
+        }
+
         return json;
     }
 
@@ -169,9 +475,20 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
     }
 
+    /// <summary>
+    /// Waits until every tile queued for the disk cache has reached the disk.
+    /// Disposing waits only briefly, so a caller that reads the cache folder
+    /// next (a test, say) waits here first.
+    /// </summary>
+    /// <param name="timeout">The longest time to wait.</param>
+    /// <returns><see langword="true"/> when there is no disk cache or its queue drained within <paramref name="timeout"/>.</returns>
+    internal bool WaitForDiskWrites(TimeSpan timeout) => _diskCache?.WaitForWrites(timeout) ?? true;
+
     public void Dispose()
     {
         _renderSlots.Dispose();
+        _diskCache?.Dispose();
+        FeatureQuery?.Dispose();
         _session.Dispose();
     }
 
@@ -221,16 +538,133 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         static int Mod(int value, int divisor) => ((value % divisor) + divisor) % divisor;
     }
 
-    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string palette, DateTime? time, TileBlock block)
+    /// <summary>
+    /// Resolves a requested style — a palette, <c>{palette}-{hash}</c> of a
+    /// registered settings set, or <see langword="null"/> for the default
+    /// palette — to its palette, its mariner settings (<see langword="null"/>
+    /// for the start-up ones) and the key its tiles and scenes are cached under.
+    /// </summary>
+    private bool TryResolveStyle(string? requested, out string palette, out MarinerStyle? mariner, out string key)
     {
+        var (name, hash) = MarinerStyleRegistry.Split(requested?.Trim().ToLowerInvariant() ?? _defaultPalette);
+        palette = name;
+        mariner = null;
+        key = name;
+        if (!AllPalettes.Contains(name))
+            return false;
+        if (hash is null)
+            return true;
+        if (!_styles.TryGet(hash, out var registered))
+            return false;
+
+        mariner = registered;
+        key = name + "-m" + registered.Key;
+        return true;
+    }
+
+    /// <summary>
+    /// The tiles of one WMTS layer (issue #1495): the datasets in it alone,
+    /// with their own time steps and bounds, in the same styles, zoom range
+    /// and tile grid as the tiles of every dataset.
+    /// </summary>
+    private sealed class LayerSource(
+        RenderedTileSource owner,
+        string id,
+        IReadOnlySet<int> members,
+        IReadOnlyList<DateTime> times,
+        (double West, double South, double East, double North) bounds) : ITileSource
+    {
+        public string Id => id;
+
+        /// <summary>The layer's datasets, by input index.</summary>
+        public IReadOnlySet<int> Members => members;
+
+        public (double West, double South, double East, double North) Bounds => bounds;
+
+        public string Path => $"{owner.Path} layer {id}";
+
+        public TileImageFormat Format => owner.Format;
+
+        public IReadOnlyList<string> Palettes => owner.Palettes;
+
+        public IReadOnlyList<DateTime> Times => times;
+
+        public MarinerStyleRegistry? MarinerStyles => owner.MarinerStyles;
+
+        public string? Revision => owner.Revision;
+
+        // The style's legend, of every dataset (issue #1501).
+        public bool HasLegend => owner.HasLegend;
+
+        public (int Width, int Height)? LegendSize(string? style) => owner.LegendSize(style);
+
+        public ValueTask<byte[]?> ReadLegendAsync(string? style, TileLegend.Options options, CancellationToken cancellationToken) =>
+            owner.ReadLegendAsync(style, options, cancellationToken);
+
+        // A layer of every dataset (such as --layers-by product over one
+        // product) draws what the tiles of every dataset draw, so it shares
+        // their scenes, renders and cached tiles rather than rendering its own.
+        public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
+            ReadAsync(zoom, x, y, palette, time, owner._layout.TileOptions.PixelRatio, cancellationToken);
+
+        public bool CanReadPixelRatio(int pixelRatio) => IsPixelRatio(pixelRatio);
+
+        public ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, int pixelRatio, CancellationToken cancellationToken) =>
+            owner.ReadAsync(zoom, x, y, palette, time, members.Count == owner._session.Paths.Count ? null : this, pixelRatio, cancellationToken);
+
+        public JsonObject ToTileJson(string? palette, DateTime? time = null) => owner.ToTileJson(palette, time, this);
+    }
+
+    /// <summary>The <see cref="Palettes"/> with <see cref="Sets"/> settings sets registered.</summary>
+    private sealed record StyleList(int Sets, IReadOnlyList<string> Styles);
+
+    /// <summary>
+    /// The key of <paramref name="style"/>'s scenes and block renders for
+    /// <paramref name="layer"/>: <c>{style}~{layer}</c>, apart from those of
+    /// every dataset. Tiles carry the layer in <see cref="TileKey.Layer"/> instead.
+    /// </summary>
+    private static string SceneStyle(string style, LayerSource? layer) =>
+        layer is null ? style : style + "~" + layer.Id;
+
+    /// <summary>The <see cref="TileKey.PixelRatio"/> of a tile drawn at <paramref name="pixelRatio"/>: <see langword="null"/> at the served tile size.</summary>
+    private int? PixelRatioKey(int pixelRatio) => pixelRatio == _layout.TileOptions.PixelRatio ? null : pixelRatio;
+
+    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string style, string palette, MarinerStyle? mariner, TimeChoice choice, TileBlock block, LayerSource? layer, int pixelRatio)
+    {
+        var sceneStyle = SceneStyle(style, layer);
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
         {
-            // Rendering is CPU-bound; keep it off the request threads.
-            var tiles = await Task.Run(() => Render(palette, time, block)).ConfigureAwait(false);
+            long slotted = System.Diagnostics.Stopwatch.GetTimestamp();
+
+            // Preparing the scene and the zoom level's renderer may portray,
+            // which runs its own jobs on the work scheduler, so it happens off
+            // the request threads but outside a job; the block itself renders
+            // and encodes as one Visible job.
+            var renderer = await Task.Run(() => _scenes.Get(sceneStyle, palette, mariner, choice, layer?.Members).RendererFor(block.Zoom, _layout.AtPixelRatio(pixelRatio))).ConfigureAwait(false);
+            long prepared = System.Diagnostics.Stopwatch.GetTimestamp();
+            TimeSpan drawn = default;
+            var tiles = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Raster,
+                _ => Render(renderer, block, out drawn),
+                CancellationToken.None,
+                WorkPriority.Visible()).ConfigureAwait(false);
+            if (_blockLog is not null)
+            {
+                var total = System.Diagnostics.Stopwatch.GetElapsedTime(prepared);
+                _waiting.TryRemove((sceneStyle, choice.Time, choice.Variant, block, pixelRatio), out int waiting);
+                _blockLog(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"block {sceneStyle} z{block.Zoom} {block.X},{block.Y} {block.Columns}x{block.Rows}{(pixelRatio == 1 ? string.Empty : $" @{pixelRatio}x")}: " +
+                    $"queued {System.Diagnostics.Stopwatch.GetElapsedTime(started, slotted).TotalMilliseconds:F0} ms, " +
+                    $"prepared {System.Diagnostics.Stopwatch.GetElapsedTime(slotted, prepared).TotalMilliseconds:F0} ms, " +
+                    $"drawn {drawn.TotalMilliseconds:F0} ms, encoded {(total - drawn).TotalMilliseconds:F0} ms, " +
+                    $"{waiting} request(s) waiting"));
+            }
             foreach (var ((x, y), data) in tiles)
             {
-                var key = new TileKey(palette, block.Zoom, x, y, time);
+                var content = layer is null ? _contentKeys?.For(block) : _contentKeys?.For(block, layer.Id, layer.Members);
+                var key = new TileKey(style, block.Zoom, x, y, choice.Time, choice.Variant, content, layer?.Id, PixelRatioKey(pixelRatio));
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -244,14 +678,15 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
             // Later requests find the tiles in the cache (or render again if
             // they were evicted).
-            _rendering.TryRemove((palette, time, block), out _);
+            _rendering.TryRemove((sceneStyle, choice.Time, choice.Variant, block, pixelRatio), out _);
         }
     }
 
-    private Dictionary<(int X, int Y), byte[]> Render(string palette, DateTime? time, TileBlock block)
+    private Dictionary<(int X, int Y), byte[]> Render(ChartTileRenderer renderer, TileBlock block, out TimeSpan drawn)
     {
-        var scene = _scenes.Get(palette, time);
-        var rendered = scene.RendererFor(block.Zoom, _layout).Render(block);
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        var rendered = renderer.Render(block);
+        drawn = System.Diagnostics.Stopwatch.GetElapsedTime(start);
         try
         {
             return rendered.ToDictionary(t => (t.X, t.Y), t => t.IsEmpty ? [] : _session.Encode(t));
@@ -265,8 +700,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 }
 
 /// <summary>
-/// The prepared scenes of a <see cref="RenderedTileSource"/>, one per palette
-/// and time step, created on first use. Only the most recently used few are
+/// The prepared scenes of a <see cref="RenderedTileSource"/>, one per style
+/// (a palette, or a palette with mariner settings) and time step, created on first use. Only the most recently used few are
 /// kept, so stepping through a long forecast doesn't hold a scene per step;
 /// one evicted is prepared again when next needed. Thread-safe.
 /// </summary>
@@ -276,8 +711,8 @@ internal sealed class SceneCache(TileRenderSession session)
     public const int Capacity = 8;
 
     private readonly Lock _gate = new();
-    private readonly Dictionary<(string Palette, DateTime? Time), LinkedListNode<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)>> _entries = [];
-    private readonly LinkedList<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)> _recency = new();
+    private readonly Dictionary<(string Style, DateTime? Time, string? Variant), LinkedListNode<((string Style, DateTime? Time, string? Variant) Key, Lazy<TileScene> Scene)>> _entries = [];
+    private readonly LinkedList<((string Style, DateTime? Time, string? Variant) Key, Lazy<TileScene> Scene)> _recency = new();
 
     /// <summary>The number of scenes held.</summary>
     public int Count
@@ -290,17 +725,28 @@ internal sealed class SceneCache(TileRenderSession session)
     }
 
     /// <summary>Adds a scene already prepared.</summary>
-    public void Seed(string palette, DateTime? time, TileScene scene) => Entry(palette, time, new Lazy<TileScene>(scene));
+    public void Seed(string palette, DateTime? time, TileScene scene) => Entry(palette, new TimeChoice(time), new Lazy<TileScene>(scene));
 
     /// <summary>The scene for <paramref name="palette"/> at <paramref name="time"/>, prepared on first use.</summary>
-    public TileScene Get(string palette, DateTime? time) =>
-        Entry(palette, time, new Lazy<TileScene>(() => session.Prepare(palette, time))).Value;
+    public TileScene Get(string palette, DateTime? time) => Get(palette, palette, null, new TimeChoice(time));
 
-    private Lazy<TileScene> Entry(string palette, DateTime? time, Lazy<TileScene> create)
+    /// <summary>
+    /// The scene for the style <paramref name="style"/> — <paramref name="palette"/>
+    /// with <paramref name="mariner"/> over the start-up settings — drawing
+    /// <paramref name="choice"/>, prepared on first use.
+    /// </summary>
+    /// <remarks>
+    /// With <paramref name="datasets"/>, the scene draws only those (a WMTS
+    /// layer's, issue #1495), and <paramref name="style"/> must tell it apart.
+    /// </remarks>
+    public TileScene Get(string style, string palette, MarinerStyle? mariner, TimeChoice choice, IReadOnlySet<int>? datasets = null) =>
+        Entry(style, choice, new Lazy<TileScene>(() => session.Prepare(palette, choice.Time, choice.Steps, mariner, choice.HiddenWarnings, datasets))).Value;
+
+    private Lazy<TileScene> Entry(string style, TimeChoice choice, Lazy<TileScene> create)
     {
         lock (_gate)
         {
-            var key = (palette, time);
+            var key = (style, choice.Time, choice.Variant);
             if (_entries.TryGetValue(key, out var node))
             {
                 _recency.Remove(node);
@@ -320,8 +766,21 @@ internal sealed class SceneCache(TileRenderSession session)
     }
 }
 
-/// <summary>One tile in one palette, at one time step (<see langword="null"/> for <c>--time-step</c>).</summary>
-internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null);
+/// <summary>
+/// One tile in one style — a palette, or <c>{palette}-m{key}</c> with mariner
+/// settings (<see cref="MarinerStyle.Key"/>) — at one time step
+/// (<see langword="null"/> for <c>--time-step</c>); <paramref name="Variant"/>
+/// tells apart the datasets <c>--strict-time</c> draws at that step
+/// (<see cref="TimeChoice.Variant"/>). <paramref name="Content"/> is the
+/// <see cref="DatasetTileKeys"/> key of the datasets that reach it, when tiles
+/// are keyed by those (<c>--manage-datasets</c>); <see langword="null"/> otherwise.
+/// <paramref name="Layer"/> is the group layer (issue #1495) the tile draws
+/// alone, or <see langword="null"/> for the tile of every dataset.
+/// <paramref name="PixelRatio"/> is the pixel ratio of a tile drawn at other
+/// than the served tile size (an "@2x" tile, issue #1563), or
+/// <see langword="null"/> for one at the served size.
+/// </summary>
+internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null, string? Variant = null, string? Content = null, string? Layer = null, int? PixelRatio = null);
 
 /// <summary>
 /// Encoded tiles kept in memory up to a byte budget, evicting the least

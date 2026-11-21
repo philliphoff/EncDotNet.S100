@@ -6,8 +6,8 @@ datasets without a GUI. It hosts:
 
 - the read-only S-100 query tools (`list_datasets`, `describe_feature`,
   `describe_feature_type`, `query_features`, `find_at`, `identify_features`,
-  `nearest_features`, `count_features`, `search_features`, `sample_coverage`,
-  `sample_coverage_along`, `list_specs`, `list_time_steps`); and
+  `nearest_features`, `count_features`, `search_features`, `sample`,
+  `list_specs`, `list_time_steps`); and
 - the mutating session tools (**mutable by default**): `open_dataset`,
   `close_dataset`, `close_all_datasets`, `set_palette`, `set_display_category`,
   `set_display_mode`, `set_time_step`, and `render_to_image` (a headless PNG of
@@ -42,7 +42,7 @@ existing Library file, such as the viewer's, and saves changes to it.
 
 A typical collection flow: `add_library_source` (or `--collection`) →
 `query_library_items` → `library_action download` → `await_library_idle` →
-`sample_coverage`.
+`sample`.
 
 A typical headless-validation flow: `set_palette` (or `set_time_step`) →
 `render_to_image` → inspect the returned PNG.

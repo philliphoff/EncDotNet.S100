@@ -4,7 +4,6 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Routing.Exchange;
 using EncDotNet.S100.Viewer.Services;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
@@ -109,13 +108,14 @@ internal sealed class ImportRouteTool : RouteToolBase
     /// <param name="routes">The routes.</param>
     /// <param name="invoker">UI-thread marshalling.</param>
     /// <param name="exchange">The import, copy and export flows.</param>
-    /// <param name="scratchDirectory">Where content is saved before opening; the temp directory when omitted.</param>
-    public ImportRouteTool(RoutesService routes, IRouteEditInvoker invoker, RouteExchangeService exchange, string? scratchDirectory = null)
+    /// <param name="scratchDirectory">Where content is saved before opening.</param>
+    public ImportRouteTool(RoutesService routes, IRouteEditInvoker invoker, RouteExchangeService exchange, string scratchDirectory)
         : base(routes, invoker)
     {
         ArgumentNullException.ThrowIfNull(exchange);
         _exchange = exchange;
-        _scratch = scratchDirectory ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "soundcharts-route-imports");
+        ArgumentException.ThrowIfNullOrEmpty(scratchDirectory);
+        _scratch = scratchDirectory;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -425,8 +425,4 @@ internal static class ReceivedRouteMcpAdapters
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }

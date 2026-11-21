@@ -16,6 +16,10 @@ public partial class LibraryPanelView : UserControl
     public static readonly IValueConverter BoolToWeight =
         new FuncValueConverter<bool, FontWeight>(isCollection => isCollection ? FontWeight.SemiBold : FontWeight.Normal);
 
+    /// <summary>A live feed's secret option is masked; other options aren't.</summary>
+    public static readonly IValueConverter SecretMask =
+        new FuncValueConverter<bool, char>(isSecret => isSecret ? '\u2022' : '\0');
+
     public LibraryPanelView()
     {
         InitializeComponent();
@@ -37,6 +41,42 @@ public partial class LibraryPanelView : UserControl
 
     private LibraryPanelViewModel? _viewModel;
 
+    /// <summary>
+    /// Lists the live feeds under the Add menu's Live feeds header (data source
+    /// design note D8). One already subscribed to is shown as added; choosing
+    /// it puts it back on the map.
+    /// </summary>
+    private void OnAddMenuOpening(object? sender, EventArgs e)
+    {
+        if (sender is not MenuFlyout flyout)
+            return;
+        var header = flyout.Items.OfType<MenuItem>()
+            .FirstOrDefault(i => Avalonia.Automation.AutomationProperties.GetAutomationId(i) == "Library.AddMenu.LiveFeeds");
+        if (header is null)
+            return;
+        var start = flyout.Items.IndexOf(header) + 1;
+        while (flyout.Items.Count > start)
+            flyout.Items.RemoveAt(start);
+        var feeds = App.Services.GetService(typeof(Services.Sources.LiveFeedLibrary)) as Services.Sources.LiveFeedLibrary;
+        if (feeds is null)
+            return;
+        var subscribed = feeds.Subscribed;
+        foreach (var registration in feeds.Offered)
+        {
+            var item = new MenuItem
+            {
+                Header = subscribed.Contains(registration.Id)
+                    ? string.Format(System.Globalization.CultureInfo.CurrentCulture, EncDotNet.S100.Viewer.Resources.Strings.Label_DataSourceAlreadyAddedFormat, registration.DisplayName)
+                    : registration.DisplayName,
+            };
+            ToolTip.SetTip(item, registration.Description);
+            Avalonia.Automation.AutomationProperties.SetAutomationId(item, "Library.AddMenu.LiveFeed." + registration.Id);
+            Avalonia.Automation.AutomationProperties.SetName(item, registration.DisplayName);
+            item.Click += (_, _) => feeds.Subscribe(registration);
+            flyout.Items.Add(item);
+        }
+    }
+
     /// <summary>Derives the SECOM tone tints (#883) from the live theme.</summary>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -50,14 +90,14 @@ public partial class LibraryPanelView : UserControl
 
         if (_viewModel is not null)
         {
-            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-            _viewModel.Revealed -= OnRevealed;
+            _viewModel.List.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.List.Revealed -= OnRevealed;
         }
         _viewModel = DataContext as LibraryPanelViewModel;
         if (_viewModel is not null)
         {
-            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-            _viewModel.Revealed += OnRevealed;
+            _viewModel.List.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.List.Revealed += OnRevealed;
         }
     }
 
@@ -71,8 +111,8 @@ public partial class LibraryPanelView : UserControl
     /// <summary>A map tap selects a dataset without changing the list: bring its row into view.</summary>
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(LibraryPanelViewModel.SelectedItem)
-            || _viewModel is not { HasTap: true, SelectedItem: { } item }
+        if (e.PropertyName != nameof(LibraryListViewModel.SelectedItem)
+            || _viewModel is not { Tap.HasTap: true, List.SelectedItem: { } item }
             || this.FindControl<ListBox>("ItemList") is not { } list)
         {
             return;
@@ -149,13 +189,13 @@ public partial class LibraryPanelView : UserControl
             box.LostFocus += (_, _) =>
             {
                 if (box.IsVisible && DataContext is LibraryPanelViewModel vm)
-                    vm.CommitRenameCommand.Execute(null);
+                    vm.Tree.CommitRenameCommand.Execute(null);
             };
         }
     }
 
     private void OnCopySourceUrl(object? sender, RoutedEventArgs e) =>
-        CopyToClipboard((DataContext as LibraryPanelViewModel)?.SelectedNode?.SourceUrl?.AbsoluteUri);
+        CopyToClipboard((DataContext as LibraryPanelViewModel)?.Tree.SelectedNode?.SourceUrl?.AbsoluteUri);
 
     private void CopyToClipboard(string? text)
     {
@@ -189,7 +229,7 @@ public partial class LibraryPanelView : UserControl
     {
         // Only Enter on the row itself: a tag's button inside the row has its own.
         if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None && e.Source is ListBoxItem
-            && (DataContext as LibraryPanelViewModel)?.SelectedItem is not null)
+            && (DataContext as LibraryPanelViewModel)?.List.SelectedItem is not null)
         {
             OpenSelected();
             e.Handled = true;
@@ -200,9 +240,9 @@ public partial class LibraryPanelView : UserControl
     {
         if (DataContext is not LibraryPanelViewModel vm)
             return;
-        vm.CenterOnSelected();
-        if (vm.LoadCommand.CanExecute(null))
-            vm.LoadCommand.Execute(null);
+        vm.Details.CenterOnItem();
+        if (vm.Details.LoadCommand.CanExecute(null))
+            vm.Details.LoadCommand.Execute(null);
     }
 
     private void OnListContainerPrepared(object? sender, ContainerPreparedEventArgs e)
@@ -222,6 +262,6 @@ public partial class LibraryPanelView : UserControl
     private void OnItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is LibraryPanelViewModel vm && sender is ListBoxItem { DataContext: LibraryItemViewModel entry })
-            vm.SelectedItem = entry;
+            vm.List.SelectedItem = entry;
     }
 }

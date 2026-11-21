@@ -64,6 +64,7 @@ the other ways to read each product.
 | S-131 | `S131HarbourInfrastructureDataset` | Marine harbour infrastructure. |
 | S-201 | `S201AtonInventory` | An IALA aids-to-navigation inventory. |
 | S-411 | `S411SeaIceInventory` | Sea-ice and lake-ice features. |
+| S-412 | `S412MarineWeatherWarnings` | Weather warnings by type, with their validity periods and data providers. |
 | S-421 | `S421RoutePlan` | A route plan. |
 
 Each typed root is in the product package's `DataModel` namespace, for

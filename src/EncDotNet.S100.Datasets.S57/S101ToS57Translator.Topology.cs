@@ -248,7 +248,7 @@ public sealed partial class S101ToS57Translator
             {
                 var kept = faces.Where(f =>
                 {
-                    var probe = f.Polygon.InteriorPoint;
+                    var probe = f.Probe;
                     return area.Contains(probe) && !cutters.Any(c => c.Area!.Contains(probe));
                 });
                 Reshape(skin, graph.Boundary(kept));
@@ -307,7 +307,7 @@ public sealed partial class S101ToS57Translator
                 .Select(p => (uint)p.Name.RecordId)
                 .Concat(added);
             var faces = graph.Faces(noded);
-            var covered = faces.Where(f => coverages.Any(c => c.Area!.Contains(f.Polygon.InteriorPoint))).ToList();
+            var covered = faces.Where(f => coverages.Any(c => c.Area!.Contains(f.Probe))).ToList();
             var uncovered = faces.Except(covered).ToList();
 
             // Coverage available: one object per connected group.

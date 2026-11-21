@@ -66,7 +66,7 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
 
         /// <summary>Viewport route scenario.</summary>
         [CommandOption("--scenario <SCENARIO>")]
-        [Description("Route shape: burst for a snake with continuous zoom, navigation for distinct pan and zoom legs, jumps for the settle-timed Seattle → Tacoma → Port Townsend jumps, or pan for a settle-timed pan across cell boundaries.")]
+        [Description("Route shape: burst for a snake with continuous zoom, navigation for distinct pan and zoom legs, jumps for the settle-timed Seattle → Tacoma → Port Townsend jumps, glide for the same jumps animated (a 'go to'), fling for settle-timed flings from Seattle, or pan for a settle-timed pan across cell boundaries.")]
         [DefaultValue("burst")]
         public string Scenario { get; set; } = "burst";
 
@@ -121,6 +121,17 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
         [DefaultValue(16)]
         public int PanStepDelayMs { get; set; } = 16;
 
+        /// <summary>Glide animation length.</summary>
+        [CommandOption("--glide-ms <MS>")]
+        [Description("glide: how long each animated jump takes.")]
+        [DefaultValue(800)]
+        public int GlideMs { get; set; } = 800;
+
+        /// <summary>Fling velocities.</summary>
+        [CommandOption("--flings <VELOCITIES>")]
+        [Description("fling: release velocities in screen pixels per second as vx,vy;vx,vy (positive x drags right, so the view travels west). Defaults to west, west, south, east at 4000 px/s, Mapsui's fastest fling.")]
+        public string? Flings { get; set; }
+
         /// <summary>Map scale.</summary>
         [CommandOption("--scale <DENOMINATOR>")]
         [Description("jumps/pan: map scale denominator.")]
@@ -132,6 +143,11 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
         [Description("jumps/pan: longest await_settled wait per move.")]
         [DefaultValue(120000)]
         public int SettleTimeoutMs { get; set; } = 120_000;
+
+        /// <summary>Longest wait for the start view to settle.</summary>
+        [CommandOption("--start-settle-timeout-ms <MS>")]
+        [Description("jumps/pan/glide/fling: longest await_settled wait for the view the viewer starts at, before the first move; defaults to --settle-timeout-ms. That view often never settles (a basemap layer that never paints), so a shorter wait saves time on every run.")]
+        public int? StartSettleTimeoutMs { get; set; }
 
         /// <summary>Settle confirmation.</summary>
         [CommandOption("--confirm-ms <MS>")]
@@ -163,6 +179,8 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
 
         internal bool IsSettleScenario =>
             string.Equals(Scenario, "jumps", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Scenario, "glide", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Scenario, "fling", StringComparison.OrdinalIgnoreCase)
             || string.Equals(Scenario, "pan", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Maximum time to wait for rendering to settle after each cycle.</summary>
@@ -211,7 +229,7 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
                 && !string.Equals(Scenario, "navigation", StringComparison.OrdinalIgnoreCase))
             {
                 return ValidationResult.Error(
-                    "--scenario must be burst, navigation, jumps or pan.");
+                    "--scenario must be burst, navigation, jumps, glide, fling or pan.");
             }
 
             return ValidationResult.Success();
@@ -231,8 +249,12 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
                 return ValidationResult.Error("--jumps must be Name=lat,lon;Name=lat,lon.");
             if (PanStops is not null && (!SettleRoute.TryParseWaypoints(PanStops, out var pan) || pan.Count != 2))
                 return ValidationResult.Error("--pan must be two stops: Name=lat,lon;Name=lat,lon.");
+            if (Flings is not null && !SettleRoute.TryParseFlings(Flings, out _))
+                return ValidationResult.Error("--flings must be vx,vy;vx,vy with each component within ±20000.");
+            if (GlideMs is < 1 or > 10_000)
+                return ValidationResult.Error("--glide-ms must be 1 to 10000.");
             if (PanSteps < 1 || PanStepDelayMs < 0 || Repeat < 1 || ConfirmMs < 0
-                || SettleTimeoutMs < 50 || PrewarmTimeoutMs < 1000
+                || SettleTimeoutMs < 50 || StartSettleTimeoutMs is < 50 || PrewarmTimeoutMs < 1000
                 || !double.IsFinite(ScaleDenominator) || ScaleDenominator <= 0)
             {
                 return ValidationResult.Error(

@@ -111,6 +111,7 @@ internal static class S102DepthAdjuster
             NoDataValue = layer.NoDataValue,
             Georeferencer = layer.Georeferencer,
             SymbolScheme = layer.SymbolScheme,
+            ReliefShade = layer.ReliefShade,
         }, count);
     }
 }

@@ -16,6 +16,9 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class S104StationTimeSeriesViewModel : StationTimeSeriesViewModel
 {
+    /// <summary>The channel this chart draws: the water level height.</summary>
+    public const string HeightChannel = "waterLevelHeight";
+
     private readonly SolidColorPaint _heightStrokePaint;
     private readonly SolidColorPaint _heightAxisLabelsPaint;
     private readonly SolidColorPaint _heightAxisNamePaint;
@@ -23,12 +26,10 @@ internal sealed class S104StationTimeSeriesViewModel : StationTimeSeriesViewMode
 
     public S104StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
-        : base(snapshot, globalTime, timeFormat, themeService)
+        StationChartContext context)
+        : base(snapshot, context)
     {
-        var channel = FindChannel(snapshot, "waterLevelHeight");
+        var channel = FindChannel(snapshot, HeightChannel);
         var points = channel is null ? new List<DateTimePoint>() : ProjectChannel(snapshot.Times, channel);
 
         _heightStrokePaint = new SolidColorPaint(CurrentChartTheme.SeriesPrimary, 2f);

@@ -400,6 +400,14 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
 
     // ── Symbols ────────────────────────────────────────────────────────
 
+    private IReadOnlyCollection<string>? _symbolNames;
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> SymbolNames => _symbolNames ??= _provider.Catalogue.Symbols
+        .Select(s => s.Id)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
     /// <summary>
     /// Returns the SVG symbol with the given name, loading and caching it
     /// on first access.
@@ -431,6 +439,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         {
             Name = symbolName,
             SvgContent = svgContent,
+            Title = catalogItem.Description.Summary,
         };
 
         _cache.Symbols[symbolName] = symbol;

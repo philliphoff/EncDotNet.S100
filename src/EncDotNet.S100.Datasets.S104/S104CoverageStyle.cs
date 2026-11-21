@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
@@ -55,6 +56,34 @@ public class S104CoverageStyle : ICoverageStyle
     /// (1:100 000). At smaller scales only the square is drawn.
     /// </summary>
     public const double StationLabelMaxScaleDenominator = 100_000;
+
+    /// <summary>The caption of the S-104 legend: what the labels give.</summary>
+    public const string LegendCaption = "Water level height, m";
+
+    /// <summary>
+    /// The station legend: one row per gauge symbol, in <paramref name="palette"/>.
+    /// </summary>
+    /// <param name="palette">The palette the stations are drawn in.</param>
+    public static IReadOnlyList<LegendEntry> BuildStationLegend(PaletteType palette)
+    {
+        var legend = new LegendBuilder(Palette, palette, Symbols.Provider);
+        return
+        [
+            legend.Symbol(RisingSymbol, "Rising"),
+            legend.Symbol(FallingSymbol, "Falling"),
+            legend.Symbol(SteadySymbol, "Steady"),
+            legend.Symbol(UnknownSymbol, "Trend unknown"),
+            legend.Symbol(NoDataSymbol, "No value at this time"),
+        ];
+    }
+
+    /// <summary>
+    /// The isoline legend row's label for the dataset's interval, e.g.
+    /// <c>"Water level, every 0.5 m"</c>.
+    /// </summary>
+    /// <param name="interval">The isoline interval from <see cref="SelectIsolineInterval"/>, in metres.</param>
+    public static string IsolineLegendLabel(double interval) =>
+        string.Create(CultureInfo.InvariantCulture, $"Water level, every {interval:0.##} m");
 
     /// <summary>The isoline interval, in metres.</summary>
     public const double IsolineInterval = 0.5;

@@ -66,9 +66,9 @@ internal static class ActivityTabServiceCollectionExtensions
             iconFactory,
             sp.GetRequiredService<TViewModel>(),
             persistAsLastSelected,
+            visibilitySourceFactory?.Invoke(sp),
             dock,
             autoOpenOnContentSignal,
-            visibilitySourceFactory?.Invoke(sp),
             name,
             fillsContent));
 

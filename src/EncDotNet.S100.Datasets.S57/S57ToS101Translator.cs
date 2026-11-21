@@ -525,9 +525,12 @@ public sealed partial class S57ToS101Translator
     // §27.199 write exactly that from a VirtualAISAidToNavigation and its
     // virtualAISAidToNavigationType, so the translator reads it back by the
     // same table (S101ToS57Rules.VirtualAisTypes). Port and starboard
-    // lateral each have two types, told apart by the SYMINS symbol. Any
-    // other NEWOBJ still becomes an S57UnknownObject.
+    // lateral each have two types, told apart by the SYMINS symbol. A type
+    // name the table doesn't know (NOAA writes "Virtual AtoN, Wreck Marking"
+    // for "Emergency Wreck Marking", #1289) is matched by its CLSDEF, which
+    // follows the table. Any other NEWOBJ still becomes an S57UnknownObject.
     private const ushort NewobjObjl = 163;         // NEWOBJ (S-57 object class)
+    private const ushort S57AttrClsdef = 190;      // CLSDEF — object class definition
     private const ushort S57AttrClsnam = 191;      // CLSNAM — object class name
     private const ushort S57AttrSymins = 192;      // SYMINS — symbol instruction
     private const string VirtualAisClassPrefix = "Virtual AtoN, ";
@@ -884,9 +887,21 @@ public sealed partial class S57ToS101Translator
     /// enumerate values dropped during translation. Pass <c>null</c> (the
     /// default) to disable collection with zero overhead.
     /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="s57"/> is a NATO Additional Military Layers cell
+    /// (<c>DSID</c> <c>PRSP</c> 51–57). AML is military overlay data, not a
+    /// chart: translating it to S-101 would drop its AML classes and draw the
+    /// rest as chart content, so it's opened as AML instead.
+    /// </exception>
     public S101Document Translate(EncDotNet.S57.S57Document s57, S57TranslationDiagnostics? diagnostics)
     {
         ArgumentNullException.ThrowIfNull(s57);
+        if (AmlDatasetInfo.IsAml(s57))
+        {
+            throw new ArgumentException(
+                $"'{s57.DataSetIdentification?.DataSetName}' is an Additional Military Layers (AML) cell, not a chart; it isn't translated to S-101.",
+                nameof(s57));
+        }
 
         var ctx = new TranslationContext(
             s57, _mapping, _allowedEnumValues, _featureBindings, diagnostics, _target.InlineTextualInformation);
@@ -1888,6 +1903,15 @@ public sealed partial class S57ToS101Translator
             var types = S101ToS57Rules.VirtualAisTypes
                 .Where(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+            if (types.Count == 0)
+            {
+                // An unknown type name: fall back to the class definition.
+                var clsdef = feat.Attributes.Where(a => a.AttributeCode == S57AttrClsdef).Select(a => a.Value?.Trim()).FirstOrDefault();
+                if (!string.IsNullOrEmpty(clsdef))
+                    types = S101ToS57Rules.VirtualAisTypes
+                        .Where(t => string.Equals(t.Definition, clsdef, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+            }
             if (types.Count == 0) return null;
             var symins = feat.Attributes.Where(a => a.AttributeCode == S57AttrSymins).Select(a => a.Value).FirstOrDefault() ?? string.Empty;
             return (types.FirstOrDefault(t => symins.Contains(t.Symbol, StringComparison.OrdinalIgnoreCase)) is { Value: not null } bySymbol

@@ -14,10 +14,10 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [Description("A dataset supplying depths or water level in the map view.")]
 internal sealed record DepthBasisSourceDto(
     [property: Description("The dataset's name, as the Datasets panel shows it.")] string Id,
-    [property: Description("The product: S-101, S-401, S-57, S-102 or S-104.")] string Spec,
+    [property: Description("The product: S-101, S-401, S-57, S-102 or S-104, or 'prediction' for tide predictions.")] string Spec,
     [property: Description("The vertical datum as an S-100 vertical datum code; null when the dataset doesn't declare one.")] int? VerticalDatum,
     [property: Description("The vertical datum's name, e.g. \"Mean Lower Low Water\"; null when not declared.")] string? VerticalDatumLabel,
-    [property: Description("S-104 only: 'grid' or 'station'.")] string? Kind = null,
+    [property: Description("Water level only: 'grid' or 'station' for S-104, 'prediction' for tide predictions.")] string? Kind = null,
     [property: Description("S-104 only: the first time step (UTC).")] DateTime? Start = null,
     [property: Description("S-104 only: the last time step (UTC).")] DateTime? End = null,
     [property: Description("S-104 only: the run (issue time, UTC).")] DateTime? Run = null);
@@ -26,7 +26,7 @@ internal sealed record DepthBasisSourceDto(
 [Description("What the depths and safety contour drawn on the chart are relative to: the status bar's DEPTHS indicator.")]
 internal sealed record DepthBasisDto(
     [property: Description("'none' (no depth-bearing dataset loaded and active: the indicator is hidden), 'charted' (charted depths, relative to each dataset's vertical datum) or 'adjusted' (charted depth + S-104 water level).")] string Kind,
-    [property: Description("Why the chart shows charted depths when water level exists: 'not_applied' (S-104 meets the view, chart adjustment is off) or 'water_level' (adjustment is on but unavailable: see waterLevelStatus); null otherwise.")] string? Reason,
+    [property: Description("Why the chart shows charted depths when water level exists: 'not_applied' (S-104 meets the view, chart adjustment is off) 'water_level' (adjustment is on but unavailable: see waterLevelStatus) or 'product_not_adjusted' (adjustment is on, but every depth source in view is drawn as charted, such as translated S-57 cells); null otherwise.")] string? Reason,
     [property: Description("Set when reason is water_level or kind is adjusted: applied, no_coverage, before_start, after_end, no_data or datum_mismatch, as check_route reports them.")] string? WaterLevelStatus,
     [property: Description("The Timeline's view time the basis was evaluated at (UTC).")] DateTimeOffset? ViewTime,
     [property: Description("The S-104 time step the adjusted chart uses; null unless adjusted.")] DateTime? WaterLevelStepTime,
@@ -34,7 +34,11 @@ internal sealed record DepthBasisDto(
     [property: Description("Whether the depth and water-level sources in view share a vertical datum: same, different or unknown; null unless both are in view.")] string? Datum,
     [property: Description("The indicator's value exactly as the user reads it at full width, e.g. \"Charted · water level not applied\"; empty when hidden.")] string Display,
     [property: Description("The depth-bearing datasets in the view (S-102 surfaces first).")] IReadOnlyList<DepthBasisSourceDto> DepthSources,
-    [property: Description("The active S-104 datasets meeting the view (a station series counts within the route check's station distance).")] IReadOnlyList<DepthBasisSourceDto> WaterLevelSources);
+    [property: Description("The active S-104 datasets meeting the view (a station series counts within the route check's station distance), and, while tide predictions are in use with stations in reach, one row with spec 'prediction' and kind 'prediction'.")] IReadOnlyList<DepthBasisSourceDto> WaterLevelSources,
+    [property: Description("How much of the adjusted water level is a tide prediction (tide predictions design D9): 'none', 'part' (S-104 covers the rest) or 'all'.")] string Predicted = "none",
+    [property: Description("While tide predictions are in use: the stations in reach of the view, as 'Seattle 9447130', nearest the centre first.")] IReadOnlyList<string>? PredictedStations = null,
+    [property: Description("True when the DEPTHS flyout offers 'Use tide predictions': they're off, no S-104 meets the view and a station is in reach.")] bool OffersPredictions = false,
+    [property: Description("True when predictions are in use and NOAA has newer data than the station list (the flyout's stale notice).")] bool PredictionsStale = false);
 
 /// <summary>Reads the depth basis indicator (MCP <c>get_depth_basis</c>).</summary>
 internal sealed class GetDepthBasisTool
@@ -75,6 +79,7 @@ internal sealed class GetDepthBasisTool
             {
                 DepthBasisReason.NotApplied => "not_applied",
                 DepthBasisReason.WaterLevel => "water_level",
+                DepthBasisReason.ProductNotAdjusted => "product_not_adjusted",
                 _ => null,
             },
             basis.WaterLevelStatus is { } status ? Status(status) : null,
@@ -84,7 +89,16 @@ internal sealed class GetDepthBasisTool
             basis.Datum is { } datum ? Datum(datum) : null,
             DepthBasisText.Display(basis, TimeFormat.Utc),
             [.. basis.DepthSources.Select(Source)],
-            [.. basis.WaterLevelSources.Select(Source)]);
+            [.. basis.WaterLevelSources.Select(Source)],
+            basis.Predicted switch
+            {
+                PredictedShare.All => "all",
+                PredictedShare.Part => "part",
+                _ => "none",
+            },
+            basis.PredictedStations,
+            basis.OffersPredictions,
+            basis.PredictionsStale);
     }
 
     internal static string Kind(DepthBasisKind kind) => kind switch
@@ -121,6 +135,7 @@ internal sealed class GetDepthBasisTool
         {
             WaterLevelSourceKind.Grid => "grid",
             WaterLevelSourceKind.Station => "station",
+            WaterLevelSourceKind.Prediction => "prediction",
             _ => null,
         },
         source.Start,

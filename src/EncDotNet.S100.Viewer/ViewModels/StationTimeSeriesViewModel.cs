@@ -29,9 +29,9 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </remarks>
 internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 {
-    private readonly GlobalTimeService? _globalTime;
-    private readonly ITimeFormatProvider? _timeFormat;
-    private readonly IThemeService? _themeService;
+    private readonly GlobalTimeService _globalTime;
+    private readonly ITimeFormatProvider _timeFormat;
+    private readonly IThemeService _themeService;
     private readonly RectangularSection _nowSection;
     private readonly SolidColorPaint _nowMarkerPaint;
     private readonly SolidColorPaint _timeAxisLabelsPaint;
@@ -46,28 +46,25 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     internal bool IsDisposed => _disposed;
 
     /// <summary>
-    /// Constructs a view model bound to <paramref name="snapshot"/>. The
-    /// <paramref name="globalTime"/> service may be <c>null</c> in unit
-    /// tests; when supplied, <see cref="GlobalTimeService.CurrentTimeChanged"/>
-    /// is observed for the lifetime of this view model. Likewise
-    /// <paramref name="themeService"/> may be <c>null</c>; when supplied,
-    /// <see cref="IThemeService.ThemeChanged"/> drives in-place updates of
-    /// the chart's <see cref="SolidColorPaint"/> colours so the chart
-    /// follows the chrome <see cref="Avalonia.Styling.ThemeVariant"/>.
+    /// Constructs a view model bound to <paramref name="snapshot"/>. For its
+    /// lifetime, <see cref="GlobalTimeService.CurrentTimeChanged"/> moves the
+    /// now-marker, the time format relabels the time axis, and
+    /// <see cref="IThemeService.ThemeChanged"/> updates the chart's
+    /// <see cref="SolidColorPaint"/> colours in place so the chart follows the
+    /// chrome <see cref="Avalonia.Styling.ThemeVariant"/>.
     /// </summary>
-    protected StationTimeSeriesViewModel(
-        StationTimeSeriesSnapshot snapshot,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
+    /// <param name="snapshot">The station's series.</param>
+    /// <param name="context">The time, formatting and theme the chart follows.</param>
+    protected StationTimeSeriesViewModel(StationTimeSeriesSnapshot snapshot, StationChartContext context)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(context);
         Snapshot = snapshot;
-        _globalTime = globalTime;
-        _timeFormat = timeFormat;
-        _themeService = themeService;
+        _globalTime = context.Time;
+        _timeFormat = context.TimeFormat;
+        _themeService = context.Theme;
 
-        CurrentChartTheme = ChartTheme.Resolve(themeService?.IsDarkTheme ?? false);
+        CurrentChartTheme = ChartTheme.Resolve(_themeService.IsDarkTheme);
 
         _nowMarkerPaint = new SolidColorPaint(CurrentChartTheme.NowMarker, 1.5f);
         _nowSection = new RectangularSection
@@ -85,7 +82,9 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 
         TimeAxis = new Axis
         {
-            Name = Strings.Pick_Chart_Axis_Time,
+            Name = TimeAxisName(_timeFormat.Current),
+            // The labels' size: LiveCharts' larger default name dwarfs the card.
+            NameTextSize = 13,
             Labeler = FormatTimeAxisLabel,
             LabelsRotation = 0,
             UnitWidth = TimeSpan.FromMinutes(1).Ticks,
@@ -96,26 +95,20 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         };
         TimeAxisArray = new ICartesianAxis[] { TimeAxis };
 
-        if (_globalTime is not null)
+        _globalTime.CurrentTimeChanged += OnGlobalTimeChanged;
+        if (_globalTime.CurrentTime is { } current)
         {
-            _globalTime.CurrentTimeChanged += OnGlobalTimeChanged;
-            if (_globalTime.CurrentTime is { } current)
-            {
-                // Position the visual now-marker, but do not invoke the virtual
-                // OnNowMarkerChanged hook here: this base constructor runs before
-                // any derived constructor body, so a derived override would see
-                // uninitialised fields. Derived types pull the initial current
-                // time explicitly (via GlobalTimeService.CurrentTime); the hook
-                // fires only for subsequent CurrentTimeChanged events.
-                UpdateNowMarker(current);
-            }
+            // Position the visual now-marker, but do not invoke the virtual
+            // OnNowMarkerChanged hook here: this base constructor runs before
+            // any derived constructor body, so a derived override would see
+            // uninitialised fields. Derived types pull the initial current
+            // time explicitly (via GlobalTimeService.CurrentTime); the hook
+            // fires only for subsequent CurrentTimeChanged events.
+            UpdateNowMarker(current);
         }
 
-        if (_timeFormat is not null)
-            _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
-
-        if (_themeService is not null)
-            _themeService.ThemeChanged += OnThemeChanged;
+        _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
+        _themeService.ThemeChanged += OnThemeChanged;
     }
 
     /// <summary>The raw snapshot that backs this view model.</summary>
@@ -168,12 +161,9 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        if (_globalTime is not null)
-            _globalTime.CurrentTimeChanged -= OnGlobalTimeChanged;
-        if (_timeFormat is not null)
-            _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
-        if (_themeService is not null)
-            _themeService.ThemeChanged -= OnThemeChanged;
+        _globalTime.CurrentTimeChanged -= OnGlobalTimeChanged;
+        _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
+        _themeService.ThemeChanged -= OnThemeChanged;
     }
 
     /// <summary>
@@ -186,7 +176,7 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     /// <remarks>
     /// This responds to <b>chrome theme</b> (Light vs Dark), not the
     /// S-100 map palette (Day / Dusk / Night). The map palette is owned
-    /// by <see cref="SettingsViewModel.SelectedPalette"/> and is not
+    /// by <see cref="ViewerSettingsService.SelectedPalette"/> and is not
     /// consumed by these charts.
     /// </remarks>
     protected internal ChartTheme CurrentChartTheme { get; private set; }
@@ -210,7 +200,7 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 
     private void OnThemeChanged(object? sender, EventArgs e)
     {
-        CurrentChartTheme = ChartTheme.Resolve(_themeService?.IsDarkTheme ?? false);
+        CurrentChartTheme = ChartTheme.Resolve(_themeService.IsDarkTheme);
         OnChartThemeChanged(CurrentChartTheme);
     }
 
@@ -266,7 +256,12 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         // Force LiveCharts2 to re-evaluate the axis labels — the labeler
         // closes over _timeFormat.Current so simply notifying is enough.
         TimeAxis.Labeler = FormatTimeAxisLabel;
+        TimeAxis.Name = TimeAxisName(format);
     }
+
+    // The labels follow the Local/UTC setting, so the name does too.
+    private static string TimeAxisName(TimeFormat format) =>
+        format == TimeFormat.Utc ? Strings.Pick_Chart_Axis_Time : Strings.Pick_Chart_Axis_TimeLocal;
 
     /// <summary>
     /// Formats a chart point's underlying <see cref="DateTime"/> (always
@@ -279,7 +274,7 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     /// </summary>
     protected internal string FormatTooltipDateTime(DateTime utc)
     {
-        var fmt = _timeFormat?.Current ?? TimeFormat.Local;
+        var fmt = _timeFormat.Current;
         if (fmt == TimeFormat.Utc)
             return DateTime.SpecifyKind(utc, DateTimeKind.Utc)
                 .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
@@ -295,7 +290,7 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         if (t < DateTime.MinValue.Ticks || t > DateTime.MaxValue.Ticks)
             return string.Empty;
         var dt = new DateTime(t, DateTimeKind.Utc);
-        var fmt = _timeFormat?.Current ?? TimeFormat.Local;
+        var fmt = _timeFormat.Current;
         if (fmt == TimeFormat.Utc)
             return dt.ToString("HH:mm", CultureInfo.InvariantCulture);
         return dt.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);

@@ -4,7 +4,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 
 /// <summary>
 /// Discriminated payload of a coverage sample, returned by an
-/// <see cref="ICoverageSampler"/> and by the <c>sample_coverage</c> tool.
+/// <see cref="ICoverageSampler"/> and by the <c>sample</c> tool.
 /// </summary>
 /// <remarks>
 /// The S-102, S-104 and S-111 shapes (<c>DepthSample</c>,
@@ -87,7 +87,7 @@ public sealed record CoverageFieldsSample(
 /// <summary>
 /// Where a requested instant fell relative to the sampled dataset's time
 /// range, as reported by <see cref="CoverageSampling"/> and the
-/// <c>sample_coverage</c> tool's <c>timeStatus</c>.
+/// <c>sample</c> tool's <c>timeStatus</c>.
 /// </summary>
 public static class SampleTimeStatus
 {

@@ -63,10 +63,10 @@ internal sealed class RouteFindingsService : IDisposable
         PassageCheckService check,
         RoutesService routes,
         IDatasetCatalog catalog,
-        ICapabilityAccessor<IMapViewportController>? viewport = null,
-        IMarinerSettingsProvider? mariner = null,
-        ITimeFormatProvider? timeFormat = null,
-        NavigationalWarningsService? warnings = null)
+        ICapabilityAccessor<IMapViewportController>? viewport,
+        IMarinerSettingsProvider? mariner,
+        ITimeFormatProvider? timeFormat,
+        NavigationalWarningsService? warnings)
     {
         ArgumentNullException.ThrowIfNull(check);
         ArgumentNullException.ThrowIfNull(routes);
@@ -167,13 +167,6 @@ internal sealed class RouteFindingsService : IDisposable
             : null;
 
     /// <summary>
-    /// The Navigational warnings panel, which an S-124 finding's inline
-    /// Warning card (#959, E1) links to, zooms through and opens in; set by
-    /// the panel. <c>null</c> without it.
-    /// </summary>
-    internal ViewModels.INavigationalWarningNavigator? WarningNavigator { get; set; }
-
-    /// <summary>
     /// Selects a finding (or clears the selection with <c>null</c>). A placed
     /// finding moves the profile cursor to it and, when
     /// <paramref name="zoom"/> is set, zooms the map to it (F3).
@@ -260,7 +253,7 @@ internal sealed class RouteFindingsService : IDisposable
             return Findings;
         }
 
-        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current, _mariner?.Current) is not { } input)
+        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current, _check.WeatherLimits, _check.CycloneSettings, _mariner?.Current) is not { } input)
             return null;
 
         var report = await _check.CheckOnceAsync(input, cancellationToken).ConfigureAwait(true);

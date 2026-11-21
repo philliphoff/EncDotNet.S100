@@ -211,7 +211,13 @@ public sealed record RemoteItemLocation(
 /// on AWS): the fields to read, as <c>.idx</c> matches (<c>:UGRD:10 m above ground:</c>),
 /// fetched with HTTP byte ranges. <see langword="null"/> to fetch the whole response.
 /// </param>
-public sealed record RemotePart(Uri Uri, IReadOnlyList<string>? GribFields = null);
+/// <param name="FileName">
+/// The name the part is saved under, beside the download's other parts,
+/// rather than appended into one file: an NHC advisory's forecast, wind radii
+/// and best track zips (#1298). Either every part of a download names its
+/// file, or none does. <see langword="null"/> to append.
+/// </param>
+public sealed record RemotePart(Uri Uri, IReadOnlyList<string>? GribFields = null, string? FileName = null);
 
 /// <summary>How a <see cref="RemoteItemLocation"/>'s download wraps its data.</summary>
 public enum RemoteEnvelope

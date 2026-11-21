@@ -44,7 +44,9 @@ internal sealed record TimelineLayerDto(
     [property: Description("Number of samples in the layer.")] int SampleCount,
     [property: Description("The layer time as its row in the Datasets list shows it: '08:00Z · T+20 h', '20:06Z (−24 min)', 'no data · last 18:00Z, 6 h earlier', 'drawing…'; null for none.")] string? Time,
     [property: Description("True when the layer has no data within its tolerance of the view time and hides (its row's Hidden tag).")] bool Hidden,
-    [property: Description("True while the layer is drawing the view time.")] bool Drawing);
+    [property: Description("True while the layer is drawing the view time.")] bool Drawing,
+    [property: Description("For a layer drawing stale data at the view time (its row's Stale tag), such as a surface analysis over 6 hours old, the data's age to the nearest hour; null otherwise.")] int? StaleHours = null,
+    [property: Description("The row's warning tag: 'Hidden' for a hidden layer, or 'Beyond forecast' or 'Before track' for a tropical cyclone outside its track and forecast (its cone still draws, so it isn't hidden); null otherwise.")] string? Tag = null);
 
 /// <summary>The Timeline as the user sees it.</summary>
 [Description("The viewer's Timeline: mode, now, view time, loaded range and what each time-aware layer draws.")]
@@ -77,7 +79,24 @@ internal sealed record TimelineStateDto(
     [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes,
     [property: Description("True while the lanes also show what the Library knows but has not loaded: online (dashed) and on disk (outlined); set_timeline_view showOnline changes it.")] bool ShowOnline,
     [property: Description("The passage and departure-window lanes, shown above the product groups while Check route is on and the passage has ETAs; null otherwise.")] TimelinePassageDto? Passage,
-    [property: Description("True while Follow passage pins the view time to the ETA at the Clearance cursor (set_follow_passage changes it).")] bool FollowPassage);
+    [property: Description("True while Follow passage pins the view time to the ETA at the Clearance cursor (set_follow_passage changes it).")] bool FollowPassage,
+    [property: Description("The Tide predictions lane: the station nearest the map centre and its highs and lows on the axis; null when the lane doesn't show (predictions off, or no station near).")] TimelineTidePredictionsDto? TidePredictions);
+
+/// <summary>The Timeline's Tide predictions lane (#1453).</summary>
+[Description("The Timeline's Tide predictions lane.")]
+internal sealed record TimelineTidePredictionsDto(
+    [property: Description("The station the lane follows: the one nearest the map centre.")] string StationId,
+    [property: Description("The lane's station text as displayed, e.g. 'Seattle 9447130 · 4.2 km from centre'.")] string Station,
+    [property: Description("The highs and lows on the lane, in time order.")] IReadOnlyList<TimelineTideExtremeDto> Extremes);
+
+/// <summary>A high or low on the Tide predictions lane.</summary>
+[Description("A high or low on the Tide predictions lane.")]
+internal sealed record TimelineTideExtremeDto(
+    [property: Description("'high' or 'low'.")] string Kind,
+    [property: Description("When, UTC.")] DateTime Time,
+    [property: Description("The height above the station's datum (MLLW where NOAA has it), metres.")] double HeightMeters,
+    [property: Description("The label as displayed, e.g. 'H 3.4'.")] string Label,
+    [property: Description("Where on the axis, 0 (left) to 1 (right).")] double Position);
 
 /// <summary>The Timeline's passage lanes (#904).</summary>
 [Description("The Timeline's passage lane (departure to arrival, with a tick at the minimum UKC) and departure-window lane.")]
@@ -118,7 +137,11 @@ internal sealed record TimelineLaneDto(
     [property: Description("The layer time as the lane shows it (a Library lane: its run).")] string Time,
     [property: Description("True for a lane of Library data that is not loaded (its id is 'library:<spec>/<model>').")] bool Library,
     [property: Description("True when a newer run is online ('New run' tag).")] bool NewRun,
-    [property: Description("The Library's windows for the lane: the loaded copy, a newer run online, data on disk.")] IReadOnlyList<TimelineLibraryWindowDto> Windows);
+    [property: Description("The Library's windows for the lane: the loaded copy, a newer run online, data on disk.")] IReadOnlyList<TimelineLibraryWindowDto> Windows,
+    [property: Description("The lane's sub line under its label, e.g. 'adv 20 · 6 h' for a tropical cyclone or 'analysis · 3 h'.")] string Sub = "",
+    [property: Description("UTC time of the lane's solid diamond, when the dataset was issued (a cyclone advisory); null when not marked.")] DateTime? Issued = null,
+    [property: Description("UTC time of the lane's hollow diamond, when the next is expected (NHC's next advisory); null when not marked.")] DateTime? NextIssue = null,
+    [property: Description("How many step ticks the lane draws, one per forecast point of a tropical cyclone; 0 for none.")] int StepTicks = 0);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
 [Description("A loaded dataset's display state before and after a change.")]
@@ -253,12 +276,13 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.StepDriver,
         [.. state.Gaps.Select(g => new TimelineGapDto(g.From, g.To, TimelineAxisLabels.GapLength(g.Length, CultureInfo.InvariantCulture)))],
         [.. state.Layers.Select(layer => new TimelineLayerDto(
-            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing))],
+            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing, layer.StaleHours, layer.Tag))],
         state.InMapView,
         state.CollapsedToStrip ? "strip" : "lanes",
         [.. state.Lanes.Select(lane => new TimelineLaneDto(
             lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time, lane.Library, lane.NewRun,
-            [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))]))],
+            [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))],
+            lane.Sub, lane.Issued, lane.NextIssue, lane.StepTicks))],
         state.ShowOnline,
         state.Passage is { } passage
             ? new TimelinePassageDto(
@@ -275,7 +299,14 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
                 passage.Windows,
                 [.. passage.Segments.Select(ClearanceTools.Segment)])
             : null,
-        state.FollowPassage);
+        state.FollowPassage,
+        state.TidePredictions is { } tides
+            ? new TimelineTidePredictionsDto(
+                tides.StationId,
+                tides.Station,
+                [.. tides.Extremes.Select(e => new TimelineTideExtremeDto(
+                    e.IsHigh ? "high" : "low", e.Time, Math.Round(e.HeightMeters, 3), e.Label, Math.Round(e.Position, 4)))])
+            : null);
 
     private static string WindowState(LibraryTimedState state) => state switch
     {

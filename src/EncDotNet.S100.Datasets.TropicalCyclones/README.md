@@ -10,7 +10,8 @@ It depends on [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md) and
 NetTopologySuite. The pipeline processor that loads it,
 `TropicalCycloneDatasetProcessor`, is in
 [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md),
-under the format name `TC`.
+under the format name `TC`. The portrayal, `TropicalCycloneStyle`, is in
+[`EncDotNet.S100.Datasets.Weather`](../EncDotNet.S100.Datasets.Weather/README.md#tropical-cyclones).
 
 > **Not for navigation.** NHC advisories aren't S-100 products or official
 > navigational warnings. Hosts label them so wherever they appear.
@@ -75,6 +76,8 @@ The last two can be `null`.
 - **Wind radii.** Each forecast point's 34, 50 and 64 kt radii, as nautical
   miles in each quadrant (NE, SE, SW, NW) and NHC's polygon. A radius whose
   quadrants are all 0 is left out, so a tropical depression has none.
+  `QuadrantSurface(centre, pointsPerQuadrant)` builds the area from the four
+  quadrants, a quarter circle each, for a radius that has no polygon of NHC's.
 - **Cone.** `TropicalCycloneCone` holds NHC's polygon unchanged, and the same
   area split at 72 hours into `DaysOneToThree` and `DaysFourToFive`. It is
   `null` when the advisory has no cone, as some final advisories don't.
@@ -82,6 +85,12 @@ The last two can be `null`.
   with the intensity, class and observed radii at each. A best track
   downloaded later holds the storm's whole life, so points after the advisory
   are left out.
+- **Final advisory.** `IsFinal` is true for a storm's last advisory, when
+  NHC has stopped issuing advisories for it. NHC's files don't say so: a
+  host that sees the storm leave NHC's active list writes a marker beside the
+  zips (`NhcAdvisoryFiles.FinalMarkerName`, `al092022_final.txt`), and
+  `NhcAdvisoryFiles.Find` reports it (`IsFinal`) so the reader marks the
+  advisory.
 
 All positions are WGS-84 degrees. NHC computes on a sphere, and the
 difference is far smaller than the data's precision.
@@ -94,6 +103,32 @@ with a line through the 72-hour position, square to the track there. This
 matches NHC's own graphic for any track that doesn't double back within the
 cone. When the forecast ends at or before 72 hours, the whole cone is days 1
 to 3.
+
+## The storm at a time
+
+`advisory.StormAt(time)` gives the storm at any time in the advisory's range
+as a `TropicalCycloneStormAt`: its `Point` (position, intensity, class,
+motion and radii, as a forecast point valid at that time) and its `Source`:
+
+- `ForecastPoint` on one of the advisory's forecast points;
+- `Estimated` between two, interpolated linearly in time: the position on
+  the geodesic between them, the wind, gusts, pressure and each quadrant of
+  each wind radius in between, and the earlier point's class. A radius that's
+  zero at one end shrinks to nothing; when a point has no radii at all the
+  radii are left out. The motion is the direction and speed between the two
+  points. NHC doesn't forecast these positions;
+- `BestTrack` before the advisory's synoptic time, interpolated the same way
+  along the past track, with the observed radii where both points have them.
+
+It's `null` before the first best-track point and after the last forecast
+point. Across the antimeridian the longitude stays on the earlier point's
+side, so it can pass 180°.
+
+```csharp
+var storm = advisory.StormAt(new DateTime(2022, 9, 28, 6, 0, 0, DateTimeKind.Utc));
+if (storm is { IsEstimated: true })
+    Console.WriteLine($"est. {storm.Point.Position}, {storm.Point.MaxWindKnots} kt");
+```
 
 ## Field names
 

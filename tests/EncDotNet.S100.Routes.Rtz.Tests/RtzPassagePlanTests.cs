@@ -83,7 +83,27 @@ public class RtzPassagePlanTests
         Assert.Empty(plan.Legs);
     }
 
-    private static RtzRoute Read(string waypoints, string? schedule)
+    [Fact]
+    public void The_vessel_wind_and_wave_limits_become_the_plans_vessel_limits()
+    {
+        var plan = Read(TwoWaypoints, schedule: null, routeInfo: "vesselMaxWind=\"28\" vesselMaxWave=\"3.5\"").ToPassagePlan();
+
+        // vesselMaxWind is in knots (RTZ 1.2 XSD), vesselMaxWave in metres.
+        Assert.Equal(28, plan.VesselLimits!.MaxWind!.Value.TotalKnots, 9);
+        Assert.Equal(3.5, plan.VesselLimits.MaxWaveHeight!.Value.TotalMetres, 9);
+        Assert.Equal(plan.VesselLimits, plan.WithDeparture(DateTimeOffset.UnixEpoch).VesselLimits);
+    }
+
+    [Fact]
+    public void A_route_without_limits_has_no_vessel_limits()
+    {
+        Assert.Null(Read(TwoWaypoints, schedule: null).ToPassagePlan().VesselLimits);
+    }
+
+    private const string TwoWaypoints =
+        "<waypoint id=\"1\"><position lat=\"50.0\" lon=\"-1.0\"/></waypoint><waypoint id=\"2\"><position lat=\"50.5\" lon=\"-1.0\"/></waypoint>";
+
+    private static RtzRoute Read(string waypoints, string? schedule, string routeInfo = "")
     {
         var schedules = schedule is null
             ? ""
@@ -91,7 +111,7 @@ public class RtzPassagePlanTests
         var xml = $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <route xmlns="http://www.cirm.org/RTZ/1/1" version="1.1">
-              <routeInfo routeName="Test"/>
+              <routeInfo routeName="Test" {routeInfo}/>
               <waypoints>{waypoints}</waypoints>
               {schedules}
             </route>

@@ -31,7 +31,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor, ILoadedDatasetProjection
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor, ILoadedDatasetProjection, IListedValueDefinitions
     where TFeature : IS100Feature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
@@ -202,14 +202,6 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected virtual IReadOnlyList<FeatureReference> BuildFeatureReferences(TFeature feature) => [];
 
     /// <summary>
-    /// Builds the WMO / SIGRID-3 ice "egg code" projection for a feature, when
-    /// the product supports it. Returns <c>null</c> by default; S-411 overrides
-    /// this to project sea-ice / lake-ice concentration, stage, and form
-    /// attributes into an <see cref="IceEggCode"/> for the pick report.
-    /// </summary>
-    protected virtual IceEggCode? BuildEggCode(TFeature feature) => null;
-
-    /// <summary>
     /// Builds the navigational warning message for a feature, when the
     /// product carries warnings. Returns <c>null</c> by default; S-124
     /// overrides this for <c>NavwarnPart</c> features.
@@ -244,6 +236,24 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected virtual Task<SupplementalPortrayal?> BuildSupplementalPortrayalAsync(
         RenderContext? context, CancellationToken cancellationToken) =>
         Task.FromResult<SupplementalPortrayal?>(null);
+
+    /// <summary>
+    /// Builds the sub-layer's legend (<see cref="VectorSubLayer.Legend"/>) from
+    /// the catalogue's assets, in the palette the sub-layer is drawn in, or
+    /// returns <see langword="null"/> (the default) for no legend. Called under
+    /// the render gate after the portrayal, so the catalogue's display mode and
+    /// palette are the ones just drawn with.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions just emitted.</param>
+    /// <param name="legend">A legend builder over the catalogue's palette, symbols and line styles.</param>
+    protected virtual IReadOnlyList<LegendEntry>? BuildLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend) => null;
+
+    /// <summary>
+    /// The one-line caption shown with the legend, or <see langword="null"/>
+    /// (the default) for none.
+    /// </summary>
+    protected virtual string? LegendCaption => null;
 
     /// <summary>
     /// Drawing instructions and their pre-resolved assets from a supplemental
@@ -338,6 +348,10 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     /// <summary>The feature catalogue decoder, if available.</summary>
     protected FeatureCatalogueDecoder? Decoder => _decoder;
 
+    /// <inheritdoc />
+    public string? ResolveListedValueDefinition(string attributeCode, string rawValue) =>
+        _decoder?.ResolveListedValueDefinition(attributeCode, rawValue);
+
     /// <summary>The dataset file name.</summary>
     protected string FileName => _fileName;
 
@@ -389,6 +403,8 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 // default-plane authority via the injected provider.
                 Plane = _authorityProvider.Current.GetDefaultPlane(Spec.Name),
                 WithinPlanePriority = 0,
+                Legend = BuildLegend(instructions, new CatalogueLegendBuilder(output.Palette, output.SymbolSvg, output.LineStyle)),
+                LegendCaption = LegendCaption,
             };
 
             return new VectorPortrayalResult
@@ -404,6 +420,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 SymbolScale = context?.SymbolScale ?? 1.0,
                 TextScale = context?.TextScale ?? 1.0,
                 SymbolProvider = output.SymbolSvg,
+                CatalogueSymbols = new CatalogueSymbolSet(_catalogue),
                 AreaFillProvider = output.AreaFill,
                 LineStyleProvider = output.LineStyle,
                 GeographicExtent = ComputeGeographicExtent(),
@@ -631,8 +648,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
             References = references,
-            EggCode = BuildEggCode(feature),
-            NavigationalWarning = BuildNavigationalWarning(feature),
+            Sections = BuildNavigationalWarning(feature) is { } warning ? [new NavigationalWarningSection(warning)] : [],
         };
     }
 
@@ -677,8 +693,15 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             Extent = env.Any
                 ? new BoundingBox(env.MinLat, env.MinLon, env.MaxLat, env.MaxLon)
                 : null,
+            TimeCoverage = TimeCoverage,
         };
     }
+
+    /// <summary>
+    /// The time the dataset's content covers, for <see cref="Metadata"/>, or
+    /// <c>null</c> (the default) for none. S-412 reports its warnings' span.
+    /// </summary>
+    protected virtual TimeCoverage? TimeCoverage => null;
 
     /// <summary>
     /// Scans every feature's coordinates once to produce the raw (unpadded)

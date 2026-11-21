@@ -4,7 +4,7 @@
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.AppearanceSettingsPage"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:AppearanceSettingsPageViewModel">
 
     <!-- Settings → Appearance: accent colour, chrome theme, colour profile, symbol and text scale (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"

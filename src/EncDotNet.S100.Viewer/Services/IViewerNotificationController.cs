@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 using EncDotNet.S100.Viewer.Services.Notifications;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -45,11 +44,12 @@ internal sealed class ViewerNotificationController : IViewerNotificationControll
     private readonly INotificationService _notifications;
     private readonly Func<Action, Task> _dispatch;
 
-    public ViewerNotificationController(INotificationService notifications, Func<Action, Task>? dispatch = null)
+    public ViewerNotificationController(INotificationService notifications, Func<Action, Task> dispatch)
     {
         ArgumentNullException.ThrowIfNull(notifications);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _notifications = notifications;
-        _dispatch = dispatch ?? (action => Dispatcher.UIThread.InvokeAsync(action).GetTask());
+        _dispatch = dispatch;
     }
 
     /// <inheritdoc />

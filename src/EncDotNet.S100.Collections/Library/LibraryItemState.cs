@@ -27,7 +27,7 @@ public sealed class LibraryItemState
     /// <param name="source">The source it was indexed from.</param>
     /// <param name="copies">Downloaded copies of online items, or <see langword="null"/> when the host downloads nothing.</param>
     /// <param name="loadState">Whether an item is open in the host's session, or <see langword="null"/> when nothing is.</param>
-    /// <param name="time">The clock that decides whether a downloaded forecast run has ended.</param>
+    /// <param name="time">The clock that decides whether a downloaded forecast run has ended; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
     public LibraryItemState(
         CollectionItem item,
         LibrarySource source,

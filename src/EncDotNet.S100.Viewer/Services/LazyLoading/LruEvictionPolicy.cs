@@ -97,13 +97,19 @@ internal sealed class LruEvictionPolicy<TKey> where TKey : class
     /// Keys that must never be evicted regardless of age; may be
     /// <see langword="null"/> or empty.
     /// </param>
+    /// <param name="preferred">
+    /// Keys to evict first, coldest first, before any other key: the cells the
+    /// demand planner released (map rendering slice&#160;9). May be
+    /// <see langword="null"/> or empty.
+    /// </param>
     /// <returns>
     /// The keys to evict, coldest first. Empty when the budget is satisfied or
     /// every over-budget key is protected.
     /// </returns>
     public IReadOnlyList<TKey> SelectEvictions(
         int retentionBudget,
-        IReadOnlySet<TKey>? protectedKeys = null)
+        IReadOnlySet<TKey>? protectedKeys = null,
+        IReadOnlySet<TKey>? preferred = null)
     {
         if (retentionBudget < 0)
             retentionBudget = 0;
@@ -113,11 +119,24 @@ internal sealed class LruEvictionPolicy<TKey> where TKey : class
             return Array.Empty<TKey>();
 
         var victims = new List<TKey>(overBy);
+        if (preferred is { Count: > 0 })
+        {
+            foreach (var key in _order) // coldest first
+            {
+                if (victims.Count >= overBy)
+                    break;
+                if (preferred.Contains(key) && (protectedKeys is null || !protectedKeys.Contains(key)))
+                    victims.Add(key);
+            }
+        }
+
         foreach (var key in _order) // coldest first
         {
             if (victims.Count >= overBy)
                 break;
             if (protectedKeys is not null && protectedKeys.Contains(key))
+                continue;
+            if (preferred is not null && preferred.Contains(key))
                 continue;
             victims.Add(key);
         }

@@ -60,8 +60,8 @@ internal sealed class CaptureAppScreenshotTool
     /// <param name="displayCombination">The active display combination's id and modified marker, recorded with each capture; null records none.</param>
     public CaptureAppScreenshotTool(
         IAppScreenshotProvider provider,
-        IViewerUiControllerAccessor? panels = null,
-        Func<(string? Id, bool Modified)>? displayCombination = null)
+        IViewerUiControllerAccessor? panels,
+        Func<(string? Id, bool Modified)>? displayCombination)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;

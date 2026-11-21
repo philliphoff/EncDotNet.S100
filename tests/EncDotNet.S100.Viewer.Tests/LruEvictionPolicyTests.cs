@@ -74,6 +74,25 @@ public sealed class LruEvictionPolicyTests
     }
 
     [Fact]
+    public void SelectEvictions_EvictsPreferredKeysFirst()
+    {
+        var lru = new LruEvictionPolicy<string>();
+        lru.Touch("a");
+        lru.Touch("b");
+        lru.Touch("c");
+        lru.Touch("d");
+
+        // Two over budget: 'c' is released (map rendering slice 9), so it goes
+        // before the colder 'b'; 'a', the coldest, fills the other place.
+        var victims = lru.SelectEvictions(
+            retentionBudget: 2,
+            protectedKeys: new HashSet<string> { "d" },
+            preferred: new HashSet<string> { "c", "d" });
+
+        Assert.Equal(new[] { "c", "a" }, victims);
+    }
+
+    [Fact]
     public void SelectEvictions_DoesNotRemoveFromTracking()
     {
         var lru = new LruEvictionPolicy<string>();

@@ -1,0 +1,869 @@
+<title>Storms and Fronts Mock-ups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a design-review sheet. Page chrome follows the viewer's theme; the SoundCharts windows and panels follow the Day/Dusk/Night switch (Light, S100Dusk and S100Night app themes). */
+:root {
+  --bg: #F3F4F6; --fg: #181C24; --muted: #5B6272; --rule: #D6D9E0; --surface: #FFFFFF; --accent: #4B3A5C;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-cond: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --f-app: -apple-system, BlinkMacSystemFont, "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #12151A; --fg: #E4E6EB; --muted: #9AA1AE; --rule: #2C313A; --surface: #1A1E25; --accent: #CBB8DC; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #12151A; --fg: #E4E6EB; --muted: #9AA1AE; --rule: #2C313A; --surface: #1A1E25; --accent: #CBB8DC; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); line-height: 1.5; }
+.wrap { max-width: 1440px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+h1 { font-size: 1.9rem; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 1.2rem; margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 78ch; margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.switch { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--surface); width: max-content; }
+.switch button { font: 500 0.85rem var(--f-body); padding: 7px 16px; border: 0; background: transparent; color: var(--fg); cursor: pointer; }
+.switch button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sticky { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--bg); padding-block: 8px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--rule); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+.sticky small { color: var(--muted); }
+section.frame { display: grid; gap: 14px; min-width: 0; }
+.frame-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.notes { color: var(--muted); max-width: 86ch; margin: 0; font-size: 0.92rem; }
+.notes code, .lede code { font-family: var(--f-mono); font-size: 0.85em; }
+.map-legend-key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.85rem; color: var(--muted); }
+.map-legend-key span { display: inline-flex; gap: 6px; align-items: center; }
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--rule); padding-top: 14px; }
+
+/* ---- SoundCharts chrome (values from App.axaml and the s100-chrome-theme spike) ---- */
+#stage { display: grid; gap: 44px; grid-template-columns: minmax(0, 1fr); }
+.wrap, section.frame { grid-template-columns: minmax(0, 1fr); }
+.winfit { width: 100%; position: relative; overflow: hidden; border-radius: 10px; box-shadow: 0 1px 0 var(--rule), 0 10px 30px rgba(0,0,0,.12); }
+.win { width: 1400px; height: 880px; transform-origin: 0 0; position: absolute; left: 0; top: 0; display: flex; flex-direction: column; background: var(--w-bg); color: var(--w-fg); font-family: var(--f-app); font-size: 12px; border: 1px solid var(--w-border); border-radius: 10px; overflow: hidden; }
+.titlebar { height: 36px; flex: none; display: flex; align-items: center; justify-content: center; position: relative; border-bottom: 1px solid var(--w-border); background: var(--w-bar); }
+.tb-title { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; font-size: 14px; }
+.tb-right { position: absolute; right: 14px; color: var(--w-muted); font-size: 13px; letter-spacing: 6px; }
+.body { flex: 1; display: flex; min-height: 0; }
+.activity { width: 48px; flex: none; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--w-border); background: var(--w-bg); }
+.act { height: 48px; display: grid; place-items: center; color: var(--w-muted); position: relative; }
+.act.on { color: var(--w-fg); } .act.on::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; background: var(--w-accent); border-radius: 0 2px 2px 0; }
+.dock { background: var(--w-bg); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.dock.left { width: 320px; flex: none; }
+.dock.right { width: 360px; flex: none; border-left: 1px solid var(--w-border); }
+.splitter { width: 4px; flex: none; background: var(--w-border); opacity: .6; }
+.dock-title { height: 28px; flex: none; display: flex; align-items: center; padding: 0 6px 0 12px; font-size: 11px; letter-spacing: 1px; }
+.dock-title .x { margin-left: auto; width: 24px; text-align: center; color: var(--w-fg); }
+.dock-body { flex: 1; overflow: hidden; min-height: 0; }
+.edge-tab { width: 26px; flex: none; border-left: 1px solid var(--w-border); display: flex; justify-content: center; }
+.edge-tab span { writing-mode: vertical-rl; font-size: 10.5px; font-weight: 600; letter-spacing: 1px; opacity: .7; margin-top: 12px; }
+.mapcol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.maparea { flex: 1; position: relative; overflow: hidden; background: var(--c-sea); min-height: 0; }
+.mapsvg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.dock.bottom { height: 260px; flex: none; border-top: 1px solid var(--w-border); }
+.statusbar { height: 30px; flex: none; border-top: 1px solid var(--w-border); display: flex; justify-content: flex-end; align-items: center; gap: 0; padding: 0 8px; font-size: 12px; color: var(--w-fg); }
+.statusbar span { opacity: .75; } .statusbar i { width: 1px; height: 15px; background: var(--w-border); margin: 0 12px; }
+.pin { position: absolute; z-index: 5; width: 26px; height: 26px; border-radius: 50%; background: #E0005A; color: #fff; font: 700 13px var(--f-body); display: grid; place-items: center; box-shadow: 0 0 0 3px rgba(255,255,255,.85); }
+.pin.static { position: static; flex: none; width: 22px; height: 22px; font-size: 12px; box-shadow: none; }
+/* map overlays */
+.ov-scale { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 200px; font: 600 11px var(--f-app); color: var(--w-fg); }
+.ov-scale-labels { display: flex; justify-content: space-between; } .ov-scale-bar { height: 5px; background: linear-gradient(90deg, var(--w-accent) 0 25%, transparent 25% 50%, var(--w-accent) 50% 75%, transparent 75%); border: 1px solid var(--w-accent); }
+.ov-tools { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.ov-tool { width: 32px; height: 32px; border-radius: 8px; background: var(--w-toolBtn); display: grid; place-items: center; color: var(--w-fg); }
+.ov-tool.gap { margin-bottom: 14px; }
+.ov-compass { margin-top: 14px; width: 30px; height: 30px; border-radius: 50%; background: var(--w-toolBtn); display: grid; place-items: center; font: 700 12px var(--f-app); color: var(--w-fg); border: 1px solid var(--w-border); }
+.ov-stamp { position: absolute; top: 12px; left: 12px; background: var(--w-overlay); border: 1px solid var(--w-border); border-radius: 6px; padding: 3px 8px; font: 600 12px var(--f-mono); display: flex; gap: 6px; align-items: center; color: var(--w-fg); }
+.ov-hud { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); height: 40px; border-radius: 10px; background: var(--w-overlay); border: 1px solid var(--w-border); display: flex; align-items: center; gap: 10px; padding: 0 12px; white-space: nowrap; color: var(--w-fg); font-size: 12px; }
+.ov-hud .sep { width: 1px; height: 18px; background: var(--w-border); } .ov-hud .chev { opacity: .8; }
+.ov-legend { position: absolute; top: 12px; left: 12px; width: 200px; background: var(--w-overlay); border: 1px solid var(--w-border); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; font-size: 11.5px; color: var(--w-fg); }
+.lgr { display: flex; gap: 8px; align-items: center; } .ln { width: 18px; height: 3px; border-radius: 2px; flex: none; } .ln.wide { height: 8px; }
+.sdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--w-accent); } .sdot.live { background: #22A55A; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #22A55A; display: inline-block; }
+.slot { width: 64px; display: inline-block; }
+/* panel atoms */
+.mono { font-family: var(--f-mono); } .b { font-weight: 600; }
+.t10 { font-size: 10px; } .t105 { font-size: 10.5px; } .t11 { font-size: 11px; } .t12 { font-size: 12px; } .t13 { font-size: 13px; } .t14 { font-size: 14px; } .t15 { font-size: 15px; }
+.o55 { opacity: .55; } .o60 { opacity: .6; } .o65 { opacity: .65; } .o70 { opacity: .7; } .o75 { opacity: .75; } .o80 { opacity: .8; } .o85 { opacity: .85; }
+.grow { flex: 1; min-width: 0; } .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.caps10 { font-size: 10px; letter-spacing: 1px; opacity: .7; } .caps11 { font-size: 11px; font-weight: 600; letter-spacing: .6px; opacity: .6; }
+.accent-t { color: var(--w-accent); } .warn-t { color: #B7791F; }
+.cb { width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--w-border); display: inline-grid; place-items: center; font-size: 10px; flex: none; color: var(--w-pillFg); }
+.cb.on { background: var(--w-pillBg); border-color: var(--w-pillBg); }
+.tg { width: 36px; height: 20px; border-radius: 10px; background: var(--w-toggleOff); position: relative; flex: none; }
+.tg::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.tg.on { background: var(--w-accent); } .tg.on::after { left: 18px; }
+.eye { color: var(--w-fg); display: inline-flex; margin-right: 2px; }
+.ib, .ib16, .ib12 { display: inline-grid; place-items: center; color: var(--w-muted); } .ib { width: 30px; height: 30px; font-size: 15px; } .ib16 { width: 22px; font-size: 13px; } .ib12 { width: 14px; font-size: 11px; opacity: .6; }
+.chev-d { font-size: 10px; opacity: .7; width: 10px; }
+.sw { width: 14px; height: 10px; border-radius: 2px; border: 1px solid var(--w-border); flex: none; display: inline-block; }
+.btn-plain { display: inline-block; padding: 4px 8px; font-weight: 600; font-size: 12px; }
+.btn-ghost { display: inline-block; padding: 3px 8px; font-size: 11.5px; font-weight: 500; border-radius: 6px; } .btn-ghost.sm { padding: 2px 6px; }
+.btn-sec { display: inline-block; padding: 5px 10px; border-radius: 6px; background: var(--w-chip); font-weight: 500; }
+.btn-acc { display: inline-block; padding: 7px 14px; border-radius: 6px; background: var(--w-accent); color: var(--w-accentFg); font-weight: 600; }
+.btn-dark { display: inline-block; width: max-content; padding: 6px 12px; border-radius: 6px; background: var(--w-pillBg); color: var(--w-pillFg); font-weight: 600; }
+/* layer stack */
+.ls-top { padding: 4px 8px 6px; display: flex; gap: 8px; align-items: center; }
+.ls-plane { margin: 2px 4px; }
+.ls-head { display: flex; gap: 6px; align-items: center; padding: 5px 8px; }
+.ls-entry { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; align-items: center; margin: 3px 8px 3px 24px; }
+.ls-text { min-width: 0; }
+.ls-legend { grid-column: 2 / 4; margin: 4px 0 2px; display: grid; gap: 2px; }
+.lg { display: flex; gap: 6px; align-items: center; font-size: 10px; opacity: .85; } .lg svg { flex: none; }
+.ls-foot { border-top: 1px solid var(--w-border); padding: 6px 8px 8px; font-size: 11px; opacity: .65; margin-top: 6px; }
+/* display controls */
+.dc { padding: 4px 12px 12px; display: grid; gap: 12px; }
+.dc-sec { display: grid; gap: 6px; }
+.st { display: grid; grid-template-columns: 150px minmax(0,1fr); min-height: 100%; }
+.st-nav { border-right: 1px solid var(--w-border); padding: 12px 8px; display: grid; gap: 2px; align-content: start; }
+.st-nav span { font-size: 12.5px; font-weight: 500; padding: 7px 10px; border-radius: 6px; white-space: nowrap; }
+.st-nav span.on { background: color-mix(in srgb, var(--w-accent) 14%, transparent); }
+.st-page { padding: 18px 22px 22px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.st-title { font-size: 17px; font-weight: 600; } .st-sec { font-size: 14px; font-weight: 600; opacity: .7; }
+.st-help { font-size: 11px; opacity: .6; } .st-lbl { font-size: 12px; font-weight: 600; }
+.st-field { display: grid; gap: 6px; } .st-dim { opacity: .45; }
+.st-sub { font-size: 12.5px; font-weight: 600; border-top: 1px solid var(--w-border); padding-top: 12px; margin-top: 2px; }
+.st-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; } .st-row > span:first-child { flex: 1; }
+.st-input, .st-combo { border: 1px solid var(--w-border); border-radius: 5px; padding: 4px 8px; font-size: 12px; background: var(--w-bg); white-space: nowrap; }
+.st-input { width: 90px; } .st-combo { min-width: 140px; display: inline-flex; justify-content: space-between; gap: 10px; }
+.st-combo::after { content: "⌄"; opacity: .6; }
+.dc-h { font-size: 11px; font-weight: 600; letter-spacing: .5px; opacity: .7; }
+.dc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.dc-radio { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; }
+.rd { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--w-border); flex: none; } .rd.on { border: 5px solid var(--w-fg); }
+/* pick report */
+.pk-sec { padding: 4px 12px 8px; border-bottom: 1px solid var(--w-border); display: grid; gap: 4px; }
+.pk-hit { display: flex; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; } .pk-hit.on { background: var(--w-sel); box-shadow: inset 3px 0 0 var(--w-accent); }
+.pk-notice { margin: 8px 12px 0; font-size: 12px; font-weight: 600; color: #B7791F; }
+.pk-stale { margin: 4px 12px 0; font-size: 12px; color: #B7791F; } .link { color: var(--w-accent); font-weight: 600; }
+.dock-body > .t12.o70, .panel .dock-body > .t12.o70 { margin: 4px 12px 0; }
+.pk-id { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center; margin: 8px 12px; }
+.tile { width: 36px; height: 36px; border-radius: 7px; background: var(--w-chip); display: grid; place-items: center; }
+.tile svg { width: 22px; height: 22px; }
+.cpill { font-size: 11px; opacity: .8; background: var(--w-chip); border-radius: 4px; padding: 1px 6px; }
+.pk-attrs { padding: 6px 12px 12px; border-top: 1px solid var(--w-border); display: grid; gap: 6px; }
+.attr-box { border: 1px solid var(--w-border); border-radius: 6px; overflow: hidden; }
+.attr { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; padding: 7px 12px; font-size: 12px; } .attr:nth-child(even) { background: var(--w-chip); }
+.attr .k { opacity: .7; } .attr .v { font-weight: 500; }
+.hatchglyph { width: 14px; height: 10px; border: 1px solid; flex: none; background: repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 4px); opacity: .7; }
+/* datasets */
+.tabs2 { display: flex; justify-content: center; gap: 18px; font-size: 11px; letter-spacing: 1px; padding: 6px 0; } .tabs2 span { opacity: .6; padding-bottom: 3px; } .tabs2 .on { opacity: 1; font-weight: 600; border-bottom: 2px solid var(--w-accent); }
+.tabs2.small { justify-content: flex-start; gap: 14px; padding: 6px 12px; border-top: 1px solid var(--w-border); }
+.ds-tools { display: flex; padding: 0 6px; }
+.ds-row { display: flex; gap: 6px; align-items: center; padding: 6px 10px; } .ds-row.sel { background: var(--w-sel); }
+.wtag { font-size: 10px; font-weight: 600; border-radius: 4px; padding: 0 5px; background: var(--w-warnBg); color: var(--w-warnFg); border: 1px solid var(--w-warnBorder); }
+.ds-insp { margin-top: 8px; }
+.kvs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; padding: 6px 12px; font-size: 12px; }
+/* library */
+.lib-bar { display: flex; align-items: center; padding: 4px 8px; gap: 4px; }
+.lib-tree { padding: 0 10px 6px; display: grid; gap: 4px; border-bottom: 1px solid var(--w-border); }
+.lib-src { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.lib-src > b, .lib-src > span:not(.ktag) { white-space: nowrap; } .lib-src > b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ktag { font: 10.5px var(--f-mono); min-width: 42px; text-align: center; border: 1px solid var(--w-border); border-radius: 4px; opacity: .7; padding: 1px 0; }
+.lib-filter { margin: 8px 10px 4px; border: 1px solid var(--w-border); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+.seg3, .seg { display: flex; margin: 4px 10px 6px; background: var(--w-chip); border-radius: 8px; padding: 2px; font-size: 12px; }
+.seg3 span, .seg span { flex: 1; text-align: center; padding: 3px 0; border-radius: 6px; } .seg3 .on, .seg .on { background: var(--w-bg); font-weight: 600; } .seg3 i { font-style: normal; opacity: .55; }
+.lib-item { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; padding: 8px 10px; border-top: 1px solid var(--w-border); }
+.lib-sw { width: 18px; height: 18px; display: grid; place-items: center; } .lib-sw svg { width: 18px; height: 18px; }
+.ltag { font-size: 11px; font-weight: 500; border-radius: 11px; padding: 0 8px; height: 20px; display: inline-flex; align-items: center; border: 1px solid var(--w-border); flex: none; }
+.ltag.warn { background: var(--w-warnBg); color: var(--w-warnFg); border-color: var(--w-warnBorder); } .ltag.prim { background: var(--w-pillBg); color: var(--w-pillFg); border-color: transparent; }
+.fwin { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--w-accent) 30%, transparent); margin-top: 4px; } .fwin span { display: block; height: 100%; background: var(--w-border); border-radius: 2px; }
+.lib-detail { margin: 6px 10px; padding: 8px; border: 1px solid var(--w-border); border-radius: 6px; display: grid; gap: 6px; }
+.nfn-banner { background: #FFE4B5; border: 1px solid #B8860B; color: #8B4513; border-radius: 4px; padding: 6px 10px; font-weight: 600; font-size: 12px; }
+/* timeline */
+.tl { font-size: 12px; padding: 0 12px 4px; box-sizing: border-box; }
+.tl-tabs { height: 28px; display: flex; align-items: center; gap: 14px; }
+.tab { font-size: 11px; letter-spacing: 1px; opacity: .65; padding: 6px 0 4px; border-bottom: 2px solid transparent; } .tab.on { opacity: 1; font-weight: 600; border-color: var(--w-accent); }
+.tl .x { width: 24px; text-align: center; }
+.tl-read { display: flex; align-items: center; gap: 10px; height: 34px; }
+.tl-btn { height: 28px; min-width: 28px; display: inline-grid; place-items: center; border-radius: 6px; padding: 0 6px; } .tl-btn.menu { border: 1px solid var(--w-border); padding: 0 10px; }
+.tl-live { height: 28px; width: 64px; border-radius: 6px; background: var(--w-chip); display: inline-flex; gap: 6px; align-items: center; justify-content: center; font-weight: 500; } .tl-live.out { background: transparent; border: 1px solid var(--w-border); }
+.tl-grid { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 64px; }
+.tl-left { display: grid; gap: 4px; align-content: start; padding-top: 4px; }
+.tl-axis { position: relative; margin-left: -260px; }
+.tl-ov { position: absolute; left: 260px; right: 16px; top: 2px; height: 6px; background: rgba(161,161,170,.35); border-radius: 3px; }
+.tl-day { position: absolute; top: 42px; font-size: 11px; transform: translateX(4px); white-space: nowrap; }
+.tl-tick { position: absolute; top: 30px; height: 8px; width: 1px; background: var(--w-border); }
+.tl-nowlab { position: absolute; top: 12px; transform: translateX(-50%); font-size: 10px; font-weight: 700; }
+.tl-lanes { position: relative; }
+.tl-group { height: 24px; display: flex; align-items: center; gap: 6px; }
+.tl-lane { height: 34px; display: grid; grid-template-columns: 248px minmax(0, 1fr); align-items: center; }
+.tl-lab { display: flex; gap: 8px; margin-left: 14px; align-items: stretch; } .lane-bar { width: 3px; border-radius: 1px; background: #52525B; margin: 3px 0; flex: none; }
+.tl-track { position: relative; height: 34px; margin-left: -260px; }
+.tl-known { position: absolute; top: 8px; height: 18px; border: 1px solid #52525B; border-radius: 4px; box-sizing: border-box; }
+.tl-load { position: absolute; top: 11px; height: 12px; background: #52525B; border-radius: 3px; } .tl-load.past { opacity: .45; }
+.tl-fc { position: absolute; top: 7px; width: 1.5px; height: 20px; background: var(--w-fg); }
+.tl-dia { position: absolute; top: 26px; width: 8px; height: 8px; background: var(--w-fg); transform: translateX(-4px) rotate(45deg); } .tl-dia.hollow { background: transparent; border: 1.5px solid var(--w-fg); }
+.tl-seg { position: absolute; top: 11px; height: 12px; background: #52525B; border-radius: 2px; opacity: .8; }
+.tl-nowline { position: absolute; top: -70px; bottom: 0; width: 0; border-left: 1.5px dashed var(--w-fg); }
+.tl-status { padding-top: 4px; }
+/* routes */
+.rt { padding: 0 0 6px; display: grid; gap: 6px; }
+.rt-tools { display: flex; padding: 0 8px; }
+.rt-sel { display: flex; gap: 8px; align-items: center; margin: 0 8px; padding: 8px; background: var(--w-sel); border-left: 3px solid var(--w-accent); border-radius: 4px; }
+.rt-ic { color: var(--w-accent); } .rt-name { padding: 4px 12px; border-top: 1px solid var(--w-border); }
+.rt-card { margin: 0 10px; padding: 10px; border-radius: 8px; background: var(--w-mustBg); border: 1px solid var(--w-mustBorder); display: grid; gap: 6px; font-size: 12px; }
+.badge-must { width: 16px; height: 16px; border-radius: 50%; background: #C62828; color: #fff; display: inline-grid; place-items: center; font-weight: 700; font-size: 11px; flex: none; }
+.badge-chk { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 14px solid #D4A017; display: inline-block; font-size: 0; flex: none; }
+.badge-must.sm { width: 14px; height: 14px; font-size: 10px; }
+.rt-sum { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.chipn { border-radius: 10px; padding: 0 7px; font-size: 11px; border: 1px solid; } .chipn.ok { color: #2E7D32; } .chipn.chk { color: #B26A00; background: #FFF1D6; } .chipn.must { color: #C62828; background: #FDECEC; }
+.fd { margin: 0 10px; padding: 4px 0 4px 10px; border-left: 3px solid #D4A017; display: grid; } .fd.must { border-color: #C62828; } .fd.info { border-color: var(--w-muted); }
+.rt-bottom { display: flex; padding: 8px 10px; border-top: 1px solid var(--w-border); }
+/* map tiles and callouts */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .tiles { grid-template-columns: minmax(0, 1fr); } }
+.maptile { margin: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--w-border); background: var(--w-bg); color: var(--w-fg); font-family: var(--f-app); }
+.maparea.tilemap { height: 300px; flex: none; }
+.maptile figcaption { padding: 8px 10px; font-size: 12px; }
+.maptile .ov-hud { transform: translateX(-50%) scale(.7); transform-origin: 50% 100%; bottom: 8px; }
+.maptile.wide .maparea.tilemap { height: 380px; }
+#m4 { grid-template-columns: minmax(0, 1fr); }
+#m4 .maparea.tilemap { height: 360px; }
+.callouts { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.callout { margin: 0; width: var(--cw); max-width: 100%; display: grid; gap: 8px; }
+.callout figcaption { display: flex; gap: 8px; align-items: flex-start; font-size: 0.85rem; color: var(--fg); }
+.callout .where { color: var(--muted); }
+.callout .panel { background: var(--w-bg); color: var(--w-fg); font-family: var(--f-app); font-size: 12px; border: 1px solid var(--w-border); border-radius: 8px; overflow: hidden; }
+.callout .dock-body { overflow: visible; }
+.callout.wide .panel { overflow-x: auto; }
+.scroll-x { overflow-x: auto; max-width: 100%; }
+.sheet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 860px) { .sheet { grid-template-columns: minmax(0, 1fr); } }
+.sheet > div { border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; min-width: 0; }
+.sheet svg { display: block; width: 100%; height: auto; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SoundCharts · design round 1, revision 2 · #1232 / #1233</span>
+    <h1>Tropical cyclones, fronts and pressure centres</h1>
+    <p class="lede">Mock-ups for <code>docs/design/vector-weather.md</code>. The chart shows only what's drawn on the map. Everything else is shown in the SoundCharts panel it lives in, laid out as the viewer lays it out (from <code>MainWindow.axaml</code> and the panel views). Pink numbers match each panel in the whole-window frames to its full-size callout. The storm, coastline and route are made up.</p>
+  </header>
+
+  <div class="sticky">
+    <div class="switch" role="group" aria-label="Palette">
+      <button type="button" id="pal-day" data-pal="day" aria-pressed="true">Day</button>
+      <button type="button" id="pal-dusk" data-pal="dusk" aria-pressed="false">Dusk</button>
+      <button type="button" id="pal-night" data-pal="night" aria-pressed="false">Night</button>
+    </div>
+    <small>Chart palette and app theme together, as SoundCharts pairs them: Day with Light, Dusk with S100Dusk, Night with S100Night.</small>
+  </div>
+
+  <div id="stage"><div id="gdefs"></div>
+  <section class="frame">
+    <div class="frame-head"><span class="eyebrow">Frame 1</span><h2>A hurricane at Live: the whole window</h2></div>
+    <p class="notes">Layer stack open in the left dock (1), a pick on the storm in Object information (2), the Timeline in the bottom dock (3). On the map (4): only the chart drawing, plus the existing map overlays (scale bar, tools, compass and the Live stamp that shows while the Timeline dock is open). Decisions: V1–V12, V23, V25.</p>
+    <div id="w1"></div>
+    <div class="frame-head"><span class="eyebrow">Callouts</span><h2>The panels at full size</h2></div>
+    <p class="notes"><b>1 Layer stack:</b> a storm draws on two S-98 planes, so it has two entries. Its symbol legend sits under the track entry and its area legend under the cone-and-radii entry, as the wave fill's legend sits under its entry today. Legend rows can show a symbol or line sample as well as a colour swatch. <b>2 Object information:</b> the storm is a hit in the list, then the existing notice line, credit, identity block and attributes table; the radii are attribute rows, not a new table. <b>5 Display controls</b> and <b>6 Library</b> are other tabs of the same left dock.</p>
+    <div class="callouts" id="c1"></div>
+    <div class="callouts" id="c1t"></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><span class="eyebrow">Frame 2</span><h2>The storm through the Timeline</h2></div>
+    <p class="notes">Map only, with the Time HUD as it sits on the map while the Timeline dock is closed. The forecast always shows; the storm marker and its radii follow the view time (V11). Beyond the forecast, the Datasets row and inspector say why there's no marker (7).</p>
+    <div class="tiles" id="m2"></div>
+    <div class="callouts" id="c2"></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><span class="eyebrow">Frame 3</span><h2>Surface analysis: the whole window</h2></div>
+    <p class="notes">Timeline dock closed, so the Time HUD is on the map. The Layer stack lists the analysis on Other chart overlays above the isobars, with its front-type legend (V17–V22, V25). Object information shows a cold-front pick (V24).</p>
+    <div id="w3"></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><span class="eyebrow">Frame 4</span><h2>Stale data</h2></div>
+    <p class="notes">On the map, the storm label carries the age and the analysis fades (V29, V30). Everywhere else the age shows in the panels that already show freshness: a Stale tag in Datasets, a warning line in Object information under the notice, and the Library's existing Stale tag, stale-run warning and <b>Load latest run</b>.</p>
+    <div class="tiles" id="m4"></div>
+    <div class="callouts" id="c4"></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><span class="eyebrow">Frame 5</span><h2>A planned route near the storm (#1093): the whole window</h2></div>
+    <p class="notes">The Routes panel (8) shows the check summary card and Findings as today, with a Weather row and weather findings. Check mode folds Object information to its edge tab. The route-check legend card on the map (9) is the existing <code>RouteCheckLegendView</code>, with a Weather row added (V38). The radius the check uses and which radii are Must review are set in Settings (10), under Chart display → Mariner Settings, beside the safety contour and depth the check already reads (V39).</p>
+    <div id="w5"></div>
+    <div class="callouts" id="c5"></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><span class="eyebrow">Frame 6</span><h2>Symbol sheet at Day, Dusk and Night</h2></div>
+    <p class="notes">Classification symbols for each hemisphere (V5, V6; southern ones mirrored, arm direction to be confirmed against the WMO glyph), radii and cone samples, front types and pressure centres. Night inks stay under luminance 0.2.</p>
+    <div class="sheet" id="sheet"></div>
+  </section>
+  </div>
+
+  <footer>Design only. No production code. Chart colours: <code>WXTC*</code> and <code>WXFRONT</code> tokens proposed in §3.2 and §5.2 of the note; base chart colours approximate S-101 Day, Dusk and Night. App chrome follows the viewer's XAML; pixel sizes are its own.</footer>
+</div>
+
+<script>
+(function () {
+const PAL = {
+  day:   { name: "Day",  sea: "#D4EEFB", sea2: "#A9D8F7", sea3: "#86C5F2", land: "#C2BD8E", coast: "#46525C", depthLine: "#6E9CC0", grat: "#8EA9BC",
+           ink: "#2A1F2D", halo: "#FFFFFF", cone: ["#6F5E70", .14], r34: ["#7A5C78", .16], r50: ["#5E3F5C", .26], r64: ["#43243F", .38],
+           front: "#1A2030", isobar: "#4A5160", isoHalo: "#FFFFFF", barb: "#222630", wave: ["#E5DFFC", "#CAC1EB", "#B0A3DA", "#9786C9"],
+           cap: "#6A1B9A", route: "#1C4E80", sleeve: "#B07D00", must: "#C62828",
+           panel: "#F7F8FA", pfg: "#1B1F27", pmuted: "#5D6372", prule: "#DADDE3", on: "#2A1F2D", nfnbg: "#ECEEF2", nfnfg: "#3A3F4A", stalebg: "#FFF1D6", stalefg: "#6B4A00" },
+  dusk:  { name: "Dusk", sea: "#05090C", sea2: "#0F1A22", sea3: "#1D3450", land: "#4A4630", coast: "#8FA3B0", depthLine: "#2A4558", grat: "#2B3640",
+           ink: "#EADFEA", halo: "#2A2530", cone: ["#EADFEA", .12], r34: ["#D9C7D7", .14], r50: ["#E3D3E1", .22], r64: ["#F1E6EF", .32],
+           front: "#E3E6EE", isobar: "#BFC4CE", isoHalo: "#3B4250", barb: "#D4D7DE", wave: ["#494260", "#5A5177", "#6C608F", "#7E70A7"],
+           cap: "#B47FD6", route: "#86B9E6", sleeve: "#D9A93A", must: "#E57373",
+           panel: "#252A31", pfg: "#E4E6EA", pmuted: "#A2A8B3", prule: "#363C45", on: "#D8CBD8", nfnbg: "#2F353E", nfnfg: "#C9CDD5", stalebg: "#3D3320", stalefg: "#E8C77A" },
+  night: { name: "Night", sea: "#020303", sea2: "#060B10", sea3: "#0D1824", land: "#2A2410", coast: "#33434D", depthLine: "#13222C", grat: "#161D22",
+           ink: "#6B5F6B", halo: "#000000", cone: ["#6B5F6B", .18], r34: ["#6B5F6B", .10], r50: ["#6B5F6B", .18], r64: ["#6B5F6B", .28],
+           front: "#646A76", isobar: "#555A63", isoHalo: "#0B0E14", barb: "#5F636C", wave: ["#171322", "#201B2F", "#29233C", "#332B4A"],
+           cap: "#5C3A72", route: "#36536E", sleeve: "#5A4A12", must: "#7A2E2E",
+           panel: "#0A0C0F", pfg: "#7E838C", pmuted: "#565B64", prule: "#1C2026", on: "#4F4650", nfnbg: "#12151A", nfnfg: "#6E737C", stalebg: "#1E1A0E", stalefg: "#8A7640" }
+};
+
+const f = n => (Math.round(n * 10) / 10).toString();
+const pts = a => a.map(p => f(p[0]) + "," + f(p[1])).join(" ");
+const lerp = (a, b, t) => a + (b - a) * t;
+let uid = 0; const id = p => p + (++uid);
+
+/* ---------- Storm data (made up) ---------- */
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const when = h => { const tot = 15 + h; const d = 2 + Math.floor(tot / 24); const hr = ((tot % 24) + 24) % 24; const h12 = hr % 12 === 0 ? 12 : hr % 12; return DAYS[((d % 7) + 7) % 7] + " " + h12 + ":00 " + (hr < 12 ? "AM" : "PM"); };
+const PAST = [[-36, 404, 404, 45], [-30, 386, 393, 55], [-24, 368, 382, 65], [-18, 352, 370, 75], [-12, 336, 358, 90], [-6, 318, 344, 100]];
+const FC = [[0, 300, 330, 115], [12, 290, 300, 120], [24, 284, 268, 115], [36, 284, 236, 110], [48, 292, 205, 100], [60, 306, 177, 85], [72, 324, 152, 70], [96, 370, 110, 45], [120, 430, 78, 35]];
+const CONE_NM = [16, 26, 39, 52, 65, 79, 93, 149, 206];
+const PX = 2.5; // nm per px
+const BASE = { 64: [40, 35, 25, 30], 50: [80, 70, 50, 60], 34: [170, 150, 110, 130] };
+const cls = kt => kt < 34 ? "D" : kt < 64 ? "S" : kt < 96 ? "H" : "M";
+const CLSWORD = { D: "TROPICAL DEPRESSION", S: "TROPICAL STORM", H: "HURRICANE", M: "HURRICANE" };
+function radiiAt(h, kt) { const g = 1 + Math.max(h, -20) / 160; const out = {}; for (const k of [34, 50, 64]) out[k] = kt >= k ? BASE[k].map(v => v * g * (k === 34 ? 1 : Math.min(1, (kt - k) / 40 + 0.4))) : null; return out; }
+const TRACK = PAST.concat(FC);
+function stormAt(h) {
+  if (h < TRACK[0][0] || h > TRACK[TRACK.length - 1][0]) return null;
+  for (let i = 0; i < TRACK.length - 1; i++) {
+    const a = TRACK[i], b = TRACK[i + 1];
+    if (h >= a[0] && h <= b[0]) {
+      const t = (h - a[0]) / (b[0] - a[0]);
+      const kt = Math.round(lerp(a[3], b[3], t) / 5) * 5;
+      const onPoint = t === 0 || t === 1;
+      return { x: lerp(a[1], b[1], t), y: lerp(a[2], b[2], t), kt, c: cls(onPoint ? (t === 0 ? a[3] : b[3]) : a[3]), est: h > 0 && !onPoint, past: h < 0, r: radiiAt(h, kt) };
+    }
+  }
+  return null;
+}
+
+/* ---------- Drawing helpers ---------- */
+function conePolygon(P, R, i0, i1, capStart, capEnd) {
+  const L = [], Rt = [];
+  const n = i => { const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)]; const dx = b[0] - a[0], dy = b[1] - a[1], m = Math.hypot(dx, dy); return [-dy / m, dx / m]; };
+  for (let i = i0; i <= i1; i++) { const [nx, ny] = n(i); L.push([P[i][0] + nx * R[i], P[i][1] + ny * R[i]]); Rt.push([P[i][0] - nx * R[i], P[i][1] - ny * R[i]]); }
+  const out = L.slice();
+  const arc = (c, r, th0, th1) => { const s = []; for (let k = 1; k < 24; k++) { const th = lerp(th0, th1, k / 24); s.push([c[0] + r * Math.cos(th), c[1] + r * Math.sin(th)]); } return s; };
+  if (capEnd) { const [nx, ny] = n(i1); const th = Math.atan2(ny, nx); out.push(...arc(P[i1], R[i1], th, th - Math.PI)); }
+  out.push(...Rt.reverse());
+  if (capStart) { const [nx, ny] = n(i0); const th = Math.atan2(ny, nx); out.push(...arc(P[i0], R[i0], th + Math.PI, th)); }
+  return out;
+}
+function radiiPath(cx, cy, q) { // q: NE, SE, SW, NW in nm
+  const r = q.map(v => v / PX);
+  const P = (rr, deg) => [cx + rr * Math.cos(deg * Math.PI / 180), cy + rr * Math.sin(deg * Math.PI / 180)];
+  const seg = [[-90, 0, r[0]], [0, 90, r[1]], [90, 180, r[2]], [180, 270, r[3]]];
+  let d = "";
+  seg.forEach(([a0, a1, rr], i) => { const p0 = P(rr, a0), p1 = P(rr, a1); d += (i === 0 ? "M" : "L") + f(p0[0]) + " " + f(p0[1]) + " A" + f(rr) + " " + f(rr) + " 0 0 1 " + f(p1[0]) + " " + f(p1[1]) + " "; });
+  return d + "Z";
+}
+function tcSymbol(x, y, c, size, p, opts = {}) {
+  const r = size * 0.32, s = opts.south ? -1 : 1, ink = opts.ink || p.ink;
+  let g = "";
+  if (opts.ring) g += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(size * 0.95)}" fill="none" stroke="${ink}" stroke-width="1.2" ${opts.ring === "dash" ? 'stroke-dasharray="3 2.5"' : ""}/>`;
+  if (c !== "D") {
+    const a = size * 0.85;
+    g += `<path d="M${f(x)} ${f(y - r)} C ${f(x + s * a * 0.55)} ${f(y - r * 1.1)}, ${f(x + s * a * 0.9)} ${f(y - a * 0.75)}, ${f(x + s * a * 0.55)} ${f(y - a)}" fill="none" stroke="${ink}" stroke-width="${f(size * 0.16)}" stroke-linecap="round"/>`;
+    g += `<path d="M${f(x)} ${f(y + r)} C ${f(x - s * a * 0.55)} ${f(y + r * 1.1)}, ${f(x - s * a * 0.9)} ${f(y + a * 0.75)}, ${f(x - s * a * 0.55)} ${f(y + a)}" fill="none" stroke="${ink}" stroke-width="${f(size * 0.16)}" stroke-linecap="round"/>`;
+  }
+  const filled = c === "H" || c === "M";
+  g += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${filled ? ink : p.halo}" stroke="${ink}" stroke-width="${f(size * 0.14)}"/>`;
+  if (c === "M") g += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r * 1.65)}" fill="none" stroke="${ink}" stroke-width="${f(size * 0.09)}"/>`;
+  if (c === "PT") g = `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r * 1.1)}" fill="${p.halo}" stroke="${ink}" stroke-width="${f(size * 0.12)}"/><path d="M${f(x - r * .6)} ${f(y - r * .6)} L${f(x + r * .6)} ${f(y + r * .6)} M${f(x + r * .6)} ${f(y - r * .6)} L${f(x - r * .6)} ${f(y + r * .6)}" stroke="${ink}" stroke-width="${f(size * 0.12)}"/>`;
+  return g;
+}
+const text = (x, y, s, p, o = {}) => `<text x="${f(x)}" y="${f(y)}" font-family="IBM Plex Sans Condensed, Arial Narrow, sans-serif" font-size="${o.size || 11}" font-weight="${o.weight || 400}" fill="${o.fill || p.ink}" stroke="${o.halo || p.halo}" stroke-width="${o.hw || 3}" paint-order="stroke" stroke-linejoin="round" ${o.anchor ? `text-anchor="${o.anchor}"` : ""} ${o.opacity ? `opacity="${o.opacity}"` : ""}>${s}</text>`;
+
+function chaikin(P, n = 3) { let a = P; for (let k = 0; k < n; k++) { const b = [a[0]]; for (let i = 0; i < a.length - 1; i++) { const p = a[i], q = a[i + 1]; b.push([.75 * p[0] + .25 * q[0], .75 * p[1] + .25 * q[1]], [.25 * p[0] + .75 * q[0], .25 * p[1] + .75 * q[1]]); } b.push(a[a.length - 1]); a = b; } return a; }
+function along(P, s) { let acc = 0; for (let i = 0; i < P.length - 1; i++) { const dx = P[i + 1][0] - P[i][0], dy = P[i + 1][1] - P[i][1], L = Math.hypot(dx, dy); if (acc + L >= s) { const t = (s - acc) / L; return { x: P[i][0] + dx * t, y: P[i][1] + dy * t, tx: dx / L, ty: dy / L }; } acc += L; } return null; }
+function plen(P) { let L = 0; for (let i = 0; i < P.length - 1; i++) L += Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]); return L; }
+function front(type, raw, p, o = {}) {
+  const P = chaikin(raw), ink = o.ink || p.front, side = o.side || 1, sp = o.spacing || 30, w = o.width || 2.4, op = o.opacity || 1;
+  let g = `<g opacity="${op}">`;
+  const dash = type === "trough" ? 'stroke-dasharray="9 6"' : "";
+  g += `<polyline points="${pts(P)}" fill="none" stroke="${o.halo || p.isoHalo}" stroke-width="${w + 2.5}" stroke-linejoin="round" stroke-linecap="round" opacity="0.8" ${dash}/>`;
+  g += `<polyline points="${pts(P)}" fill="none" stroke="${ink}" stroke-width="${type === "trough" ? w * 0.7 : w}" stroke-linejoin="round" stroke-linecap="round" ${dash}/>`;
+  if (type !== "trough") {
+    const L = plen(P); let k = 0;
+    for (let s = 12; s < L - 6; s += sp, k++) {
+      const a = along(P, s); if (!a) break;
+      let sd = side; let kind = type;
+      if (type === "occluded") kind = k % 2 ? "warm" : "cold";
+      if (type === "stationary") { kind = k % 2 ? "warm" : "cold"; sd = k % 2 ? -side : side; }
+      const nx = -a.ty * sd, ny = a.tx * sd, hw = o.pip || 7, h = (o.pip || 7) * 1.35;
+      if (kind === "cold") g += `<polygon points="${pts([[a.x - a.tx * hw, a.y - a.ty * hw], [a.x + a.tx * hw, a.y + a.ty * hw], [a.x + nx * h, a.y + ny * h]])}" fill="${ink}"/>`;
+      else { const arc = []; for (let j = 0; j <= 12; j++) { const ph = Math.PI * j / 12; arc.push([a.x - Math.cos(ph) * hw * a.tx + Math.sin(ph) * hw * nx, a.y - Math.cos(ph) * hw * a.ty + Math.sin(ph) * hw * ny]); } g += `<polygon points="${pts(arc)}" fill="${ink}"/>`; }
+    }
+  }
+  return g + "</g>";
+}
+function barb(x, y, kt, from, p, o = {}) {
+  const ink = o.ink || p.barb, L = 24, a = (from - 90) * Math.PI / 180;
+  const ex = x + Math.cos(a) * L, ey = y + Math.sin(a) * L;
+  let g = `<circle cx="${f(x)}" cy="${f(y)}" r="1.6" fill="${ink}"/><line x1="${f(x)}" y1="${f(y)}" x2="${f(ex)}" y2="${f(ey)}" stroke="${ink}" stroke-width="1.2"/>`;
+  let rem = Math.round(kt / 5) * 5, pos = 0;
+  const nx = Math.cos(a + Math.PI / 2), ny = Math.sin(a + Math.PI / 2);
+  const at = d => [x + Math.cos(a) * (L - d), y + Math.sin(a) * (L - d)];
+  while (rem >= 50) { const b0 = at(pos), b1 = at(pos + 5); g += `<polygon points="${pts([b0, [b0[0] + nx * 10 + Math.cos(a) * 3, b0[1] + ny * 10 + Math.sin(a) * 3], b1])}" fill="${ink}"/>`; pos += 7; rem -= 50; }
+  while (rem >= 10) { const b = at(pos); g += `<line x1="${f(b[0])}" y1="${f(b[1])}" x2="${f(b[0] + nx * 10 + Math.cos(a) * 3)}" y2="${f(b[1] + ny * 10 + Math.sin(a) * 3)}" stroke="${ink}" stroke-width="1.2"/>`; pos += 3.5; rem -= 10; }
+  if (rem >= 5) { const b = at(pos + (pos === 0 ? 3.5 : 0)); g += `<line x1="${f(b[0])}" y1="${f(b[1])}" x2="${f(b[0] + nx * 5 + Math.cos(a) * 1.5)}" y2="${f(b[1] + ny * 5 + Math.sin(a) * 1.5)}" stroke="${ink}" stroke-width="1.2"/>`; }
+  return g;
+}
+
+/* ---------- Base chart ---------- */
+const COAST = [[0, 128], [60, 138], [120, 150], [180, 168], [230, 176], [280, 172], [320, 166], [360, 160], [400, 150], [440, 146], [470, 152], [500, 165], [515, 200], [527, 240], [542, 280], [566, 306], [592, 292], [604, 252], [614, 212], [632, 180], [670, 160], [720, 150], [760, 146]];
+function baseChart(p, W, H) {
+  const sm = chaikin(COAST, 2);
+  const land = `<polygon points="${pts([[0, 0], ...sm, [W, 0]])}" fill="${p.land}"/>`;
+  const off = (d) => chaikin(COAST.map(([x, y]) => [x, y + d]), 2);
+  let g = `<rect width="${W}" height="${H}" fill="${p.sea}"/>`;
+  g += `<polygon points="${pts([[0, 0], ...off(34), [W, 0]])}" fill="${p.sea2}"/>`;
+  g += `<polygon points="${pts([[0, 0], ...off(14), [W, 0]])}" fill="${p.sea3}"/>`;
+  g += `<polyline points="${pts(off(34))}" fill="none" stroke="${p.depthLine}" stroke-width="0.8"/>`;
+  for (let x = 80; x < W; x += 160) g += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="${p.grat}" stroke-width="0.5" stroke-dasharray="2 4"/>`;
+  for (let y = 60; y < H; y += 160) g += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${p.grat}" stroke-width="0.5" stroke-dasharray="2 4"/>`;
+  g += land + `<polyline points="${pts(sm)}" fill="none" stroke="${p.coast}" stroke-width="1"/>`;
+  return g;
+}
+function defs(p, key) {
+  return `<defs>
+    <pattern id="stip-${key}" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="0.9" fill="${p.ink}" opacity="0.55"/><circle cx="4.5" cy="4.5" r="0.9" fill="${p.ink}" opacity="0.55"/></pattern>
+    <pattern id="hatch-${key}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="${p.cap}" stroke-width="1"/></pattern>
+  </defs>`;
+}
+
+/* ---------- Storm scene ---------- */
+function storm(p, key, h, o = {}) {
+  const P = FC.map(r => [r[1], r[2]]), R = CONE_NM.map(v => v / PX);
+  let g = "";
+  const i72 = FC.findIndex(r => r[0] === 72);
+  const all = conePolygon(P, R, 0, P.length - 1, true, true);
+  const a = conePolygon(P, R, 0, i72, true, false), b = conePolygon(P, R, i72, P.length - 1, false, true);
+  g += `<polygon points="${pts(a)}" fill="${p.cone[0]}" fill-opacity="${p.cone[1]}"/>`;
+  g += `<polygon points="${pts(b)}" fill="${p.cone[0]}" fill-opacity="${p.cone[1]}"/><polygon points="${pts(b)}" fill="url(#stip-${key})"/>`;
+  g += `<polygon points="${pts(all)}" fill="none" stroke="${p.ink}" stroke-width="1.1" stroke-dasharray="6 4"/>`;
+  const s = o.radii === false ? null : stormAt(h);
+  if (s) {
+    for (const k of [34, 50, 64]) if (s.r[k]) g += `<path d="${radiiPath(s.x, s.y, s.r[k])}" fill="${p["r" + k][0]}" fill-opacity="${p["r" + k][1]}"/>`;
+    if (s.r[34]) g += `<path d="${radiiPath(s.x, s.y, s.r[34])}" fill="none" stroke="${p.ink}" stroke-width="1.1" stroke-dasharray="3 3"/>`;
+    if (s.r[50]) g += `<path d="${radiiPath(s.x, s.y, s.r[50])}" fill="none" stroke="${p.ink}" stroke-width="1.1"/>`;
+    if (s.r[64]) g += `<path d="${radiiPath(s.x, s.y, s.r[64])}" fill="none" stroke="${p.ink}" stroke-width="2.2"/>`;
+    if (o.radiiLabels !== false && s.r[34]) { const rr = s.r[34][0] / PX; g += text(s.x + rr * .72 + 3, s.y - rr * .72 - 2, "34 kt", p, { size: 10 }); }
+  }
+  if (o.past !== false) {
+    const PP = PAST.map(r => [r[1], r[2]]).concat([[FC[0][1], FC[0][2]]]);
+    g += `<polyline points="${pts(PP)}" fill="none" stroke="${p.ink}" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round"/>`;
+    PAST.forEach(r => g += `<circle cx="${r[1]}" cy="${r[2]}" r="2.4" fill="${p.ink}"/>`);
+  }
+  g += `<polyline points="${pts(P)}" fill="none" stroke="${p.ink}" stroke-width="1.8"/>`;
+  FC.forEach((r, i) => {
+    if (i === 0) return;
+    g += tcSymbol(r[1], r[2], cls(r[3]), 10, p);
+    if (o.times !== false && r[0] % 24 === 0 || (o.times !== false && r[0] === 12)) g += text(r[1] + (r[0] >= 72 ? 12 : -12), r[2] + 4, when(r[0]) + " · " + r[3] + " kt", p, { size: 10, anchor: r[0] >= 72 ? "start" : "end" });
+  });
+  if (s && o.marker !== false) {
+    g += tcSymbol(s.x, s.y, s.c, 17, p, { ring: s.est ? "dash" : "solid" });
+    const l1 = (o.labelName || (CLSWORD[s.c] + " ZELDA")) + " · " + s.kt + " kt" + (s.past ? "" : " · 948 hPa");
+    const l2 = o.label2 || (s.est ? "est. " + when(h) + " · Adv 17 · NW 9 kt" : s.past ? "best track " + when(h) : "Adv 17 · issued Tue 15:00 · NW 9 kt");
+    g += text(s.x + 22, s.y + 2, l1, p, { size: 12, weight: 600 });
+    g += text(s.x + 22, s.y + 16, l2, p, { size: 10.5, weight: o.label2Bold ? 600 : 400 });
+  }
+  return g;
+}
+function capWarning(p, key) {
+  const zone = [[240, 176], [280, 172], [320, 166], [360, 160], [372, 186], [330, 196], [290, 202], [244, 204]];
+  return `<polygon points="${pts(zone)}" fill="url(#hatch-${key})" stroke="${p.cap}" stroke-width="1.6"/>` + text(300, 220, "Hurricane Warning", p, { size: 10.5, fill: p.cap, weight: 600, anchor: "middle" });
+}
+function waveFill(p) {
+  const e = [[300, 330, 210, 150], [300, 326, 150, 108], [300, 322, 95, 72], [300, 320, 48, 38]];
+  return e.map((v, i) => `<ellipse cx="${v[0]}" cy="${v[1]}" rx="${v[2]}" ry="${v[3]}" fill="${p.wave[i]}" fill-opacity="0.5"/>`).join("");
+}
+function scaleBar(p, W, H, label) { return `<g><line x1="${W - 120}" y1="${H - 16}" x2="${W - 20}" y2="${H - 16}" stroke="${p.coast}" stroke-width="1.5"/><line x1="${W - 120}" y1="${H - 20}" x2="${W - 120}" y2="${H - 12}" stroke="${p.coast}"/><line x1="${W - 20}" y1="${H - 20}" x2="${W - 20}" y2="${H - 12}" stroke="${p.coast}"/>${text(W - 70, H - 22, label, p, { size: 10, anchor: "middle", fill: p.coast, halo: p.sea })}</g>`; }
+function svg(W, H, inner, label) { return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">${inner}</svg>`; }
+
+
+function isobarSet(p, cx, cy, vals, rx0, ry0, step, rot) {
+  let g = "";
+  vals.forEach((v, i) => { const rx = rx0 + i * step, ry = ry0 + i * step * 0.7; g += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${rot} ${cx} ${cy})" fill="none" stroke="${p.isobar}" stroke-width="1"/>`; g += text(cx + rx * 0.2, cy - ry - 0, String(v), p, { size: 9.5, fill: p.isobar, halo: p.isoHalo, anchor: "middle" }); });
+  return g;
+}
+function hl(p, x, y, L, val, o = {}) {
+  const ink = o.ink || p.front;
+  return `<g opacity="${o.opacity || 1}">${text(x, y - 6, L, p, { size: 26, weight: 600, fill: ink, halo: p.isoHalo, anchor: "middle" })}<path d="M${x - 4} ${y - 4} L${x + 4} ${y + 4} M${x + 4} ${y - 4} L${x - 4} ${y + 4}" stroke="${ink}" stroke-width="1.8"/>${text(x, y + 20, val, p, { size: 11.5, weight: 600, fill: ink, halo: p.isoHalo, anchor: "middle" })}<line x1="${x - 13}" y1="${y + 23}" x2="${x + 13}" y2="${y + 23}" stroke="${ink}" stroke-width="1"/>${o.extra || ""}</g>`;
+}
+function fronts(p, o = {}) {
+  const op = o.opacity || 1;
+  let g = isobarSet(p, 330, 200, [996, 1000, 1004, 1008, 1012], 34, 26, 30, -20) + isobarSet(p, 640, 360, [1028, 1024, 1020], 50, 36, 34, 10);
+  g += front("occluded", [[330, 200], [370, 214], [400, 238]], p, { side: -1, opacity: op });
+  g += front("cold", [[400, 238], [380, 280], [340, 320], [280, 360], [220, 380], [160, 392]], p, { side: -1, opacity: op });
+  g += front("warm", [[400, 238], [450, 250], [510, 262], [570, 282]], p, { side: -1, opacity: op });
+  g += front("stationary", [[160, 392], [110, 400], [60, 396], [20, 404]], p, { side: 1, opacity: op });
+  g += front("trough", [[470, 330], [490, 380], [500, 430]], p, { opacity: op });
+  g += hl(p, 330, 200, "L", "996", { opacity: op, extra: `<line x1="336" y1="196" x2="408" y2="154" stroke="${p.front}" stroke-width="1.4" stroke-dasharray="5 4"/><path d="M408 154 m-4 -4 l8 8 m0 -8 l-8 8" stroke="${p.front}" stroke-width="1.4"/>${text(414, 150, "Thu 00:00 · 990", p, { size: 10, fill: p.front, halo: p.isoHalo })}` });
+  g += hl(p, 640, 360, "H", "1032", { opacity: op });
+  return g;
+}
+/* ---------- App chrome (Light / S100Dusk / S100Night themes, as the palettes pair them) ---------- */
+const CHROME = {
+  day:   { bg: "#FFFFFF", bar: "#FFFFFF", fg: "#18181B", muted: "#71717A", border: "#CECECE", accent: "#007ACC", accentFg: "#FFFFFF", toggleOff: "#E4E4E7", overlay: "rgba(255,255,255,0.72)", toolBtn: "rgba(244,244,245,0.9)", chip: "rgba(0,0,0,0.07)", pillBg: "#18181B", pillFg: "#FFFFFF", warnBg: "#FFF3DA", warnFg: "#8A5A00", warnBorder: "#F1D59B", mustBg: "#FDECEC", mustBorder: "#F3B7B2", sel: "rgba(0,122,204,0.10)" },
+  dusk:  { bg: "#F5EDE0", bar: "#F5EDE0", fg: "#3A2E1A", muted: "#8A7560", border: "#C8B89A", accent: "#2C6BA8", accentFg: "#FFFFFF", toggleOff: "#DED3BF", overlay: "rgba(245,237,224,0.75)", toolBtn: "rgba(200,184,154,0.55)", chip: "rgba(58,46,26,0.08)", pillBg: "#3A2E1A", pillFg: "#F5EDE0", warnBg: "#EAD9B0", warnFg: "#5E4410", warnBorder: "#C8A866", mustBg: "#EFD3C9", mustBorder: "#D9A796", sel: "rgba(44,107,168,0.12)" },
+  night: { bg: "#000000", bar: "#000000", fg: "#FFB0A0", muted: "#8A4848", border: "#280808", accent: "#8A3B26", accentFg: "#FFD0C4", toggleOff: "#280808", overlay: "rgba(0,0,0,0.75)", toolBtn: "rgba(40,8,8,0.8)", chip: "rgba(255,255,255,0.08)", pillBg: "#3A1010", pillFg: "#FFB0A0", warnBg: "#1E1408", warnFg: "#C08A3E", warnBorder: "#3A2A12", mustBg: "#1E0808", mustBorder: "#4A1A12", sel: "rgba(138,59,38,0.25)" }
+};
+let C = CHROME.day, P = null, PNAME = "day";
+
+const ICONS = {
+  datasets: '<path d="M12 3 3 8l9 5 9-5-9-5Z M3 12l9 5 9-5 M3 16l9 5 9-5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  library: '<path d="M5 4v16M9 4v16M13 5l4 15M17.5 4.5l3 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  warnings: '<path d="M12 4 3 20h18L12 4Z M12 10v5 M12 17.5v.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>',
+  display: '<path d="M3 14c2.5-5 6-7 9-7s6.5 2 9 7 M12 11a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  stack: '<rect x="4" y="5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 19h12a2 2 0 0 0 2-2V8" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m15 15 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  routes: '<circle cx="5" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="19" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 16c3-1 2-6 5-7s3 0 5-2" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+  book: '<path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4V5Zm16 0h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6V5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  brush: '<path d="M7 3h10v8H7z M9 11v4h6v-4 M11 15v6h2v-6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  settings: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
+};
+const ACTIVITY = ["datasets", "library", "warnings", "display", "stack", "search", "routes", "book", "brush"];
+const icon = (k, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>`;
+const TOOLS = ['<path d="M7 4v13l3.5-3 2.5 6 2-1-2.5-6H17L7 4Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+  '<rect x="8" y="3" width="8" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7h3M8 11h4M8 15h3" stroke="currentColor" stroke-width="1.2"/>',
+  ICONS.routes,
+  '<path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="15" cy="16" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  '<circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 11h6M11 8v6M15.5 15.5 20 20" stroke="currentColor" stroke-width="1.3"/>',
+  '<circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 11h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="1.3"/>',
+  '<path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="currentColor" stroke-width="1.3"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/>'];
+
+function mapOverlays(o) {
+  let h = `<div class="ov-scale"><div class="ov-scale-labels"><span>0</span><span>50</span><span>100</span><span>150 nm</span></div><div class="ov-scale-bar"></div></div>`;
+  h += `<div class="ov-tools">${TOOLS.map((t, i) => `<span class="ov-tool${i === 3 || i === 4 ? " gap" : ""}"><svg width="16" height="16" viewBox="0 0 24 24">${t}</svg></span>`).join("")}<span class="ov-compass">N</span></div>`;
+  if (o.stamp) h += `<div class="ov-stamp"><span class="dot"></span>${o.stamp}</div>`;
+  if (typeof o.hud === "string") h += o.hud;
+  else if (o.hud) h += `<div class="ov-hud"><span class="pill ${o.hud.live ? "live" : ""}">${o.hud.live ? '<span class="dot"></span>LIVE' : "PINNED"}</span><span class="mono">${o.hud.time}</span><span class="accent-t">${o.hud.rel}</span><span class="sep"></span><span class="chev">‹</span><span class="chev">›</span>${o.hud.live ? "" : '<span class="pill solid">Live</span>'}<span class="sep"></span><span class="chev">▭</span></div>`;
+  if (o.extra) h += o.extra;
+  return h;
+}
+
+function appWindow(o) {
+  // o: { active, left: {title, html}, right: {title, html} | null, edgeTab, bottom: {html} | null, map: svgInner, overlays, pins: [{n, x, y}] }
+  const acts = ACTIVITY.map(k => `<span class="act${k === o.active ? " on" : ""}" title="${k}">${icon(k)}</span>`).join("");
+  const left = o.left ? `<div class="dock left"><div class="dock-title">${o.left.title}</div><div class="dock-body">${o.left.html}</div></div><div class="splitter"></div>` : "";
+  const right = o.right ? `<div class="dock right"><div class="dock-title">${o.right.title}<span class="x">✕</span></div><div class="dock-body">${o.right.html}</div></div>` : (o.edgeTab ? `<div class="edge-tab"><span>${o.edgeTab}</span></div>` : "");
+  const bottom = o.bottom ? `<div class="dock bottom">${o.bottom.html}</div>` : "";
+  const pins = (o.pins || []).map(p => `<span class="pin" style="left:${p.x}px;top:${p.y}px">${p.n}</span>`).join("");
+  return `<div class="winfit"><div class="win">
+    <div class="titlebar"><span class="tb-title"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6Z M9 4v14M15 6v14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>SoundCharts</span><span class="tb-right">◐ ☾</span></div>
+    <div class="body">
+      <div class="activity"><div class="act-top">${acts}</div><span class="act">${icon("settings")}</span></div>
+      ${left}
+      <div class="mapcol"><div class="maparea"><svg class="mapsvg" viewBox="${o.vb || '0 0 760 480'}" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Chart">${o.map}</svg>${mapOverlays(o.overlays || {})}</div>${bottom}</div>
+      ${right}
+    </div><div class="statusbar"><span>27°24.0′N 086°06.0′W</span><i></i><span>Scale 1:5,000,000</span><i></i><span>MCP off</span></div>${pins}</div></div>`;
+}
+function fitWindows() {
+  document.querySelectorAll(".winfit").forEach(w => { const k = Math.min(1, w.clientWidth / 1400); const win = w.firstElementChild; win.style.transform = `scale(${k})`; w.style.height = (880 * k) + "px"; });
+}
+function chromeVars(el) {
+  for (const [k, v] of Object.entries(C)) el.style.setProperty("--w-" + k, v);
+  el.style.setProperty("--c-sea", P.sea);
+}
+const callout = (n, where, title, html, width) => `<figure class="callout${width > 600 ? " wide" : ""}" style="--cw:${width}px"><figcaption><span class="pin static">${n}</span><span><b>${title}</b><br><span class="where">${where}</span></span></figcaption><div class="panel"><div class="dock-title">${title.toUpperCase()}</div><div class="dock-body">${html}</div></div></figure>`;
+
+/* ---------- Panel contents, shared by the window frames and the callouts ---------- */
+const cb = (on = true) => `<span class="cb${on ? " on" : ""}">${on ? "✓" : ""}</span>`;
+const tg = (on = true) => `<span class="tg${on ? " on" : ""}"></span>`;
+// Settings → Chart display, Mariner Settings (V39), laid out from SettingsView.axaml and ChartSettingsPage.axaml.
+function panelSettings() {
+  const nav = ["General", "Appearance", "Chart display", "Vessels", "Integrations", "Keys &amp; certificates", "Advanced"]
+    .map(n => `<span class="${n === "Chart display" ? "on" : ""}">${n}</span>`).join("");
+  const field = (l, v, dim) => `<div class="st-field${dim ? " st-dim" : ""}"><span class="st-lbl">${l}</span><span class="st-input">${v}</span></div>`;
+  const combo = (v, w) => `<span class="st-combo"${w ? ` style="min-width:${w}px"` : ""}>${v}</span>`;
+  return `<div class="st"><div class="st-nav">${nav}</div><div class="st-page">
+    <div style="display:grid;gap:3px"><div class="st-title">Chart display</div><div class="st-help">The background map, scale indicators, and the mariner settings that shape how charts are drawn.</div></div>
+    <div class="st-sec st-dim">Map</div><div class="st-help st-dim">Basemap and scale indicators …</div>
+    <div class="st-sec">Mariner Settings</div><div class="st-help">Safety/depth preferences and S-101 portrayal toggles. Changes re-render all loaded datasets.</div>
+    ${field("Safety Contour", "10 m", true)}${field("Safety Depth", "10 m", true)}
+    <div class="st-help st-dim">Shallow and deep contours, S-101 toggles …</div>
+    <div class="st-field st-dim"><span class="st-lbl">Water level adjustment</span>${combo("Off", 180)}</div>
+    <div class="st-sub">Tropical cyclones on a route</div>
+    <div class="st-help" style="margin-top:-6px">Used by the route check's weather findings. Weather findings are advisory. Not for navigation.</div>
+    <div class="st-row"><span>Check against</span>${combo("34 kt radius")}</div>
+    <div class="st-row"><span>Report closest approach</span>${tg(true)}</div>
+    <div class="st-row"><span>Must review inside</span>${combo("50 kt radius")}</div>
+    <div class="st-help">Inside the 50 kt and 64 kt radii: Must review. The 34 kt radius and the cone: Check.</div>
+    <div class="st-help st-dim">National language …</div>
+  </div></div>`;
+}
+const eyeI = (on = true) => `<span class="eye">${on ? '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 12c3-5 6.5-7 10-7s7 2 10 7c-3 5-6.5 7-10 7s-7-2-10-7Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>' : '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 12c3-5 6.5-7 10-7s7 2 10 7c-3 5-6.5 7-10 7s-7-2-10-7Z M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'}</span>`;
+const gSym = (c, south) => `<svg width="14" height="14" viewBox="-11 -11 22 22">${tcSymbol(0, 0, c, 9, P, { south })}</svg>`;
+const gArea = (k, dash, w, stip) => `<svg width="14" height="10" viewBox="0 0 14 10"><rect x="0.5" y="0.5" width="13" height="9" rx="2" fill="${P[k][0]}" fill-opacity="${Math.min(1, P[k][1] * 2.2)}" stroke="${P.ink}" stroke-width="${w || 1}" ${dash ? `stroke-dasharray="${dash}"` : ""}/>${stip ? `<rect x="0.5" y="0.5" width="13" height="9" fill="url(#gstip)"/>` : ""}</svg>`;
+const gLine = (type) => `<svg width="28" height="10" viewBox="0 0 28 10">${front(type, [[1, 6], [14, 6], [27, 6]], P, { spacing: 11, width: 1.5, pip: 3.6, halo: "transparent" })}</svg>`;
+const gTrack = (dash) => `<svg width="14" height="10" viewBox="0 0 14 10"><line x1="1" y1="5" x2="13" y2="5" stroke="${P.ink}" stroke-width="1.8" ${dash ? 'stroke-dasharray="1 3" stroke-linecap="round"' : ""}/></svg>`;
+const gHL = () => `<svg width="14" height="10" viewBox="0 0 14 10"><text x="7" y="9.5" font-size="11" font-weight="700" text-anchor="middle" fill="${P.front}" font-family="IBM Plex Sans Condensed">L</text></svg>`;
+const lg = (glyph, label) => `<div class="lg">${glyph}<span>${label}</span></div>`;
+const swatches = (cols, labels) => cols.map((c, i) => `<div class="lg"><span class="sw" style="background:${c}"></span><span>${labels[i]}</span></div>`).join("");
+
+/* LAYER STACK (left dock). Plane expanders, entry rows, the legend under the entry that draws it. */
+function lsEntry(label, key, prio, legend, isNew) {
+  return `<div class="ls-entry">${cb(true)}<div class="ls-text"><div class="t12 ell">${label}</div><div class="t10 o65 ell">${key}</div></div><span class="mono t10 o60">#${prio}</span>${legend ? `<div class="ls-legend">${legend}</div>` : ""}</div>`;
+}
+const plane = (title, n, body) => `<div class="ls-plane"><div class="ls-head"><span class="chev-d">⌄</span><b class="t12 grow">${title}</b><span class="t11 o70">${n}</span></div>${body}</div>`;
+function panelLayerStack(kind = "tc") {
+  let planes;
+  if (kind === "tc") {
+    const glyphs = lg(gSym("D"), "Tropical depression") + lg(gSym("S"), "Tropical storm") + lg(gSym("H"), "Hurricane, typhoon") + lg(gSym("M"), "Major (cat. 3+)") + lg(gSym("H", true), "Southern hemisphere") + lg(gTrack(false), "Forecast track") + lg(gTrack(true), "Past track");
+    const areas = lg(gArea("cone", "3 2"), "Cone, days 1–3") + lg(gArea("cone", "3 2", 1, true), "Cone, days 4–5") + lg(gArea("r34", "2 2"), "34 kt winds") + lg(gArea("r50"), "50 kt winds") + lg(gArea("r64", "", 2), "64 kt winds");
+    planes = plane("Dynamic arrows", 1, lsEntry("gfs.t06z.pgrb2.0p25.grib2", "weather.wind.barbs", 20))
+      + plane("Cautions and warnings", 1, lsEntry("nws-marine-alerts.atom", "cap.warnings", 0))
+      + plane("Other chart overlays", 2, lsEntry("al142026_5day_017.zip", "weather.tc.track", 95, glyphs, true) + lsEntry("gfs.t06z.pgrb2.0p25.grib2", "weather.pressure.isobars", 90))
+      + plane("On-demand surface", 2, lsEntry("al142026_5day_017.zip", "weather.tc.areas", 10, areas, true) + lsEntry("gfswave.t06z.global.0p25.grib2", "weather.wave.height", 0, swatches(P.wave, ["0–0.5 m", "0.5–1 m", "1–1.5 m", "1.5–2 m"]) + '<div class="lg o60">… 11 more bands</div>'));
+  } else {
+    const fr = lg(gLine("cold"), "Cold front") + lg(gLine("warm"), "Warm front") + lg(gLine("occluded"), "Occluded front") + lg(gLine("stationary"), "Stationary front") + lg(gLine("trough"), "Trough") + lg(gHL(), "Pressure centre, hPa");
+    planes = plane("Dynamic arrows", 1, lsEntry("gfs.t06z.pgrb2.0p25.grib2", "weather.wind.barbs", 20))
+      + plane("Other chart overlays", 2, lsEntry("codsus_hr_2026110412.txt", "weather.fronts", 92, fr, true) + lsEntry("gfs.t06z.pgrb2.0p25.grib2", "weather.pressure.isobars", 90));
+  }
+  return `<div class="ls-top">${cb(false)}<span class="t12">Show empty planes</span></div>${planes}<div class="ls-foot">Active controls participation in S-98 rules and pick; Visibility (on the Datasets panel) only hides the rendered layers.</div>`;
+}
+
+/* DISPLAY CONTROLS (left dock). */
+function panelDisplayControls() {
+  const row = (label, on, isNew) => `<div class="dc-row"><span class="grow">${label}</span>${tg(on)}</div>`;
+  return `<div class="dc">
+    <div class="dc-sec"><div class="dc-h">Display Category</div><div class="dc-radio"><span class="rd on"></span>Display Base</div><div class="dc-radio"><span class="rd"></span>Standard</div><div class="dc-radio"><span class="rd"></span>Other Information</div><div class="dc-radio"><span class="rd"></span>All</div></div>
+    <div class="dc-sec"><div class="dc-h">Display Planes</div>${row("Under Radar", true)}${row("Over Radar", true)}</div>
+    <div class="dc-sec"><div class="dc-h">Overlays</div>${row("Navigational warnings", true)}</div>
+    <div class="dc-sec"><div class="dc-h">Weather</div>${row("Isobars", true)}${row("Wind speed fill", false)}${row("Wave arrows", false)}${row("Isotherms", false)}${row("Currents", true)}${row("Wind radii", true, true)}${row("Past track", true, true)}${row("Forecast times", true, true)}
+      <div class="t11 o60">Wind radii, Past track and Forecast times show while a tropical cyclone is loaded. The section now also shows for cyclone and surface-analysis datasets.</div></div>
+    <div><span class="btn-plain">Reset all overrides</span></div>
+  </div>`;
+}
+
+/* OBJECT INFORMATION (right dock). Location, hit list, notice line, credit, identity block, attributes. */
+function pickHeader(loc, hits, sel) {
+  const hl = hits.length > 1 ? `<div class="pk-sec"><div class="caps10">${hits.length} FEATURES AT THIS POINT</div>${hits.map((h, i) => `<div class="pk-hit${i === sel ? " on" : ""}">${h[0]}<span class="grow"><b class="t13">${h[1]}</b> <span class="t11 o70">${h[2]}</span></span><span class="t11 o55">${h[3]}</span></div>`).join("")}</div>` : "";
+  return `<div class="pk-sec"><div class="caps10">LOCATION</div><div class="row"><span class="t13 grow">${loc}</span><span class="ib16">⧉</span></div></div>${hl}`;
+}
+const attrs = rows => `<div class="pk-attrs"><div class="caps10">ATTRIBUTES</div><div class="attr-box">${rows.map(r => `<div class="attr"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join("")}</div></div>`;
+function identity(glyph, name, pill, caption) {
+  return `<div class="pk-id"><span class="tile">${glyph}</span><div class="grow"><div class="row"><b class="t15">${name}</b>${pill ? `<span class="cpill">${pill}</span>` : ""}</div><div class="mono t11 o60">${caption}</div></div><span class="ib16">↗</span><span class="ib16">⧉</span></div>`;
+}
+function panelPickTC(stale) {
+  const hits = [[gSym("M"), "HURRICANE ZELDA", "Tropical cyclone", "AL142026"], [`<span class="hatchglyph"></span>`, "Hurricane Warning", "CAP warning", "ANZ835"], [`<span class="sw" style="background:${P.wave[2]}"></span>`, "Weather grid point", "GFS-Wave", "(212,388)"]];
+  const staleLine = stale ? `<div class="pk-stale">Advisory 17 is 9 h old. NHC has probably issued a newer one. <span class="link">Load latest run</span></div>` : "";
+  return pickHeader("27°24.0′N 086°06.0′W", hits, 0) + `
+    <div class="pk-notice">Tropical cyclone forecast, not for navigation. Follow official NHC advisories.</div>${staleLine}
+    <div class="t12 o70">Data: NOAA/NWS National Hurricane Center · Public domain</div>
+    ${identity(gSym("M"), "HURRICANE ZELDA", "Category 4", "AL142026 · TC · al142026_5day_017.zip")}
+    ${attrs([["Advisory", stale ? "17 · issued 11/4/2026 3:00 PM · <b>9 h ago</b>" : "17 · issued 11/4/2026 3:00 PM · 2 h ago"], ["Next advisory", stale ? "was due 11/4/2026 9:00 PM" : "due 11/4/2026 9:00 PM"], ["At view time", "est. 11/4 5:00 PM (between forecast points)"], ["Position", "27°24′N 086°06′W"], ["Max wind", "115 kn, gusts 140 kn"], ["Pressure", "948 hPa"], ["Movement", "NW 9 kn"], ["Picked part", "forecast point 11/6 3:00 PM · 110 kn"], ["64 kn radii", "40 / 35 / 25 / 30 nm (NE/SE/SW/NW)"], ["50 kn radii", "80 / 70 / 50 / 60 nm"], ["34 kn radii", "170 / 150 / 110 / 130 nm"], ["Cone", "The centre stays inside about two-thirds of the time. Winds reach well outside it."]])}`;
+}
+function panelPickFront() {
+  const hits = [[gLine("cold").replace('width="28"', 'width="16"'), "Cold front", "Surface analysis", "COLD 3"], [`<span class="sw" style="background:${P.isobar}"></span>`, "Weather grid point", "GFS", "(88,120)"]];
+  return pickHeader("37°48.0′N 068°12.0′W", hits, 0) + `
+    <div class="pk-notice">Weather analysis, not for navigation.</div>
+    <div class="t12 o70">Data: NOAA/NWS Weather Prediction Center · Public domain</div>
+    ${identity(gLine("cold"), "Cold front", "Moderate", "COLD 3 · CODSUS · codsus_hr_2026110412.txt")}
+    ${attrs([["Analysis", "11/4/2026 2:00 PM · 3 h ago"], ["Strength", "Moderate"], ["Points", "12, from 41.0°N 062.3°W to 33.4°N 074.0°W"], ["Next analysis", "due 11/4/2026 5:00 PM"]])}`;
+}
+
+/* DATASETS (left dock). */
+function dsRow(name, spec, time, o = {}) {
+  return `<div class="ds-row${o.sel ? " sel" : ""}">${eyeI(o.eye !== false)}<b class="t13 ell grow">${name}</b><span class="t11 o60">${spec}</span>${o.tag ? `<span class="wtag">${o.tag}</span>` : ""}<span class="mono t11 o85 ${o.warnTime ? "warn-t" : ""}">${time}</span><span class="ib12">⌃</span><span class="ib12">⌄</span><span class="ib12">✕</span></div>`;
+}
+function panelDatasets(state = "stale") {
+  const st = state === "stale";
+  return `<div class="tabs2"><span>EXCHANGE SETS</span><span class="on">DATASETS</span></div>
+    <div class="ds-tools"><span class="ib">+</span><span class="ib">◉</span><span class="ib">◌</span><span class="ib">↺</span></div>
+    ${dsRow("ZELDA", "TC", st ? "3:00 PM" : state === "beyond" ? "no data" : "5:00 PM", { sel: true, tag: st ? "Stale" : state === "beyond" ? "Beyond forecast" : "", warnTime: state === "beyond" })}
+    ${dsRow("Surface analysis", "Fronts", st ? "8:00 AM" : "2:00 PM", { tag: st ? "Stale" : "" })}
+    ${dsRow("GFS 0.25°", "GRIB2", "6:00 PM")}
+    ${dsRow("GFS-Wave", "GRIB2", "6:00 PM")}
+    ${dsRow("US4FL1AA", "S-101", "—")}
+    <div class="ds-insp"><div class="tabs2 small"><span class="on">DATASET</span><span>LAYERS</span><span>VALIDATION</span></div>
+    <div class="kvs"><span class="o60">Spec</span><span>TC (NHC GIS shapefile)</span><span class="o60">Time</span><span>${st ? "Advisory 17, 11/4 3:00 PM · 9 h old" : "Advisory 17, 11/4 3:00 PM"}</span><span class="o60">At view time</span><span>${state === "beyond" ? '<span class="warn-t">Beyond the forecast</span>' : "est. position between forecast points"}</span><span class="o60">Credit</span><span>NOAA/NWS NHC · Public domain</span></div></div>`;
+}
+
+/* LIBRARY (left dock). */
+function libItem(sw, name, tags, sub, summary, win) {
+  return `<div class="lib-item"><span class="lib-sw">${sw}</span><div class="grow"><div class="row"><b class="t13 grow ell">${name}</b>${tags.map(t => `<span class="ltag ${t[1] || ""}">${t[0]}</span>`).join("")}</div><div class="t13 o80">${sub}</div><div class="t13 o60">${summary}</div>${win ? `<div class="fwin"><span style="width:${win}%"></span></div>` : ""}</div></div>`;
+}
+function panelLibrary(stale) {
+  return `<div class="lib-bar"><span class="btn-sec">+ Add ⌄</span><span class="grow"></span><span class="ib">⟳</span><span class="ib">▦</span><span class="ib">⋯</span></div>
+    <div class="lib-tree">
+      <div class="lib-src"><span class="ktag">FEED</span><b>Tropical cyclones — NHC</b><span class="t13 o60">2 active</span></div>
+      <div class="lib-src"><span class="ktag">FEED</span><b>Surface analysis — WPC</b><span class="t13 o60">every 3 h</span></div>
+      <div class="lib-src"><span class="ktag">WEB</span>GFS 0.25° (NOMADS)<span class="t13 o60">06Z</span></div>
+    </div>
+    <div class="lib-filter"><span class="o60">Filter by name, title, product…</span></div>
+    <div class="seg3"><span class="on">All <i>5</i></span><span>Local <i>2</i></span><span>Online <i>3</i></span><span>Updates <i>${stale ? 2 : 0}</i></span></div>
+    ${libItem(gSym("M"), "HURRICANE ZELDA · AL14", stale ? [["Stale", "warn"], ["Loaded", "prim"]] : [["Loaded", "prim"]], stale ? "Advisory 17 · 11/4 3:00 PM · advisory 18 available" : "Advisory 17 · 11/4 3:00 PM · next 9:00 PM", "Forecast to 11/9 3:00 PM · 115 kn", 12)}
+    ${libItem(gSym("S"), "TROPICAL STORM ARLO · EP09", [], "Advisory 6 · 11/4 3:00 PM", "East Pacific · 50 kn", 6)}
+    ${libItem(gLine("cold").replace('width="28"', 'width="18"'), "Surface analysis · WPC", stale ? [["Stale", "warn"], ["Loaded", "prim"]] : [["Loaded", "prim"]], stale ? "Analysis 11/4 8:00 AM · 3 newer" : "Analysis 11/4 2:00 PM", "North America and adjacent waters")}
+    ${stale ? `<div class="lib-detail"><div class="row"><span class="lib-sw">${gSym("M")}</span><b class="t14 grow">HURRICANE ZELDA · AL14</b></div><div class="warn-t t13">Advisory 17 is over 7 hours old</div><div class="row"><span class="btn-ghost">Load latest run</span><span class="btn-ghost">Pin this run</span></div><div class="nfn-banner">⚠ Not for navigation</div></div>` : ""}`;
+}
+
+/* TIMELINE (bottom dock). */
+function panelTimeline(o = {}) {
+  const X0 = 260, W = o.width || 1028, h0 = -48, h1 = 132, X = h => X0 + (h - h0) / (h1 - h0) * (W - X0 - 16);
+  const vt = o.viewH ?? 2;
+  let ax = "";
+  for (let h = -39; h <= h1; h += 24) { const d = 4 + Math.floor((h + 15) / 24); ax += `<span class="tl-day" style="left:${X(h)}px">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][((2 + Math.floor((h + 15) / 24)) % 7 + 7) % 7]} 11/${d}</span>`; }
+  for (let h = -45; h <= h1; h += 6) ax += `<span class="tl-tick" style="left:${X(h)}px"></span>`;
+  const fcTicks = FC.map(r => `<span class="tl-fc" style="left:${X(r[0])}px"></span>`).join("");
+  const sa = Array.from({ length: 17 }, (_, i) => -45 + i * 3).map(h => `<span class="tl-seg" style="left:${X(h)}px;width:${X(h + 3) - X(h) - 2}px"></span>`).join("");
+  return `<div class="tl" style="width:${W}px">
+    <div class="tl-tabs"><span class="tab on">TIMELINE</span><span class="tab">LOGS</span><span class="grow"></span><span class="btn-ghost sm">Collapse to strip</span><span class="x">✕</span></div>
+    <div class="tl-read"><span class="sdot live"></span><span class="mono b t13">11/4/2026 5:00 PM</span><span class="mono t12 o60 slot">now</span><span class="grow"></span><span class="tl-btn">⇤</span><span class="tl-btn">‹</span><span class="tl-btn menu">ZELDA ⌄</span><span class="tl-btn">›</span><span class="tl-btn">⇥</span><span class="tl-live"><span class="sdot live"></span>Live</span><span class="tl-btn menu">This run ⌄</span></div>
+    <div class="tl-grid"><div class="tl-left"><div class="caps11">ALL LOADED</div><div class="row">${cb(false)}<span class="t12">In map view</span></div><div class="row">${cb(true)}<span class="t12">Show online</span></div></div>
+      <div class="tl-axis"><span class="tl-ov"></span>${ax}<span class="tl-nowlab" style="left:${X(vt)}px">NOW</span></div></div>
+    <div class="tl-lanes">
+      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">Tropical cyclones</b><span class="o60 t12">1</span></div>
+      <div class="tl-lane"><div class="tl-lab"><span class="lane-bar"></span><div><div><span class="mono b t12">ZELDA</span> <span class="t11 o60">adv 17 · 6-hourly</span></div><div class="mono t105 o75">est. 5:00 PM · T+2 h</div></div></div>
+        <div class="tl-track"><span class="tl-known" style="left:${X(-36)}px;width:${X(120) - X(-36)}px"></span><span class="tl-load past" style="left:${X(-36)}px;width:${X(0) - X(-36)}px"></span><span class="tl-load" style="left:${X(0)}px;width:${X(120) - X(0)}px"></span>${fcTicks}<span class="tl-dia" style="left:${X(0)}px"></span><span class="tl-dia hollow" style="left:${X(6)}px"></span></div></div>
+      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">Surface analysis</b><span class="o60 t12">1</span></div>
+      <div class="tl-lane"><div class="tl-lab"><span class="lane-bar"></span><div><div><span class="mono b t12">WPC</span> <span class="t11 o60">analysis · every 3 h</span></div><div class="mono t105 o75">2:00 PM · 3 h ago</div></div></div><div class="tl-track">${sa}</div></div>
+      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">GRIB2</b><span class="o60 t12">2</span></div>
+      <span class="tl-nowline" style="left:${X(vt)}px"></span>
+    </div>
+    <div class="tl-status"><span class="t11 o60">ZELDA: 9 forecast points from 11/4 3:00 PM to 11/9 3:00 PM · ◆ issued · ◇ next advisory due 9:00 PM</span></div>
+  </div>`;
+}
+
+/* ROUTES (left dock), with the check summary and Findings. */
+function panelRoutes() {
+  return `<div class="rt">
+    <div class="rt-tools"><span class="grow"></span><span class="ib">⤓</span><span class="ib">▯</span><span class="ib">+</span></div>
+    <div class="rt-sel"><span class="rt-ic">${icon("routes", 16)}</span><span class="grow"><b class="accent-t t14">Key West to Mobile</b><br><span class="t11 o60">6 WP · 512 NM</span></span><span class="o60">⋯</span></div>
+    <div class="rt-name"><b class="t14">Key West to Mobile</b><div class="t11 o60">7.5 m · dep 11/4 3:00 PM · arr 11/6 9:00 AM</div></div>
+    <div class="rt-card">
+      <div class="row"><span class="badge-must">!</span><b class="t14">Inside the 50 kt wind radius on 2 legs</b></div>
+      <div class="t12">Leg 2 → 4 · HURRICANE ZELDA · 11/5 2:00–7:00 AM at ETA · forecast, adv 17</div>
+      <div class="rt-sum"><span class="o70">Clearance</span><span>min 4.1 m</span><span class="chipn ok">0</span></div>
+      <div class="rt-sum"><span class="o70">Route</span><span>2 to check</span><span class="chipn chk">2</span></div>
+      <div class="rt-sum"><span class="o70">Weather</span><span>1 must review · CPA 85 nm</span><span class="chipn must">4</span></div>
+      <div class="t12">Departures 11/6 6:00 AM and later keep the route outside the 34 kt radius.</div>
+      <span class="btn-dark">Depart 11/6 6:00 AM</span>
+      <div class="t11 o60">Not for navigation · weather from NHC adv 17 · ETAs ignore set and drift</div>
+    </div>
+    <div class="seg"><span>Legs</span><span class="on">Findings <b>6</b></span></div>
+    <div class="fd must"><b>Inside the 50 kt radius</b><span class="t11 o60">Leg 2 → 4 · 11/5 2:00–7:00 AM · ZELDA adv 17</span></div>
+    <div class="fd chk"><b>Inside the 34 kt radius</b><span class="t11 o60">Leg 2 → 4 · 11/4 10:00 PM–11/5 11:00 AM</span></div>
+    <div class="fd chk"><b>Inside the forecast cone</b><span class="t11 o60">Leg 3 → 4 · 11/5 3:00–9:00 AM</span></div>
+    <div class="fd info"><b>Closest approach 85 nm</b><span class="t11 o60">11/5 5:00 AM · legs 5 → 6 beyond the forecast, not checked</span></div>
+  </div>
+  <div class="rt-bottom"><span class="btn-ghost">Edit</span><span class="grow"></span><span class="btn-acc">Check route</span></div>`;
+}
+/* The route check's on-map legend (RouteCheckLegendView), extended with the storm rows. */
+const routeLegendOverlay = () => `<div class="ov-legend"><div class="caps10 row">UKC AT ETA <span class="grow"></span>⌄</div>
+  <div class="lgr"><span class="ln" style="background:#2E9E5B"></span>Meets your settings</div><div class="lgr"><span class="ln" style="background:#B07D00"></span>Tight</div>
+  <div class="caps10">FINDINGS</div><div class="lgr"><span class="badge-must sm">!</span>Must review</div><div class="lgr"><span class="badge-chk sm">!</span>Check</div><div class="lgr"><span class="ln wide" style="background:rgba(176,125,0,.45)"></span>Stretch of the route</div>
+  <div class="caps10">WEATHER</div><div class="lgr"><svg width="16" height="16" viewBox="-11 -11 22 22">${tcSymbol(0, 0, "H", 8, P, { ring: "dash" })}</svg>Storm at ETA (closest approach)</div></div>`;
+
+/* ---------- Frames ---------- */
+const gdefs = () => `<svg width="0" height="0" style="position:absolute"><defs><pattern id="gstip" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="${P.ink}" opacity="0.6"/><circle cx="3" cy="3" r="0.7" fill="${P.ink}" opacity="0.6"/></pattern></defs></svg>`;
+const seaPad = p => `<rect x="-2000" y="-2000" width="5000" height="5000" fill="${p.sea}"/>`;
+function stormMap(p, k, h, o = {}) {
+  let g = defs(p, k) + seaPad(p) + baseChart(p, 760, 480);
+  if (o.wave !== false) g += waveFill(p);
+  g += storm(p, k, h, o);
+  if (o.cap !== false) g += capWarning(p, k);
+  if (o.barbs !== false) g += barb(560, 400, 35, 120, p) + barb(640, 360, 25, 110, p) + barb(120, 420, 30, 60, p) + barb(170, 330, 45, 40, p) + barb(420, 300, 70, 160, p) + barb(470, 430, 40, 150, p);
+  return g;
+}
+function frontsMap(p, k, op = 1) {
+  let g = defs(p, k) + seaPad(p) + `<polygon points="-2000,-2000 210,-2000 210,0 190,60 150,110 90,130 40,170 0,190 -2000,190" fill="${p.land}"/><polyline points="210,0 190,60 150,110 90,130 40,170 0,190" fill="none" stroke="${p.coast}"/>`;
+  g += fronts(p, { opacity: op });
+  [[260, 120, 30, 200], [460, 160, 35, 190], [560, 220, 25, 230], [280, 300, 30, 280], [180, 440, 20, 300], [620, 450, 15, 60], [680, 280, 10, 100], [400, 420, 25, 320]].forEach(b => g += barb(b[0], b[1], b[2], b[3], p));
+  g += text(500, 446, "TROF", p, { size: 10, fill: p.front, halo: p.isoHalo, opacity: op });
+  return g;
+}
+const mapTile = (inner, vb, overlays, cap, sub) => `<figure class="maptile"><div class="maparea tilemap"><svg class="mapsvg" viewBox="${vb}" preserveAspectRatio="xMidYMid slice">${inner}</svg>${overlays || ""}</div><figcaption><b>${cap}</b><br><span class="o60">${sub}</span></figcaption></figure>`;
+const hudHtml = (live, time, rel) => `<div class="ov-hud"><span class="sdot ${live ? "live" : "pin"}"></span><span class="mono b t13">${time}</span><span class="mono t12 slot ${live ? "o60" : "accent-t"}">${rel}</span><span class="sep"></span><span class="chev">‹</span><span class="chev">›</span><span class="tl-live ${live ? "" : "out"}">${live ? '<span class="sdot live"></span>Live' : "Go live"}</span><span class="sep"></span><span class="chev">▭</span></div>`;
+
+function render() {
+  const p = P;
+  // Frame 1: cyclone at Live, whole window.
+  document.getElementById("w1").innerHTML = appWindow({
+    active: "stack", left: { title: "LAYER STACK", html: panelLayerStack("tc") }, right: { title: "OBJECT INFORMATION", html: panelPickTC(false) },
+    bottom: { html: panelTimeline({ width: 668 + 360 }) }, map: stormMap(p, "w1", 2), vb: "60 40 640 520",
+    overlays: { stamp: "LIVE · 11/4/2026 5:00 PM" }, pins: [{ n: 1, x: 300, y: 50 }, { n: 2, x: 1376, y: 50 }, { n: 3, x: 640, y: 600 }, { n: 4, x: 400, y: 120 }]
+  });
+  document.getElementById("c1").innerHTML =
+    callout(1, "Left dock · Layer stack tab (stack icon)", "Layer stack", panelLayerStack("tc"), 320) +
+    callout(2, "Right dock · opens on a pick", "Object information", panelPickTC(false), 360) +
+    callout(5, "Left dock · Display controls tab (eye icon)", "Display controls", panelDisplayControls(), 320) +
+    callout(6, "Left dock · Library tab (books icon)", "Library", panelLibrary(false), 320);
+  document.getElementById("c1t").innerHTML = callout(3, "Bottom dock · Timeline tab (the HUD replaces it when the dock is closed)", "Timeline", panelTimeline({ width: 1028 }), 1028).replace('<div class="dock-title">TIMELINE</div>', "");
+  // Frame 2: map at three view times (map only, HUD as it sits on the map) + Datasets.
+  const views = [[-18, false, "11/3/2026 9:00 PM", "20 h ago", "On the past track", "Best-track position, solid ring"], [30, false, "11/5/2026 9:00 PM", "in 28 h", "Between forecast points", "Estimate: dashed ring, est. in the label, radii interpolated"], [132, false, "11/10/2026 3:00 AM", "in 5 d", "Beyond the forecast", "No storm marker; the cone stays. Datasets says why."]];
+  document.getElementById("m2").innerHTML = views.map(([h, live, t, rel, cap, sub], i) => mapTile(stormMap(p, "m2" + i, h, { times: false, cap: false, wave: false }), "130 70 420 400", hudHtml(live, t, rel), cap, sub)).join("");
+  document.getElementById("c2").innerHTML = callout(7, "Left dock · Datasets tab · view time beyond the forecast", "Datasets", panelDatasets("beyond"), 320);
+  // Frame 3: fronts, whole window, Timeline dock closed so the HUD is on the map.
+  document.getElementById("w3").innerHTML = appWindow({
+    active: "stack", left: { title: "LAYER STACK", html: panelLayerStack("fronts") }, right: { title: "OBJECT INFORMATION", html: panelPickFront() },
+    map: frontsMap(p, "w3"), vb: "40 40 700 440", overlays: { hud: hudHtml(true, "11/4/2026 5:00 PM", "now") }, pins: [{ n: 1, x: 300, y: 50 }, { n: 2, x: 1376, y: 50 }, { n: 4, x: 420, y: 200 }]
+  });
+  // Frame 4: stale.
+  const staleMap = defs(p, "m4") + seaPad(p) + baseChart(p, 760, 480) + `<g transform="translate(250 230) scale(0.55)">${fronts(p, { opacity: 0.5 })}</g>` + storm(p, "m4", 9, { label2: "Adv 17 · 9 h old · newer advisory likely", label2Bold: true, times: false }) + text(700, 470, "Analysis 11/4 8:00 AM · 9 h old", p, { size: 10.5, anchor: "end", fill: p.front, halo: p.isoHalo, opacity: 0.8 });
+  document.getElementById("m4").innerHTML = mapTile(staleMap, "100 60 620 420", hudHtml(true, "11/5/2026 12:00 AM", "now"), "On the chart", "The storm keeps its weight and says its age; the 9 h old analysis fades to half.");
+  document.getElementById("c4").innerHTML =
+    callout(7, "Left dock · Datasets tab", "Datasets", panelDatasets("stale"), 320) +
+    callout(2, "Right dock", "Object information", panelPickTC(true), 360) +
+    callout(6, "Left dock · Library tab", "Library", panelLibrary(true), 320);
+  // Frame 5: route near the storm, whole window, check mode folds Object information to its edge tab.
+  const RT = [[40, 300], [170, 262], [300, 256], [430, 262], [520, 330], [700, 400]];
+  let rm = stormMap(p, "w5", 0, { times: false, cap: false, wave: false, label2: "Live · Adv 17 · issued 11/4 3:00 PM" });
+  rm += `<polyline points="${pts(RT.slice(1, 4))}" fill="none" stroke="${p.sleeve}" stroke-opacity="0.55" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><polyline points="${pts(RT)}" fill="none" stroke="${p.route}" stroke-width="2.4" stroke-linejoin="round"/>`;
+  RT.forEach((w, i) => { rm += `<circle cx="${w[0]}" cy="${w[1]}" r="5" fill="${p.sea}" stroke="${p.route}" stroke-width="2"/>` + text(w[0], w[1] - 10, String(i + 1), p, { size: 10, fill: p.route, anchor: "middle", halo: p.sea }); });
+  const gs = stormAt(14);
+  rm += tcSymbol(gs.x, gs.y, gs.c, 14, p, { ring: "dash" }) + `<line x1="${f(gs.x)}" y1="${f(gs.y)}" x2="292" y2="256" stroke="${p.ink}" stroke-width="1.2" stroke-dasharray="4 3"/>` + text(gs.x - 18, gs.y + 30, "at ETA 11/5 5:00 AM · CPA 85 nm", p, { size: 10.5, weight: 600, anchor: "end" });
+  document.getElementById("w5").innerHTML = appWindow({
+    active: "routes", left: { title: "ROUTES", html: panelRoutes() }, edgeTab: "OBJECT INFORMATION",
+    map: rm, vb: "0 60 760 420", overlays: { hud: hudHtml(true, "11/4/2026 5:00 PM", "now"), extra: routeLegendOverlay() }, pins: [{ n: 8, x: 300, y: 50 }, { n: 9, x: 400, y: 70 }, { n: 10, x: 34, y: 826 }]
+  });
+  document.getElementById("c5").innerHTML = callout(10, "Settings (gear, bottom of the activity bar) · Chart display · Mariner Settings. Settings fills the content area.", "Settings", panelSettings(), 640);
+  const stage = document.getElementById("stage"); chromeVars(stage);
+  document.getElementById("gdefs").innerHTML = gdefs();
+  fitWindows();
+}
+function sheet() {
+  document.getElementById("sheet").innerHTML = Object.values(PAL).map(p => {
+    const W = 380, H = 360; let g = `<rect width="${W}" height="${H}" fill="${p.sea}"/>`;
+    g += text(14, 22, p.name, p, { size: 13, weight: 600 });
+    const cl = ["D", "S", "H", "M", "PT"], lab = ["TD", "TS", "HU", "MH", "PT"];
+    cl.forEach((c, i) => { const x = 40 + i * 64; g += tcSymbol(x, 58, c, 16, p); g += tcSymbol(x, 106, c, 16, p, { south: true }); g += text(x, 140, lab[i], p, { size: 10, anchor: "middle" }); });
+    g += text(14, 62, "N", p, { size: 10 }) + text(14, 110, "S", p, { size: 10 });
+    g += tcSymbol(340, 82, "H", 16, p, { ring: "dash" }) + text(340, 120, "est.", p, { size: 10, anchor: "middle" });
+    const sw = (x, k2, l, dash, w) => `<rect x="${x}" y="160" width="62" height="34" fill="${p[k2][0]}" fill-opacity="${p[k2][1]}" stroke="${p.ink}" stroke-width="${w || 1.1}" ${dash ? `stroke-dasharray="${dash}"` : ""}/>` + text(x + 31, 208, l, p, { size: 10, anchor: "middle" });
+    g += sw(14, "cone", "cone", "6 4") + `<rect x="86" y="160" width="62" height="34" fill="${p.cone[0]}" fill-opacity="${p.cone[1]}" stroke="${p.ink}" stroke-dasharray="6 4"/><rect x="86" y="160" width="62" height="34" fill="url(#stip-sh${p.name})"/>` + text(117, 208, "days 4–5", p, { size: 10, anchor: "middle" });
+    g += sw(158, "r34", "34 kt", "3 3") + sw(228, "r50", "50 kt") + sw(298, "r64", "64 kt", "", 2.2);
+    ["cold", "warm", "occluded", "stationary", "trough"].forEach((t, i) => { const y = 236 + i * 22; g += front(t, [[20, y], [110, y], [200, y]], p, { spacing: 26, width: 2 }) + text(214, y + 4, t, p, { size: 10.5, fill: p.front, halo: p.sea }); });
+    g += hl(p, 300, 270, "L", "996") + hl(p, 350, 320, "H", "1032");
+    return `<div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${p.name} symbol sheet">${defs(p, "sh" + p.name)}${g}</svg></div>`;
+  }).join("");
+}
+function apply(name) {
+  PNAME = name; P = PAL[name]; C = CHROME[name];
+  render();
+  document.querySelectorAll("[data-pal]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.pal === name)));
+  try { localStorage.setItem("vw-pal", name); } catch (e) { }
+}
+document.querySelectorAll("[data-pal]").forEach(b => b.addEventListener("click", () => apply(b.dataset.pal)));
+window.addEventListener("resize", fitWindows);
+try { new ResizeObserver(() => fitWindows()).observe(document.getElementById("stage")); } catch (e) { }
+sheet();
+let start = "day"; try { const s = localStorage.getItem("vw-pal"); if (s && PAL[s]) start = s; } catch (e) { }
+apply(start);
+
+})();
+</script>

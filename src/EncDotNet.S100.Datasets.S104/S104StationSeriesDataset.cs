@@ -74,6 +74,23 @@ public sealed class S104StationSeriesDataset
     public double? WaterLevelTrendThreshold { get; init; }
 
     /// <summary>
+    /// The interval, in minutes, over which the trend at a time is judged
+    /// against <see cref="WaterLevelTrendThreshold"/> (the root
+    /// <c>trendInterval</c> attribute), or <c>null</c> when absent.
+    /// </summary>
+    public int? TrendInterval { get; init; }
+
+    /// <summary>
+    /// How the water levels were produced (the instance's
+    /// <c>dataDynamicity</c>, S-104 Edition 2.0.0): <c>1</c> observation,
+    /// <c>2</c> astronomical prediction, <c>3</c> analysis or hybrid,
+    /// <c>4</c> hydrodynamic hindcast, <c>5</c> hydrodynamic forecast; or
+    /// <c>null</c> when absent. Read from the first <c>WaterLevel.NN</c>
+    /// instance that has it.
+    /// </summary>
+    public int? DataDynamicity { get; init; }
+
+    /// <summary>
     /// The outcome of the dataset-level axis-order check on the station
     /// positions (issue #650), or <c>null</c> when there are no positions.
     /// When it is <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/>

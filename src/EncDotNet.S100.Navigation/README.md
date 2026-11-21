@@ -32,7 +32,7 @@ To check a passage against loaded datasets, also install
 ## Check a route
 
 `RouteChecker` runs every check on a plan and returns one `RouteCheckReport`:
-the findings of the chart, area, warning and clearance checks in one sorted
+the findings of the chart, area, warning, clearance and weather checks in one sorted
 list, a verdict, and whether each check ran. Create one checker per sources
 bundle and keep it while the data is loaded:
 
@@ -73,8 +73,8 @@ foreach (var check in report.Checks)
   `new RouteChecker(sources, [new ClearanceCheck()])`.
 
 `RouteCheckOptions` tunes every check at once: `DefaultLimit` (50 m) and
-`Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings` and
-`Clearance` tune each one. `Check` may be called from several threads at once.
+`Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings`,
+`Clearance` and `Weather` tune each one. `Check` may be called from several threads at once.
 
 [How a route check works](../../docs/how-a-route-check-works.md) explains
 which dataset feeds each check, the time and keel rules, the verdict and
@@ -103,6 +103,7 @@ Console.WriteLine(chart.Detail?.LengthMeters);                    // null only w
 | `AreaCheck` | `areas` | `AreaCheckResult`: every area near the route | `report.Areas` |
 | `WarningCheck` | `warnings` | `WarningCheckResult`: every warning near the route | `report.Warnings` |
 | `ClearanceCheck` | `clearance` | `ClearanceCheckResult`: the `PassageCheckResult` and the departure sweep | `report.Clearance`, `report.Departures` |
+| `WeatherCheck` | `weather` | `WeatherCheckResult`: the limits used, the samples, the verdict and the departure sweep | `report.Weather` |
 
 A check object keeps what its last run computed, as it does inside a
 checker, so keep one per sources bundle when you run it often. A check of
@@ -178,6 +179,18 @@ one of:
 | `BelowSetting` | UKC is less than the required UKC. |
 | `NoData` | There's no charted depth, or no water level that can be applied. |
 
+A source can add harmonic tide predictions after S-104
+(`WaterLevelSources.WithFallback`): a series of kind
+`WaterLevelSourceKind.Prediction`, whose `WaterLevelSourceInfo` carries the
+station, its name, its distance and, for a subordinate station, its reference
+station. S-104 wins wherever it covers a point and time. A predicted sample is
+lower confidence (`WaterLevelPredicted`): it's the astronomical tide only, not
+a forecast. The findings name the stations: `confidence.water_level_predicted`
+(Info) for each stretch on predicted water, and
+`clearance.tight_on_predicted` (Check) where such a stretch is Tight or below
+your setting. A prediction has no time range, so it doesn't set the departure
+window.
+
 The water level counts as missing outside the S-104 extent or time range,
 where a value is NoData, or where its vertical datum differs from the charted
 depth's. A datum mismatch is reported as a gap and the two values are never
@@ -186,7 +199,8 @@ can't be confirmed. In that case the water level is applied and the sample is
 lower confidence.
 
 Confidence is separate from the state. A sample's `Confidence` lists why it's
-lower confidence (`ChartedDepthFromS101`, `DatumUnconfirmed`), and the state
+lower confidence (`ChartedDepthFromS101`, `DatumUnconfirmed`,
+`WaterLevelPredicted`), and the state
 still says whether the clearance meets, is tight or is below. Legs, the
 minimum, the whole result and each departure option combine their samples'
 reasons the same way. A departure that meets your settings with lower
@@ -227,6 +241,16 @@ the same samples, in `ClearanceCheckResult.Departures` (`report.Departures`):
   S-104 data that covers the route, starting at the first whole step. Over
   a long forecast, the step widens so the sweep stays under `maxDepartures`
   (default 2000). Without S-104 coverage there's no sweep.
+
+Where no water-level dataset covers part of the route, the sweep judges that
+stretch, per departure, with the lowest water level applied anywhere on the
+route during that departure's passage, capped at chart datum (0 m). If the
+charted depth at that level meets the setting there, the departure can still
+meet your settings, with `ConfidenceReasons.WaterLevelFromLowestLow` (or
+`WaterLevelAtChartDatum` when no water level was applied during the passage,
+so 0 m was used); otherwise the stretch is "no data" and the departure doesn't
+meet them. The passage check itself still reports
+the stretch as a `NoWaterLevelCoverage` gap.
 
 `DepartureSweep.Windows()` returns the runs of departures that meet the
 settings, `NearestMeeting(departure)` the meeting departure closest to one,
@@ -305,6 +329,7 @@ leg's limits with one half-width.
 | `route_check.overhead_on_route` | Check | A bridge, span, overhead cable or pipeline, or conveyor inside the limits (Info in the near band) |
 | `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert |
 | `route_check.safety_contour_in_corridor` | Check | Such areas reach inside the limits, but the track doesn't cross them |
+| `route_check.berth_structures` | Info | Structures that raise `SafetyContour` (except a breakwater or other non-berth structure the track line cuts) within `RouteCheckSettings.BerthRadius` (default 100 m) of the departure or arrival, one finding per end |
 | `route_check.soundings_below_safety_contour` | Check | Soundings inside the limits, in deeper areas, are no deeper than the safety contour (S-101 `SOUNDG03`) |
 | `route_check.crosses_s102_shoal` | MustReview | The track crosses S-102 cells shallower than the safety contour |
 | `route_check.s102_shoal_in_corridor` | Check | S-102 cells shallower than the safety contour inside the limits, off the track |
@@ -323,6 +348,11 @@ names the threshold that fired. A danger counts wherever it lies, also inside
 water already shallower than the safety contour. Aids to navigation, structures and
 overhead features (`HazardDetails`, classed by `RouteHazardClasses`) come from
 the alerts the chart source tags them with, and need no depth settings.
+A structure that raises `SafetyContour` (`SafetyContourFeatureDetails`) is
+titled for the structure ("Crosses a structure"), not for depth. A danger
+without a `valueOfSounding` is judged by its `defaultClearanceDepth`
+(`DangerDetails.DepthIsDefault`), but its meta line describes its water level
+("floating", "awash") rather than showing that stand-in as a depth.
 Adjacent shallow areas, soundings and S-102 cells merge into one span, so a
 long bank is one finding. `ChartCheck.Dangers.cs` writes out the rules.
 
@@ -390,6 +420,88 @@ warnings near the route that give no finding. The meta line names the series
 and number, the locality, the validity and the status; the wording comes from
 `RouteCheckOptions.Formatter`.
 
+## Check a route against the weather
+
+`WeatherCheck` samples the track every `WeatherCheckOptions.SampleSpacingMeters`
+(1 NM) at the vessel's ETA and compares forecast wind speed at 10 m and
+significant wave height with the vessel's limits. It reads them through
+`IRouteWeatherSource` (`sources.Weather`): for a position and a
+`WeatherQuantity`, the time series (`IRouteWeatherSeries`) of every grid that
+covers it, best first. `CatalogRouteCheckSources` implements it over loaded
+GRIB2 and NetCDF grids, at the nearest node; a later check can read other
+quantities, such as surface currents, through the same interface.
+
+```csharp
+var settings = new RouteCheckSettings
+{
+    At = DateTimeOffset.UtcNow,
+    WeatherLimits = new WeatherLimits { MaxWind = Speed.FromKnots(25), MaxWaveHeight = Length.FromMetres(3) },
+};
+var weather = new WeatherCheck().Run(new RouteCheckContext(plan, settings, sources));
+
+Console.WriteLine(weather.Detail?.Verdict);                                     // AboveLimits
+foreach (var finding in weather.Findings)
+{
+    Console.WriteLine($"{finding.Title} · {finding.Meta}");                     // Wind above 25 kn for 3 h · Leg 4 → 5 · max 31 kn at …
+}
+```
+
+- **Limits.** `RouteCheckSettings.WeatherLimits` replaces the plan's
+  `PassagePlan.VesselLimits` value by value. `RtzPassagePlan` fills
+  `VesselLimits` from RTZ `vesselMaxWind` (knots) and `vesselMaxWave`
+  (metres). `WeatherCheckResult.Limits` says where each came from.
+- **Time.** Each sample reads the forecast step nearest its ETA, no
+  interpolation. A time more than half a step beyond a series' range isn't
+  checked: `WeatherSampleState.ForecastEnds` or `ForecastStartsLate`. A
+  covering series without a value (a masked cell) gives way to the next
+  series that has one; with none, `NoData`.
+- **Findings.** One per run of samples in the same state, per quantity, with
+  `WeatherDetails`: above the limit with its time window (`StartTime`,
+  `EndTime`) and highest value, or a gap with its reason and the forecast's
+  end. Every weather finding is Check: model data is advisory.
+- **Reuse and sweep.** The located series are kept while the legs and source
+  stay the same, so changing the departure or the limits reads no new places.
+  With `DepartureWindow` it also sweeps departures
+  (`WeatherCheckResult.Departures`), following the forecast's range when the
+  window follows the data.
+
+### Tropical cyclones
+
+With tropical cyclones on `RouteCheckSources.Cyclones` (`IRouteCyclone`:
+the storm at a time and the forecast cone; `CatalogRouteCheckSources` builds
+them from loaded NHC advisories), the weather check also tests each sample
+within `WeatherCheckOptions.CycloneNearbyMeters` (600 NM) of a storm's track
+against the storm at the sample's ETA. It runs without wind or wave limits.
+
+```csharp
+var settings = new RouteCheckSettings
+{
+    At = departure,
+    TropicalCyclones = new TropicalCycloneCheckSettings
+    {
+        CheckAgainst = TropicalCycloneRadius.Knots34,       // the default
+        ReportClosestApproach = true,                       // the default
+        MustReviewInside = TropicalCycloneRadius.Knots50,   // the default; null for never
+    },
+};
+var weather = new WeatherCheck().Run(new RouteCheckContext(plan, settings, sources));
+foreach (var storm in weather.Detail!.Cyclones)
+    Console.WriteLine($"{storm.Info.Name}: {storm.StrongestRadius} · CPA {storm.ClosestApproach?.DistanceMeters / 1852:0} NM");
+```
+
+- **Radii.** A sample is inside a radius when it's no farther from the
+  storm's centre than the radius reaches in the sample's quadrant. Every
+  radius from `CheckAgainst` up is tested, so the stretches nest.
+  `WeatherSample.Cyclones` holds each storm's reading.
+- **Findings.** `weather.tc_radius_34`, `_50` and `_64` stretches (grouped by
+  `MustReviewInside`), `weather.tc_cone` (Check), `weather.tc_cpa` (Info) and
+  `weather.tc_beyond_forecast` (Check, not checked), with
+  `TropicalCycloneDetails`.
+- **Verdict and sweep.** A radius met makes the verdict
+  `WeatherVerdict.InsideCycloneRadius`; a stretch beyond a storm's forecast
+  makes it `ForecastEndsBeforeArrival`. Each swept departure gives the
+  `CycloneRadius` it meets and its `CycloneClosestMeters`.
+
 ## Check a route against restricted and protected areas
 
 `AreaCheck` checks a route against regulated areas: S-101 restricted,
@@ -418,9 +530,9 @@ to go.
 
 | Code | Group | When |
 | --- | --- | --- |
-| `route_check.enters_prohibited_area` | MustReview | The track enters an S-101 area whose `restriction` is entry prohibited (7) or entry restricted (8) |
+| `route_check.enters_prohibited_area` | MustReview | The track enters an S-101 area whose `restriction` is entry prohibited (7) |
 | `route_check.prohibited_area_in_corridor` | Check | Such an area reaches inside the limits, but the track doesn't enter it |
-| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area, offshore production or seaplane landing area or marine farm; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like); MustReview when the track enters an area to be avoided |
+| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area (entry restricted (8) is Check, since it often applies only to some vessels), offshore production or seaplane landing area or marine farm; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like); MustReview when the track enters an area to be avoided |
 | `route_check.caution_area` | Check | A `CautionArea` |
 | `route_check.traffic_area` | Check or Info | A precautionary area or submarine transit lane; Info for an inshore traffic zone; MustReview when the track enters a traffic separation zone |
 | `route_check.anchorage_area` | Check | An `AnchorageArea` |
@@ -502,6 +614,70 @@ give the same answer at a point:
 - `WaterLevelSnapshot.Resolve` chooses the series at a point and time: the
   most preferred one that covers the time, skipping one whose datum differs
   from the depth's when another covers too. The clearance check uses it too.
+
+## Reach by water
+
+A station's water level, S-104 or predicted, applies within 10 km of it,
+measured through the loaded charts' water. `IWaterMask` says where the
+charts have water, land or no coverage at a point or across a grid, and
+`WaterReach` gives the distance by water from a station to a point, or
+`null` beyond the reach: land blocks a station from the next basin, and
+uncharted ground counts as water, so with no chart the distance is a
+straight line. `RouteCheckSources.WaterMask` carries the mask, for the
+adjusted-area edge to be clipped to as well.
+
+## Navigable water
+
+`NavigabilityGrid.Build` lays a regular grid over a box and classes each
+cell from the route-check sources: navigable, shoal (shallower than the
+minimum depth), hazard (a charted danger or a structure in it), land, uncharted, or water
+with no depth. A cell's depth is the least at its centre and corners, with
+the finest chart cell winning where cells overlap. The grid gives each
+navigable cell's clearance to the nearest cell that isn't, its connected
+area, and whether two positions are joined by water.
+
+`NavigableSnap.Snap` answers "is this spot navigable, and if not, where is
+the nearest that is?" for a minimum depth and a clearance. It builds a grid
+round the point, or uses one you pass, and returns why the point fails
+(`land`, `uncharted`, `shoal`, `hazard`, `no_depth` or `too_close`) and the
+nearest qualifying cell's centre, depth, clearance, distance and bearing.
+A point it moves to has one cell more room than asked for, so a check on
+another grid finds it navigable too. The search widens in steps (500 m on
+5 m cells, then 1.5 km and 5 km on coarser ones) up to `SearchRadiusMeters`.
+
+```csharp
+var snap = NavigableSnap.Snap(sources, new GeoPosition(48.660, -123.140),
+    new NavigableSnapRequest(MinimumDepthMeters: 3, ClearanceMeters: 50));
+if (snap.Status == NavigableSnapStatus.Moved)
+{
+    Console.WriteLine($"{snap.Reason}: moved {snap.DistanceMeters} m on {snap.BearingDegrees}°");
+}
+```
+
+## Plan a route
+
+`RoutePlanner.Plan` suggests a route through a list of stops for a minimum
+depth: each stop moved to navigable water as `NavigableSnap` moves a point
+(at the berth depth, so a stop in a marina stays in it), then each leg a
+least-cost way through the grid's navigable cells, costing distance and
+closeness to anything that isn't navigable, and cut to few waypoints by line
+of sight. Round each stop it searches 5 m cells; in between, 20 m cells
+(coarser on a long leg, finer when a narrow channel closes). Within
+`BerthRadiusMeters` of a stop, water down to `BerthDepthMeters` is allowed.
+`PreferredAreas` and `PreferredLines` (such as fairways and recommended
+tracks) cost less. The result is the `RoutePlan`, or a `RoutePlanFailure`
+saying which stop or leg failed. A plan isn't checked: run it through
+`RouteChecker`.
+
+```csharp
+var result = RoutePlanner.Plan(sources, new RoutePlanRequest(
+    [new GeoPosition(48.5119, -122.6052), new GeoPosition(48.5393, -123.0135)],
+    MinimumDepthMeters: 1.5) { BerthDepthMeters = 1.1 });
+if (result.Plan is { } plan)
+{
+    Console.WriteLine($"{plan.DistanceMeters / 1852:0.0} NM, {plan.Waypoints.Count} waypoints");
+}
+```
 
 ## Water level across an area
 

@@ -84,8 +84,8 @@ public sealed record MarinerSettings
     public bool IgnoreScaleMinimum { get; init; } = false;
 
     /// <summary>
-    /// Preferred 3-letter ISO 639-2/B language code for chart text (S-101
-    /// PC parameter <c>NationalLanguage</c>). An empty string means "use
+    /// Preferred 3-letter ISO 639-2/B language code for chart text (the
+    /// S-101 and S-131 PC parameter <c>NationalLanguage</c>). An empty string means "use
     /// the catalogue's declared default" — no override is sent to the
     /// portrayal engine.
     /// </summary>

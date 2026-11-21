@@ -76,21 +76,22 @@ public sealed class ViewerUiAutomationTests
         using var library = context.CreateService();
         library.Initialize();
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
+            TestCatalogueDirectory.Create(KnownCatalogueSources.All),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
         var automation = Automation(host);
 
-        // There is nothing to go back to on the first step.
-        var disabled = await Assert.ThrowsAsync<UiAutomationException>(
+        // There is nothing to go back to on the first step, so Back isn't shown.
+        var hidden = await Assert.ThrowsAsync<UiAutomationException>(
             () => automation.ActAsync(new UiTarget("Wizard.Back", null), UiAction.Invoke, null));
-        Assert.Equal(UiFailure.Disabled, disabled.Failure);
+        Assert.Equal(UiFailure.NotFound, hidden.Failure);
 
         var search = await automation.ActAsync(new UiTarget("Catalogues.Search", null), UiAction.SetValue, "NOAA ENC");
         Assert.Equal("NOAA ENC", search.Value);
@@ -98,7 +99,7 @@ public sealed class ViewerUiAutomationTests
         var row = Flatten(list).First(e => e.Role == "listItem" && e.Name?.Contains("all U.S. waters") == true);
         await automation.ActAsync(new UiTarget(null, row.Ref), UiAction.Select, null);
         await automation.ActAsync(new UiTarget("Wizard.Next", null), UiAction.Invoke, null);
-        Assert.Equal(3, wizard.CurrentStep);  // NOAA ENC skips Connection (#883)
+        Assert.True(wizard.IsIncludeStep);  // NOAA ENC has no Connection step (#883)
 
         var state = wizard.Scope!.Choices("States")[0];
         var options = await Assert.ThrowsAsync<UiAutomationException>(
@@ -119,11 +120,16 @@ public sealed class ViewerUiAutomationTests
         library.Initialize();
         library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, context.CreateS57ExchangeSet("Charts"))]);
         await library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
-            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action());
+        using var panel = TestLibrary.Panel(
+            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
+            feedHealth: null,
+            notifications: null,
+            viewTime: null,
+            timeFormat: null,
+            sync: null);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
         var automation = Automation(host);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
 
         var tree = await automation.GetTreeAsync(Interactive with { Root = new UiTarget("Library.Tree", null) });
         var node = Flatten(tree.Roots[0].Element).First(e => e.Role == "treeItem" && e.Name == "Charts");
@@ -139,11 +145,11 @@ public sealed class ViewerUiAutomationTests
         // desktop the menu is a popup root, listed as a root of kind "popup".)
         var source = collection.Children.Single();
         var sourceNode = Flatten(tree.Roots[0].Element).Last(e => e.Role == "treeItem");
-        Assert.Same(collection, panel.SelectedNode);
+        Assert.Same(collection, panel.Tree.SelectedNode);
         await automation.ActAsync(new UiTarget(null, sourceNode.Ref), UiAction.ContextMenu, null);
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.ContextMenu, null);
-        Assert.Same(collection, panel.SelectedNode);
+        Assert.Same(collection, panel.Tree.SelectedNode);
         var withMenu = await automation.GetTreeAsync(Interactive);
         Assert.Contains(withMenu.Roots.SelectMany(r => Flatten(r.Element)), e => e.Id == "Library.NodeMenu.Rename");
         await automation.ActAsync(new UiTarget("Library.NodeMenu.Rename", null), UiAction.Invoke, null);
@@ -192,6 +198,63 @@ public sealed class ViewerUiAutomationTests
 
         Assert.True(tree.Truncated);
         Assert.Equal(5, tree.NodeCount);
+    }
+
+    // #1225: an element whose children depth left out is marked, and listing
+    // it as a root reaches them.
+    [AvaloniaFact]
+    public async Task Depth_cut_marks_elements_with_more_and_their_ref_lists_the_rest()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5SEAFL.000", "S-57");
+        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
+        var automation = Automation(host);
+
+        var full = await automation.GetTreeAsync(new UiTreeQuery(null, Depth: 100, InteractiveOnly: false, MaxNodes: 5000));
+        var shallow = await automation.GetTreeAsync(new UiTreeQuery(null, Depth: 2, InteractiveOnly: false, MaxNodes: 5000));
+
+        Assert.False(full.Truncated);
+        Assert.DoesNotContain(full.Roots.SelectMany(r => Flatten(r.Element)), e => e.More is not null);
+        Assert.True(shallow.Truncated);
+        var cut = shallow.Roots.SelectMany(r => Flatten(r.Element)).Where(e => e.More == true).ToList();
+        Assert.NotEmpty(cut);
+        Assert.All(cut, e => Assert.Null(e.Children));
+
+        // Every element is reachable from the marked refs.
+        var reached = new HashSet<string>(shallow.Roots.SelectMany(r => Flatten(r.Element)).Select(e => e.Ref));
+        var pending = new Queue<string>(cut.Select(e => e.Ref));
+        while (pending.TryDequeue(out var reference))
+        {
+            var next = await automation.GetTreeAsync(new UiTreeQuery(new UiTarget(null, reference), Depth: 2, InteractiveOnly: false, MaxNodes: 5000));
+            foreach (var element in next.Roots.SelectMany(r => Flatten(r.Element)))
+            {
+                reached.Add(element.Ref);
+                if (element.More == true)
+                    pending.Enqueue(element.Ref);
+            }
+        }
+        Assert.Equal(full.Roots.SelectMany(r => Flatten(r.Element)).Select(e => e.Ref).ToHashSet(), reached);
+    }
+
+    // In the interactive view an element is marked only when a listable
+    // element (one with an id or an action) lies below it.
+    [AvaloniaFact]
+    public async Task Interactive_view_marks_only_elements_with_listable_descendants()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5SEAFL.000", "S-57");
+        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
+        var automation = Automation(host);
+
+        var tree = await automation.GetTreeAsync(new UiTreeQuery(null, Depth: 1, InteractiveOnly: true, MaxNodes: 5000));
+
+        var marked = tree.Roots.SelectMany(r => Flatten(r.Element)).Where(e => e.More == true).ToList();
+        Assert.NotEmpty(marked);
+        foreach (var element in marked)
+        {
+            var below = await automation.GetTreeAsync(new UiTreeQuery(new UiTarget(null, element.Ref), Depth: 1, InteractiveOnly: true, MaxNodes: 5000));
+            Assert.NotNull(Assert.Single(below.Roots).Element.Children);
+        }
     }
 
     private static ViewerUiAutomation Automation(ViewHost host) => new(() => [host.Window]);

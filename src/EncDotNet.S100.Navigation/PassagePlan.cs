@@ -107,6 +107,14 @@ public sealed class PassagePlan
     public DateTimeOffset? Departure { get; }
 
     /// <summary>
+    /// The vessel's own wind and wave limits from the route, such as RTZ
+    /// <c>vesselMaxWind</c> and <c>vesselMaxWave</c>, or <c>null</c> when
+    /// the route has none. <see cref="RouteCheckSettings.WeatherLimits"/>
+    /// replaces them value by value.
+    /// </summary>
+    public WeatherLimits? VesselLimits { get; init; }
+
+    /// <summary>
     /// The departure the checks use: <see cref="Departure"/>, or
     /// <paramref name="settings"/>' <see cref="RouteCheckSettings.At"/> when
     /// the plan has none.
@@ -122,5 +130,5 @@ public sealed class PassagePlan
     /// <summary>A copy of the plan with a different departure.</summary>
     /// <param name="departure">The departure, or <c>null</c>.</param>
     /// <returns>The plan.</returns>
-    public PassagePlan WithDeparture(DateTimeOffset? departure) => new(Legs, departure);
+    public PassagePlan WithDeparture(DateTimeOffset? departure) => new(Legs, departure) { VesselLimits = VesselLimits };
 }

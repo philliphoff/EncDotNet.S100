@@ -329,6 +329,8 @@ internal static class DefaultRules
         yield return F(32, "COSARE", "ContinentalShelfArea");
         yield return F(34, "CONVYR", "Conveyor");
         yield return F(36, "CURENT", "CurrentNonGravitational");
+        // CUSZNE — S-65 Annex B (Ed 2.0.0) § 11.2.2.
+        yield return F(37, "CUSZNE", "CustomZone");
         // DAMCON — S-65 Annex B (Ed 2.0.0) § 4.8.5: point is not a permitted
         // Dam primitive, so a point DAMCON converts to Landmark (the
         // translator supplies categoryOfLandmark = 27 (dam) and, when CONVIS
@@ -482,6 +484,9 @@ internal static class DefaultRules
         // TSEZNE — S-65 Annex B (Ed 2.0.0) § 10.2.1.4: its CATTSS isn't converted,
         // and SeparationZoneOrLine doesn't bind iMOAdopted.
         yield return F(150, "TSEZNE", "SeparationZoneOrLine");
+        // TSELNE — § 10.2.1.3: the line form of the same feature; its CATTSS
+        // isn't converted either.
+        yield return F(145, "TSELNE", "SeparationZoneOrLine");
         yield return F(151, "TUNNEL", "Tunnel");
         yield return F(152, "TWRTPT", "TwoWayRoutePart");
         yield return F(154, "UNSARE", "UnsurveyedArea");

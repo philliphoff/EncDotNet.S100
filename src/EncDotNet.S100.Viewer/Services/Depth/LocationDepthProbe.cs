@@ -53,6 +53,7 @@ internal sealed class LocationDepthProbe
     /// none is available (the depth is then static).
     /// </param>
     /// <param name="applyUndeclaredDatum">Applies water level where either vertical datum isn't declared (#1132 Q2).</param>
+    /// <param name="viewTimeUtc">The Timeline's time, round which a predicted water level is drawn; <c>null</c> for none.</param>
     /// <returns>The probe outcome.</returns>
     public Probe Evaluate(
         IEnumerable<KeyValuePair<DatasetEntry, IDatasetProcessor>> processors,
@@ -60,7 +61,8 @@ internal sealed class LocationDepthProbe
         double latitude,
         double longitude,
         IWaterLevelSource? waterLevel = null,
-        bool applyUndeclaredDatum = false)
+        bool applyUndeclaredDatum = false,
+        DateTime? viewTimeUtc = null)
     {
         ArgumentNullException.ThrowIfNull(processors);
         ArgumentNullException.ThrowIfNull(hits);
@@ -116,7 +118,7 @@ internal sealed class LocationDepthProbe
             datasetId => datasetId is not null && chartCells.TryGetValue(datasetId, out var cell)
                 ? SafeSoundingDatum(cell, latitude, longitude)
                 : null);
-        var result = _assimilation.Assimilate(baseDepth, SafeLocate(waterLevel, latitude, longitude), applyUndeclaredDatum);
+        var result = _assimilation.Assimilate(baseDepth, SafeLocate(waterLevel, latitude, longitude), applyUndeclaredDatum, viewTimeUtc);
 
         return new Probe(waterLand, result);
     }
@@ -128,14 +130,14 @@ internal sealed class LocationDepthProbe
     internal static HashSet<IChartDepthCell>? FinestCoveringCells(
         IEnumerable<IChartDepthCell> cells, double latitude, double longitude)
     {
-        var covering = new List<(IChartDepthCell Cell, int? Rank)>();
+        var covering = new List<(IChartDepthCell Cell, CellRank? Rank)>();
         foreach (var cell in cells)
         {
             try
             {
                 if (cell.CoversPoint(latitude, longitude))
                 {
-                    covering.Add((cell, cell.CellRankingScale));
+                    covering.Add((cell, cell.CellRank));
                 }
             }
             catch

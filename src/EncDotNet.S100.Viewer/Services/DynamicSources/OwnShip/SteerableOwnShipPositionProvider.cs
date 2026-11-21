@@ -61,15 +61,11 @@ internal sealed class SteerableOwnShipPositionProvider
     /// <param name="cadence">
     /// Time between simulated fixes. Defaults to 1 second.
     /// </param>
-    /// <param name="time">
-    /// Optional time provider; defaults to
-    /// <see cref="TimeProvider.System"/>. Tests pass a fake to keep the
-    /// wall clock out of the loop.
-    /// </param>
+    /// <param name="time">The clock the vessel dead-reckons by.</param>
     public SteerableOwnShipPositionProvider(
         OwnShipPosition start,
-        TimeSpan? cadence = null,
-        TimeProvider? time = null)
+        TimeProvider time,
+        TimeSpan? cadence = null)
         : this(start, cadence, time, startTimer: true) { }
 
     private SteerableOwnShipPositionProvider(

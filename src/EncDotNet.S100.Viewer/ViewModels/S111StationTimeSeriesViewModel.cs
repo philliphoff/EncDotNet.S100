@@ -18,6 +18,12 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewModel
 {
+    /// <summary>The speed channel this chart draws.</summary>
+    public const string SpeedChannel = "surfaceCurrentSpeed";
+
+    /// <summary>The direction channel this chart draws.</summary>
+    public const string DirectionChannel = "surfaceCurrentDirection";
+
     private readonly SolidColorPaint _speedStrokePaint;
     private readonly SolidColorPaint _directionStrokePaint;
     private readonly SolidColorPaint _speedAxisLabelsPaint;
@@ -29,13 +35,11 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
 
     public S111StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
-        : base(snapshot, globalTime, timeFormat, themeService)
+        StationChartContext context)
+        : base(snapshot, context)
     {
-        var speedChannel = FindChannel(snapshot, "surfaceCurrentSpeed");
-        var directionChannel = FindChannel(snapshot, "surfaceCurrentDirection");
+        var speedChannel = FindChannel(snapshot, SpeedChannel);
+        var directionChannel = FindChannel(snapshot, DirectionChannel);
 
         var speedPoints = speedChannel is null
             ? new List<DateTimePoint>()

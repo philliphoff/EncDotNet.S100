@@ -1,4 +1,6 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Geodesy;
 
 namespace EncDotNet.S100.Datasets.TropicalCyclones;
 
@@ -37,4 +39,37 @@ public sealed record TropicalCycloneWindRadii(
 
     /// <summary>Whether no quadrant has winds of this strength.</summary>
     public bool IsEmpty => MaximumNauticalMiles <= 0;
+
+    /// <summary>
+    /// The area of this radius around <paramref name="centre"/>, built from
+    /// its four quadrant extents: a quarter circle per quadrant, north to
+    /// east, east to south, south to west and west to north, each at its own
+    /// radius, on the WGS-84 ellipsoid. For drawing a radius that has no
+    /// polygon of NHC's, such as a best-track point's.
+    /// </summary>
+    /// <param name="centre">The storm's centre.</param>
+    /// <param name="pointsPerQuadrant">The number of points on each quarter circle, at least 2.</param>
+    /// <returns>The area's surface; empty when no quadrant reaches anywhere.</returns>
+    public IReadOnlyList<SurfacePart> QuadrantSurface(GeoPosition centre, int pointsPerQuadrant)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pointsPerQuadrant, 2);
+        if (IsEmpty)
+            return [];
+
+        const double metresPerNauticalMile = 1852.0;
+        double[] extents = [NortheastNauticalMiles, SoutheastNauticalMiles, SouthwestNauticalMiles, NorthwestNauticalMiles];
+        var ring = new List<GeoPosition>(4 * pointsPerQuadrant + 1);
+        for (int quadrant = 0; quadrant < 4; quadrant++)
+        {
+            double metres = extents[quadrant] * metresPerNauticalMile;
+            for (int i = 0; i < pointsPerQuadrant; i++)
+            {
+                double bearing = 90.0 * quadrant + 90.0 * i / (pointsPerQuadrant - 1);
+                ring.Add(metres <= 0 ? centre : Wgs84Geodesy.GeodesicDestination(centre, bearing, metres));
+            }
+        }
+
+        ring.Add(ring[0]);
+        return [new SurfacePart(ring, [])];
+    }
 }

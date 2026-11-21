@@ -56,6 +56,16 @@ public sealed class S104Dataset
     public string? MethodWaterLevelProduct { get; init; }
 
     /// <summary>
+    /// How the water levels were produced (the instance's
+    /// <c>dataDynamicity</c>, S-104 Edition 2.0.0): <c>1</c> observation,
+    /// <c>2</c> astronomical prediction, <c>3</c> analysis or hybrid,
+    /// <c>4</c> hydrodynamic hindcast, <c>5</c> hydrodynamic forecast; or
+    /// <c>null</c> when absent. Read from the first <c>WaterLevel.NN</c>
+    /// instance that has it.
+    /// </summary>
+    public int? DataDynamicity { get; init; }
+
+    /// <summary>
     /// The outcome of the dataset-level axis-order check on the grid
     /// footprints (issue #650), or <c>null</c> when it was not run (no
     /// coverages, or a projected horizontal CRS). Grid georeferencing is

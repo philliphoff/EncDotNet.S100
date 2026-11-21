@@ -4,6 +4,7 @@ using System.Text.Json;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Geodesy;
+using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Geodesy;
 using EncDotNet.S100.Viewer.Tools;
@@ -189,14 +190,13 @@ internal sealed class SetRangeBearingTool
         {
             if (!LatLonFormatter.TryParse(e.GetString(), out lat, out lon))
             {
-                error = $"'{e.GetString()}' is not a position; try \"32°35.224'S 061°17.710'E\" or {{\"lat\": -32.587, \"lon\": 61.295}}";
+                error = $"'{e.GetString()}' is not a position; try \"32°35.224'S 061°17.710'E\" or {{\"latitude\": -32.587, \"longitude\": 61.295}}";
                 return false;
             }
         }
-        else if (e.ValueKind == JsonValueKind.Object
-            && e.TryGetProperty("lat", out var latElement) && latElement.TryGetDouble(out lat)
-            && e.TryGetProperty("lon", out var lonElement) && lonElement.TryGetDouble(out lon))
+        else if (PositionArguments.TryRead(e, out lat, out lon))
         {
+            // {latitude, longitude}, {lat, lon} or [lat, lon] (#1628).
             if (lat is < -90 or > 90 || lon is < -180 or > 180 || !double.IsFinite(lat) || !double.IsFinite(lon))
             {
                 error = $"({lat}, {lon}) is outside the WGS-84 range";
@@ -205,7 +205,7 @@ internal sealed class SetRangeBearingTool
         }
         else
         {
-            error = "must be a position string or an object {\"lat\": number, \"lon\": number}";
+            error = "must be a position string, an object {\"latitude\": number, \"longitude\": number} or a [lat, lon] pair";
             return false;
         }
 
@@ -320,7 +320,7 @@ internal static class RangeBearingMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("The origin: a position string as the card accepts (\"32°35.224'S 061°17.710'E\", \"-32.587, 61.295\") or {\"lat\", \"lon\"} in decimal degrees. Omit to keep the current origin.")] JsonElement? origin = null,
+            [Description("The origin: a position string as the card accepts (\"32°35.224'S 061°17.710'E\", \"-32.587, 61.295\") or {\"latitude\", \"longitude\"} (or [lat, lon]) in decimal degrees. Omit to keep the current origin.")] JsonElement? origin = null,
             [Description("The range: metres as a number (2000000), or a string with a unit (\"2,000 km\", \"1079.9 NM\", \"1.2 mi\", \"500 m\"; a bare M is refused). A string without a unit is in the Distance unit setting. Locks the range. Omit to keep it.")] JsonElement? range = null,
             [Description("The initial true bearing at the origin, 0 to 360 degrees. Locks the bearing. Omit to keep it.")] double? bearing = null,
             [Description("rhumb or greatCircle: how the bearing line runs and how the end is computed. Remembered. Omit to keep it.")] string? geometry = null,

@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// becomes a <see cref="GridCoverageSubLayer"/> at the style's
 /// <see cref="WeatherCoverageStyle.Opacity"/>, flagged
 /// <see cref="GridCoverageSubLayer.ClipToWater"/> when the style is (wave
-/// height) and carrying the band legend (<see cref="GridCoverageSubLayer.Legend"/>);
+/// height) and carrying the band legend (<see cref="CoverageSubLayerBase.Legend"/>);
 /// symbols become an <see cref="ArrowCoverageSubLayer"/> served from
 /// <see cref="WeatherCoverageStyle.Symbols"/>, with southern-hemisphere barbs
 /// south of the equator; isolines (pressure) are traced from the style's

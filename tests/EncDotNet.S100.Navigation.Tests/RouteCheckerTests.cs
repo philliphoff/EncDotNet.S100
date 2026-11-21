@@ -52,6 +52,7 @@ public class RouteCheckerTests
             new RouteCheckStatus("areas", RouteCheckState.Skipped, RouteCheckReasons.AreasMissing, 0),
             new RouteCheckStatus("warnings", RouteCheckState.Skipped, RouteCheckReasons.WarningsMissing, 0),
             new RouteCheckStatus("clearance", RouteCheckState.Skipped, RouteCheckReasons.DepthMissing, 0),
+            new RouteCheckStatus("weather", RouteCheckState.Skipped, RouteCheckReasons.WeatherMissing, 0),
         ],
         report.Checks);
         Assert.Empty(report.Findings);
@@ -280,7 +281,7 @@ public class RouteCheckerTests
 
         var report = new RouteChecker(RouteCheckSources.Empty, additionalChecks: [custom]).Check(TwoLegs(), Fixture.Settings(), Token);
 
-        Assert.Equal(["chart", "areas", "warnings", "clearance", "ferries"], report.Checks.Select(c => c.Name));
+        Assert.Equal(["chart", "areas", "warnings", "clearance", "weather", "ferries"], report.Checks.Select(c => c.Name));
         Assert.Equal("custom.0", report.Verdict.Headline!.Id);
         Assert.Equal("ok", report.Detail<string>("ferries"));
         Assert.Same(report.Track, custom.Context!.Track);

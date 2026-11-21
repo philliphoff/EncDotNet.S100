@@ -20,6 +20,14 @@ public sealed class S100CompositeOptions
     /// <summary>Output image height in pixels. Default 1024. Ignored when <see cref="Viewport"/> is set.</summary>
     public int Height { get; init; } = 1024;
 
+    /// <summary>
+    /// Image pixels per viewport pixel. <see cref="Width"/>, <see cref="Height"/>
+    /// and the viewport are device-independent; a density of 2 renders the same
+    /// view as an image twice as wide and tall, with symbols, text and lines
+    /// twice as many pixels across, as a HiDPI display does. Default 1.
+    /// </summary>
+    public double PixelDensity { get; init; } = 1.0;
+
     /// <summary>Colour palette (Day/Dusk/Night). Default <see cref="PaletteType.Day"/>.</summary>
     public PaletteType Palette { get; init; } = PaletteType.Day;
 

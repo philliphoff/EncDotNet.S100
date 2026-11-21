@@ -27,8 +27,20 @@ internal enum KeysTab
 /// protected charts. Rows, statuses and banners are recomputed from the two
 /// stores whenever they change, when the page is shown, and once a day.
 /// </summary>
-internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
+internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPage, IDisposable
 {
+    /// <inheritdoc />
+    public SettingsCategory Category => SettingsCategory.KeysAndCertificates;
+
+    /// <inheritdoc />
+    public string Title => Strings.Settings_Category_Keys;
+
+    /// <inheritdoc />
+    public int Order => 60;
+
+    /// <inheritdoc />
+    public string AutomationId => "Settings.Category.Keys";
+
     /// <summary>A certificate ending within this many days is flagged.</summary>
     public const int EndingSoonDays = 30;
 
@@ -46,17 +58,19 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
     public KeysAndCertificatesViewModel(
         SecomIdentityStore identities,
         TrustedAuthorityStore authorities,
-        IKeysDialogs? dialogs = null,
-        TimeProvider? time = null,
-        Action<Action>? post = null)
+        IKeysDialogs? dialogs,
+        TimeProvider time,
+        Action<Action> post)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(authorities);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(post);
         _identities = identities;
         _authorities = authorities;
         _dialogs = dialogs;
-        _time = time ?? TimeProvider.System;
-        _post = post ?? (a => Avalonia.Threading.Dispatcher.UIThread.Post(a));
+        _time = time;
+        _post = post;
 
         ImportIdentityCommand = new RelayCommand(() => _ = ImportAsync(replacing: null));
         AddAuthorityCommand = new RelayCommand(() => _ = AddAuthorityAsync());

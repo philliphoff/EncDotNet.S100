@@ -49,6 +49,12 @@
         "name": "clearance",
         "state": "ran",
         "findingCount": 4
+      },
+      {
+        "name": "weather",
+        "state": "skipped",
+        "reason": "weather_missing",
+        "findingCount": 0
       }
     ],
     "findings": [

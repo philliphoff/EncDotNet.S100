@@ -25,7 +25,15 @@ public interface IDynamicFeatureDescriber
 /// <summary>The pick-report description of a <see cref="DynamicFeature"/>.</summary>
 /// <param name="Title">The feature's display label, e.g. a station name.</param>
 /// <param name="Properties">The feature's values, in display order.</param>
-public sealed record DynamicFeatureDescription(string Title, IReadOnlyList<DynamicFeatureProperty> Properties);
+public sealed record DynamicFeatureDescription(string Title, IReadOnlyList<DynamicFeatureProperty> Properties)
+{
+    /// <summary>
+    /// Pick sections for the feature, such as a predicted tide station's
+    /// (data source design note P3, slice 7d); a host presents the kinds it
+    /// knows and shows the rest as rows. Empty by default.
+    /// </summary>
+    public IReadOnlyList<EncDotNet.S100.Datasets.Pipelines.PickSection> Sections { get; init; } = [];
+}
 
 /// <summary>One labelled value in a <see cref="DynamicFeatureDescription"/>.</summary>
 /// <param name="Label">The value's label, e.g. <c>"Wind"</c>.</param>
