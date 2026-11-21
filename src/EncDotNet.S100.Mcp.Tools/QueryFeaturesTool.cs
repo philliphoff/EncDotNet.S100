@@ -37,7 +37,8 @@ public sealed record QueryFeaturesRequest(
     [property: Description("When true, replaces the default bounding-box intersection test with true full-geometry intersection: point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing — e.g. \"which features does this route leg actually cross?\". Slightly more expensive; default false.")] bool Precise = false,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
     [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50,
-    [property: Description("Optional single-dataset filter; when supplied only the dataset with this identifier (from list_datasets) is queried. Null queries every matching dataset.")] DatasetId? Dataset = null);
+    [property: Description("Optional single-dataset filter; when supplied only the dataset with this identifier (from list_datasets) is queried. Null queries every matching dataset.")] DatasetId? Dataset = null,
+    [property: Description("Add each feature's attributes as encoded (code and raw value) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false);
 
 /// <summary>
 /// Per-feature summary returned by <see cref="QueryFeaturesTool"/>.
@@ -47,12 +48,16 @@ public sealed record QueryFeaturesRequest(
 /// <param name="FeatureId">Stable feature identifier (<c>gml:id</c>; for S-101 the decimal RCID).</param>
 /// <param name="FeatureType">Feature type code (the GML element local name; for S-101 the feature-type acronym).</param>
 /// <param name="Bounds">Bounding box of the feature's geometry, or <c>null</c> if the feature carries no geometry.</param>
+/// <param name="Depth">The feature's depth values as numbers, or <c>null</c> when it carries none (#556).</param>
+/// <param name="Attributes">With <see cref="QueryFeaturesRequest.IncludeAttributes"/>, the feature's attributes as encoded.</param>
 public sealed record FeatureMatch(
     DatasetId DatasetId,
     SpecRef Spec,
     string FeatureId,
     string FeatureType,
-    BoundingBox? Bounds);
+    BoundingBox? Bounds,
+    [property: Description("The feature's depth values as numbers in metres, named as sample's depth result names them: depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, and the waterLevelEffect code. Null when it carries none.")] FeatureDepthValues? Depth = null,
+    [property: Description("With includeAttributes, the feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub). Null otherwise.")] IReadOnlyList<IdentifyAttribute>? Attributes = null);
 
 /// <summary>
 /// A per-feature-type tally of the full (all-pages) match set, returned
@@ -143,6 +148,7 @@ public sealed class QueryFeaturesTool
 
         var snapshot = _catalog.Datasets;
         var matched = new List<FeatureMatch>();
+        var matchedFeatures = new List<EncDotNet.S100.Features.IS100Feature>();
 
         foreach (var dataset in snapshot)
         {
@@ -206,6 +212,7 @@ public sealed class QueryFeaturesTool
                     feature.Id,
                     feature.FeatureType,
                     FeatureGeometryQuery.TryGetBoundingBox(feature)));
+                matchedFeatures.Add(feature);
             }
         }
 
@@ -215,7 +222,13 @@ public sealed class QueryFeaturesTool
         var pageBuilder = new List<FeatureMatch>(take);
         for (var i = 0; i < take; i++)
         {
-            pageBuilder.Add(matched[skip + i]);
+            // Values for the page only (#556).
+            var feature = matchedFeatures[skip + i];
+            pageBuilder.Add(matched[skip + i] with
+            {
+                Depth = FeatureDepthValues.From(feature),
+                Attributes = request.IncludeAttributes ? IdentifyAttribute.Raw(feature) : null,
+            });
         }
 
         var hasMore = skip + take < totalCount;

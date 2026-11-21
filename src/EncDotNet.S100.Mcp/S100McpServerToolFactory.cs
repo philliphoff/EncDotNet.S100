@@ -300,7 +300,9 @@ internal static class S100McpServerToolFactory
             "returns what its map draws at the view time, hidden S-124 parts left out, and a headless " +
             "host returns every drawable feature. Each match reports the dataset ID, " +
             "spec, feature ID and type, geometry primitive, bounds, containment ('inside'/'near'), " +
-            "and approximate distance — follow up with describe_feature for full attributes.";
+            "and approximate distance, and 'depth' with its numeric depth values in metres where it has any (depthRangeMinimumMeters, " +
+            "depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds every attribute as encoded. " +
+            "Use describe_feature for decoded attributes and geometry.";
 
         var del = ([Description("Pick latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
                    [Description("Pick longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
@@ -308,6 +310,7 @@ internal static class S100McpServerToolFactory
                    [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
                    [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
                    [Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? time = null,
+                   [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -317,7 +320,8 @@ internal static class S100McpServerToolFactory
                         ParseSpec(spec),
                         radiusMeters,
                         maxResults,
-                        time),
+                        time,
+                        includeAttributes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -340,7 +344,9 @@ internal static class S100McpServerToolFactory
             "on its geometry (nearest point on a segment, not just the nearest vertex) plus the " +
             "bearing toward it. Works across every vector spec (S-101, S-122, S-124, S-125, S-127, " +
             "S-128, S-129, S-131, S-201, S-411, S-421). Optional spec / datasetId / featureType / " +
-            "maxDistanceMeters filters; results are nearest-first. Read-only.";
+            "maxDistanceMeters filters; results are nearest-first. Each match has 'depth' with its numeric depth values in metres where it " +
+            "has any (depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds " +
+            "every attribute as encoded. Read-only.";
 
         var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
                    [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
@@ -349,6 +355,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"LightAllAround\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null matches every feature type.")] string? featureType = null,
                    [Description("Optional maximum distance in metres; features farther than this are excluded. null imposes no limit.")] double? maxDistanceMeters = null,
                    [Description("Maximum ranked features to return; clamped to [1, 200]. Default 10.")] int limit = 10,
+                   [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -359,7 +366,8 @@ internal static class S100McpServerToolFactory
                         string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
                         featureType,
                         maxDistanceMeters,
-                        limit),
+                        limit,
+                        includeAttributes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -383,8 +391,9 @@ internal static class S100McpServerToolFactory
             "attribute values (equality map or explicit operator predicates, combined with AND). " +
             "For S-101 the featureType filter matches the feature-type acronym (e.g. LIGHTS, " +
             "BOYLAT) and each featureId is the record's decimal RCID. Each result includes the " +
-            "dataset ID, spec, feature ID, feature type, and bounding box — follow up with " +
-            "describe_feature for full attributes. The result also carries a typeBreakdown " +
+            "dataset ID, spec, feature ID, feature type, bounding box, and 'depth' with its numeric depth values in metres where it has " +
+            "any (depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds every " +
+            "attribute as encoded. Use describe_feature for decoded attributes and geometry. The result also carries a typeBreakdown " +
             "(per-feature-type counts of the full match set). Pagination is server-side.";
 
         var del = ([Description("Spatial query envelope, supplied either as a JSON object (preferred) or a JSON string containing one. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] JsonElement query,
@@ -396,6 +405,7 @@ internal static class S100McpServerToolFactory
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    [Description("Optional dataset identifier (typically from list_datasets); null queries across every matching dataset.")] string? datasetId = null,
+                   [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -408,7 +418,8 @@ internal static class S100McpServerToolFactory
                         precise,
                         page,
                         pageSize,
-                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId)),
+                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
+                        includeAttributes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

@@ -26,7 +26,8 @@ public sealed record NearestFeaturesRequest(
     [property: Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] DatasetId? Dataset = null,
     [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"LightAllAround\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null matches every feature type.")] string? FeatureType = null,
     [property: Description("Optional maximum distance in metres; features whose nearest geometry is farther than this are excluded. null imposes no limit.")] double? MaxDistanceMeters = null,
-    [property: Description("Maximum ranked features to return; clamped to [1, 200]. Default 10.")] int Limit = 10);
+    [property: Description("Maximum ranked features to return; clamped to [1, 200]. Default 10.")] int Limit = 10,
+    [property: Description("Add each feature's attributes as encoded (code and raw value) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false);
 
 /// <summary>
 /// A single ranked nearest-feature match returned by
@@ -43,6 +44,8 @@ public sealed record NearestFeaturesRequest(
 /// <param name="NearestLatitude">Latitude of the nearest point on the feature.</param>
 /// <param name="NearestLongitude">Longitude of the nearest point on the feature.</param>
 /// <param name="Bounds">Bounding box of the feature's geometry.</param>
+/// <param name="Depth">The feature's depth values as numbers, or <c>null</c> when it carries none (#556).</param>
+/// <param name="Attributes">With <see cref="NearestFeaturesRequest.IncludeAttributes"/>, the feature's attributes as encoded.</param>
 public sealed record NearestFeatureMatch(
     [property: Description("Dataset the feature belongs to.")] DatasetId DatasetId,
     [property: Description("Spec the dataset declares.")] SpecRef Spec,
@@ -54,7 +57,9 @@ public sealed record NearestFeatureMatch(
     [property: Description("'inside' when the query point lies within an area feature; otherwise 'near'.")] string Containment,
     [property: Description("Latitude of the nearest point on the feature.")] double NearestLatitude,
     [property: Description("Longitude of the nearest point on the feature.")] double NearestLongitude,
-    [property: Description("Bounding box of the feature's geometry.")] BoundingBox? Bounds);
+    [property: Description("Bounding box of the feature's geometry.")] BoundingBox? Bounds,
+    [property: Description("The feature's depth values as numbers in metres, named as sample's depth result names them: depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, and the waterLevelEffect code. Null when it carries none.")] FeatureDepthValues? Depth = null,
+    [property: Description("With includeAttributes, the feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub). Null otherwise.")] IReadOnlyList<IdentifyAttribute>? Attributes = null);
 
 /// <summary>Result of <see cref="NearestFeaturesTool"/>.</summary>
 /// <param name="Point">The echoed query point.</param>
@@ -204,7 +209,9 @@ public sealed class NearestFeaturesTool
                     measured.Inside ? "inside" : "near",
                     measured.NearestLatitude,
                     measured.NearestLongitude,
-                    FeatureGeometryQuery.TryGetBoundingBox(feature)));
+                    FeatureGeometryQuery.TryGetBoundingBox(feature),
+                    FeatureDepthValues.From(feature),
+                    request.IncludeAttributes ? IdentifyAttribute.Raw(feature) : null));
             }
         }
 
