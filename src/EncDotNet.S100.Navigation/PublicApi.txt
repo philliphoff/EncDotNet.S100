@@ -466,7 +466,7 @@ namespace EncDotNet.S100.Navigation
     }
     public static class NavigableSnap
     {
-        public const double DefaultSearchRadiusMeters = 1000D;
+        public const double DefaultSearchRadiusMeters = 5000D;
         public const double MaxSearchRadiusMeters = 20000D;
         public static EncDotNet.S100.Pipelines.BoundingBox Box(EncDotNet.S100.DataModel.GeoPosition position, double halfMeters) { }
         public static double CellMetersFor(double searchRadiusMeters) { }
@@ -476,7 +476,7 @@ namespace EncDotNet.S100.Navigation
     }
     public sealed class NavigableSnapRequest : System.IEquatable<EncDotNet.S100.Navigation.NavigableSnapRequest>
     {
-        public NavigableSnapRequest(double MinimumDepthMeters, double ClearanceMeters = 0, double SearchRadiusMeters = 1000, double? HazardDepthMeters = default, double? CellMeters = default) { }
+        public NavigableSnapRequest(double MinimumDepthMeters, double ClearanceMeters = 0, double SearchRadiusMeters = 5000, double? HazardDepthMeters = default, double? CellMeters = default) { }
         public double? CellMeters { get; init; }
         public double ClearanceMeters { get; init; }
         public double? HazardDepthMeters { get; init; }

@@ -75,7 +75,7 @@ public sealed record SampleRequest(
     [property: Description("Handling of a single instant outside every covering dataset's time range: Error (default) or Nearest.")] TimeOutOfRangePolicy OutOfRange = TimeOutOfRangePolicy.Error,
     [property: Description("For depth at a point: the least charted depth the point needs; when it fails, the result adds nearestNavigable.")] double? MinDepthMeters = null,
     [property: Description("With MinDepthMeters, the room wanted round the point, in metres.")] double? ClearanceMeters = null,
-    [property: Description("With MinDepthMeters, how far to look for a navigable point, in metres (default 1,000, at most 20,000).")] double? SearchRadiusMeters = null);
+    [property: Description("With MinDepthMeters, how far to look for a navigable point, in metres (default 5,000, at most 20,000; nearer water is searched on finer cells first).")] double? SearchRadiusMeters = null);
 
 /// <summary>
 /// The result of <see cref="SampleTool"/>: exactly one of its members is set,

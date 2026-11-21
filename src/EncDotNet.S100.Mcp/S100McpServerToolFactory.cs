@@ -192,7 +192,7 @@ internal static class S100McpServerToolFactory
             "doesn't span it); depth takes one time. Where no S-104 or S-111 covers and the host has tide predictions on, the nearest tide or " +
             "current station within reach by water (10 km for tide stations, 2 km for current stations) is used: 'source' then names it (kind \"prediction\") with a caveat to quote; " +
             "beyond every station's reach the error is no_station_within_reach, naming the nearest station and its distance. " +
-            "For depth at a point, minDepthMeters (with optional clearanceMeters and searchRadiusMeters, default 1000 m) also checks the point is navigable " +
+            "For depth at a point, minDepthMeters (with optional clearanceMeters and searchRadiusMeters, default 5000 m) also checks the point is navigable " +
             "(charted water at least that deep, no danger, and that much room from land, shoal, dangers and uncharted water): 'navigable', and when not, " +
             "'notNavigableReason' (land, uncharted, shoal, hazard, no_depth, too_close) and 'nearestNavigable' (latitude, longitude, depthMeters, depth source, " +
             "clearanceMeters, distanceMeters, bearingDegrees; or a 'reason' when nothing in the radius qualifies). " +
@@ -212,7 +212,7 @@ internal static class S100McpServerToolFactory
                    [Description(OutOfRangeDescription)] string? outOfRange = null,
                    [Description("For depth at a point: the least charted depth in metres the point needs (e.g. draft plus margin, or the safety contour). When the point fails, the result adds 'nearestNavigable'.")] double? minDepthMeters = null,
                    [Description("With minDepthMeters: the room wanted round the point, in metres, from land, shoal water, dangers and uncharted water. Default 0.")] double? clearanceMeters = null,
-                   [Description("With minDepthMeters: how far to look for a navigable point, in metres. Default 1000, at most 20000.")] double? searchRadiusMeters = null,
+                   [Description("With minDepthMeters: how far to look for a navigable point, in metres. Default 5000, at most 20000; nearer water is searched on finer cells first.")] double? searchRadiusMeters = null,
                    CancellationToken ct = default) =>
             DispatchAsync(async () =>
             {

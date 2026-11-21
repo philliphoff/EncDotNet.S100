@@ -10,9 +10,13 @@ namespace EncDotNet.S100.Navigation;
 /// (land, uncharted water, water shallower than the minimum depth, dangers),
 /// in metres; 0 for none.
 /// </param>
-/// <param name="SearchRadiusMeters">How far to look for navigable water, in metres.</param>
+/// <param name="SearchRadiusMeters">
+/// How far to look for navigable water, in metres. The search widens in
+/// steps (500 m, 1.5 km, 5 km, then the radius), each on a coarser grid, so a
+/// near answer keeps fine cells.
+/// </param>
 /// <param name="HazardDepthMeters">Dangers at or shallower than this mark their cells; <c>null</c> uses the minimum depth.</param>
-/// <param name="CellMeters">The grid's cell size in metres; <c>null</c> picks one from the radius (<see cref="NavigableSnap.CellMetersFor"/>).</param>
+/// <param name="CellMeters">The grid's cell size in metres for every step; <c>null</c> picks one per step from its radius (<see cref="NavigableSnap.CellMetersFor"/>).</param>
 public sealed record NavigableSnapRequest(
     double MinimumDepthMeters,
     double ClearanceMeters = 0,
@@ -70,8 +74,8 @@ public sealed record NavigableSnapResult(
 /// </remarks>
 public static class NavigableSnap
 {
-    /// <summary>The default search radius: 1 km.</summary>
-    public const double DefaultSearchRadiusMeters = 1_000;
+    /// <summary>The default search radius: 5 km.</summary>
+    public const double DefaultSearchRadiusMeters = 5_000;
 
     /// <summary>The largest search radius: 20 km.</summary>
     public const double MaxSearchRadiusMeters = 20_000;
@@ -106,15 +110,46 @@ public static class NavigableSnap
             throw new ArgumentOutOfRangeException(nameof(request), request.ClearanceMeters, "The clearance must be zero or more.");
         }
 
-        var cell = request.CellMeters ?? CellMetersFor(request.SearchRadiusMeters);
+        // Look near on a fine grid first, then farther on coarser ones, so a
+        // point by a marina moves metres and a point well inland still finds water.
+        NavigableSnapResult? result = null;
+        foreach (var radius in Radii(request.SearchRadiusMeters))
+        {
+            var cell = request.CellMeters ?? CellMetersFor(radius);
 
-        // The radius, plus the clearance so a cell at the edge sees what's round it.
-        var half = request.SearchRadiusMeters + request.ClearanceMeters + (2 * cell);
-        var grid = NavigabilityGrid.Build(
-            sources,
-            new NavigabilityGridRequest(Box(position, half), cell, request.MinimumDepthMeters, request.HazardDepthMeters),
-            cancellationToken);
-        return Snap(grid, position, request.ClearanceMeters, request.SearchRadiusMeters);
+            // The radius, plus the clearance so a cell at the edge sees what's round it.
+            var half = radius + request.ClearanceMeters + (2 * cell);
+            var grid = NavigabilityGrid.Build(
+                sources,
+                new NavigabilityGridRequest(Box(position, half), cell, request.MinimumDepthMeters, request.HazardDepthMeters),
+                cancellationToken);
+            var here = Snap(grid, position, request.ClearanceMeters, radius);
+            result = result is null ? here : here with { Reason = result.Reason, PointDepthMeters = result.PointDepthMeters };
+            if (here.Status != NavigableSnapStatus.NotFound)
+            {
+                return result;
+            }
+        }
+
+        return result!;
+    }
+
+    private static readonly double[] StepRadii = [500, 1_500, 5_000];
+
+    // The radii searched in turn: 500 m, 1.5 km, 5 km, then the whole radius.
+    private static IEnumerable<double> Radii(double searchRadiusMeters)
+    {
+        foreach (var radius in StepRadii)
+        {
+            if (radius >= searchRadiusMeters)
+            {
+                break;
+            }
+
+            yield return radius;
+        }
+
+        yield return searchRadiusMeters;
     }
 
     /// <summary>Snaps a point on a grid already built.</summary>
