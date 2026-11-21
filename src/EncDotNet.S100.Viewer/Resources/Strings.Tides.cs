@@ -136,4 +136,12 @@ internal static partial class Strings
     public static string Tides_Currents_UsedFor => Get(nameof(Tides_Currents_UsedFor));
     public static string Tides_Currents_DisplayOnly => Get(nameof(Tides_Currents_DisplayOnly));
     public static string Tides_Currents_Note => Get(nameof(Tides_Currents_Note));
+    public static string Tides_FeedStatus_DownloadingList => Get(nameof(Tides_FeedStatus_DownloadingList));
+    public static string Tides_FeedStatus_DownloadingListFormat => Get(nameof(Tides_FeedStatus_DownloadingListFormat));
+    public static string Tides_FeedStatus_DownloadingDetail => Get(nameof(Tides_FeedStatus_DownloadingDetail));
+    public static string Tides_FeedStatus_ReadingList => Get(nameof(Tides_FeedStatus_ReadingList));
+    public static string Tides_FeedStatus_WaitingForList => Get(nameof(Tides_FeedStatus_WaitingForList));
+    public static string Tides_FeedStatus_DownloadFailed => Get(nameof(Tides_FeedStatus_DownloadFailed));
+    public static string Tides_FeedStatus_DownloadFailedDetailFormat => Get(nameof(Tides_FeedStatus_DownloadFailedDetailFormat));
+    public static string Tides_FeedStatus_ZoomInFormat => Get(nameof(Tides_FeedStatus_ZoomInFormat));
 }

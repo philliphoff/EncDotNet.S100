@@ -123,9 +123,17 @@ internal sealed class SourceDatasetService : IDisposable
 
             // D8: the row says what the source is doing. Read again when it
             // pauses or resumes, when it delivers data, and every 30 s so its
-            // age and staleness stay current.
-            void Refresh() => UpdateStatus(entry, running, registration, activation, hosted);
+            // age and staleness stay current. An extension can say more, such
+            // as a tide feed waiting for its station list (#1630).
+            var overrides = attached.OfType<ISourceStatusOverride>().ToArray();
+            void Refresh() => UpdateStatus(entry, running, registration, activation, hosted, overrides);
             running.StateChanged += (_, _) => Refresh();
+            foreach (var statusOverride in overrides)
+            {
+                EventHandler onStatus = (_, _) => Refresh();
+                statusOverride.StatusChanged += onStatus;
+                attached.Add(new Callback(() => statusOverride.StatusChanged -= onStatus));
+            }
             EventHandler<DatasetChangedEventArgs>? onData = null;
             if (processor is ILiveDatasetProcessor live)
             {
@@ -170,13 +178,18 @@ internal sealed class SourceDatasetService : IDisposable
         HostedSourceActivator activator,
         SourceRegistration? registration,
         SourceActivation activation,
-        IHostedDatasetProcessor processor)
+        IHostedDatasetProcessor processor,
+        IReadOnlyList<ISourceStatusOverride> overrides)
     {
         SourceStatus status;
         try
         {
-            status = SourceStatus.Evaluate(
-                activator.State, registration, processor.LastUpdated, processor.LastError, _time.GetUtcNow(), activation);
+            var state = activator.State;
+            status = (state == SourceRunState.Hidden
+                    ? null
+                    : overrides.Select(o => o.Status).FirstOrDefault(s => s is not null))
+                ?? SourceStatus.Evaluate(
+                    state, registration, processor.LastUpdated, processor.LastError, _time.GetUtcNow(), activation);
         }
         catch (ObjectDisposedException)
         {

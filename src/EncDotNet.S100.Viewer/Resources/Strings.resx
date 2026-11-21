@@ -8583,6 +8583,33 @@
   <data name="Tides_StationsLayer_Description" xml:space="preserve">
     <value>NOAA harmonic predictions: the astronomical tide only, not a forecast. Shown at 1:500,000 and larger; not where S-104 covers.</value>
   </data>
+  <data name="Tides_FeedStatus_DownloadingList" xml:space="preserve">
+    <value>Downloading the station list</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadingListFormat" xml:space="preserve">
+    <value>Downloading the station list · {0:N0} of {1:N0}</value>
+    <comment>{0} = stations downloaded, {1} = stations in all.</comment>
+  </data>
+  <data name="Tides_FeedStatus_DownloadingDetail" xml:space="preserve">
+    <value>The first time, SoundCharts downloads NOAA's tide and current stations. It takes about 10 minutes; the stations appear when it's done. Keep SoundCharts open until then.</value>
+  </data>
+  <data name="Tides_FeedStatus_ReadingList" xml:space="preserve">
+    <value>Reading the station list</value>
+  </data>
+  <data name="Tides_FeedStatus_WaitingForList" xml:space="preserve">
+    <value>Waiting for the station list</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadFailed" xml:space="preserve">
+    <value>Station list download failed</value>
+  </data>
+  <data name="Tides_FeedStatus_DownloadFailedDetailFormat" xml:space="preserve">
+    <value>{0} Hide and show the feed to try again.</value>
+    <comment>{0} = why the download failed.</comment>
+  </data>
+  <data name="Tides_FeedStatus_ZoomInFormat" xml:space="preserve">
+    <value>Zoom in to 1:{0:N0} to see stations</value>
+    <comment>{0} = the smallest scale stations are drawn at, such as 500,000.</comment>
+  </data>
   <data name="Tides_LegendSpec" xml:space="preserve">
     <value>TIDE</value>
   </data>

@@ -63,7 +63,7 @@ internal sealed record TideStationState(
 /// subordinate station is predicted on.
 /// </para>
 /// </remarks>
-internal sealed class TideStationSource : IPausableDynamicSource, IDynamicFeatureDescriber
+internal sealed class TideStationSource : IPredictedStationSource, IDynamicFeatureDescriber
 {
     /// <summary>The source id, and its key in <c>ViewerSettings.DynamicSourceVisibility</c>.</summary>
     public const string SourceId = "tide-stations";
@@ -209,6 +209,18 @@ internal sealed class TideStationSource : IPausableDynamicSource, IDynamicFeatur
     /// <summary>The feature id of a station.</summary>
     /// <param name="stationId">The station id.</param>
     public static string FeatureIdFor(string stationId) => "tide:" + stationId;
+
+    /// <inheritdoc />
+    public bool IsViewTooWide
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _view is { } view && !StationThinning.IsDrawable(view);
+            }
+        }
+    }
 
     /// <summary>Sets the viewport and recomputes.</summary>
     /// <param name="view">The viewport.</param>

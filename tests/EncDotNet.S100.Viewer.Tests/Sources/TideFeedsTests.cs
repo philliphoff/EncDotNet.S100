@@ -29,7 +29,8 @@ public sealed class TideFeedsTests
     [Fact]
     public async Task A_tide_feed_draws_the_shared_source_and_leaves_it_running_for_others()
     {
-        using var overlay = await Overlay();
+        var (overlay, list) = await OverlayAndList();
+        using var _ = overlay;
         var registration = TideFeeds.TideStations(() => overlay);
 
         Assert.Equal(TideFeeds.TideStationsId, registration.Id);
@@ -41,7 +42,7 @@ public sealed class TideFeedsTests
         processor.Dispose();
         // The processor doesn't own the source; the host extension turns it off.
         Assert.True(overlay.Source.IsActive);
-        var extension = new TideFeedHostExtension(TideFeeds.TideStationsId, () => overlay.Source);
+        var extension = new TideFeedHostExtension(TideFeeds.TideStationsId, () => overlay.Source, () => list);
         extension.Attach(DatasetEntry.ForSource(registration), processor)!.Dispose();
         Assert.False(overlay.Source.IsActive);
     }
@@ -74,6 +75,76 @@ public sealed class TideFeedsTests
         Assert.Null(cards.Present(new PredictedStationSection(PredictedStationSection.CurrentKind, "PUG0001_1", "Somewhere")));
     }
 
+    [Fact]
+    public void A_station_feed_row_says_what_the_station_list_is_doing()
+    {
+        var downloading = TideFeedHostExtension.StatusFor(
+            TideStationListActivity.Downloading, new(120, 2134), hasList: false, lastError: null, viewTooWide: false)!;
+        Assert.Equal(Services.Sources.SourceStatusKind.Starting, downloading.Kind);
+        Assert.Equal(
+            string.Format(System.Globalization.CultureInfo.CurrentCulture, Resources.Strings.Tides_FeedStatus_DownloadingListFormat, 120, 2134),
+            downloading.Text);
+        Assert.NotNull(downloading.Detail);
+
+        Assert.Equal(
+            Resources.Strings.Tides_FeedStatus_DownloadingList,
+            TideFeedHostExtension.StatusFor(TideStationListActivity.Downloading, null, false, null, false)!.Text);
+        Assert.Equal(
+            Resources.Strings.Tides_FeedStatus_ReadingList,
+            TideFeedHostExtension.StatusFor(TideStationListActivity.Loading, null, false, null, false)!.Text);
+        Assert.Equal(
+            Resources.Strings.Tides_FeedStatus_WaitingForList,
+            TideFeedHostExtension.StatusFor(TideStationListActivity.Idle, null, false, null, false)!.Text);
+
+        var failed = TideFeedHostExtension.StatusFor(TideStationListActivity.Idle, null, false, "Forbidden.", false)!;
+        Assert.Equal(Services.Sources.SourceStatusKind.Failed, failed.Kind);
+        Assert.Contains("Forbidden.", failed.Detail, StringComparison.Ordinal);
+
+        Assert.Equal(
+            Services.Sources.SourceStatusKind.WaitingForZoom,
+            TideFeedHostExtension.StatusFor(TideStationListActivity.Idle, null, true, null, viewTooWide: true)!.Kind);
+        Assert.Null(TideFeedHostExtension.StatusFor(TideStationListActivity.Idle, null, true, null, viewTooWide: false));
+        Assert.Null(TideFeedHostExtension.StatusFor(TideStationListActivity.Checking, null, true, "Old error.", false));
+    }
+
+    [Fact]
+    public async Task A_station_feed_row_follows_the_list_and_the_zoom()
+    {
+        var (overlay, list) = await OverlayAndList();
+        using var _ = overlay;
+        var registration = TideFeeds.TideStations(() => overlay);
+        var extension = new TideFeedHostExtension(TideFeeds.TideStationsId, () => overlay.Source, () => list);
+        using var attachment = extension.Attach(DatasetEntry.ForSource(registration), new NoProcessor())!;
+        var status = Assert.IsAssignableFrom<Services.Sources.ISourceStatusOverride>(attachment);
+        var changes = 0;
+        status.StatusChanged += (_, _) => changes++;
+
+        overlay.Source.IsActive = true;
+        overlay.Source.UpdateView(View(47.6, -122.4, 2_000_000));
+        Assert.Equal(Services.Sources.SourceStatusKind.WaitingForZoom, status.Status!.Kind);
+        Assert.True(changes > 0);
+
+        overlay.Source.UpdateView(View(47.6, -122.4, 400_000));
+        Assert.Null(status.Status);
+    }
+
+    [Fact]
+    public async Task A_station_feed_row_says_when_the_list_download_failed()
+    {
+        var list = TideTestLists.Missing();
+        using var overlay = new TideStationsOverlay(
+            list, notifier: null, new FixedViewTime(ViewTime), new NoWaterLevel(), TimeProvider.System, () => TimeFormat.Utc, () => []);
+        var extension = new TideFeedHostExtension(TideFeeds.CurrentStationsId, () => overlay.Currents, () => list);
+        using var attachment = extension.Attach(DatasetEntry.ForSource(TideFeeds.CurrentStations(() => overlay)), new NoProcessor())!;
+        var status = Assert.IsAssignableFrom<Services.Sources.ISourceStatusOverride>(attachment);
+
+        Assert.Equal(Services.Sources.SourceStatusKind.Starting, status.Status!.Kind);
+        await list.EnsureAvailableAsync();
+
+        Assert.Equal(Services.Sources.SourceStatusKind.Failed, status.Status!.Kind);
+        Assert.Contains("Offline in tests.", status.Status.Detail, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(true, true)]
     [InlineData(false, false)]
@@ -99,6 +170,19 @@ public sealed class TideFeedsTests
         MaxLongitude = longitude + 0.3,
         MercatorResolution = MapScaleFormatter.ScaleDenominatorToResolution(scale, latitude),
     };
+
+    private sealed class NoProcessor : IDatasetProcessor
+    {
+        public EncDotNet.S100.Core.SpecRef Spec => new(EncDotNet.S100.Core.SpecName.TidePredictions, default);
+
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public void Dispose()
+        {
+        }
+    }
 
     private sealed class FixedViewTime(DateTime utc) : IViewTime
     {
