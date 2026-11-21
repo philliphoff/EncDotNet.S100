@@ -1,5 +1,4 @@
 using EncDotNet.S100.Crs.ProjNet;
-using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;

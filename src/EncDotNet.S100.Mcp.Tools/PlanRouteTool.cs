@@ -7,7 +7,6 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Navigation;

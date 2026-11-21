@@ -2,7 +2,6 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
