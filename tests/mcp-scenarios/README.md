@@ -6,7 +6,7 @@ scenario is a prompt an agent could be given, the tool sequence a good answer
 needs, the fusion seams it crosses, and assertions with an oracle where one
 exists. They double as SoundCharts showcases.
 
-`harness/run_scenarios.py` runs S1–S3 and prints PASS, FAIL or SKIP per
+`harness/run_scenarios.py` (s100 0.30 or later) runs S1–S3 and prints PASS, FAIL or SKIP per
 assertion. A FAIL is a behaviour the scenario expects and the server doesn't
 give yet; see [FINDINGS.md](FINDINGS.md). Nothing here is for navigation.
 
@@ -37,6 +37,10 @@ on a 25 m grid, finest compilation scale wins (`harness/grid.py`), and an A*
 search with a clearance penalty joins hand-picked via points (`harness/plan.py`).
 The Swinomish Channel leg follows the charted Fairway and DredgedArea on a
 5 m grid. `check_route` then validated every leg: no land or drying crossings.
+Days 2 and 4 were re-planned on 20 November with an A* search over the
+server's `get_navigability_grid` file, after stricter checks caught a
+breakwater, a shoal and a wreck; the Cap Sante ends of days 1 and 7 were
+routed round the marina breakwater by hand. The rest come from the GDAL planner.
 That makes the planner a second, independent reading of the same cells, so
 disagreements between it and `check_route` are worth a look.
 
@@ -48,7 +52,7 @@ disagreements between it and `check_route` are worth a look.
 > ending at Cap Sante Marina in Anacortes. Create and validate routes between
 > each stop, predict running times, and suggest starting times given
 > currents, tides and running speed. Boat: 40' twin diesel, 1.1 m draft,
-> 16 kn cruise (8 kn displacement).
+> 16 kn cruise (8 kn displacement); 1.5 m safety contour and depth.
 
 Stops: Cap Sante → Friday Harbor → Roche Harbor → Reid Harbor → Fossil Bay
 (Sucia) → Cascade Bay (Rosario) → Spencer Spit → Cap Sante.

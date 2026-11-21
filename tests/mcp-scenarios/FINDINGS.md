@@ -1,4 +1,77 @@
-# Findings, 17 November 2026
+# Findings
+
+## Rerun, 20 November 2026: s100 0.30.1
+
+Same 67 NOAA cells and catalogue. The harness is on the 0.30 API (`sample`,
+`get_navigability_grid`, and `check_route`'s `vessel`, `limits`, `samples` and
+`window` objects), with assertions added for the new tools, on top of the
+agent commits that set the S1 boat's safety contour and depth to 1.5 m and
+routed the Cap Sante ends round the marina breakwater. **65 passed, 0
+failed, 9 skipped** (was 22 / 16 / 10 on 0.29.2).
+
+| Before (0.29.2) | Issue | Now (0.30.1) |
+|---|---|---|
+| Deception Pass's 5.37 kn carried 10 km into Skagit Bay and Rosario Strait (S3.3) | #1545 | Only the narrows get the station; 4.8–9.9 km out returns no current |
+| Departure window empty because of a deep-water gap (S2.4) | #1544 | Window 19:00Z–11:30Z, matching the control sweep |
+| Coarse RNA span overlapping finer cells on day 4 (S1.d4.areas) | #1543 | No overlapping spans on any day |
+| Every day must-review for a large-vessel RNA (S1.*.rna) | #1546 | `entry restricted` is now `route_check.restricted_area` (check) |
+| Berth pontoons as zero-length safety-contour crossings (S1.*.shore) | #1548 | One `route_check.berth_structures` (info) per end, with `isBerth`, `isStructure` and `cutByTrack` in details |
+| Floating obstructions as "-15.0 m" (S2.6) | #1547 | "floating" |
+| 4 search hits for 2 objects (S1.2) | #1549 | 2 with `finestOnly` |
+
+New capabilities, all verified against an independent source:
+
+- **`sample` depth** (#1557) at 105 clearance samples across the seven days
+  is never shoaler than `check_route`'s sample there (which keeps the
+  shoalest of its stretch). With a time, its water level matches the route
+  sample to the centimetre.
+- **`get_navigability_grid`** (#1558): the San Juans in one call (1046 × 1178
+  cells at 50 m, 18 s). Against the harness's GDAL grid, land and water agree
+  on 99.75 % of cells and navigable / not on 98.95 %. Every disagreement is
+  within two cells of an edge, and the server is the cautious side (it takes
+  the least depth of a cell's centre and corners). `connect` joins every
+  day's ends.
+- **Tidal-gate timing** (#1561): with a slack-within-15-minutes gate at
+  Deception Pass, the window is 15:05–15:35Z with best departure 15:20Z,
+  exactly the hand calculation; the gate ETA is 20 seconds from predicted
+  slack. `applyCurrents` changes running time only on the legs near the
+  pass, now that currents stay local.
+
+### What the new checks turned up
+
+- **Two of my routes had real problems, in both versions.** Day 2 cut the
+  Friday Harbor breakwater 0.5 NM out and crossed a 0–1.8 m depth area by
+  awash rocks 3.6 NM out; Day 4 passed 15 m from a charted wreck leaving Reid
+  Harbor. 0.29.2 reported all three; the old harness asserted only on land
+  and drying crossings, so it missed them. Both days are now re-planned with
+  an A* search over the server's navigability grid and have no must-review
+  chart findings more than 0.3 NM from either end. (Those legs are no longer
+  independent of the server; the other days still come from the GDAL
+  planner.)
+- **Marina approaches.** At a 3 m safety contour, Cap Sante's basin (dredged
+  0.4–1.6 m) and Fossil Bay (1.8 m) made every day's last few hundred metres
+  must-review. The 1.5 m contour the agents chose for the S1 boat removes
+  that; the harness still ignores chart findings within 0.3 NM of either end.
+
+### Remaining gaps
+
+- **No snap to navigable water** (#1559, open). `connect` answers
+  `from_not_navigable` or `to_not_navigable` for four of the seven days
+  because the anchorage or marina waypoint is shoal. The harness snaps to the
+  nearest navigable cell itself (50–420 m).
+- **No route suggestion** (#1560, open). Re-planning Days 2 and 4 still took
+  a client-side A* over the grid file.
+- **Berth radius vs large marinas.** Roche Harbor's docks start 128 m from
+  the arrival point, past the 100 m default, so two pontoons there are still
+  must-review findings (titled for the structure). Working as documented; a larger default, or a
+  radius taken from the harbour area, would suit big marinas.
+- **Out-of-reach current sample error.** `sample` current more than the
+  station reach from any station returns `no_dataset_covers_point`, which
+  reads as a missing dataset rather than "no station within reach".
+- **Still skipped:** San Juan currents and the La Conner tide need the full
+  catalogue from `s100 tides update`.
+
+## First run, 17 November 2026: s100 0.29.2
 
 Run of S1–S3 with `s100` 0.29.2 (nightly, linux-x64), `s100 mcp serve` over
 stdio, 67 NOAA ENC cells downloaded 17 November 2026, and the repo's
