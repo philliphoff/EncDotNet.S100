@@ -55,6 +55,14 @@ public enum SampleQuantity
 /// <param name="Time">The time to sample at; see <see cref="SampleCoverageRequest.Time"/>. For depth, the time of the water level.</param>
 /// <param name="Times">A richer time selector; see <see cref="SampleCoverageRequest.Times"/>. Depth takes an instant only.</param>
 /// <param name="OutOfRange">Handling of an instant outside every covering dataset's time range; see <see cref="SampleCoverageRequest.OutOfRange"/>.</param>
+/// <param name="MinDepthMeters">
+/// For depth at a point: the least charted depth the point needs. When it
+/// fails (land, uncharted, too shallow, or nearer than
+/// <paramref name="ClearanceMeters"/> to something that isn't navigable),
+/// the result adds the nearest point that qualifies (#1559).
+/// </param>
+/// <param name="ClearanceMeters">With <paramref name="MinDepthMeters"/>, the room wanted round the point, in metres.</param>
+/// <param name="SearchRadiusMeters">With <paramref name="MinDepthMeters"/>, how far to look for a navigable point, in metres.</param>
 public sealed record SampleRequest(
     [property: Description("What to sample: depth, water level, current or weather; null when 'Spec' names the product.")] SampleQuantity? Quantity,
     [property: Description("Optional product to pin: S-102 (depth, bathymetry only), S-104, S-111, GRIB2 or NetCDF.")] SpecRef? Spec = null,
@@ -64,7 +72,10 @@ public sealed record SampleRequest(
     [property: Description("With a polyline, the longest distance in metres between samples along each rhumb-line leg; null samples the vertices only.")] double? SpacingMeters = null,
     [property: Description("UTC ISO-8601 time: the time step for water level, current and weather, and the time of the water level for depth.")] DateTimeOffset? Time = null,
     [property: Description("Optional TimeQuery (instant / range / series); takes precedence over 'Time'. Depth takes an instant only.")] TimeQuery? Times = null,
-    [property: Description("Handling of a single instant outside every covering dataset's time range: Error (default) or Nearest.")] TimeOutOfRangePolicy OutOfRange = TimeOutOfRangePolicy.Error);
+    [property: Description("Handling of a single instant outside every covering dataset's time range: Error (default) or Nearest.")] TimeOutOfRangePolicy OutOfRange = TimeOutOfRangePolicy.Error,
+    [property: Description("For depth at a point: the least charted depth the point needs; when it fails, the result adds nearestNavigable.")] double? MinDepthMeters = null,
+    [property: Description("With MinDepthMeters, the room wanted round the point, in metres.")] double? ClearanceMeters = null,
+    [property: Description("With MinDepthMeters, how far to look for a navigable point, in metres (default 1,000, at most 20,000).")] double? SearchRadiusMeters = null);
 
 /// <summary>
 /// The result of <see cref="SampleTool"/>: exactly one of its members is set,
@@ -94,6 +105,9 @@ public sealed record SampleOutput(
 /// Charted depth plus the water level, where the water level applies
 /// (status <c>applied</c>); <c>null</c> otherwise.
 /// </param>
+/// <param name="Navigable">With a minimum depth: whether the point qualifies; <c>null</c> without one.</param>
+/// <param name="NotNavigableReason">Why it doesn't: <c>land</c>, <c>uncharted</c>, <c>shoal</c>, <c>hazard</c>, <c>no_depth</c> or <c>too_close</c>.</param>
+/// <param name="NearestNavigable">When it doesn't, the nearest point that does, or why there's none.</param>
 public sealed record ChartedDepthSampleResult(
     [property: Description("Latitude of the sample, decimal degrees WGS-84.")] double Latitude,
     [property: Description("Longitude of the sample, decimal degrees WGS-84.")] double Longitude,
@@ -101,7 +115,29 @@ public sealed record ChartedDepthSampleResult(
     [property: Description("The charted depth and where it came from; null where no loaded source has one.")] ChartedDepthValue? Depth,
     [property: Description("The time the water level is for (UTC); null when no time was given.")] DateTimeOffset? Time = null,
     [property: Description("The water level at the time; null when no time was given or there is no depth.")] SampleWaterLevel? WaterLevel = null,
-    [property: Description("Charted depth plus the water level, in metres, where the water level applies; null otherwise.")] double? AvailableDepthMeters = null);
+    [property: Description("Charted depth plus the water level, in metres, where the water level applies; null otherwise.")] double? AvailableDepthMeters = null,
+    [property: Description("With minDepthMeters: whether the point is navigable (deep enough, charted, no danger, and with the clearance asked for); null without minDepthMeters.")] bool? Navigable = null,
+    [property: Description("Why the point isn't navigable: \"land\", \"uncharted\", \"shoal\" (shallower than minDepthMeters), \"hazard\" (a danger in the cell), \"no_depth\" (charted water with no depth) or \"too_close\" (nearer than clearanceMeters to any of those).")] string? NotNavigableReason = null,
+    [property: Description("When the point isn't navigable: the nearest point that is, within searchRadiusMeters, or a 'reason' when none is.")] NearestNavigablePoint? NearestNavigable = null);
+
+/// <summary>The nearest navigable point to a sample that isn't navigable (#1559).</summary>
+/// <param name="Latitude">Its latitude, or <c>null</c> when none was found.</param>
+/// <param name="Longitude">Its longitude.</param>
+/// <param name="DepthMeters">The least charted depth round it, in metres.</param>
+/// <param name="Depth">The charted depth at it and where it came from (the finest cell wins).</param>
+/// <param name="ClearanceMeters">The room round it, in metres.</param>
+/// <param name="DistanceMeters">How far it is from the point, in metres.</param>
+/// <param name="BearingDegrees">Its bearing from the point, degrees true.</param>
+/// <param name="Reason">When none was found, why.</param>
+public sealed record NearestNavigablePoint(
+    [property: Description("Latitude, decimal degrees WGS-84; null when none was found.")] double? Latitude,
+    [property: Description("Longitude, decimal degrees WGS-84; null when none was found.")] double? Longitude,
+    [property: Description("The least charted depth round it (its grid cell's centre and corners), in metres.")] double? DepthMeters = null,
+    [property: Description("The charted depth at it and where it came from, as a depth sample reports it.")] ChartedDepthValue? Depth = null,
+    [property: Description("The room round it, in metres, to the nearest land, shoal, danger or uncharted water.")] double? ClearanceMeters = null,
+    [property: Description("How far it is from the point, in metres.")] double? DistanceMeters = null,
+    [property: Description("Its bearing from the point, degrees true.")] double? BearingDegrees = null,
+    [property: Description("When none was found, why.")] string? Reason = null);
 
 /// <summary>A charted depth and where it came from, as the route check reads it.</summary>
 /// <param name="DepthMeters">Depth below the vertical datum in metres (positive down; negative for drying heights). For an area, its minimum depth.</param>
@@ -286,7 +322,13 @@ public sealed class SampleTool
         var longitude = request.Longitude!.Value;
         if (quantity == SampleQuantity.Depth && !IsS102(request.Spec))
         {
-            return ToolResult<SampleOutput>.Ok(new SampleOutput(null, SampleDepth(request, latitude, longitude), null));
+            var charted = SampleDepth(request, latitude, longitude);
+            if (request.MinDepthMeters is not null)
+            {
+                charted = await Task.Run(() => WithNavigability(charted, request, cancellationToken), cancellationToken).ConfigureAwait(false);
+            }
+
+            return ToolResult<SampleOutput>.Ok(new SampleOutput(null, charted, null));
         }
 
         var coverage = await SampleCoverageAsync(request, quantity, latitude, longitude, cancellationToken).ConfigureAwait(false);
@@ -371,6 +413,11 @@ public sealed class SampleTool
         }
 
         var quantityOrSpec = request.Quantity ?? QuantityOf(request.Spec!.Value);
+        if (ValidateNavigability(request, quantityOrSpec) is { } navigability)
+        {
+            return navigability;
+        }
+
         if (quantityOrSpec == SampleQuantity.Depth && !IsS102(request.Spec)
             && request.Times is TimeQuery.Range or TimeQuery.Series)
         {
@@ -378,6 +425,82 @@ public sealed class SampleTool
         }
 
         return null;
+    }
+
+    private static InvalidArgument? ValidateNavigability(SampleRequest request, SampleQuantity quantity)
+    {
+        if (request.MinDepthMeters is null)
+        {
+            return request.ClearanceMeters is not null
+                ? new InvalidArgument("clearanceMeters", "give minDepthMeters with it")
+                : request.SearchRadiusMeters is not null
+                    ? new InvalidArgument("searchRadiusMeters", "give minDepthMeters with it")
+                    : null;
+        }
+
+        if (quantity != SampleQuantity.Depth || IsS102(request.Spec) || request.Polyline is not null)
+        {
+            return new InvalidArgument("minDepthMeters", "applies to quantity depth at a point, without an S-102 spec");
+        }
+
+        if (!double.IsFinite(request.MinDepthMeters.Value))
+        {
+            return new InvalidArgument("minDepthMeters", "must be a number of metres");
+        }
+
+        if (request.ClearanceMeters is { } clearance && (!double.IsFinite(clearance) || clearance < 0))
+        {
+            return new InvalidArgument("clearanceMeters", "must be zero or more metres");
+        }
+
+        if (request.SearchRadiusMeters is { } radius && (!double.IsFinite(radius) || radius <= 0 || radius > NavigableSnap.MaxSearchRadiusMeters))
+        {
+            return new InvalidArgument("searchRadiusMeters", $"must be more than 0 and at most {NavigableSnap.MaxSearchRadiusMeters:0} m");
+        }
+
+        return null;
+    }
+
+    private ChartedDepthSampleResult WithNavigability(ChartedDepthSampleResult sample, SampleRequest request, CancellationToken cancellationToken)
+    {
+        var sources = _sources.Get(_catalog.Datasets);
+        var radius = request.SearchRadiusMeters ?? NavigableSnap.DefaultSearchRadiusMeters;
+        var snap = NavigableSnap.Snap(
+            sources,
+            new GeoPosition(sample.Latitude, sample.Longitude),
+            new NavigableSnapRequest(request.MinDepthMeters!.Value, request.ClearanceMeters ?? 0, radius),
+            cancellationToken);
+        return sample with
+        {
+            Navigable = snap.Status == NavigableSnapStatus.Navigable,
+            NotNavigableReason = snap.Reason,
+            NearestNavigable = Nearest(snap, sources, radius),
+        };
+    }
+
+    /// <summary>A snap's nearest navigable point as sample and plan_route report it; <c>null</c> when the point didn't move.</summary>
+    internal static NearestNavigablePoint? Nearest(NavigableSnapResult snap, RouteCheckSources sources, double radiusMeters)
+    {
+        switch (snap.Status)
+        {
+            case NavigableSnapStatus.Moved when snap.Position is { } to:
+                var at = sources.Depth?.Sample(to);
+                return new NearestNavigablePoint(
+                    Math.Round(to.Latitude, 7),
+                    Math.Round(to.Longitude, 7),
+                    snap.DepthMeters,
+                    at is null ? null : ToValue(at),
+                    snap.ClearanceMeters,
+                    snap.DistanceMeters,
+                    snap.BearingDegrees);
+            case NavigableSnapStatus.NotFound:
+                return new NearestNavigablePoint(
+                    null,
+                    null,
+                    Reason: FormattableString.Invariant($"Nothing within {radiusMeters:0} m is charted water at least the minimum depth with the clearance asked for. Widen searchRadiusMeters (at most {NavigableSnap.MaxSearchRadiusMeters:0}), or lower the depth or clearance."));
+            default:
+                return null;
+        }
     }
 
     // A spec with no quantity of its own is sampled as it is, under the
@@ -527,7 +650,7 @@ public sealed class SampleTool
         return new ChartedDepthSampleResult(position.Latitude, position.Longitude, Snake(mask), value, at.ToUniversalTime(), waterLevel, available);
     }
 
-    private static ChartedDepthValue ToValue(ChartedDepth depth)
+    internal static ChartedDepthValue ToValue(ChartedDepth depth)
     {
         var isArea = depth.Kind is ChartedDepthKind.DepthArea or ChartedDepthKind.DredgedArea;
         var isGrid = depth.Kind == ChartedDepthKind.Bathymetry;

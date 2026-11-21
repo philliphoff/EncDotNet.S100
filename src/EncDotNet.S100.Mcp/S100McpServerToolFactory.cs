@@ -190,7 +190,12 @@ internal static class S100McpServerToolFactory
             "requestedTime, datasetId, validFrom, validTo, nearestStep, run, candidates) unless outOfRange=\"nearest\" (then timeStatus " +
             "\"before_start\" or \"after_end\"). Range/series 'times' return a 'series' (truncated=true with coveredFrom/coveredTo when the data " +
             "doesn't span it); depth takes one time. Where no S-104 or S-111 covers and the host has tide predictions on, the nearest tide or " +
-            "current station within 10 km by water is used: 'source' then names it (kind \"prediction\") with a caveat to quote. " +
+            "current station within reach by water (10 km for tide stations, 2 km for current stations) is used: 'source' then names it (kind \"prediction\") with a caveat to quote; " +
+            "beyond every station's reach the error is no_station_within_reach, naming the nearest station and its distance. " +
+            "For depth at a point, minDepthMeters (with optional clearanceMeters and searchRadiusMeters, default 1000 m) also checks the point is navigable " +
+            "(charted water at least that deep, no danger, and that much room from land, shoal, dangers and uncharted water): 'navigable', and when not, " +
+            "'notNavigableReason' (land, uncharted, shoal, hazard, no_depth, too_close) and 'nearestNavigable' (latitude, longitude, depthMeters, depth source, " +
+            "clearanceMeters, distanceMeters, bearingDegrees; or a 'reason' when nothing in the radius qualifies). " +
             "'spec' pins one product (S-102 depth means bathymetry only). A polyline returns 'samples' in order, each with legIndex, vertexIndex, " +
             "distanceMeters and its result, or an 'error' where that point has none; spacingMeters adds points between vertices along each rhumb-line " +
             "leg (at most " + SampleTool.MaxProfileSamples + " samples); for depth, 'shoalest' names the shallowest sample. CAP warnings are areas: use " +
@@ -205,6 +210,9 @@ internal static class S100McpServerToolFactory
                    [Description("Optional UTC ISO-8601 time: the time step for water level, current and weather (the first step when omitted), and the time of the water level for depth.")] DateTimeOffset? time = null,
                    [Description("Optional temporal query JSON envelope: {\"kind\":\"instant\",\"t\":\"…\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"} or {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Takes precedence over 'time'; depth takes an instant only.")] string? times = null,
                    [Description(OutOfRangeDescription)] string? outOfRange = null,
+                   [Description("For depth at a point: the least charted depth in metres the point needs (e.g. draft plus margin, or the safety contour). When the point fails, the result adds 'nearestNavigable'.")] double? minDepthMeters = null,
+                   [Description("With minDepthMeters: the room wanted round the point, in metres, from land, shoal water, dangers and uncharted water. Default 0.")] double? clearanceMeters = null,
+                   [Description("With minDepthMeters: how far to look for a navigable point, in metres. Default 1000, at most 20000.")] double? searchRadiusMeters = null,
                    CancellationToken ct = default) =>
             DispatchAsync(async () =>
             {
@@ -218,7 +226,10 @@ internal static class S100McpServerToolFactory
                         spacingMeters,
                         time,
                         ParseTimeQuery(times),
-                        ParseOutOfRange(outOfRange)),
+                        ParseOutOfRange(outOfRange),
+                        minDepthMeters,
+                        clearanceMeters,
+                        searchRadiusMeters),
                     ct).ConfigureAwait(false);
                 return result.TryGetValue(out var output)
                     ? ToolResult<object>.Ok(output.Payload)

@@ -626,6 +626,33 @@ uncharted ground counts as water, so with no chart the distance is a
 straight line. `RouteCheckSources.WaterMask` carries the mask, for the
 adjusted-area edge to be clipped to as well.
 
+## Navigable water
+
+`NavigabilityGrid.Build` lays a regular grid over a box and classes each
+cell from the route-check sources: navigable, shoal (shallower than the
+minimum depth), hazard (a charted danger in it), land, uncharted, or water
+with no depth. A cell's depth is the least at its centre and corners, with
+the finest chart cell winning where cells overlap. The grid gives each
+navigable cell's clearance to the nearest cell that isn't, its connected
+area, and whether two positions are joined by water.
+
+`NavigableSnap.Snap` answers "is this spot navigable, and if not, where is
+the nearest that is?" for a minimum depth and a clearance. It builds a grid
+round the point, or uses one you pass, and returns why the point fails
+(`land`, `uncharted`, `shoal`, `hazard`, `no_depth` or `too_close`) and the
+nearest qualifying cell's centre, depth, clearance, distance and bearing.
+A point it moves to has one cell more room than asked for, so a check on
+another grid finds it navigable too.
+
+```csharp
+var snap = NavigableSnap.Snap(sources, new GeoPosition(48.660, -123.140),
+    new NavigableSnapRequest(MinimumDepthMeters: 3, ClearanceMeters: 50));
+if (snap.Status == NavigableSnapStatus.Moved)
+{
+    Console.WriteLine($"{snap.Reason}: moved {snap.DistanceMeters} m on {snap.BearingDegrees}°");
+}
+```
+
 ## Water level across an area
 
 An `IWaterLevelField` is the water level to apply across an area for one time
