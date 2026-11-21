@@ -515,8 +515,9 @@ internal static class S100McpServerToolFactory
             "(window.from/to, or the S-104 range). With weather.maxWindKnots or weather.maxWaveHeightMeters (or the route's own limits) the " +
             "weather check tests loaded GRIB2/NetCDF forecasts along the route, and loaded NHC advisories are tested as weather.cyclones " +
             "says. window.constraints adds the timing check (result: timing): tidal gates, leg current limits and arrival constraints at each departure, " +
-            "with applyCurrents for running times with predicted currents, and the windows that meet them all. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
-            "uses each leg's XTDs, draft, speed and UKC. SOG is the entered speed (S-111 is not applied). Not for navigation.";
+            "with applyCurrents for running times with currents, and the windows that meet them all. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
+            "uses each leg's XTDs, draft, speed and UKC. The speed is over the ground unless vessel.speedThroughWater (or applyCurrents) says it's through the water: " +
+            "then every check's ETAs add the current along the track (S-111, else current predictions; result: currents). Not for navigation.";
 
         // The schema and the binding come from CheckRouteRequest itself, so
         // every parameter the request takes reaches the tool.

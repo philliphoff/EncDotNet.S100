@@ -685,7 +685,17 @@ squat + required UKC.
 These `vessel` values override every leg's value:
 
 - `draftMeters`. With a draft on every leg, the clearance check runs.
-- `speedKnots`: the speed over ground. S-111 currents aren't applied.
+- `speedKnots`: the speed, over the ground unless `speedThroughWater` is
+  true.
+- `speedThroughWater`: the speeds are through the water. Every check's ETAs
+  (water level, warnings, areas, weather and timing) then add the current
+  along the track to each 500 m stretch: S-111 where it covers the place and
+  time, else a current-station prediction within reach (with
+  `--tide-predictions`). Where neither has a value at the ETA, the speed is
+  taken as over the ground and the stretch is a `data.no_current_coverage`
+  finding (info). The result's `currents` gives `applied`, the `sources`
+  read (`origin` `s111` or `prediction`) and `withoutCurrentNm`; it's `null`
+  with speeds over the ground. Set across the track isn't applied.
 - `squatMeters`: a fixed allowance; it isn't modelled from speed.
 - `requiredUkcMeters`: when unset, the clearance check uses 0 m and sets
   `noMarginSet`.
@@ -699,10 +709,9 @@ departure and every swept departure against passage timing constraints and
 returns the result as `timing`. It needs a speed on every leg; without
 `from` and `to` it sweeps the 24 hours from `departure`.
 
-- `applyCurrents`: the speeds are through the water. The timing check adds
-  the current along the track to each 500 m stretch's speed, so its ETAs and
-  running times include the stream. The other checks still treat the speed
-  as over the ground.
+- `applyCurrents`: the speeds are through the water, as
+  `vessel.speedThroughWater` says: the timing check's ETAs and running times,
+  and every other check's ETAs, include the stream.
 - `gates`: tidal gates, each at a `waypoint` (zero-based) or a `latitude`
   and `longitude` snapped to the track, with a `station` (a current station
   id or name, as `predict_current` takes) or the nearest station that
@@ -716,9 +725,10 @@ returns the result as `timing`. It needs a speed on every leg; without
 - `arrivalTide`: `{minMeters?, maxMeters?}`, the water level at the arrival
   waypoint at the ETA (S-104, else tide predictions).
 
-Currents come from current-station predictions, so they need
-`--tide-predictions`; without them, `applyCurrents`, leg limits and current
-gates leave the check `partial` with `currents_missing`. A station reaches
+Currents come from loaded S-111 and, where it doesn't cover the place and
+time, current-station predictions (`--tide-predictions`); without either,
+`applyCurrents`, leg limits and current gates leave the check `partial`
+with `currents_missing`. Gates that name a station read its prediction. A station reaches
 2 km by water (`--current-station-reach`). Predictions are the astronomical
 tidal current only: quote `timing.caveat` with the times.
 

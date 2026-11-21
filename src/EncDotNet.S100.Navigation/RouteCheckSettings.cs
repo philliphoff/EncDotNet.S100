@@ -102,6 +102,19 @@ public sealed class RouteCheckSettings
     public PassageTimingSettings? Timing { get; init; }
 
     /// <summary>
+    /// Whether the legs' speeds are through the water (#1033): every check's
+    /// ETAs (water level, warnings, areas, weather and timing) then add the
+    /// current along the track from <see cref="RouteCheckSources.Currents"/>.
+    /// Without currents, or where none covers the ETA, the speed stands as
+    /// over the ground. <see cref="PassageTimingSettings.ApplyCurrents"/>
+    /// says the same.
+    /// </summary>
+    public bool SpeedsThroughWater { get; init; }
+
+    /// <summary>Whether the speeds are through the water, by either setting.</summary>
+    internal bool AppliesCurrents => SpeedsThroughWater || Timing?.ApplyCurrents == true;
+
+    /// <summary>
     /// The wind and wave limits for the weather check, or <c>null</c>. Each
     /// value set here replaces the plan's (<see cref="PassagePlan.VesselLimits"/>);
     /// a value set in neither isn't checked.

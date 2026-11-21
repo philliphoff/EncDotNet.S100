@@ -44,7 +44,21 @@ public interface IRouteCurrentSeries
     /// <param name="time">The time.</param>
     /// <returns>The current, or <c>null</c>.</returns>
     RouteCurrent? At(DateTimeOffset time);
+
+    /// <summary>
+    /// The current at a time with what it was read from, which can differ
+    /// from <see cref="Source"/> when the series falls back to another
+    /// source at some times (such as a prediction past an S-111 forecast).
+    /// </summary>
+    /// <param name="time">The time.</param>
+    /// <returns>The reading, or <c>null</c>.</returns>
+    RouteCurrentReading? Read(DateTimeOffset time) => At(time) is { } current ? new RouteCurrentReading(current, Source) : null;
 }
+
+/// <summary>A current read at a time, and what it was read from.</summary>
+/// <param name="Current">The current.</param>
+/// <param name="Source">The dataset or station it was read from.</param>
+public sealed record RouteCurrentReading(RouteCurrent Current, RouteCurrentSourceInfo Source);
 
 /// <summary>A current station: a series at a fixed place that also knows its slack waters.</summary>
 public interface IRouteCurrentStation : IRouteCurrentSeries

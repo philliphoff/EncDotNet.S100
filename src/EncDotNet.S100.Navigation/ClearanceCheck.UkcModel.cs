@@ -44,13 +44,16 @@ public sealed partial class ClearanceCheck
         private readonly IChartedDepthSource _depth;
         private readonly IWaterLevelSource _waterLevel;
         private readonly PassageCheckOptions _options;
+        private readonly IRouteCurrentSource? _currents;
 
         /// <summary>Creates the model over the given sources.</summary>
         /// <param name="depth">The charted-depth source.</param>
         /// <param name="waterLevel">The water-level source.</param>
         /// <param name="options">Tuning.</param>
-        public UkcModel(IChartedDepthSource depth, IWaterLevelSource waterLevel, PassageCheckOptions options)
+        /// <param name="currents">The currents added to the speeds for the ETAs (#1033), or <c>null</c> for speeds over the ground.</param>
+        public UkcModel(IChartedDepthSource depth, IWaterLevelSource waterLevel, PassageCheckOptions options, IRouteCurrentSource? currents = null)
         {
+            _currents = currents;
             ArgumentNullException.ThrowIfNull(depth);
             ArgumentNullException.ThrowIfNull(waterLevel);
             _depth = depth;
@@ -146,7 +149,7 @@ public sealed partial class ClearanceCheck
             }
 
             RequireDrafts(plan.Legs, nameof(plan));
-            var schedule = PassageSchedule.Compute(plan, settings);
+            var schedule = PassageSchedule.Compute(plan.Legs, plan.EffectiveDeparture(settings), _currents);
             var samples = new UkcSample[profile.Points.Count];
             for (var i = 0; i < samples.Length; i++)
             {
@@ -223,7 +226,7 @@ public sealed partial class ClearanceCheck
             for (var departure = from; departure <= to; departure += step)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var schedule = PassageSchedule.Compute(legs, departure);
+                var schedule = PassageSchedule.Compute(legs, departure, _currents);
                 double? lowest = null;
                 for (var i = 0; i < evals.Length; i++)
                 {

@@ -253,6 +253,7 @@ public sealed class CheckRouteTool
                     MustReviewInside = cyclones.MustReviewInside is { } inside ? MustReviewInside(inside) : TropicalCycloneRadius.Knots50,
                 },
             Timing = window?.Constraints is { } constraints ? Timing(constraints) : null,
+            SpeedsThroughWater = vessel?.SpeedThroughWater ?? false,
             DepartureWindow = window is null ? null
                 : window.From is { } from && window.To is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(window.StepMinutes))
                 : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(window.StepMinutes), MaxWindowDepartures),

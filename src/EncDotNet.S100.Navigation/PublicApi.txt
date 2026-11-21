@@ -292,6 +292,7 @@ namespace EncDotNet.S100.Navigation
     {
         EncDotNet.S100.Navigation.RouteCurrentSourceInfo Source { get; }
         EncDotNet.S100.Navigation.RouteCurrent? At(System.DateTimeOffset time);
+        EncDotNet.S100.Navigation.RouteCurrentReading? Read(System.DateTimeOffset time);
     }
     public interface IRouteCurrentSource
     {
@@ -531,6 +532,13 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.PassageSources Sources { get; init; }
         public EncDotNet.S100.Navigation.PassageVerdict Verdict { get; init; }
     }
+    public sealed class PassageCurrentGap : System.IEquatable<EncDotNet.S100.Navigation.PassageCurrentGap>
+    {
+        public PassageCurrentGap(int LegIndex, double StartAlongLegMeters, double EndAlongLegMeters) { }
+        public double EndAlongLegMeters { get; init; }
+        public int LegIndex { get; init; }
+        public double StartAlongLegMeters { get; init; }
+    }
     public static class PassageGeodesy
     {
         public const double EarthRadiusMeters = 6371008.8D;
@@ -568,7 +576,11 @@ namespace EncDotNet.S100.Navigation
     }
     public sealed class PassageSchedule
     {
+        public const double CurrentStretchMeters = 500D;
         public System.DateTimeOffset? Arrival { get; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageCurrentGap> CurrentGaps { get; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCurrentSourceInfo> CurrentSources { get; }
+        public bool CurrentsApplied { get; }
         public System.DateTimeOffset Departure { get; }
         public System.TimeSpan? Duration { get; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.LegSchedule> Legs { get; }
@@ -577,6 +589,8 @@ namespace EncDotNet.S100.Navigation
         public System.DateTimeOffset TimeAt(int legIndex, double distanceAlongLegMeters) { }
         public static EncDotNet.S100.Navigation.PassageSchedule Compute(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings) { }
         public static EncDotNet.S100.Navigation.PassageSchedule Compute(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.DateTimeOffset departure) { }
+        public static EncDotNet.S100.Navigation.PassageSchedule Compute(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, EncDotNet.S100.Navigation.RouteCheckSources sources) { }
+        public static EncDotNet.S100.Navigation.PassageSchedule Compute(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.DateTimeOffset departure, EncDotNet.S100.Navigation.IRouteCurrentSource? currents) { }
     }
     public sealed class PassageSources : System.IEquatable<EncDotNet.S100.Navigation.PassageSources>
     {
@@ -878,6 +892,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Quantities.Length? NearbyDistance { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyContour { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyDepth { get; init; }
+        public bool SpeedsThroughWater { get; init; }
         public EncDotNet.S100.Navigation.PassageTimingSettings? Timing { get; init; }
         public EncDotNet.S100.Quantities.Length? TrackClearance { get; init; }
         public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
@@ -945,6 +960,12 @@ namespace EncDotNet.S100.Navigation
     {
         S111 = 0,
         Prediction = 1,
+    }
+    public sealed class RouteCurrentReading : System.IEquatable<EncDotNet.S100.Navigation.RouteCurrentReading>
+    {
+        public RouteCurrentReading(EncDotNet.S100.Navigation.RouteCurrent Current, EncDotNet.S100.Navigation.RouteCurrentSourceInfo Source) { }
+        public EncDotNet.S100.Navigation.RouteCurrent Current { get; init; }
+        public EncDotNet.S100.Navigation.RouteCurrentSourceInfo Source { get; init; }
     }
     public sealed class RouteCurrentSourceInfo : System.IEquatable<EncDotNet.S100.Navigation.RouteCurrentSourceInfo>
     {
@@ -1069,6 +1090,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode EntersProhibitedArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode LandInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoChartedDepth { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode NoCurrentCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoWaterLevelCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoWeatherCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode OutsideChartCoverage { get; }
@@ -1179,6 +1201,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string MinutesFormat { get; }
         protected virtual string MoreStationsFormat { get; }
         protected virtual string NoChartedDepth { get; }
+        protected virtual string NoCurrentCoverage { get; }
         protected virtual string NoDepthSource { get; }
         protected virtual string NoValue { get; }
         protected virtual string NoWaterLevelCoverage { get; }
@@ -1200,6 +1223,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string Separator { get; }
         protected virtual string SoundingCountFormat { get; }
         protected virtual string SoundingsBelowSafetyContour { get; }
+        protected virtual string SpeedOverGround { get; }
         protected virtual string StretchFromFormat { get; }
         protected virtual string StretchLengthFormat { get; }
         protected virtual string StructureInsideLimits { get; }
