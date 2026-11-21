@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
@@ -34,8 +36,56 @@ public sealed class DescribeFeatureTool
     }
 
     /// <summary>Executes the tool by delegating to the shared service.</summary>
-    public Task<ToolResult<DescribeFeatureResult>> InvokeAsync(
+    public async Task<ToolResult<DescribeFeatureResult>> InvokeAsync(
         DescribeFeatureRequest request,
-        CancellationToken cancellationToken = default) =>
-        _service.InvokeAsync(request, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var result = await _service.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+        return request.IncludeGeometry || !result.TryGetValue(out var value)
+            ? result
+            : ToolResult<DescribeFeatureResult>.Ok(value! with { Attributes = WithoutCoordinates(value.Attributes) });
+    }
+
+    /// <summary>
+    /// The attribute payload with its <c>geometry</c>'s coordinates replaced
+    /// by counts (#1628): the primitive and bounding box stay, and
+    /// <c>coordinateCount</c>, <c>interiorRingCount</c> and
+    /// <c>coordinatesOmitted</c> say what was left out.
+    /// </summary>
+    /// <param name="attributes">The payload, as <see cref="DescribeFeatureResult.Attributes"/>.</param>
+    /// <returns>The trimmed payload; the payload itself when it has no geometry object.</returns>
+    public static JsonElement WithoutCoordinates(JsonElement attributes)
+    {
+        if (attributes.ValueKind != JsonValueKind.Object
+            || JsonNode.Parse(attributes.GetRawText()) is not JsonObject root
+            || root["geometry"] is not JsonObject geometry)
+        {
+            return attributes;
+        }
+
+        var trimmed = new JsonObject();
+        foreach (var (key, node) in geometry)
+        {
+            switch (key)
+            {
+                case "coordinates":
+                    trimmed["coordinateCount"] = node is JsonArray points ? points.Count : 0;
+                    break;
+                case "interiorRings":
+                    trimmed["interiorRingCount"] = node is JsonArray rings ? rings.Count : 0;
+                    break;
+                case "depths":
+                    break;
+                default:
+                    trimmed[key] = node?.DeepClone();
+                    break;
+            }
+        }
+
+        trimmed["coordinatesOmitted"] = true;
+        root["geometry"] = trimmed;
+        using var document = JsonDocument.Parse(root.ToJsonString());
+        return document.RootElement.Clone();
+    }
 }

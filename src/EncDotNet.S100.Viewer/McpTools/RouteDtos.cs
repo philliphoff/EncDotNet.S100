@@ -152,7 +152,8 @@ internal sealed record RouteDetail(
     [property: Description("True for a received route (from an opened S-421 dataset): read-only, not saved; edits fail with route_read_only. Copy it to edit.")] bool ReadOnly = false,
     [property: Description("Where a received route came from, or null for an owned route.")] RouteSourceDto? Source = null,
     [property: Description("How the map draws the route: \"planning\" (the route renderer) or \"native\" (its S-421 dataset's own portrayal). Set it with set_route_display_mode.")] string DisplayMode = "planning",
-    [property: Description("What each passage value is: a check setting (draft, squat, required UKC, departure: yours, kept locally, editable on any route) or a route value (speed, cross-track: route content, read-only on a received route), and whether it comes from the route's file.")] IReadOnlyList<PassageFieldDto>? PassageFields = null);
+    [property: Description("What each passage value is: a check setting (draft, squat, required UKC, departure: yours, kept locally, editable on any route) or a route value (speed, cross-track: route content, read-only on a received route), and whether it comes from the route's file.")] IReadOnlyList<PassageFieldDto>? PassageFields = null,
+    [property: Description("From append_waypoint, insert_waypoint and move_waypoint only: the water at the placed point as sample reads it (charted depth, and with a minimum depth whether it's navigable and the nearest point that is). Null from other tools.")] WaypointWaterDto? Water = null);
 
 /// <summary>Result of list_routes.</summary>
 [Description("Result of list_routes: every route in the collection plus the active route id.")]

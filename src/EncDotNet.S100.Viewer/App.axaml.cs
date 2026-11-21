@@ -624,7 +624,13 @@ public partial class App : Application
             new McpTools.Groups.RouteMcpToolGroup(
                 routes,
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
-                sp.GetRequiredService<ClearanceViewModel>()),
+                sp.GetRequiredService<ClearanceViewModel>(),
+                // #1628: waypoint edits report the water as sample reads it.
+                new McpTools.WaypointWater(new EncDotNet.S100.Mcp.Tools.SampleTool(
+                    sp.GetRequiredService<ViewerDatasetCatalog>(),
+                    new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
+                    sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+                    sp.GetRequiredService<TimeProvider>()))),
             new McpTools.Groups.PassageCheckMcpToolGroup(
                 routes,
                 passageCheck,

@@ -104,7 +104,7 @@ These read an `IDatasetCatalog` and never change it.
 | `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. |
 | `CountFeaturesTool` | `count_features` | Counts features by type, for each dataset. |
 | `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. `FinestOnly` keeps a chart-cell hit only where its cell is in the finest band at the feature (`CellScaleRanking.FinestBand`). |
-| `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. |
+| `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. `IncludeGeometry = false` replaces an S-101 geometry's coordinates with counts (`WithoutCoordinates`). |
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
 | `SampleTool` | `sample` | Samples a quantity at a point or along a polyline (vertices, or every `SpacingMeters`). `Depth` is charted depth by the route check's rule (S-102, else the finest S-101 cell), with the water mask and, at a time, the water level and available depth, from the host's `RouteCheckSourceCache`. `WaterLevel`, `Current` and `Weather` sample S-104, S-111 and GRIB2 or NetCDF at one time or over a time window, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). A point along a polyline with no value has an error instead of failing the whole call. |
 | `PlanRouteTool` | `plan_route` | Plans a route through stops with `RoutePlanner` on the navigability grid, moving stops to navigable water, then checks it with `CheckRouteTool` and summarises the check. With `RouteName` and a host `IPassageRouteWriter`, creates the route. |
@@ -319,3 +319,11 @@ A `DatasetId` is a plain JSON string in both directions, through
 `DatasetIdJsonConverter`, so an ID from one tool's result can go straight into
 another tool's request. A wrapped `{"value":"…"}` ID is still accepted as
 input.
+
+## Positions
+
+Tools take a position as `latitude` and `longitude` in decimal degrees,
+WGS-84. `PositionArguments.Resolve` accepts older alias pairs (`lat`/`lon`,
+`centerLat`/`centerLon`) beside them and refuses a conflicting or half-given
+pair; `PositionArguments.TryRead` reads a position value given as
+`{"latitude", "longitude"}`, `{"lat", "lon"}` or a `[lat, lon]` pair.

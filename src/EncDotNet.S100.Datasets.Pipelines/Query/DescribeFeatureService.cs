@@ -9,9 +9,11 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// <summary>Request payload for <see cref="DescribeFeatureService"/>.</summary>
 /// <param name="DatasetId">Stable dataset identifier returned by list_datasets.</param>
 /// <param name="FeatureId">GML id of the feature within the dataset.</param>
+/// <param name="IncludeGeometry">Whether the <c>describe_feature</c> tool keeps the geometry's coordinates (#1628); the service itself always includes them.</param>
 public sealed record DescribeFeatureRequest(
     [property: Description("Stable dataset identifier returned by list_datasets.")] DatasetId DatasetId,
-    [property: Description("GML id of the feature within the dataset.")] string FeatureId);
+    [property: Description("GML id of the feature within the dataset.")] string FeatureId,
+    [property: Description("Include the feature's coordinates. False keeps the geometry's primitive and bounding box and replaces the coordinates with counts: an S-101 area or sounding group can run to hundreds of kilobytes. Default true.")] bool IncludeGeometry = true);
 
 /// <summary>Result of <see cref="DescribeFeatureService"/>.</summary>
 /// <param name="Spec">The spec the feature was parsed from.</param>

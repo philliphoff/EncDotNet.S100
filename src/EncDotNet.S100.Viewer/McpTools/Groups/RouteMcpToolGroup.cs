@@ -11,12 +11,15 @@ internal sealed class RouteMcpToolGroup : IViewerMcpToolGroup
     private readonly RoutesService _routes;
     private readonly RouteExchangeService _routeExchange;
     private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel _clearance;
+    private readonly WaypointWater? _water;
 
     public RouteMcpToolGroup(
         RoutesService routes,
         RouteExchangeService routeExchange,
-        EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel clearance)
+        EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel clearance,
+        WaypointWater? water = null)
     {
+        _water = water;
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(routeExchange);
         ArgumentNullException.ThrowIfNull(clearance);
@@ -40,9 +43,9 @@ internal sealed class RouteMcpToolGroup : IViewerMcpToolGroup
         yield return ListRoutesMcpAdapter.Create(new ListRoutesTool(routes, invoker));
         yield return GetRouteMcpAdapter.Create(new GetRouteTool(routes, invoker));
         yield return DeleteRouteMcpAdapter.Create(new DeleteRouteTool(routes, invoker));
-        yield return AppendWaypointMcpAdapter.Create(new AppendWaypointTool(routes, invoker));
-        yield return InsertWaypointMcpAdapter.Create(new InsertWaypointTool(routes, invoker));
-        yield return MoveWaypointMcpAdapter.Create(new MoveWaypointTool(routes, invoker));
+        yield return AppendWaypointMcpAdapter.Create(new AppendWaypointTool(routes, invoker, _water));
+        yield return InsertWaypointMcpAdapter.Create(new InsertWaypointTool(routes, invoker, _water));
+        yield return MoveWaypointMcpAdapter.Create(new MoveWaypointTool(routes, invoker, _water));
         yield return DeleteWaypointMcpAdapter.Create(new DeleteWaypointTool(routes, invoker));
         yield return SetLegAttributesMcpAdapter.Create(new SetLegAttributesTool(routes, invoker));
         yield return SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(routes, invoker));

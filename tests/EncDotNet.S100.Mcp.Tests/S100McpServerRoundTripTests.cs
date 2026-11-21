@@ -480,6 +480,24 @@ public class S100McpServerRoundTripTests
         }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(precise.IsError ?? false, $"query_features returned an error: {DumpText(precise)}");
         Assert.Equal(0, ParseSingleJson(precise)["totalCount"]!.GetValue<int>());
+
+        // #1628: latitude and longitude stand in for a point query.
+        var shorthand = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 1.5,
+            ["longitude"] = 1.5,
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(shorthand.IsError ?? false, $"query_features returned an error: {DumpText(shorthand)}");
+        Assert.Equal(1, ParseSingleJson(shorthand)["totalCount"]!.GetValue<int>());
+
+        var both = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = pointQuery,
+            ["latitude"] = 1.5,
+            ["longitude"] = 1.5,
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(both.IsError ?? false);
+        Assert.Contains("invalid_argument", DumpText(both));
     }
 
     [Fact]

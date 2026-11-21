@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.MutableTools;
+using EncDotNet.S100.Mcp.Tools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -22,8 +23,8 @@ internal static class SetViewportMcpAdapter
 
     private const string Description =
         "Mutates the live viewer's map navigator to a specific WGS-84 viewport. Supply EXACTLY ONE " +
-        "of a bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale " +
-        "(centerLat/centerLon/scaleDenominator); mixing forms is rejected. Coordinates are decimal " +
+        "of a bbox (south/west/north/east), centre+zoom (centerLatitude/centerLongitude/zoom), or centre+scale " +
+        "(centerLatitude/centerLongitude/scaleDenominator; centerLat/centerLon are accepted as older names); mixing forms is rejected. Coordinates are decimal " +
         "degrees. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map " +
         "scale (e.g. 50000), converted at the centre latitude the same way the status bar reads it. " +
         "The result echoes the applied scaleDenominator read back from the live map. An optional rotation (degrees clockwise, 0 = north-up) is applied on top of the " +
@@ -45,16 +46,18 @@ internal static class SetViewportMcpAdapter
             [Description("Bounding-box west edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/north/east; mutually exclusive with centre+zoom. Greater than east for a box that crosses the antimeridian.")] double? west = null,
             [Description("Bounding-box north edge in decimal degrees (WGS-84). Must be paired with south/west/east; mutually exclusive with centre+zoom.")] double? north = null,
             [Description("Bounding-box east edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/west/north; mutually exclusive with centre+zoom. Past 180 frames the world copy east of the antimeridian.")] double? east = null,
-            [Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLat = null,
-            [Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy. Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLon = null,
-            [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? zoom = null,
+            [Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLongitude and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLatitude = null,
+            [Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy. Must be paired with centerLatitude and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLongitude = null,
+            [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLatitude/centerLongitude; mutually exclusive with scaleDenominator and the bbox form.")] double? zoom = null,
             [Description("Optional clockwise viewport rotation in degrees (0 = north-up), applied on top of the bbox or centre+zoom frame. Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? rotation = null,
-            [Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form.")] double? scaleDenominator = null,
+            [Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLatitude/centerLongitude; mutually exclusive with zoom and the bbox form.")] double? scaleDenominator = null,
             [Description("Optional animation duration in milliseconds (0 to 10000) for the centre forms: the map animates to the view instead of jumping. The echo then reports the target.")] long? durationMs = null,
+            [Description("Alias of centerLatitude (older name).")] double? centerLat = null,
+            [Description("Alias of centerLongitude (older name).")] double? centerLon = null,
             CancellationToken ct = default) =>
-            DispatchAsync(() => inner.InvokeAsync(
-                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation, scaleDenominator, durationMs),
-                ct));
+            DispatchAsync(() => PositionArguments.Resolve(centerLatitude, centerLongitude, centerLat, centerLon, ("centerLatitude", "centerLongitude", "centerLat", "centerLon"), out var centre) is { } bad
+                ? Task.FromResult(ToolResult<SetViewportResult>.Err(bad))
+                : inner.InvokeAsync(new SetViewportRequest(south, west, north, east, centre?.Latitude, centre?.Longitude, zoom, rotation, scaleDenominator, durationMs), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
