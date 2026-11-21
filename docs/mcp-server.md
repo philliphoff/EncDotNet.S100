@@ -370,7 +370,27 @@ the hour round it), and it adds a `source`:
 
 A value from a loaded dataset has no `source`. A `series` query is predicted
 at each instant; a `range` query every 30 minutes, at most 2,000 heights.
-With predictions off, or no station in reach, the S-104 error stands.
+With predictions off, the S-104 error stands.
+
+With predictions on and no station in reach, `sample` returns
+`no_station_within_reach` rather than `no_dataset_covers_point`, so an agent
+can tell "out of every station's reach" from "nothing loaded here". It carries
+the `quantity` (`water_level` or `current`), the `reachMeters` that applies,
+and the `nearestStation` that can be predicted: its `id`, `name`, position,
+`distanceMeters`, and `distanceByWater` (false when it's a straight line,
+past 20 km). An S-104 or S-111 error that says more, such as
+`time_out_of_range` or `no_data_at_point`, still stands. Along a `polyline`,
+each sample out of reach has this `error`.
+
+```json
+{
+  "code": "no_station_within_reach",
+  "message": "No current station is within reach of 48.399, -122.587: the nearest, Deception Pass (Narrows) (PUG1701_33), is 4.8 km away by water, beyond the 2 km a current station reaches. Load an S-111 dataset that covers the point, or predict at the station with predict_current.",
+  "quantity": "current",
+  "reachMeters": 2000,
+  "nearestStation": { "id": "PUG1701_33", "name": "Deception Pass (Narrows)", "latitude": 48.4065, "longitude": -122.6431, "distanceMeters": 4790, "distanceByWater": true }
+}
+```
 
 The same switch fills S-111 gaps, with a much shorter reach.
 `sample` for current (`S-111`) falls back to the
@@ -378,7 +398,8 @@ predicted tidal current at the current station nearest by water within
 **2 km**, the shallowest bin where several share a place. Tide heights change
 slowly over 10 km, but tidal currents don't: a station in a narrows such as
 Deception Pass says little about the open water either side of it, so a point
-farther than that from every current station keeps the S-111 error. Change the
+farther than that from every current station returns
+`no_station_within_reach`. Change the
 reach with `s100 mcp serve --current-station-reach <metres>` (or, in code,
 `RouteCheckSourceOptions.MaxCurrentStationDistanceMeters`). The tide-station
 reach stays 10 km.

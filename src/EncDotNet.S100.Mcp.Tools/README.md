@@ -212,6 +212,7 @@ is a typed `ToolError` with a stable `Code` and a `Message`.
 | `current_station_not_found` | No current station has the id or name, or a name matches several stations (`candidates`). |
 | `no_current_station_near` | No predictable current station is within the radius. |
 | `current_station_not_predictable` | The current station's constituents, or its reference station, are missing. |
+| `no_station_within_reach` | `sample` tried a tide or current prediction and no station reaches the point; `nearestStation` names the nearest and its distance. |
 
 ## `IDatasetCatalog`
 

@@ -33,6 +33,7 @@ internal sealed class PredictedWaterLevelSampler
     private readonly IDatasetCatalog _catalog;
     private readonly RouteCheckSourceCache _sources;
     private readonly TimeProvider _time;
+    private readonly StationReach _beyond = new();
 
     public PredictedWaterLevelSampler(IDatasetCatalog catalog, RouteCheckSourceCache sources, TimeProvider time)
     {
@@ -41,7 +42,11 @@ internal sealed class PredictedWaterLevelSampler
         _time = time;
     }
 
-    /// <summary>The predicted sample for the request, or <c>null</c> when predictions are off or no station reaches the point.</summary>
+    /// <summary>
+    /// The predicted sample for the request; a <see cref="NoStationWithinReach"/>
+    /// error when no station reaches the point; or <c>null</c> when predictions
+    /// are off or no station can be predicted.
+    /// </summary>
     public ToolResult<SampleCoverageResult>? Sample(SampleCoverageRequest request)
     {
         if (_sources.TidePredictions is not { } catalogue)
@@ -52,7 +57,14 @@ internal sealed class PredictedWaterLevelSampler
         var source = new TidePredictionWaterLevelSource(catalogue, new WaterReach(mask, _sources.Options.MaxStationDistanceMeters));
         var position = new GeoPosition(request.Latitude, request.Longitude);
         if (source.Locate(position) is not [var series, ..])
-            return null;
+        {
+            var candidates = catalogue.FindNearest(position, 32)
+                .Select(m => (m.Station.Id, (string?)m.Station.Name, m.Station.Position, m.DistanceMeters));
+            return _beyond.Nearest(mask, position, candidates, id => source.SeriesFor(id) is not null) is { } nearest
+                ? ToolResult<SampleCoverageResult>.Err(new NoStationWithinReach(
+                    "water_level", request.Latitude, request.Longitude, _sources.Options.MaxStationDistanceMeters, nearest))
+                : null;
+        }
 
         var info = series.Source;
         if (info.StationId is not { } id || catalogue.Find(id) is not { } station)

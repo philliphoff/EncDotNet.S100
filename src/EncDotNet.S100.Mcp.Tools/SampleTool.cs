@@ -186,10 +186,10 @@ public sealed record SampleProfileEntry(
     [property: Description("Why there is no value here; null when a value was sampled.")] SampleError? Error = null);
 
 /// <summary>Why a sample along a polyline has no value.</summary>
-/// <param name="Code">The error code a point sample would return, such as <c>time_out_of_range</c> or <c>no_dataset_covers_point</c>.</param>
+/// <param name="Code">The error code a point sample would return, such as <c>time_out_of_range</c>, <c>no_station_within_reach</c> or <c>no_dataset_covers_point</c>.</param>
 /// <param name="Message">The matching human-readable message.</param>
 public sealed record SampleError(
-    [property: Description("The error code a point sample here would return, e.g. \"time_out_of_range\", \"out_of_bounds\", \"no_data_at_point\".")] string Code,
+    [property: Description("The error code a point sample here would return, e.g. \"time_out_of_range\", \"out_of_bounds\", \"no_data_at_point\", \"no_station_within_reach\".")] string Code,
     [property: Description("Human-readable message for the error; not localised.")] string Message);
 
 /// <summary>The shoalest depth sample along a polyline.</summary>
@@ -316,12 +316,20 @@ public sealed class SampleTool
             return result;
         }
 
-        return request.Spec.Name switch
+        var predicted = request.Spec.Name switch
         {
-            "S-104" => _predictions.Sample(request) ?? result,
-            "S-111" => _currentPredictions.Sample(request) ?? result,
-            _ => result,
+            "S-104" => _predictions.Sample(request),
+            "S-111" => _currentPredictions.Sample(request),
+            _ => null,
         };
+
+        // Out of every station's reach says more than "nothing covers the
+        // point" (#1627), but less than a dataset that covers it at another
+        // time or has no data in this cell.
+        return predicted is null
+            || (predicted.TryGetError(out var miss) && miss is NoStationWithinReach && error is not (NoDatasetCoversPoint or OutOfBounds))
+            ? result
+            : predicted;
     }
 
     private static ToolError? Validate(SampleRequest request)
@@ -482,7 +490,7 @@ public sealed class SampleTool
         static int Rank(ToolError? error) => error switch
         {
             TimeOutOfRange => 3,
-            NoDataAtPoint or OutOfBounds => 2,
+            NoDataAtPoint or OutOfBounds or NoStationWithinReach => 2,
             NoDatasetCoversPoint => 1,
             _ => 0,
         };

@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Time;
+using EncDotNet.S100.Mcp.Tools.Tides;
 using EncDotNet.S100.Tides.Stations;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
@@ -100,7 +101,10 @@ public sealed class PredictedSampleCoverageTests
         var s102 = await on.SampleCoverageAsync(new SampleCoverageRequest(new SpecRef("S-102", default), 47.605, -122.34), TestContext.Current.CancellationToken);
 
         Assert.IsType<NoDatasetCoversPoint>(Error(offResult));
-        Assert.IsType<NoDatasetCoversPoint>(Error(farResult));
+        var far = Assert.IsType<NoStationWithinReach>(Error(farResult));
+        Assert.Equal("water_level", far.Quantity);
+        Assert.Equal(10_000, far.ReachMeters);
+        Assert.True(far.NearestStation.DistanceMeters > 10_000);
         Assert.IsType<NoDatasetCoversPoint>(Error(s102));
     }
 
@@ -117,7 +121,7 @@ public sealed class PredictedSampleCoverageTests
         Assert.True(result.TryGetValue(out var along));
         Assert.Equal("prediction", along!.Samples[0].Result!.Source!.Kind);
         Assert.Null(along.Samples[1].Result);
-        Assert.Equal("no_dataset_covers_point", along.Samples[1].Error!.Code);
+        Assert.Equal("no_station_within_reach", along.Samples[1].Error!.Code);
     }
 
     private static T Ok<T>(ToolResult<T> result)

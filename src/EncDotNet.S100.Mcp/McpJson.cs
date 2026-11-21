@@ -156,6 +156,7 @@ public static class McpJson
 [JsonSerializable(typeof(CurrentStationNotFound))]
 [JsonSerializable(typeof(NoCurrentStationNear))]
 [JsonSerializable(typeof(CurrentStationNotPredictable))]
+[JsonSerializable(typeof(NoStationWithinReach))]
 // Tool parameter types the SDK binds.
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonElement?))]
