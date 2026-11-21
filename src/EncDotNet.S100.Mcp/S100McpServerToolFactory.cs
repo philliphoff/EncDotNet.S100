@@ -53,7 +53,8 @@ internal static class S100McpServerToolFactory
         SearchFeaturesTool searchFeatures,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps,
-        CheckRouteTool checkRoute)
+        CheckRouteTool checkRoute,
+        PlanRouteTool planRoute)
     {
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListDatasetsTool(listDatasets));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTool(describeFeature));
@@ -68,6 +69,7 @@ internal static class S100McpServerToolFactory
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListSpecsTool(listSpecs));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListTimeStepsTool(listTimeSteps));
         yield return McpToolsets.Assign(McpToolsets.Routes, CreateCheckRouteTool(checkRoute));
+        yield return McpToolsets.Assign(McpToolsets.Routes, CreatePlanRouteTool(planRoute));
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -649,6 +651,111 @@ internal static class S100McpServerToolFactory
 
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
             await DispatchAsync(() => inner.InvokeAsync(ReadCheckRouteRequest(arguments), cancellationToken)).ConfigureAwait(false);
+    }
+
+    private static McpServerTool CreatePlanRouteTool(PlanRouteTool inner)
+    {
+        var description =
+            "Suggests a route between stops for a vessel (from, to, optional via for a whole itinerary in one call) and checks it. " +
+            "Stops that are on land or in water too shallow move to the nearest navigable water (stops[].moved, reason, movedMeters); near a stop " +
+            "(limits.berthRadiusMeters, default 300 m) water down to draft + squat is allowed so the route can reach a berth. Between the stops the " +
+            "route keeps to charted water at least the larger of draft + squat + requiredUkc and the safety contour deep, with no danger or structure " +
+            "(breakwater, pier, pontoon) in it, at least clearanceMeters from anything that isn't, and prefers open water and, with prefer, charted " +
+            "fairways, dredged areas or recommended tracks. It searches the same grid as get_navigability_grid, then keeps few waypoints. Returns the " +
+            "legs (distanceNm, runningMinutes at vessel.speedKnots, least depth and clearance), 'waypoints' in the shape append_waypoint takes, " +
+            "'polyline' to pass to check_route, and with check (default true) a short check_route summary: verdict, counts, mustReviewAwayFromStops " +
+            "and the worst findings. In SoundCharts, routeName creates the route and returns its routeId. No tide gates or currents. " +
+            "Errors: no_route_planned (stop_not_navigable or no_navigable_way). Not for navigation.";
+
+        return McpServerTool.Create(new PlanRouteFunction(inner), new McpServerToolCreateOptions
+        {
+            Name = PlanRouteTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>The <c>plan_route</c> input schema: <see cref="PlanRouteRequest"/>'s properties and descriptions.</summary>
+    internal static JsonElement PlanRouteInputSchema { get; } = CreatePlanRouteInputSchema();
+
+    private static JsonElement CreatePlanRouteInputSchema()
+    {
+        var schema = AIJsonUtilities.CreateJsonSchema(
+            typeof(PlanRouteRequest),
+            serializerOptions: JsonOptions,
+            inferenceOptions: new AIJsonSchemaCreateOptions { IncludeSchemaKeyword = false });
+        var node = JsonNode.Parse(schema.GetRawText())!.AsObject();
+        node["required"] = new JsonArray("from", "to", "vessel");
+        RemoveNullDefaults(node);
+        using var doc = JsonDocument.Parse(node.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>Reads a <see cref="PlanRouteRequest"/> from <c>plan_route</c>'s arguments.</summary>
+    /// <param name="arguments">The call's arguments, by name.</param>
+    /// <returns>The request.</returns>
+    /// <exception cref="JsonException">An argument has the wrong type.</exception>
+    internal static PlanRouteRequest ReadPlanRouteRequest(IEnumerable<KeyValuePair<string, object?>> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        var body = new JsonObject();
+        foreach (var (name, value) in arguments)
+        {
+            var node = value switch
+            {
+                null => null,
+                JsonElement element => JsonNode.Parse(element.GetRawText()),
+                JsonNode n => n.DeepClone(),
+                _ => JsonSerializer.SerializeToNode(value, JsonOptions.GetTypeInfo(value.GetType())),
+            };
+
+            // An object or list sent as JSON text is read as itself.
+            if (node is JsonValue text && text.TryGetValue<string>(out var json) && json.TrimStart() is ['{' or '[', ..]
+                && !string.Equals(name, "routeName", StringComparison.OrdinalIgnoreCase))
+            {
+                node = JsonNode.Parse(json);
+            }
+
+            body[name] = Point(name, node);
+        }
+
+        if (body["from"] is null || body["to"] is null)
+        {
+            throw new ArgumentException("plan_route needs 'from' and 'to'.", body["from"] is null ? "from" : "to");
+        }
+
+        return body.Deserialize(JsonOptions.GetTypeInfo(typeof(PlanRouteRequest))) as PlanRouteRequest
+            ?? throw new JsonException("plan_route takes an object of arguments.");
+
+        // A point may be [lat, lon] as well as {latitude, longitude}; so may each via point.
+        static JsonNode? Point(string name, JsonNode? node)
+        {
+            static JsonNode? One(JsonNode? n) => n is JsonArray { Count: 2 } pair && pair[0] is JsonValue && pair[1] is JsonValue
+                ? new JsonObject { ["latitude"] = pair[0]!.DeepClone(), ["longitude"] = pair[1]!.DeepClone() }
+                : n;
+
+            if (string.Equals(name, "from", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "to", StringComparison.OrdinalIgnoreCase))
+            {
+                return One(node);
+            }
+
+            return string.Equals(name, "via", StringComparison.OrdinalIgnoreCase) && node is JsonArray list
+                ? new JsonArray([.. list.Select(item => One(item?.DeepClone()))])
+                : node;
+        }
+    }
+
+    /// <summary><c>plan_route</c> as an <see cref="AIFunction"/> whose schema and binding are <see cref="PlanRouteRequest"/>'s.</summary>
+    private sealed class PlanRouteFunction(PlanRouteTool inner) : AIFunction
+    {
+        public override string Name => PlanRouteTool.Name;
+
+        public override JsonElement JsonSchema => PlanRouteInputSchema;
+
+        public override JsonSerializerOptions JsonSerializerOptions => JsonOptions;
+
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+            await DispatchAsync(() => inner.InvokeAsync(ReadPlanRouteRequest(arguments), cancellationToken)).ConfigureAwait(false);
     }
 
     private static McpServerTool CreateListSpecsTool(ListSpecsTool inner)

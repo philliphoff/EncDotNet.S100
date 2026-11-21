@@ -108,6 +108,34 @@ public sealed class NavigabilityGridTests
     }
 
     [Fact]
+    public void Structures_the_chart_check_flags_mark_their_cells_but_aids_and_bridges_do_not()
+    {
+        // #1560: a breakwater (SafetyContour) and a pile (NavHazard structure)
+        // block their cells; a buoy (an aid) and a bridge (overhead) don't.
+        var cell = new FakeCell("101AA", new CellRank(12000));
+        RouteChartFeature Alerted(string id, string type, double lat, double lon, RouteFindingAlert alert) =>
+            new(RouteChartFeatureKind.Alerted, cell, id, type, [], []) { Points = [new GeoPosition(lat, lon)], Alerts = [new RouteChartAlert(alert)] };
+        var charts = new FakeCharts(
+            [cell],
+            [
+                Alerted("1", "ShorelineConstruction", 0.002, 0.002, RouteFindingAlert.SafetyContour),
+                Alerted("2", "Pile", 0.004, 0.004, RouteFindingAlert.NavHazard),
+                Alerted("3", "LateralBuoy", 0.006, 0.006, RouteFindingAlert.NavHazard),
+                Alerted("4", "Bridge", 0.008, 0.008, RouteFindingAlert.NavHazard),
+            ]);
+
+        var grid = NavigabilityGrid.Build(
+            new RouteCheckSources { WaterMask = new FakeMask(_ => WaterMaskClass.Water), Depth = new FakeDepth((_, _) => FakeDepth.DepthArea(20)), Charts = charts },
+            new NavigabilityGridRequest(Box, 100, 5),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(NavigabilityCellClass.Hazard, Class(grid, 0.002, 0.002));
+        Assert.Equal(NavigabilityCellClass.Hazard, Class(grid, 0.004, 0.004));
+        Assert.Equal(NavigabilityCellClass.Navigable, Class(grid, 0.006, 0.006));
+        Assert.Equal(NavigabilityCellClass.Navigable, Class(grid, 0.008, 0.008));
+    }
+
+    [Fact]
     public void A_danger_in_a_coarser_cell_does_not_count_where_a_finer_cell_charts()
     {
         var fine = new FakeCell("101FINE", new CellRank(12000));

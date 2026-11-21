@@ -19,7 +19,12 @@ public enum NavigabilityCellClass : byte
     /// <summary>Charted water shallower than the minimum depth (drying ground included).</summary>
     Shoal = 3,
 
-    /// <summary>Charted water with a danger (wreck, obstruction or rock) in the cell at or shallower than the hazard depth.</summary>
+    /// <summary>
+    /// Charted water with a danger (wreck, obstruction or rock) in the cell at
+    /// or shallower than the hazard depth, or a structure standing in it: one
+    /// that raises the SafetyContour alert (a breakwater, pier, pontoon or
+    /// hulk), or a pile, platform or other structure the hazards check flags.
+    /// </summary>
     Hazard = 4,
 
     /// <summary>Charted water with no charted depth.</summary>
@@ -516,12 +521,23 @@ public sealed class NavigabilityGrid
         };
         var threshold = request.HazardDepthMeters ?? request.MinimumDepthMeters;
         var cells = charts.CellsNear(extent);
-        var features = charts.FeaturesInCorridor(ring, extent, RouteChartQuery.Default);
+        var features = charts.FeaturesInCorridor(ring, extent, new RouteChartQuery(request.MinimumDepthMeters, request.MinimumDepthMeters));
         foreach (var feature in features)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (feature.Kind != RouteChartFeatureKind.Danger
-                || (feature.DepthMeters is { } depth && depth > threshold))
+
+            // Dangers at or shallower than the hazard depth, and what stands
+            // in the water and raises the SafetyContour alert as the chart
+            // check sees it (breakwaters, piers, pontoons, hulks: #1560), so
+            // a way through the grid doesn't cut a structure check_route flags.
+            var danger = feature.Kind == RouteChartFeatureKind.Danger && !(feature.DepthMeters is { } depth && depth > threshold);
+            // So does a structure the hazards check flags on the track, such
+            // as a pile or platform (NavHazard; not an aid or a bridge).
+            var structure = feature.Kind == RouteChartFeatureKind.Alerted
+                && (feature.Alerts.Any(a => a.Alert == RouteFindingAlert.SafetyContour)
+                    || (feature.Alerts.Any(a => a.Alert == RouteFindingAlert.NavHazard)
+                        && RouteHazardClasses.Of(feature.FeatureType) == RouteHazardClass.Structure));
+            if (!danger && !structure)
             {
                 continue;
             }

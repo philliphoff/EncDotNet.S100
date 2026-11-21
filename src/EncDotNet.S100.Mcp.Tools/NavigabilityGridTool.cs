@@ -32,7 +32,7 @@ public sealed record NavigabilityGridToolRequest(
     [property: Description("Draft in metres: a navigable cell has at least this much charted depth.")] double? DraftMeters = null,
     [property: Description("Safety contour in metres: a navigable cell has at least this much charted depth too.")] double? SafetyContourMeters = null,
     [property: Description("Dangers at or shallower than this mark their cells; default the minimum depth.")] double? HazardDepthMeters = null,
-    [property: Description("Whether to read the charted dangers.")] bool IncludeHazards = true,
+    [property: Description("Whether to read the charted dangers and the structures standing in the water (breakwaters, piers, pontoons, hulks).")] bool IncludeHazards = true,
     [property: Description("Two positions to test for a navigable way between them.")] IReadOnlyList<GeoPoint>? Connect = null,
     [property: Description("The grid file's format: npy, raw or none.")] string Format = NavigabilityGridTool.FormatNpy,
     [property: Description("Whether to return a PNG of the grid.")] bool IncludeImage = false);
@@ -54,7 +54,7 @@ public sealed record NavigabilityGridGeometry(
 public sealed record NavigabilityGridCounts(
     [property: Description("Charted water at least the minimum depth with no danger in the cell.")] int Navigable,
     [property: Description("Charted water shallower than the minimum depth, drying ground included.")] int Shoal,
-    [property: Description("Charted water with a danger at or shallower than the hazard depth (or of unknown depth) in the cell.")] int Hazard,
+    [property: Description("Charted water with a danger at or shallower than the hazard depth (or of unknown depth) in the cell, or a structure standing in it (breakwater, pier, pontoon, hulk).")] int Hazard,
     [property: Description("Charted land.")] int Land,
     [property: Description("Not covered by any loaded chart.")] int Uncharted,
     [property: Description("Charted water with no charted depth.")] int NoDepth);

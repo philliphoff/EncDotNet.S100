@@ -38,6 +38,7 @@ public class S100McpServerRoundTripTests
                 "list_specs",
                 "list_time_steps",
                 "nearest_features",
+                "plan_route",
                 "query_features",
                 "sample",
                 "search_features",

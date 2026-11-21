@@ -630,7 +630,7 @@ adjusted-area edge to be clipped to as well.
 
 `NavigabilityGrid.Build` lays a regular grid over a box and classes each
 cell from the route-check sources: navigable, shoal (shallower than the
-minimum depth), hazard (a charted danger in it), land, uncharted, or water
+minimum depth), hazard (a charted danger or a structure in it), land, uncharted, or water
 with no depth. A cell's depth is the least at its centre and corners, with
 the finest chart cell winning where cells overlap. The grid gives each
 navigable cell's clearance to the nearest cell that isn't, its connected
@@ -642,7 +642,8 @@ round the point, or uses one you pass, and returns why the point fails
 (`land`, `uncharted`, `shoal`, `hazard`, `no_depth` or `too_close`) and the
 nearest qualifying cell's centre, depth, clearance, distance and bearing.
 A point it moves to has one cell more room than asked for, so a check on
-another grid finds it navigable too.
+another grid finds it navigable too. The search widens in steps (500 m on
+5 m cells, then 1.5 km and 5 km on coarser ones) up to `SearchRadiusMeters`.
 
 ```csharp
 var snap = NavigableSnap.Snap(sources, new GeoPosition(48.660, -123.140),
@@ -650,6 +651,31 @@ var snap = NavigableSnap.Snap(sources, new GeoPosition(48.660, -123.140),
 if (snap.Status == NavigableSnapStatus.Moved)
 {
     Console.WriteLine($"{snap.Reason}: moved {snap.DistanceMeters} m on {snap.BearingDegrees}°");
+}
+```
+
+## Plan a route
+
+`RoutePlanner.Plan` suggests a route through a list of stops for a minimum
+depth: each stop moved to navigable water as `NavigableSnap` moves a point
+(at the berth depth, so a stop in a marina stays in it), then each leg a
+least-cost way through the grid's navigable cells, costing distance and
+closeness to anything that isn't navigable, and cut to few waypoints by line
+of sight. Round each stop it searches 5 m cells; in between, 20 m cells
+(coarser on a long leg, finer when a narrow channel closes). Within
+`BerthRadiusMeters` of a stop, water down to `BerthDepthMeters` is allowed.
+`PreferredAreas` and `PreferredLines` (such as fairways and recommended
+tracks) cost less. The result is the `RoutePlan`, or a `RoutePlanFailure`
+saying which stop or leg failed. A plan isn't checked: run it through
+`RouteChecker`.
+
+```csharp
+var result = RoutePlanner.Plan(sources, new RoutePlanRequest(
+    [new GeoPosition(48.5119, -122.6052), new GeoPosition(48.5393, -123.0135)],
+    MinimumDepthMeters: 1.5) { BerthDepthMeters = 1.1 });
+if (result.Plan is { } plan)
+{
+    Console.WriteLine($"{plan.DistanceMeters / 1852:0.0} NM, {plan.Waypoints.Count} waypoints");
 }
 ```
 

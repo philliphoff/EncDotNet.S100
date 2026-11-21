@@ -22,7 +22,7 @@ internal static class NavigabilityGridMcpTool
         "Water, land and charted depth over a box on a regular grid, with overlapping chart cells resolved as check_route resolves them " +
         "(S-102 first, else the finest S-101/S-57 cell): each cell is navigable (charted depth at least the larger of draftMeters and " +
         "safetyContourMeters, least of its centre and corners), shoal, hazard (a wreck, obstruction or rock at or shallower than " +
-        "hazardDepthMeters, or of unknown depth), land, uncharted or no_depth. The reply is a summary: grid geometry, cell counts, " +
+        "hazardDepthMeters, or of unknown depth, or a structure standing in the water such as a breakwater, pier or pontoon), land, uncharted or no_depth. The reply is a summary: grid geometry, cell counts, " +
         "the shoalest navigable cell, the largest connected navigable area and its most open cell, and with connect whether two " +
         "positions join through navigable cells and where the widest way between them is narrowest. The grid itself is written to a " +
         "file on the server (format npy or raw; 'file' gives its path and layout) for code to read; includeImage adds a PNG (north up). " +
@@ -45,7 +45,7 @@ internal static class NavigabilityGridMcpTool
                    [Description("Safety contour in metres: a navigable cell has at least this much charted depth too.")] double? safetyContourMeters = null,
                    [Description("Cell size in metres (default 50). At most 6,000,000 cells; a bigger grid is refused with a cell size that fits.")] double cellMeters = NavigabilityGridTool.DefaultCellMeters,
                    [Description("Dangers at or shallower than this mark their cells hazard (default: the minimum depth). Dangers with no known depth always do.")] double? hazardDepthMeters = null,
-                   [Description("Read the charted dangers (default true).")] bool includeHazards = true,
+                   [Description("Read the charted dangers and structures (default true).")] bool includeHazards = true,
                    [Description("Two positions to test, [[lat,lon],[lat,lon]]: whether a navigable way joins them, and its narrowest place.")] JsonElement? connect = null,
                    [Description("The grid file: \"npy\" (default; NumPy structured array depth_dm int16 + class uint8), \"raw\" (int16 depths then class bytes) or \"none\".")] string format = NavigabilityGridTool.FormatNpy,
                    [Description("Add a PNG of the grid, north up, at most 1024 px a side.")] bool includeImage = false,

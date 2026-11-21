@@ -130,6 +130,9 @@ public static class McpJson
 [JsonSerializable(typeof(SurfaceCurrentSample))]
 [JsonSerializable(typeof(SurfaceCurrentStationSample))]
 [JsonSerializable(typeof(CoverageFieldsSample))]
+// plan_route (#1560).
+[JsonSerializable(typeof(PlanRouteRequest))]
+[JsonSerializable(typeof(PlanRouteResult))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(InvalidArgument))]
 [JsonSerializable(typeof(DatasetNotFound))]
@@ -157,6 +160,7 @@ public static class McpJson
 [JsonSerializable(typeof(NoCurrentStationNear))]
 [JsonSerializable(typeof(CurrentStationNotPredictable))]
 [JsonSerializable(typeof(NoStationWithinReach))]
+[JsonSerializable(typeof(NoRoutePlanned))]
 // Tool parameter types the SDK binds.
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonElement?))]
