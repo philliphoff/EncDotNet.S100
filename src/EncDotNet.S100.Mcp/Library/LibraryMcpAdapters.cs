@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Library;
 using ModelContextProtocol.Server;
 
@@ -40,21 +42,24 @@ public static class LibraryMcpAdapters
             [Description("Western longitude of the box.")] double? west = null,
             [Description("Northern latitude of the box.")] double? north = null,
             [Description("Eastern longitude of the box.")] double? east = null,
-            [Description("Latitude of a point items must cover (with lon), as tapping the map does; results are then most detailed first.")] double? lat = null,
-            [Description("Longitude of the point.")] double? lon = null,
+            [Description("Latitude of a point items must cover (with longitude), as tapping the map does; results are then most detailed first.")] double? latitude = null,
+            [Description("Longitude of the point.")] double? longitude = null,
             [Description("0-based page (default 0).")] int? page = null,
             [Description("Items per page, 1–500 (default 50).")] int? pageSize = null,
             [Description("Keep only items whose data covers a time: 'view_time' (the Timeline's view time, as the Library's Valid at view time toggle) or an ISO-8601 time. A forecast's window is its run's (the downloaded copy's, else the catalogue's).")] string? validAt = null,
+            [Description("Alias of latitude (older name).")] double? lat = null,
+            [Description("Alias of longitude (older name).")] double? lon = null,
             CancellationToken ct = default) =>
-            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(
-                new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, lat, lon, page, pageSize, validAt), ct));
+            McpToolDispatch.DispatchAsync(() => PositionArguments.Resolve(latitude, longitude, lat, lon, ("latitude", "longitude", "lat", "lon"), out var point) is { } bad
+                ? Task.FromResult(ToolResult<LibraryItemPage>.Err(bad))
+                : inner.InvokeAsync(new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, point?.Latitude, point?.Longitude, page, pageSize, validAt), ct));
         return Tool(del, QueryLibraryItemsTool.Name,
             "Finds datasets in the Library, paged. Each item reports its id, spec, state as the Library "
             + "row shows it ('online' not downloaded, 'local' on disk, 'loaded', 'on_pan', 'update' newer edition or run "
             + "online, 'expired' forecast run ended, 'missing', 'listed'), tags, edition, issue date, size, bounds, local "
             + "path, and for forecasts the model, run and end of the valid window. Filter by source, states, spec, text, "
             + "a bounding box, or a point (what covers here, most detailed first). Examples: what is out of date "
-            + "(states=[update]); which currents cover a position (spec=S-111, lat, lon). Read-only.");
+            + "(states=[update]); which currents cover a position (spec=S-111, latitude, longitude). Read-only.");
     }
 
     /// <summary>Creates <c>describe_library_item</c>.</summary>

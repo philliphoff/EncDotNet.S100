@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tools;
@@ -197,8 +198,8 @@ internal sealed class SetMeasureTool
     }
 
     /// <summary>
-    /// Reads <c>points</c>: an array of position strings the card accepts or
-    /// <c>{lat, lon}</c> objects.
+    /// Reads <c>points</c>: an array of position strings the card accepts,
+    /// <c>{latitude, longitude}</c> (or <c>{lat, lon}</c>) objects or <c>[lat, lon]</c> pairs.
     /// </summary>
     internal static ToolError? TryParsePoints(JsonElement points, out List<GeoPosition> positions)
     {
@@ -218,30 +219,21 @@ internal sealed class SetMeasureTool
                 continue;
             }
 
-            if (item.ValueKind == JsonValueKind.Object
-                && TryNumber(item, "lat", out var objLat)
-                && TryNumber(item, "lon", out var objLon))
+            // {latitude, longitude}, {lat, lon} or [lat, lon] (#1628).
+            if (PositionArguments.TryRead(item, out var objLat, out var objLon))
             {
-                if (objLat is < -90 or > 90 || !double.IsFinite(objLat))
-                    return new InvalidArgument(name, $"lat {objLat} is outside [-90, 90]");
-                if (objLon is < -180 or > 180 || !double.IsFinite(objLon))
-                    return new InvalidArgument(name, $"lon {objLon} is outside [-180, 180]");
+                if (objLat is < -90 or > 90)
+                    return new InvalidArgument(name, $"latitude {objLat} is outside [-90, 90]");
+                if (objLon is < -180 or > 180)
+                    return new InvalidArgument(name, $"longitude {objLon} is outside [-180, 180]");
                 positions.Add(new GeoPosition(objLat, objLon));
                 continue;
             }
 
-            return new InvalidArgument(name, "each point is a position string or {lat, lon}");
+            return new InvalidArgument(name, "each point is a position string, {latitude, longitude} or [lat, lon]");
         }
 
         return null;
-    }
-
-    private static bool TryNumber(JsonElement item, string name, out double value)
-    {
-        value = 0;
-        return item.TryGetProperty(name, out var property)
-            && property.ValueKind == JsonValueKind.Number
-            && property.TryGetDouble(out value);
     }
 }
 
@@ -268,7 +260,7 @@ internal static class MeasureMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("The path's points in order, each a position string the card accepts (\"32°35.224'S 061°17.710'E\", \"-32.587, 61.295\", DMS, hemisphere letters either side) or {\"lat\": …, \"lon\": …} in decimal degrees. An empty array clears the path; omit to keep it.")] JsonElement? points = null,
+            [Description("The path's points in order, each a position string the card accepts (\"32°35.224'S 061°17.710'E\", \"-32.587, 61.295\", DMS, hemisphere letters either side) or {\"latitude\": …, \"longitude\": …} (or [lat, lon]) in decimal degrees. An empty array clears the path; omit to keep it.")] JsonElement? points = null,
             [Description("rhumb or greatCircle; omit to keep the current geometry. Remembered per user, as the card's control is.")] string? geometry = null,
             [Description("One-based leg the card shows; omit for the last leg.")] int? selectedLeg = null,
             CancellationToken ct = default) =>

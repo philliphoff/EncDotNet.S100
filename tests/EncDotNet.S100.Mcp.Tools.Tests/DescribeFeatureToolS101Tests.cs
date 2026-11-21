@@ -54,6 +54,49 @@ public class DescribeFeatureToolS101Tests
     }
 
     [Fact]
+    public async Task Without_geometry_the_coordinates_become_counts()
+    {
+        // #1628: an area or sounding group's coordinates can run to hundreds
+        // of kilobytes; includeGeometry: false keeps the shape's outline only.
+        var dataset = S101Synth.DatasetWithSounding(
+            "enc-with-soundings",
+            new (double Lat, double Lon, double Depth)[]
+            {
+                (50.7699, -1.1396, 11.0),
+                (50.7709, -1.1367, 6.4),
+                (50.7720, -1.1340, 18.3),
+            });
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc", dataset));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var full = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc"), "808"), TestContext.Current.CancellationToken);
+        var slim = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc"), "808", IncludeGeometry: false), TestContext.Current.CancellationToken);
+
+        Assert.True(full.TryGetValue(out var withGeometry));
+        Assert.True(slim.TryGetValue(out var value));
+        var geometry = value.Attributes.GetProperty("geometry");
+        Assert.False(geometry.TryGetProperty("coordinates", out _));
+        Assert.False(geometry.TryGetProperty("depths", out _));
+        Assert.Equal(3, geometry.GetProperty("coordinateCount").GetInt32());
+        Assert.True(geometry.GetProperty("coordinatesOmitted").GetBoolean());
+        Assert.Equal(
+            withGeometry.Attributes.GetProperty("geometry").GetProperty("boundingBox").GetRawText(),
+            geometry.GetProperty("boundingBox").GetRawText());
+        Assert.Equal(
+            withGeometry.Attributes.GetProperty("attributes").GetRawText(),
+            value.Attributes.GetProperty("attributes").GetRawText());
+    }
+
+    [Fact]
+    public void A_payload_with_no_geometry_object_is_left_alone()
+    {
+        var gml = JsonDocument.Parse("""{"geometryType":"Point","attributes":{"a":"1"}}""").RootElement;
+
+        Assert.Equal(gml.GetRawText(), DescribeFeatureTool.WithoutCoordinates(gml).GetRawText());
+    }
+
+    [Fact]
     public async Task Non_multipoint_feature_omits_depths()
     {
         var dataset = S101Synth.DatasetWithPointFeatures(

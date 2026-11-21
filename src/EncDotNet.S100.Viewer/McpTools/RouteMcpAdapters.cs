@@ -1,4 +1,7 @@
 using System.Text.Json;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Tools;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
@@ -118,24 +121,29 @@ internal static class AppendWaypointMcpAdapter
     private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
-        "Appends a waypoint to the end of a route in the live viewer. Omit routeId to use the active " +
-        "route. Returns the route's full updated state. Viewer-injected tool — mutates live state.";
+        "Appends a waypoint to the end of a route in the live viewer at latitude/longitude. Omit routeId to use the active " +
+        "route. Returns the route's full updated state. " + "The result's 'water' reports the charted depth at the point as sample reads it; with minDepthMeters, or a route draft (draft + squat + required UKC), also 'navigable', 'notNavigableReason' (land, uncharted, shoal, hazard, no_depth) and 'nearestNavigable' to move it to. validate: true reports without editing. " + "Viewer-injected tool — mutates live state.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
     public static McpServerTool Create(AppendWaypointTool inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [System.ComponentModel.Description("WGS-84 latitude in decimal degrees [-90, 90].")] double lat,
-            [System.ComponentModel.Description("WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
+            [System.ComponentModel.Description("WGS-84 latitude in decimal degrees [-90, 90].")] double? latitude = null,
+            [System.ComponentModel.Description("WGS-84 longitude in decimal degrees [-180, 180].")] double? longitude = null,
             [System.ComponentModel.Description("Id of the route to append to; omit to use the active route.")] string? routeId = null,
             [System.ComponentModel.Description("Optional author-assigned ordinal (S-421 routeWaypointID).")] int? number = null,
             [System.ComponentModel.Description("Optional waypoint name.")] string? name = null,
             [System.ComponentModel.Description("Optional flag pinning the waypoint so it must not be moved.")] bool? @fixed = null,
             [System.ComponentModel.Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? turnRadiusNm = null,
+            [System.ComponentModel.Description("Alias of latitude (older name).")] double? lat = null,
+            [System.ComponentModel.Description("Alias of longitude (older name).")] double? lon = null,
+            [System.ComponentModel.Description("The least charted depth the point needs, in metres (e.g. draft plus margin, or the safety contour). Default: the route's draft + squat + required UKC when it has a draft.")] double? minDepthMeters = null,
+            [System.ComponentModel.Description("Report the water at the point without making the edit (a dry run).")] bool validate = false,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
-                new AppendWaypointRequest(lat, lon, routeId, number, name, @fixed, turnRadiusNm), ct));
+            McpAdapterShared.DispatchAsync(() => Position(latitude, longitude, lat, lon, out var p) is { } bad
+                ? Task.FromResult(ToolResult<RouteDetail>.Err(bad))
+                : inner.InvokeAsync(new AppendWaypointRequest(p.Latitude, p.Longitude, routeId, number, name, @fixed, turnRadiusNm, minDepthMeters, validate), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -143,6 +151,17 @@ internal static class AppendWaypointMcpAdapter
             Description = Description,
             SerializerOptions = JsonOptions,
         });
+    }
+
+    /// <summary>
+    /// A waypoint's position from latitude/longitude or the older lat/lon
+    /// (#1628); an error when neither or a conflicting pair is given.
+    /// </summary>
+    internal static InvalidArgument? Position(double? latitude, double? longitude, double? lat, double? lon, out GeoPosition position)
+    {
+        var error = PositionArguments.Resolve(latitude, longitude, lat, lon, ("latitude", "longitude", "lat", "lon"), out var resolved);
+        position = resolved ?? default;
+        return error ?? (resolved is null ? new InvalidArgument("latitude", "give latitude and longitude") : null);
     }
 }
 
@@ -153,8 +172,8 @@ internal static class InsertWaypointMcpAdapter
 
     private const string Description =
         "Inserts a waypoint at a given index of a route in the live viewer, splitting the affected " +
-        "leg. Index 0 prepends; waypointCount appends. Omit routeId to use the active route. Returns " +
-        "the route's full updated state. Viewer-injected tool — mutates live state.";
+        "leg, at latitude/longitude. Index 0 prepends; waypointCount appends. Omit routeId to use the active route. Returns " +
+        "the route's full updated state. " + "The result's 'water' reports the charted depth at the point as sample reads it; with minDepthMeters, or a route draft (draft + squat + required UKC), also 'navigable', 'notNavigableReason' (land, uncharted, shoal, hazard, no_depth) and 'nearestNavigable' to move it to. validate: true reports without editing. " + "Viewer-injected tool — mutates live state.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
     public static McpServerTool Create(InsertWaypointTool inner)
@@ -162,16 +181,21 @@ internal static class InsertWaypointMcpAdapter
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [System.ComponentModel.Description("Insertion index in [0, waypointCount]; 0 prepends, waypointCount appends.")] int index,
-            [System.ComponentModel.Description("WGS-84 latitude in decimal degrees [-90, 90].")] double lat,
-            [System.ComponentModel.Description("WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
+            [System.ComponentModel.Description("WGS-84 latitude in decimal degrees [-90, 90].")] double? latitude = null,
+            [System.ComponentModel.Description("WGS-84 longitude in decimal degrees [-180, 180].")] double? longitude = null,
             [System.ComponentModel.Description("Id of the route to insert into; omit to use the active route.")] string? routeId = null,
             [System.ComponentModel.Description("Optional author-assigned ordinal (S-421 routeWaypointID).")] int? number = null,
             [System.ComponentModel.Description("Optional waypoint name.")] string? name = null,
             [System.ComponentModel.Description("Optional flag pinning the waypoint so it must not be moved.")] bool? @fixed = null,
             [System.ComponentModel.Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? turnRadiusNm = null,
+            [System.ComponentModel.Description("Alias of latitude (older name).")] double? lat = null,
+            [System.ComponentModel.Description("Alias of longitude (older name).")] double? lon = null,
+            [System.ComponentModel.Description("The least charted depth the point needs, in metres (e.g. draft plus margin, or the safety contour). Default: the route's draft + squat + required UKC when it has a draft.")] double? minDepthMeters = null,
+            [System.ComponentModel.Description("Report the water at the point without making the edit (a dry run).")] bool validate = false,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
-                new InsertWaypointRequest(index, lat, lon, routeId, number, name, @fixed, turnRadiusNm), ct));
+            McpAdapterShared.DispatchAsync(() => AppendWaypointMcpAdapter.Position(latitude, longitude, lat, lon, out var p) is { } bad
+                ? Task.FromResult(ToolResult<RouteDetail>.Err(bad))
+                : inner.InvokeAsync(new InsertWaypointRequest(index, p.Latitude, p.Longitude, routeId, number, name, @fixed, turnRadiusNm, minDepthMeters, validate), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -188,8 +212,8 @@ internal static class MoveWaypointMcpAdapter
     private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
-        "Moves an existing waypoint of a route in the live viewer to a new position. Omit routeId to " +
-        "use the active route. Returns the route's full updated state. Viewer-injected tool — mutates " +
+        "Moves an existing waypoint of a route in the live viewer to a new position (latitude/longitude). Omit routeId to " +
+        "use the active route. Returns the route's full updated state. " + "The result's 'water' reports the charted depth at the point as sample reads it; with minDepthMeters, or a route draft (draft + squat + required UKC), also 'navigable', 'notNavigableReason' (land, uncharted, shoal, hazard, no_depth) and 'nearestNavigable' to move it to. validate: true reports without editing. " + "Viewer-injected tool — mutates " +
         "live state.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
@@ -198,12 +222,17 @@ internal static class MoveWaypointMcpAdapter
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [System.ComponentModel.Description("Index of the waypoint to move in [0, waypointCount).")] int index,
-            [System.ComponentModel.Description("New WGS-84 latitude in decimal degrees [-90, 90].")] double lat,
-            [System.ComponentModel.Description("New WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
+            [System.ComponentModel.Description("New WGS-84 latitude in decimal degrees [-90, 90].")] double? latitude = null,
+            [System.ComponentModel.Description("New WGS-84 longitude in decimal degrees [-180, 180].")] double? longitude = null,
             [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Alias of latitude (older name).")] double? lat = null,
+            [System.ComponentModel.Description("Alias of longitude (older name).")] double? lon = null,
+            [System.ComponentModel.Description("The least charted depth the point needs, in metres (e.g. draft plus margin, or the safety contour). Default: the route's draft + squat + required UKC when it has a draft.")] double? minDepthMeters = null,
+            [System.ComponentModel.Description("Report the water at the point without making the edit (a dry run).")] bool validate = false,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
-                new MoveWaypointRequest(index, lat, lon, routeId), ct));
+            McpAdapterShared.DispatchAsync(() => AppendWaypointMcpAdapter.Position(latitude, longitude, lat, lon, out var p) is { } bad
+                ? Task.FromResult(ToolResult<RouteDetail>.Err(bad))
+                : inner.InvokeAsync(new MoveWaypointRequest(index, p.Latitude, p.Longitude, routeId, minDepthMeters, validate), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {

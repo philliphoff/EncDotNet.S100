@@ -22,23 +22,23 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// in a continuous frame (to ±540°, one world copy either side), and a bbox
 /// with <c>west &gt; east</c> crosses the antimeridian (issue #759).
 /// </remarks>
-[Description("Request for set_viewport: supply EXACTLY ONE of a WGS-84 bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale (centerLat/centerLon/scaleDenominator). Coordinates are decimal degrees; longitudes may run past ±180 (to ±540) to frame the adjacent world copy, and a bbox with west > east crosses the antimeridian. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map scale the status bar shows.")]
+[Description("Request for set_viewport: supply EXACTLY ONE of a WGS-84 bbox (south/west/north/east), centre+zoom (centerLatitude/centerLongitude/zoom), or centre+scale (centerLatitude/centerLongitude/scaleDenominator). Coordinates are decimal degrees; longitudes may run past ±180 (to ±540) to frame the adjacent world copy, and a bbox with west > east crosses the antimeridian. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map scale the status bar shows.")]
 internal sealed record SetViewportRequest(
     [property: Description("Bounding-box south edge in decimal degrees (WGS-84). Must be paired with west/north/east; mutually exclusive with centre+zoom.")] double? South = null,
     [property: Description("Bounding-box west edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/north/east; mutually exclusive with centre+zoom. Greater than east for a box that crosses the antimeridian.")] double? West = null,
     [property: Description("Bounding-box north edge in decimal degrees (WGS-84). Must be paired with south/west/east; mutually exclusive with centre+zoom.")] double? North = null,
     [property: Description("Bounding-box east edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/west/north; mutually exclusive with centre+zoom. Past 180 (e.g. 220 = 140°W) frames the world copy east of the antimeridian.")] double? East = null,
-    [property: Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLat = null,
-    [property: Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy (e.g. 205 = 155°W, east of the antimeridian). Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLon = null,
-    [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? Zoom = null,
+    [property: Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLongitude and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLat = null,
+    [property: Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy (e.g. 205 = 155°W, east of the antimeridian). Must be paired with centerLatitude and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLon = null,
+    [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLatitude/centerLongitude; mutually exclusive with scaleDenominator and the bbox form.")] double? Zoom = null,
     [property: Description("Optional clockwise viewport rotation in degrees (0 = north-up). Applied on top of the bbox or centre+zoom frame, so it exercises the rotated-viewport render path (e.g. upright-label verification). Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? Rotation = null,
-    [property: Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form. Converted at the centre latitude with the 0.28 mm pixel the status bar uses, so the status bar reads back this scale.")] double? ScaleDenominator = null,
+    [property: Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLatitude/centerLongitude; mutually exclusive with zoom and the bbox form. Converted at the centre latitude with the 0.28 mm pixel the status bar uses, so the status bar reads back this scale.")] double? ScaleDenominator = null,
     [property: Description("Optional animation duration in milliseconds for the centre forms: the map animates to the view, as a 'go to' in the viewer does, instead of jumping. 0 or absent jumps. The echo then reports the target and the scale requested, since the live map is still on its way.")] long? DurationMs = null);
 
 /// <summary>Result of <see cref="SetViewportTool"/>.</summary>
 [Description("Result of set_viewport: the request mode that was applied (bbox or center) plus an echo of the resolved WGS-84 viewport and its map scale. The echo is the precise frame the navigator was set to and is suitable for verification in scripted runs. Longitudes are in the continuous frame that was framed: west < east, and past ±180 for a frame on or across the antimeridian.")]
 internal sealed record SetViewportResult(
-    [property: Description("\"bbox\" when the call resolved through the south/west/north/east form; \"center\" when it resolved through a centre form (centerLat/centerLon with zoom or scaleDenominator).")] string Mode,
+    [property: Description("\"bbox\" when the call resolved through the south/west/north/east form; \"center\" when it resolved through a centre form (centerLatitude/centerLongitude with zoom or scaleDenominator).")] string Mode,
     [property: Description("Echoed south edge of the resolved viewport in decimal degrees, WGS-84.")] double South,
     [property: Description("Echoed west edge of the resolved viewport in decimal degrees, in the continuous frame that was framed.")] double West,
     [property: Description("Echoed north edge of the resolved viewport in decimal degrees, WGS-84.")] double North,
@@ -129,19 +129,19 @@ internal sealed class SetViewportTool
         {
             return Err(new InvalidArgument(
                 "request",
-                "supply EITHER a bbox (south/west/north/east) OR a centre form (centerLat/centerLon with zoom or scaleDenominator), not both"));
+                "supply EITHER a bbox (south/west/north/east) OR a centre form (centerLatitude/centerLongitude with zoom or scaleDenominator), not both"));
         }
         if (!hasBboxAny && !hasCenterAny)
         {
             return Err(new InvalidArgument(
                 "request",
-                "must supply a bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale (centerLat/centerLon/scaleDenominator)"));
+                "must supply a bbox (south/west/north/east), centre+zoom (centerLatitude/centerLongitude/zoom), or centre+scale (centerLatitude/centerLongitude/scaleDenominator)"));
         }
         if (request.Zoom.HasValue && request.ScaleDenominator.HasValue)
         {
             return Err(new InvalidArgument(
                 "request",
-                "supply EITHER zoom OR scaleDenominator with centerLat/centerLon, not both"));
+                "supply EITHER zoom OR scaleDenominator with centerLatitude/centerLongitude, not both"));
         }
 
         var host = _accessor.Current;
@@ -169,7 +169,7 @@ internal sealed class SetViewportTool
         }
         if (hasBboxAny && request.DurationMs is > 0)
         {
-            return Err(new InvalidArgument("durationMs", "an animation needs a centre form (centerLat/centerLon with zoom or scaleDenominator)"));
+            return Err(new InvalidArgument("durationMs", "an animation needs a centre form (centerLatitude/centerLongitude with zoom or scaleDenominator)"));
         }
 
         var result = hasBboxAny
@@ -242,12 +242,12 @@ internal sealed class SetViewportTool
             return Err(new InvalidArgument(
                 "request",
                 request.ScaleDenominator.HasValue
-                    ? "centre+scale form requires all three of centerLat, centerLon, scaleDenominator"
-                    : "centre+zoom form requires all three of centerLat, centerLon, zoom (or use scaleDenominator in place of zoom)"));
+                    ? "centre+scale form requires all three of centerLatitude, centerLongitude, scaleDenominator"
+                    : "centre+zoom form requires all three of centerLatitude, centerLongitude, zoom (or use scaleDenominator in place of zoom)"));
         }
 
-        if (Validate(lat, "centerLat", MinLat, MaxLat) is { } e1) return Err(e1);
-        if (Validate(lon, "centerLon", MinLon, MaxLon) is { } e2) return Err(e2);
+        if (Validate(lat, "centerLatitude", MinLat, MaxLat) is { } e1) return Err(e1);
+        if (Validate(lon, "centerLongitude", MinLon, MaxLon) is { } e2) return Err(e2);
 
         double resolution;
         if (request.ScaleDenominator is { } scaleDenominator)
