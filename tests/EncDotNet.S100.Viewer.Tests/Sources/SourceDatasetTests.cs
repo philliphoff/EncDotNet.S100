@@ -167,6 +167,33 @@ public sealed class SourceDatasetTests
         Assert.Equal(1, mine.Detached);
     }
 
+    [Fact]
+    public void An_extension_can_say_what_a_source_row_shows_unless_its_hidden()
+    {
+        var registry = new SourceRegistry();
+        registry.Register(Registration());
+        var extension = new StatusExtension("test.feed");
+        using var service = new SourceDatasetService(registry, new FakeNotifier { Current = Harbour }, extensions: [extension]);
+        var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
+
+        service.Attach(entry, service.CreateProcessor("test.feed", options: null));
+        Assert.Equal(SourceStatusKind.Starting, entry.SourceStatus!.Kind);
+
+        extension.Set(new SourceStatus(SourceStatusKind.WaitingForZoom, "Zoom in"));
+        Assert.Equal("Zoom in", entry.SourceStatus.Text);
+
+        entry.IsVisible = false;
+        Assert.Equal(SourceStatusKind.Paused, entry.SourceStatus.Kind);
+
+        entry.IsVisible = true;
+        extension.Set(null);
+        Assert.Equal(SourceStatusKind.Starting, entry.SourceStatus.Kind);
+
+        service.Detach(entry.Id);
+        extension.Set(new SourceStatus(SourceStatusKind.Failed, "Not followed"));
+        Assert.Equal(SourceStatusKind.Starting, entry.SourceStatus.Kind);
+    }
+
     private static readonly DateTimeOffset Noon = new(2026, 11, 18, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -344,6 +371,27 @@ public sealed class SourceDatasetTests
         private sealed class Callback(Action onDispose) : IDisposable
         {
             public void Dispose() => onDispose();
+        }
+    }
+
+    private sealed class StatusExtension(string sourceId) : ISourceHostExtension, ISourceStatusOverride, IDisposable
+    {
+        public string SourceId => sourceId;
+
+        public SourceStatus? Status { get; private set; }
+
+        public event EventHandler? StatusChanged;
+
+        public void Set(SourceStatus? status)
+        {
+            Status = status;
+            StatusChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public IDisposable? Attach(DatasetEntry entry, IDatasetProcessor processor) => this;
+
+        public void Dispose()
+        {
         }
     }
 

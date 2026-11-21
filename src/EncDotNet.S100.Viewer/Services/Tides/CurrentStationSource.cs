@@ -46,7 +46,7 @@ internal sealed record CurrentStationState(
 /// the view time isn't drawn: S-111 wins, as S-104 does for tides. Rotary
 /// stations draw the arrow at the predicted direction (D22).
 /// </remarks>
-internal sealed class CurrentStationSource : IPausableDynamicSource, IDynamicFeatureDescriber
+internal sealed class CurrentStationSource : IPredictedStationSource, IDynamicFeatureDescriber
 {
     /// <summary>The source id, and its key in <c>ViewerSettings.DynamicSourceVisibility</c>.</summary>
     public const string SourceId = "current-stations";
@@ -188,6 +188,18 @@ internal sealed class CurrentStationSource : IPausableDynamicSource, IDynamicFea
     /// <summary>The feature id of a station.</summary>
     /// <param name="stationId">The station id.</param>
     public static string FeatureIdFor(string stationId) => "current:" + stationId;
+
+    /// <inheritdoc />
+    public bool IsViewTooWide
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _view is { } view && !StationThinning.IsDrawable(view);
+            }
+        }
+    }
 
     /// <summary>Sets the viewport and recomputes.</summary>
     /// <param name="view">The viewport.</param>

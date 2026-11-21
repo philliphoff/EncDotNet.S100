@@ -600,9 +600,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // state (auto-dismissing) instead of dismissing + re-creating a
             // separate toast. Exchange-set entries are covered by the
             // aggregate notification, so they have no per-dataset one.
+            // A live feed's count of features at load is only a starting
+            // point (a tide feed's is 0 until its station list arrives), and
+            // its row says what it's doing, so there's no success toast (#1630).
             if (!fromExchangeSet)
             {
-                if (!string.IsNullOrWhiteSpace(result?.Info))
+                if (!isSource && !string.IsNullOrWhiteSpace(result?.Info))
                 {
                     DriveTerminal(
                         loadNotification, NotificationSeverity.Success, Strings.Toast_Success, result.Info);
