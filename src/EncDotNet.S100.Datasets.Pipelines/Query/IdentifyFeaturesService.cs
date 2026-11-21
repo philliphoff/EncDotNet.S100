@@ -27,6 +27,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// the radius. Clamped to <c>[0, 100000]</c>.
 /// </param>
 /// <param name="MaxResults">Maximum ranked matches to return; clamped to <c>[1, 200]</c>.</param>
+/// <param name="IncludeAttributes">Whether every feature's attributes are listed, not only an AML feature's.</param>
 /// <param name="Time">
 /// The time (UTC) to identify at: time-dependent products (S-412, CAP,
 /// surface analyses, tropical cyclones) return only the features drawn then.
@@ -39,7 +40,8 @@ public sealed record IdentifyFeaturesRequest(
     [property: Description("Optional spec filter; null matches every vector spec.")] SpecRef? Spec = null,
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
     [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20,
-    [property: Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? Time = null);
+    [property: Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? Time = null,
+    [property: Description("Add every feature's attributes as encoded (code and raw value) in 'attributes'. Default false: only AML features list them. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false);
 
 /// <summary>
 /// A single feature picked at the query point by
@@ -59,6 +61,7 @@ public sealed record IdentifyFeaturesRequest(
 /// <param name="Attributes">The feature's attributes as Object Information shows them; <c>null</c> where the product doesn't report them.</param>
 /// <param name="Aml">Where an AML feature comes from and whether it's drawn; <c>null</c> for every other product.</param>
 /// <param name="Sections">Pick report content that isn't attribute rows, such as an ice egg code; <c>null</c> when the feature has none.</param>
+/// <param name="Depth">The feature's depth values as numbers, or <c>null</c> when it carries none (#556).</param>
 public sealed record IdentifyMatch(
     [property: Description("Dataset the feature belongs to.")] DatasetId DatasetId,
     [property: Description("Spec the dataset declares.")] SpecRef Spec,
@@ -71,9 +74,10 @@ public sealed record IdentifyMatch(
     [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes, or by those of the information types it links to; empty when none or unresolvable.")] IReadOnlyList<ReferencedText>? ReferencedTexts = null,
     [property: Description("Highest drawing priority of the feature's drawing instructions in the dataset's portrayal; null when it isn't drawn or the dataset wasn't portrayed.")] int? DrawingPriority = null,
     [property: Description("Feature type name from the product's catalogue (\"Obstruction\" for an AML OBSTRN). Reported for NATO Additional Military Layers (AML) features; null otherwise.")] string? FeatureTypeName = null,
-    [property: Description("The feature's attributes as the viewer's Object Information shows them: catalogue names, decoded values, and on a standard S-57 class the AML-only attributes last with mark \"AML\". Reported for AML features; null otherwise.")] IReadOnlyList<IdentifyAttribute>? Attributes = null,
+    [property: Description("The feature's attributes. For AML features, as the viewer's Object Information shows them: catalogue names, decoded values, and on a standard S-57 class the AML-only attributes last with mark \"AML\". With includeAttributes, every other feature's attributes as encoded (code and raw value). Null otherwise.")] IReadOnlyList<IdentifyAttribute>? Attributes = null,
     [property: Description("Provenance of a NATO Additional Military Layers (AML) feature (product tag, cell, protective marking) and whether it's drawn; null for every other product.")] IdentifyAmlFeature? Aml = null,
-    [property: Description("Object Information content that isn't attribute rows, such as the WMO ice egg code of a sea-ice feature; null when the feature has none.")] IReadOnlyList<PickSectionResult>? Sections = null);
+    [property: Description("Object Information content that isn't attribute rows, such as the WMO ice egg code of a sea-ice feature; null when the feature has none.")] IReadOnlyList<PickSectionResult>? Sections = null,
+    [property: Description("The feature's depth values as numbers in metres, named as sample's depth result names them: depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, and the waterLevelEffect code. Null when it carries none.")] FeatureDepthValues? Depth = null);
 
 /// <summary>One attribute of an <see cref="IdentifyMatch"/>, as Object Information shows it.</summary>
 /// <param name="Code">The attribute acronym as encoded (<c>CATOBS</c>, <c>sonsig</c>).</param>
@@ -90,6 +94,34 @@ public sealed record IdentifyAttribute(
 {
     internal static IdentifyAttribute From(PickAttribute attribute) =>
         new(attribute.Code, attribute.Name, attribute.DisplayText, attribute.RawValue, attribute.Mark);
+
+    /// <summary>
+    /// A feature's attributes as encoded (#556): its simple attributes, then
+    /// each complex attribute's sub-attributes as <c>complex.sub</c>, with no
+    /// catalogue names or decoding.
+    /// </summary>
+    /// <param name="feature">The feature.</param>
+    /// <returns>The attributes.</returns>
+    public static IReadOnlyList<IdentifyAttribute> Raw(IS100Feature feature)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+        var result = new List<IdentifyAttribute>(feature.Attributes.Count);
+        foreach (var (code, value) in feature.Attributes)
+        {
+            result.Add(new IdentifyAttribute(code, null, value, value));
+        }
+
+        foreach (var complex in feature.ComplexAttributes)
+        {
+            foreach (var (code, value) in complex.SubAttributes)
+            {
+                var name = $"{complex.Code}.{code}";
+                result.Add(new IdentifyAttribute(name, null, value, value));
+            }
+        }
+
+        return result;
+    }
 }
 
 /// <summary>
@@ -337,9 +369,11 @@ public sealed class IdentifyFeaturesService
                 ResolveReferencedTexts(h.Feature, h.Resolver, LinkedFileReferences(h)),
                 h.DrawingPriority,
                 amlInfo?.Info.FeatureTypeName,
-                amlInfo?.Info.Attributes.Select(IdentifyAttribute.From).ToList(),
+                amlInfo?.Info.Attributes.Select(IdentifyAttribute.From).ToList()
+                    ?? (request.IncludeAttributes && h.Feature is { } withAttributes ? IdentifyAttribute.Raw(withAttributes) : null),
                 amlInfo?.Provenance,
-                h.Feature is { } feature ? PickSectionResult.For(h.Spec, feature, amlInfo?.Info.Attributes) : null));
+                h.Feature is { } feature ? PickSectionResult.For(h.Spec, feature, amlInfo?.Info.Attributes) : null,
+                h.Feature is { } valued ? FeatureDepthValues.From(valued) : null));
         }
 
         return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Ok(
@@ -502,6 +536,7 @@ public sealed class IdentifyFeaturesService
         1 => "curve",
         _ => "surface",
     };
+
 
     /// <summary>
     /// Resolves every <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c>

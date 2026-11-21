@@ -69,7 +69,7 @@ public sealed record RouteCheckLimits(
     [property: Description("The corridor's HALF-width in metres: how far it reaches to port, and to starboard, of the track (so the corridor is twice this wide). Overrides every leg's cross-track limits. Without it a route uses each leg's port/starboard XTD, and anything unset uses 50 m.")] double? CorridorHalfWidthMeters = null,
     [property: Description("How close to the track line, in metres, an aid to navigation, structure or overhead feature counts as on the track (default 30). A structure on the track is must review.")] double? TrackClearanceMeters = null,
     [property: Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route (default 185.2, 0.1 NM).")] double? NearbyDistanceMeters = null,
-    [property: Description("How far from the departure and arrival waypoints, in metres, structures that raise the SafetyContour alert count as the berth (a breakwater, ruin or other non-berth structure the track line cuts stays a crossing; pontoons, floating docks, piers and wharves never do) (default 100; 0 turns it off). They are one route_check.berth_structures finding (info) per end instead of crossings.")] double? BerthRadiusMeters = null,
+    [property: Description("How far from the departure and arrival waypoints, in metres, structures that raise the SafetyContour alert count as the berth (a breakwater, ruin or other non-berth structure the track line cuts stays a crossing; pontoons, floating docks, piers and wharves never do) (default 100; 0 turns it off). They are one route_check.berth_structures finding (info) per end instead of crossings. Pontoons, piers and wharves within 60 m of one already grouped join it, out to 4 times the radius, so a large marina's docks count as one berth.")] double? BerthRadiusMeters = null,
     [property: Description("Kinds of prohibited area and area with special conditions to turn off (S-101 alert catalogue ProhAre kinds): traffic_separation_zone, inshore_traffic_zone, restricted_area, area_to_be_avoided, particularly_sensitive_sea_area, caution_area, offshore_production_area, user_area_to_be_avoided, military_practice_area, seaplane_landing_area, submarine_transit_lane, anchorage_area, marine_farm. Their areas aren't reported; one route_check.area_kind_off finding per kind says the route meets them. Default: every kind on.")] IReadOnlyList<string>? AreaKindsOff = null);
 
 /// <summary>The clearance sampling of a <see cref="CheckRouteRequest"/>.</summary>
@@ -253,6 +253,7 @@ public sealed class CheckRouteTool
                     MustReviewInside = cyclones.MustReviewInside is { } inside ? MustReviewInside(inside) : TropicalCycloneRadius.Knots50,
                 },
             Timing = window?.Constraints is { } constraints ? Timing(constraints) : null,
+            SpeedsThroughWater = vessel?.SpeedThroughWater ?? false,
             DepartureWindow = window is null ? null
                 : window.From is { } from && window.To is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(window.StepMinutes))
                 : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(window.StepMinutes), MaxWindowDepartures),

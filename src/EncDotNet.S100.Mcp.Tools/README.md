@@ -107,6 +107,7 @@ These read an `IDatasetCatalog` and never change it.
 | `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. |
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
 | `SampleTool` | `sample` | Samples a quantity at a point or along a polyline (vertices, or every `SpacingMeters`). `Depth` is charted depth by the route check's rule (S-102, else the finest S-101 cell), with the water mask and, at a time, the water level and available depth, from the host's `RouteCheckSourceCache`. `WaterLevel`, `Current` and `Weather` sample S-104, S-111 and GRIB2 or NetCDF at one time or over a time window, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). A point along a polyline with no value has an error instead of failing the whole call. |
+| `PlanRouteTool` | `plan_route` | Plans a route through stops with `RoutePlanner` on the navigability grid, moving stops to navigable water, then checks it with `CheckRouteTool` and summarises the check. With `RouteName` and a host `IPassageRouteWriter`, creates the route. |
 | `CheckRouteTool` | `check_route` | Checks a polyline or a host route (through `IPassageRouteProvider`) with `RouteChecker`: charts, areas, S-124 warnings and, with a draft, under-keel clearance. Returns the whole `RouteCheckReport` as a `CheckRouteResult`; `CheckRouteResult.From` projects a report you ran yourself. |
 
 The vector tools (`identify_features`, `nearest_features`, `query_features`,
@@ -212,6 +213,8 @@ is a typed `ToolError` with a stable `Code` and a `Message`.
 | `current_station_not_found` | No current station has the id or name, or a name matches several stations (`candidates`). |
 | `no_current_station_near` | No predictable current station is within the radius. |
 | `current_station_not_predictable` | The current station's constituents, or its reference station, are missing. |
+| `no_route_planned` | `plan_route` found no route: a stop has no navigable water near it (`stop_not_navigable`) or no way joins two stops (`no_navigable_way`). |
+| `no_station_within_reach` | `sample` tried a tide or current prediction and no station reaches the point; `nearestStation` names the nearest and its distance. |
 
 ## `IDatasetCatalog`
 

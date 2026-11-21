@@ -60,10 +60,20 @@ public static class CatalogRouteCheckSources
                 ? new LazyWeather(() => new CatalogRouteWeatherSource(snapshot))
                 : null,
             Cyclones = CatalogRouteCyclone.FromDatasets(snapshot),
-            Currents = options.TidePredictions is { CurrentStations.Count: > 0 } catalogue
-                ? new TidePredictionCurrentSource(catalogue, new WaterReach(charts, options.MaxCurrentStationDistanceMeters))
-                : null,
+            Currents = Currents(snapshot, transforms, options, charts),
         };
+    }
+
+    // S-111 first, then current-station predictions where S-111 doesn't cover a place and time (#1033).
+    private static IRouteCurrentSource? Currents(
+        IReadOnlyList<LoadedDataset> snapshot, ICrsTransformFactory transforms, RouteCheckSourceOptions options, IWaterMask charts)
+    {
+        IRouteCurrentSource? predictions = options.TidePredictions is { CurrentStations.Count: > 0 } catalogue
+            ? new TidePredictionCurrentSource(catalogue, new WaterReach(charts, options.MaxCurrentStationDistanceMeters))
+            : null;
+        return CatalogCurrentSource.HasCurrents(snapshot)
+            ? new CatalogCurrentSource(snapshot, transforms, predictions)
+            : predictions;
     }
 
     /// <summary>

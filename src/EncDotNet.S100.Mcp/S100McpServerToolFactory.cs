@@ -53,7 +53,8 @@ internal static class S100McpServerToolFactory
         SearchFeaturesTool searchFeatures,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps,
-        CheckRouteTool checkRoute)
+        CheckRouteTool checkRoute,
+        PlanRouteTool planRoute)
     {
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListDatasetsTool(listDatasets));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTool(describeFeature));
@@ -68,6 +69,7 @@ internal static class S100McpServerToolFactory
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListSpecsTool(listSpecs));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListTimeStepsTool(listTimeSteps));
         yield return McpToolsets.Assign(McpToolsets.Routes, CreateCheckRouteTool(checkRoute));
+        yield return McpToolsets.Assign(McpToolsets.Routes, CreatePlanRouteTool(planRoute));
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -190,7 +192,12 @@ internal static class S100McpServerToolFactory
             "requestedTime, datasetId, validFrom, validTo, nearestStep, run, candidates) unless outOfRange=\"nearest\" (then timeStatus " +
             "\"before_start\" or \"after_end\"). Range/series 'times' return a 'series' (truncated=true with coveredFrom/coveredTo when the data " +
             "doesn't span it); depth takes one time. Where no S-104 or S-111 covers and the host has tide predictions on, the nearest tide or " +
-            "current station within 10 km by water is used: 'source' then names it (kind \"prediction\") with a caveat to quote. " +
+            "current station within reach by water (10 km for tide stations, 2 km for current stations) is used: 'source' then names it (kind \"prediction\") with a caveat to quote; " +
+            "beyond every station's reach the error is no_station_within_reach, naming the nearest station and its distance. " +
+            "For depth at a point, minDepthMeters (with optional clearanceMeters and searchRadiusMeters, default 5000 m) also checks the point is navigable " +
+            "(charted water at least that deep, no danger, and that much room from land, shoal, dangers and uncharted water): 'navigable', and when not, " +
+            "'notNavigableReason' (land, uncharted, shoal, hazard, no_depth, too_close) and 'nearestNavigable' (latitude, longitude, depthMeters, depth source, " +
+            "clearanceMeters, distanceMeters, bearingDegrees; or a 'reason' when nothing in the radius qualifies). " +
             "'spec' pins one product (S-102 depth means bathymetry only). A polyline returns 'samples' in order, each with legIndex, vertexIndex, " +
             "distanceMeters and its result, or an 'error' where that point has none; spacingMeters adds points between vertices along each rhumb-line " +
             "leg (at most " + SampleTool.MaxProfileSamples + " samples); for depth, 'shoalest' names the shallowest sample. CAP warnings are areas: use " +
@@ -205,6 +212,9 @@ internal static class S100McpServerToolFactory
                    [Description("Optional UTC ISO-8601 time: the time step for water level, current and weather (the first step when omitted), and the time of the water level for depth.")] DateTimeOffset? time = null,
                    [Description("Optional temporal query JSON envelope: {\"kind\":\"instant\",\"t\":\"…\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"} or {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Takes precedence over 'time'; depth takes an instant only.")] string? times = null,
                    [Description(OutOfRangeDescription)] string? outOfRange = null,
+                   [Description("For depth at a point: the least charted depth in metres the point needs (e.g. draft plus margin, or the safety contour). When the point fails, the result adds 'nearestNavigable'.")] double? minDepthMeters = null,
+                   [Description("With minDepthMeters: the room wanted round the point, in metres, from land, shoal water, dangers and uncharted water. Default 0.")] double? clearanceMeters = null,
+                   [Description("With minDepthMeters: how far to look for a navigable point, in metres. Default 5000, at most 20000; nearer water is searched on finer cells first.")] double? searchRadiusMeters = null,
                    CancellationToken ct = default) =>
             DispatchAsync(async () =>
             {
@@ -218,7 +228,10 @@ internal static class S100McpServerToolFactory
                         spacingMeters,
                         time,
                         ParseTimeQuery(times),
-                        ParseOutOfRange(outOfRange)),
+                        ParseOutOfRange(outOfRange),
+                        minDepthMeters,
+                        clearanceMeters,
+                        searchRadiusMeters),
                     ct).ConfigureAwait(false);
                 return result.TryGetValue(out var output)
                     ? ToolResult<object>.Ok(output.Payload)
@@ -287,7 +300,9 @@ internal static class S100McpServerToolFactory
             "returns what its map draws at the view time, hidden S-124 parts left out, and a headless " +
             "host returns every drawable feature. Each match reports the dataset ID, " +
             "spec, feature ID and type, geometry primitive, bounds, containment ('inside'/'near'), " +
-            "and approximate distance — follow up with describe_feature for full attributes.";
+            "and approximate distance, and 'depth' with its numeric depth values in metres where it has any (depthRangeMinimumMeters, " +
+            "depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds every attribute as encoded. " +
+            "Use describe_feature for decoded attributes and geometry.";
 
         var del = ([Description("Pick latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
                    [Description("Pick longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
@@ -295,6 +310,7 @@ internal static class S100McpServerToolFactory
                    [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
                    [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
                    [Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? time = null,
+                   [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -304,7 +320,8 @@ internal static class S100McpServerToolFactory
                         ParseSpec(spec),
                         radiusMeters,
                         maxResults,
-                        time),
+                        time,
+                        includeAttributes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -327,7 +344,9 @@ internal static class S100McpServerToolFactory
             "on its geometry (nearest point on a segment, not just the nearest vertex) plus the " +
             "bearing toward it. Works across every vector spec (S-101, S-122, S-124, S-125, S-127, " +
             "S-128, S-129, S-131, S-201, S-411, S-421). Optional spec / datasetId / featureType / " +
-            "maxDistanceMeters filters; results are nearest-first. Read-only.";
+            "maxDistanceMeters filters; results are nearest-first. Each match has 'depth' with its numeric depth values in metres where it " +
+            "has any (depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds " +
+            "every attribute as encoded. Read-only.";
 
         var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
                    [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
@@ -336,6 +355,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"LightAllAround\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null matches every feature type.")] string? featureType = null,
                    [Description("Optional maximum distance in metres; features farther than this are excluded. null imposes no limit.")] double? maxDistanceMeters = null,
                    [Description("Maximum ranked features to return; clamped to [1, 200]. Default 10.")] int limit = 10,
+                   [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -346,7 +366,8 @@ internal static class S100McpServerToolFactory
                         string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
                         featureType,
                         maxDistanceMeters,
-                        limit),
+                        limit,
+                        includeAttributes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -370,8 +391,9 @@ internal static class S100McpServerToolFactory
             "attribute values (equality map or explicit operator predicates, combined with AND). " +
             "For S-101 the featureType filter matches the feature-type acronym (e.g. LIGHTS, " +
             "BOYLAT) and each featureId is the record's decimal RCID. Each result includes the " +
-            "dataset ID, spec, feature ID, feature type, and bounding box — follow up with " +
-            "describe_feature for full attributes. The result also carries a typeBreakdown " +
+            "dataset ID, spec, feature ID, feature type, bounding box, and 'depth' with its numeric depth values in metres where it has " +
+            "any (depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds every " +
+            "attribute as encoded. Use describe_feature for decoded attributes and geometry. The result also carries a typeBreakdown " +
             "(per-feature-type counts of the full match set). Pagination is server-side.";
 
         var del = ([Description("Spatial query envelope, supplied either as a JSON object (preferred) or a JSON string containing one. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] JsonElement query,
@@ -383,6 +405,7 @@ internal static class S100McpServerToolFactory
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    [Description("Optional dataset identifier (typically from list_datasets); null queries across every matching dataset.")] string? datasetId = null,
+                   [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -395,7 +418,8 @@ internal static class S100McpServerToolFactory
                         precise,
                         page,
                         pageSize,
-                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId)),
+                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
+                        includeAttributes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -502,8 +526,9 @@ internal static class S100McpServerToolFactory
             "(window.from/to, or the S-104 range). With weather.maxWindKnots or weather.maxWaveHeightMeters (or the route's own limits) the " +
             "weather check tests loaded GRIB2/NetCDF forecasts along the route, and loaded NHC advisories are tested as weather.cyclones " +
             "says. window.constraints adds the timing check (result: timing): tidal gates, leg current limits and arrival constraints at each departure, " +
-            "with applyCurrents for running times with predicted currents, and the windows that meet them all. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
-            "uses each leg's XTDs, draft, speed and UKC. SOG is the entered speed (S-111 is not applied). Not for navigation.";
+            "with applyCurrents for running times with currents, and the windows that meet them all. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
+            "uses each leg's XTDs, draft, speed and UKC. The speed is over the ground unless vessel.speedThroughWater (or applyCurrents) says it's through the water: " +
+            "then every check's ETAs add the current along the track (S-111, else current predictions; result: currents). Not for navigation.";
 
         // The schema and the binding come from CheckRouteRequest itself, so
         // every parameter the request takes reaches the tool.
@@ -638,6 +663,111 @@ internal static class S100McpServerToolFactory
 
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
             await DispatchAsync(() => inner.InvokeAsync(ReadCheckRouteRequest(arguments), cancellationToken)).ConfigureAwait(false);
+    }
+
+    private static McpServerTool CreatePlanRouteTool(PlanRouteTool inner)
+    {
+        var description =
+            "Suggests a route between stops for a vessel (from, to, optional via for a whole itinerary in one call) and checks it. " +
+            "Stops that are on land or in water too shallow move to the nearest navigable water (stops[].moved, reason, movedMeters); near a stop " +
+            "(limits.berthRadiusMeters, default 300 m) water down to draft + squat is allowed so the route can reach a berth. Between the stops the " +
+            "route keeps to charted water at least the larger of draft + squat + requiredUkc and the safety contour deep, with no danger or structure " +
+            "(breakwater, pier, pontoon) in it, at least clearanceMeters from anything that isn't, and prefers open water and, with prefer, charted " +
+            "fairways, dredged areas or recommended tracks. It searches the same grid as get_navigability_grid, then keeps few waypoints. Returns the " +
+            "legs (distanceNm, runningMinutes at vessel.speedKnots, least depth and clearance), 'waypoints' in the shape append_waypoint takes, " +
+            "'polyline' to pass to check_route, and with check (default true) a short check_route summary: verdict, counts, mustReviewAwayFromStops " +
+            "and the worst findings. In SoundCharts, routeName creates the route and returns its routeId. No tide gates or currents. " +
+            "Errors: no_route_planned (stop_not_navigable or no_navigable_way). Not for navigation.";
+
+        return McpServerTool.Create(new PlanRouteFunction(inner), new McpServerToolCreateOptions
+        {
+            Name = PlanRouteTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>The <c>plan_route</c> input schema: <see cref="PlanRouteRequest"/>'s properties and descriptions.</summary>
+    internal static JsonElement PlanRouteInputSchema { get; } = CreatePlanRouteInputSchema();
+
+    private static JsonElement CreatePlanRouteInputSchema()
+    {
+        var schema = AIJsonUtilities.CreateJsonSchema(
+            typeof(PlanRouteRequest),
+            serializerOptions: JsonOptions,
+            inferenceOptions: new AIJsonSchemaCreateOptions { IncludeSchemaKeyword = false });
+        var node = JsonNode.Parse(schema.GetRawText())!.AsObject();
+        node["required"] = new JsonArray("from", "to", "vessel");
+        RemoveNullDefaults(node);
+        using var doc = JsonDocument.Parse(node.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>Reads a <see cref="PlanRouteRequest"/> from <c>plan_route</c>'s arguments.</summary>
+    /// <param name="arguments">The call's arguments, by name.</param>
+    /// <returns>The request.</returns>
+    /// <exception cref="JsonException">An argument has the wrong type.</exception>
+    internal static PlanRouteRequest ReadPlanRouteRequest(IEnumerable<KeyValuePair<string, object?>> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        var body = new JsonObject();
+        foreach (var (name, value) in arguments)
+        {
+            var node = value switch
+            {
+                null => null,
+                JsonElement element => JsonNode.Parse(element.GetRawText()),
+                JsonNode n => n.DeepClone(),
+                _ => JsonSerializer.SerializeToNode(value, JsonOptions.GetTypeInfo(value.GetType())),
+            };
+
+            // An object or list sent as JSON text is read as itself.
+            if (node is JsonValue text && text.TryGetValue<string>(out var json) && json.TrimStart() is ['{' or '[', ..]
+                && !string.Equals(name, "routeName", StringComparison.OrdinalIgnoreCase))
+            {
+                node = JsonNode.Parse(json);
+            }
+
+            body[name] = Point(name, node);
+        }
+
+        if (body["from"] is null || body["to"] is null)
+        {
+            throw new ArgumentException("plan_route needs 'from' and 'to'.", body["from"] is null ? "from" : "to");
+        }
+
+        return body.Deserialize(JsonOptions.GetTypeInfo(typeof(PlanRouteRequest))) as PlanRouteRequest
+            ?? throw new JsonException("plan_route takes an object of arguments.");
+
+        // A point may be [lat, lon] as well as {latitude, longitude}; so may each via point.
+        static JsonNode? Point(string name, JsonNode? node)
+        {
+            static JsonNode? One(JsonNode? n) => n is JsonArray { Count: 2 } pair && pair[0] is JsonValue && pair[1] is JsonValue
+                ? new JsonObject { ["latitude"] = pair[0]!.DeepClone(), ["longitude"] = pair[1]!.DeepClone() }
+                : n;
+
+            if (string.Equals(name, "from", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "to", StringComparison.OrdinalIgnoreCase))
+            {
+                return One(node);
+            }
+
+            return string.Equals(name, "via", StringComparison.OrdinalIgnoreCase) && node is JsonArray list
+                ? new JsonArray([.. list.Select(item => One(item?.DeepClone()))])
+                : node;
+        }
+    }
+
+    /// <summary><c>plan_route</c> as an <see cref="AIFunction"/> whose schema and binding are <see cref="PlanRouteRequest"/>'s.</summary>
+    private sealed class PlanRouteFunction(PlanRouteTool inner) : AIFunction
+    {
+        public override string Name => PlanRouteTool.Name;
+
+        public override JsonElement JsonSchema => PlanRouteInputSchema;
+
+        public override JsonSerializerOptions JsonSerializerOptions => JsonOptions;
+
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+            await DispatchAsync(() => inner.InvokeAsync(ReadPlanRouteRequest(arguments), cancellationToken)).ConfigureAwait(false);
     }
 
     private static McpServerTool CreateListSpecsTool(ListSpecsTool inner)

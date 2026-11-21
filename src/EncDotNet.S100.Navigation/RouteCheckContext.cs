@@ -23,7 +23,7 @@ public sealed class RouteCheckContext
         Sources = sources;
         Options = options ?? RouteCheckOptions.Default;
         Track = RouteTrack.Build(plan, settings, Options.DefaultLimit);
-        Schedule = PassageSchedule.Compute(plan, settings);
+        Schedule = PassageSchedule.Compute(plan, settings, sources);
     }
 
     /// <summary>The plan to check.</summary>
@@ -43,7 +43,11 @@ public sealed class RouteCheckContext
 
     /// <summary>
     /// The plan's ETAs. Where a leg has none, the time is the plan's
-    /// departure, or <see cref="RouteCheckSettings.At"/> without one.
+    /// departure, or <see cref="RouteCheckSettings.At"/> without one. With
+    /// speeds through the water, they add the current along the track.
     /// </summary>
     public PassageSchedule Schedule { get; }
+
+    /// <summary>The currents applied to the ETAs, or <c>null</c> when the speeds are over the ground or there are none.</summary>
+    internal IRouteCurrentSource? AppliedCurrents => Settings.AppliesCurrents ? Sources.Currents : null;
 }

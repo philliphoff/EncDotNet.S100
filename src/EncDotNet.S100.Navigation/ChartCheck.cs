@@ -927,7 +927,8 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         // narrower than the track clearance either side, so its breakwaters
         // are close too. But a structure that isn't a berth
         // (SafetyContourFeatureDetails.IsBerth) and that the track line
-        // itself cuts (CutByTrack) stays a MUST REVIEW crossing.
+        // itself cuts (CutByTrack) stays a MUST REVIEW crossing. Berth
+        // structures joined to the grouped ones are grouped too (#1626).
         public void GroupBerthStructures(GeoPosition departure, GeoPosition arrival, int lastLeg, double totalDistance, double radius)
         {
             if (!(radius > 0))
@@ -961,9 +962,51 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 return false;
             });
 
+            // #1626: a marina's docks spread past any one radius, so a berth
+            // structure next to one already grouped joins it, out to a few
+            // radii from the end: the dock system counts as one berth.
+            Chain(atDeparture, departure, radius);
+            Chain(atArrival, arrival, radius);
+
             AddBerth(RouteEnd.Departure, atDeparture, 0, 0, departure, radius);
             AddBerth(RouteEnd.Arrival, atArrival, lastLeg, totalDistance, arrival, radius);
         }
+
+        // How close a berth structure must be to one grouped at an end to join it, in metres.
+        private const double BerthJoinMeters = 60;
+
+        // How far from the end, in radii, the joined structures may reach.
+        private const double BerthReachRadii = 4;
+
+        private void Chain(List<Entry> grouped, GeoPosition end, double radius)
+        {
+            if (grouped.Count == 0)
+            {
+                return;
+            }
+
+            var reach = radius * BerthReachRadii;
+            bool joined;
+            do
+            {
+                joined = false;
+                var added = _entries.FindAll(e =>
+                    e.Details is SafetyContourFeatureDetails { IsStructure: true, IsBerth: true }
+                    && Within(e.Location, end, reach)
+                    && grouped.Any(g => Near(g.Location, e.Location, BerthJoinMeters)));
+                if (added.Count > 0)
+                {
+                    grouped.AddRange(added);
+                    _entries.RemoveAll(added.Contains);
+                    joined = true;
+                }
+            }
+            while (joined);
+        }
+
+        // Whether any points of two locations are within a distance of each other.
+        private static bool Near(RouteFindingLocation a, RouteFindingLocation b, double meters) =>
+            a.Path.Any(p => b.Path.Any(q => Wgs84Geodesy.GeodesicDistanceMetres(p, q) <= meters));
 
         private void AddBerth(RouteEnd end, List<Entry> structures, int legIndex, double distance, GeoPosition at, double radius)
         {

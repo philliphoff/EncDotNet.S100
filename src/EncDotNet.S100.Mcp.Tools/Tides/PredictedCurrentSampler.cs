@@ -44,6 +44,7 @@ internal sealed class PredictedCurrentSampler
     private readonly IDatasetCatalog _catalog;
     private readonly RouteCheckSourceCache _sources;
     private readonly TimeProvider _time;
+    private readonly StationReach _beyond = new();
 
     public PredictedCurrentSampler(IDatasetCatalog catalog, RouteCheckSourceCache sources, TimeProvider time)
     {
@@ -52,16 +53,21 @@ internal sealed class PredictedCurrentSampler
         _time = time;
     }
 
-    /// <summary>The predicted sample for the request, or <c>null</c> when predictions are off or no station reaches the point.</summary>
+    /// <summary>
+    /// The predicted sample for the request; a <see cref="NoStationWithinReach"/>
+    /// error when no station reaches the point; or <c>null</c> when predictions
+    /// are off or there are no current stations.
+    /// </summary>
     public ToolResult<SampleCoverageResult>? Sample(SampleCoverageRequest request)
     {
         if (_sources.TidePredictions is not { } catalogue || catalogue.CurrentStations.Count == 0)
             return null;
 
         var position = new GeoPosition(request.Latitude, request.Longitude);
-        var reach = new WaterReach(_sources.Get(_catalog.Datasets).WaterMask, _sources.Options.MaxCurrentStationDistanceMeters);
+        var mask = _sources.Get(_catalog.Datasets).WaterMask;
+        var reach = new WaterReach(mask, _sources.Options.MaxCurrentStationDistanceMeters);
         if (Locate(catalogue, reach, position) is not var (station, prediction, distance))
-            return null;
+            return OutOfReach(catalogue, mask, position, request, reach.ReachMeters);
 
         var info = prediction.Source;
         var sampleSource = new SampleSource(
@@ -123,6 +129,16 @@ internal sealed class PredictedCurrentSampler
             Value(prediction.Predictor, station, distance, at, requested),
             TimeStatus: requested is null ? null : "in_range",
             Source: sampleSource));
+    }
+
+    private ToolResult<SampleCoverageResult>? OutOfReach(
+        TideStationCatalogue catalogue, IWaterMask? mask, GeoPosition position, SampleCoverageRequest request, double reachMeters)
+    {
+        var candidates = catalogue.FindNearestCurrentStations(position, Candidates)
+            .Select(m => (m.Station.Id, (string?)m.Station.Name, m.Station.Position, m.DistanceMeters));
+        return _beyond.Nearest(mask, position, candidates, id => catalogue.TryCreateCurrentPrediction(id) is not null) is { } nearest
+            ? ToolResult<SampleCoverageResult>.Err(new NoStationWithinReach("current", request.Latitude, request.Longitude, reachMeters, nearest))
+            : null;
     }
 
     private static (CurrentStationEntry Station, CurrentStationPrediction Prediction, double Distance)? Locate(

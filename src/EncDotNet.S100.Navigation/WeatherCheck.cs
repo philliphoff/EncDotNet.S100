@@ -363,7 +363,7 @@ public sealed class WeatherCheck : IRouteCheck<WeatherCheckResult>
     private readonly object _gate = new();
     private Profile? _profile;
     private StormProfile? _storms;
-    private (Profile Profile, StormProfile Storms, DepartureRange Range, IReadOnlyList<WeatherLimitUsed> Limits, TropicalCycloneCheckSettings Cyclones, WeatherDepartureSweep? Sweep)? _sweep;
+    private (Profile Profile, StormProfile Storms, DepartureRange Range, IReadOnlyList<WeatherLimitUsed> Limits, TropicalCycloneCheckSettings Cyclones, IRouteCurrentSource? Currents, WeatherDepartureSweep? Sweep)? _sweep;
 
     /// <inheritdoc/>
     public string Name => CheckName;
@@ -411,7 +411,7 @@ public sealed class WeatherCheck : IRouteCheck<WeatherCheckResult>
         var storms = StormsFor(profile, cyclones, context.Options.Weather.CycloneNearbyMeters, cancellationToken);
         var samples = Evaluate(profile, storms, tc, context.Schedule, checkedLimits, cancellationToken);
         var departures = context.Settings.DepartureWindow is { } range && (checkedLimits.Count > 0 || storms.Storms.Count > 0)
-            ? Sweep(profile, storms, tc, context.Plan.Legs, range, checkedLimits, cancellationToken)
+            ? Sweep(profile, storms, tc, context.Plan.Legs, range, checkedLimits, context.AppliedCurrents, cancellationToken)
             : null;
         var result = new WeatherCheckResult(checkedLimits, samples, Verdict(samples), Datasets(samples), departures)
         {
@@ -762,12 +762,13 @@ public sealed class WeatherCheck : IRouteCheck<WeatherCheckResult>
         IReadOnlyList<PassageLeg> legs,
         DepartureRange range,
         IReadOnlyList<WeatherLimitUsed> limits,
+        IRouteCurrentSource? currents,
         CancellationToken cancellationToken)
     {
         lock (_gate)
         {
             if (_sweep is { } last && ReferenceEquals(last.Profile, profile) && ReferenceEquals(last.Storms, storms)
-                && last.Range == range && last.Limits.SequenceEqual(limits) && last.Cyclones == tc)
+                && last.Range == range && last.Limits.SequenceEqual(limits) && last.Cyclones == tc && ReferenceEquals(last.Currents, currents))
             {
                 return last.Sweep;
             }
@@ -781,7 +782,7 @@ public sealed class WeatherCheck : IRouteCheck<WeatherCheckResult>
             foreach (var departure in list.Times)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                options.Add(Option(profile, storms, tc, legs, departure, limits, cancellationToken));
+                options.Add(Option(profile, storms, tc, legs, departure, limits, currents, cancellationToken));
             }
 
             sweep = new WeatherDepartureSweep(options) { Step = list.Step };
@@ -789,7 +790,7 @@ public sealed class WeatherCheck : IRouteCheck<WeatherCheckResult>
 
         lock (_gate)
         {
-            _sweep = (profile, storms, range, limits.ToArray(), tc, sweep);
+            _sweep = (profile, storms, range, limits.ToArray(), tc, currents, sweep);
         }
 
         return sweep;
@@ -878,9 +879,10 @@ public sealed class WeatherCheck : IRouteCheck<WeatherCheckResult>
         IReadOnlyList<PassageLeg> legs,
         DateTimeOffset departure,
         IReadOnlyList<WeatherLimitUsed> limits,
+        IRouteCurrentSource? currents,
         CancellationToken cancellationToken)
     {
-        var schedule = PassageSchedule.Compute(legs, departure);
+        var schedule = PassageSchedule.Compute(legs, departure, currents);
         var samples = Evaluate(profile, storms, tc, schedule, limits, cancellationToken);
         double? wind = null, wave = null, closest = null;
         TropicalCycloneRadius? radius = null;

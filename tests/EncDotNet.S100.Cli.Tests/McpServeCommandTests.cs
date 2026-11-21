@@ -43,6 +43,7 @@ public sealed class McpServeCommandTests
         "list_time_steps",
         "nearest_features",
         "open_dataset",
+        "plan_route",
         "predict_current",
         "predict_tide",
         "query_features",

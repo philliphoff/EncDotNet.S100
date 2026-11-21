@@ -266,13 +266,14 @@ public sealed class TimingCheck : IRouteCheck<PassageTimingResult>
         }
 
         var currents = context.Sources.Currents;
-        var needsCurrents = timing.ApplyCurrents || timing.LegLimits.Count > 0
+        var apply = context.Settings.AppliesCurrents;
+        var needsCurrents = apply || timing.LegLimits.Count > 0
             || timing.Gates.Any(g => g.SlackWithin is not null || g.MaxCurrent is not null || g.FairOnly);
         var stretches = Stretches(legs, currents);
         var gates = timing.Gates.Select((g, i) => Locate(g, i, stretches, legs, currents)).ToList();
 
         var departure = context.Schedule.Departure;
-        var planned = Evaluate(departure, legs, stretches, gates, timing, currents is not null && timing.ApplyCurrents, context.Sources);
+        var planned = Evaluate(departure, legs, stretches, gates, timing, currents is not null && apply, context.Sources);
         List<TimingDeparture>? swept = null;
         TimeSpan? step = null;
         if (context.Settings.DepartureWindow is { } range)
@@ -289,7 +290,7 @@ public sealed class TimingCheck : IRouteCheck<PassageTimingResult>
             for (var t = from; t <= to; t += step.Value)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                swept.Add(Evaluate(t, legs, stretches, gates, timing, currents is not null && timing.ApplyCurrents, context.Sources));
+                swept.Add(Evaluate(t, legs, stretches, gates, timing, currents is not null && apply, context.Sources));
             }
         }
 
@@ -305,7 +306,7 @@ public sealed class TimingCheck : IRouteCheck<PassageTimingResult>
             swept,
             swept is null ? [] : Windows(swept),
             step,
-            currents is not null && timing.ApplyCurrents,
+            currents is not null && apply,
             sources);
         return needsCurrents && currents is null
             ? RouteCheckOutcome<PassageTimingResult>.Partial(TimingReasons.CurrentsMissing, [], result)

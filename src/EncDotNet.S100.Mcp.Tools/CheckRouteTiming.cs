@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="ArriveNotBefore">The earliest arrival.</param>
 /// <param name="ArrivalTide">The water level range at the arrival waypoint.</param>
 public sealed record WindowConstraintsArguments(
-    [property: Description("Speeds are through the water: the timing check applies the current along the track to its ETAs and running times (other checks keep the speed as over the ground). Needs current predictions (s100 mcp serve --tide-predictions).")] bool ApplyCurrents = false,
+    [property: Description("Speeds are through the water: the current along the track is added to them for the ETAs and running times, in this check and every other (the same as vessel.speedThroughWater). Needs S-111 or current predictions (s100 mcp serve --tide-predictions).")] bool ApplyCurrents = false,
     [property: Description("Tidal gates: [{name?, waypoint | latitude+longitude, station?, slackWithinMinutes?, maxCurrentKnots?, fairOnly?}]. waypoint is zero-based; a position is snapped to the track. The current comes from the named current station (id or name, as predict_current takes), else from the nearest station that reaches the gate. slackWithinMinutes needs a station.")] IReadOnlyList<GateArguments>? Gates = null,
     [property: Description("Limits on the current against the track: [{leg?, maxOpposingKnots}]; leg is zero-based, omitted for every leg.")] IReadOnlyList<LegLimitArguments>? LegLimits = null,
     [property: Description("ISO 8601 latest arrival, such as daylight or marina office hours.")] DateTimeOffset? ArriveBy = null,

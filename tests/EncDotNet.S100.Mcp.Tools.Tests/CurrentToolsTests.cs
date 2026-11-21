@@ -1,6 +1,7 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Time;
@@ -232,9 +233,45 @@ public sealed class CurrentToolsTests
     {
         // Skagit Bay off Hope Island, 4.7 km from the Deception Pass narrows
         // (#1545): within a tide station's 10 km, beyond a current station's 2 km.
+        // The error names the station and its distance (#1627).
         var result = await SampleTool(predictions: true).SampleCoverageAsync(S111(48.398, -122.580, Now), TestContext.Current.CancellationToken);
 
-        Assert.IsType<NoDatasetCoversPoint>(Error(result));
+        var error = Assert.IsType<NoStationWithinReach>(Error(result));
+        Assert.Equal("no_station_within_reach", error.Code);
+        Assert.Equal("current", error.Quantity);
+        Assert.Equal(2_000, error.ReachMeters);
+        Assert.Equal(DeceptionPass, error.NearestStation.Id);
+        Assert.InRange(error.NearestStation.DistanceMeters, 4_000, 5_500);
+        Assert.Contains(DeceptionPass, error.Message);
+        Assert.Contains("beyond the 2 km a current station reaches", error.Message);
+    }
+
+    [Theory]
+    [InlineData(48.3990, -122.5870, 4_000, 5_500)] // Skagit Bay
+    [InlineData(48.36352, -122.54594, 8_000, 11_000)] // Swinomish entrance
+    public async Task Points_out_of_reach_name_the_nearest_station(double latitude, double longitude, double min, double max)
+    {
+        // The repro points of #1627.
+        var result = await SampleTool(predictions: true).SampleCoverageAsync(S111(latitude, longitude, Now), TestContext.Current.CancellationToken);
+
+        var error = Assert.IsType<NoStationWithinReach>(Error(result));
+        Assert.Equal(DeceptionPass, error.NearestStation.Id);
+        Assert.InRange(error.NearestStation.DistanceMeters, min, max);
+    }
+
+    [Fact]
+    public async Task Along_a_line_out_of_reach_samples_report_the_station()
+    {
+        var line = new GeoPolyline([new GeoPoint(48.4065, -122.6440), new GeoPoint(48.3990, -122.5870)]);
+        var request = new SampleRequest(SampleQuantity.Current, Polyline: line, Time: Now);
+
+        var result = await SampleTool(predictions: true).InvokeAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var output));
+        var samples = output!.Profile!.Samples;
+        Assert.NotNull(samples[0].Result);
+        Assert.Equal("no_station_within_reach", samples[^1].Error!.Code);
+        Assert.Contains(DeceptionPass, samples[^1].Error!.Message);
     }
 
     [Fact]
@@ -300,7 +337,7 @@ public sealed class CurrentToolsTests
         var far = await SampleTool(predictions: true).SampleCoverageAsync(S111(10, 10, Now), TestContext.Current.CancellationToken);
 
         Assert.IsType<NoDatasetCoversPoint>(Error(off));
-        Assert.IsType<NoDatasetCoversPoint>(Error(far));
+        Assert.IsType<NoStationWithinReach>(Error(far));
     }
 
     private static SampleTool SampleTool(bool predictions, double? currentReachMeters = null)

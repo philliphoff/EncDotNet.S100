@@ -40,7 +40,15 @@ The results are an aid for exploring the data, not for navigation.
   has a draft. See [Keel](how-a-route-check-works.md#keel).
 - **The departure and speeds.** Speeds give each point an ETA, and
   warnings, seasonal areas, S-104 water levels and the weather forecast are
-  judged at the ETAs.
+  judged at the ETAs. Speeds are over the ground unless you say they're
+  through the water (`vessel.speedThroughWater` in `check_route`, or the
+  timing check's `applyCurrents`). Then each stretch of up to 500 m adds the
+  current along the track at its ETA, from S-111 where it covers the place
+  and time, else from a current-station prediction within reach (with
+  predictions on), and every check uses those ETAs. Where neither has a
+  value at the ETA, the speed stands as over the ground and the stretch is
+  a `data.no_current_coverage` finding (Info). Set across the track and
+  leeway aren't applied.
 - **Wind and wave limits.** The highest wind speed and significant wave
   height the vessel accepts, for the weather check. SoundCharts uses
   **Mariner Settings**; MCP and the command line take them as arguments. An
@@ -94,7 +102,7 @@ These checks run when the safety contour and safety depth are both set.
 |---|---|---|
 | `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
 | `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
-| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, one finding per end; a breakwater or other non-berth structure the track line cuts stays a crossing. |
+| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, and the docks joined to them, one finding per end; a breakwater or other non-berth structure the track line cuts stays a crossing. |
 | `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
@@ -115,7 +123,10 @@ piers, and a marina entrance is often narrower than the track clearance either
 side, so its breakwaters are close too. Structures within the berth radius of
 the departure or arrival waypoint are grouped into one Info finding per end,
 "Structures at the departure berth" or "Structures at the arrival berth",
-which lists them. The radius is a setting (`--berth-radius` in
+which lists them. A large marina's docks spread past any one radius, so a
+pontoon, floating dock, pier or wharf within 60 m of a structure already
+grouped joins the group too, out to four times the radius: the dock system
+counts as one berth. The radius is a setting (`--berth-radius` in
 `s100 route check`, `limits.berthRadiusMeters` in `check_route`); 0 turns the
 grouping off.
 
@@ -262,8 +273,7 @@ and compares it with the required UKC (0 m when none is set).
   reach, there's no water level, and the stretch is a gap.
 - **Datums.** When the depth and water-level vertical datums differ, the
   water level is reported but not applied, and the stretch is a gap.
-- **Squat** is a fixed allowance. It isn't modelled from speed, and S-111
-  currents aren't applied to ETAs.
+- **Squat** is a fixed allowance. It isn't modelled from speed.
 
 Each sample has a state:
 
@@ -317,6 +327,7 @@ findings:
 | `data.water_level_no_data` | Check | A stretch inside water-level coverage where the data has no value. |
 | `data.datum_mismatch` | Check | The water level's datum differs from the charted depth's, so it isn't applied. |
 | `data.no_charted_depth` | Check | A stretch with no charted depth from S-102 or S-101. |
+| `data.no_current_coverage` | Info | With speeds through the water, a stretch where no S-111 or current prediction has a value at the ETA, so the speed is taken as over the ground there. |
 
 ## Weather along the route
 
@@ -335,8 +346,9 @@ and compares them with the limits.
   step isn't checked, and the stretch is reported. It never counts as a
   pass. The same applies before the first step, outside every grid, and
   where the grid has no value.
-- **ETAs.** ETAs are distance over the entered speed. Set and drift aren't
-  applied, so weather at an ETA is only as good as the ETA.
+- **ETAs.** ETAs are distance over the entered speed, with the current
+  along the track added when speeds are through the water. Set across the
+  track isn't applied, so weather at an ETA is only as good as the ETA.
 - **Advisory.** Weather model output isn't official S-100 data. Every
   weather finding is Check, and none is for navigation.
 

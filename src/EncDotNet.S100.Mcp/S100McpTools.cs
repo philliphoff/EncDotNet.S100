@@ -56,6 +56,7 @@ public static class S100McpTools
         ArgumentNullException.ThrowIfNull(catalog);
         var transforms = new ProjNetCrsTransformFactory();
         routeCheckSources ??= new RouteCheckSourceCache(transforms);
+        var checkRoute = new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System);
 
         return S100McpServerToolFactory.CreateTools(
             new ListDatasetsTool(catalog),
@@ -70,7 +71,8 @@ public static class S100McpTools
             new SearchFeaturesTool(catalog),
             new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
-            new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))
+            checkRoute,
+            new PlanRouteTool(catalog, routeCheckSources, checkRoute, passageRoutes as IPassageRouteWriter))
             .Append(McpToolsets.Assign(McpToolsets.Routes, NavigabilityGridMcpTool.Create(new NavigabilityGridTool(catalog, routeCheckSources, NavigabilityGridDirectory))))
             .ToList();
     }

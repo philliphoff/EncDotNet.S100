@@ -206,6 +206,12 @@ public static class RouteFindingCodes
     /// <summary>A stretch outside every water-level dataset's coverage. CHECK.</summary>
     public static RouteFindingCode NoWaterLevelCoverage { get; } = new("data.no_water_level_coverage", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
+    /// <summary>
+    /// With speeds through the water, a stretch where no current covers the
+    /// ETA, so the speed is taken as over the ground there (#1033). INFO.
+    /// </summary>
+    public static RouteFindingCode NoCurrentCoverage { get; } = new("data.no_current_coverage", RouteFindingCategory.Data, RouteFindingGroup.Info);
+
     /// <summary>A stretch inside water-level coverage where the data has no value. CHECK.</summary>
     public static RouteFindingCode WaterLevelNoData { get; } = new("data.water_level_no_data", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
@@ -278,7 +284,7 @@ public static class RouteFindingCodes
         BelowSetting, TightOnPredicted,
         ChartedDepthFromS101, DatumUnconfirmed, WaterLevelPredicted,
         OutsideChartCoverage, WaterLevelEnds, WaterLevelStartsLate, NoWaterLevelCoverage,
-        WaterLevelNoData, DatumMismatch, NoChartedDepth,
+        WaterLevelNoData, DatumMismatch, NoChartedDepth, NoCurrentCoverage,
         WindAboveLimit, WavesAboveLimit, WeatherForecastEnds, WeatherForecastStartsLate, NoWeatherCoverage, WeatherNoData,
         CycloneRadius34, CycloneRadius50, CycloneRadius64, CycloneCone, CycloneClosestApproach, CycloneBeyondForecast,
     ];

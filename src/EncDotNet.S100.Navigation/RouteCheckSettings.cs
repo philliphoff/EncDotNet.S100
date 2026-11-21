@@ -68,7 +68,9 @@ public sealed class RouteCheckSettings
     /// (<see cref="SafetyContourFeatureDetails.IsBerth"/>) even when it does.
     /// <c>null</c> for <see cref="DefaultBerthRadius"/>. Such structures are reported as
     /// one <see cref="RouteFindingCodes.BerthStructures"/> finding (INFO) per
-    /// end instead of crossings; zero turns this off.
+    /// end instead of crossings; zero turns this off. A berth structure
+    /// within 60 m of one grouped joins the group, out to four times the
+    /// radius, so a large marina's docks count as one berth (#1626).
     /// </summary>
     public Length? BerthRadius { get; init; }
 
@@ -98,6 +100,19 @@ public sealed class RouteCheckSettings
     /// current limits and arrival constraints, or <c>null</c> for none.
     /// </summary>
     public PassageTimingSettings? Timing { get; init; }
+
+    /// <summary>
+    /// Whether the legs' speeds are through the water (#1033): every check's
+    /// ETAs (water level, warnings, areas, weather and timing) then add the
+    /// current along the track from <see cref="RouteCheckSources.Currents"/>.
+    /// Without currents, or where none covers the ETA, the speed stands as
+    /// over the ground. <see cref="PassageTimingSettings.ApplyCurrents"/>
+    /// says the same.
+    /// </summary>
+    public bool SpeedsThroughWater { get; init; }
+
+    /// <summary>Whether the speeds are through the water, by either setting.</summary>
+    internal bool AppliesCurrents => SpeedsThroughWater || Timing?.ApplyCurrents == true;
 
     /// <summary>
     /// The wind and wave limits for the weather check, or <c>null</c>. Each

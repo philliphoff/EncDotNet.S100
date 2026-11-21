@@ -292,6 +292,7 @@ namespace EncDotNet.S100.Navigation
     {
         EncDotNet.S100.Navigation.RouteCurrentSourceInfo Source { get; }
         EncDotNet.S100.Navigation.RouteCurrent? At(System.DateTimeOffset time);
+        EncDotNet.S100.Navigation.RouteCurrentReading? Read(System.DateTimeOffset time);
     }
     public interface IRouteCurrentSource
     {
@@ -440,7 +441,12 @@ namespace EncDotNet.S100.Navigation
         public int ComponentAt(int row, int column) { }
         public EncDotNet.S100.Navigation.NavigabilityConnection Connect(EncDotNet.S100.DataModel.GeoPosition from, EncDotNet.S100.DataModel.GeoPosition to) { }
         public bool IsNavigable(int row, int column) { }
+        public bool IsNavigable(int row, int column, double clearanceMeters) { }
         public double? LeastDepthAt(int row, int column) { }
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Cell",
+                "DistanceMeters"})]
+        public System.ValueTuple<EncDotNet.S100.Navigation.NavigabilityCell, double>? NearestNavigable(EncDotNet.S100.DataModel.GeoPosition position, double clearanceMeters, double maxDistanceMeters, System.Func<EncDotNet.S100.Navigation.NavigabilityCell, bool>? accept = null) { }
         public static EncDotNet.S100.Navigation.NavigabilityGrid Build(EncDotNet.S100.Navigation.RouteCheckSources sources, EncDotNet.S100.Navigation.NavigabilityGridRequest request, System.Threading.CancellationToken cancellationToken = default) { }
     }
     public sealed class NavigabilityGridRequest : System.IEquatable<EncDotNet.S100.Navigation.NavigabilityGridRequest>
@@ -458,6 +464,43 @@ namespace EncDotNet.S100.Navigation
                 "Rows",
                 "Columns"})]
         public System.ValueTuple<int, int> Size() { }
+    }
+    public static class NavigableSnap
+    {
+        public const double DefaultSearchRadiusMeters = 5000D;
+        public const double MaxSearchRadiusMeters = 20000D;
+        public static EncDotNet.S100.Pipelines.BoundingBox Box(EncDotNet.S100.DataModel.GeoPosition position, double halfMeters) { }
+        public static double CellMetersFor(double searchRadiusMeters) { }
+        public static double InitialBearingDegrees(EncDotNet.S100.DataModel.GeoPosition from, EncDotNet.S100.DataModel.GeoPosition to) { }
+        public static EncDotNet.S100.Navigation.NavigableSnapResult Snap(EncDotNet.S100.Navigation.RouteCheckSources sources, EncDotNet.S100.DataModel.GeoPosition position, EncDotNet.S100.Navigation.NavigableSnapRequest request, System.Threading.CancellationToken cancellationToken = default) { }
+        public static EncDotNet.S100.Navigation.NavigableSnapResult Snap(EncDotNet.S100.Navigation.NavigabilityGrid grid, EncDotNet.S100.DataModel.GeoPosition position, double clearanceMeters, double searchRadiusMeters, System.Func<EncDotNet.S100.Navigation.NavigabilityCell, bool>? accept = null) { }
+    }
+    public sealed class NavigableSnapRequest : System.IEquatable<EncDotNet.S100.Navigation.NavigableSnapRequest>
+    {
+        public NavigableSnapRequest(double MinimumDepthMeters, double ClearanceMeters = 0, double SearchRadiusMeters = 5000, double? HazardDepthMeters = default, double? CellMeters = default) { }
+        public double? CellMeters { get; init; }
+        public double ClearanceMeters { get; init; }
+        public double? HazardDepthMeters { get; init; }
+        public double MinimumDepthMeters { get; init; }
+        public double SearchRadiusMeters { get; init; }
+    }
+    public sealed class NavigableSnapResult : System.IEquatable<EncDotNet.S100.Navigation.NavigableSnapResult>
+    {
+        public NavigableSnapResult(EncDotNet.S100.Navigation.NavigableSnapStatus Status, string? Reason, double? PointDepthMeters, EncDotNet.S100.DataModel.GeoPosition? Position, double? DepthMeters, double? ClearanceMeters, double DistanceMeters, double BearingDegrees) { }
+        public double BearingDegrees { get; init; }
+        public double? ClearanceMeters { get; init; }
+        public double? DepthMeters { get; init; }
+        public double DistanceMeters { get; init; }
+        public double? PointDepthMeters { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition? Position { get; init; }
+        public string? Reason { get; init; }
+        public EncDotNet.S100.Navigation.NavigableSnapStatus Status { get; init; }
+    }
+    public enum NavigableSnapStatus
+    {
+        Navigable = 0,
+        Moved = 1,
+        NotFound = 2,
     }
     public sealed class PassageCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.PassageCheckOptions>
     {
@@ -488,6 +531,13 @@ namespace EncDotNet.S100.Navigation
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.UkcSample> Samples { get; init; }
         public EncDotNet.S100.Navigation.PassageSources Sources { get; init; }
         public EncDotNet.S100.Navigation.PassageVerdict Verdict { get; init; }
+    }
+    public sealed class PassageCurrentGap : System.IEquatable<EncDotNet.S100.Navigation.PassageCurrentGap>
+    {
+        public PassageCurrentGap(int LegIndex, double StartAlongLegMeters, double EndAlongLegMeters) { }
+        public double EndAlongLegMeters { get; init; }
+        public int LegIndex { get; init; }
+        public double StartAlongLegMeters { get; init; }
     }
     public static class PassageGeodesy
     {
@@ -526,7 +576,11 @@ namespace EncDotNet.S100.Navigation
     }
     public sealed class PassageSchedule
     {
+        public const double CurrentStretchMeters = 500D;
         public System.DateTimeOffset? Arrival { get; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageCurrentGap> CurrentGaps { get; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCurrentSourceInfo> CurrentSources { get; }
+        public bool CurrentsApplied { get; }
         public System.DateTimeOffset Departure { get; }
         public System.TimeSpan? Duration { get; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.LegSchedule> Legs { get; }
@@ -535,6 +589,8 @@ namespace EncDotNet.S100.Navigation
         public System.DateTimeOffset TimeAt(int legIndex, double distanceAlongLegMeters) { }
         public static EncDotNet.S100.Navigation.PassageSchedule Compute(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings) { }
         public static EncDotNet.S100.Navigation.PassageSchedule Compute(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.DateTimeOffset departure) { }
+        public static EncDotNet.S100.Navigation.PassageSchedule Compute(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, EncDotNet.S100.Navigation.RouteCheckSources sources) { }
+        public static EncDotNet.S100.Navigation.PassageSchedule Compute(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.DateTimeOffset departure, EncDotNet.S100.Navigation.IRouteCurrentSource? currents) { }
     }
     public sealed class PassageSources : System.IEquatable<EncDotNet.S100.Navigation.PassageSources>
     {
@@ -836,6 +892,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Quantities.Length? NearbyDistance { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyContour { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyDepth { get; init; }
+        public bool SpeedsThroughWater { get; init; }
         public EncDotNet.S100.Navigation.PassageTimingSettings? Timing { get; init; }
         public EncDotNet.S100.Quantities.Length? TrackClearance { get; init; }
         public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
@@ -903,6 +960,12 @@ namespace EncDotNet.S100.Navigation
     {
         S111 = 0,
         Prediction = 1,
+    }
+    public sealed class RouteCurrentReading : System.IEquatable<EncDotNet.S100.Navigation.RouteCurrentReading>
+    {
+        public RouteCurrentReading(EncDotNet.S100.Navigation.RouteCurrent Current, EncDotNet.S100.Navigation.RouteCurrentSourceInfo Source) { }
+        public EncDotNet.S100.Navigation.RouteCurrent Current { get; init; }
+        public EncDotNet.S100.Navigation.RouteCurrentSourceInfo Source { get; init; }
     }
     public sealed class RouteCurrentSourceInfo : System.IEquatable<EncDotNet.S100.Navigation.RouteCurrentSourceInfo>
     {
@@ -1027,6 +1090,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode EntersProhibitedArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode LandInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoChartedDepth { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode NoCurrentCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoWaterLevelCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoWeatherCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode OutsideChartCoverage { get; }
@@ -1137,6 +1201,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string MinutesFormat { get; }
         protected virtual string MoreStationsFormat { get; }
         protected virtual string NoChartedDepth { get; }
+        protected virtual string NoCurrentCoverage { get; }
         protected virtual string NoDepthSource { get; }
         protected virtual string NoValue { get; }
         protected virtual string NoWaterLevelCoverage { get; }
@@ -1158,6 +1223,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string Separator { get; }
         protected virtual string SoundingCountFormat { get; }
         protected virtual string SoundingsBelowSafetyContour { get; }
+        protected virtual string SpeedOverGround { get; }
         protected virtual string StretchFromFormat { get; }
         protected virtual string StretchLengthFormat { get; }
         protected virtual string StructureInsideLimits { get; }
@@ -1280,6 +1346,76 @@ namespace EncDotNet.S100.Navigation
     public static class RouteHazardClasses
     {
         public static EncDotNet.S100.Navigation.RouteHazardClass Of(string featureType) { }
+    }
+    public sealed class RoutePlan : System.IEquatable<EncDotNet.S100.Navigation.RoutePlan>
+    {
+        public RoutePlan(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RoutePlanStop> Stops, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RoutePlanLeg> Legs, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Waypoints, double DistanceMeters) { }
+        public double DistanceMeters { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RoutePlanLeg> Legs { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RoutePlanStop> Stops { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Waypoints { get; init; }
+    }
+    public sealed class RoutePlanFailure : System.IEquatable<EncDotNet.S100.Navigation.RoutePlanFailure>
+    {
+        public RoutePlanFailure(string Reason, int? StopIndex, int? LegIndex, string Message) { }
+        public int? LegIndex { get; init; }
+        public string Message { get; init; }
+        public string Reason { get; init; }
+        public int? StopIndex { get; init; }
+    }
+    public sealed class RoutePlanLeg : System.IEquatable<EncDotNet.S100.Navigation.RoutePlanLeg>
+    {
+        public RoutePlanLeg(int From, int To, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Points, double DistanceMeters, double? LeastClearanceMeters, double? LeastDepthMeters, double CellMeters) { }
+        public double CellMeters { get; init; }
+        public double DistanceMeters { get; init; }
+        public int From { get; init; }
+        public double? LeastClearanceMeters { get; init; }
+        public double? LeastDepthMeters { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Points { get; init; }
+        public int To { get; init; }
+    }
+    public sealed class RoutePlanRequest : System.IEquatable<EncDotNet.S100.Navigation.RoutePlanRequest>
+    {
+        public const double DefaultBerthRadiusMeters = 300D;
+        public const double DefaultComfortMeters = 200D;
+        public RoutePlanRequest(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Stops, double MinimumDepthMeters) { }
+        public double? BerthDepthMeters { get; init; }
+        public double BerthRadiusMeters { get; init; }
+        public double? CellMeters { get; init; }
+        public double ClearanceMeters { get; init; }
+        public double ComfortMeters { get; init; }
+        public double? HazardDepthMeters { get; init; }
+        public int MaxCellsPerLeg { get; init; }
+        public double MinimumDepthMeters { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> PreferredAreas { get; init; }
+        public double PreferredCostFactor { get; init; }
+        public System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> PreferredLines { get; init; }
+        public double SnapRadiusMeters { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Stops { get; init; }
+    }
+    public sealed class RoutePlanResult : System.IEquatable<EncDotNet.S100.Navigation.RoutePlanResult>
+    {
+        public RoutePlanResult(EncDotNet.S100.Navigation.RoutePlan? Plan, EncDotNet.S100.Navigation.RoutePlanFailure? Failure) { }
+        public EncDotNet.S100.Navigation.RoutePlanFailure? Failure { get; init; }
+        public EncDotNet.S100.Navigation.RoutePlan? Plan { get; init; }
+    }
+    public sealed class RoutePlanStop : System.IEquatable<EncDotNet.S100.Navigation.RoutePlanStop>
+    {
+        public RoutePlanStop(int Index, EncDotNet.S100.DataModel.GeoPosition Requested, EncDotNet.S100.DataModel.GeoPosition Position, bool Moved, string? Reason, double DistanceMeters, double BearingDegrees, double? DepthMeters) { }
+        public double BearingDegrees { get; init; }
+        public double? DepthMeters { get; init; }
+        public double DistanceMeters { get; init; }
+        public int Index { get; init; }
+        public bool Moved { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition Position { get; init; }
+        public string? Reason { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition Requested { get; init; }
+    }
+    public static class RoutePlanner
+    {
+        public const double DefaultCellMeters = 20D;
+        public const int DefaultMaxCellsPerLeg = 3000000;
+        public static EncDotNet.S100.Navigation.RoutePlanResult Plan(EncDotNet.S100.Navigation.RouteCheckSources sources, EncDotNet.S100.Navigation.RoutePlanRequest request, System.Threading.CancellationToken cancellationToken = default) { }
     }
     public sealed class RouteTrack
     {

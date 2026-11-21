@@ -127,10 +127,10 @@ edited.
 
 | Toolset | What its tools do | SoundCharts | `s100 mcp serve` |
 |---|---|---|---|
-| `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 12 tools, ~5,900 tokens | 12 tools, ~5,900 tokens |
+| `query` | Read the loaded datasets: list, describe, find, identify, query, search and sample | 12 tools, ~6,200 tokens | 12 tools, ~6,200 tokens |
 | `datasets` | Open and close datasets by path, and add live data sources | 3 tools, ~400 tokens | 5 tools, ~800 tokens |
 | `presentation` | Palette, display category and mode, time step, viewport and render to an image | 5 tools, ~1,100 tokens | 6 tools, ~1,700 tokens |
-| `routes` | Check routes and map where a boat can go; in SoundCharts, also create, edit, import and export them | 23 tools, ~8,700 tokens | 2 tools, ~3,100 tokens |
+| `routes` | Check and plan routes and map where a boat can go; in SoundCharts, also create, edit, import and export them | 24 tools, ~10,200 tokens | 3 tools, ~4,600 tokens |
 | `passage` | Check mode, departure, findings, clearance and route weather settings | 12 tools, ~2,900 tokens | none |
 | `tides` | Tide and current stations and their predictions | 4 tools, ~2,100 tokens | 4 tools, ~2,100 tokens |
 | `library` | The Library: sources, items, downloads and SECOM services | 12 tools, ~4,300 tokens | 12 tools, ~4,300 tokens |
@@ -139,14 +139,14 @@ edited.
 | `map` | Viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing | 15 tools, ~5,200 tokens | none |
 | `ui` | Panels and app screenshots; with `--mcp-test-hooks`, the [test tools](#test-tools) too | 13 tools with test hooks, ~4,200 tokens | none |
 | `diagnostics` | Render and performance diagnostics and recent logs | 7 tools, ~1,700 tokens | none |
-| `all` | Every toolset | 128 tools with test hooks, ~41,900 tokens | 41 tools, ~18,800 tokens |
+| `all` | Every toolset | 129 tools with test hooks, ~43,700 tokens | 42 tools, ~20,100 tokens |
 
 Profiles name a set of toolsets for a kind of task:
 
 | Profile | Toolsets | SoundCharts | `s100 mcp serve` |
 |---|---|---|---|
-| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 54 tools, ~20,000 tokens | 23 tools, ~12,700 tokens |
-| `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 61 tools, ~19,900 tokens | 23 tools, ~8,400 tokens |
+| `route-planning` | `query`, `datasets`, `routes`, `passage`, `tides` | 55 tools, ~21,800 tokens | 24 tools, ~14,500 tokens |
+| `visual-check` | `query`, `datasets`, `presentation`, `display`, `map`, `ui` | 61 tools, ~20,200 tokens | 23 tools, ~8,700 tokens |
 
 Over HTTP, `s100 mcp serve` still leaves out the tools that open datasets by
 path and change the Library unless you pass `--allow-changes`, whatever the
@@ -202,15 +202,16 @@ Both hosts provide these tools.
 | `list_specs` | No | Lists the product specifications the host can read: every product in its product registry, with how many datasets of each are loaded and `capabilities` (`canQueryFeatures`, `canDescribeFeature`, `canSampleCoverage`, `canListTimeSteps`). `isS100` is `false` for a product that isn't S-100: the weather formats `GRIB2`, `NetCDF` and `CAP`, which aren't for navigation. A product whose specification defines no portrayal carries a `portrayalNote`: S-104 has `"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology"`, because its station gauges and surface isolines are SoundCharts' own ([S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal)), and the weather formats have `"SoundCharts portrayal: GRIB2 defines no symbology"`, `"… NetCDF-CF …"` and `"… CAP 1.2 …"`. GRIB2 and NetCDF can be sampled and have time steps; CAP has time steps and its warning areas are features, but there's no coverage to sample. |
 | `list_time_steps` | No | Lists the time steps of a dataset by `datasetId`, ascending, with `firstTime`, `lastTime` and the `cadence` when the steps are evenly spaced: S-104 and S-111 samples, the valid times of a GRIB2 or NetCDF grid, and for CAP warnings the times warnings start and the tick after each ends. S-102 has no time axis and returns no steps; other products return `not_supported_yet`. |
 | `find_at` | No | Returns every loaded dataset whose declared bounding box contains a point. It checks the bounding box only, not per-cell coverage or no-data masks. To find the features at a point, use `identify_features`. |
-| `identify_features` | No | Identifies the vector features at a point, as an ECDIS cursor pick does, ranked most specific first: points before curves before areas, and within a primitive the smaller or nearer feature first. Areas must contain the point (holes count); points and curves match within `radiusMeters` (default 50). Works for every vector product, including S-101. `longitude` can be anywhere in `[-540, 540]`: data kept in a 0…360 or other continuous frame, such as the NWS Alaska S-411 (175°E to 225°E), matches at its own longitude and one world east or west (210 and −150 find the same feature). CAP weather warnings (`spec` `CAP`) answer too: each area is a surface of type `CapWarningArea`. Time-dependent products return only what's drawn at a time: S-412 and CAP warnings in force then, the surface analysis valid then and a tropical cyclone's position then. Pass `time` (ISO-8601, UTC) to choose the time. Without it, SoundCharts uses its map's view time and also leaves out the S-124 parts the map hides, so the result matches what's on screen; a headless host (`s100 mcp serve`) returns every warning that isn't superseded or cancelled and the first analysis. Each match reports the dataset id, spec, feature id and type, primitive, bounds, `containment` (`inside` or `near`) and approximate `distanceMeters`. `maxResults` (default 20) caps the list and sets `truncated`. For S-101 features with a `fileReference`, `TXTDSC` or `NTXTDS` attribute, each match also reports `referencedTexts`: the name and content of the text files from the dataset's exchange set. NATO Additional Military Layers (AML) cells answer whether or not they're drawn, without their meta features (`M_COVR`, `m_clas` and so on). Each AML match also reports what Object Information shows: `featureTypeName` from the cell's catalogue, `attributes` (each with `code`, catalogue `name`, decoded `value`, `rawValue`, and `mark` `"AML"` on an attribute AML adds to a standard S-57 class, listed after the standard ones), and `aml` with the `tag`, `product`, `productName`, `cell`, `protectiveMarking`, `classKind` (`aml` or `standard`), `drawn` and, when it isn't drawn, the `note` "Not drawn. Picked from its position.". A feature with Object Information content that isn't attribute rows also reports `sections`: each has a `kind` (such as `ice.egg-code` for the WMO egg code of an S-411 sea-ice or lake-ice area), a `description`, its `rows` (`code`, `name`, `value`, `rawValue`) and its typed `data`. `pick_features` returns the same fields. |
+| `identify_features` | No | Identifies the vector features at a point, as an ECDIS cursor pick does, ranked most specific first: points before curves before areas, and within a primitive the smaller or nearer feature first. Areas must contain the point (holes count); points and curves match within `radiusMeters` (default 50). Works for every vector product, including S-101. `longitude` can be anywhere in `[-540, 540]`: data kept in a 0…360 or other continuous frame, such as the NWS Alaska S-411 (175°E to 225°E), matches at its own longitude and one world east or west (210 and −150 find the same feature). CAP weather warnings (`spec` `CAP`) answer too: each area is a surface of type `CapWarningArea`. Time-dependent products return only what's drawn at a time: S-412 and CAP warnings in force then, the surface analysis valid then and a tropical cyclone's position then. Pass `time` (ISO-8601, UTC) to choose the time. Without it, SoundCharts uses its map's view time and also leaves out the S-124 parts the map hides, so the result matches what's on screen; a headless host (`s100 mcp serve`) returns every warning that isn't superseded or cancelled and the first analysis. Each match reports the dataset id, spec, feature id and type, primitive, bounds, `containment` (`inside` or `near`) and approximate `distanceMeters`. `maxResults` (default 20) caps the list and sets `truncated`. For S-101 features with a `fileReference`, `TXTDSC` or `NTXTDS` attribute, each match also reports `referencedTexts`: the name and content of the text files from the dataset's exchange set. NATO Additional Military Layers (AML) cells answer whether or not they're drawn, without their meta features (`M_COVR`, `m_clas` and so on). Each AML match also reports what Object Information shows: `featureTypeName` from the cell's catalogue, `attributes` (each with `code`, catalogue `name`, decoded `value`, `rawValue`, and `mark` `"AML"` on an attribute AML adds to a standard S-57 class, listed after the standard ones), and `aml` with the `tag`, `product`, `productName`, `cell`, `protectiveMarking`, `classKind` (`aml` or `standard`), `drawn` and, when it isn't drawn, the `note` "Not drawn. Picked from its position.". A feature with Object Information content that isn't attribute rows also reports `sections`: each has a `kind` (such as `ice.egg-code` for the WMO egg code of an S-411 sea-ice or lake-ice area), a `description`, its `rows` (`code`, `name`, `value`, `rawValue`) and its typed `data`. `pick_features` returns the same fields. Each match has `depth`, the feature's depth values as numbers in metres where it has any, named as `sample`'s depth result names them: `depthRangeMinimumMeters` (DRVAL1), `depthRangeMaximumMeters` (DRVAL2), `valueOfSoundingMeters` (VALSOU) and the `waterLevelEffect` code (WATLEV). `includeAttributes: true` adds `attributes`, every attribute as encoded (`code` and `rawValue`; a complex attribute's parts as `complex.sub`); use `describe_feature` for decoded values and geometry. |
 | `describe_feature` | No | Returns the spec, feature type, attributes and, for S-101, resolved geometry for a feature id in a dataset. Numeric attributes whose feature catalogue declares a unit, such as `depthRangeMinimumValue` or `valueOfSounding`, carry `unit` (for example `"m"`) and `unitName` (`"metre"`); the sounding `depths` in an S-101 `geometry` block carry `depthUnit` (`"metres"`). Supported: S-101, S-401 and S-57 cells (RCID; the result has a `geometry` block with primitive, bounding box and coordinates); S-102 (`BathymetryCoverage[.01]`; `boundingBox` is in WGS-84 degrees, while `gridMetadata` and `nativeExtent` stay in the grid's native CRS, such as metres for a UTM tile); S-104 and S-111 (`WaterLevel` or `SurfaceCurrent[.NN][.Group_KKK]`, or a bare station identifier); S-124 (`gml:id`); S-129 (`gml:id` of a plan, plan area, control point or non-navigable area); S-412 weather warnings (`gml:id`; the result adds a `warning` block with the `kind`, the `threshold`, `beaufortForce`, `iceAccretionRate` and `sourceOfIcing` as a `code` and the feature catalogue's `label`, the `messages` and `maximumWindSpeed` in each language, `validFrom`, `validTo`, `cancellationDate`, `inForceUntil`, `issuedAt`, `nextUpdateDateTime` and the `dataProvider`); and CAP warning areas (the feature id from `identify_features`; the attributes are the pick report's: `notice`, `headline`, `event`, `severity`, `urgency`, `certainty`, `onset` or `effective`, `expires`, `ends`, `sent`, `sender`, `areaDesc`, `zones`, `msgType`, `description`, `instruction`, `identifier`, each when the alert has it). For S-104 and CAP the result has the same `portrayalNote` as `list_specs`. A feature with Object Information content that isn't attribute rows, such as the egg code of an S-411 sea-ice area, also has `sections`, as `identify_features` reports them. |
 | `describe_feature_type` | No | Describes a spec's bundled feature catalogue (ISO 19110, S-100 Part 5). With only `spec` (for example `S-101` or `S-124/1.5.0`), lists every feature type with its attribute count. Add `featureType` (code, name or alias) to get that type's attributes: value type, whether mandatory or repeatable, and listed values (`includeListedValues=false` omits large enumerations). Use it to build attribute filters without a loaded dataset. Casing and an edition suffix in `spec` are accepted, and the edition is ignored. A spec with no bundled catalogue returns `feature_catalogue_not_available`, whose `details.acceptedSpecs` lists the specs that have one. |
-| `query_features` | No | Returns features whose geometry intersects a spatial query, from every GML vector product and from S-101 and S-401. Intersection uses bounding boxes by default; `precise=true` tests the full geometry, with point-in-polygon containment for areas (holes count) and real segment crossings, for questions such as "which features does this route leg cross?". For S-101, `featureType` matches the acronym (for example `LIGHTS` or `BOYLAT`) and each `featureId` is the record's decimal RCID. `attributes` filters on values: a code-to-value map for equality (`{"categoryOfLateralMark":"1"}`), or an array of predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`). Operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt` and `le`, combined with AND. The result's `typeBreakdown` counts every match by feature type, across all pages, so you can size a result before paging. The optional `times` filter compares a feature's `fixedDateRange` and `periodicDateRange` with the window only; it doesn't apply cancellation dates, supersession or the S-124 not-yet-in-force setting. To find what's drawn at a time, use `identify_features` with `time`. |
+| `query_features` | No | Returns features whose geometry intersects a spatial query, from every GML vector product and from S-101 and S-401. Intersection uses bounding boxes by default; `precise=true` tests the full geometry, with point-in-polygon containment for areas (holes count) and real segment crossings, for questions such as "which features does this route leg cross?". For S-101, `featureType` matches the acronym (for example `LIGHTS` or `BOYLAT`) and each `featureId` is the record's decimal RCID. `attributes` filters on values: a code-to-value map for equality (`{"categoryOfLateralMark":"1"}`), or an array of predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`). Operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt` and `le`, combined with AND. The result's `typeBreakdown` counts every match by feature type, across all pages, so you can size a result before paging. The optional `times` filter compares a feature's `fixedDateRange` and `periodicDateRange` with the window only; it doesn't apply cancellation dates, supersession or the S-124 not-yet-in-force setting. To find what's drawn at a time, use `identify_features` with `time`. Each match has `depth`, the feature's depth values as numbers in metres where it has any, named as `sample`'s depth result names them: `depthRangeMinimumMeters` (DRVAL1), `depthRangeMaximumMeters` (DRVAL2), `valueOfSoundingMeters` (VALSOU) and the `waterLevelEffect` code (WATLEV). `includeAttributes: true` adds `attributes`, every attribute as encoded (`code` and `rawValue`; a complex attribute's parts as `complex.sub`); use `describe_feature` for decoded values and geometry. |
 | `count_features` | No | Lists the feature types in the loaded vector datasets and how many features of each there are, to answer "what's in this cell?" before you have any ids. Works for every vector product, including S-101. Filters: `spec`, `datasetId` and a spatial `query`. Each count reports `count` and `withGeometry` (how many have geometry). |
-| `nearest_features` | No | Ranks vector features by true distance from a point, for questions such as "nearest light to my position?" or "is this point inside a restricted area?". An area that contains the point is returned at `distanceMeters` 0 with `containment` `inside`. Every other feature reports the distance to the nearest point on its geometry (on a segment, not only a vertex) and `bearingDegrees` toward it. Works for every vector product, including S-101. Filters: `spec`, `datasetId`, `featureType` and `maxDistanceMeters`. `limit` (default 10) caps the list and sets `truncated`. |
+| `nearest_features` | No | Ranks vector features by true distance from a point, for questions such as "nearest light to my position?" or "is this point inside a restricted area?". An area that contains the point is returned at `distanceMeters` 0 with `containment` `inside`. Every other feature reports the distance to the nearest point on its geometry (on a segment, not only a vertex) and `bearingDegrees` toward it. Works for every vector product, including S-101. Filters: `spec`, `datasetId`, `featureType` and `maxDistanceMeters`. `limit` (default 10) caps the list and sets `truncated`. Each match has `depth`, the feature's depth values as numbers in metres where it has any, named as `sample`'s depth result names them: `depthRangeMinimumMeters` (DRVAL1), `depthRangeMaximumMeters` (DRVAL2), `valueOfSoundingMeters` (VALSOU) and the `waterLevelEffect` code (WATLEV). `includeAttributes: true` adds `attributes`, every attribute as encoded (`code` and `rawValue`; a complex attribute's parts as `complex.sub`); use `describe_feature` for decoded values and geometry. |
 | `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Overlapping chart cells of different usage bands each chart the same object, so a search returns one hit per cell. Set `finestOnly` to keep a chart-cell hit (S-101, S-401 or S-57) only where its cell is in the finest band at the feature's position, ranked as `check_route` ranks cells; cells of the same scale are peers and both copies stay. Each match reports `matchedName` and `matchedAttribute`. Paged. |
-| `sample` | No | Samples a `quantity` at a point (`latitude`, `longitude`) or along a `polyline`. `depth` is charted depth by the route check's rule: S-102 first, otherwise the finest overlapping S-101, S-401 or translated S-57 cell's dredged area, depth area or nearest sounding (within 250 m). The result has `waterMask` (`water`, `land` or `uncharted`) and `depth` with its `kind` (`bathymetry`, `dredged_area`, `depth_area` or `sounding`), `datasetId`, `featureId` (for `describe_feature`) or S-102 `gridCell`, an area's `depthRangeMinimumMeters` and `depthRangeMaximumMeters`, `verticalDatum` and `lowConfidence`; `depth` is `null` where nothing charts one. With a `time`, it adds `waterLevel` (S-104, otherwise a tide prediction where the host has them on; `status` `applied`, `datum_mismatch`, `no_coverage`, `before_start`, `after_end` or `no_data`) and `availableDepthMeters`, the depth plus the water level where it applies, as `check_route` computes clearance. `water_level` (S-104), `current` (S-111) and `weather` (a GRIB2 or NetCDF grid) sample the nearest grid cell or station: `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it, and a time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. `spec` pins one product (`S-102` for depth reads the bathymetry only); with a `spec`, `quantity` can be left out. A `polyline` returns `samples` in order, each with `legIndex`, `vertexIndex` (`null` between vertices), `distanceMeters` and its `result` (or `depth`), or an `error` (`code`, `message`) where that point has no value; `spacingMeters` adds points between the vertices along each rhumb-line leg, up to 2,000 samples. For depth, `shoalest` names the shallowest sample, by available depth when a time is given. When no point has a value because of the requested time, the call returns `time_out_of_range`. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
+| `sample` | No | Samples a `quantity` at a point (`latitude`, `longitude`) or along a `polyline`. `depth` is charted depth by the route check's rule: S-102 first, otherwise the finest overlapping S-101, S-401 or translated S-57 cell's dredged area, depth area or nearest sounding (within 250 m). The result has `waterMask` (`water`, `land` or `uncharted`) and `depth` with its `kind` (`bathymetry`, `dredged_area`, `depth_area` or `sounding`), `datasetId`, `featureId` (for `describe_feature`) or S-102 `gridCell`, an area's `depthRangeMinimumMeters` and `depthRangeMaximumMeters`, `verticalDatum` and `lowConfidence`; `depth` is `null` where nothing charts one. With a `time`, it adds `waterLevel` (S-104, otherwise a tide prediction where the host has them on; `status` `applied`, `datum_mismatch`, `no_coverage`, `before_start`, `after_end` or `no_data`) and `availableDepthMeters`, the depth plus the water level where it applies, as `check_route` computes clearance. `water_level` (S-104), `current` (S-111) and `weather` (a GRIB2 or NetCDF grid) sample the nearest grid cell or station: `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it, and a time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). A grid, or any other coverage product whose processor can be sampled, answers with a `value` of `$kind` `"fields"`: a `fields` list in which each entry has a `name`, the `quantity` it measures (such as `significant_wave_height` or `wind_speed`), its `unit` (such as `m` or `kn`) and its `value`, plus the `sampleTime` and the cell or station read. A grid's fields are its parameters at the nearest grid point, such as `wave.hs` (m), `wave.period` (s), `wave.dir` (deg), `wind.u` and `wind.v` (m/s), `wind.speed` (m/s) and `wind.speed.kn` (kn), `wind.from_direction` (deg) and `pressure.msl`; wind speed and direction are worked out from U and V when the file has only those. `spec` pins one product (`S-102` for depth reads the bathymetry only); with a `spec`, `quantity` can be left out. A `polyline` returns `samples` in order, each with `legIndex`, `vertexIndex` (`null` between vertices), `distanceMeters` and its `result` (or `depth`), or an `error` (`code`, `message`) where that point has no value; `spacingMeters` adds points between the vertices along each rhumb-line leg, up to 2,000 samples. For depth, `shoalest` names the shallowest sample, by available depth when a time is given. When no point has a value because of the requested time, the call returns `time_out_of_range`. For depth at a point, `minDepthMeters` (with optional `clearanceMeters`, default 0, and `searchRadiusMeters`, default 5,000 and at most 20,000; it looks within 500 m on 5 m cells first, then widens on coarser ones) also checks whether the point is navigable: charted water at least that deep, with no danger in it and that much room from land, shoal water, dangers and uncharted water. The result adds `navigable`, and when it's false, `notNavigableReason` (`land`, `uncharted`, `shoal`, `hazard`, `no_depth` or `too_close`) and `nearestNavigable`: the nearest point that qualifies, with its `latitude`, `longitude`, `depthMeters` (the least round it), `depth` (as a depth sample gives it, the finest cell winning), `clearanceMeters`, and the `distanceMeters` and `bearingDegrees` from the point; or a `reason` when nothing in the radius qualifies. It searches the same grid `get_navigability_grid` builds. CAP has no coverage, so it returns `spec_not_supported_for_tool`; use `identify_features`. |
 | `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers; with a draft, the under-keel clearance; with wind or wave limits, the weather forecast along the route at the ETAs. Returns the verdict, each check's status, the findings, the clearance and the weather. See [Check a route](#check-a-route). |
+| `plan_route` | Only with `routeName` | Suggests a route between stops (`from`, `to` and, for a whole itinerary in one call, `via`) for a `vessel` (the object `check_route` takes), and checks it. See [Plan a route](#plan-a-route). |
 | `get_navigability_grid` | No | Returns water, land and charted depth over a box on a regular grid, with overlapping chart cells resolved as `check_route` resolves them. The reply is a summary: cell counts by class, the shoalest navigable cell, the largest connected navigable area, and, with `connect`, whether two positions join through navigable water. The grid itself goes to a file for code to read; `includeImage` adds a PNG. See [Navigability over an area](#navigability-over-an-area). |
 
 ### Session tools
@@ -370,7 +371,27 @@ the hour round it), and it adds a `source`:
 
 A value from a loaded dataset has no `source`. A `series` query is predicted
 at each instant; a `range` query every 30 minutes, at most 2,000 heights.
-With predictions off, or no station in reach, the S-104 error stands.
+With predictions off, the S-104 error stands.
+
+With predictions on and no station in reach, `sample` returns
+`no_station_within_reach` rather than `no_dataset_covers_point`, so an agent
+can tell "out of every station's reach" from "nothing loaded here". It carries
+the `quantity` (`water_level` or `current`), the `reachMeters` that applies,
+and the `nearestStation` that can be predicted: its `id`, `name`, position,
+`distanceMeters`, and `distanceByWater` (false when it's a straight line,
+past 20 km). An S-104 or S-111 error that says more, such as
+`time_out_of_range` or `no_data_at_point`, still stands. Along a `polyline`,
+each sample out of reach has this `error`.
+
+```json
+{
+  "code": "no_station_within_reach",
+  "message": "No current station is within reach of 48.399, -122.587: the nearest, Deception Pass (Narrows) (PUG1701_33), is 4.8 km away by water, beyond the 2 km a current station reaches. Load an S-111 dataset that covers the point, or predict at the station with predict_current.",
+  "quantity": "current",
+  "reachMeters": 2000,
+  "nearestStation": { "id": "PUG1701_33", "name": "Deception Pass (Narrows)", "latitude": 48.4065, "longitude": -122.6431, "distanceMeters": 4790, "distanceByWater": true }
+}
+```
 
 The same switch fills S-111 gaps, with a much shorter reach.
 `sample` for current (`S-111`) falls back to the
@@ -378,7 +399,8 @@ predicted tidal current at the current station nearest by water within
 **2 km**, the shallowest bin where several share a place. Tide heights change
 slowly over 10 km, but tidal currents don't: a station in a narrows such as
 Deception Pass says little about the open water either side of it, so a point
-farther than that from every current station keeps the S-111 error. Change the
+farther than that from every current station returns
+`no_station_within_reach`. Change the
 reach with `s100 mcp serve --current-station-reach <metres>` (or, in code,
 `RouteCheckSourceOptions.MaxCurrentStationDistanceMeters`). The tide-station
 reach stays 10 km.
@@ -663,7 +685,17 @@ squat + required UKC.
 These `vessel` values override every leg's value:
 
 - `draftMeters`. With a draft on every leg, the clearance check runs.
-- `speedKnots`: the speed over ground. S-111 currents aren't applied.
+- `speedKnots`: the speed, over the ground unless `speedThroughWater` is
+  true.
+- `speedThroughWater`: the speeds are through the water. Every check's ETAs
+  (water level, warnings, areas, weather and timing) then add the current
+  along the track to each 500 m stretch: S-111 where it covers the place and
+  time, else a current-station prediction within reach (with
+  `--tide-predictions`). Where neither has a value at the ETA, the speed is
+  taken as over the ground and the stretch is a `data.no_current_coverage`
+  finding (info). The result's `currents` gives `applied`, the `sources`
+  read (`origin` `s111` or `prediction`) and `withoutCurrentNm`; it's `null`
+  with speeds over the ground. Set across the track isn't applied.
 - `squatMeters`: a fixed allowance; it isn't modelled from speed.
 - `requiredUkcMeters`: when unset, the clearance check uses 0 m and sets
   `noMarginSet`.
@@ -677,10 +709,9 @@ departure and every swept departure against passage timing constraints and
 returns the result as `timing`. It needs a speed on every leg; without
 `from` and `to` it sweeps the 24 hours from `departure`.
 
-- `applyCurrents`: the speeds are through the water. The timing check adds
-  the current along the track to each 500 m stretch's speed, so its ETAs and
-  running times include the stream. The other checks still treat the speed
-  as over the ground.
+- `applyCurrents`: the speeds are through the water, as
+  `vessel.speedThroughWater` says: the timing check's ETAs and running times,
+  and every other check's ETAs, include the stream.
 - `gates`: tidal gates, each at a `waypoint` (zero-based) or a `latitude`
   and `longitude` snapped to the track, with a `station` (a current station
   id or name, as `predict_current` takes) or the nearest station that
@@ -694,9 +725,10 @@ returns the result as `timing`. It needs a speed on every leg; without
 - `arrivalTide`: `{minMeters?, maxMeters?}`, the water level at the arrival
   waypoint at the ETA (S-104, else tide predictions).
 
-Currents come from current-station predictions, so they need
-`--tide-predictions`; without them, `applyCurrents`, leg limits and current
-gates leave the check `partial` with `currents_missing`. A station reaches
+Currents come from loaded S-111 and, where it doesn't cover the place and
+time, current-station predictions (`--tide-predictions`); without either,
+`applyCurrents`, leg limits and current gates leave the check `partial`
+with `currents_missing`. Gates that name a station read its prediction. A station reaches
 2 km by water (`--current-station-reach`). Predictions are the astronomical
 tidal current only: quote `timing.caveat` with the times.
 
@@ -740,7 +772,9 @@ mariner's settings (`get_route_weather_settings`). See
 - `berthRadiusMeters`: how far from the departure and arrival waypoints
   structures that raise the safety contour alert count as the berth (default
   100 m; 0 turns it off). They're one info `route_check.berth_structures`
-  finding per end instead of crossings.
+  finding per end instead of crossings. Pontoons, piers and wharves within
+  60 m of one already grouped join it, out to four times the radius, so a
+  large marina's docks count as one berth.
 - `areaKindsOff`: kinds of prohibited area and area with special conditions
   to turn off, by name (such as `anchorage_area` or `marine_farm`). Their
   areas aren't reported; one `route_check.area_kind_off` finding per kind
@@ -911,7 +945,11 @@ once, for planning a route or explaining one. Give the box (`south`, `west`,
 - **shoal**: charted water shallower than that, drying ground included.
 - **hazard**: charted water with a wreck, obstruction or rock in the cell at
   or shallower than `hazardDepthMeters` (default the minimum depth), or of
-  unknown depth. `includeHazards: false` leaves dangers out.
+  unknown depth; or with a structure standing in the water that `check_route`
+  flags when a track cuts or passes it: one that raises the SafetyContour
+  alert, such as a breakwater, pier, pontoon or hulk, or a pile, platform or
+  other structure (not an aid to navigation or a bridge). `includeHazards:
+  false` leaves dangers and structures out.
 - **land**, **uncharted** (no loaded chart covers it), or **no_depth**
   (charted water without a charted depth).
 
@@ -954,6 +992,63 @@ A grid has at most 6,000,000 cells. A bigger one returns `grid_too_large` with
 `suggestedCellMeters`, a cell size that fits the box. A 25 m grid of the San
 Juan Islands (about 4.9 million cells over 45 NOAA cells) takes about a
 second once the cells are loaded.
+
+## Plan a route
+
+`plan_route` suggests a route through a list of stops: `from`, `to`, and
+`via` in between for a whole itinerary in one call. Points are
+`{"latitude":…,"longitude":…}` or `[lat, lon]`. It plans on the same grid as
+`get_navigability_grid`, so a plan, the grid and `check_route` read the
+charts the same way.
+
+- **Depths.** `vessel` is the object `check_route` takes. Between the stops
+  the route keeps to charted water at least the larger of draft + squat +
+  required UKC and the safety contour deep, with no danger or structure in
+  the cell. Within `limits.berthRadiusMeters` (default 300 m) of a stop it
+  may use water down to draft + squat, so it can reach a berth or anchorage.
+  Give a draft, a safety contour or both.
+- **Stops.** A stop on land, in water too shallow, or on a structure moves to
+  the nearest navigable water within `limits.snapRadiusMeters` (default
+  5 km), as `sample`'s `nearestNavigable` finds it. `stops` gives where each
+  stop was asked for, where the route uses it, and for one that `moved`, the
+  `reason`, `movedMeters` and `bearingDegrees`.
+- **The way.** A least-cost search through the grid: each step costs its
+  length, more within `limits.comfortMeters` (default 200 m) of anything
+  that isn't navigable, so the route keeps to open water where there's room.
+  `clearanceMeters` sets a hard minimum room away from the stops (default
+  0). `prefer` (`fairways`, `dredged_areas`, `recommended_tracks`) makes
+  charted Fairway, DredgedArea and RecommendedTrack water cheaper, as a
+  dredged channel needs. Round each stop the grid has 5 m cells, for marina
+  entrances; in between, 20 m cells (coarser on a long leg), and 5 m again
+  where a channel is too narrow for those.
+- **Waypoints.** The way is cut to the turns a straight line can't skip. A
+  shortcut stays in navigable cells and keeps the room of the stretch it
+  replaces (up to half the comfort distance).
+
+The result has `distanceNm`, the `legs` (each with its stops, `distanceNm`,
+`runningMinutes` at `vessel.speedKnots` with no current, the range of its
+waypoints, and its least depth and clearance away from the stops),
+`waypoints` in the shape `append_waypoint` takes (stops named `from`,
+`via 1`, … `to`), and `polyline`, the route as `check_route`'s `polyline`
+argument. With `check` (default true) it runs `check_route` with the same
+vessel and `departure` and adds a summary: the `verdict`, counts by group,
+`mustReviewAwayFromStops` (must-review findings farther than the berth
+radius from every stop: the ones the plan answers for), the five worst
+findings and any check that didn't fully run. Run `check_route` on
+`polyline` for the full report.
+
+In SoundCharts, `routeName` creates the route, makes it active and returns
+its `routeId`. Elsewhere it returns `invalid_argument`.
+
+When there's no route it returns `no_route_planned` with `reason`
+`stop_not_navigable` (and `stopIndex`) or `no_navigable_way` (and
+`legIndex`). The route doesn't account for tides, tidal gates or currents:
+check timing with `check_route`'s `window.constraints`.
+
+On the 45 NOAA cells of the San Juan Islands, planning the seven-day loop
+from Cap Sante (1.1 m draft, 1.5 m safety contour) as one itinerary takes
+about 50 seconds, within about 10 % of hand-checked routes' distances, with
+no must-review finding away from the stops.
 
 ## Times outside the data
 

@@ -19,7 +19,12 @@ public enum NavigabilityCellClass : byte
     /// <summary>Charted water shallower than the minimum depth (drying ground included).</summary>
     Shoal = 3,
 
-    /// <summary>Charted water with a danger (wreck, obstruction or rock) in the cell at or shallower than the hazard depth.</summary>
+    /// <summary>
+    /// Charted water with a danger (wreck, obstruction or rock) in the cell at
+    /// or shallower than the hazard depth, or a structure standing in it: one
+    /// that raises the SafetyContour alert (a breakwater, pier, pontoon or
+    /// hulk), or a pile, platform or other structure the hazards check flags.
+    /// </summary>
     Hazard = 4,
 
     /// <summary>Charted water with no charted depth.</summary>
@@ -322,6 +327,76 @@ public sealed class NavigabilityGrid
         return new NavigabilityConnection(true, a, b, null, narrowest, clearance);
     }
 
+    /// <summary>
+    /// Whether a cell is navigable with room to spare: navigable, and with at
+    /// least <paramref name="clearanceMeters"/> from the edge of the nearest
+    /// cell that isn't (its centre's clearance less half a cell).
+    /// </summary>
+    /// <param name="row">The row.</param>
+    /// <param name="column">The column.</param>
+    /// <param name="clearanceMeters">The room wanted, in metres; 0 for none.</param>
+    /// <returns><c>true</c> when the cell qualifies.</returns>
+    public bool IsNavigable(int row, int column, double clearanceMeters) =>
+        IsNavigable(row, column)
+        && (clearanceMeters <= 0 || ClearanceMeters(row, column) - (CellMeters / 2) >= clearanceMeters);
+
+    /// <summary>
+    /// The navigable cell nearest a position (#1559): of the cells with at
+    /// least <paramref name="clearanceMeters"/> of room
+    /// (<see cref="IsNavigable(int, int, double)"/>) within
+    /// <paramref name="maxDistanceMeters"/>, the one whose centre is nearest.
+    /// </summary>
+    /// <param name="position">The position.</param>
+    /// <param name="clearanceMeters">The room wanted round the cell, in metres; 0 for none.</param>
+    /// <param name="maxDistanceMeters">How far to look, in metres.</param>
+    /// <param name="accept">Further test a cell must pass, or <c>null</c>.</param>
+    /// <returns>The cell and the distance to its centre in metres, or <c>null</c> when none qualifies.</returns>
+    public (NavigabilityCell Cell, double DistanceMeters)? NearestNavigable(
+        GeoPosition position,
+        double clearanceMeters,
+        double maxDistanceMeters,
+        Func<NavigabilityCell, bool>? accept = null)
+    {
+        // Rows and columns within the distance, by the grid's own steps.
+        var span = Math.Max(0, maxDistanceMeters) + CellMeters;
+        var rowSpan = (int)Math.Ceiling(span / CellMeters) + 1;
+        var colSpan = (int)Math.Ceiling(span / (Centres.LongitudeStep * PassageGeodesy.MetersPerDegreeLatitude
+            * Math.Max(0.01, Math.Cos(position.Latitude * Math.PI / 180)))) + 1;
+        var row0 = (int)Math.Round((position.Latitude - Centres.South) / Centres.LatitudeStep);
+        var dLon = (((position.Longitude - Centres.West) + 540) % 360) - 180;
+        if (dLon < -Centres.LongitudeStep)
+        {
+            dLon += 360;
+        }
+
+        var col0 = (int)Math.Round(dLon / Centres.LongitudeStep);
+        (NavigabilityCell Cell, double DistanceMeters)? best = null;
+        for (var r = Math.Max(0, row0 - rowSpan); r <= Math.Min(Rows - 1, row0 + rowSpan); r++)
+        {
+            for (var c = Math.Max(0, col0 - colSpan); c <= Math.Min(Columns - 1, col0 + colSpan); c++)
+            {
+                if (!IsNavigable(r, c, clearanceMeters))
+                {
+                    continue;
+                }
+
+                var cell = new NavigabilityCell(r, c);
+                var distance = PassageGeodesy.GreatCircleDistanceMeters(position, CenterOf(cell));
+                if (distance > maxDistanceMeters || (best is { } b && distance >= b.DistanceMeters))
+                {
+                    continue;
+                }
+
+                if (accept is null || accept(cell))
+                {
+                    best = (cell, distance);
+                }
+            }
+        }
+
+        return best;
+    }
+
     /// <summary>Builds the grid from the loaded data.</summary>
     /// <param name="sources">The route-check sources: the water mask, charted depth and, for dangers, the charts.</param>
     /// <param name="request">The box, cell size and depths.</param>
@@ -446,12 +521,23 @@ public sealed class NavigabilityGrid
         };
         var threshold = request.HazardDepthMeters ?? request.MinimumDepthMeters;
         var cells = charts.CellsNear(extent);
-        var features = charts.FeaturesInCorridor(ring, extent, RouteChartQuery.Default);
+        var features = charts.FeaturesInCorridor(ring, extent, new RouteChartQuery(request.MinimumDepthMeters, request.MinimumDepthMeters));
         foreach (var feature in features)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (feature.Kind != RouteChartFeatureKind.Danger
-                || (feature.DepthMeters is { } depth && depth > threshold))
+
+            // Dangers at or shallower than the hazard depth, and what stands
+            // in the water and raises the SafetyContour alert as the chart
+            // check sees it (breakwaters, piers, pontoons, hulks: #1560), so
+            // a way through the grid doesn't cut a structure check_route flags.
+            var danger = feature.Kind == RouteChartFeatureKind.Danger && !(feature.DepthMeters is { } depth && depth > threshold);
+            // So does a structure the hazards check flags on the track, such
+            // as a pile or platform (NavHazard; not an aid or a bridge).
+            var structure = feature.Kind == RouteChartFeatureKind.Alerted
+                && (feature.Alerts.Any(a => a.Alert == RouteFindingAlert.SafetyContour)
+                    || (feature.Alerts.Any(a => a.Alert == RouteFindingAlert.NavHazard)
+                        && RouteHazardClasses.Of(feature.FeatureType) == RouteHazardClass.Structure));
+            if (!danger && !structure)
             {
                 continue;
             }

@@ -888,6 +888,12 @@ public class RouteFindingFormatter
     /// <summary>The title of <see cref="RouteFindingCodes.NoWaterLevelCoverage"/>.</summary>
     protected virtual string NoWaterLevelCoverage => "Outside water-level coverage";
 
+    /// <summary>The title of <see cref="RouteFindingCodes.NoCurrentCoverage"/>.</summary>
+    protected virtual string NoCurrentCoverage => "No current at the ETA";
+
+    /// <summary>Why a stretch's ETA has no current applied.</summary>
+    protected virtual string SpeedOverGround => "speed taken as over the ground";
+
     /// <summary>The title of <see cref="RouteFindingCodes.WaterLevelNoData"/>.</summary>
     protected virtual string WaterLevelNoData => "No water-level value";
 
@@ -933,6 +939,7 @@ public class RouteFindingFormatter
             "data.water_level_no_data" => WaterLevelNoData,
             "data.datum_mismatch" => DatumMismatch,
             "data.no_charted_depth" => NoChartedDepth,
+            "data.no_current_coverage" => NoCurrentCoverage,
             _ => finding.Code.Value,
         };
     }
@@ -974,6 +981,7 @@ public class RouteFindingFormatter
             "data.water_level_ends" => Join(legs, Format(StretchFromFormat, FormatEta(details.StartTime)), Format(TideNotAppliedForFormat, nm)),
             "data.water_level_starts_late" => Join(legs, Format(TideNotAppliedForFormat, nm)),
             "data.no_charted_depth" => Join(legs, length, NoDepthSource),
+            "data.no_current_coverage" => Join(legs, length, SpeedOverGround),
             _ => Join(legs, length, TideNotApplied),
         };
     }

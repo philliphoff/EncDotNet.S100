@@ -45,7 +45,7 @@ public sealed partial class ClearanceCheck : IRouteCheck<ClearanceCheckResult>
 
     private readonly object _gate = new();
     private (RouteCheckSources Sources, PassageCheckOptions Options, PassageDepthProfile Profile)? _profile;
-    private (PassageDepthProfile Profile, IReadOnlyList<PassageLeg> Legs, DepartureRange Range, DepartureSweep? Sweep)? _sweep;
+    private (PassageDepthProfile Profile, IReadOnlyList<PassageLeg> Legs, DepartureRange Range, IRouteCurrentSource? Currents, DepartureSweep? Sweep)? _sweep;
 
     /// <inheritdoc/>
     public string Name => CheckName;
@@ -72,7 +72,7 @@ public sealed partial class ClearanceCheck : IRouteCheck<ClearanceCheckResult>
         }
 
         var options = context.Options.Clearance;
-        var model = new UkcModel(depth, waterLevel, options);
+        var model = new UkcModel(depth, waterLevel, options, context.AppliedCurrents);
         PassageDepthProfile? reuse = null;
         lock (_gate)
         {
@@ -89,7 +89,7 @@ public sealed partial class ClearanceCheck : IRouteCheck<ClearanceCheckResult>
         }
 
         var result = model.Evaluate(profile, context.Plan, context.Settings, cancellationToken);
-        var departures = context.Settings.DepartureWindow is { } range ? Sweep(model, profile, legs, range, cancellationToken) : null;
+        var departures = context.Settings.DepartureWindow is { } range ? Sweep(model, profile, legs, range, context.AppliedCurrents, cancellationToken) : null;
         var findings = ClearanceFindings.Build(context.Plan, result, context.Options.Formatter);
         return RouteCheckOutcome<ClearanceCheckResult>.Ran(findings, new ClearanceCheckResult(result, departures));
     }
@@ -97,11 +97,12 @@ public sealed partial class ClearanceCheck : IRouteCheck<ClearanceCheckResult>
     /// <inheritdoc/>
     RouteCheckOutcome IRouteCheck.Run(RouteCheckContext context, CancellationToken cancellationToken) => Run(context, cancellationToken);
 
-    private DepartureSweep? Sweep(UkcModel model, PassageDepthProfile profile, IReadOnlyList<PassageLeg> legs, DepartureRange range, CancellationToken cancellationToken)
+    private DepartureSweep? Sweep(UkcModel model, PassageDepthProfile profile, IReadOnlyList<PassageLeg> legs, DepartureRange range, IRouteCurrentSource? currents, CancellationToken cancellationToken)
     {
         lock (_gate)
         {
-            if (_sweep is { } last && ReferenceEquals(last.Profile, profile) && last.Range == range && PassageLegs.Same(last.Legs, legs))
+            if (_sweep is { } last && ReferenceEquals(last.Profile, profile) && last.Range == range && PassageLegs.Same(last.Legs, legs)
+                && ReferenceEquals(last.Currents, currents))
             {
                 return last.Sweep;
             }
@@ -112,7 +113,7 @@ public sealed partial class ClearanceCheck : IRouteCheck<ClearanceCheckResult>
             : model.SweepWaterLevelRange(profile, legs, range.Step, range.MaxDepartures, cancellationToken);
         lock (_gate)
         {
-            _sweep = (profile, legs.ToArray(), range, sweep);
+            _sweep = (profile, legs.ToArray(), range, currents, sweep);
         }
 
         return sweep;
