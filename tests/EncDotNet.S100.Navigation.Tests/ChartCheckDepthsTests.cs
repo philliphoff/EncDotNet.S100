@@ -371,6 +371,25 @@ public class ChartCheckDepthsTests
         Assert.Equal("2", arrival.Feature!.FeatureId);
     }
 
+    [Fact]
+    public void A_marinas_docks_past_the_radius_join_the_berth_when_they_join_its_structures()
+    {
+        // #1626: the arrival is at 0.01° E. Pontoons on the track 50, 100, 150
+        // and 200 m from it, 50 m apart, are one dock system; one 400 m out,
+        // 200 m past the last, isn't. A breakwater 150 m out (not a berth)
+        // next to the docks stays a finding of its own.
+        RouteChartFeature Pontoon(string id, double metres) =>
+            SafetyContourFeature(Danger("Pontoon", id, 0.01 - (metres / E), 0, null));
+        var breakwater = SafetyContourFeature(Danger("ShorelineConstruction", "9", 0.01 - (150 / E), 0, null)) with { ShorelineConstructionCategory = 1 };
+
+        var findings = Check([Pontoon("1", 50), Pontoon("2", 100), Pontoon("3", 150), Pontoon("4", 200), Pontoon("5", 400), breakwater]).Findings;
+
+        var berth = Assert.Single(findings, f => f.Code == RouteFindingCodes.BerthStructures);
+        Assert.Equal(["1", "2", "3", "4"], ((BerthStructuresDetails)berth.Details!).Features.Select(f => f.FeatureId).Order());
+        var crossings = findings.Where(f => f.Code == RouteFindingCodes.CrossesSafetyContour).Select(f => f.Feature!.FeatureId).Order();
+        Assert.Equal(["5", "9"], crossings);
+    }
+
     private const int Pier = 4;
 
     [Theory]

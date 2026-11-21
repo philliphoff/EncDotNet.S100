@@ -762,7 +762,9 @@ mariner's settings (`get_route_weather_settings`). See
 - `berthRadiusMeters`: how far from the departure and arrival waypoints
   structures that raise the safety contour alert count as the berth (default
   100 m; 0 turns it off). They're one info `route_check.berth_structures`
-  finding per end instead of crossings.
+  finding per end instead of crossings. Pontoons, piers and wharves within
+  60 m of one already grouped join it, out to four times the radius, so a
+  large marina's docks count as one berth.
 - `areaKindsOff`: kinds of prohibited area and area with special conditions
   to turn off, by name (such as `anchorage_area` or `marine_farm`). Their
   areas aren't reported; one `route_check.area_kind_off` finding per kind

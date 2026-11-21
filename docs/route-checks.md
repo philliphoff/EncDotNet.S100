@@ -94,7 +94,7 @@ These checks run when the safety contour and safety depth are both set.
 |---|---|---|
 | `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
 | `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
-| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, one finding per end; a breakwater or other non-berth structure the track line cuts stays a crossing. |
+| `route_check.berth_structures` | Info | Structures that raise the `SafetyContour` alert within the berth radius (100 m) of the departure or arrival, and the docks joined to them, one finding per end; a breakwater or other non-berth structure the track line cuts stays a crossing. |
 | `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
@@ -115,7 +115,10 @@ piers, and a marina entrance is often narrower than the track clearance either
 side, so its breakwaters are close too. Structures within the berth radius of
 the departure or arrival waypoint are grouped into one Info finding per end,
 "Structures at the departure berth" or "Structures at the arrival berth",
-which lists them. The radius is a setting (`--berth-radius` in
+which lists them. A large marina's docks spread past any one radius, so a
+pontoon, floating dock, pier or wharf within 60 m of a structure already
+grouped joins the group too, out to four times the radius: the dock system
+counts as one berth. The radius is a setting (`--berth-radius` in
 `s100 route check`, `limits.berthRadiusMeters` in `check_route`); 0 turns the
 grouping off.
 

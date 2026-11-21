@@ -68,7 +68,9 @@ public sealed class RouteCheckSettings
     /// (<see cref="SafetyContourFeatureDetails.IsBerth"/>) even when it does.
     /// <c>null</c> for <see cref="DefaultBerthRadius"/>. Such structures are reported as
     /// one <see cref="RouteFindingCodes.BerthStructures"/> finding (INFO) per
-    /// end instead of crossings; zero turns this off.
+    /// end instead of crossings; zero turns this off. A berth structure
+    /// within 60 m of one grouped joins the group, out to four times the
+    /// radius, so a large marina's docks count as one berth (#1626).
     /// </summary>
     public Length? BerthRadius { get; init; }
 
