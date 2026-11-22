@@ -1,6 +1,6 @@
 # Symbol dictionary — Design Note
 
-> Status: **Planned.** §7 slices the build: the Chart reference activity
+> Status: **Planned.** Decisions D1–D6 are made. §7 slices the build: the Chart reference activity
 > first, then the Reference tab, then Object information. A working
 > prototype of the study page, generated from the catalogues bundled in
 > `EncDotNet.S100.Specifications`, is at
@@ -284,11 +284,11 @@ symbols with their conditions.
 ### 4.5 Browse and study (artboards D, E)
 
 **Chart reference** is a left-dock activity, after Feature search (id
-`ChartReference`, order 52). Its list reads like Chart 1: grouped by section,
+`ChartReference`, order 52, icon `BookCompass`, D1). Its list reads like Chart 1: grouped by section,
 glyph first. Its controls:
 
-- a **product** combo: loaded products first, then every catalogue the
-  viewer has;
+- a **product** combo: loaded products first, then every bundled
+  catalogue, S-401 included (D4);
 - **search**;
 - **Features / Symbols**, to list feature types or individual symbols;
 - **In view**, which limits the list to what is drawn in the current
@@ -344,22 +344,33 @@ palette as a PDF.
 - **Overlay entries.** Weather, AIS, NDBC and CAP have legend rows but no
   feature catalogue; they need short written definitions to be entries.
 
-## 6. Open questions
+## 6. Decisions
 
-1. **The activity's icon.** `BookOpen` is already the Feature catalogues
-   activity's icon, and legends D13 gives it to the Reference tab too. The
-   activity and the tab need two icons that aren't the Feature catalogues
-   one; R4 proposes them.
-2. **The name.** "Chart reference", or "Chart 1"? Mariners say "Chart 1", but
-   that names the paper publication and S-101's test cells.
-3. **How far Why this symbol goes** (R12): the main symbol only, or also
-   text, light sectors and topmarks, which other rules draw?
-4. **Unreached items.** Show every catalogue item, or only those a rule can
-   reach? The prototype shows all, and unreached ones say so.
-5. **S-401.** Is the Inland ENC catalogue in scope in the product combo?
-6. **Several viewing groups.** A rule that sets different viewing groups per
-   geometry or case has more than one display category; show all of them, or
-   the first?
+**D1 — Icons.** The activity uses `BookCompass` and the Reference tab
+`BookInformation`. Feature catalogues keeps `BookOpen`. This amends legends
+D13, which gave the Reference tab `BookOpen`.
+
+**D2 — The name is Chart reference**: the activity title, the Help menu
+item, and the Legend tab's **Show all in Chart reference** link. "Chart 1"
+names the paper publication and S-101's test cells.
+
+**D3 — Unreached items are shown, grouped and marked.** Families a rule
+assembles from numbers (`SOUNDG`, `SOUNDS`, `SAFCON`) are one entry each,
+linked to the rule that assembles them. Items no rule names are listed under
+**Not used by a rule**, last in Symbols mode. In view hides them, since they
+are never drawn.
+
+**D4 — Every bundled catalogue is in the product combo**, S-401 included:
+loaded products first, then the rest.
+
+**D5 — Why this symbol explains every drawn part.** The main symbol gets
+its full reason. Each other part (topmark, light, text) gets one line
+naming it, with a link to its entry and its own reason folded underneath.
+
+**D6 — Every display category is shown.** A feature type whose rule sets
+different viewing groups by geometry or case lists one line per distinct
+category ("Point: Display base · Area: Standard"). The list's category tag
+shows the most visible one: Base, then Standard, then Other.
 
 ## 7. Slices
 
@@ -379,8 +390,9 @@ Each slice ships on its own, with tests and a whats-new bullet.
    numbers as floors: S-101 links at least 152 of 190 feature types; for
    example, `BCNLAT21` is used by `LateralBeacon` when Simplified symbols is
    on and the colour is red. The build time is measured against the budget.
-   Also records each symbol's `iho:source`, for the New in S-101 badge. No
-   UI.
+   Also records each symbol's `iho:source`, for the New in S-101 badge;
+   every viewing group a rule sets, by geometry or case, for D6; and the
+   assembled families and unreached items for D3. No UI.
 2. **R2 Service and changes.** `CataloguesChanged` on both catalogue
    managers. A viewer `ChartReferenceService` builds indexes lazily per
    spec off the UI thread, keyed by the two hashes, and drops them on
@@ -399,7 +411,8 @@ Each slice ships on its own, with tests and a whats-new bullet.
    has the product combo, search, Features / Symbols, and a virtualised list
    grouped by Chart 1 section. S-401 has 926 items, so the list must
    virtualise. A row shows the glyph, the name, the S-57 acronym or code,
-   and the display category. Selecting a row expands it in place: the
+   and the most visible display category (D6). Unreached items come last
+   under **Not used by a rule** (D3). Selecting a row expands it in place: the
    definition, display category, Chart 1 section, and Drawn with, the
    symbols and their conditions in words. Also **Help › Chart reference**
    and a shortcut, strings in `Strings.ChartReference.cs`, and automation
@@ -418,7 +431,8 @@ Each slice ships on its own, with tests and a whats-new bullet.
 
 ### Phase 2: the Reference tab
 
-7. **R7 The tab.** A `TabDock.Right` tab with id `Reference` and order 30,
+7. **R7 The tab.** A `TabDock.Right` tab with id `Reference`, order 30 and
+   icon `BookInformation` (D1),
    in the existing strip, with its empty state (legends D22).
    `ReferenceNavigator` holds the history: `Open(ReferenceKey)`, back,
    forward and a breadcrumb. There is one entry view per kind: feature
@@ -445,7 +459,9 @@ Each slice ships on its own, with tests and a whats-new bullet.
     attributes are matched against the R1 conditions for the drawn symbol,
     giving the conditions that hold. This is a match, not a trace: it can't
     see computed values, so it says "likely" when more than one case
-    matches.
+    matches. It explains every drawn part (D5): the main symbol in full,
+    the topmark, light and text one line each, with their reasons folded.
+    R12 keeps that layout.
 
 ### Phase 4: exact variants
 
