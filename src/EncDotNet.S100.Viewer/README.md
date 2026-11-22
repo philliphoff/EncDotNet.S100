@@ -956,6 +956,17 @@ type or dataset. Select a result to show the feature in the **Object
 information** panel. This works even when datasets reuse `gml:id` values for
 different features.
 
+### Look up symbols in the chart reference
+
+The **Chart reference** panel (**Help › Chart reference**, Ctrl+Shift+K)
+lists every feature type or symbol of a product's catalogues, grouped by
+Chart 1 section, each with its glyph, its S-57 acronym or code and its display
+category. Choose the product, search by name, acronym or code, and switch
+between **Features** and **Symbols**. Select a row to see its definition, its
+display categories and what it is drawn with, each symbol with the conditions
+that choose it in words. A symbol links to its own row, and a symbol's row
+links back to the feature types that use it.
+
 ### Find navigational warnings
 
 The **Navigational warnings** panel, beside **Library** in the activity bar,

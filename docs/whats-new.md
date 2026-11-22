@@ -6,6 +6,21 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference in SoundCharts.** A new **Chart reference** activity,
+  after Feature search in the activity bar (also **Help › Chart reference**,
+  Ctrl+Shift+K), lists every feature type or symbol of a product's
+  catalogues, grouped by Chart 1 section, each with its glyph on the
+  palette's chart background, its S-57 acronym or code and its display
+  category. Pick a product (open ones first, every bundled catalogue,
+  S-401 included), search by name, acronym or code, and switch between
+  **Features** and **Symbols**; symbols no rule draws are listed last under
+  **Not used by a rule**. Select a row to see its definition, display
+  categories, Chart 1 section and viewing group, and what it is **Drawn
+  with**, each symbol with its conditions in words ("Simplified symbols is
+  on · Colour is red · Beacon shape is a stake, pole, perch or post"); each
+  symbol links to its own row, which links back to the feature types that
+  use it (#1637).
+
 - **Search the chart reference over MCP.** SoundCharts' new
   `search_chart_reference` tool finds feature types, symbols, line styles,
   area fills, attributes and display settings in any product's catalogues,
