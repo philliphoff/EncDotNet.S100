@@ -6,6 +6,11 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The same UI font on every platform.** SoundCharts now uses its bundled
+  Inter font on macOS, Windows and Linux. Before, it used each platform's
+  default: San Francisco on macOS, Segoe UI on Windows, and on Linux often a
+  serif such as DejaVu Serif. The **View** pill's arrow is now an icon, since
+  Inter has no small down triangle, and the Timeline's gap labels use "…".
 - **HYCOM current forecast in the Library.** A new weather source,
   **Surface currents, forecast — HYCOM**, fetches the global HYCOM
   ESPC-D-V02 surface current forecast for the map view from HYCOM's THREDDS

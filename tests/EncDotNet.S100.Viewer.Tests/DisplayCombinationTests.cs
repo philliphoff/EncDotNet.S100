@@ -555,7 +555,7 @@ public class DisplayCombinationServiceTests
         using var vm = new DisplayCombinationsViewModel(h.Service, ui: null);
 
         h.Service.Apply(BuiltInDisplayCombinations.PilotageId);
-        Assert.Equal("View: Pilotage ▾", vm.PillLabel);
+        Assert.Equal("View: Pilotage", vm.PillLabel);
         Assert.Equal(3, vm.LadderRows.Count);
         Assert.Equal(2, vm.MoreRows.Count);
         Assert.False(vm.HasUserRows);
@@ -564,7 +564,7 @@ public class DisplayCombinationServiceTests
         Assert.Equal("6 of 7 products not loaded", pilotage.NotLoadedSummary);
 
         h.State.SetCategory(EcdisDisplayCategory.All);
-        Assert.Equal("View: Pilotage (modified) ▾", vm.PillLabel);
+        Assert.Equal("View: Pilotage (modified)", vm.PillLabel);
         Assert.True(vm.ReapplyCommand.CanExecute(null));
 
         vm.BeginSaveCommand.Execute(null);
@@ -573,7 +573,7 @@ public class DisplayCombinationServiceTests
         vm.EditName = "Mine";
         vm.ConfirmEditCommand.Execute(null);
         Assert.False(vm.IsEditing);
-        Assert.Equal("View: Mine ▾", vm.PillLabel);
+        Assert.Equal("View: Mine", vm.PillLabel);
         Assert.True(Assert.Single(vm.UserRows).IsUser);
     }
 }

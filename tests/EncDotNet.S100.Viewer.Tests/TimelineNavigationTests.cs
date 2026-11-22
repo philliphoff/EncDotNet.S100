@@ -56,7 +56,7 @@ public sealed class TimelineNavigationTests
         Assert.Equal(4, timeline.Gaps.Count);
         var gapLabels = timeline.AxisLabels.Where(l => l.Kind == AxisLabelKind.Gap).Select(l => l.Text).ToArray();
         Assert.Equal(4, gapLabels.Length);
-        Assert.All(gapLabels, l => Assert.Matches(@"^⋯ \d+ (wk|mo) ⋯$", l));
+        Assert.All(gapLabels, l => Assert.Matches(@"^… \d+ (wk|mo) …$", l));
         Assert.All(timeline.Gaps, g => Assert.Contains("with no data", g.Tooltip, StringComparison.Ordinal));
     }
 

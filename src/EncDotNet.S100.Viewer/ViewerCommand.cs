@@ -266,6 +266,7 @@ internal sealed class ViewerCommand : Command<ViewerCommandSettings>
                 .UsePlatformDetect()
                 .With(CreateSkiaOptions())
                 .WithInterFont()
+                .With(CreateFontOptions())
                 .LogToTrace()
                 .StartWithClassicDesktopLifetime([]);
         }
@@ -287,5 +288,27 @@ internal sealed class ViewerCommand : Command<ViewerCommandSettings>
     internal static SkiaOptions CreateSkiaOptions() => new()
     {
         MaxGpuResourceSizeBytes = (long)(ChartEngine.Options.SkiaGpuResourceMb * 1024 * 1024),
+    };
+
+    /// <summary>
+    /// The family name of the Inter font bundled by <c>Avalonia.Fonts.Inter</c>
+    /// and registered by <c>WithInterFont</c>.
+    /// </summary>
+    internal const string DefaultFontFamilyName = "fonts:Inter#Inter";
+
+    /// <summary>
+    /// Makes the bundled Inter the UI's default font on every platform.
+    /// </summary>
+    /// <remarks>
+    /// <c>WithInterFont</c> only registers Inter; without a default family name
+    /// Avalonia uses the platform's default typeface. That is San Francisco on
+    /// macOS and Segoe UI on Windows, but on Linux it is Skia's fontconfig
+    /// fallback for an unnamed family, which is often a serif (DejaVu Serif)
+    /// even when the desktop's sans-serif is set. Glyphs Inter lacks still
+    /// fall back to the system's fonts.
+    /// </remarks>
+    internal static Avalonia.Media.FontManagerOptions CreateFontOptions() => new()
+    {
+        DefaultFamilyName = DefaultFontFamilyName,
     };
 }
