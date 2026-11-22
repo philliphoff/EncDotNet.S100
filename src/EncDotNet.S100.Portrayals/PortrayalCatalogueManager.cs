@@ -70,7 +70,18 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         }
         _assetCaches.TryRemove(spec, out _);
         _catalogueHashes.TryRemove(spec, out _);
+
+        CataloguesChanged?.Invoke(this, new CataloguesChangedEventArgs(spec));
     }
+
+    /// <summary>
+    /// Raised by <see cref="SetPath(SpecRef, string)"/> and
+    /// <see cref="SetSource(SpecRef, IAssetSource)"/> after the spec's cached
+    /// provider, asset cache and content hash have been evicted (and, for
+    /// <c>SetSource</c>, the new provider registered), on the thread that
+    /// called them.
+    /// </summary>
+    public event EventHandler<CataloguesChangedEventArgs>? CataloguesChanged;
 
     /// <summary>
     /// Gets the configured catalogue path for a product spec, or null if none is set.
@@ -145,6 +156,8 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         // the slot participates in the same Lazy-based eviction/Dispose
         // semantics as lazily-built providers.
         _providers[spec] = new Lazy<PortrayalCatalogueProvider>(provider);
+
+        CataloguesChanged?.Invoke(this, new CataloguesChangedEventArgs(spec));
     }
 
     /// <summary>

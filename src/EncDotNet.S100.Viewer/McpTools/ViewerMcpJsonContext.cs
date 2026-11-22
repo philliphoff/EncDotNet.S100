@@ -50,6 +50,8 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(DepthBasisDto))]
 [JsonSerializable(typeof(LegendDto))]
 [JsonSerializable(typeof(SetLegendResult))]
+[JsonSerializable(typeof(ChartReferenceSearchResult))]
+[JsonSerializable(typeof(ChartReferenceEntryDto))]
 [JsonSerializable(typeof(RangeBearingDto))]
 [JsonSerializable(typeof(SettleStateDto))]
 [JsonSerializable(typeof(ProcessMetricsDto))]
@@ -72,6 +74,8 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(UiActionNotSupported))]
 [JsonSerializable(typeof(DisplayCombinationNotFound))]
 [JsonSerializable(typeof(NoActiveDisplayCombination))]
+[JsonSerializable(typeof(ChartReferenceProductNotFound))]
+[JsonSerializable(typeof(ChartReferenceEntryNotFound))]
 // Parameter types the adapters bind, beyond the shared tools'.
 [JsonSerializable(typeof(long?))]
 [JsonSerializable(typeof(float?))]
