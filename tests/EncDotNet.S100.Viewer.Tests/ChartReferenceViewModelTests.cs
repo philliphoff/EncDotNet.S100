@@ -164,6 +164,32 @@ public sealed class ChartReferenceViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task A_symbol_a_fill_places_lists_it_under_Used_inside_and_links_to_it()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var vm = await OpenAsync(f);
+        vm.Mode = ChartReferenceMode.Symbols;
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var opened = new List<ReferenceKey>();
+        var context = new ReferenceEntryContext { Index = vm.Index!, Glyphs = cache, Open = opened.Add };
+
+        // The symbol's entry, which the Reference tab and the page show (R7).
+        var symbol = Row(vm, "AIRARE02P");
+        var entry = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(symbol.Entry, context));
+        Assert.False(entry.IsUnreached);
+        Assert.True(entry.HasUsedIn);
+        var fill = Assert.Single(entry.UsedIn);
+        Assert.Equal(new ReferenceKey(vm.Index!.Spec, ReferenceKind.AreaFill, "AIRARE02"), fill.Key);
+
+        // And back: the fill's entry lists the symbol it places.
+        fill.OpenCommand.Execute(null);
+        Assert.Equal([fill.Key], opened);
+        Assert.True(vm.Index.TryGet(fill.Key, out var fillEntry));
+        var places = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(fillEntry, context)).Places;
+        Assert.Contains(places, l => l.Key == symbol.Key);
+    }
+
+    [Fact]
     public async Task A_link_to_a_family_member_searches_for_it()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");

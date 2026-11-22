@@ -208,6 +208,14 @@
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedBy}" Classes="crHeading" />
                     <ItemsControl ItemsSource="{Binding UsedBy}" AutomationProperties.AutomationId="Reference.Entry.UsedBy" />
                 </StackPanel>
+                <StackPanel Classes="crPart" IsVisible="{Binding HasUsedIn}">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedInside}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding UsedIn}" AutomationProperties.AutomationId="Reference.Entry.UsedIn" />
+                </StackPanel>
+                <StackPanel Classes="crPart" IsVisible="{Binding HasPlaces}">
+                    <TextBlock Text="{x:Static loc:Strings.Reference_Places}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding Places}" AutomationProperties.AutomationId="Reference.Entry.Places" />
+                </StackPanel>
             </StackPanel>
         </DataTemplate>
 

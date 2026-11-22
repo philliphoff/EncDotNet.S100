@@ -12,7 +12,8 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// A symbol's, line style's, area fill's or family's entry (design note §4.4,
 /// C2; R7, #1650): Day, Dusk and Night side by side, its description, the
 /// display settings it depends on, its family or members, where it came
-/// from, and Used by with each case.
+/// from, Used by with each case, and the line styles and fills it is used
+/// inside or the symbols a line style or fill places.
 /// </summary>
 internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
 {
@@ -38,6 +39,13 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
         Members = [.. item.Members.Select(m => LinkTo(new ReferenceKey(Index.Spec, ReferenceKind.Symbol, m))).OfType<ChartReferenceLinkViewModel>()];
         Origin = OriginOf(item, Index.Spec.Name);
         UsedBy = UsedByOf(item);
+        UsedIn = [.. item.UsedIn.Select(key => LinkTo(key)).OfType<ChartReferenceLinkViewModel>()];
+        Places =
+        [
+            .. item.Places
+                .Select(id => LinkTo(new ReferenceKey(Index.Spec, ReferenceKind.Symbol, id)))
+                .OfType<ChartReferenceLinkViewModel>(),
+        ];
     }
 
     /// <inheritdoc />
@@ -97,6 +105,18 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
 
     /// <summary>Whether a feature type uses it.</summary>
     public bool HasUsedBy => UsedBy.Count > 0;
+
+    /// <summary>The line styles and area fills that place the symbol along a line or as a pattern (#1654).</summary>
+    public IReadOnlyList<ChartReferenceLinkViewModel> UsedIn { get; }
+
+    /// <summary>Whether a line style or area fill places the symbol.</summary>
+    public bool HasUsedIn => UsedIn.Count > 0;
+
+    /// <summary>The symbols a line style places along its line or an area fill tiles as its pattern (#1654).</summary>
+    public IReadOnlyList<ChartReferenceLinkViewModel> Places { get; }
+
+    /// <summary>Whether the line style or fill places symbols.</summary>
+    public bool HasPlaces => Places.Count > 0;
 
     /// <inheritdoc />
     protected override bool DrawsPalettes => true;

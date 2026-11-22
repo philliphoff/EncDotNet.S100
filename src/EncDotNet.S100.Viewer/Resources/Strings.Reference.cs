@@ -109,5 +109,7 @@ internal static partial class Strings
 
     public static string Reference_ChangesFeatureTypes => Get(nameof(Reference_ChangesFeatureTypes));
 
+    public static string Reference_Places => Get(nameof(Reference_Places));
+
     public static string Tooltip_ReferenceLink => Get(nameof(Tooltip_ReferenceLink));
 }

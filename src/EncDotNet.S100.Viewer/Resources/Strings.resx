@@ -9389,6 +9389,10 @@
     <value>Used by</value>
     <comment>Heading of the feature types that use a symbol</comment>
   </data>
+  <data name="ChartReference_UsedInside" xml:space="preserve">
+    <value>Used inside</value>
+    <comment>Heading of the line styles and area fills that place a symbol along a line or as a fill pattern</comment>
+  </data>
   <data name="ChartReference_FamilyHeading" xml:space="preserve">
     <value>Family</value>
   </data>
@@ -9770,5 +9774,9 @@
   <data name="Tooltip_ReferenceLink" xml:space="preserve">
     <value>Open this entry</value>
     <comment>Tooltip of a link inside an entry</comment>
+  </data>
+  <data name="Reference_Places" xml:space="preserve">
+    <value>Places</value>
+    <comment>Heading of the symbols a line style places along its line or an area fill tiles as its pattern</comment>
   </data>
 </root>

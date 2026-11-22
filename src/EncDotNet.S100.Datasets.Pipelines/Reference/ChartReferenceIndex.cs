@@ -88,8 +88,16 @@ public sealed partial class ChartReferenceIndex
     /// <param name="cancellationToken">Cancels the build.</param>
     /// <returns>The index.</returns>
     /// <remarks>
-    /// Reading a rule file, colour profile or symbol that the catalogue
-    /// lists but its source lacks isn't an error: the file is skipped.
+    /// <para>
+    /// Line style and area fill files are read for the symbols they place,
+    /// so a symbol only a line style or fill places is reached through it
+    /// (<see cref="PortrayalItemEntry.UsedIn"/>).
+    /// </para>
+    /// <para>
+    /// Reading a rule file, colour profile, symbol, line style or area fill
+    /// that the catalogue lists but its source lacks isn't an error: the
+    /// file is skipped.
+    /// </para>
     /// </remarks>
     public static async ValueTask<ChartReferenceIndex> BuildAsync(
         SpecRef spec,
@@ -555,6 +563,18 @@ public sealed partial class ChartReferenceIndex
             }
         }
 
+        // Which line styles and area fills place each symbol (open point 6 of #1643).
+        var places = await ReadPlacementsAsync(portrayal, catalogueItems, cancellationToken).ConfigureAwait(false);
+        var usedIn = new Dictionary<string, List<ReferenceKey>>(StringComparer.Ordinal);
+        foreach (var ((kind, id), symbols) in places.OrderBy(p => p.Key.Kind).ThenBy(p => p.Key.Id, StringComparer.Ordinal))
+        {
+            foreach (var symbol in symbols)
+            {
+                if (!usedIn.TryGetValue(symbol, out var list)) usedIn[symbol] = list = [];
+                list.Add(new ReferenceKey(spec, kind, id));
+            }
+        }
+
         var members = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var entries = new List<PortrayalItemEntry>(catalogueItems.Count + familiesNamedBy.Count);
         foreach (var (item, kind, folder) in catalogueItems.OrderBy(i => i.Item.Id, StringComparer.Ordinal).ThenBy(i => i.Kind))
@@ -575,6 +595,10 @@ public sealed partial class ChartReferenceIndex
             var users = new SortedSet<string>(StringComparer.Ordinal);
             if (usedBy.TryGetValue((kind, item.Id), out var directUsers)) users.UnionWith(directUsers);
             if (family is not null && familiesUsedBy.TryGetValue(family, out var familyUsers)) users.UnionWith(familyUsers);
+            var containers = kind == ReferenceKind.Symbol && usedIn.TryGetValue(item.Id, out var placedBy) ? placedBy : [];
+
+            // A symbol a line style or fill places is drawn when a rule names that line style or fill.
+            var reached = named.Count > 0 || containers.Any(c => namedBy.ContainsKey((c.Kind, c.Code)));
 
             entries.Add(new PortrayalItemEntry
             {
@@ -588,6 +612,9 @@ public sealed partial class ChartReferenceIndex
                 Family = family,
                 UsedBy = users.ToList(),
                 NamedByRules = named.ToList(),
+                UsedIn = containers,
+                Places = places.TryGetValue((kind, item.Id), out var placed) ? placed : [],
+                IsUnreached = !reached,
             });
         }
 
@@ -601,6 +628,7 @@ public sealed partial class ChartReferenceIndex
                 Members = members.TryGetValue(prefix, out var list) ? list : [],
                 UsedBy = familiesUsedBy.TryGetValue(prefix, out var users) ? users.ToList() : [],
                 NamedByRules = rulesNaming.ToList(),
+                IsUnreached = rulesNaming.Count == 0,
             });
         }
 
@@ -612,6 +640,51 @@ public sealed partial class ChartReferenceIndex
             if (!map.TryGetValue(key, out var set)) map[key] = set = new SortedSet<string>(StringComparer.Ordinal);
             set.Add(value);
         }
+    }
+
+    /// <summary>
+    /// Reads the symbols each line style places along its line and each
+    /// area fill tiles as its pattern, keyed by the line style or fill, in
+    /// file order without repeats. A file the source lacks or can't parse
+    /// places nothing.
+    /// </summary>
+    private static async Task<Dictionary<(ReferenceKind Kind, string Id), List<string>>> ReadPlacementsAsync(
+        PortrayalCatalogueProvider portrayal,
+        List<(CatalogItem Item, ReferenceKind Kind, string Folder)> catalogueItems,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<(ReferenceKind Kind, string Id), List<string>>();
+        foreach (var (item, kind, folder) in catalogueItems)
+        {
+            if (kind is not (ReferenceKind.LineStyle or ReferenceKind.AreaFill)) continue;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            IEnumerable<string?> symbols;
+            try
+            {
+                await using var stream = await portrayal.FetchAssetAsync(item, folder, cancellationToken).ConfigureAwait(false);
+                symbols = kind == ReferenceKind.LineStyle
+                    ? LineStyleSymbols(LineStyleReader.Read(stream, item.Id))
+                    : [AreaFillReader.Read(stream, item.Id).PatternSymbol];
+            }
+            catch (Exception ex) when (IsMissingAsset(ex) || ex is System.Xml.XmlException)
+            {
+                continue;
+            }
+
+            var ids = symbols
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s!.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (ids.Count > 0) result.TryAdd((kind, item.Id), ids);
+        }
+
+        return result;
+
+        // A composite line style places the symbols of its components.
+        static IEnumerable<string?> LineStyleSymbols(LineStyle style) =>
+            style.Symbols.Select(s => s.Reference).Concat(style.Components.SelectMany(LineStyleSymbols));
     }
 
     /// <summary>Reads a symbol's <c>iho:source</c> from the head of its SVG.</summary>

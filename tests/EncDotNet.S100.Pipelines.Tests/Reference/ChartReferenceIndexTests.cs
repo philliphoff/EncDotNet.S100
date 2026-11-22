@@ -131,6 +131,72 @@ public class ChartReferenceIndexTests
     }
 
     [Fact]
+    public async Task S101_AIRARE02P_is_reached_by_way_of_the_AIRARE02_fill()
+    {
+        var index = await S101();
+
+        var symbol = Item(index, ReferenceKind.Symbol, "AIRARE02P");
+        Assert.Empty(symbol.NamedByRules);
+        Assert.Contains(new ReferenceKey(index.Spec, ReferenceKind.AreaFill, "AIRARE02"), symbol.UsedIn);
+        Assert.False(symbol.IsUnreached);
+
+        var fill = Item(index, ReferenceKind.AreaFill, "AIRARE02");
+        Assert.Equal(["AIRARE02P"], fill.Places);
+        Assert.NotEmpty(fill.NamedByRules);
+    }
+
+    [Fact]
+    public async Task S101_symbols_along_ACHARE51_are_reached()
+    {
+        var index = await S101();
+
+        var line = Item(index, ReferenceKind.LineStyle, "ACHARE51");
+        Assert.Equal(["EMAREMG1", "EMACHAR1"], line.Places);
+        Assert.NotEmpty(line.NamedByRules);
+        foreach (var id in line.Places)
+        {
+            var symbol = Item(index, ReferenceKind.Symbol, id);
+            Assert.Contains(line.Key, symbol.UsedIn);
+            Assert.False(symbol.IsUnreached, id);
+        }
+    }
+
+    [Fact]
+    public async Task S101_symbols_used_inside_drop_out_of_the_unreached_count()
+    {
+        var index = await S101();
+        var reachedByRule = index.Items.Where(i => i.NamedByRules.Count > 0).Select(i => i.Key).ToHashSet();
+
+        // Before #1654 an item was unreached exactly when no rule named it.
+        var noRule = index.Items.Count(i => i.NamedByRules.Count == 0);
+        var usedInside = index.Items.Count(i => i.NamedByRules.Count == 0 && i.UsedIn.Any(reachedByRule.Contains));
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"S-101: {noRule} items no rule names, {usedInside} of them used inside a line style or fill");
+        Assert.True(usedInside >= 10, $"{usedInside} symbols are used only inside a line style or fill");
+        Assert.Equal(noRule - usedInside, index.Items.Count(i => i.IsUnreached));
+    }
+
+    [Fact]
+    public async Task S101_symbols_nothing_names_stay_unreached()
+    {
+        var index = await S101();
+
+        var unreached = index.Items.Where(i => i.IsUnreached).ToList();
+        Assert.NotEmpty(unreached);
+        Assert.All(unreached, i => Assert.Empty(i.NamedByRules));
+        Assert.All(
+            index.Items.Where(i => i.NamedByRules.Count == 0 && i.UsedIn.Count == 0),
+            i => Assert.True(i.IsUnreached, i.Code));
+        Assert.Contains(unreached, i => i.Key.Kind == ReferenceKind.Symbol && i.UsedIn.Count == 0);
+
+        // Placed only by a line style or fill no rule names: still never drawn.
+        Assert.All(
+            index.Items.Where(i => i.NamedByRules.Count == 0 && i.UsedIn.Count > 0
+                && i.UsedIn.All(c => Item(index, c.Kind, c.Code).IsUnreached)),
+            i => Assert.True(i.IsUnreached, i.Code));
+    }
+
+    [Fact]
     public async Task S101_viewing_groups_give_display_category_and_chart1_section()
     {
         var index = await S101();

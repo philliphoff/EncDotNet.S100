@@ -82,7 +82,9 @@ internal sealed record ChartReferenceItemDto(
     [property: Description("The family the item belongs to; null for none.")] string? Family,
     [property: Description("The feature types whose rules draw it.")] IReadOnlyList<string> UsedBy,
     [property: Description("The rule files that name it or its family.")] IReadOnlyList<string> NamedByRules,
-    [property: Description("True when no rule names it, so it is never drawn.")] bool Unreached);
+    [property: Description("The keys of the line styles and area fills that place the symbol, e.g. [\"S-101/AreaFill/AIRARE02\"]; empty otherwise.")] IReadOnlyList<string> UsedIn,
+    [property: Description("The ids of the symbols a line style places along its line or an area fill tiles; empty otherwise.")] IReadOnlyList<string> Places,
+    [property: Description("True when it is never drawn: no rule names it, and no line style or area fill a rule names places it.")] bool Unreached);
 
 /// <summary>One listed value of an attribute.</summary>
 [Description("One listed value of an enumeration attribute.")]
@@ -108,7 +110,7 @@ internal sealed record ChartReferenceDisplaySettingDto(
 /// <summary>A link from an entry to another.</summary>
 [Description("A link to a related chart reference entry.")]
 internal sealed record ChartReferenceLinkDto(
-    [property: Description("How it relates: draws, used_by, member, family, attribute, setting, conditioned_feature_type.")] string Relation,
+    [property: Description("How it relates: draws, used_by, used_in, places, member, family, attribute, setting, conditioned_feature_type.")] string Relation,
     [property: Description("The linked entry's key.")] string Key,
     [property: Description("The linked entry's name.")] string Name);
 
@@ -187,7 +189,9 @@ internal static class ChartReferenceWire
         FeatureTypeEntry f => FeatureTypeSummary(f),
         PortrayalItemEntry { IsFamily: true } i => $"Family of {i.Members.Count} symbols{UsedBy(i.UsedBy)}",
         PortrayalItemEntry { IsUnreached: true } => "Not used by a rule",
-        PortrayalItemEntry i => i.UsedBy.Count > 0 ? $"Used by {List(i.UsedBy)}" : $"Named by {List(i.NamedByRules)}",
+        PortrayalItemEntry { UsedBy.Count: > 0 } i => $"Used by {List(i.UsedBy)}",
+        PortrayalItemEntry { NamedByRules.Count: > 0 } i => $"Named by {List(i.NamedByRules)}",
+        PortrayalItemEntry i => $"Used inside {List([.. i.UsedIn.Select(k => k.Code)])}",
         AttributeEntry a => a.ListedValues.Count > 0 ? $"{a.ValueType}, {a.ListedValues.Count} values" : a.ValueType,
         DisplaySettingEntry d => $"{d.Type}, default {d.Default}",
         _ => entry.Name,
@@ -366,13 +370,18 @@ internal sealed class GetChartReferenceEntryTool
                 break;
             case PortrayalItemEntry i:
                 item = new ChartReferenceItemDto(
-                    i.FileName, i.Source, i.IsFamily, i.Members, i.Family, i.UsedBy, i.NamedByRules, i.IsUnreached);
+                    i.FileName, i.Source, i.IsFamily, i.Members, i.Family, i.UsedBy, i.NamedByRules,
+                    [.. i.UsedIn.Select(k => k.ToString())], i.Places, i.IsUnreached);
                 foreach (var member in i.Members)
                     links.Add("member", ReferenceKind.Symbol, member);
                 if (i.Family is { } family)
                     links.Add("family", ReferenceKind.Symbol, family);
                 foreach (var code in i.UsedBy)
                     links.Add("used_by", ReferenceKind.FeatureType, code);
+                foreach (var container in i.UsedIn)
+                    links.Add("used_in", container.Kind, container.Code);
+                foreach (var symbol in i.Places)
+                    links.Add("places", ReferenceKind.Symbol, symbol);
                 break;
             case AttributeEntry a:
                 attribute = new ChartReferenceAttributeDto(

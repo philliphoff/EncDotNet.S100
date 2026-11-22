@@ -871,8 +871,11 @@ and code):
 - `PortrayalItemEntry`: a symbol, line style or area fill with its
   description, its SVG `iho:source` and the feature types that use it. A
   family a rule assembles from numbers (`SOUNDG`, `SOUNDS`, `SAFCON`) is one
-  entry whose `Members` are the individual symbols. `IsUnreached` marks items
-  no rule names.
+  entry whose `Members` are the individual symbols. A symbol's `UsedIn` lists
+  the line styles and area fills that place it (along a line, or as a fill
+  pattern), and a line style's or fill's `Places` lists those symbols.
+  `IsUnreached` marks items that are never drawn: no rule names them, and no
+  line style or fill a rule names places them.
 - `AttributeEntry`: a simple attribute with its listed values and the feature
   types whose rules test it.
 - `DisplaySettingEntry`: a portrayal context parameter, such as Simplified
