@@ -42,7 +42,7 @@ public static class WeatherRuns
     /// <summary>The item property naming, on a pinned run, the managed folder it is kept in (relative to the downloads root).</summary>
     public const string DownloadFolderProperty = "downloadFolder";
 
-    /// <summary>The item property naming the weather service kind (<c>gribFilter</c>, <c>gribIndex</c>, <c>nwsAlerts</c>, <c>erddapGriddap</c>, <c>wpcBulletins</c>).</summary>
+    /// <summary>The item property naming the weather service kind (<c>gribFilter</c>, <c>gribIndex</c>, <c>nwsAlerts</c>, <c>erddapGriddap</c>, <c>threddsNcss</c>, <c>wpcBulletins</c>).</summary>
     public const string ServiceProperty = "weatherService";
 
     /// <summary>True when <paramref name="item"/> is a weather item whose runs can go stale.</summary>

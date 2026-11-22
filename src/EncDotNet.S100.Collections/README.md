@@ -241,6 +241,15 @@ datasets). Each index lists one item per model or dataset:
   (`date_issued`, `date_modified`, `date_created`) is taken as the run only
   when it falls within the forecast; `NWW3_Global_Best` gives the dataset's
   own dates, so its item has no run and is never stale.
+- **THREDDS NetCDF Subset Service** (`threddsNcss`, HYCOM's current
+  forecast, #1270): datasets by path below the NCSS grid root. Each
+  dataset's `dataset.xml` (`NcssDatasetInfo`) gives its `<TimeSpan>`, grid
+  spacing, first depth and newest run (`time_run`). The item downloads a
+  NetCDF-4 subset like ERDDAP's, thinned with one `horizStride` so that
+  neither axis takes more than `WeatherRequests.NcssMaxAxisPoints` (500)
+  points. The server cuts a box across 0° at 0°, so such an area becomes
+  two items, `…-west` and `…-east` (`WeatherRequests.SplitAtGreenwich`).
+  Requests can take a minute; the download clients allow 10.
 - **NHC's active storms** (`nhcStorms`): `CurrentStorms.json`, read whole at
   each index (`NhcActiveStorms`), lists one item per storm NHC is issuing
   advisories for in the Atlantic, East and Central Pacific, keyed and named
@@ -526,13 +535,13 @@ To add a catalogue:
     NOAA data is public domain; ECMWF, Copernicus and DWD data need an
     attribution.
   - `weather` (for `weather`): the service. `service` is `gribFilter`,
-    `gribIndex`, `nwsAlerts` or `erddapGriddap`; `model` and `modelName`
+    `gribIndex`, `nwsAlerts`, `erddapGriddap` or `threddsNcss`; `model` and `modelName`
     name it. A GRIB2 service gives `dataRoot` (where runs are published),
     `file` (one forecast hour's path, with `{date}`, `{cycle}` and `{hour}`),
     `cadenceHours`, `stepHours`, `maxHours`, `defaultHours`, `gridDegrees` and
     `parameters` (`id` and `level` as the `.idx` lines spell them, `name`,
-    `default`). ERDDAP gives `datasets` (`id`, `name`, `variables`,
-    `default`). An entry without what its service needs is skipped.
+    `default`). ERDDAP and NCSS give `datasets` (`id`, `name`, `variables`,
+    `default`; for NCSS, `id` is the dataset's path). An entry without what its service needs is skipped.
 
 ## See also
 

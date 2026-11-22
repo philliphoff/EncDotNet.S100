@@ -36,6 +36,65 @@ internal sealed class WeatherFakeServer : HttpMessageHandler
     /// <summary>The NetCDF bytes ERDDAP's <c>griddap/&lt;id&gt;.nc</c> answers.</summary>
     public byte[]? ErddapNetCdf { get; set; }
 
+    /// <summary>
+    /// A synthetic NCSS <c>dataset.xml</c> shaped like HYCOM ESPC-D-V02's
+    /// (#1270): listed <c>lat</c> (0.04°) and <c>lon</c> (0.08°, 0 to 360)
+    /// values, a <c>depth</c> axis from 0 m, a 3-hourly <c>time</c> axis
+    /// given as start and increment, and daily runs on <c>time_run</c>, the
+    /// newest 2026-10-24 12Z. Its time span is 2026-10-15 12Z to 2026-10-31 12Z.
+    /// </summary>
+    public const string HycomDatasetXml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gridDataset location="/thredds/ncss/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd" path="path">
+          <axis name="depth" shape="4" type="double" axisType="Height">
+            <attribute name="units" value="m" />
+            <values>0.0 2.0 4.0 6.0</values>
+          </axis>
+          <axis name="lat" shape="5" type="double" axisType="Lat">
+            <attribute name="units" value="degrees_north" />
+            <values>-80.0 -79.95999908447266 -79.91999816894531 -79.87999725341797 -79.83999633789062</values>
+          </axis>
+          <axis name="lon" shape="4" type="double" axisType="Lon">
+            <attribute name="units" value="degrees_east" />
+            <attribute name="modulo" value="360 degrees" />
+            <values>0.0 0.0799560546875 0.1600341796875 0.239990234375</values>
+          </axis>
+          <axis name="time" shape="129" type="double" axisType="Time">
+            <attribute name="units" value="hours since 2026-10-15 12:00:00.000 UTC" />
+            <values start="0.0" increment="3.0" npts="129" />
+          </axis>
+          <axis name="time_run" shape="6" type="double" axisType="RunTime">
+            <attribute name="standard_name" value="forecast_reference_time" />
+            <attribute name="units" value="hours since 2026-10-15 12:00:00.000 UTC" />
+            <values>0.0 0.0 24.0 96.0 192.0 216.0</values>
+          </axis>
+          <gridSet name="time_run time depth lat lon">
+            <grid name="water_u" desc="Eastward Water Velocity" shape="time depth lat lon" type="float">
+              <attribute name="standard_name" value="eastward_sea_water_velocity" />
+            </grid>
+            <grid name="water_v" desc="Northward Water Velocity" shape="time depth lat lon" type="float">
+              <attribute name="standard_name" value="northward_sea_water_velocity" />
+            </grid>
+          </gridSet>
+          <LatLonBox>
+            <west>0.0000</west>
+            <east>359.9200</east>
+            <south>-80.0000</south>
+            <north>90.0000</north>
+          </LatLonBox>
+          <TimeSpan>
+            <begin>2026-10-15T12:00:00Z</begin>
+            <end>2026-10-31T12:00:00Z</end>
+          </TimeSpan>
+        </gridDataset>
+        """;
+
+    /// <summary>The <c>dataset.xml</c> HYCOM's NCSS answers (#1270).</summary>
+    public string? NcssDatasetXml { get; set; }
+
+    /// <summary>The NetCDF-4 bytes HYCOM's NCSS answers for a subset.</summary>
+    public byte[]? NcssNetCdf { get; set; }
+
     /// <summary>True to answer a ranged request with the whole file (200), as a server that ignores <c>Range</c> does.</summary>
     public bool IgnoreRanges { get; set; }
 
@@ -114,6 +173,10 @@ internal sealed class WeatherFakeServer : HttpMessageHandler
                 Bytes(Encoding.UTF8.GetBytes(info), "application/json"),
             "coastwatch.pfeg.noaa.gov" when uri.AbsolutePath.EndsWith(".nc", StringComparison.Ordinal) && ErddapNetCdf is { } nc =>
                 Bytes(nc, "application/x-netcdf"),
+            "ncss.hycom.org" when uri.AbsolutePath.EndsWith("/dataset.xml", StringComparison.Ordinal) && NcssDatasetXml is { } xml =>
+                Bytes(Encoding.UTF8.GetBytes(xml), "application/xml"),
+            "ncss.hycom.org" when uri.AbsolutePath.EndsWith(".ncd", StringComparison.Ordinal) && NcssNetCdf is { } subset =>
+                Bytes(subset, "application/x-netcdf4"),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
     }

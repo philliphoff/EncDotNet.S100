@@ -114,7 +114,7 @@ public sealed class WeatherScope : LibraryCatalogueScope
             });
         }
 
-        if (_service.Kind == WeatherServiceKind.ErddapGriddap)
+        if (_service.Kind is WeatherServiceKind.ErddapGriddap or WeatherServiceKind.ThreddsNcss)
         {
             groups.Add(new LibraryChoiceGroup(LibraryText.Get("Weather_DatasetsTitle"),
                 [.. _service.Datasets.Select(d => new LibraryChoice(d.Id, d.Name, string.Join(", ", d.Variables)) { IsSelected = d.Default || _service.Datasets.Count == 1 })])
@@ -205,7 +205,7 @@ public sealed class WeatherScope : LibraryCatalogueScope
     /// <summary>The ticked parameters ("Significant wave height, Peak wave period"), or null when none.</summary>
     public override string? DescribeSelection() => _service.Kind switch
     {
-        WeatherServiceKind.ErddapGriddap or WeatherServiceKind.WpcBulletins => LibrarySourceText.List([.. DatasetChoices.Where(o => o.IsSelected).Select(o => o.Label)]),
+        WeatherServiceKind.ErddapGriddap or WeatherServiceKind.ThreddsNcss or WeatherServiceKind.WpcBulletins => LibrarySourceText.List([.. DatasetChoices.Where(o => o.IsSelected).Select(o => o.Label)]),
         _ when _service.IsGrib => LibrarySourceText.List([.. Parameters.Where(o => o.IsSelected).Select(o => o.Label)]),
         _ => null,
     };

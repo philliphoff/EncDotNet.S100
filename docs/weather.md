@@ -167,12 +167,30 @@ made from its data. The Library can fetch some of these sources for you.
   Gulf Stream, but not wind-driven or tidal flow. HF radar sees the top metre
   of the sea out to about 150 km from the radars, and its coverage changes
   from hour to hour. Neither is a forecast.
-- **HYCOM.** The global HYCOM ocean model's 8-day current forecast is on
+- **HYCOM.** The global HYCOM ocean model's 8-day current forecast
+  (ESPC-D-V02, 0.08° by 0.04°, 3-hourly) is on
   [ncss.hycom.org](https://ncss.hycom.org/thredds/catalogs/ESPC-D-V02_uv3z.xml).
-  Its NetCDF Subset Service cuts an area, time range and depth by URL, for
-  example
+  The Library's **Surface currents, forecast — HYCOM** source fetches it for
+  the map view, at 0 m, from now to the forecast days you tick. It's the
+  only current forecast in the Library; the other current sources are
+  analyses and observations. Things to know about the server:
+
+  - A download can take a minute or more, even for a small area. The
+    download notification shows it's under way, and you can cancel it.
+  - It keeps only about two weeks, and runs are published days after they
+    start, so the forecast may reach only a few days ahead of now. The
+    source's run is the newest one on the server; a run more than six days
+    old is shown as stale.
+  - It cuts an area that crosses 0° at 0°, so such an area comes as two
+    downloads, one each side of 0°. Load both.
+  - Over a large area the Library asks for every second or third point, so
+    that no download has more than 500 points across or down.
+
+  To download by hand, its NetCDF Subset Service cuts an area, time range
+  and depth by URL, for example
   `…/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd?var=water_u&var=water_v&north=40&south=33&west=-76&east=-68&vertCoord=0&time_start=…&time_end=…&accept=netcdf4`.
-  Requests can take a minute.
+  HYCOM serves it as is, without a warranty or guaranteed availability; it's
+  a US Navy product, approved for public release.
 
 ### Warnings and observations
 
@@ -597,10 +615,9 @@ centres; see the [MCP server](mcp-server.md).
   stale analysis at full opacity.
 - **Weather in route checks.** A route check doesn't consider wind, waves or
   model currents.
-- **Ocean model servers.** The Library fetches currents only from ERDDAP.
-  NOAA RTOFS is published only as whole-globe files on a curvilinear grid,
-  and HYCOM's subset service isn't a Library source yet; download from it as
-  shown above.
+- **Ocean model servers.** The Library fetches currents from ERDDAP and from
+  HYCOM's subset service only. NOAA RTOFS is published only as whole-globe
+  files on a curvilinear grid. Copernicus Marine needs an account.
 - **The S-100 weather products** S-412, S-413 and S-414 aren't published
   yet.
 

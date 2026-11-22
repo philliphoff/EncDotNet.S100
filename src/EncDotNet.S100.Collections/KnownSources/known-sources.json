@@ -477,6 +477,36 @@
       }
     },
     {
+      "id": "hycom-ncss-currents",
+      "name": "Surface currents, forecast — HYCOM",
+      "provider": "HYCOM Consortium",
+      "region": ["Worldwide"],
+      "format": "weather",
+      "category": "weather",
+      "catalogUri": "https://ncss.hycom.org/thredds/ncss/grid/",
+      "homepage": "https://www.hycom.org/dataserver/espc-d-v02/global-analysis",
+      "coverage": "boundingBoxes",
+      "editions": false,
+      "sizes": false,
+      "note": "The global HYCOM ocean model's surface current forecast (ESPC-D-V02, 0.08° by 0.04°, 3-hourly, 80°S to 90°N), fetched from HYCOM's THREDDS NetCDF Subset Service as a NetCDF subset of the map view from now to the chosen days. The server keeps about two weeks, runs are published days after their start, and a request can take a minute. An area across 0° comes as two downloads, one each side.",
+      "product": "NetCDF",
+      "notForNavigation": true,
+      "licence": "Public domain (US Navy product, DoD Distribution A: approved for public release, distribution unlimited); served as is by the HYCOM Consortium, without warranty or guaranteed availability",
+      "attribution": "HYCOM Consortium ESPC-D-V02 global ocean forecast (US Navy NRL/FNMOC), via HYCOM THREDDS",
+      "weather": {
+        "service": "threddsNcss",
+        "model": "hycom",
+        "modelName": "HYCOM currents (ESPC-D-V02)",
+        "stepHours": 3,
+        "maxHours": 192,
+        "defaultHours": 48,
+        "staleAfterHours": 144,
+        "datasets": [
+          { "id": "FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd", "name": "HYCOM ESPC-D-V02 global currents, 0.08°, best time series", "variables": ["water_u", "water_v"], "default": true }
+        ]
+      }
+    },
+    {
       "id": "ccg-s124-secom",
       "name": "S-124 Navigational warnings — Canada",
       "provider": "Canadian Coast Guard",

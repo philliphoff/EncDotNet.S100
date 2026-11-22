@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Collections.Downloads;
 using EncDotNet.S100.Collections.Indexing;
@@ -69,7 +70,7 @@ public sealed class WeatherSourceTests : IDisposable
 
         Assert.Equal(
             ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-nhc-storms", "noaa-wpc-surface", "noaa-erddap-ww3",
-                "noaa-erddap-sst", "noaa-erddap-currents", "ioos-erddap-hfradar"],
+                "noaa-erddap-sst", "noaa-erddap-currents", "ioos-erddap-hfradar", "hycom-ncss-currents"],
             weather.Select(s => s.Id));
         Assert.All(weather, s =>
         {
@@ -87,6 +88,7 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(WeatherServiceKind.ErddapGriddap, Known("noaa-erddap-ww3").Weather!.Kind);
         Assert.Equal(WeatherServiceKind.WpcBulletins, Known("noaa-wpc-surface").Weather!.Kind);
         Assert.Equal(WeatherServiceKind.NhcStorms, Known("noaa-nhc-storms").Weather!.Kind);
+        Assert.Equal(WeatherServiceKind.ThreddsNcss, Known("hycom-ncss-currents").Weather!.Kind);
         Assert.Equal(["HTSGW", "PERPW", "DIRPW", "UGRD", "VGRD"],
             Known("noaa-nomads-gfswave").Weather!.Parameters.Where(p => p.Default).Select(p => p.Id));
     }
@@ -662,6 +664,215 @@ public sealed class WeatherSourceTests : IDisposable
             .IndexAsync(feed, null, TestContext.Current.CancellationToken);
 
         Assert.Equal(new DateTimeOffset(2026, 10, 25, 4, 10, 0, TimeSpan.Zero), S100ForecastFeedIndexer.RunOf(Assert.Single(index.Items)));
+    }
+
+    // ---------------------------------------------------------------
+    // HYCOM through THREDDS NCSS (#1270).
+    // ---------------------------------------------------------------
+
+    private static readonly Uri HycomNcss = new("https://ncss.hycom.org/thredds/ncss/grid/");
+
+    private static WeatherFakeServer HycomServer()
+    {
+        var server = WaveServer();
+        server.NcssDatasetXml = WeatherFakeServer.HycomDatasetXml;
+        server.NcssNetCdf = "\u0089HDF\r\n\u001a\nfake"u8.ToArray();
+        return server;
+    }
+
+    [Fact]
+    public void The_HYCOM_source_offers_the_ESPC_D_best_time_series_of_surface_currents_for_eight_days()
+    {
+        var known = Known("hycom-ncss-currents");
+        var service = known.Weather!;
+
+        Assert.Equal(HycomNcss, known.CatalogUri);
+        Assert.True(service.IsUsable);
+        var dataset = Assert.Single(service.Datasets);
+        Assert.Equal("FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd", dataset.Id);
+        Assert.Equal(["water_u", "water_v"], dataset.Variables);
+        Assert.Equal((3, 192, 48), (service.StepHours, service.MaxHours, service.DefaultHours));
+        Assert.Contains("Distribution A", known.Licence, StringComparison.Ordinal);
+        Assert.Contains("HYCOM", known.Attribution, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_ncss_dataset_xml_gives_the_time_span_the_newest_run_the_grid_spacing_and_the_top_level()
+    {
+        var info = NcssDatasetInfo.Parse(WeatherFakeServer.HycomDatasetXml);
+
+        Assert.Equal(new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero), info.Start);
+        Assert.Equal(new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero), info.End);
+        Assert.Equal(new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero), info.LatestRun);
+        Assert.Equal(0.04, info.LatitudeSpacing!.Value, 4);
+        Assert.Equal(0.08, info.LongitudeSpacing!.Value, 3);
+        Assert.Equal(0, info.FirstLevel);
+        Assert.Equal(new GeoBounds(-80, 0, 90, 359.92), info.Area);
+        Assert.Equal(["water_u", "water_v"], info.Grids);
+    }
+
+    [Fact]
+    public void An_ncss_axis_given_as_start_and_increment_gives_its_spacing()
+    {
+        var xml = WeatherFakeServer.HycomDatasetXml.Replace(
+            "<values>-80.0 -79.95999908447266 -79.91999816894531 -79.87999725341797 -79.83999633789062</values>",
+            "<values start=\"-80.0\" increment=\"0.25\" npts=\"681\" />",
+            StringComparison.Ordinal);
+
+        Assert.Equal(0.25, NcssDatasetInfo.Parse(xml).LatitudeSpacing);
+    }
+
+    [Theory]
+    [InlineData("<html><body>Not found</body></html>")]
+    [InlineData("not xml at all")]
+    public void A_page_that_isnt_an_ncss_grid_dataset_is_refused(string text) =>
+        Assert.Throws<InvalidDataException>(() => NcssDatasetInfo.Parse(text));
+
+    [Theory]
+    [InlineData("hours since 2026-11-12 12:00:00.000 UTC", 96, "2026-11-16T12:00:00Z")]
+    [InlineData("days since 2026-01-01", 1.5, "2026-01-02T12:00:00Z")]
+    [InlineData("seconds since 1970-01-01T00:00:00Z", 3600, "1970-01-01T01:00:00Z")]
+    public void Cf_time_units_give_a_time(string units, double value, string expected) =>
+        Assert.Equal(DateTimeOffset.Parse(expected, CultureInfo.InvariantCulture), NcssDatasetInfo.TimeOf(units, value));
+
+    [Fact]
+    public void An_ncss_subset_names_the_variables_the_area_the_top_level_the_hours_and_netcdf4()
+    {
+        var info = NcssDatasetInfo.Parse(WeatherFakeServer.HycomDatasetXml);
+        var dataset = Known("hycom-ncss-currents").Weather!.Datasets[0];
+
+        var uri = WeatherRequests.NcssGridUri(HycomNcss, dataset, info, UsEast, Run, Run.AddHours(48));
+
+        Assert.Equal(
+            "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd"
+            + "?var=water_u&var=water_v&north=39.9&south=32.1&west=-75.9&east=-68.2&vertCoord=0"
+            + "&time_start=2026-10-25T00:00:00Z&time_end=2026-10-27T00:00:00Z&accept=netcdf4",
+            Uri.UnescapeDataString(uri.AbsoluteUri));
+        Assert.Equal(
+            "https://ncss.hycom.org/thredds/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd/dataset.xml",
+            WeatherRequests.NcssDatasetXmlUri(HycomNcss, dataset.Id).AbsoluteUri);
+    }
+
+    [Fact]
+    public void A_wide_ncss_area_is_thinned_with_one_horizontal_stride_to_at_most_500_points_an_axis()
+    {
+        var info = NcssDatasetInfo.Parse(WeatherFakeServer.HycomDatasetXml);
+        var dataset = Known("hycom-ncss-currents").Weather!.Datasets[0];
+        string? Stride(GeoBounds? area) =>
+            System.Text.RegularExpressions.Regex.Match(WeatherRequests.NcssGridUri(HycomNcss, dataset, info, area, Run, Run).Query, "horizStride=(\\d+)")
+                is { Success: true } m ? m.Groups[1].Value : null;
+
+        // 21° of latitude at 0.04° is 526 points: every 2nd. Longitude (about 263 points) takes the same stride.
+        Assert.Equal("2", Stride(new GeoBounds(20, -80, 41, -59)));
+        // 61° by 100°: about 1526 latitudes (every 4th) and 1251 longitudes (every 3rd); the larger wins.
+        Assert.Equal("4", Stride(new GeoBounds(0, -100, 61, 0)));
+        // The whole dataset: 170° of latitude, 4251 points, every 9th.
+        Assert.Equal("9", Stride(null));
+        // A harbour-sized area keeps every point.
+        Assert.Null(Stride(UsEast));
+    }
+
+    [Theory]
+    [InlineData(-4, 4, true)]
+    [InlineData(-76, -68, false)]
+    [InlineData(0, 10, false)]
+    [InlineData(-10, 0, false)]
+    [InlineData(170, -170, false)]
+    public void An_area_across_0_degrees_is_split_into_its_west_and_east_parts(double west, double east, bool split)
+    {
+        var area = new GeoBounds(36, west, 40, east);
+
+        var parts = WeatherRequests.SplitAtGreenwich(area);
+
+        Assert.Equal(split ? [area with { East = 0 }, area with { West = 0 }] : [area], parts);
+    }
+
+    [Fact]
+    public async Task A_hycom_forecast_is_subset_from_now_to_the_chosen_hours_with_its_newest_run()
+    {
+        var server = HycomServer();
+        var http = new HttpClient(server);
+        var feed = Feed("hycom-ncss-currents", new WeatherSelection(Hours: [0, 3, 6, 9, 12, 15, 18, 21, 24], Area: UsEast));
+
+        var index = await new WeatherFeedIndexer(http, timeProvider: At(Run.AddHours(5))).IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        Assert.Empty(index.Diagnostics);
+        var item = Assert.Single(index.Items);
+        Assert.Equal("NetCDF", item.ProductSpec);
+        Assert.Equal("FMRC_ESPC-D-V02_uv3z_best", item.Name);
+        Assert.Equal(new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero), S100ForecastFeedIndexer.RunOf(item));
+        Assert.Equal("threddsNcss", item.Properties[WeatherRuns.ServiceProperty]);
+        Assert.Equal("144", item.Properties[WeatherRuns.StaleAfterProperty]);
+        Assert.Equal("true", item.Properties["notForNavigation"]);
+        var remote = (RemoteItemLocation)item.Location;
+        var query = Uri.UnescapeDataString(remote.Uri.Query);
+        Assert.Contains("&time_start=2026-10-25T02:00:00Z&time_end=2026-10-26T05:00:00Z&", query, StringComparison.Ordinal);
+        Assert.Contains(server.Requests, r => r.Uri.AbsolutePath.EndsWith("/dataset.xml", StringComparison.Ordinal) && r.UserAgent is not null);
+
+        var cell = await new EncCellDownloader(http, Path.Combine(_temp.Path, "hycom"))
+            .DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("FMRC_ESPC-D-V02_uv3z_best.nc", cell.Location.RelativePath);
+    }
+
+    [Fact]
+    public async Task A_hycom_area_across_0_degrees_lists_a_download_each_side()
+    {
+        var server = HycomServer();
+        var feed = Feed("hycom-ncss-currents", new WeatherSelection(Hours: [0, 3], Area: new GeoBounds(48, -6, 52, 3)));
+
+        var index = await new WeatherFeedIndexer(new HttpClient(server), timeProvider: At(Run.AddHours(5)))
+            .IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        Assert.Empty(index.Diagnostics);
+        Assert.Equal(["FMRC_ESPC-D-V02_uv3z_best-west", "FMRC_ESPC-D-V02_uv3z_best-east"], index.Items.Select(i => i.Name));
+        Assert.Equal([new GeoBounds(48, -6, 52, 0), new GeoBounds(48, 0, 52, 3)], index.Items.Select(i => i.Bounds!.Value));
+        var queries = index.Items.Select(i => Uri.UnescapeDataString(((RemoteItemLocation)i.Location).Uri.Query)).ToArray();
+        Assert.Contains("&west=-6&east=0&", queries[0], StringComparison.Ordinal);
+        Assert.Contains("&west=0&east=3&", queries[1], StringComparison.Ordinal);
+        Assert.All(index.Items, i => Assert.EndsWith("(" + (i.Name.EndsWith("west", StringComparison.Ordinal) ? "west" : "east") + " of 0°)", i.Title, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_hycom_forecast_that_has_ended_is_subset_for_its_last_hours()
+    {
+        // The server keeps about two weeks and runs arrive late: past the end
+        // of its time span, the subset is the chosen hours up to its last time.
+        var server = HycomServer();
+        var feed = Feed("hycom-ncss-currents", new WeatherSelection(Hours: [0, 3, 6, 9, 12, 15, 18, 21, 24], Area: UsEast));
+
+        var index = await new WeatherFeedIndexer(new HttpClient(server), timeProvider: At(new DateTimeOffset(2026, 11, 2, 0, 0, 0, TimeSpan.Zero)))
+            .IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        var query = Uri.UnescapeDataString(((RemoteItemLocation)Assert.Single(index.Items).Location).Uri.Query);
+        Assert.Contains("&time_start=2026-10-30T12:00:00Z&time_end=2026-10-31T12:00:00Z&", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_unreachable_hycom_dataset_is_an_error_naming_its_description()
+    {
+        var server = WaveServer(); // No NCSS answers: dataset.xml is 404.
+        var feed = Feed("hycom-ncss-currents", new WeatherSelection(Area: UsEast));
+
+        var index = await new WeatherFeedIndexer(new HttpClient(server), timeProvider: At(Run.AddHours(5)))
+            .IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        Assert.Empty(index.Items);
+        var diagnostic = Assert.Single(index.Diagnostics);
+        Assert.Equal(IndexDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.EndsWith("/dataset.xml", diagnostic.Path, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Describing_a_hycom_source_gives_its_newest_run()
+    {
+        var feed = Feed("hycom-ncss-currents", new WeatherSelection(Area: UsEast));
+
+        var summary = await new WeatherFeedIndexer(new HttpClient(HycomServer()), timeProvider: At(Run.AddHours(5)))
+            .DescribeAsync(feed, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero), summary.LatestRun);
+        Assert.Equal(1, summary.Items);
     }
 
     [Fact]

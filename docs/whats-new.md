@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **HYCOM current forecast in the Library.** A new weather source,
+  **Surface currents, forecast — HYCOM**, fetches the global HYCOM
+  ESPC-D-V02 surface current forecast for the map view from HYCOM's THREDDS
+  NetCDF Subset Service. The current arrows step through the Timeline and
+  give way to S-111 where an S-111 grid is loaded. An area across 0° comes as two
+  downloads, as the server cuts it at 0°. In `EncDotNet.S100.Collections`,
+  `WeatherServiceKind.ThreddsNcss` is the new service kind,
+  `NcssDatasetInfo` reads a dataset's `dataset.xml`, and `WeatherRequests`
+  has `NcssGridUri` and `SplitAtGreenwich`. See
+  [Get the data](weather.md#netcdf).
+
 - **Fewer, broader MCP tools.** Four tools fold into tools that nearly had
   their capability, so an agent's tool list is smaller (`s100 mcp serve`: 42
   tools and 84.5 KB of `tools/list` down to 38 and 79.0 KB). `list_datasets`
