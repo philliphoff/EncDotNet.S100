@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference index.** `ChartReferenceIndex`, in
+  `EncDotNet.S100.Datasets.Pipelines`, describes every feature type, symbol,
+  line style, area fill, attribute and display setting of a product's
+  catalogues, and links each feature type to the symbols and fills its
+  portrayal rule draws, with the conditions that choose them. It reads Lua
+  and XSLT rules statically and follows shared rules, so S-101 links 174 of
+  its 190 feature types. It ranks search results by code or S-57 acronym,
+  then name, then other text. It is the base of the coming Chart reference
+  activity (#1633).
+
 - **One MCP `sample` tool, with charted depth.** `sample` replaces
   `sample_coverage` and `sample_coverage_along`: it takes a `quantity`
   (`depth`, `water_level`, `current` or `weather`, or a `spec` to pin one
