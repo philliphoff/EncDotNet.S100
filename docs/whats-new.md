@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference In view lists line styles and area fills.** With
+  **In view** on, Chart reference's Symbols list now includes the line styles
+  and area fills drawn in the map view, such as `ACHARE51` around an
+  anchorage area and `DRGARE01` in a dredged area, and hovering one rings the
+  curves and areas drawn with it. Items are matched by kind as well as name,
+  so a drawn `CTNARE51` point symbol no longer lists the `CTNARE51` line style
+  too. The Legend tab's catalogue key still lists point symbols only.
+
 - **Chart reference hover rings clear with the panel.** The rings a hovered
   Chart reference row draws on the map now clear when the left dock closes,
   another activity is selected, the Chart reference page opens, or the list

@@ -15,9 +15,11 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// map view at the view scale, read through <see cref="IChartReferenceMap"/>
 /// from the display lists the Legend tab's catalogue key reads. A symbol row
 /// is in view when the symbol is drawn (a family when one of its members
-/// is), a feature row when a feature of its class is drawn. Items no rule
-/// names never are (D3). The list follows the map on pan end, never under
-/// the pointer.
+/// is), a line style or area fill row when an instruction draws it (#1653),
+/// and a feature row when a feature of its class is drawn. Items match by
+/// kind as well as id, so a drawn point symbol never puts the line style of
+/// the same name in view (<c>CTNARE51</c>). Items no rule names never are
+/// (D3). The list follows the map on pan end, never under the pointer.
 /// </para>
 /// <para>
 /// In view is on when the Legend tab's <b>Show all in Chart reference</b>
@@ -127,9 +129,8 @@ internal sealed partial class ChartReferenceViewModel : IActivityTabContentSigna
 
     /// <summary>
     /// What hovering <paramref name="row"/> rings: a symbol's features, a
-    /// family's members', or a feature type's by its code and S-57 acronym.
-    /// Null for a line style or area fill, which the display lists don't
-    /// name per feature.
+    /// family's members', the curves and surfaces a line style or area fill
+    /// is drawn on (#1653), or a feature type's by its code and S-57 acronym.
     /// </summary>
     /// <param name="row">The row.</param>
     internal ChartReferenceTarget? TargetOf(ChartReferenceRowViewModel row)
@@ -141,6 +142,8 @@ internal sealed partial class ChartReferenceViewModel : IActivityTabContentSigna
             FeatureTypeEntry f => new ChartReferenceTarget(spec, f.Key.ToString(), [], f.Alias is { } alias ? [f.Code, alias] : [f.Code]),
             PortrayalItemEntry { IsFamily: true } family => new ChartReferenceTarget(spec, family.Key.ToString(), family.Members, []),
             PortrayalItemEntry { Key.Kind: ReferenceKind.Symbol } symbol => new ChartReferenceTarget(spec, symbol.Key.ToString(), [symbol.Code], []),
+            PortrayalItemEntry { Key.Kind: ReferenceKind.LineStyle } line => new ChartReferenceTarget(spec, line.Key.ToString(), [], []) { LineStyles = [line.Code] },
+            PortrayalItemEntry { Key.Kind: ReferenceKind.AreaFill } fill => new ChartReferenceTarget(spec, fill.Key.ToString(), [], []) { AreaFills = [fill.Code] },
             _ => null,
         };
     }
@@ -155,15 +158,18 @@ internal sealed partial class ChartReferenceViewModel : IActivityTabContentSigna
     }
 
     // Whether the In view filter keeps an item. Unreached items are never
-    // drawn (D3); a family is drawn when one of its members is.
+    // drawn (D3); a family is drawn when one of its members is. An item is
+    // matched by its kind as well as its id (#1653).
     private bool InViewAllows(PortrayalItemEntry item)
     {
         if (!_inView)
             return true;
         if (item.IsUnreached)
             return false;
-        var drawn = Drawn().Symbols;
-        return item.IsFamily ? item.Members.Any(drawn.Contains) : drawn.Contains(item.Code);
+        var drawn = Drawn();
+        return item.IsFamily
+            ? item.Members.Any(drawn.Symbols.Contains)
+            : drawn.Contains(item.Key.Kind, item.Code);
     }
 
     private bool InViewAllows(ReferenceEntry entry) => entry switch
@@ -205,7 +211,7 @@ internal sealed partial class ChartReferenceViewModel : IActivityTabContentSigna
             return;
         var now = Drawn();
         if (before is { } b && string.Equals(b.Spec, _drawn?.Spec, StringComparison.OrdinalIgnoreCase)
-            && b.Drawn.Symbols.SetEquals(now.Symbols) && b.Drawn.FeatureTypes.SetEquals(now.FeatureTypes))
+            && b.Drawn.SetEquals(now))
         {
             return;
         }

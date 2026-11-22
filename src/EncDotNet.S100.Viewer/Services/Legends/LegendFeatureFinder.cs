@@ -4,6 +4,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -242,8 +243,10 @@ internal static class LegendFeatureFinder
     /// <summary>
     /// Adds what one catalogue product sub-layer draws in view to Chart
     /// reference's In view sets: its point symbols as the catalogue key
-    /// counts them (<see cref="CatalogueSymbolKey.Drawn"/>), and the feature
-    /// class, from the processor's feature list, of each feature it draws.
+    /// counts them (<see cref="CatalogueSymbolKey.Drawn"/>), its line styles
+    /// and area fills by the same tests (<see cref="CatalogueLinework.Drawn"/>,
+    /// #1653), and the feature class, from the processor's feature list, of
+    /// each feature it draws.
     /// </summary>
     /// <param name="payload">A vector stack entry's payload.</param>
     /// <param name="suppressed">The features an S-98 rule removed from the entry, or null.</param>
@@ -251,16 +254,23 @@ internal static class LegendFeatureFinder
     /// <param name="view">The map view, or null for everywhere.</param>
     /// <param name="scale">The display scale (1:N), or NaN to ignore SCAMIN.</param>
     /// <param name="symbols">Receives the symbol names.</param>
+    /// <param name="lineStyles">Receives the line style names.</param>
+    /// <param name="areaFills">Receives the area fill names.</param>
     /// <param name="featureTypes">Receives the feature class codes.</param>
     internal static void AddDrawn(
         VectorStackPayload payload, IReadOnlySet<string>? suppressed, IDatasetProcessor? processor,
-        GeoBounds? view, double scale, ISet<string> symbols, ISet<string> featureTypes)
+        GeoBounds? view, double scale,
+        ISet<string> symbols, ISet<string> lineStyles, ISet<string> areaFills, ISet<string> featureTypes)
     {
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(symbols);
+        ArgumentNullException.ThrowIfNull(lineStyles);
+        ArgumentNullException.ThrowIfNull(areaFills);
         ArgumentNullException.ThrowIfNull(featureTypes);
         foreach (var symbol in CatalogueSymbolKey.Drawn(payload, suppressed, view, scale))
             symbols.Add(symbol.Name);
+        foreach (var style in CatalogueLinework.Drawn(payload, suppressed, view, scale))
+            (style.Kind == ReferenceKind.AreaFill ? areaFills : lineStyles).Add(style.Name);
 
         if (processor is null)
             return;
@@ -284,8 +294,11 @@ internal static class LegendFeatureFinder
     /// <summary>
     /// The features a Chart reference row describes that are drawn in view
     /// (hover to find, legends D19): those that draw one of the target's
-    /// symbols, as <see cref="FindSymbols"/> finds a catalogue key row's, and
-    /// those of one of its feature classes.
+    /// symbols, as <see cref="FindSymbols"/> finds a catalogue key row's,
+    /// those that draw one of its line styles or area fills (#1653), and
+    /// those of one of its feature classes. A line style rings the curve, or
+    /// the outline of the surface, it is drawn along; a fill the outline of
+    /// the surface it fills, with no fill of its own (D19).
     /// </summary>
     /// <param name="target">The row.</param>
     /// <param name="layers">The product's sub-layers, top of the stack first.</param>
@@ -303,6 +316,8 @@ internal static class LegendFeatureFinder
         ArgumentNullException.ThrowIfNull(layers);
         var collector = new Collector(maxRings);
         var symbols = target.Symbols.ToHashSet(StringComparer.Ordinal);
+        var lineStyles = target.LineStyles.ToHashSet(StringComparer.Ordinal);
+        var areaFills = target.AreaFills.ToHashSet(StringComparer.Ordinal);
         var classes = target.FeatureTypes.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var any = false;
         foreach (var (payload, suppressed, processor) in layers)
@@ -318,6 +333,22 @@ internal static class LegendFeatureFinder
                         collector.Add(Point(at));
                     else
                         collector.Add(payload.Result.GeometryProvider.GetGeometry(symbol.FeatureReference));
+                }
+            }
+
+            if (lineStyles.Count > 0 || areaFills.Count > 0)
+            {
+                // A feature both outlined and filled with the target's items
+                // is ringed once.
+                var ringed = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var style in CatalogueLinework.Drawn(payload, suppressed, view, scale))
+                {
+                    if (!(style.Kind == ReferenceKind.AreaFill ? areaFills : lineStyles).Contains(style.Name))
+                        continue;
+                    if (style.Line is { } line)
+                        collector.Add(new PickHighlightGeometry([], [], [line], []));
+                    else if (ringed.Add(style.FeatureReference))
+                        collector.Add(payload.Result.GeometryProvider.GetGeometry(style.FeatureReference));
                 }
             }
 
