@@ -154,7 +154,9 @@ public sealed class TilesServeWmsDpiTests
     public async Task GetMap_at_300_dpi_is_the_96_dpi_map_of_the_same_view_sharper()
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
-        var settings = new TilesServeCommand.Settings { Input = S57, MinZoom = 12, MaxZoom = 15 };
+        // Every viewing group, so the cell's data-quality pattern gives the
+        // fine detail the sharpness check below measures.
+        var settings = new TilesServeCommand.Settings { Input = S57, MinZoom = 12, MaxZoom = 15, HideViewingGroups = ["none"] };
         Assert.True(settings.Validate().Successful);
         Assert.Equal(0, TilesServeCommand.OpenRendered(settings, out var rendered));
         using var source = rendered!;

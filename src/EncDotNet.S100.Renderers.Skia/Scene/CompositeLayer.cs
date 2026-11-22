@@ -93,7 +93,7 @@ public sealed class VectorCompositeLayer : CompositeLayer
     /// The coarsest scale denominator the whole layer is drawn at, such as a
     /// cell's <c>DataCoverage.minimumDisplayScale</c>, or <see langword="null"/>
     /// for no limit. Applied only with scale-visibility culling on: past it,
-    /// <see cref="Draw"/> paints nothing, area fills included.
+    /// <see cref="Draw(SKCanvas, Viewport)"/> paints nothing, area fills included.
     /// </summary>
     public double? MinimumDisplayScale { get; init; }
 
@@ -104,8 +104,24 @@ public sealed class VectorCompositeLayer : CompositeLayer
     /// </summary>
     public IReadOnlyList<FinerCoverage> FinerCoverages { get; init; } = [];
 
+    /// <summary>The lowered scene the layer paints.</summary>
+    internal VectorScene Scene => _scene;
+
+    /// <summary>Whether the layer applies scale-visibility culling.</summary>
+    internal bool HonorScaleVisibility => _honorScaleVisibility;
+
     /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, Viewport viewport)
+    public override void Draw(SKCanvas canvas, Viewport viewport) => Draw(canvas, viewport, suppressedText: null);
+
+    /// <summary>
+    /// Paints this layer as <see cref="Draw(SKCanvas, Viewport)"/> does, but
+    /// skips the labels in <paramref name="suppressedText"/>, such as the losers
+    /// of a <see cref="WorldLabelDeclutterer"/> pass.
+    /// </summary>
+    /// <param name="canvas">The composite canvas.</param>
+    /// <param name="viewport">The shared composite viewport (pixel space).</param>
+    /// <param name="suppressedText">The text ops to skip, by reference, or <see langword="null"/> to draw every label.</param>
+    public void Draw(SKCanvas canvas, Viewport viewport, IReadOnlySet<TextPaintOp>? suppressedText)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
@@ -116,7 +132,7 @@ public sealed class VectorCompositeLayer : CompositeLayer
         int save = ClipOutFinerCoverages(canvas, viewport, rotationDegrees: 0);
         try
         {
-            CreateRenderer().RenderOnto(canvas, ScopeTo(viewport), viewport);
+            CreateRenderer().RenderOnto(canvas, ScopeTo(viewport), viewport, new OverlayDrawOptions { SuppressedText = suppressedText });
         }
         finally
         {
@@ -150,10 +166,13 @@ public sealed class VectorCompositeLayer : CompositeLayer
             : new VectorScene(ops) { ScaleMinimumCap = _scene.ScaleMinimumCap, PreferLiveDrawing = _scene.PreferLiveDrawing };
     }
 
-    private bool IsPastMinimumDisplayScale(Viewport viewport) =>
+    private bool IsPastMinimumDisplayScale(Viewport viewport) => IsPastMinimumDisplayScale(viewport.ScaleDenominator);
+
+    /// <summary>Whether the whole layer stops drawing at <paramref name="scaleDenominator"/>.</summary>
+    internal bool IsPastMinimumDisplayScale(double scaleDenominator) =>
         _honorScaleVisibility
         && MinimumDisplayScale is double limit
-        && viewport.ScaleDenominator > limit;
+        && scaleDenominator > limit;
 
     /// <summary>
     /// Saves the canvas and removes the active finer coverages from its clip,

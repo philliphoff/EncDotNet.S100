@@ -584,7 +584,8 @@ the old file is left as it was.
 | `--hide <categories>` | none | Hides drawing-instruction categories, comma-separated: `text`, `points`, `lines`, `areas`. |
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth land layer under the chart. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. See [Sea-ice display modes](#sea-ice-display-modes). |
-| `--display-category <category>` | `all` | Mariner setting: the ECDIS display category, `display-base`, `standard`, `other-information` or `all`. |
+| `--display-category <category>` | `all` | Mariner setting: the ECDIS display category, `display-base`, `standard`, `other-information` or `all`. `all` still leaves out the viewing groups `--hide-viewing-groups` hides. |
+| `--hide-viewing-groups <groups>` | `S-101:90000,90010,90011` | Mariner setting: the viewing groups to hide, as `SPEC:ID,ID,…`. Repeat it for another product. `none` shows every viewing group. The default hides what SoundCharts hides: the shallow-water pattern (90000), the data-quality (CATZOC) patterns (90010) and the low-accuracy marker (90011). |
 | `--safety-contour <metres>` | `30` | Mariner setting: the safety contour. |
 | `--safety-depth <metres>` | `30` | Mariner setting: the safety depth. Shallower soundings are emphasised. |
 | `--shallow-contour <metres>` | `2` | Mariner setting: the shallow contour, used with `--four-shades`. |
@@ -953,7 +954,10 @@ When `tiles serve` renders datasets, one server can serve the chart with
 several sets of mariner settings, as the viewer's Mariner settings and display
 category choose them. The [mariner setting options](#tiles-export-options)
 (`--display-category`, `--safety-contour` and the rest) set those of the plain
-tile URLs; without them the tiles look as they always have.
+tile URLs. Without them the tiles show every viewing group except the ones
+SoundCharts hides by default: the S-101 shallow-water pattern, the
+data-quality (CATZOC) patterns and the low-accuracy marker (viewing groups
+90000, 90010 and 90011). Pass `--hide-viewing-groups none` to draw them.
 
 A client registers another set with a `PUT` of a JSON object to
 `settings/{hash}`. It picks the hash, 1 to 64 letters, digits or `_`, for
@@ -972,6 +976,7 @@ curl -X PUT http://127.0.0.1:8200/settings/a1b2 \
 | `safetyContour`, `safetyDepth`, `shallowContour`, `deepContour` | Depths in metres, from 0 to 12000. |
 | `fourShades`, `soundings`, `shallowWaterDangers`, `plainBoundaries`, `simplifiedSymbols`, `fullLightLines`, `ignoreScaleMinimum` | `true` or `false`. |
 | `depthUnit` | `Metres`, `Feet`, `FathomsFeet` or `Fathoms`. |
+| `hiddenViewingGroups` | The viewing groups to hide, per product, such as `{ "S-101": [90010] }`. `{}` hides none. |
 
 The set is then served in each palette as the style `{palette}-{hash}`, such
 as `day-a1b2` or `night-a1b2`:

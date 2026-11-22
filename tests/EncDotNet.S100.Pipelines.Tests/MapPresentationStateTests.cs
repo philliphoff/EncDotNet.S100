@@ -169,6 +169,18 @@ public class MapPresentationStateTests
     }
 
     [Fact]
+    public void Default_HidesTheViewersDefaultViewingGroups()
+    {
+        // Issue #1665: headless sessions hide what the viewer hides by default.
+        var hidden = MapPresentationState.Default.EcdisDisplay.HiddenViewingGroups;
+        Assert.True(hidden.TryGetValue("s-101", out var ids));
+        Assert.Equal(new[] { 90000, 90010, 90011 }, ids!.Order().ToArray());
+        Assert.Equal(
+            EcdisDisplaySettings.DefaultHiddenViewingGroups.Keys.Order(),
+            hidden.Keys.Order());
+    }
+
+    [Fact]
     public void ApplyTo_RejectsUnsetPortrayalSpec()
     {
         Assert.ThrowsAny<ArgumentException>(() =>
