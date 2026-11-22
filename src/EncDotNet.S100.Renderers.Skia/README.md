@@ -136,7 +136,9 @@ These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
   area, symbol, line sample or area fill pattern). `Render` draws it at
   legend size (`SizeOf`); `RenderFitted` fits it to a box of your size, such
   as a 40 px tile: a symbol keeps its aspect ratio, and a line sample shows
-  at least one whole interval of its pattern.
+  at least one whole interval of its pattern. Its optional `padding` keeps a
+  symbol or line sample that far inside the box, while a swatch or fill still
+  fills it.
 
 ## Linux arm64 native dependency
 

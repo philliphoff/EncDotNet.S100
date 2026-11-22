@@ -490,7 +490,15 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         _post(Apply);
     }
 
-    private void Rebuild()
+    /// <summary>
+    /// Raised after the list is rebuilt for a new mode, product, search or In
+    /// view setting (#1657), so a view starts it at the top, or brings the
+    /// selected row into view when it is still listed. Not raised when In view
+    /// follows the map.
+    /// </summary>
+    internal event EventHandler? ListRestarted;
+
+    private void Rebuild(bool restart = true)
     {
         var previous = _selectedItem as ChartReferenceRowViewModel;
         var keep = previous?.Key;
@@ -508,16 +516,15 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         {
             Items = _mode == ChartReferenceMode.Features ? BrowseFeatures(index) : BrowseItems(index);
             var count = Rows.Count();
-            Summary = string.Format(
-                CultureInfo.CurrentCulture,
-                _mode == ChartReferenceMode.Features ? Strings.ChartReference_FeatureCount : Strings.ChartReference_SymbolCount,
-                count);
+            Summary = _mode == ChartReferenceMode.Features
+                ? Count(count, Strings.ChartReference_FeatureCountOne, Strings.ChartReference_FeatureCount)
+                : Count(count, Strings.ChartReference_SymbolCountOne, Strings.ChartReference_SymbolCount);
         }
         else
         {
             Items = Search(index, _query.Trim());
             var count = _items.Count;
-            Summary = count == 0 ? null : string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_MatchCount, count);
+            Summary = count == 0 ? null : Count(count, Strings.ChartReference_MatchCountOne, Strings.ChartReference_MatchCount);
         }
 
         OnPropertyChanged(nameof(SelectedItem));
@@ -525,7 +532,13 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         if (keep is { } key && Find(key) is { } again)
             SelectedItem = again;
         RaiseStates();
+        if (restart)
+            ListRestarted?.Invoke(this, EventArgs.Empty);
     }
+
+    // "1 match", "N matches": the singular and plural are separate strings.
+    private static string Count(int count, string one, string many) =>
+        string.Format(CultureInfo.CurrentCulture, count == 1 ? one : many, count);
 
     private List<ChartReferenceListItem> BrowseFeatures(ChartReferenceIndex index)
     {
@@ -673,6 +686,6 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ViewerSettingsService.SimplifiedSymbols) && _mode == ChartReferenceMode.Features)
-            _post(Rebuild);
+            _post(() => Rebuild(restart: false));
     }
 }
