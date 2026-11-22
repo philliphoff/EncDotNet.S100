@@ -93,6 +93,8 @@ internal static partial class Strings
 
     public static string ChartReference_UsedBy => Get(nameof(ChartReference_UsedBy));
 
+    public static string ChartReference_UsedInside => Get(nameof(ChartReference_UsedInside));
+
     public static string ChartReference_FamilyHeading => Get(nameof(ChartReference_FamilyHeading));
 
     public static string ChartReference_Always => Get(nameof(ChartReference_Always));

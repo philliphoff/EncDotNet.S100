@@ -178,6 +178,10 @@
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedBy}" Classes="crHeading" />
                     <ItemsControl ItemsSource="{Binding UsedBy}" />
                 </StackPanel>
+                <StackPanel IsVisible="{Binding HasUsedIn}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedInside}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding UsedIn}" />
+                </StackPanel>
             </StackPanel>
         </DataTemplate>
     </UserControl.DataTemplates>

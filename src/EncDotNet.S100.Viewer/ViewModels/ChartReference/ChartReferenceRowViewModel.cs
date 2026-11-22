@@ -266,6 +266,12 @@ internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListIte
             .Select(e => new ChartReferenceLinkViewModel(e.Key, e.Name, [], null, _host.Open))
             .ToList();
 
+        var usedIn = item.UsedIn
+            .Select(key => _index.TryGet(key, out var e) ? e : null)
+            .OfType<ReferenceEntry>()
+            .Select(e => new ChartReferenceLinkViewModel(e.Key, e.Name, [], null, _host.Open))
+            .ToList();
+
         var family = item.Family is { } prefix && _index.TryGet(new ReferenceKey(_index.Spec, ReferenceKind.Symbol, prefix), out var familyEntry)
             ? new ChartReferenceLinkViewModel(familyEntry.Key, familyEntry.Name, [], null, _host.Open)
             : null;
@@ -276,6 +282,7 @@ internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListIte
             DefinitionRepeatsTitle = DescriptionRepeatsName(item),
             Notes = notes,
             UsedBy = usedBy,
+            UsedIn = usedIn,
             Family = family is null ? [] : [family],
         };
     }

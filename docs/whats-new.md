@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference counts symbols inside line styles and fills.** A symbol
+  that a line style places along its line, such as `EMACHAR1` on the
+  anchorage boundary `ACHARE51`, or that an area fill tiles, such as
+  `AIRARE02P` in `AIRARE02`, is no longer listed under **Not used by a
+  rule**. Its expanded row lists those line styles and fills under **Used
+  inside**, and `get_chart_reference_entry` gives them as `usedIn` with
+  `used_in` links, and a line style's or fill's symbols as `places` with
+  `places` links. In S-101, 58 of the 130 items no rule names are drawn
+  this way.
+
 - **The same UI font on every platform.** SoundCharts now uses its bundled
   Inter font on macOS, Windows and Linux. Before, it used each platform's
   default: San Francisco on macOS, Segoe UI on Windows, and on Linux often a
