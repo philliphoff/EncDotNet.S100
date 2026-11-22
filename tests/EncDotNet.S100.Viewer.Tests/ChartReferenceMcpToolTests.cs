@@ -155,6 +155,26 @@ public sealed class ChartReferenceMcpToolTests
     }
 
     [Fact]
+    public async Task A_symbol_a_fill_places_links_to_the_fill_and_back()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        var ct = TestContext.Current.CancellationToken;
+
+        var symbol = Value(await Get(f).InvokeAsync("S-101/Symbol/AIRARE02P", ct));
+
+        Assert.NotNull(symbol.Item);
+        Assert.False(symbol.Item.Unreached);
+        Assert.Equal(["S-101/AreaFill/AIRARE02"], symbol.Item.UsedIn);
+        Assert.Contains(symbol.Links, l => l is { Relation: "used_in", Key: "S-101/AreaFill/AIRARE02" });
+        Assert.Equal("Used inside AIRARE02", symbol.Summary);
+
+        var fill = Value(await Get(f).InvokeAsync("S-101/AreaFill/AIRARE02", ct));
+        Assert.NotNull(fill.Item);
+        Assert.Equal(["AIRARE02P"], fill.Item.Places);
+        Assert.Contains(fill.Links, l => l is { Relation: "places", Key: "S-101/Symbol/AIRARE02P" });
+    }
+
+    [Fact]
     public async Task A_family_lists_its_members()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");

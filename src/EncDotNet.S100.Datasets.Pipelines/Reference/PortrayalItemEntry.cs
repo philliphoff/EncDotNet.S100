@@ -49,8 +49,22 @@ public sealed class PortrayalItemEntry : ReferenceEntry
     public IReadOnlyList<string> NamedByRules { get; init; } = [];
 
     /// <summary>
-    /// <see langword="true"/> when no rule names the item or its family, so
-    /// it is never drawn (listed under "Not used by a rule", design note D3).
+    /// The line styles and area fills that place the symbol: along a line
+    /// (a line style's <c>&lt;symbol reference&gt;</c>) or as a fill's
+    /// pattern. Empty for a line style, an area fill or a family.
     /// </summary>
-    public bool IsUnreached => NamedByRules.Count == 0;
+    public IReadOnlyList<ReferenceKey> UsedIn { get; init; } = [];
+
+    /// <summary>
+    /// The ids of the symbols a line style places along the line or an area
+    /// fill tiles as its pattern; empty for a symbol or a family.
+    /// </summary>
+    public IReadOnlyList<string> Places { get; init; } = [];
+
+    /// <summary>
+    /// <see langword="true"/> when the item is never drawn: no rule names
+    /// it or its family, and no line style or area fill that a rule names
+    /// places it (listed under "Not used by a rule", design note D3).
+    /// </summary>
+    public bool IsUnreached { get; init; }
 }

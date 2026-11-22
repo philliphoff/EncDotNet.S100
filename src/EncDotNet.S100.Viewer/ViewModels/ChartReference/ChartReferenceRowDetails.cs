@@ -58,6 +58,12 @@ internal sealed class ChartReferenceRowDetails
     /// <summary>Whether any feature type uses the item.</summary>
     public bool HasUsedBy => UsedBy.Count > 0;
 
+    /// <summary>The line styles and area fills that place a symbol.</summary>
+    public IReadOnlyList<ChartReferenceLinkViewModel> UsedIn { get; init; } = [];
+
+    /// <summary>Whether a line style or area fill places the symbol.</summary>
+    public bool HasUsedIn => UsedIn.Count > 0;
+
     /// <summary>The family a symbol belongs to, as a one-item list, or empty.</summary>
     public IReadOnlyList<ChartReferenceLinkViewModel> Family { get; init; } = [];
 

@@ -564,7 +564,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         var items = index.Items.Where(i => i.Family is null && InViewAllows(i)).ToList();
         var reached = items
             .Where(i => !i.IsUnreached)
-            .Select(i => (Section: SectionOfItem(i, featureSections), Row: Row(i, index)));
+            .Select(i => (Section: SectionOfItem(i, index, featureSections), Row: Row(i, index)));
         var unreached = items
             .Where(i => i.IsUnreached)
             .Select(i => Row(i, index))
@@ -632,11 +632,18 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
                 g => g.Key,
                 g => g.GroupBy(s => s.Title).OrderByDescending(t => t.Count()).ThenBy(t => t.Key, StringComparer.Ordinal).First().Key);
 
-    // An item's section: the one most of the feature types that use it are in.
+    // An item's section: the one most of the feature types that use it are
+    // in, or that use the line styles and fills that place it.
     private static ChartReferenceSection? SectionOfItem(
         PortrayalItemEntry item,
+        ChartReferenceIndex index,
         Dictionary<string, ChartReferenceSection?> featureSections) =>
-        item.UsedBy
+        (item.UsedBy.Count > 0
+            ? item.UsedBy
+            : item.UsedIn
+                .Select(key => index.TryGet(key, out var e) ? e as PortrayalItemEntry : null)
+                .OfType<PortrayalItemEntry>()
+                .SelectMany(c => c.UsedBy))
             .Select(code => featureSections.GetValueOrDefault(code))
             .OfType<ChartReferenceSection>()
             .GroupBy(s => s.Key)

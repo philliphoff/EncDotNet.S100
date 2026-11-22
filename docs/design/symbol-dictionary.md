@@ -358,7 +358,10 @@ names the paper publication and S-101's test cells.
 **D3 — Unreached items are shown, grouped and marked.** Families a rule
 assembles from numbers (`SOUNDG`, `SOUNDS`, `SAFCON`) are one entry each,
 linked to the rule that assembles them. Items no rule names are listed under
-**Not used by a rule**, last in Symbols mode. In view hides them, since they
+**Not used by a rule**, last in Symbols mode. A symbol that a line style
+places along its line, or an area fill tiles as its pattern, is reached when
+a rule names that line style or fill (#1654): its entry lists them under
+**Used inside**. In view hides them, since they
 are never drawn.
 
 **D4 — Every bundled catalogue is in the product combo**, S-401 included:

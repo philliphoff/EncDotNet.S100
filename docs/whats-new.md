@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference counts symbols inside line styles and fills.** A symbol
+  that a line style places along its line, such as `EMACHAR1` on the
+  anchorage boundary `ACHARE51`, or that an area fill tiles, such as
+  `AIRARE02P` in `AIRARE02`, is no longer listed under **Not used by a
+  rule**. Its expanded row lists those line styles and fills under **Used
+  inside**, and `get_chart_reference_entry` gives them as `usedIn` with
+  `used_in` links, and a line style's or fill's symbols as `places` with
+  `places` links. In S-101, 58 of the 130 items no rule names are drawn
+  this way.
+
 - **Chart reference In view lists line styles and area fills.** With
   **In view** on, Chart reference's Symbols list now includes the line styles
   and area fills drawn in the map view, such as `ACHARE51` around an

@@ -173,6 +173,26 @@ public sealed class ChartReferenceViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task A_symbol_a_fill_places_lists_it_under_Used_inside_and_links_to_it()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var vm = await OpenAsync(f);
+        vm.Mode = ChartReferenceMode.Symbols;
+
+        var symbol = Row(vm, "AIRARE02P");
+        vm.SelectedItem = symbol;
+        var details = Assert.IsType<ChartReferenceRowDetails>(symbol.Details);
+
+        Assert.DoesNotContain("Not used by a rule", details.Notes);
+        Assert.True(details.HasUsedIn);
+        var fill = Assert.Single(details.UsedIn);
+        Assert.Equal(new ReferenceKey(vm.Index!.Spec, ReferenceKind.AreaFill, "AIRARE02"), fill.Key);
+
+        fill.OpenCommand.Execute(null);
+        Assert.Equal(fill.Key, vm.SelectedRow?.Key);
+    }
+
+    [Fact]
     public async Task A_link_to_a_family_member_searches_for_it()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
