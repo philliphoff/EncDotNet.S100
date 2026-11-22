@@ -1988,7 +1988,7 @@
     <value>ECDIS Display Controls</value>
   </data>
   <data name="Toolbar_DisplayFormat" xml:space="preserve">
-    <value>Display: {0} ▾</value>
+    <value>Display: {0}</value>
     <comment>Toolbar pill label; {0} is the active display category name.</comment>
   </data>
   <data name="Tooltip_DisplayMode" xml:space="preserve">
@@ -2452,7 +2452,7 @@
 
   <!-- Text group toolbar pill -->
   <data name="Toolbar_Text" xml:space="preserve">
-    <value>Text ▾</value>
+    <value>Text</value>
   </data>
   <data name="Tooltip_TextGroupPill" xml:space="preserve">
     <value>Toggle text viewing groups</value>
@@ -2469,7 +2469,7 @@
 
   <!-- Map palette toolbar pill (PR-N1) -->
   <data name="Toolbar_Palette" xml:space="preserve">
-    <value>Palette ▾</value>
+    <value>Palette</value>
   </data>
   <data name="Tooltip_SwitchPalette" xml:space="preserve">
     <value>Switch S-100 map palette (Day / Dusk / Night)</value>
@@ -4591,7 +4591,7 @@
     <value>‹ Previous data</value>
   </data>
   <data name="TimelinePanel_GapFormat" xml:space="preserve">
-    <value>⋯ {0} ⋯</value>
+    <value>… {0} …</value>
     <comment>Label of a collapsed gap on the Timeline axis; {0}: its length, e.g. "6 wk".</comment>
   </data>
   <data name="TimelinePanel_GapTooltipFormat" xml:space="preserve">
@@ -7646,8 +7646,8 @@
     <comment>View menu group heading: the mariner's saved combinations</comment>
   </data>
   <data name="DisplayCombination_PillFormat" xml:space="preserve">
-    <value>View: {0} ▾</value>
-    <comment>Map toolbar pill; {0} is the active display combination, e.g. View: Pilotage ▾</comment>
+    <value>View: {0}</value>
+    <comment>Map toolbar pill; {0} is the active display combination, e.g. View: Pilotage. The pill draws its own chevron icon after it.</comment>
   </data>
   <data name="DisplayCombination_Custom" xml:space="preserve">
     <value>Custom</value>

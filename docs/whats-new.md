@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The same UI font on every platform.** SoundCharts now uses its bundled
+  Inter font on macOS, Windows and Linux. Before, it used each platform's
+  default: San Francisco on macOS, Segoe UI on Windows, and on Linux often a
+  serif such as DejaVu Serif. The **View** pill's arrow is now an icon, since
+  Inter has no small down triangle, and the Timeline's gap labels use "…".
+
 - **Catalogue changes apply live.** Adding or removing a feature or
   portrayal catalogue now takes effect at once, without a restart: the loaded
   datasets of that product are redrawn with it, and removing a custom

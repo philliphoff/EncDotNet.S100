@@ -807,11 +807,18 @@
                         AutomationProperties.Name="{x:Static loc:Strings.Label_DisplayCombination_Pill}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}">
-                    <TextBlock Text="{Binding MapChrome.DisplayCombinations.PillLabel, FallbackValue=''}"
-                               FontSize="12"
-                               FontWeight="Medium"
-                               MaxWidth="260"
-                               TextTrimming="CharacterEllipsis" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="{Binding MapChrome.DisplayCombinations.PillLabel, FallbackValue=''}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   MaxWidth="260"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <!-- An icon, not a "▾" in the label: Inter, the UI font, has no
+                             small down triangle, and the platform fallback differs. -->
+                        <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="12"
+                                       VerticalAlignment="Center" />
+                    </StackPanel>
                     <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedRight">
                             <Border Padding="14,12,14,12" Background="Transparent">
