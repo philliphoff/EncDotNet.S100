@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Mcp.Tools;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
 namespace EncDotNet.S100.Mcp.Tests;
@@ -56,5 +57,44 @@ public class NavigabilityGridMcpTests
         var payload = JsonNode.Parse(Assert.IsType<TextContentBlock>(result.Content[0]).Text)!.AsObject();
         Assert.Equal("grid_too_large", payload["code"]!.GetValue<string>());
         Assert.True(payload["details"]!["suggestedCellMeters"]!.GetValue<double>() > 10);
+    }
+
+    [Fact]
+    public async Task Over_http_a_client_fetches_the_grid_by_its_resource_link_and_gets_the_files_bytes()
+    {
+        await using var server = await McpTestHelpers.StartServerAsync(McpTestHelpers.NewCatalog());
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
+
+        var templates = await client.ListResourceTemplatesAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Contains(templates, t => t.UriTemplate == S100McpTools.NavigabilityGridUriTemplate);
+
+        var result = await client.CallToolAsync(
+            NavigabilityGridTool.Name,
+            new Dictionary<string, object?> { ["south"] = 0.0, ["west"] = 0.0, ["north"] = 0.01, ["east"] = 0.01, ["cellMeters"] = 100.0, ["draftMeters"] = 2.0 },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false);
+        var file = JsonNode.Parse(Assert.IsType<TextContentBlock>(result.Content[0]).Text)!["file"]!;
+        var link = Assert.IsType<ResourceLinkBlock>(result.Content[1]);
+        Assert.Equal(file["uri"]!.GetValue<string>(), link.Uri);
+        Assert.StartsWith("s100://grids/", link.Uri, StringComparison.Ordinal);
+        Assert.Equal(file["bytes"]!.GetValue<long>(), link.Size);
+
+        var read = await client.ReadResourceAsync(link.Uri, cancellationToken: TestContext.Current.CancellationToken);
+        var blob = Assert.IsType<BlobResourceContents>(Assert.Single(read.Contents));
+        Assert.Equal(link.Uri, blob.Uri);
+        Assert.Equal(await File.ReadAllBytesAsync(file["path"]!.GetValue<string>(), TestContext.Current.CancellationToken), blob.DecodedData.ToArray());
+    }
+
+    [Theory]
+    [InlineData("s100://grids/navigability-20990101T000000-00000000.npy")]
+    [InlineData("s100://grids/..%2F..%2Fetc%2Fpasswd")]
+    public async Task A_grid_that_is_not_there_is_resource_not_found(string uri)
+    {
+        await using var server = await McpTestHelpers.StartServerAsync(McpTestHelpers.NewCatalog());
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
+
+        var error = await Assert.ThrowsAnyAsync<McpException>(() => client.ReadResourceAsync(uri, cancellationToken: TestContext.Current.CancellationToken).AsTask());
+        Assert.Equal(McpErrorCode.ResourceNotFound, Assert.IsType<McpProtocolException>(error).ErrorCode);
     }
 }

@@ -99,7 +99,7 @@ public sealed record DescribeFeatureTypeResult(
 /// <remarks>
 /// <para>
 /// This is the schema-discovery counterpart to the data-discovery tools
-/// (<see cref="CountFeaturesTool"/>, <see cref="QueryFeaturesTool"/>): it
+/// (<see cref="QueryFeaturesTool"/>): it
 /// answers "what attributes is a <c>BuoyLateral</c> allowed to have, and
 /// what are the legal values of its <c>categoryOfLateralMark</c>?" so an
 /// agent can build valid attribute predicates without a loaded dataset.

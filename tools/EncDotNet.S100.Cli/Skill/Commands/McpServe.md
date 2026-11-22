@@ -5,8 +5,8 @@
 datasets without a GUI. It hosts:
 
 - the read-only S-100 query tools (`list_datasets`, `describe_feature`,
-  `describe_feature_type`, `query_features`, `find_at`, `identify_features`,
-  `nearest_features`, `count_features`, `search_features`, `sample`,
+  `describe_feature_type`, `query_features`, `identify_features`,
+  `nearest_features`, `search_features`, `sample`,
   `list_specs`, `list_time_steps`); and
 - the mutating session tools (**mutable by default**): `open_dataset`,
   `close_dataset`, `close_all_datasets`, `set_palette`, `set_display_category`,

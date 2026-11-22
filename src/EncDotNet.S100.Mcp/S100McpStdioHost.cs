@@ -73,10 +73,12 @@ public static class S100McpStdioHost
             tools.AddRange(extra);
         }
 
+        var selected = McpToolsets.Select(tools, toolsets);
         builder.Services
             .AddMcpServer()
             .WithStdioServerTransport()
-            .WithTools(McpToolsets.Select(tools, toolsets));
+            .WithTools(selected)
+            .WithResources(S100McpTools.CreateResources(selected));
 
         using var host = builder.Build();
         await host.RunAsync(cancellationToken).ConfigureAwait(false);

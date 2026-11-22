@@ -27,11 +27,9 @@ public class McpToolsetsTests
         ["describe_feature"] = McpToolsets.Query,
         ["describe_feature_type"] = McpToolsets.Query,
         ["sample"] = McpToolsets.Query,
-        ["find_at"] = McpToolsets.Query,
         ["identify_features"] = McpToolsets.Query,
         ["nearest_features"] = McpToolsets.Query,
         ["query_features"] = McpToolsets.Query,
-        ["count_features"] = McpToolsets.Query,
         ["search_features"] = McpToolsets.Query,
         ["list_specs"] = McpToolsets.Query,
         ["list_time_steps"] = McpToolsets.Query,
@@ -61,10 +59,8 @@ public class McpToolsetsTests
         ["set_library_source_options"] = McpToolsets.Library,
         ["await_library_idle"] = McpToolsets.Library,
         ["set_secom_identity"] = McpToolsets.Library,
-        ["list_tide_stations"] = McpToolsets.Tides,
-        ["predict_tide"] = McpToolsets.Tides,
-        ["list_current_stations"] = McpToolsets.Tides,
-        ["predict_current"] = McpToolsets.Tides,
+        ["list_stations"] = McpToolsets.Tides,
+        ["predict"] = McpToolsets.Tides,
     };
 
     [Fact]

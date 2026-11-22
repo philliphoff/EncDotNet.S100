@@ -16,6 +16,29 @@ month. For package versions and release assets, see
   then name, then other text. It is the base of the coming Chart reference
   activity (#1633).
 
+- **Fewer, broader MCP tools.** Four tools fold into tools that nearly had
+  their capability, so an agent's tool list is smaller (`s100 mcp serve`: 42
+  tools and 84.5 KB of `tools/list` down to 38 and 79.0 KB). `list_datasets`
+  takes `find_at`'s point (`latitude` and `longitude`) and spatial `query`,
+  in place of its `south`, `west`, `north` and `east`. `query_features` takes
+  `countOnly`, which returns `counts` per dataset and feature type instead of
+  `count_features`' tallies, with every `query_features` filter, and may then
+  leave out `query`. `list_tide_stations` and `list_current_stations` are
+  `list_stations` with a `kind` of `tide` or `current`; `predict_tide` and
+  `predict_current` are `predict` with a `kind`. Breaking changes: the old
+  names are gone, `FindAtTool` and `CountFeaturesTool` are removed,
+  `ListDatasetsRequest.IntersectsBounds` is replaced by `Query`, and the tide
+  tools' `Name` constants move to `TideMcpTools`. See the
+  [MCP server](mcp-server.md).
+
+- **Navigability grids for remote MCP clients.** `get_navigability_grid`
+  serves each grid file as an `s100://grids/{id}` resource and returns a
+  `resource_link` beside its summary, so a client on another machine
+  (`s100 mcp serve --transport http`) fetches it with `resources/read`. Grids
+  are kept for 24 hours, up to the 50 newest; before, nothing cleaned the
+  folder up. `ResultFileStore` in `EncDotNet.S100.Mcp.Tools` is the store,
+  and `NavigabilityGridTool` now takes one in place of a folder path.
+
 - **One MCP `sample` tool, with charted depth.** `sample` replaces
   `sample_coverage` and `sample_coverage_along`: it takes a `quantity`
   (`depth`, `water_level`, `current` or `weather`, or a `spec` to pin one

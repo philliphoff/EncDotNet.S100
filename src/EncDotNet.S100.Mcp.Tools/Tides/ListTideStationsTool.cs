@@ -7,7 +7,7 @@ using EncDotNet.S100.Tides.Stations;
 
 namespace EncDotNet.S100.Mcp.Tools.Tides;
 
-/// <summary>A list_tide_stations request: a point and radius, or a box.</summary>
+/// <summary>A list_stations request: a point and radius, or a box.</summary>
 /// <param name="Latitude">The point's latitude (with <paramref name="Longitude"/>).</param>
 /// <param name="Longitude">The point's longitude.</param>
 /// <param name="RadiusMeters">How far from the point to look; <see cref="ListTideStationsTool.DefaultRadiusMeters"/> when null.</param>
@@ -22,13 +22,10 @@ public sealed record ListTideStationsRequest(
 
 /// <summary>
 /// Lists tide stations near a point or in a box, nearest first, from the
-/// station catalogue (MCP <c>list_tide_stations</c>, <c>s100 tides stations</c>).
+/// station catalogue (MCP <c>list_stations</c> (kind tide), <c>s100 tides stations</c>).
 /// </summary>
 public sealed class ListTideStationsTool
 {
-    /// <summary>The MCP tool name.</summary>
-    public const string Name = "list_tide_stations";
-
     /// <summary>The radius searched round a point when none is given: 50 km.</summary>
     public const double DefaultRadiusMeters = 50_000;
 

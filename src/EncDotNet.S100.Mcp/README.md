@@ -103,9 +103,13 @@ error. Don't write to `Console.Out` from your own code while it runs.
 `S100McpServer` and `S100McpStdioHost` serve unless the selected toolsets leave them out. They only read the catalog:
 
 `list_datasets`, `describe_feature`, `describe_feature_type`, `sample`,
-`find_at`, `identify_features`, `nearest_features`, `query_features`,
-`count_features`, `search_features`, `list_specs`, `list_time_steps` and
-`check_route`.
+`identify_features`, `nearest_features`, `query_features`,
+`search_features`, `list_specs`, `list_time_steps`, `check_route`,
+`plan_route` and `get_navigability_grid`.
+
+`S100McpTools.CreateResources(tools)` returns the resources to serve beside
+them: the `s100://grids/{id}` template that `get_navigability_grid`'s
+`resource_link`s point at, when that tool is served. Both hosts register it.
 
 [Query tools](../../docs/mcp-server.md#query-tools) in the MCP server guide
 describes each one.
@@ -164,8 +168,7 @@ tools with a headless renderer.
 Library.
 
 `TideMcpTools.Create` (namespace `EncDotNet.S100.Mcp.Tides`) builds the
-read-only tide and tidal current tools, `list_tide_stations`, `predict_tide`,
-`list_current_stations` and `predict_current`, over an
+read-only tide and tidal current tools, `list_stations` and `predict`, over an
 `ITideCatalogueSource`, such as a `TideCatalogueFileSource` for the file
 `s100 tides update` writes. SoundCharts and `s100 mcp serve` both serve them.
 [Tide tools](../../docs/mcp-server.md#tide-tools) and

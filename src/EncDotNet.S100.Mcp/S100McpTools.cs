@@ -3,6 +3,8 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Mcp;
@@ -26,6 +28,22 @@ public static class S100McpTools
     /// the system's temporary directory.
     /// </summary>
     public static string NavigabilityGridDirectory { get; } = Path.Combine(Path.GetTempPath(), "s100-mcp", "navigability-grids");
+
+    /// <summary>The resource URI template <c>get_navigability_grid</c>'s files are served at (#1615).</summary>
+    public const string NavigabilityGridUriTemplate = "s100://grids/{id}";
+
+    /// <summary>The MIME type of a navigability grid file.</summary>
+    public const string NavigabilityGridMimeType = "application/octet-stream";
+
+    /// <summary>
+    /// The grid files <c>get_navigability_grid</c> writes, in
+    /// <see cref="NavigabilityGridDirectory"/>: served as
+    /// <c>s100://grids/{id}</c> resources, and kept for
+    /// <see cref="ResultFileStore.DefaultMaxAge"/>, up to the
+    /// <see cref="ResultFileStore.DefaultMaxFiles"/> newest.
+    /// </summary>
+    public static ResultFileStore NavigabilityGrids { get; } =
+        new(NavigabilityGridDirectory, "navigability", NavigabilityGridUriTemplate.Replace("{id}", string.Empty, StringComparison.Ordinal));
 
     /// <summary>
     /// Creates the built-in read-only tool set bound to <paramref name="catalog"/>.
@@ -63,17 +81,60 @@ public static class S100McpTools
             new DescribeFeatureTool(catalog),
             new DescribeFeatureTypeTool(),
             new SampleTool(catalog, transforms, routeCheckSources, TimeProvider.System),
-            new FindAtTool(catalog),
             mapDrawState is null ? new IdentifyFeaturesTool(catalog) : new IdentifyFeaturesTool(catalog, mapDrawState),
             new NearestFeaturesTool(catalog),
             new QueryFeaturesTool(catalog),
-            new CountFeaturesTool(catalog),
             new SearchFeaturesTool(catalog),
             new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
             checkRoute,
             new PlanRouteTool(catalog, routeCheckSources, checkRoute, passageRoutes as IPassageRouteWriter))
-            .Append(McpToolsets.Assign(McpToolsets.Routes, NavigabilityGridMcpTool.Create(new NavigabilityGridTool(catalog, routeCheckSources, NavigabilityGridDirectory))))
+            .Append(McpToolsets.Assign(McpToolsets.Routes, NavigabilityGridMcpTool.Create(new NavigabilityGridTool(catalog, routeCheckSources, NavigabilityGrids))))
             .ToList();
+    }
+
+    /// <summary>
+    /// The resources a host serves beside <paramref name="tools"/>: the
+    /// <c>s100://grids/{id}</c> template, when <c>get_navigability_grid</c> is
+    /// among them, so a client that can't read the server's files (HTTP from
+    /// another machine) fetches a grid by the <c>resource_link</c> it was given.
+    /// </summary>
+    /// <param name="tools">The tools the host serves, after toolset selection.</param>
+    /// <returns>The resources; empty when no served tool writes any.</returns>
+    public static IReadOnlyList<McpServerResource> CreateResources(IEnumerable<McpServerTool> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        return tools.Any(t => t.ProtocolTool.Name == NavigabilityGridTool.Name)
+            ? [CreateGridResource(NavigabilityGrids)]
+            : [];
+    }
+
+    /// <summary>The <c>s100://grids/{id}</c> resource template over <paramref name="store"/>.</summary>
+    /// <param name="store">The grid files.</param>
+    /// <returns>The resource.</returns>
+    internal static McpServerResource CreateGridResource(ResultFileStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        var read = async (string id, CancellationToken ct) =>
+        {
+            if (!store.TryGet(id, out var file))
+            {
+                throw new McpProtocolException(
+                    $"No navigability grid '{id}': it may have expired (grids are kept {store.MaxAge.TotalHours:0} hours, up to the {store.MaxFiles} newest). Call get_navigability_grid again.",
+                    McpErrorCode.ResourceNotFound);
+            }
+
+            var bytes = await File.ReadAllBytesAsync(file!.Path, ct).ConfigureAwait(false);
+            return BlobResourceContents.FromBytes(bytes, file.Uri, NavigabilityGridMimeType);
+        };
+
+        return McpServerResource.Create(read, new McpServerResourceCreateOptions
+        {
+            UriTemplate = store.UriPrefix + "{id}",
+            Name = "navigability_grid",
+            Title = "Navigability grid",
+            Description = "A grid get_navigability_grid wrote (npy or raw, as its 'file' describes). Kept for a day, up to the 50 newest.",
+            MimeType = NavigabilityGridMimeType,
+        });
     }
 }
