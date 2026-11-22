@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -50,7 +51,7 @@ public class EcdisDisplayDefaultsTests
     [Fact]
     public void DefaultHiddenViewingGroups_DeclaresS101Selectors()
     {
-        Assert.True(EcdisDisplayDefaults.DefaultHiddenViewingGroups.TryGetValue("S-101", out var ids));
+        Assert.True(EcdisDisplaySettings.DefaultHiddenViewingGroups.TryGetValue("S-101", out var ids));
         Assert.Equal(new[] { 90000, 90010, 90011 }, ids!.OrderBy(i => i).ToArray());
     }
 }

@@ -113,8 +113,12 @@ internal abstract class TilesRenderSettings : CommandSettings
     public string? DisplayMode { get; init; }
 
     [CommandOption("--display-category <CATEGORY>")]
-    [Description("Mariner setting: the ECDIS display category, display-base, standard, other-information or all. Default: every viewing group (all).")]
+    [Description("Mariner setting: the ECDIS display category, display-base, standard, other-information or all. Default: every viewing group (all) but those --hide-viewing-groups hides.")]
     public string? DisplayCategory { get; init; }
+
+    [CommandOption("--hide-viewing-groups <GROUPS>")]
+    [Description("Mariner setting: the viewing groups to hide, as SPEC:ID,ID,… (e.g. S-101:90010; repeatable for other products), or none to show every viewing group. Default: the groups SoundCharts hides, S-101:90000,90010,90011 (the shallow-water pattern, the data-quality (CATZOC) patterns and the low-accuracy marker).")]
+    public string[] HideViewingGroups { get; init; } = [];
 
     [CommandOption("--safety-contour <METRES>")]
     [Description("Mariner setting: the safety contour in metres (S-101 SafetyContour). Default 30.")]
@@ -203,6 +207,8 @@ internal abstract class TilesRenderSettings : CommandSettings
         FullLightLines = FullLightLines ? true : null,
         IgnoreScaleMinimum = IgnoreScaleMinimum ? true : null,
         DepthUnit = TryParseDepthUnit(DepthUnit, out var unit) ? unit : null,
+        HiddenViewingGroups = HideViewingGroups.Length > 0
+            && MarinerStyle.TryParseViewingGroupsOption(HideViewingGroups, out var groups, out _) ? groups : null,
     };
 
     /// <summary>Parses <c>--display-category</c>: a category name, with or without hyphens, in any case.</summary>
@@ -336,6 +342,9 @@ internal abstract class TilesRenderSettings : CommandSettings
         if (DisplayCategory is not null && !TryParseDisplayCategory(DisplayCategory, out _))
             return ValidationResult.Error(
                 $"Invalid --display-category value '{DisplayCategory}'. Use display-base, standard, other-information or all.");
+        if (HideViewingGroups.Length > 0
+            && !MarinerStyle.TryParseViewingGroupsOption(HideViewingGroups, out _, out var viewingGroupsError))
+            return ValidationResult.Error(viewingGroupsError);
         if (DepthUnit is not null && !TryParseDepthUnit(DepthUnit, out _))
             return ValidationResult.Error($"Invalid --depth-unit value '{DepthUnit}'. Use metres, feet, fathoms-feet or fathoms.");
         foreach (var (option, depth) in new[]

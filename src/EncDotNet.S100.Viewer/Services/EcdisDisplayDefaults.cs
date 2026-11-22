@@ -1,55 +1,24 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Seeds the viewer's default ECDIS viewing-group visibility.
+/// Seeds the viewer's default ECDIS viewing-group visibility from
+/// <see cref="EcdisDisplaySettings.DefaultHiddenViewingGroups"/>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The S-101 portrayal catalogue declares a handful of "Independent
-/// Mariner Selector" viewing groups (S-101 PC §Independent Mariner
-/// Selectors) that operate independently of the selected display mode.
-/// They are not part of any <c>displayMode</c> membership, so they are
-/// already off in Display Base / Standard / Other Information, but they
-/// switch <em>on</em> in the "All" category (where there is no mode
-/// filter, so every viewing group is base-on).
-/// </para>
-/// <para>
-/// Three of them paint a repeating area-fill pattern across the whole
-/// dataset, which makes the chart busy and is expensive to rasterise
-/// during pan/zoom:
-/// </para>
-/// <list type="bullet">
-///   <item><c>90000</c> — Shallow water pattern (DIAMON1 diamond fill on
-///   areas shallower than the safety contour).</item>
-///   <item><c>90010</c> — Survey accuracy / reliability / quality
-///   (M_ACCY / M_SREL / M_QUAL CATZOC star patterns).</item>
-///   <item><c>90011</c> — Low-accuracy data marker (LOWACC01).</item>
-/// </list>
-/// <para>
-/// The viewer therefore hides these by default — including in "All" —
-/// while still surfacing them in the ECDIS panel so the mariner can
-/// switch them back on. This is applied once per profile via the
-/// <see cref="ViewerSettings.EcdisDefaultsApplied"/> flag so that a
-/// mariner who later re-enables them is never overridden on the next
-/// launch.
-/// </para>
+/// The default set (the S-101 shallow-water pattern, data-quality patterns
+/// and low-accuracy marker) is shared with the <c>s100 tiles</c> commands, so
+/// both hosts hide the same groups. The viewer still lists them in the ECDIS
+/// panel so the mariner can switch them back on. They are merged in once per
+/// profile via the <see cref="ViewerSettings.EcdisDefaultsApplied"/> flag, so
+/// a mariner who later re-enables them is never overridden on the next launch.
 /// </remarks>
 internal static class EcdisDisplayDefaults
 {
     /// <summary>
-    /// Per-spec viewing-group ids hidden by default (including in the
-    /// "All" category). Keys are spec codes (e.g. <c>"S-101"</c>).
-    /// </summary>
-    public static readonly IReadOnlyDictionary<string, IReadOnlySet<int>> DefaultHiddenViewingGroups =
-        new Dictionary<string, IReadOnlySet<int>>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["S-101"] = new HashSet<int> { 90000, 90010, 90011 },
-        };
-
-    /// <summary>
-    /// Merges <see cref="DefaultHiddenViewingGroups"/> into
+    /// Merges <see cref="EcdisDisplaySettings.DefaultHiddenViewingGroups"/> into
     /// <paramref name="settings"/> exactly once (guarded by
     /// <see cref="ViewerSettings.EcdisDefaultsApplied"/>). Existing
     /// hidden ids are preserved; the flag is set so subsequent launches
@@ -68,7 +37,7 @@ internal static class EcdisDisplayDefaults
         if (settings.EcdisDefaultsApplied)
             return false;
 
-        foreach (var (spec, ids) in DefaultHiddenViewingGroups)
+        foreach (var (spec, ids) in EcdisDisplaySettings.DefaultHiddenViewingGroups)
         {
             settings.EcdisHiddenViewingGroups.TryGetValue(spec, out var existingCsv);
             var merged = ParseIds(existingCsv);

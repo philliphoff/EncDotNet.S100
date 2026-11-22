@@ -14,6 +14,12 @@ month. For package versions and release assets, see
   so a drawn `CTNARE51` point symbol no longer lists the `CTNARE51` line style
   too. The Legend tab's catalogue key still lists point symbols only.
 
+- **Chart reference hover rings clear with the panel.** The rings a hovered
+  Chart reference row draws on the map now clear when the left dock closes,
+  another activity is selected, the Chart reference page opens, or the list
+  changes with a new product, mode, search or In view. Before, they stayed
+  until the next map move or hover.
+
 - **The same UI font on every platform.** SoundCharts now uses its bundled
   Inter font on macOS, Windows and Linux. Before, it used each platform's
   default: San Francisco on macOS, Segoe UI on Windows, and on Linux often a

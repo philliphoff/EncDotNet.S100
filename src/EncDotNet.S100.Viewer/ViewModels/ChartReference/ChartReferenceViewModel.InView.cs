@@ -27,11 +27,12 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// opens it from the Help menu or the activity bar (<see cref="OnOpenedByUser"/>).
 /// </para>
 /// </remarks>
-internal sealed partial class ChartReferenceViewModel : IActivityTabContentSignal, IActivityTabOpenedByUser
+internal sealed partial class ChartReferenceViewModel : IActivityTabContentSignal, IActivityTabOpenedByUser, IActivityTabShown
 {
     private IChartReferenceMap? _map;
     private bool _inView;
     private (string Spec, ChartReferenceDrawn Drawn)? _drawn;
+    private bool _isTabShown;
 
     /// <summary>
     /// Raised by <see cref="ShowAllInView"/>: the shell opens the left dock on
@@ -86,6 +87,25 @@ internal sealed partial class ChartReferenceViewModel : IActivityTabContentSigna
 
     /// <inheritdoc />
     public void OnOpenedByUser() => InView = false;
+
+    /// <summary>
+    /// Whether the activity is shown in the left dock. When it stops being
+    /// shown (the dock closes, another activity is selected, or the page
+    /// covers it), a row's hover ends and its rings clear (#1655): the row's
+    /// <c>PointerExited</c> can't be relied on as the dock goes away.
+    /// </summary>
+    public bool IsTabShown
+    {
+        get => _isTabShown;
+        set
+        {
+            if (_isTabShown == value)
+                return;
+            _isTabShown = value;
+            if (!value)
+                _map?.Leave(null);
+        }
+    }
 
     /// <summary>
     /// The pointer rests on, or keyboard focus moves to, a row: the features

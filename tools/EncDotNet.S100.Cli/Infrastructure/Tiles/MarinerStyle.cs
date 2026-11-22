@@ -14,8 +14,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// display category, the depth settings and the S-101 display toggles, named
 /// as the viewer names them. Each value is optional; one left out takes the
 /// value it falls back to (<see cref="Over"/>), and in the end the
-/// processors' own defaults, so a set with nothing in it renders as tiles
-/// rendered without one.
+/// processors' own defaults, except that the viewing groups the viewer hides
+/// by default are hidden (<see cref="EffectiveHiddenViewingGroups"/>), so a set
+/// with nothing in it renders as the viewer shows "All".
 /// </summary>
 /// <remarks>
 /// <c>tiles serve</c> and <c>tiles export</c> take one at start-up from their
@@ -34,7 +35,11 @@ internal sealed record MarinerStyle
     /// <summary>The settings with no value set.</summary>
     public static MarinerStyle Empty { get; } = new();
 
-    /// <summary>The ECDIS display category (S-100 Part 9 §11.7). Unset is every viewing group (<see cref="EcdisDisplayCategory.All"/>).</summary>
+    /// <summary>
+    /// The ECDIS display category (S-100 Part 9 §11.7). Unset is every viewing
+    /// group (<see cref="EcdisDisplayCategory.All"/>) but the hidden ones
+    /// (<see cref="EffectiveHiddenViewingGroups"/>).
+    /// </summary>
     public EcdisDisplayCategory? DisplayCategory { get; init; }
 
     /// <summary>The safety contour in metres (S-101 context parameter <c>SafetyContour</c>).</summary>
@@ -73,6 +78,23 @@ internal sealed record MarinerStyle
     /// <summary>The unit depths are shown in (<see cref="Pipelines.DepthUnit"/>).</summary>
     public DepthUnit? DepthUnit { get; init; }
 
+    /// <summary>
+    /// The viewing groups hidden, per product, in the canonical text form
+    /// <see cref="FormatViewingGroups"/> writes (e.g.
+    /// <c>S-101:90000,90010,90011</c>); empty to hide none.
+    /// <see langword="null"/> is the viewer's default,
+    /// <see cref="EcdisDisplaySettings.DefaultHiddenViewingGroups"/> (issue #1665).
+    /// </summary>
+    /// <remarks>Text rather than a dictionary so the record compares by value.</remarks>
+    public string? HiddenViewingGroups { get; init; }
+
+    /// <summary>
+    /// The viewing groups hidden: <see cref="HiddenViewingGroups"/>, or the
+    /// default set when it is unset. Soundings switched off are not included.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlySet<int>> EffectiveHiddenViewingGroups =>
+        HiddenViewingGroups is { } text ? ParseCanonicalViewingGroups(text) : EcdisDisplaySettings.DefaultHiddenViewingGroups;
+
     /// <summary>Whether no value is set.</summary>
     public bool IsEmpty => this == Empty;
 
@@ -92,6 +114,7 @@ internal sealed record MarinerStyle
         FullLightLines = FullLightLines ?? fallback.FullLightLines,
         IgnoreScaleMinimum = IgnoreScaleMinimum ?? fallback.IgnoreScaleMinimum,
         DepthUnit = DepthUnit ?? fallback.DepthUnit,
+        HiddenViewingGroups = HiddenViewingGroups ?? fallback.HiddenViewingGroups,
     };
 
     /// <summary>
@@ -119,21 +142,26 @@ internal sealed record MarinerStyle
     }
 
     /// <summary>
-    /// The ECDIS display settings for the display category and soundings, or
-    /// <see langword="null"/> when neither is set, so the processors keep
-    /// their own (every viewing group shown).
+    /// The ECDIS display settings for the display category, the hidden viewing
+    /// groups (<see cref="EffectiveHiddenViewingGroups"/>) and soundings. With
+    /// nothing set this is every viewing group (<see cref="EcdisDisplayCategory.All"/>)
+    /// but the default hidden ones, as the viewer shows "All".
     /// </summary>
-    public EcdisDisplaySettings? ToEcdisDisplay()
+    public EcdisDisplaySettings ToEcdisDisplay()
     {
-        if (DisplayCategory is null && Soundings is null)
-            return null;
+        var hidden = new Dictionary<string, IReadOnlySet<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (spec, ids) in EffectiveHiddenViewingGroups)
+            hidden[spec] = new HashSet<int>(ids);
 
-        var hidden = new Dictionary<string, IReadOnlySet<int>>();
         if (Soundings == false)
         {
             // S-57 cells are portrayed with the S-101 catalogue; inland ENC shares its viewing groups.
-            hidden["S-101"] = new HashSet<int> { SoundingsViewingGroup };
-            hidden["S-401"] = new HashSet<int> { SoundingsViewingGroup };
+            foreach (var spec in (string[])["S-101", "S-401"])
+            {
+                var ids = hidden.TryGetValue(spec, out var existing) ? new HashSet<int>(existing) : [];
+                ids.Add(SoundingsViewingGroup);
+                hidden[spec] = ids;
+            }
         }
 
         return new EcdisDisplaySettings
@@ -162,6 +190,14 @@ internal sealed record MarinerStyle
         Add("ignoreScaleMinimum", IgnoreScaleMinimum);
         if (DepthUnit is { } unit)
             json["depthUnit"] = unit.ToString();
+        if (HiddenViewingGroups is { } groups)
+        {
+            var byProduct = new JsonObject();
+            foreach (var (spec, ids) in ParseCanonicalViewingGroups(groups))
+                byProduct[spec] = new JsonArray([.. ids.Order().Select(id => JsonValue.Create(id))]);
+            json["hiddenViewingGroups"] = byProduct;
+        }
+
         return json;
 
         void Add(string name, object? value)
@@ -191,11 +227,14 @@ internal sealed record MarinerStyle
 
     /// <summary>
     /// The values set, as text for tile-set metadata: e.g. <c>safetyContour</c>
-    /// → <c>10</c>, <c>fourShades</c> → <c>true</c>.
+    /// → <c>10</c>, <c>fourShades</c> → <c>true</c>,
+    /// <c>hiddenViewingGroups</c> → <c>S-101:90000,90010</c>.
     /// </summary>
     public IEnumerable<KeyValuePair<string, string>> Describe() =>
         // A JSON value's text is invariant: numbers as JSON writes them, true/false, strings unquoted.
-        ToJson().Select(p => new KeyValuePair<string, string>(p.Key, p.Value!.ToString()));
+        ToJson().Select(p => new KeyValuePair<string, string>(
+            p.Key,
+            p.Key == "hiddenViewingGroups" ? HiddenViewingGroups! : p.Value!.ToString()));
 
     /// <summary>
     /// Reads settings from a JSON object, the names as <see cref="ToJson"/>
@@ -273,6 +312,9 @@ internal sealed record MarinerStyle
                 case "ignorescaleminimum":
                     problem = Flag(value, b => result = result with { IgnoreScaleMinimum = b });
                     break;
+                case "hiddenviewinggroups":
+                    problem = ViewingGroups(value, text => result = result with { HiddenViewingGroups = text });
+                    break;
                 default:
                     error = $"Unknown setting '{name}'.";
                     return false;
@@ -312,6 +354,30 @@ internal sealed record MarinerStyle
             return "must be true or false";
         }
 
+        static string? ViewingGroups(JsonNode? value, Action<string> set)
+        {
+            const string shapeProblem = "must be an object of product specifications to arrays of viewing-group ids, e.g. { \"S-101\": [90010] }";
+            if (value is not JsonObject byProduct)
+                return shapeProblem;
+
+            var groups = new Dictionary<string, SortedSet<int>>(StringComparer.Ordinal);
+            foreach (var (spec, idsNode) in byProduct)
+            {
+                if (!TryNormalizeSpec(spec, out var canonical) || idsNode is not JsonArray array)
+                    return shapeProblem;
+                var ids = groups.TryGetValue(canonical, out var existing) ? existing : groups[canonical] = [];
+                foreach (var id in array)
+                {
+                    if (id is not JsonValue v || v.GetValueKind() != JsonValueKind.Number || !v.TryGetValue<int>(out var number) || number < 0)
+                        return shapeProblem;
+                    ids.Add(number);
+                }
+            }
+
+            set(FormatViewingGroups(groups));
+            return null;
+        }
+
         static bool TryEnum<T>(JsonNode? value, out T parsed)
             where T : struct, Enum
         {
@@ -319,6 +385,93 @@ internal sealed record MarinerStyle
             return value is JsonValue v && v.GetValueKind() == JsonValueKind.String
                 && TryParseName(v.GetValue<string>(), out parsed);
         }
+    }
+
+    /// <summary>
+    /// Parses <c>--hide-viewing-groups</c> values: each <c>SPEC:ID,ID,…</c>
+    /// (e.g. <c>S-101:90000,90010</c>; the spec with or without its hyphen),
+    /// or a single <c>none</c> to hide no viewing group. Repeated values for
+    /// the same product are combined. <paramref name="canonical"/> is the
+    /// <see cref="HiddenViewingGroups"/> text.
+    /// </summary>
+    public static bool TryParseViewingGroupsOption(IReadOnlyList<string> values, out string canonical, out string error)
+    {
+        canonical = string.Empty;
+        error = string.Empty;
+        if (values.Count == 1 && string.Equals(values[0].Trim(), "none", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var groups = new Dictionary<string, SortedSet<int>>(StringComparer.Ordinal);
+        foreach (var value in values)
+        {
+            if (string.Equals(value.Trim(), "none", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "--hide-viewing-groups none cannot be combined with other values.";
+                return false;
+            }
+
+            var colon = value.IndexOf(':', StringComparison.Ordinal);
+            if (colon < 0 || !TryNormalizeSpec(value[..colon], out var spec))
+            {
+                error = $"Invalid --hide-viewing-groups value '{value}'. Use SPEC:ID,ID,… (e.g. S-101:90000,90010,90011), or none to show every viewing group.";
+                return false;
+            }
+
+            var set = groups.TryGetValue(spec, out var existing) ? existing : groups[spec] = [];
+            foreach (var token in value[(colon + 1)..].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!int.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+                {
+                    error = $"Invalid viewing-group id '{token}' in --hide-viewing-groups '{value}'. Ids are whole numbers, e.g. 90010.";
+                    return false;
+                }
+
+                set.Add(id);
+            }
+        }
+
+        canonical = FormatViewingGroups(groups);
+        return true;
+    }
+
+    /// <summary>
+    /// The canonical <see cref="HiddenViewingGroups"/> text: products in
+    /// ordinal order, each <c>SPEC:ID,ID</c> with ids ascending, joined by
+    /// <c>;</c>. Products with no ids are left out.
+    /// </summary>
+    internal static string FormatViewingGroups(IEnumerable<KeyValuePair<string, SortedSet<int>>> groups) =>
+        string.Join(';', groups
+            .Where(g => g.Value.Count > 0)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => g.Key + ":" + string.Join(',', g.Value.Select(id => id.ToString(CultureInfo.InvariantCulture)))));
+
+    private static Dictionary<string, IReadOnlySet<int>> ParseCanonicalViewingGroups(string text)
+    {
+        var groups = new Dictionary<string, IReadOnlySet<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in text.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var colon = part.IndexOf(':', StringComparison.Ordinal);
+            groups[part[..colon]] = part[(colon + 1)..]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => int.Parse(id, CultureInfo.InvariantCulture))
+                .ToHashSet();
+        }
+
+        return groups;
+    }
+
+    /// <summary>A product specification as <c>S-NNN</c>, from <c>S-101</c>, <c>s101</c> and the like.</summary>
+    private static bool TryNormalizeSpec(string text, out string spec)
+    {
+        var trimmed = text.Trim();
+        spec = string.Empty;
+        if (trimmed.Length < 2 || char.ToUpperInvariant(trimmed[0]) != 'S')
+            return false;
+        var digits = trimmed[1] == '-' ? trimmed[2..] : trimmed[1..];
+        if (digits.Length == 0 || !digits.All(char.IsAsciiDigit))
+            return false;
+        spec = "S-" + digits;
+        return true;
     }
 
     /// <summary>Whether <paramref name="metres"/> is an accepted depth.</summary>
