@@ -571,7 +571,7 @@ internal sealed class LegendService : IDisposable
     /// <summary>
     /// A vector layer's row for a feature it draws, when the feature's
     /// geometry fits the row (a point a symbol, a curve a line, a surface a
-    /// swatch or area): the layer's only row, or the line or area row named
+    /// swatch, area or fill): the layer's only row, or the line or area row named
     /// like the feature's class ("Cold front"). A symbol row needs more than a
     /// name: a tropical cyclone names every part after the storm's class, so
     /// its forecast points would ring the wrong symbol. Shared by a pick's
@@ -596,7 +596,7 @@ internal sealed class LegendService : IDisposable
     {
         Features.S100GeometryType.Point => kind == LegendRowKind.Symbol,
         Features.S100GeometryType.Curve => kind == LegendRowKind.Line,
-        Features.S100GeometryType.Surface => kind is LegendRowKind.Swatch or LegendRowKind.Area,
+        Features.S100GeometryType.Surface => kind is LegendRowKind.Swatch or LegendRowKind.Area or LegendRowKind.Fill,
         _ => false,
     };
 

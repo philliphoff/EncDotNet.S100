@@ -113,6 +113,9 @@ internal enum LegendRowKind
 
     /// <summary>A sample of a line style with its symbols.</summary>
     Line,
+
+    /// <summary>An area fill pattern tiled in a swatch, such as a dredged area.</summary>
+    Fill,
 }
 
 /// <summary>Helpers over <see cref="LegendEntry"/> rows.</summary>
@@ -128,6 +131,7 @@ internal static class LegendRows
             SwatchLegendEntry { Outline: null } => LegendRowKind.Swatch,
             SwatchLegendEntry => LegendRowKind.Area,
             SymbolLegendEntry => LegendRowKind.Symbol,
+            FillLegendEntry => LegendRowKind.Fill,
             _ => LegendRowKind.Line,
         };
     }

@@ -43,6 +43,10 @@ another path. The provider disposes the source when you dispose it.
   portrayal components.
 - `ViewingGroup`, `DisplayMode`, `DisplayPlane` and `ContextParameter` describe
   display configuration.
+- `CatalogueLegendBuilder` builds legend rows (`LegendEntry`) from a
+  catalogue's own assets, by name, for one palette: colour swatches, point
+  symbols (`Symbol`), line styles (`Line`) and area fill patterns (`Fill`,
+  for example `DRGARE01`). Pass it resolvers for the kinds of asset you use.
 - `PortrayalCatalogueManager` manages the portrayal catalogues for several
   product specifications. `SetPath` and `SetSource` set where a product's
   catalogue comes from.

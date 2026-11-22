@@ -18,6 +18,16 @@ month. For package versions and release assets, see
   now raise `CataloguesChanged` when `SetSource` (and, for portrayal
   catalogues, `SetPath`) replaces a product's catalogue (#1635).
 
+- **Area fill legend rows and fitted glyphs.** `CatalogueLegendBuilder.Fill`
+  builds a legend row from a portrayal catalogue's area fill, such as S-101's
+  dredged area pattern (`DRGARE01`), as a new `FillLegendEntry`;
+  `LegendGlyphRenderer` draws it as the pattern tiled in a swatch, and the
+  viewer's Legend tab and MCP `get_legend` (kind `fill`) show it.
+  `LegendGlyphRenderer.RenderFitted` draws any row fitted to a box of the
+  caller's size, for Chart reference's tiles. Breaking change:
+  `CatalogueLegendBuilder`'s constructor takes an optional `areaFills`
+  resolver as a fourth parameter.
+
 - **Chart reference index.** `ChartReferenceIndex`, in
   `EncDotNet.S100.Datasets.Pipelines`, describes every feature type, symbol,
   line style, area fill, attribute and display setting of a product's
