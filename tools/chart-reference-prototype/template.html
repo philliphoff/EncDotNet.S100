@@ -1,0 +1,513 @@
+<title>Chart Symbol Dictionary</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working reference tool. Sticky search + filters, a tile grid of glyphs on real ECDIS
+   chart-water swatches, and a detail pane (right on desktop, sheet on phones). */
+:root {
+  --bg: #eef2f4;
+  --surface: #ffffff;
+  --ink: #13202a;
+  --muted: #566772;
+  --line: #d3dce1;
+  --accent: #8f2a84;
+  --accent-soft: #f4e3f1;
+  --cat-base: #2d6a4f;
+  --cat-standard: #2f5d8a;
+  --cat-other: #7a6a2f;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1317; --surface: #141e24; --ink: #e2eaee; --muted: #93a5b0; --line: #26353d;
+    --accent: #e086d6; --accent-soft: #3a2137; --cat-base: #7fcfa6; --cat-standard: #8fb9e6; --cat-other: #d9c27a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1317; --surface: #141e24; --ink: #e2eaee; --muted: #93a5b0; --line: #26353d;
+  --accent: #e086d6; --accent-soft: #3a2137; --cat-base: #7fcfa6; --cat-standard: #8fb9e6; --cat-other: #d9c27a;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-block: 12px; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { font: 600 26px/1 var(--font-display); letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+.brand span { color: var(--muted); font-size: 13px; }
+.search { flex: 1 1 280px; max-width: 520px; position: relative; }
+.search input { width: 100%; box-sizing: border-box; padding: 9px 12px 9px 34px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 6px 11px; cursor: pointer; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.lbl { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.specs { display: flex; gap: 6px; overflow-x: auto; padding-block: 0 10px; scrollbar-width: thin; }
+.chip { flex: none; display: inline-flex; align-items: baseline; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.chip b { font-family: var(--font-mono); font-weight: 500; font-size: 12px; }
+.chip small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding-block: 10px; border-top: 1px solid var(--line); }
+.toolbar .grp { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar select { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 5px 8px; font-size: 13px; }
+.count { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+main.layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; padding-block: 16px 40px; align-items: start; }
+#results { min-width: 0; }
+.group { margin-bottom: 26px; }
+.group h2 { font: 600 19px/1.2 var(--font-display); letter-spacing: 0.02em; margin: 0 0 10px; display: flex; gap: 10px; align-items: baseline; text-wrap: balance; }
+.group h2 small { font: 400 13px var(--font-body); color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { display: flex; flex-direction: column; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0; cursor: pointer; overflow: hidden; content-visibility: auto; contain-intrinsic-size: 150px 150px; }
+.tile:hover { border-color: var(--muted); }
+.tile[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.sw { display: grid; place-items: center; height: 84px; background: var(--chartbg); border-bottom: 1px solid var(--line); position: relative; }
+.sw.bare { background: var(--bg); }
+.sw.bare .none { color: var(--muted); }
+.sw .none { font-size: 12px; color: var(--chartink); opacity: 0.75; padding: 0 8px; text-align: center; }
+.tile .meta { padding: 8px 10px 10px; display: grid; gap: 2px; min-width: 0; }
+.tile .name { font-weight: 700; font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
+.tile .code { font: 12px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.cat { position: absolute; top: 6px; left: 6px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: var(--surface); border: 1px solid var(--line); }
+.cat.Base { color: var(--cat-base); } .cat.Standard { color: var(--cat-standard); } .cat.Other { color: var(--cat-other); }
+.empty { padding: 40px 0; color: var(--muted); }
+
+aside#detail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--hdr, 170px)); max-height: calc(100vh - var(--hdr, 170px) - 24px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.d-head { padding: 16px 18px 12px; display: grid; gap: 6px; }
+.d-head h2 { font: 600 28px/1.05 var(--font-display); margin: 0; text-wrap: balance; }
+.codes { display: flex; flex-wrap: wrap; gap: 6px; }
+.codes code { font: 12px var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+.codes code em { font-style: normal; color: var(--muted); margin-right: 4px; }
+.hero { background: var(--chartbg); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 18px; border-block: 1px solid var(--line); min-height: 130px; }
+.hero .big { display: grid; place-items: center; }
+.hero .actual { display: grid; gap: 4px; justify-items: center; font-size: 11px; color: var(--chartink); }
+.hero .actual .box { display: grid; place-items: center; min-width: 40px; min-height: 40px; }
+.d-body { padding: 14px 18px 20px; display: grid; gap: 16px; }
+.d-body p { margin: 0; max-width: 65ch; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+h3 { font: 600 16px/1.2 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; color: var(--muted); }
+.rows { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: start; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; background: transparent; text-align: left; cursor: pointer; }
+.row:hover { border-color: var(--muted); }
+.row .sw { height: 50px; border: 0; border-radius: 4px; }
+.row .t { display: grid; gap: 2px; min-width: 0; font-size: 13px; }
+.row .t b { font-family: var(--font-mono); font-weight: 500; font-size: 12px; }
+.row ul { margin: 2px 0 0; padding-left: 16px; color: var(--muted); font-size: 12px; }
+.fills { display: flex; flex-wrap: wrap; gap: 8px; }
+.fill { display: grid; gap: 3px; justify-items: center; font: 11px var(--font-mono); color: var(--muted); }
+.fill i { width: 40px; height: 26px; border-radius: 4px; border: 1px solid var(--line); display: block; }
+.note { font-size: 12px; color: var(--muted); }
+.close { display: none; }
+.placeholder { padding: 28px 20px; color: var(--muted); display: grid; gap: 10px; }
+.placeholder h2 { font: 600 24px var(--font-display); color: var(--ink); margin: 0; }
+
+@media (max-width: 900px) {
+  header.top { position: static; }
+  main.layout { grid-template-columns: minmax(0, 1fr); }
+  aside#detail { position: fixed; inset: auto 0 0 0; top: auto; max-height: 78vh; border-radius: 12px 12px 0 0; z-index: 20; box-shadow: 0 -10px 30px rgba(0,0,0,.25); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  aside#detail.idle { display: none; }
+  .close { display: inline-block; justify-self: end; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 4px 10px; cursor: pointer; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .brand span { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { .tile, .row { transition: border-color .12s; } }
+</style>
+<style id="palcss"></style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <div class="brand"><h1>Chart Symbol Dictionary</h1><span>S-100 portrayal catalogues, as shipped with EncDotNet.S100</span></div>
+      <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="search" placeholder="Search: lateral beacon, BCNLAT, wreck, red, anchorage…" autocomplete="off" aria-label="Search symbols and features"></label>
+      <div class="grp" style="display:flex;align-items:center;gap:8px">
+        <span class="lbl">ECDIS palette</span>
+        <div class="seg" id="pal" role="group" aria-label="ECDIS colour palette">
+          <button data-v="day" aria-pressed="true">Day</button><button data-v="dusk" aria-pressed="false">Dusk</button><button data-v="night" aria-pressed="false">Night</button>
+        </div>
+      </div>
+    </div>
+    <nav class="specs" id="specs" aria-label="Product specification"></nav>
+    <div class="toolbar">
+      <div class="grp"><span class="lbl">Browse</span>
+        <div class="seg" id="view" role="group" aria-label="Browse by"><button data-v="features" aria-pressed="true">Feature types</button><button data-v="symbols" aria-pressed="false">Symbols</button></div>
+      </div>
+      <div class="grp"><span class="lbl">Geometry</span>
+        <div class="seg" id="geom" role="group" aria-label="Geometry"><button data-v="" aria-pressed="true">All</button><button data-v="point" aria-pressed="false">Point</button><button data-v="line" aria-pressed="false">Line</button><button data-v="area" aria-pressed="false">Area</button></div>
+      </div>
+      <div class="grp" id="catgrp"><span class="lbl">Display</span>
+        <div class="seg" id="cat" role="group" aria-label="Display category"><button data-v="" aria-pressed="true">All</button><button data-v="Base" aria-pressed="false">Base</button><button data-v="Standard" aria-pressed="false">Standard</button><button data-v="Other" aria-pressed="false">Other</button></div>
+      </div>
+      <div class="grp"><label class="lbl" for="group">Group</label>
+        <select id="group"><option value="section">Chart 1 section</option><option value="cat">Display category</option><option value="geom">Geometry</option><option value="letter">A–Z</option><option value="none">None</option></select>
+        <label class="lbl" for="sort">Sort</label>
+        <select id="sort"><option value="name">Name</option><option value="code">Code</option><option value="alias">S-57 acronym</option><option value="vg">Viewing group</option></select>
+      </div>
+      <span class="count" id="count" aria-live="polite"></span>
+    </div>
+  </div>
+</header>
+
+<main class="layout wrap">
+  <section id="results" aria-label="Results"></section>
+  <aside id="detail" class="idle" aria-live="polite"></aside>
+</main>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+  const specs = {};
+  for (const s of D.specs) {
+    s.itemMap = Object.fromEntries(s.items.map((i) => [i.id, i]));
+    s.featMap = Object.fromEntries(s.features.map((f) => [f.code, f]));
+    specs[s.id] = s;
+  }
+  const label = (id) => id.replace(/^S(\d)/, 'S-$1');
+
+  const state = {
+    spec: store.get('scd.spec') && specs[store.get('scd.spec')] ? store.get('scd.spec') : 'S101',
+    view: 'features', geom: '', cat: '', group: 'section', sort: 'name', q: '',
+    pal: ['day', 'dusk', 'night'].includes(store.get('scd.pal')) ? store.get('scd.pal') : 'day',
+    sel: null,
+  };
+
+  // ---- palette CSS: every spec's own SVG classes, scoped per palette ----
+  function buildPaletteCss() {
+    const out = [];
+    for (const [spec, c] of Object.entries(D.css)) {
+      for (const pal of ['day', 'dusk', 'night']) {
+        const cls = c.classes[pal] || {};
+        for (const [sel, body] of Object.entries(cls)) out.push(`.p-${pal} .sp-${spec} ${sel}{${body}}`);
+      }
+    }
+    out.push('.layout{display:none}');
+    $('#palcss').textContent = out.join('\n');
+  }
+  function tok(spec, t) {
+    const tk = (D.css[spec] && D.css[spec].tokens[t]) || (D.css.S101.tokens[t]) || null;
+    return tk ? tk[state.pal] : null;
+  }
+  function applyPalette() {
+    document.body.classList.remove('p-day', 'p-dusk', 'p-night');
+    document.body.classList.add('p-' + state.pal);
+    const bg = tok('S101', 'DEPDW') || '#fff';
+    const ink = tok('S101', 'CHBLK') || '#000';
+    document.body.style.setProperty('--chartbg', bg);
+    document.body.style.setProperty('--chartink', ink);
+    for (const b of $('#pal').children) b.setAttribute('aria-pressed', String(b.dataset.v === state.pal));
+  }
+
+  // ---- glyphs ----
+  function glyph(spec, item, maxW, maxH, pxPerMm) {
+    const [x, y, w, h] = item.box;
+    const pad = item.kind === 'point' ? 0.4 : 0;
+    const vw = w + pad * 2, vh = h + pad * 2;
+    const k = Math.min(pxPerMm, maxW / vw, maxH / vh);
+    return `<svg class="sp-${spec}" viewBox="${x - pad} ${y - pad} ${vw} ${vh}" width="${(vw * k).toFixed(1)}" height="${(vh * k).toFixed(1)}" overflow="visible" aria-hidden="true">${item.svg}</svg>`;
+  }
+  function glyphMm(spec, item) {
+    const [x, y, w, h] = item.box;
+    return `<svg class="sp-${spec}" viewBox="${x} ${y} ${w} ${h}" style="width:${w}mm;height:${h}mm" overflow="visible" aria-hidden="true">${item.svg}</svg>`;
+  }
+  function fillGlyph(spec, fills, w, h) {
+    const n = Math.min(fills.length, 4);
+    if (!n) return '';
+    const bw = w / n;
+    return `<svg width="${w}" height="${h}" aria-hidden="true">${fills.slice(0, n).map((t, i) => `<rect x="${i * bw}" y="0" width="${bw + 0.5}" height="${h}" fill="${tok(spec, t) || '#ccc'}"/>`).join('')}<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" fill="none" stroke="${tok(spec, 'CHGRD') || '#888'}"/></svg>`;
+  }
+  function penGlyph(spec, pens, w) {
+    return `<svg width="${w}" height="${pens.length * 14}" aria-hidden="true">${pens.map(([dash, width, t], i) => {
+      const px = Math.max(1, width * 3.2);
+      const da = dash === 'dash' ? `${px * 4} ${px * 2}` : dash === 'dot' ? `${px} ${px * 2}` : '';
+      return `<line x1="4" x2="${w - 4}" y1="${7 + i * 14}" y2="${7 + i * 14}" stroke="${tok(spec, t) || '#000'}" stroke-width="${px}" ${da ? `stroke-dasharray="${da}"` : ''}/>`;
+    }).join('')}</svg>`;
+  }
+  function featureLead(s, f) {
+    const direct = f.items.filter((i) => !i.conds.every((c) => c.startsWith('via ')));
+    const plain = (it) => it && !/default|unknown|question/i.test(it.desc);
+    const pick = (list) => list.map((i) => s.itemMap[i.id]).find(plain) || list.map((i) => s.itemMap[i.id]).find(Boolean);
+    return pick(direct.filter((i) => s.itemMap[i.id] && s.itemMap[i.id].kind === 'point')) || pick(direct) || null;
+  }
+  function featureGlyph(s, f, maxW, maxH, pxPerMm) {
+    const lead = featureLead(s, f);
+    if (lead) return glyph(s.id, lead, maxW, maxH, pxPerMm);
+    if (f.fills.length) return fillGlyph(s.id, f.fills, Math.min(maxW, 90), Math.min(maxH, 46));
+    if (f.pens.length) return penGlyph(s.id, f.pens, Math.min(maxW, 100));
+    const via = f.items.map((i) => s.itemMap[i.id]).find(Boolean);
+    if (via) return glyph(s.id, via, maxW, maxH, pxPerMm);
+    return `<span class="none">No symbol of its own</span>`;
+  }
+
+  // ---- geometry & categories ----
+  const geomOfFeature = (f) => {
+    const g = new Set();
+    for (const p of f.prims) { if (/point/i.test(p)) g.add('point'); if (/curve/i.test(p)) g.add('line'); if (/surface/i.test(p)) g.add('area'); }
+    return g;
+  };
+  const geomLabel = { point: 'Point', line: 'Line', area: 'Area' };
+  const catText = {
+    Base: 'Display Base: always shown, cannot be removed from the display.',
+    Standard: 'Standard Display: shown by default on an ECDIS.',
+    Other: 'Other Information: shown only when the mariner asks for all information.',
+  };
+
+  // ---- search ----
+  function terms(q) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
+  function featHay(s, f) {
+    if (!f._hay) {
+      const syms = f.items.map((i) => (s.itemMap[i.id] ? i.id + ' ' + s.itemMap[i.id].desc : '')).join(' ');
+      f._hay = [f.name, f.code, f.alias, f.def, f.vgName, f.vgSection, syms, f.items.map((i) => i.conds.join(' ')).join(' ')].join(' ').toLowerCase();
+    }
+    return f._hay;
+  }
+  function itemHay(s, it) {
+    if (!it._hay) it._hay = [it.id, it.desc, it.usedBy.map((c) => (s.featMap[c] ? s.featMap[c].name + ' ' + s.featMap[c].alias : c)).join(' ')].join(' ').toLowerCase();
+    return it._hay;
+  }
+  function score(hay, primary, ts) {
+    let sc = 0;
+    for (const t of ts) {
+      if (!hay.includes(t)) return -1;
+      if (primary.some((p) => p === t)) sc += 10;
+      else if (primary.some((p) => p.startsWith(t))) sc += 5;
+      else if (primary.some((p) => p.includes(t))) sc += 2;
+      else sc += 1;
+    }
+    return sc;
+  }
+
+  // ---- listing ----
+  function currentList() {
+    const s = specs[state.spec];
+    const ts = terms(state.q);
+    let rows;
+    if (state.view === 'features') {
+      rows = s.features.map((f) => ({ f, sc: ts.length ? score(featHay(s, f), [f.name.toLowerCase(), f.code.toLowerCase(), (f.alias || '').toLowerCase()], ts) : 0 }))
+        .filter((r) => r.sc >= 0)
+        .filter((r) => !state.geom || geomOfFeature(r.f).has(state.geom))
+        .filter((r) => !state.cat || r.f.cat === state.cat);
+    } else {
+      rows = s.items.map((it) => ({ it, sc: ts.length ? score(itemHay(s, it), [it.id.toLowerCase(), it.desc.toLowerCase()], ts) : 0 }))
+        .filter((r) => r.sc >= 0)
+        .filter((r) => !state.geom || r.it.kind === state.geom)
+        .filter((r) => !state.cat || r.it.usedBy.some((c) => s.featMap[c] && s.featMap[c].cat === state.cat));
+    }
+    const key = (r) => {
+      const f = r.f, it = r.it;
+      switch (state.sort) {
+        case 'code': return (f ? f.code : it.id).toLowerCase();
+        case 'alias': return f ? (f.alias || '~').toLowerCase() : it.id.toLowerCase();
+        case 'vg': return f ? (f.vg || '99999') + f.name : ((it.usedBy.map((c) => s.featMap[c] && s.featMap[c].vg).filter(Boolean).sort()[0]) || '99999') + it.id;
+        default: return (f ? f.name : it.desc).toLowerCase();
+      }
+    };
+    const drawn = (r) => (r.f ? (r.f.items.length || r.f.fills.length || r.f.pens.length ? 1 : 0) : 1);
+    rows.sort((a, b) => (b.sc - a.sc) || (drawn(b) - drawn(a)) || key(a).localeCompare(key(b)));
+    return rows;
+  }
+  function groupOf(s, r) {
+    const f = r.f, it = r.it;
+    const feat = f || (it.usedBy.length ? s.featMap[it.usedBy[0]] : null);
+    switch (state.group) {
+      case 'cat': return feat && feat.cat ? feat.cat === 'Other' ? 'Other Information' : feat.cat === 'Base' ? 'Display Base' : 'Standard Display' : 'Not assigned a display category';
+      case 'geom': return f ? [...geomOfFeature(f)].map((g) => geomLabel[g]).join(' + ') || 'No geometry' : geomLabel[it.kind];
+      case 'letter': { const c = (f ? f.name : it.id)[0].toUpperCase(); return /[A-Z]/.test(c) ? c : '#'; }
+      case 'none': return '';
+      default: {
+        if (!feat || !feat.vgSection) return 'No Chart 1 section given';
+        const m = feat.vgSection.match(/^(?:\w+:\s*)?(.*)$/);
+        return m ? m[1] : feat.vgSection;
+      }
+    }
+  }
+  function render() {
+    const s = specs[state.spec];
+    const rows = currentList();
+    const groups = new Map();
+    for (const r of rows) {
+      const g = groupOf(s, r);
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(r);
+    }
+    let order = [...groups.keys()];
+    if (state.group !== 'none' && !state.q) order.sort((a, b) => (a.startsWith('No ') || a.startsWith('Not ')) - (b.startsWith('No ') || b.startsWith('Not ')) || a.localeCompare(b));
+    const html = [];
+    for (const g of order) {
+      const list = groups.get(g);
+      html.push(`<div class="group">${g ? `<h2>${esc(g)} <small>${list.length}</small></h2>` : ''}<div class="grid">`);
+      for (const r of list) html.push(r.f ? featTile(s, r.f) : itemTile(s, r.it));
+      html.push('</div></div>');
+    }
+    $('#results').innerHTML = rows.length ? html.join('') : `<p class="empty">Nothing in ${label(s.id)} matches “${esc(state.q)}”. Try an S-57 acronym (BOYLAT), a colour, or switch to ${state.view === 'features' ? 'Symbols' : 'Feature types'}.</p>`;
+    const total = state.view === 'features' ? s.features.length : s.items.length;
+    $('#count').textContent = `${rows.length} of ${total} ${state.view === 'features' ? 'feature types' : 'symbols, line styles and fills'}`;
+    markSelected();
+  }
+  function featTile(s, f) {
+    const key = `${s.id}|f|${f.code}`;
+    const bare = !(f.items.length || f.fills.length || f.pens.length);
+    return `<button class="tile" data-k="${esc(key)}"><div class="sw${bare ? ' bare' : ''}">${f.cat ? `<span class="cat ${f.cat}">${f.cat}</span>` : ''}${featureGlyph(s, f, 120, 64, 7)}</div>
+      <div class="meta"><span class="name">${esc(f.name)}</span><span class="code">${esc(f.alias || f.code)}</span></div></button>`;
+  }
+  function itemTile(s, it) {
+    const key = `${s.id}|s|${it.id}`;
+    return `<button class="tile" data-k="${esc(key)}"><div class="sw">${glyph(s.id, it, 120, 64, 7)}</div>
+      <div class="meta"><span class="name">${esc(cap(it.desc))}</span><span class="code">${esc(it.id)}</span></div></button>`;
+  }
+  const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : '');
+
+  // ---- detail ----
+  function showFeature(s, f) {
+    const lead = featureLead(s, f);
+    const geoms = [...geomOfFeature(f)].map((g) => geomLabel[g]).join(', ') || '—';
+    const rows = f.items.map((ref) => {
+      const it = s.itemMap[ref.id];
+      if (!it) return '';
+      const conds = ref.conds.filter(Boolean);
+      const shown = conds.slice(0, 3).map((c) => `<li>${esc(c)}</li>`).join('');
+      const more = conds.length > 3 ? `<li>and ${conds.length - 3} more cases</li>` : '';
+      return `<button class="row" data-k="${esc(`${s.id}|s|${it.id}`)}"><div class="sw">${glyph(s.id, it, 50, 42, 5)}</div>
+        <div class="t"><b>${esc(it.id)}</b><span>${esc(cap(it.desc))}</span>${conds.length ? `<ul>${shown}${more}</ul>` : '<span class="note">Always drawn</span>'}</div></button>`;
+    }).join('');
+    const fills = f.fills.map((t) => `<span class="fill"><i style="background:${tok(s.id, t) || 'transparent'}"></i>${esc(t)}</span>`).join('');
+    const pens = f.pens.length ? `<div>${penGlyph(s.id, f.pens, 160)}<p class="note">${f.pens.map(([d, w, t]) => `${d} ${w} mm ${t}`).join(' · ')}</p></div>` : '';
+    $('#detail').innerHTML = `
+      <div class="d-head"><button class="close" data-close>Close</button>
+        <span class="lbl">${label(s.id)} feature type</span>
+        <h2>${esc(f.name)}</h2>
+        <div class="codes"><code><em>S-100</em>${esc(f.code)}</code>${f.alias ? `<code><em>S-57</em>${esc(f.alias)}</code>` : ''}</div></div>
+      <div class="hero"><div class="big">${featureGlyph(s, f, 230, 110, 14)}</div>
+        ${lead && lead.kind === 'point' ? `<div class="actual"><div class="box">${glyphMm(s.id, lead)}</div>chart size</div>` : ''}</div>
+      <div class="d-body">
+        ${f.def ? `<p>${esc(f.def)}</p>` : ''}
+        <dl class="facts">
+          <dt>Display</dt><dd>${f.cat ? esc(catText[f.cat]) : 'Not given by its rule'}</dd>
+          ${f.vgSection ? `<dt>Chart 1</dt><dd>${esc(f.vgSection.replace(/^\w+:\s*/, ''))}</dd>` : ''}
+          ${f.vg ? `<dt>Viewing group</dt><dd>${esc(f.vg)}${f.vgName ? ' · ' + esc(f.vgName) : ''}</dd>` : ''}
+          <dt>Geometry</dt><dd>${esc(geoms)}</dd>
+        </dl>
+        ${rows ? `<h3>Drawn with</h3><p class="note">Which symbol appears depends on the feature's attributes and your display settings. Conditions are read from the portrayal rule.</p><div class="rows">${rows}</div>` : ''}
+        ${fills ? `<h3>Colour fills</h3><div class="fills">${fills}</div>` : ''}
+        ${pens ? `<h3>Lines</h3>${pens}` : ''}
+        ${!rows && !fills && !pens ? `<p class="note">The catalogue's rules give this feature type no symbol of its own. It is drawn by a shared rule, as text only, or not at all.</p>` : ''}
+      </div>`;
+  }
+  function showItem(s, it) {
+    const users = it.usedBy.map((c) => s.featMap[c]).filter(Boolean);
+    const urows = users.map((f) => {
+      const ref = f.items.find((i) => i.id === it.id);
+      const conds = ref ? ref.conds.filter(Boolean) : [];
+      return `<button class="row" data-k="${esc(`${s.id}|f|${f.code}`)}"><div class="sw">${featureGlyph(s, f, 50, 42, 5)}</div>
+        <div class="t"><b>${esc(f.alias || f.code)}</b><span>${esc(f.name)}</span>${conds.length ? `<ul>${conds.slice(0, 2).map((c) => `<li>${esc(c)}</li>`).join('')}${conds.length > 2 ? `<li>and ${conds.length - 2} more cases</li>` : ''}</ul>` : ''}</div></button>`;
+    }).join('');
+    const kind = { point: 'Point symbol', line: 'Line style', area: 'Area fill pattern' }[it.kind];
+    $('#detail').innerHTML = `
+      <div class="d-head"><button class="close" data-close>Close</button>
+        <span class="lbl">${label(s.id)} ${kind.toLowerCase()}</span>
+        <h2>${esc(cap(it.desc))}</h2>
+        <div class="codes"><code><em>Symbol</em>${esc(it.id)}</code></div></div>
+      <div class="hero"><div class="big">${glyph(s.id, it, 230, 120, 16)}</div>
+        ${it.kind === 'point' ? `<div class="actual"><div class="box">${glyphMm(s.id, it)}</div>chart size</div>` : ''}</div>
+      <div class="d-body">
+        <dl class="facts"><dt>Kind</dt><dd>${kind}</dd><dt>Size</dt><dd>${it.box[2].toFixed(1)} × ${it.box[3].toFixed(1)} mm on the display</dd></dl>
+        ${urows ? `<h3>Used by</h3><div class="rows">${urows}</div>` : `<p class="note">No feature type's rule names this ${kind.toLowerCase()} directly. It may be composed by a rule (sounding digits, contour labels), placed by a line style or fill, or kept for compatibility.</p>`}
+      </div>`;
+  }
+  function select(key, push = true) {
+    if (!key) { state.sel = null; $('#detail').classList.add('idle'); placeholder(); markSelected(); return; }
+    const [spec, t, id] = key.split('|');
+    const s = specs[spec];
+    if (!s) return;
+    if (spec !== state.spec) { state.spec = spec; renderSpecs(); render(); }
+    if (t === 'f' && s.featMap[id]) showFeature(s, s.featMap[id]);
+    else if (t === 's' && s.itemMap[id]) showItem(s, s.itemMap[id]);
+    else return;
+    state.sel = key;
+    $('#detail').classList.remove('idle');
+    $('#detail').scrollTop = 0;
+    markSelected();
+    if (push) { const h = '#' + [spec, t, id.replace(/_/g, '-x-')].join('-'); if (location.hash !== h) history.replaceState(null, '', h); }
+  }
+  function fromHash() {
+    const m = location.hash.match(/^#(S\d+)-([fs])-([A-Za-z0-9-]+)$/);
+    if (m) select(`${m[1]}|${m[2]}|${m[3].replace(/-x-/g, '_')}`, false);
+  }
+  function markSelected() {
+    for (const el of document.querySelectorAll('.tile[aria-current]')) el.removeAttribute('aria-current');
+    if (state.sel) { const el = document.querySelector(`.tile[data-k="${CSS.escape(state.sel)}"]`); if (el) el.setAttribute('aria-current', 'true'); }
+  }
+  function placeholder() {
+    const s = specs[state.spec];
+    const linked = s.features.filter((f) => f.items.length || f.fills.length || f.pens.length).length;
+    $('#detail').innerHTML = `<div class="placeholder"><span class="lbl">${label(s.id)} · ${esc(s.title)}</span><h2>Pick a feature type or symbol</h2>
+      <p>${s.features.length} feature types and ${s.items.length} symbols, line styles and fills, read from the ${label(s.id)} feature and portrayal catalogues. ${linked} feature types are linked to how they are drawn through the catalogue's portrayal rules.</p>
+      <p class="note">Switch the ECDIS palette to see each symbol as it appears at dusk or at night. Search by name, S-57 acronym, symbol code or description.</p></div>`;
+  }
+
+  // ---- chrome ----
+  function renderSpecs() {
+    $('#specs').innerHTML = D.specs.map((s) => `<button class="chip" data-spec="${s.id}" aria-pressed="${s.id === state.spec}" title="${esc(s.title)}"><b>${label(s.id)}</b>${esc(s.title)}<small>${s.items.length}</small></button>`).join('');
+    store.set('scd.spec', state.spec);
+    if (!state.sel) placeholder();
+  }
+  function seg(id, prop, after) {
+    $(id).addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      state[prop] = b.dataset.v;
+      for (const x of $(id).children) x.setAttribute('aria-pressed', String(x === b));
+      after ? after() : render();
+    });
+  }
+  seg('#view', 'view');
+  seg('#geom', 'geom');
+  seg('#cat', 'cat');
+  seg('#pal', 'pal', () => { store.set('scd.pal', state.pal); applyPalette(); if (state.sel) select(state.sel, false); render(); });
+  $('#specs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-spec]'); if (!b) return;
+    state.spec = b.dataset.spec; renderSpecs(); render();
+  });
+  $('#group').addEventListener('change', (e) => { state.group = e.target.value; render(); });
+  $('#sort').addEventListener('change', (e) => { state.sort = e.target.value; render(); });
+  let t;
+  $('#q').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value.trim(); render(); }, 120); });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { select(null); history.replaceState(null, '', location.pathname); return; }
+    const k = e.target.closest('[data-k]'); if (k) select(k.dataset.k);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
+    if (e.key === 'Escape' && state.sel) select(null);
+  });
+  window.addEventListener('hashchange', fromHash);
+  const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--hdr', $('header.top').offsetHeight + 16 + 'px'));
+  ro.observe($('header.top'));
+
+  buildPaletteCss();
+  applyPalette();
+  renderSpecs();
+  render();
+  fromHash();
+  if (!state.sel && window.matchMedia('(min-width: 901px)').matches) select('S101|f|LateralBeacon', false);
+})();
+</script>
