@@ -7,8 +7,7 @@
 > (<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>). It builds on
 > **Per-product Legends · design pass** (round 3) and **Chart Reference ·
 > design pass** on the same page, and on the
-> [Symbol dictionary](https://github.com/philliphoff/EncDotNet.S100/blob/docs/symbol-dictionary-design/docs/design/symbol-dictionary.md)
-> note (branch `docs/symbol-dictionary-design`).
+> [Symbol dictionary](symbol-dictionary.md) note.
 
 This note decides where SoundCharts shows the legend of what it draws, when
 the legend appears, and how it scales from one product to a dozen without
@@ -264,7 +263,8 @@ bottom dock uses, the three labels measure about 150, 52 and 76 px; with
 two 14 px gaps that's about 306 px, inside the 318 px left by the 12 px
 inset, the close button and its padding at the default 360 px width. When
 the dock is narrowed so the labels no longer fit, each tab shows its icon
-only (Cursor, the legend glyph, BookOpen), with the full title as its
+only (Cursor, the legend glyph, BookInformation: see
+[Symbol dictionary](symbol-dictionary.md) D1), with the full title as its
 tooltip and accessible name. Labels are never truncated and the strip
 never scrolls.
 
