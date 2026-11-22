@@ -7,8 +7,7 @@
 > (<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>). It builds on
 > **Per-product Legends · design pass** (round 3) and **Chart Reference ·
 > design pass** on the same page, and on the
-> [Symbol dictionary](https://github.com/philliphoff/EncDotNet.S100/blob/docs/symbol-dictionary-design/docs/design/symbol-dictionary.md)
-> note (branch `docs/symbol-dictionary-design`).
+> [Symbol dictionary](symbol-dictionary.md) note.
 
 This note decides where SoundCharts shows the legend of what it draws, when
 the legend appears, and how it scales from one product to a dozen without
