@@ -1,7 +1,5 @@
 using Avalonia.Controls;
-using Avalonia.Headless.XUnit;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
