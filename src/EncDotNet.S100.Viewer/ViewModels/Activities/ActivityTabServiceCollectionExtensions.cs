@@ -36,6 +36,7 @@ internal static class ActivityTabServiceCollectionExtensions
     /// always visible.
     /// </param>
     /// <param name="fillsContent">When <c>true</c>, the tab is shown across the whole content area (see <see cref="IActivityTab.FillsContent"/>).</param>
+    /// <param name="showsInActivityBar">When <c>false</c>, the tab has no activity-bar button and only code opens it (see <see cref="IActivityTab.ShowsInActivityBar"/>).</param>
     public static IServiceCollection AddActivityTab<TViewModel, TView>(
         this IServiceCollection services,
         string id,
@@ -48,7 +49,8 @@ internal static class ActivityTabServiceCollectionExtensions
         TabDock dock = TabDock.Left,
         bool autoOpenOnContentSignal = false,
         Func<IServiceProvider, ITabVisibilitySource?>? visibilitySourceFactory = null,
-        bool fillsContent = false)
+        bool fillsContent = false,
+        bool showsInActivityBar = true)
         where TViewModel : class
         where TView : Control, new()
     {
@@ -70,7 +72,8 @@ internal static class ActivityTabServiceCollectionExtensions
             dock,
             autoOpenOnContentSignal,
             name,
-            fillsContent));
+            fillsContent,
+            showsInActivityBar));
 
         return services;
     }

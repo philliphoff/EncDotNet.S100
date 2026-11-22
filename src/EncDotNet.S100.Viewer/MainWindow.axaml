@@ -1451,7 +1451,7 @@
                                         ShowCloseButton="True"
                                         CloseCommand="{Binding Layout.CloseDockCommand}"
                                         CloseCommandParameter="Left"
-                                        CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseSettings}" />
+                                        CloseButtonToolTip="{Binding Layout.ContentPanelCloseTooltip}" />
             </Border>
         </Grid>
     </DockPanel>
