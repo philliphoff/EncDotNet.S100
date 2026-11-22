@@ -403,7 +403,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 // default-plane authority via the injected provider.
                 Plane = _authorityProvider.Current.GetDefaultPlane(Spec.Name),
                 WithinPlanePriority = 0,
-                Legend = BuildLegend(instructions, new CatalogueLegendBuilder(output.Palette, output.SymbolSvg, output.LineStyle)),
+                Legend = BuildLegend(instructions, new CatalogueLegendBuilder(output.Palette, output.SymbolSvg, output.LineStyle, output.AreaFill)),
                 LegendCaption = LegendCaption,
             };
 

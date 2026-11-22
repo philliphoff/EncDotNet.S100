@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using SkiaSharp;
 
@@ -6,18 +7,31 @@ namespace EncDotNet.S100.Renderers.Skia;
 
 /// <summary>
 /// Draws the glyph of a legend row (<see cref="LegendEntry"/>) at legend
-/// size: a colour swatch, an outlined area, a point symbol, or a short sample
-/// of a line style with its symbols. The viewer's Layer stack shows these
-/// next to each row's label.
+/// size: a colour swatch, an outlined area, a point symbol, a short sample
+/// of a line style with its symbols, or an area fill pattern tiled in a
+/// swatch. The viewer's Legend tab shows these next to each row's label.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Glyphs are sized in logical pixels (see <see cref="SizeOf"/>): 14×10 for a
-/// swatch or area, 14×14 for a symbol, 28×10 for a line. A line sample is
+/// swatch, area or fill, 14×14 for a symbol, 28×10 for a line. A line sample is
 /// drawn at <see cref="MillimetresPerPixel"/>, smaller than on the chart, so
 /// a front shows two or three pips; its symbols are the line style's own,
 /// placed and turned as the chart renderer places them, and centred along
 /// the sample.
+/// </para>
+/// <para>
+/// <see cref="RenderFitted"/> and <see cref="DrawFitted"/> draw a row into a
+/// box of the caller's size instead, such as a 40 px reference tile or a large
+/// hero glyph: a symbol fills the box keeping its aspect ratio, and a line
+/// sample or outline is drawn at chart size (<see cref="ChartMillimetresPerPixel"/>),
+/// or smaller where the box is too short to show one whole interval of the
+/// line's pattern.
+/// </para>
+/// <para>
+/// A fill's pattern is drawn the same way at either size: scaled so the
+/// shorter side of the box holds <see cref="FillCellsAcross"/> cells of the
+/// pattern's lattice, on the fill's colour or on a transparent background.
 /// </para>
 /// </remarks>
 public static class LegendGlyphRenderer
@@ -29,8 +43,23 @@ public static class LegendGlyphRenderer
     /// </summary>
     public const double MillimetresPerPixel = 0.8;
 
+    /// <summary>
+    /// The scale <see cref="DrawFitted"/> draws line samples and outlines at
+    /// when the box is long enough: millimetres per logical pixel, as on the chart.
+    /// </summary>
+    public const double ChartMillimetresPerPixel = 0.32;
+
+    /// <summary>
+    /// How many cells of a fill pattern's lattice the shorter side of a fill
+    /// glyph holds, so the glyph shows the pattern repeat.
+    /// </summary>
+    public const double FillCellsAcross = 2;
+
     /// <summary>The thinnest pen a legend glyph draws, in logical pixels, so a fine line stays visible.</summary>
     public const float MinimumPenWidth = 1f;
+
+    // SVG user units (96 DPI) per millimetre, as the symbol pictures are drawn.
+    private const double SvgUnitsPerMillimetre = 96 / 25.4;
 
     /// <summary>The glyph size of <paramref name="entry"/>, in logical pixels.</summary>
     /// <param name="entry">The legend row.</param>
@@ -58,17 +87,27 @@ public static class LegendGlyphRenderer
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(deviceScale);
 
         var (width, height) = SizeOf(entry);
-        var bitmap = new SKBitmap(
-            (int)Math.Ceiling(width * deviceScale),
-            (int)Math.Ceiling(height * deviceScale),
-            SKColorType.Rgba8888,
-            SKAlphaType.Premul);
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Transparent);
-        canvas.Scale(deviceScale);
-        Draw(canvas, entry, width, height);
-        canvas.Flush();
-        return bitmap;
+        return RenderTo(width, height, deviceScale, canvas => Draw(canvas, entry, width, height));
+    }
+
+    /// <summary>
+    /// Renders the glyph of <paramref name="entry"/> fitted to a box of
+    /// <paramref name="width"/> × <paramref name="height"/> logical pixels (see
+    /// <see cref="DrawFitted"/>), to a new bitmap on a transparent background
+    /// of that size times <paramref name="deviceScale"/>. The caller owns the bitmap.
+    /// </summary>
+    /// <param name="entry">The legend row.</param>
+    /// <param name="width">The box width in logical pixels, e.g. 40 for a reference tile.</param>
+    /// <param name="height">The box height in logical pixels.</param>
+    /// <param name="deviceScale">Device pixels per logical pixel, e.g. 2 on a Retina display.</param>
+    public static SKBitmap RenderFitted(LegendEntry entry, int width, int height, float deviceScale = 1f)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(deviceScale);
+
+        return RenderTo(width, height, deviceScale, canvas => DrawFitted(canvas, entry, width, height));
     }
 
     /// <summary>
@@ -88,18 +127,161 @@ public static class LegendGlyphRenderer
         switch (entry)
         {
             case SwatchLegendEntry swatch:
-                DrawSwatch(canvas, swatch, width, height);
+                DrawSwatch(canvas, swatch, width, height, MillimetresPerPixel);
                 break;
             case SymbolLegendEntry symbol:
                 DrawSymbol(canvas, symbol.Svg, width, height);
                 break;
             case LineLegendEntry line:
-                DrawLine(canvas, line.Line, width, height);
+                DrawLine(canvas, line.Line, width, height, MillimetresPerPixel);
+                break;
+            case FillLegendEntry fill:
+                DrawFill(canvas, fill.Fill, width, height);
                 break;
         }
     }
 
-    private static void DrawSwatch(SKCanvas canvas, SwatchLegendEntry swatch, float width, float height)
+    /// <summary>
+    /// Draws the glyph of <paramref name="entry"/> fitted to the rectangle from
+    /// the canvas origin to (<paramref name="width"/>, <paramref name="height"/>),
+    /// in the canvas's logical pixels: a symbol as large as the box allows,
+    /// keeping its aspect ratio; a line sample at
+    /// <see cref="ChartMillimetresPerPixel"/>, or smaller so that the sample
+    /// shows at least one whole interval of its dashes and symbols; a swatch,
+    /// area or fill filling the box.
+    /// </summary>
+    /// <param name="canvas">The canvas.</param>
+    /// <param name="entry">The legend row.</param>
+    /// <param name="width">The box width.</param>
+    /// <param name="height">The box height.</param>
+    public static void DrawFitted(SKCanvas canvas, LegendEntry entry, float width, float height)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(entry);
+
+        switch (entry)
+        {
+            case SwatchLegendEntry swatch:
+                DrawSwatch(canvas, swatch, width, height, ChartMillimetresPerPixel);
+                break;
+            case SymbolLegendEntry symbol:
+                DrawSymbol(canvas, symbol.Svg, width, height);
+                break;
+            case LineLegendEntry line:
+                DrawLine(canvas, line.Line, width, height, FittedLineScale(line.Line, width));
+                break;
+            case FillLegendEntry fill:
+                DrawFill(canvas, fill.Fill, width, height);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The scale <see cref="DrawFitted"/> draws <paramref name="line"/> at in a
+    /// box <paramref name="width"/> logical pixels wide, in millimetres per
+    /// logical pixel: <see cref="ChartMillimetresPerPixel"/>, or coarser when
+    /// one interval of the line's pattern, with its symbols kept whole, would
+    /// not fit along the sample.
+    /// </summary>
+    /// <param name="line">The line sample.</param>
+    /// <param name="width">The box width in logical pixels.</param>
+    public static double FittedLineScale(LegendLineSample line, float width)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        float length = width - 2f;
+        if (line.IntervalLength <= 0 || length <= 0)
+            return ChartMillimetresPerPixel;
+
+        // A symbol reaches half its larger side either way from its pivot.
+        double reach = 0;
+        foreach (var symbol in line.Symbols)
+        {
+            if (SkiaDisplayListRenderer.GetSymbolPicture(symbol.Svg) is { } picture)
+                reach = Math.Max(reach, Math.Max(picture.CullRect.Width, picture.CullRect.Height) / 2 / SvgUnitsPerMillimetre);
+        }
+
+        return Math.Max(ChartMillimetresPerPixel, (line.IntervalLength + 2 * reach) / length);
+    }
+
+    /// <summary>
+    /// The scale a fill glyph of <paramref name="width"/> × <paramref name="height"/>
+    /// logical pixels draws <paramref name="fill"/>'s pattern at, in logical
+    /// pixels per millimetre: <see cref="FillCellsAcross"/> lattice cells
+    /// across the shorter side; 0 when the fill has no pattern.
+    /// </summary>
+    /// <param name="fill">The fill pattern.</param>
+    /// <param name="width">The glyph width in logical pixels.</param>
+    /// <param name="height">The glyph height in logical pixels.</param>
+    public static double FillPixelsPerMillimetre(LegendFillPattern fill, float width, float height)
+    {
+        ArgumentNullException.ThrowIfNull(fill);
+        if (fill.Svg is null || SkiaDisplayListRenderer.GetSymbolPicture(fill.Svg) is not { } picture)
+            return 0;
+
+        // As the chart's pattern tiles: a cell is v1.x wide and v2.y high,
+        // or the symbol's own size where the fill gives no vector.
+        double cellWidth = Math.Abs(fill.V1X) > 0 ? Math.Abs(fill.V1X) : picture.CullRect.Width / SvgUnitsPerMillimetre;
+        double cellHeight = Math.Abs(fill.V2Y) > 0 ? Math.Abs(fill.V2Y) : picture.CullRect.Height / SvgUnitsPerMillimetre;
+        double cell = Math.Max(cellWidth, cellHeight);
+        return cell <= 0 ? 0 : Math.Min(width, height) / (FillCellsAcross * cell);
+    }
+
+    private static SKBitmap RenderTo(int width, int height, float deviceScale, Action<SKCanvas> draw)
+    {
+        var bitmap = new SKBitmap(
+            (int)Math.Ceiling(width * deviceScale),
+            (int)Math.Ceiling(height * deviceScale),
+            SKColorType.Rgba8888,
+            SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+        canvas.Scale(deviceScale);
+        draw(canvas);
+        canvas.Flush();
+        return bitmap;
+    }
+
+    private static void DrawFill(SKCanvas canvas, LegendFillPattern fill, float width, float height)
+    {
+        var rect = new SKRect(0.5f, 0.5f, width - 0.5f, height - 0.5f);
+        canvas.Save();
+        using (var clip = new SKPath())
+        {
+            clip.AddRoundRect(rect, 2, 2);
+            canvas.ClipPath(clip, antialias: true);
+        }
+
+        if (fill.Color is { } color)
+        {
+            using var background = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill, Color = Parse(color) };
+            canvas.DrawRect(rect, background);
+        }
+
+        double pixelsPerMillimetre = FillPixelsPerMillimetre(fill, width, height);
+        if (fill.Svg is { } svg && pixelsPerMillimetre > 0)
+        {
+            // The chart's own tile, recorded in millimetres, so the glyph
+            // repeats the symbol as the chart does.
+            var areaFill = new AreaFill { Name = "legend", V1X = fill.V1X, V1Y = fill.V1Y, V2X = fill.V2X, V2Y = fill.V2Y };
+            using var tile = SkiaSvgRasterizer.BuildPatternTilePicture(svg, areaFill, out var tileRect);
+            if (tile is not null && tileRect.Width > 0 && tileRect.Height > 0)
+            {
+                float scale = (float)pixelsPerMillimetre;
+                using var shader = tile.ToShader(
+                    SKShaderTileMode.Repeat,
+                    SKShaderTileMode.Repeat,
+                    SKFilterMode.Linear,
+                    SKMatrix.CreateScale(scale, scale),
+                    tileRect);
+                using var paint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill, Shader = shader };
+                canvas.DrawRect(rect, paint);
+            }
+        }
+
+        canvas.Restore();
+    }
+
+    private static void DrawSwatch(SKCanvas canvas, SwatchLegendEntry swatch, float width, float height, double millimetresPerPixel)
     {
         var rect = new SKRect(0.5f, 0.5f, width - 0.5f, height - 0.5f);
         using var fill = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill, Color = Parse(swatch.Color) };
@@ -108,7 +290,7 @@ public static class LegendGlyphRenderer
         if (swatch.Outline is not { } outline || outline.Width <= 0)
             return;
 
-        float pen = PenWidth(outline.Width);
+        float pen = PenWidth(outline.Width, millimetresPerPixel);
         float inset = pen / 2;
         var outlineRect = new SKRect(inset, inset, width - inset, height - inset);
         using var stroke = new SKPaint
@@ -117,7 +299,7 @@ public static class LegendGlyphRenderer
             Style = SKPaintStyle.Stroke,
             StrokeWidth = pen,
             Color = Parse(outline.Color),
-            PathEffect = DashEffect(outline),
+            PathEffect = DashEffect(outline, millimetresPerPixel),
         };
         canvas.DrawRoundRect(outlineRect, 2, 2, stroke);
     }
@@ -142,15 +324,15 @@ public static class LegendGlyphRenderer
         canvas.Restore();
     }
 
-    private static void DrawLine(SKCanvas canvas, LegendLineSample line, float width, float height)
+    private static void DrawLine(SKCanvas canvas, LegendLineSample line, float width, float height, double millimetresPerPixel)
     {
         const float x0 = 1f;
         float x1 = width - 1f;
         float length = x1 - x0;
         float y = height / 2f;
-        float interval = (float)(line.IntervalLength / MillimetresPerPixel);
+        float interval = (float)(line.IntervalLength / millimetresPerPixel);
 
-        float symbolScale = (float)(1 / MillimetresPerPixel / (96 / 25.4));
+        float symbolScale = (float)(1 / millimetresPerPixel / SvgUnitsPerMillimetre);
 
         // Where the pattern's origin falls: the symbols are centred along the
         // sample, kept whole inside it, so the first starts the visible run,
@@ -160,14 +342,14 @@ public static class LegendGlyphRenderer
         {
             float inset = Math.Min(line.Symbols.Max(s => HalfWidth(s, symbolScale)), length / 2f);
             float room = length - 2 * inset;
-            float first = (float)(line.Symbols.Min(s => s.Position) / MillimetresPerPixel);
+            float first = (float)(line.Symbols.Min(s => s.Position) / millimetresPerPixel);
             float last = 0;
             for (int k = 0; ; k++)
             {
                 bool any = false;
                 foreach (var symbol in line.Symbols)
                 {
-                    float at = (float)(symbol.Position / MillimetresPerPixel) - first + k * interval;
+                    float at = (float)(symbol.Position / millimetresPerPixel) - first + k * interval;
                     if (at <= room)
                     {
                         last = Math.Max(last, at);
@@ -188,7 +370,7 @@ public static class LegendGlyphRenderer
             {
                 IsAntialias = true,
                 Style = SKPaintStyle.Stroke,
-                StrokeWidth = PenWidth(line.Width),
+                StrokeWidth = PenWidth(line.Width, millimetresPerPixel),
                 StrokeCap = SKStrokeCap.Butt,
                 Color = Parse(line.Color),
             };
@@ -205,8 +387,8 @@ public static class LegendGlyphRenderer
                 {
                     foreach (var (start, dash) in line.Dashes)
                     {
-                        float a = origin + k * interval + (float)(start / MillimetresPerPixel);
-                        float b = a + (float)(dash / MillimetresPerPixel);
+                        float a = origin + k * interval + (float)(start / millimetresPerPixel);
+                        float b = a + (float)(dash / millimetresPerPixel);
                         a = Math.Max(a, x0);
                         b = Math.Min(b, x1);
                         if (b > a)
@@ -224,7 +406,7 @@ public static class LegendGlyphRenderer
             bool any = false;
             foreach (var symbol in line.Symbols)
             {
-                float x = origin + (float)(symbol.Position / MillimetresPerPixel) + k * interval;
+                float x = origin + (float)(symbol.Position / millimetresPerPixel) + k * interval;
                 if (x > x1 + 0.01f)
                     continue;
                 any = true;
@@ -268,12 +450,12 @@ public static class LegendGlyphRenderer
         return (float)(Math.Max(bounds.Width, bounds.Height) / 2 * scale);
     }
 
-    private static float PenWidth(double millimetres) =>
-        Math.Max((float)(millimetres / MillimetresPerPixel), MinimumPenWidth);
+    private static float PenWidth(double millimetres, double millimetresPerPixel) =>
+        Math.Max((float)(millimetres / millimetresPerPixel), MinimumPenWidth);
 
     // The dashes of an outline as a Skia dash effect: on/off lengths over one
     // interval, starting at the first dash.
-    private static SKPathEffect? DashEffect(LegendLineSample line)
+    private static SKPathEffect? DashEffect(LegendLineSample line, double millimetresPerPixel)
     {
         if (line.Dashes.Count == 0 || line.IntervalLength <= 0)
             return null;
@@ -285,8 +467,8 @@ public static class LegendGlyphRenderer
             double next = i + 1 < line.Dashes.Count
                 ? line.Dashes[i + 1].Start
                 : line.IntervalLength + line.Dashes[0].Start;
-            intervals[2 * i] = (float)Math.Max(length / MillimetresPerPixel, 0.5);
-            intervals[2 * i + 1] = (float)Math.Max((next - start - length) / MillimetresPerPixel, 0.5);
+            intervals[2 * i] = (float)Math.Max(length / millimetresPerPixel, 0.5);
+            intervals[2 * i + 1] = (float)Math.Max((next - start - length) / millimetresPerPixel, 0.5);
         }
 
         return SKPathEffect.CreateDash(intervals, 0);

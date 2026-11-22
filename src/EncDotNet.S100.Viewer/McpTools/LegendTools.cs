@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// <summary>One row of a legend section.</summary>
 [Description("One legend row: a glyph and its label.")]
 internal sealed record LegendRowDto(
-    [property: Description("What the glyph shows: 'swatch' (a colour band), 'area' (a swatch in an outline), 'symbol' or 'line'.")] string Kind,
+    [property: Description("What the glyph shows: 'swatch' (a colour band), 'area' (a swatch in an outline), 'symbol', 'line' or 'fill' (an area fill pattern).")] string Kind,
     [property: Description("The row's label, also its accessible name, e.g. \"0.5–1 m\" or \"Cold front\".")] string Label,
     [property: Description("A swatch or area row's colour as #RRGGBB in the current palette; null for a symbol or line row.")] string? Color);
 
@@ -173,6 +173,7 @@ internal sealed class GetLegendTool
             LegendRowKind.Swatch => "swatch",
             LegendRowKind.Area => "area",
             LegendRowKind.Symbol => "symbol",
+            LegendRowKind.Fill => "fill",
             _ => "line",
         },
         entry.Label,
