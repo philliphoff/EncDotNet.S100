@@ -1,6 +1,7 @@
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Viewer.ViewModels.Legends;
@@ -8,8 +9,9 @@ using EncDotNet.S100.Viewer.ViewModels.Legends;
 namespace EncDotNet.S100.Viewer.Services.ChartReference;
 
 /// <summary>
-/// The glyphs Chart reference shows, drawn once per spec, item, palette and
-/// size and kept in memory (symbol dictionary design note §3.4, R3). A glyph
+/// The glyphs Chart reference shows, drawn once per entry
+/// (<see cref="ReferenceKey"/>: spec, kind and code), palette and size and
+/// kept in memory (symbol dictionary design note §3.4, R3). A glyph
 /// is a catalogue item drawn fitted to its box by
 /// <see cref="LegendGlyphRenderer.RenderFitted"/>: a 40 px tile or a large
 /// hero glyph.
@@ -77,16 +79,15 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
     }
 
     /// <summary>
-    /// The glyph of <paramref name="item"/> in <paramref name="spec"/> at
+    /// The glyph of the entry <paramref name="entry"/> addresses at
     /// <paramref name="width"/> × <paramref name="height"/> logical pixels in
     /// the current palette, drawn on first use from the row
     /// <paramref name="build"/> makes for that palette; <see langword="null"/>
-    /// when <paramref name="build"/> gives no row (an item with nothing to draw).
+    /// when <paramref name="build"/> gives no row (an entry with nothing to draw).
     /// </summary>
-    /// <param name="spec">The product, e.g. <c>"S-101"</c>.</param>
-    /// <param name="item">
-    /// The item, unique within the spec: qualify names that two kinds of item
-    /// share, e.g. <c>"BCNLAT21"</c> for a symbol and <c>"fill:DRGARE01"</c> for an area fill.
+    /// <param name="entry">
+    /// The Chart reference entry: its spec, kind and code, e.g. S-101's symbol
+    /// <c>BCNLAT21</c> or area fill <c>DRGARE01</c>.
     /// </param>
     /// <param name="width">The box width in logical pixels.</param>
     /// <param name="height">The box height in logical pixels.</param>
@@ -94,10 +95,9 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
     /// Makes the item's legend row for a palette, as <c>CatalogueLegendBuilder</c>
     /// does with that palette's colours; called only on a miss.
     /// </param>
-    public IImage? Get(string spec, string item, int width, int height, Func<PaletteType, LegendEntry?> build)
+    public IImage? Get(ReferenceKey entry, int width, int height, Func<PaletteType, LegendEntry?> build)
     {
-        ArgumentException.ThrowIfNullOrEmpty(spec);
-        ArgumentException.ThrowIfNullOrEmpty(item);
+        ArgumentException.ThrowIfNullOrEmpty(entry.Code);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentNullException.ThrowIfNull(build);
@@ -106,14 +106,14 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
         lock (_glyphs)
             palette = _palette;
 
-        var key = new Key(spec, item, palette, width, height);
+        var key = new Key(entry, palette, width, height);
         lock (_glyphs)
         {
             if (_glyphs.TryGetValue(key, out var cached))
                 return cached;
         }
 
-        var glyph = build(palette) is { } entry ? Render(entry, width, height) : null;
+        var glyph = build(palette) is { } row ? Render(row, width, height) : null;
         lock (_glyphs)
         {
             // Kept only while its palette is current; one drawn across a
@@ -160,5 +160,5 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
         return new Bitmap(stream);
     }
 
-    private readonly record struct Key(string Spec, string Item, PaletteType Palette, int Width, int Height);
+    private readonly record struct Key(ReferenceKey Entry, PaletteType Palette, int Width, int Height);
 }

@@ -16,6 +16,16 @@ month. For package versions and release assets, see
   `CatalogueLegendBuilder`'s constructor takes an optional `areaFills`
   resolver as a fourth parameter.
 
+- **Chart reference index.** `ChartReferenceIndex`, in
+  `EncDotNet.S100.Datasets.Pipelines`, describes every feature type, symbol,
+  line style, area fill, attribute and display setting of a product's
+  catalogues, and links each feature type to the symbols and fills its
+  portrayal rule draws, with the conditions that choose them. It reads Lua
+  and XSLT rules statically and follows shared rules, so S-101 links 174 of
+  its 190 feature types. It ranks search results by code or S-57 acronym,
+  then name, then other text. It is the base of the coming Chart reference
+  activity (#1633).
+
 - **Fewer, broader MCP tools.** Four tools fold into tools that nearly had
   their capability, so an agent's tool list is smaller (`s100 mcp serve`: 42
   tools and 84.5 KB of `tools/list` down to 38 and 79.0 KB). `list_datasets`

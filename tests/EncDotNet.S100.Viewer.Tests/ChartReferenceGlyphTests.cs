@@ -3,7 +3,9 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
@@ -99,23 +101,23 @@ public sealed class ChartReferenceGlyphTests : IDisposable
             return LayerStackLegendTests.FrontsLegend()[3];
         }
 
-        var tile = cache.Get("S-101", "BCNLAT21", 40, 40, Build);
-        Assert.Same(tile, cache.Get("S-101", "BCNLAT21", 40, 40, Build));
+        var tile = cache.Get(Key("S-101", ReferenceKind.Symbol, "BCNLAT21"), 40, 40, Build);
+        Assert.Same(tile, cache.Get(Key("S-101", ReferenceKind.Symbol, "BCNLAT21"), 40, 40, Build));
         var bitmap = Assert.IsAssignableFrom<Bitmap>(tile);
         Assert.Equal((80, 80), (bitmap.PixelSize.Width, bitmap.PixelSize.Height)); // at the device scale
 
-        var hero = Assert.IsAssignableFrom<Bitmap>(cache.Get("S-101", "BCNLAT21", 160, 120, Build));
+        var hero = Assert.IsAssignableFrom<Bitmap>(cache.Get(Key("S-101", ReferenceKind.Symbol, "BCNLAT21"), 160, 120, Build));
         Assert.Equal((320, 240), (hero.PixelSize.Width, hero.PixelSize.Height));
-        cache.Get("S-401", "BCNLAT21", 40, 40, Build);
-        cache.Get("S-101", "fill:BCNLAT21", 40, 40, Build);
+        cache.Get(Key("S-401", ReferenceKind.Symbol, "BCNLAT21"), 40, 40, Build);
+        cache.Get(Key("S-101", ReferenceKind.AreaFill, "BCNLAT21"), 40, 40, Build);
 
         Assert.Equal(4, builds.Count);
         Assert.Equal(4, cache.Count);
 
         // An item with nothing to draw is remembered as such.
         int none = 0;
-        Assert.Null(cache.Get("S-101", "LIGHTS", 40, 40, _ => { none++; return null; }));
-        Assert.Null(cache.Get("S-101", "LIGHTS", 40, 40, _ => { none++; return null; }));
+        Assert.Null(cache.Get(Key("S-101", ReferenceKind.Symbol, "LIGHTS"), 40, 40, _ => { none++; return null; }));
+        Assert.Null(cache.Get(Key("S-101", ReferenceKind.Symbol, "LIGHTS"), 40, 40, _ => { none++; return null; }));
         Assert.Equal(1, none);
     }
 
@@ -136,7 +138,7 @@ public sealed class ChartReferenceGlyphTests : IDisposable
             return fills[palette];
         }
 
-        var day = cache.Get("S-101", "fill:PRTSUR01", 40, 40, Build);
+        var day = cache.Get(Key("S-101", ReferenceKind.AreaFill, "PRTSUR01"), 40, 40, Build);
         Assert.Equal(Color.FromRgb(201, 237, 255), Assert.IsAssignableFrom<ISolidColorBrush>(cache.Tile).Color);
         int raised = 0;
         cache.PaletteChanged += (_, _) => raised++;
@@ -147,7 +149,7 @@ public sealed class ChartReferenceGlyphTests : IDisposable
         Assert.Equal(PaletteType.Night, cache.Palette);
         Assert.Equal(0, cache.Count);
         Assert.Equal(Colors.Black, Assert.IsAssignableFrom<ISolidColorBrush>(cache.Tile).Color);
-        var night = cache.Get("S-101", "fill:PRTSUR01", 40, 40, Build);
+        var night = cache.Get(Key("S-101", ReferenceKind.AreaFill, "PRTSUR01"), 40, 40, Build);
         Assert.NotSame(day, night);
         Assert.Equal([PaletteType.Day, PaletteType.Night], builds);
 
@@ -158,6 +160,8 @@ public sealed class ChartReferenceGlyphTests : IDisposable
         settings.SelectedPalette = PaletteType.Dusk;
         Assert.Equal(PaletteType.Night, cache.Palette);
     }
+
+    private static ReferenceKey Key(string spec, ReferenceKind kind, string code) => new(new SpecRef(spec, default), kind, code);
 
     private sealed class FixedFormat : ITimeFormatProvider
     {
