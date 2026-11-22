@@ -546,8 +546,9 @@ internal sealed class LegendService : IDisposable
     /// <summary>
     /// What <paramref name="spec"/> draws in the view the sections were last
     /// built for (Chart reference's <b>In view</b>, symbol dictionary R5,
-    /// #1638): the point symbols, as the catalogue key counts them (D7), and
-    /// the feature classes. The view is taken on pan end, like the sections'
+    /// #1638): the point symbols, as the catalogue key counts them (D7), the
+    /// line styles and area fills by the same tests (#1653), and the feature
+    /// classes. The view is taken on pan end, like the sections'
     /// (D5), so read it after <see cref="Changed"/>. Call on the UI thread.
     /// </summary>
     /// <param name="spec">The portrayal spec name (<c>S-101</c>), which an S-57 cell is drawn with too.</param>
@@ -555,12 +556,14 @@ internal sealed class LegendService : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(spec);
         var symbols = new HashSet<string>(StringComparer.Ordinal);
+        var lineStyles = new HashSet<string>(StringComparer.Ordinal);
+        var areaFills = new HashSet<string>(StringComparer.Ordinal);
         var featureTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var scale = ViewScale();
         using var snapshot = _loader.AcquireProcessors();
         foreach (var (payload, suppressed, processor) in CatalogueLayers(spec, snapshot))
-            LegendFeatureFinder.AddDrawn(payload, suppressed, processor, _view, scale, symbols, featureTypes);
-        return new ChartReferenceDrawn(symbols, featureTypes);
+            LegendFeatureFinder.AddDrawn(payload, suppressed, processor, _view, scale, symbols, lineStyles, areaFills, featureTypes);
+        return new ChartReferenceDrawn(symbols, lineStyles, areaFills, featureTypes);
     }
 
     /// <summary>
