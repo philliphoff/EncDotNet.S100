@@ -3,7 +3,7 @@
 Predicts the astronomical tidal current at a current station named by id or
 name, or at the nearest station to `--near latitude,longitude`. A NOAA station
 id without its depth bin (`PUG1701`) or a name shared by several bins takes
-the shallowest bin. Prefer `--format json`: it's the `predict_current` MCP
+the shallowest bin. Prefer `--format json`: it's the `predict` (kind `current`) MCP
 result, with times in UTC, speeds in knots, directions in degrees true (where
 the current sets), `phase` (`flood` or `ebb`), the station with its depth and
 flood and ebb directions, `kind: "prediction"` and a `caveat`. `--events`

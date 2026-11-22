@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <summary>
 /// <c>s100 tides predict</c>: the astronomical tide at a station, as a series
 /// or highs and lows, from the offline station catalogue. The same query as
-/// the MCP <c>predict_tide</c> tool, whose JSON <c>--format json</c> writes;
+/// the MCP <c>predict</c> (kind tide) tool, whose JSON <c>--format json</c> writes;
 /// <c>--format s104</c> writes the series as an S-104 station dataset.
 /// </summary>
 internal sealed class TidesPredictCommand : AsyncCommand<TidesPredictCommand.Settings>
@@ -56,7 +56,7 @@ internal sealed class TidesPredictCommand : AsyncCommand<TidesPredictCommand.Set
         public string? Datum { get; init; }
 
         [CommandOption("--format <FORMAT>")]
-        [Description("Output format: table (default), csv, json (the predict_tide result) or s104 (an S-104 station dataset; needs a series, not --highs-lows).")]
+        [Description("Output format: table (default), csv, json (the predict result) or s104 (an S-104 station dataset; needs a series, not --highs-lows).")]
         [DefaultValue("table")]
         public string Format { get; init; } = "table";
 

@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <summary>
 /// <c>s100 tides currents predict</c>: the astronomical tidal current at a
 /// current station, as a series or its slacks and maxima, from the offline
-/// station catalogue. The same query as the MCP <c>predict_current</c> tool,
+/// station catalogue. The same query as the MCP <c>predict</c> (kind current) tool,
 /// whose JSON <c>--format json</c> writes; <c>--format s111</c> writes the
 /// series as an S-111 station dataset.
 /// </summary>
@@ -50,7 +50,7 @@ internal sealed class TidesCurrentPredictCommand : AsyncCommand<TidesCurrentPred
         public bool Events { get; init; }
 
         [CommandOption("--format <FORMAT>")]
-        [Description("Output format: table (default), csv, json (the predict_current result) or s111 (an S-111 station dataset; needs a series, not --events).")]
+        [Description("Output format: table (default), csv, json (the predict result) or s111 (an S-111 station dataset; needs a series, not --events).")]
         [DefaultValue("table")]
         public string Format { get; init; } = "table";
 

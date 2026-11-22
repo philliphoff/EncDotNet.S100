@@ -25,7 +25,8 @@ internal static class NavigabilityGridMcpTool
         "hazardDepthMeters, or of unknown depth, or a structure standing in the water such as a breakwater, pier or pontoon), land, uncharted or no_depth. The reply is a summary: grid geometry, cell counts, " +
         "the shoalest navigable cell, the largest connected navigable area and its most open cell, and with connect whether two " +
         "positions join through navigable cells and where the widest way between them is narrowest. The grid itself is written to a " +
-        "file on the server (format npy or raw; 'file' gives its path and layout) for code to read; includeImage adds a PNG (north up). " +
+        "file on the server (format npy or raw; 'file' gives its path, resource uri and layout) for code to read: by path on the same " +
+        "machine, else with resources/read on the resource_link the reply carries; grids are kept a day. includeImage adds a PNG (north up). " +
         "Use it to plan or explain a route over an area; check the route itself with check_route. Charted depths only, no water level. " +
         "Not for navigation.";
 
@@ -95,13 +96,26 @@ internal static class NavigabilityGridMcpTool
             }
 
             var text = JsonSerializer.Serialize(value, NavigabilityGridJsonContext.Default.NavigabilityGridResult);
-            return new CallToolResult
+            List<ContentBlock> content = [new TextContentBlock { Text = text }];
+            if (value.File is { } file)
             {
-                Content = png is null
-                    ? [new TextContentBlock { Text = text }]
-                    : [new TextContentBlock { Text = text }, ImageContentBlock.FromBytes(png, "image/png")],
-                IsError = false,
-            };
+                // For a client that can't read the server's files (#1615).
+                content.Add(new ResourceLinkBlock
+                {
+                    Uri = file.Uri,
+                    Name = file.Uri[(file.Uri.LastIndexOf('/') + 1)..],
+                    Description = file.Layout,
+                    MimeType = S100McpTools.NavigabilityGridMimeType,
+                    Size = file.Bytes,
+                });
+            }
+
+            if (png is not null)
+            {
+                content.Add(ImageContentBlock.FromBytes(png, "image/png"));
+            }
+
+            return new CallToolResult { Content = content, IsError = false };
         }
         catch (OperationCanceledException)
         {

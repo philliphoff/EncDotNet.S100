@@ -89,7 +89,7 @@ public class AnnotationContractTests
         // Tool request / result records, plus the supporting summary /
         // reference records they contain. The suffix-based rule is the
         // codebase convention and naturally picks up sibling sessions'
-        // future tools (e.g. FindAtRequest / FindAtResult).
+        // future tools (e.g. QueryFeaturesRequest / QueryFeaturesResult).
         if (t.Namespace is not null
             && t.Namespace.StartsWith("EncDotNet.S100.Mcp.Tools", StringComparison.Ordinal)
             && IsRecordType(t))

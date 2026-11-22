@@ -28,10 +28,8 @@ public class S100McpServerRoundTripTests
             new[]
             {
                 "check_route",
-                "count_features",
                 "describe_feature",
                 "describe_feature_type",
-                "find_at",
                 "get_navigability_grid",
                 "identify_features",
                 "list_datasets",
@@ -197,7 +195,7 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
-    public async Task FindAt_round_trip_returns_matching_datasets()
+    public async Task ListDatasets_with_a_point_returns_the_datasets_containing_it()
     {
         var catalog = McpTestHelpers.NewCatalog(
             LoadedDatasetFactory.S124("warn-here", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10)),
@@ -206,13 +204,13 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("list_datasets", new Dictionary<string, object?>
         {
             ["latitude"] = 5.0,
             ["longitude"] = 5.0,
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"find_at returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"list_datasets returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
         var datasets = payload["datasets"]!.AsArray();
         Assert.Single(datasets);
@@ -221,13 +219,13 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
-    public async Task FindAt_invalid_latitude_returns_structured_error()
+    public async Task ListDatasets_invalid_latitude_returns_structured_error()
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("list_datasets", new Dictionary<string, object?>
         {
             ["latitude"] = 95.0,
             ["longitude"] = 0.0,
@@ -236,11 +234,11 @@ public class S100McpServerRoundTripTests
         Assert.True(result.IsError ?? false, "Expected isError=true for out-of-range latitude.");
         var payload = ParseSingleJson(result);
         Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
-        Assert.Equal("latitude", payload["details"]!["parameter"]!.GetValue<string>());
+        Assert.Equal("query.latitude", payload["details"]!["parameter"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task CountFeatures_round_trip_returns_type_tallies()
+    public async Task QueryFeatures_countOnly_round_trip_returns_type_tallies()
     {
         var feature = new S124Feature
         {
@@ -262,13 +260,14 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("count_features", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?> { ["countOnly"] = true }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"count_features returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
-        Assert.Equal(1, payload["totalFeatures"]!.GetValue<int>());
+        Assert.Equal(1, payload["totalCount"]!.GetValue<int>());
         Assert.Equal(1, payload["datasetCount"]!.GetValue<int>());
-        var types = payload["types"]!.AsArray();
+        Assert.Empty(payload["features"]!.AsArray());
+        var types = payload["counts"]!.AsArray();
         var tally = Assert.Single(types);
         Assert.Equal("NavwarnPart", tally!["featureType"]!.GetValue<string>());
         Assert.Equal(1, tally["count"]!.GetValue<int>());
@@ -1131,7 +1130,7 @@ public class S100McpServerRoundTripTests
 
 
     [Fact]
-    public async Task FindAt_with_box_query_envelope_returns_intersecting_datasets()
+    public async Task ListDatasets_with_box_query_envelope_returns_intersecting_datasets()
     {
         var catalog = McpTestHelpers.NewCatalog(
             LoadedDatasetFactory.S124("warn-here", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10)),
@@ -1140,15 +1139,12 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("list_datasets", new Dictionary<string, object?>
         {
-            // latitude/longitude are ignored when 'query' is supplied.
-            ["latitude"] = 0.0,
-            ["longitude"] = 0.0,
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"find_at returned an error: {DumpText(result)}");
+        Assert.False(result.IsError ?? false, $"list_datasets returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
         var datasets = payload["datasets"]!.AsArray();
         Assert.Single(datasets);

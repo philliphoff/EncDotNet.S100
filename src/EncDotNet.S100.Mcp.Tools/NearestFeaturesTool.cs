@@ -75,7 +75,7 @@ public sealed record NearestFeaturesResult(
 /// <summary>
 /// Ranks the vector features nearest to a geographic point by <em>true</em>
 /// geometric distance — the distance-ranking and containment query that
-/// <see cref="FindAtTool"/> (dataset-bbox membership) and
+/// <see cref="ListDatasetsTool"/> (dataset-bbox membership) and
 /// <see cref="QueryFeaturesTool"/> (feature-bbox intersection) cannot answer.
 /// </summary>
 /// <remarks>

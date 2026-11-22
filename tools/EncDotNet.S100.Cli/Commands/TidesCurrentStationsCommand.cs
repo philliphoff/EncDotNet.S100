@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <summary>
 /// <c>s100 tides currents stations</c>: tidal current stations near a point,
 /// nearest first, from the offline station catalogue. The same query as the
-/// MCP <c>list_current_stations</c> tool, whose JSON <c>--format json</c>
+/// MCP <c>list_stations</c> (kind current) tool, whose JSON <c>--format json</c>
 /// writes.
 /// </summary>
 internal sealed class TidesCurrentStationsCommand : AsyncCommand<TidesCurrentStationsCommand.Settings>
@@ -31,7 +31,7 @@ internal sealed class TidesCurrentStationsCommand : AsyncCommand<TidesCurrentSta
         public int? Limit { get; init; }
 
         [CommandOption("--format <FORMAT>")]
-        [Description("Output format: table (default), csv or json (the list_current_stations result).")]
+        [Description("Output format: table (default), csv or json (the list_stations result).")]
         [DefaultValue("table")]
         public string Format { get; init; } = "table";
 
