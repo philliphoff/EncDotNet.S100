@@ -6,10 +6,10 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// <summary>The bundled S-101 chart reference index, built once for the Chart reference tests.</summary>
 internal static class ChartReferenceIndexes
 {
-    private static readonly Lazy<Task<ChartReferenceIndex>> s_s101 = new(BuildAsync);
+    private static readonly Lazy<Task<ChartReferenceIndex>> S101Index = new(BuildAsync);
 
     /// <summary>The bundled S-101 index.</summary>
-    public static Task<ChartReferenceIndex> S101Async() => s_s101.Value;
+    public static Task<ChartReferenceIndex> S101Async() => S101Index.Value;
 
     /// <summary>A feature type of <paramref name="index"/>.</summary>
     public static FeatureTypeEntry Feature(ChartReferenceIndex index, string code) =>
