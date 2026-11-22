@@ -133,8 +133,10 @@
         <!-- The selected entry's summary: the activity's expanded row, until the Reference tab exists (R7). -->
         <DataTemplate DataType="cr:ChartReferenceRowDetails">
             <StackPanel Spacing="12" AutomationProperties.AutomationId="ChartReferencePage.Entry.Details">
+                <!-- Left out when it would only repeat the heading (#1657). -->
                 <TextBlock Text="{Binding Definition}"
-                           IsVisible="{Binding HasDefinition}"
+                           IsVisible="{Binding ShowsDefinitionUnderTitle}"
+                           AutomationProperties.AutomationId="ChartReferencePage.Entry.Definition"
                            TextWrapping="Wrap" />
                 <TextBlock Text="{x:Static loc:Strings.ChartReference_NoSymbol}"
                            IsVisible="{Binding NoSymbol}"
@@ -387,7 +389,8 @@
                           HorizontalScrollBarVisibility="Disabled"
                           AutomationProperties.AutomationId="ChartReferencePage.Grid"
                           AutomationProperties.Name="{x:Static loc:Strings.ChartReferencePage_TilesName}">
-            <ItemsControl ItemsSource="{Binding Lines}"
+            <ItemsControl x:Name="GridLines"
+                          ItemsSource="{Binding Lines}"
                           Padding="16,12,6,12">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

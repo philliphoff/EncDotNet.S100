@@ -23,7 +23,10 @@ month. For package versions and release assets, see
   icon toggle, like the Library's **Show coverage**. **Open** is a pill
   beside the product id. An expanded row wraps to the panel's width.
   Symbols, line styles and fills are listed by their description, with the
-  code beneath. The footer says "1 match". The Legend tab no longer covers
+  code beneath and a space after each comma. The study page's entry pane
+  doesn't repeat a description that is already its heading. A new mode,
+  product or search starts the list and the page's grid at the top, or at
+  the selected entry. The footer says "1 match". The Legend tab no longer covers
   the Chart reference page or Settings in a narrow window. In
   `EncDotNet.S100.Renderers.Skia`, `LegendGlyphRenderer.RenderFitted` and
   `DrawFitted` take an optional `padding` (#1657).

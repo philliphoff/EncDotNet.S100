@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media.Imaging;
@@ -229,6 +230,106 @@ public sealed class ChartReferencePanelPolishTests : IDisposable
         Assert.False(layout.IsContentPanelOpen);
         layout.UnfoldRightDockCommand.Execute(null);
         Assert.True(layout.IsRightDockOverlaid);
+    }
+
+    // ── Review follow-ups ────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Beacon in general,lateral-r,paper-chart", "Beacon in general, lateral-r, paper-chart")]
+    [InlineData("depth 1,000 m", "depth 1,000 m")]
+    [InlineData("red, green", "red, green")]
+    [InlineData("a,1,b", "a,1, b")]
+    public void A_comma_before_a_letter_gets_a_space_and_one_before_a_digit_doesnt(string text, string expected)
+    {
+        Assert.Equal(expected, ChartReferenceRowViewModel.SpaceAfterCommas(text));
+    }
+
+    [Fact]
+    public void A_symbol_named_by_its_description_has_its_commas_spaced()
+    {
+        var entry = new PortrayalItemEntry
+        {
+            Key = new ReferenceKey(EncDotNet.S100.Core.SpecRef.Parse("S-101/2.0.0"), ReferenceKind.Symbol, "BCNGEN01"),
+            Name = "BCNGEN01",
+            Definition = "beacon in general,lateral-r,paper-chart",
+        };
+
+        Assert.Equal("Beacon in general, lateral-r, paper-chart", ChartReferenceRowViewModel.NameOf(entry));
+    }
+
+    [Fact]
+    public async Task The_entry_pane_leaves_out_a_description_that_only_repeats_its_heading()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var vm = await OpenAsync(f);
+
+        // A feature type's definition adds to its name.
+        var beacon = Row(vm, "LateralBeacon");
+        beacon.IsExpanded = true;
+        Assert.True(beacon.Details!.ShowsDefinitionUnderTitle);
+
+        // A symbol named by its one-line description says it once, as the heading.
+        vm.Mode = ChartReferenceMode.Symbols;
+        var inform = Row(vm, "INFORM01");
+        inform.IsExpanded = true;
+        Assert.True(inform.Details!.HasDefinition);
+        Assert.True(inform.Details.DefinitionRepeatsTitle);
+        Assert.False(inform.Details.ShowsDefinitionUnderTitle);
+    }
+
+    [AvaloniaFact]
+    public async Task A_new_mode_or_search_starts_the_list_at_the_top_or_at_the_selected_row()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var vm = await LoadAsync(f);
+        using var host = ViewHost.Show(new ChartReferenceView { DataContext = vm }, 320, 800);
+        var list = host.Find<ListBox>("ChartReference.List");
+        var scroller = list.GetVisualDescendants().OfType<ScrollViewer>().First();
+
+        // Scrolled down, then Symbols: the list starts at the top.
+        scroller.Offset = new Vector(0, 3000);
+        host.Settle();
+        Assert.True(scroller.Offset.Y > 0);
+        vm.Mode = ChartReferenceMode.Symbols;
+        host.Settle();
+        Assert.Equal(0, scroller.Offset.Y);
+
+        // Opening an entry brings its row into view.
+        vm.Open(new ReferenceKey(vm.Index!.Spec, ReferenceKind.FeatureType, "LateralBeacon"));
+        host.Settle();
+        Assert.Equal("LateralBeacon", vm.SelectedRow?.Key.Code);
+        Assert.True(scroller.Offset.Y > 0);
+
+        // Scrolled away, a search that clears brings the selected row, still listed, back into view.
+        scroller.Offset = default;
+        host.Settle();
+        vm.Query = "lateral";
+        vm.Query = string.Empty;
+        host.Settle();
+        Assert.True(scroller.Offset.Y > 0);
+        var row = Assert.IsType<ListBoxItem>(list.ContainerFromItem(vm.SelectedItem!));
+        var top = row.TranslatePoint(default, scroller)!.Value.Y;
+        Assert.InRange(top, -1, scroller.Viewport.Height - 1);
+    }
+
+    [AvaloniaFact]
+    public async Task A_new_mode_starts_the_study_pages_grid_at_the_top()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var reference = new ChartReferenceViewModel(f.Service, new ChartReferenceGlyphCache(PaletteType.Day), post: a => Dispatcher.UIThread.Post(a));
+        using var page = new ChartReferencePageViewModel(reference, f.Service, post: a => Dispatcher.UIThread.Post(a));
+        using var host = ViewHost.Show(new ChartReferencePageView { DataContext = page }, 1280, 720);
+        await reference.Loading;
+        Dispatcher.UIThread.RunJobs();
+        host.Settle();
+        var scroller = host.Find<ScrollViewer>("ChartReferencePage.Grid");
+
+        scroller.Offset = new Vector(0, 3000);
+        host.Settle();
+        Assert.True(scroller.Offset.Y > 0);
+        reference.Mode = ChartReferenceMode.Symbols;
+        host.Settle();
+        Assert.Equal(0, scroller.Offset.Y);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

@@ -490,7 +490,15 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         _post(Apply);
     }
 
-    private void Rebuild()
+    /// <summary>
+    /// Raised after the list is rebuilt for a new mode, product, search or In
+    /// view setting (#1657), so a view starts it at the top, or brings the
+    /// selected row into view when it is still listed. Not raised when In view
+    /// follows the map.
+    /// </summary>
+    internal event EventHandler? ListRestarted;
+
+    private void Rebuild(bool restart = true)
     {
         var previous = _selectedItem as ChartReferenceRowViewModel;
         var keep = previous?.Key;
@@ -524,6 +532,8 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         if (keep is { } key && Find(key) is { } again)
             SelectedItem = again;
         RaiseStates();
+        if (restart)
+            ListRestarted?.Invoke(this, EventArgs.Empty);
     }
 
     // "1 match", "N matches": the singular and plural are separate strings.
@@ -676,6 +686,6 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ViewerSettingsService.SimplifiedSymbols) && _mode == ChartReferenceMode.Features)
-            _post(Rebuild);
+            _post(() => Rebuild(restart: false));
     }
 }

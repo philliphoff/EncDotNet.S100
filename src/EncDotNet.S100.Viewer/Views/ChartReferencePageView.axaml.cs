@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -13,6 +14,7 @@ namespace EncDotNet.S100.Viewer.Views;
 public partial class ChartReferencePageView : UserControl
 {
     private readonly ScrollViewer _scroller;
+    private ChartReferencePageViewModel? _page;
 
     /// <summary>Creates the view.</summary>
     public ChartReferencePageView()
@@ -34,6 +36,11 @@ public partial class ChartReferencePageView : UserControl
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        if (_page is not null)
+            _page.GridRestarted -= OnGridRestarted;
+        _page = DataContext as ChartReferencePageViewModel;
+        if (_page is not null)
+            _page.GridRestarted += OnGridRestarted;
         if (VisualRoot is null || DataContext is not ChartReferencePageViewModel page)
             return;
         page.Show();
@@ -50,6 +57,17 @@ public partial class ChartReferencePageView : UserControl
         var inner = width - 22 + ChartReferencePageViewModel.TileSpacing;
         page.Columns = (int)Math.Max(1, Math.Floor(inner / (ChartReferencePageViewModel.MinTileWidth + ChartReferencePageViewModel.TileSpacing)));
     }
+
+    // A new mode, product or search starts the grid at the top, or at the
+    // selected tile's line when it is still shown (#1657).
+    private void OnGridRestarted(object? sender, EventArgs e) => Dispatcher.UIThread.Post(
+        () =>
+        {
+            _scroller.ScrollToHome();
+            if (_page?.SelectedLineIndex is >= 0 and var line && this.FindControl<ItemsControl>("GridLines") is { } grid)
+                grid.ScrollIntoView(line);
+        },
+        DispatcherPriority.Background);
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 }

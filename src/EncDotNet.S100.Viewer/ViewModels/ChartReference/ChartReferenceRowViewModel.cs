@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Avalonia.Media;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Viewer.Resources;
@@ -11,7 +12,7 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// the S-57 acronym or code and the display category tag (design note D6).
 /// Selecting the row expands it in place to the entry's summary.
 /// </summary>
-internal sealed class ChartReferenceRowViewModel : ChartReferenceListItem
+internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListItem
 {
     private const int MaxCases = 6;
 
@@ -159,21 +160,47 @@ internal sealed class ChartReferenceRowViewModel : ChartReferenceListItem
     /// <summary>
     /// The title of <paramref name="entry"/>'s row: its name, or for a
     /// portrayal item named only by its code, its description's first line
-    /// in sentence case.
+    /// in sentence case. A portrayal item's title gets a space after each
+    /// comma directly followed by a letter, as the catalogues often write
+    /// "Beacon in general,lateral-r,paper-chart".
     /// </summary>
     /// <param name="entry">The entry.</param>
     /// <returns>The title.</returns>
     internal static string NameOf(ReferenceEntry entry)
     {
-        if (entry is not PortrayalItemEntry { IsFamily: false } item
-            || !string.Equals(item.Name, item.Code, StringComparison.OrdinalIgnoreCase)
+        if (entry is not PortrayalItemEntry { IsFamily: false } item)
+            return entry.Name;
+        if (!string.Equals(item.Name, item.Code, StringComparison.OrdinalIgnoreCase)
             || FirstLine(item.Definition) is not { Length: > 0 } line)
         {
-            return entry.Name;
+            return SpaceAfterCommas(item.Name);
         }
 
-        return SentenceCase(line);
+        return SentenceCase(SpaceAfterCommas(line));
     }
+
+    /// <summary>
+    /// Adds a space after each comma that is directly followed by a letter:
+    /// "general,lateral" reads "general, lateral"; "1,000" is unchanged.
+    /// </summary>
+    /// <param name="text">The catalogue text.</param>
+    /// <returns>The text with its commas spaced.</returns>
+    internal static string SpaceAfterCommas(string text) => CommaBeforeLetter().Replace(text, ", ");
+
+    /// <summary>
+    /// Whether <paramref name="entry"/>'s description says no more than its
+    /// row title, <see cref="NameOf"/>: a portrayal item named by a one-line
+    /// description. The study page's entry pane then shows it once, as its heading.
+    /// </summary>
+    /// <param name="entry">The entry.</param>
+    /// <returns>Whether the description only repeats the title.</returns>
+    internal static bool DescriptionRepeatsName(ReferenceEntry entry) =>
+        entry is PortrayalItemEntry { IsFamily: false, Definition: { } definition } item
+        && string.Equals(item.Name, item.Code, StringComparison.OrdinalIgnoreCase)
+        && definition.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Count(l => l.Length > 0) == 1;
+
+    [GeneratedRegex(@",(?=\p{L})")]
+    private static partial Regex CommaBeforeLetter();
 
     // The first non-empty line, without a closing full stop.
     private static string? FirstLine(string? text)
@@ -246,6 +273,7 @@ internal sealed class ChartReferenceRowViewModel : ChartReferenceListItem
         return new ChartReferenceRowDetails
         {
             Definition = item.Definition,
+            DefinitionRepeatsTitle = DescriptionRepeatsName(item),
             Notes = notes,
             UsedBy = usedBy,
             Family = family is null ? [] : [family],
