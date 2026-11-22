@@ -117,6 +117,29 @@ public sealed class GribField
     /// </summary>
     public DateTime? ValidTime => Product.GetValidTime(ReferenceTime);
 
+    /// <summary>
+    /// For a statistic over a time interval (template 4.8), the interval as a
+    /// <see cref="WeatherInterval"/>: from the reference time plus the forecast
+    /// time to the interval's end, with the outermost statistical process
+    /// (code table 4.10: 0 average, 1 accumulation, 2 maximum, 3 minimum).
+    /// <see langword="null"/> for a value at a point in time.
+    /// </summary>
+    public WeatherInterval? ToWeatherInterval()
+    {
+        if (Product.IntervalEnd is not { } end || Product.ForecastTime is not { } start)
+            return null;
+
+        var statistic = Product.StatisticalProcesses.Count == 0 ? WeatherStatistic.Other : Product.StatisticalProcesses[0].Type switch
+        {
+            GribStatisticalProcess.Average => WeatherStatistic.Average,
+            GribStatisticalProcess.Accumulation => WeatherStatistic.Accumulation,
+            GribStatisticalProcess.Maximum => WeatherStatistic.Maximum,
+            GribStatisticalProcess.Minimum => WeatherStatistic.Minimum,
+            _ => WeatherStatistic.Other,
+        };
+        return new WeatherInterval(start.AddTo(ReferenceTime), end, statistic);
+    }
+
     internal long BitmapOffset { get; }
 
     internal long BitmapLength { get; }

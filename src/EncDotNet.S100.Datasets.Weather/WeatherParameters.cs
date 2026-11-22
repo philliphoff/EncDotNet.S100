@@ -65,6 +65,14 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// average over the hours before it; a reader keeps the first message, the
 /// value at that time, which GFS writes first.
 /// </para>
+/// <para>
+/// Accumulated precipitation (GFS's APCP) is a total over a period that
+/// changes from step to step, so each step carries its period
+/// (<see cref="WeatherTimeStep.Interval"/>). GFS writes it twice at most
+/// forecast hours (the 6-hourly bucket and the run total); the GRIB reader
+/// keeps the period since the step before, taken from either message or
+/// derived from two that share a start.
+/// </para>
 /// </remarks>
 public static class WeatherParameters
 {
@@ -133,6 +141,13 @@ public static class WeatherParameters
 
     /// <summary>Canonical id of the precipitation rate at the surface, in kg m⁻² s⁻¹ (millimetres of water a second).</summary>
     public const string PrecipitationRate = "precipitation.rate";
+
+    /// <summary>
+    /// Canonical id of the precipitation accumulated at the surface over a
+    /// period, in kg m⁻² (millimetres of water). Each step carries its period
+    /// (<see cref="WeatherTimeStep.Interval"/>).
+    /// </summary>
+    public const string PrecipitationAmount = "precipitation.amount";
 
     /// <summary>Canonical id of the convective available potential energy (CAPE) of a parcel from the surface, in J/kg.</summary>
     public const string Cape = "cape";
@@ -209,7 +224,8 @@ public static class WeatherParameters
     /// then the sea surface temperature (issue #1227), the surface current
     /// (issue #1228), the visibility (issue #1229), and the air and skin
     /// temperatures and land cover the freezing spray risk reads (issue #1231),
-    /// and the precipitation rate, CAPE and total cloud cover (issue #1230).
+    /// the precipitation rate, CAPE and total cloud cover (issue #1230), and
+    /// the accumulated precipitation (issue #1321).
     /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
@@ -260,6 +276,8 @@ public static class WeatherParameters
             [new(2, 0, 0)], ["land_binary_mask"]),
         new(PrecipitationRate, "Precipitation rate", WeatherUnit.KilogramsPerSquareMetrePerSecond, PrecipitationGroup, WeatherLevel.Surface,
             [new(0, 1, 7)], ["precipitation_flux"]),
+        new(PrecipitationAmount, "Precipitation amount", WeatherUnit.KilogramsPerSquareMetre, PrecipitationGroup, WeatherLevel.Surface,
+            [new(0, 1, 8)], ["precipitation_amount"]),
         new(Cape, "Convective available potential energy", WeatherUnit.JoulesPerKilogram, CapeGroup, WeatherLevel.Surface,
             [new(0, 7, 6)], ["atmosphere_convective_available_potential_energy", "atmosphere_convective_available_potential_energy_wrt_surface"]),
         new(CloudCover, "Total cloud cover", WeatherUnit.Percent, CloudGroup, WeatherLevel.EntireAtmosphere,

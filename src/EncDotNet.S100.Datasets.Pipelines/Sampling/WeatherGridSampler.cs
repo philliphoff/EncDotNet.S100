@@ -11,7 +11,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Sampling;
 /// their quantity and unit. Wind and current speed and direction are derived
 /// from U and V when the file has only the components; wind and current speed
 /// are repeated in knots, sea surface and air temperature (stored in kelvin)
-/// in degrees Celsius, and visibility in nautical miles. When the grid has
+/// in degrees Celsius, visibility in nautical miles, and accumulated
+/// precipitation (kg m⁻²) in millimetres. A value over a time interval (an
+/// accumulation, a maximum gust) carries it as its <see cref="SampledField.Period"/>.
+/// When the grid has
 /// the wind, the air temperature and a sea (or skin) temperature, the freezing
 /// spray predictor and class are added (<see cref="FreezingSpray"/>). Shared by
 /// <see cref="WeatherGridProcessorBase"/> (picks) and its catalog payload
@@ -190,7 +193,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 land = reading;
 
             var (quantity, unit) = Describe(parameter.Id);
-            fields.Add(new SampledField(parameter.Id, quantity, unit, reading));
+            var period = step < 0 ? null : Period(parameter.Steps[step].Interval);
+            fields.Add(new SampledField(parameter.Id, quantity, unit, reading, Period: period));
             if (parameter.Id == WeatherParameters.WindSpeed)
                 fields.Add(Knots(reading));
             if (parameter.Id == WeatherParameters.SeaSurfaceTemperature)
@@ -203,6 +207,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 fields.Add(new SampledField(WeatherParameters.AirTemperature + ".degc", "air_temperature", "degC", ToCelsius(reading)));
             if (parameter.Id == WeatherParameters.PrecipitationRate)
                 fields.Add(MillimetresPerHour(reading));
+            if (parameter.Id == WeatherParameters.PrecipitationAmount)
+                fields.Add(new SampledField(WeatherParameters.PrecipitationAmount + ".mm", "precipitation_amount", "mm", reading, Period: period));
         }
 
         if (_deriveWindSpeed)
@@ -298,10 +304,19 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.SurfaceTemperature => ("surface_temperature", "K"),
         WeatherParameters.LandCover => ("land_binary_mask", "1"),
         WeatherParameters.PrecipitationRate => ("precipitation_flux", "kg m-2 s-1"),
+        WeatherParameters.PrecipitationAmount => ("precipitation_amount", "kg m-2"),
         WeatherParameters.Cape => ("atmosphere_convective_available_potential_energy", "J/kg"),
         WeatherParameters.CloudCover => ("cloud_area_fraction", "%"),
         _ => (id, null),
     };
+
+    // The interval a step's values are a statistic over, for the sample.
+    private static SampledPeriod? Period(WeatherInterval? interval) => interval is { } i
+        ? new SampledPeriod(
+            DateTime.SpecifyKind(i.Start, DateTimeKind.Utc),
+            DateTime.SpecifyKind(i.End, DateTimeKind.Utc),
+            i.Statistic.ToString().ToLowerInvariant())
+        : null;
 
     // The wind speed again in knots, the unit mariners read it in.
     private static SampledField Knots(double? metresPerSecond) =>

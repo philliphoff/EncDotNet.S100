@@ -59,6 +59,17 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// <see cref="UnusedReasons"/>, but not drawn or sampled.
 /// </description></item>
 /// <item><description>
+/// <b>Accumulations</b> (template 4.8 with statistical process 1, such as
+/// GFS's APCP). Each step carries its period (<see cref="WeatherTimeStep.Interval"/>).
+/// GFS writes the total twice at most forecast hours, over the 6-hourly
+/// bucket and since the run started (f009 holds 6–9 h and 0–9 h), so each
+/// step keeps the period since the step before: a field over exactly that
+/// period, else the difference of two fields that start together (f012's
+/// 6–12 h less f009's 6–9 h gives 9–12 h), else, for the first step or after
+/// a gap, the shortest period the file gives (f003's 0–3 h). The other
+/// periods are listed in <see cref="IgnoredFields"/>.
+/// </description></item>
+/// <item><description>
 /// <b>Grid.</b> The fields' <see cref="WeatherNativeGrid"/> (scanning mode as
 /// signed increments) normalised by <see cref="WeatherGridLayout"/>: rows
 /// flipped to run north, 0 to 360 longitudes moved into −180 to 180. Bitmapped
@@ -283,7 +294,17 @@ public sealed class GribWeatherDataset : IDisposable
             }
 
             var validTime = field.ValidTime!.Value;
+            var interval = field.ToWeatherInterval();
             int earlier = group.Steps.FindIndex(s => s.ValidTime == validTime);
+            if (earlier >= 0 && IsAccumulation(interval) && IsAccumulation(group.Steps[earlier].Field.ToWeatherInterval()) &&
+                group.Steps.Concat(group.Periods).All(s => s.ValidTime != validTime || s.Field.ToWeatherInterval() != interval))
+            {
+                // Another accumulation period at the same time (GFS's 6–9 h
+                // and 0–9 h): kept until the steps are built.
+                group.Periods.Add((validTime, field));
+                continue;
+            }
+
             if (earlier >= 0)
             {
                 ignored.Add((field, string.Create(
@@ -308,10 +329,12 @@ public sealed class GribWeatherDataset : IDisposable
         var unused = new Dictionary<WeatherParameter, string>();
         foreach (var group in groups)
         {
-            var steps = group.Steps
-                .OrderBy(s => s.ValidTime)
-                .Select(s => new WeatherTimeStep(s.ValidTime, file.CreateStepDecoder(s.Field)))
-                .ToArray();
+            var steps = group.Steps.Any(s => IsAccumulation(s.Field.ToWeatherInterval()))
+                ? AccumulationSteps(file, group, ignored)
+                : group.Steps
+                    .OrderBy(s => s.ValidTime)
+                    .Select(s => new WeatherTimeStep(s.ValidTime, file.CreateStepDecoder(s.Field), s.Field.ToWeatherInterval()))
+                    .ToArray();
             var sourceName = GribShortNames.Get(group.Code) ?? group.Code.ToString();
             if (group.Definition is { } definition)
             {
@@ -339,6 +362,107 @@ public sealed class GribWeatherDataset : IDisposable
             .ToArray();
         return new GribWeatherDataset(file, gridSet, times, referenceTime, ignoredFields, unused);
     }
+
+    private static bool IsAccumulation(WeatherInterval? interval) => interval is { Statistic: WeatherStatistic.Accumulation };
+
+    // The steps of an accumulation (GFS's APCP), each over the period since
+    // the step before, so the slider shows the same kind of total at every
+    // step: a field over exactly that period when the file has one (GFS's
+    // 6–9 h at f009), else the difference of two fields that start together
+    // (GFS's 0–6 h minus 0–3 h at f006, or 6–12 h minus 6–9 h at f012), else,
+    // for the first step or after a gap, the shortest period the file gives.
+    // Fields left over are listed with why.
+    private static WeatherTimeStep[] AccumulationSteps(GribFile file, FieldGroup group, List<(GribField Field, string Reason)> ignored)
+    {
+        var byTime = group.Steps.Concat(group.Periods)
+            .GroupBy(s => s.ValidTime)
+            .OrderBy(g => g.Key)
+            .Select(g => (ValidTime: g.Key, Fields: g
+                .Select(s => s.Field)
+                .Where(f => IsAccumulation(f.ToWeatherInterval()))
+                .OrderByDescending(f => f.ToWeatherInterval()!.Value.Start)
+                .ThenBy(f => f.Index)
+                .ToArray()))
+            .ToArray();
+
+        var steps = new List<WeatherTimeStep>(byTime.Length);
+        var used = new HashSet<GribField>();
+        for (int t = 0; t < byTime.Length; t++)
+        {
+            var (validTime, fields) = byTime[t];
+            if (fields.Length == 0)
+            {
+                // Only values at a point in time at this step: the first, as for other parameters.
+                var first = group.Steps.First(s => s.ValidTime == validTime).Field;
+                used.Add(first);
+                steps.Add(new WeatherTimeStep(validTime, file.CreateStepDecoder(first), first.ToWeatherInterval()));
+                continue;
+            }
+
+            DateTime? previous = t > 0 ? byTime[t - 1].ValidTime : null;
+            var direct = fields.FirstOrDefault(f => f.ToWeatherInterval()!.Value.Start == previous);
+            if (direct is null && previous is { } since && Derive(file, fields, byTime[t - 1].Fields, since, validTime, used) is { } derived)
+            {
+                steps.Add(derived);
+                continue;
+            }
+
+            // Fields are ordered latest start first, so this is the shortest period.
+            var chosen = direct ?? fields[0];
+            used.Add(chosen);
+            steps.Add(new WeatherTimeStep(validTime, file.CreateStepDecoder(chosen), chosen.ToWeatherInterval()));
+        }
+
+        foreach (var (validTime, field) in group.Steps.Concat(group.Periods))
+        {
+            if (used.Contains(field))
+                continue;
+            var step = steps.First(s => s.ValidTime == validTime);
+            ignored.Add((field, $"It's the total over {Hours(field.ToWeatherInterval(), field.ReferenceTime)}; the step keeps {Hours(step.Interval, field.ReferenceTime)}, the period since the step before."));
+        }
+
+        return [.. steps];
+    }
+
+    // The step over previous–validTime from a total at this step and one at
+    // the step before that start together, latest start first; null when no
+    // two do.
+    private static WeatherTimeStep? Derive(
+        GribFile file, GribField[] fields, GribField[] before, DateTime previous, DateTime validTime, HashSet<GribField> used)
+    {
+        foreach (var total in fields)
+        {
+            var start = total.ToWeatherInterval()!.Value.Start;
+            var earlier = before.FirstOrDefault(f => f.ToWeatherInterval()!.Value.Start == start);
+            if (earlier is null)
+                continue;
+
+            used.Add(total);
+            used.Add(earlier);
+            var period = new WeatherInterval(previous, validTime, WeatherStatistic.Accumulation);
+            return new WeatherTimeStep(validTime, Difference(file.CreateStepDecoder(total), file.CreateStepDecoder(earlier)), period);
+        }
+
+        return null;
+    }
+
+    // The total over the later period less the total over the earlier one
+    // that starts at the same time. Packing rounds each, so a difference a
+    // hair under zero is read as zero.
+    private static WeatherStepDecoder Difference(WeatherStepDecoder total, WeatherStepDecoder before) => cancellationToken =>
+    {
+        var minuend = total(cancellationToken);
+        var subtrahend = before(cancellationToken);
+        var values = new float[minuend.Length];
+        for (int i = 0; i < values.Length; i++)
+            values[i] = float.IsNaN(minuend[i]) || float.IsNaN(subtrahend[i]) ? float.NaN : Math.Max(0f, minuend[i] - subtrahend[i]);
+        return values;
+    };
+
+    // An interval as hours of the run: "0–9 h".
+    private static string Hours(WeatherInterval? interval, DateTime run) => interval is { } i
+        ? string.Create(CultureInfo.InvariantCulture, $"{(i.Start - run).TotalHours:0.##}–{(i.End - run).TotalHours:0.##} h")
+        : "the value at its valid time";
 
     // Picks, for each table group, the level it's read at, then for each row
     // the most preferred code at that level. Groups not picked keep a null
@@ -474,6 +598,9 @@ public sealed class GribWeatherDataset : IDisposable
         public GribField First { get; } = first;
 
         public List<(DateTime ValidTime, GribField Field)> Steps { get; } = [];
+
+        // Accumulations over other periods at a valid time Steps already has.
+        public List<(DateTime ValidTime, GribField Field)> Periods { get; } = [];
 
         public WeatherParameterDefinition? Definition { get; set; }
     }

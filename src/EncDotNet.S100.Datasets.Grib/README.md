@@ -50,6 +50,7 @@ Each field gives what the weather model needs:
 | Canonical parameter | `field.FindWeatherParameter()`: the GRIB2 code through `WeatherParameters.FindByGribCode`, and a level check where the row has a level (10 m for wind) |
 | `WeatherLevel` | `field.ToWeatherLevel()`: surface, mean sea level, height above ground, or `Other` with a description |
 | Run time, valid time | `field.ReferenceTime`, `field.ValidTime` (UTC; for template 4.8, the end of the interval) |
+| Statistical interval | `field.ToWeatherInterval()`: for template 4.8, the start, end and statistic (accumulation, average, maximum, minimum) as a `WeatherInterval`; `null` otherwise |
 | Centre | `field.Identification.CentreName`, for example `"NCEP"` |
 | `WeatherStepDecoder` | `grib.CreateStepDecoder(field)`, which decodes only when the step is needed |
 
@@ -92,6 +93,15 @@ foreach (var ignored in dataset.IgnoredFields)
   preferred one the file has is used. Every other group stays in the grid set
   as an unknown parameter (`grib2:10,0,8`), listed with why in `UnusedReasons`
   but not drawn.
+- **Accumulations** (template 4.8 with statistical process 1, such as GFS's
+  APCP). Each step carries its `Interval`. GFS writes the total twice at most
+  forecast hours, over the 6-hourly bucket and since the run started (f009
+  holds 6–9 h and 0–9 h), so each step keeps the period since the step
+  before: a field over exactly that period, else the difference of two
+  fields that start together (f012's 6–12 h less f009's 6–9 h gives 9–12 h;
+  a difference under zero from packing is read as zero), else, for the first
+  step or after a gap, the shortest period the file gives. The other periods
+  are listed in `IgnoredFields`.
 - **Left out** (`IgnoredFields`, with why): fields with an unsupported
   template, fields on another grid than the first known field's, fields of an
   older model run, and repeats of a parameter, level and valid time. A file

@@ -8,6 +8,7 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Weather;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -618,6 +619,9 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 ["unit"] = field.Unit,
                 ["value"] = field.Value,
                 ["text"] = field.Text,
+                ["period"] = field.Period is { } period
+                    ? new JsonObject { ["start"] = period.Start, ["end"] = period.End, ["statistic"] = period.Statistic }
+                    : null,
             });
         }
 
@@ -651,11 +655,16 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         var parts = sample.Fields
             .Where(f => f.Value is not null || f.Text is not null)
             .Select(f => f.Value is { } v
-                ? $"{f.Name} {v.ToString("0.##", CultureInfo.InvariantCulture)}{(f.Unit is { } u ? " " + u : string.Empty)}"
+                ? $"{f.Name} {v.ToString("0.##", CultureInfo.InvariantCulture)}{(f.Unit is { } u ? " " + u : string.Empty)}{Period(f.Period)}"
                 : $"{f.Name} {f.Text}");
         var text = string.Join(", ", parts);
         return sample.SampleTime is { } t ? $"{text} @ {t:yyyy-MM-dd HH:mm}Z" : text;
     }
+
+    // " (3 h to 12:00Z)": the period a total or maximum is over.
+    private static string Period(SampledPeriod? period) => period is { } p
+        ? $" ({WeatherInterval.DescribeLength(p.End - p.Start)} to {p.End:HH:mm}Z)"
+        : string.Empty;
 
     private static string Truncate(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..maxLength] + "…";

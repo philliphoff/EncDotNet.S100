@@ -56,6 +56,7 @@ public sealed class WeatherDisplaySettingsTests
         Assert.True(panel.IsCurrentArrowsVisible);
         Assert.False(panel.IsAirTemperatureVisible);
         Assert.False(panel.IsPrecipitationVisible);
+        Assert.False(panel.IsPrecipitationAmountVisible);
         Assert.False(panel.IsThunderstormRiskVisible);
         Assert.False(panel.IsCloudCoverVisible);
         // Unset switches follow the styles' defaults, so nothing is in the snapshot yet.
@@ -124,6 +125,52 @@ public sealed class WeatherDisplaySettingsTests
 
         panel.IsThunderstormRiskVisible = false;
         Assert.False(new ThunderstormRiskStyle().IsDrawnWith(state.Snapshot()));
+    }
+
+    [Fact]
+    public async Task The_precipitation_amount_switch_turns_its_layer_on_and_is_read_and_set_through_MCP()
+    {
+        var state = new EcdisDisplayState();
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null, amlDisplay: null);
+        var notified = new List<string?>();
+        panel.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
+        var tools = new WeatherDisplayTools(panel, new ImmediateInvoker());
+        Assert.False(new PrecipitationAmountStyle().IsDrawnWith(state.Snapshot()));
+        Assert.False(Assert.IsType<ToolResult<WeatherDisplayDto>.OkResult>(await tools.GetAsync(TestContext.Current.CancellationToken)).Value.PrecipitationAmount);
+
+        var set = Assert.IsType<ToolResult<WeatherDisplayDto>.OkResult>(
+            await tools.SetAsync(precipitationAmount: true, cancellationToken: TestContext.Current.CancellationToken)).Value;
+
+        Assert.True(set.PrecipitationAmount);
+        Assert.False(set.Precipitation);
+        Assert.True(panel.IsPrecipitationAmountVisible);
+        Assert.True(new PrecipitationAmountStyle().IsDrawnWith(state.Snapshot()));
+        Assert.False(new PrecipitationStyle().IsDrawnWith(state.Snapshot()));
+        Assert.Contains(nameof(EcdisDisplayPanelViewModel.IsPrecipitationAmountVisible), notified);
+
+        panel.IsPrecipitationAmountVisible = false;
+        Assert.False(state.GetLayerVisible(PrecipitationAmountStyle.Key));
+    }
+
+    [AvaloniaFact]
+    public void The_precipitation_amount_switch_has_an_automation_id_and_name()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/gfs.grib2", WeatherProducts.Grib2.Spec);
+        var state = new EcdisDisplayState();
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null, amlDisplay: null);
+        using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = panel }, width: 360, height: 1200);
+
+        var amount = host.Find<ToggleSwitch>("EcdisDisplayPanel.Weather.PrecipitationAmount");
+
+        Assert.Equal("Precipitation amount", AutomationProperties.GetName(amount));
+        Assert.Equal(Strings.Tooltip_EcdisPanel_Weather_PrecipitationAmount, AutomationProperties.GetHelpText(amount));
+        Assert.False(amount.IsChecked);
+
+        host.Click(amount);
+        host.Settle();
+
+        Assert.True(state.GetLayerVisible(PrecipitationAmountStyle.Key));
     }
 
     [Fact]

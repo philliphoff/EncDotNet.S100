@@ -76,14 +76,15 @@ foreach (var source in WeatherCoverageSource.CreateForGroups(set))
 | `WeatherGrid` | The normalised grid: south-west origin, rows running north, columns running east, longitudes in −180 to 180. |
 | `WeatherGridLayout` | How the native grid maps onto the normalised one, and `Normalize`, which reorders a decoded step and turns missing values into `NaN`. |
 | `WeatherParameter` | One variable at one level: canonical id (or the reader's id for an unknown parameter), unit, level and time steps. |
-| `WeatherTimeStep` | A valid time and a `WeatherStepDecoder` callback. `FromValues` wraps values already in memory. |
+| `WeatherTimeStep` | A valid time, a `WeatherStepDecoder` callback, and for a statistic over time (an accumulation, a maximum gust) its `Interval`. `FromValues` wraps values already in memory. |
+| `WeatherInterval` | The start, end and `WeatherStatistic` of a step's interval; `Describe` reads it as "in the 3 h to 12:00Z". |
 | `WeatherParameters` | The canonical parameter table, with lookups by id, GRIB2 code and CF standard name. |
 | `WeatherParameterDefinition` | One row of the table. `ToSpeed`, `ToLength`, `ToAngle` and `ToPeriod` read a stored value as a quantity type. |
 | `WeatherLevel` | The vertical level: surface, a height above ground, mean sea level or another level the reader describes. |
 | `WeatherCoverageSource` | An `ICoverageSource` over one parameter group. |
 | `WindComponents` | Wind speed and "from" direction from U and V. |
 | `CurrentComponents` | Current speed and "to" direction from U and V. |
-| `WeatherCoverageStyle` | The base of the fourteen grid styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `CloudCoverStyle`, `VisibilityStyle`, `ThunderstormRiskStyle`, `PrecipitationStyle`, `FreezingSprayStyle`, `SeaTemperatureIsothermStyle`, `AirTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
+| `WeatherCoverageStyle` | The base of the fifteen grid styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `CloudCoverStyle`, `VisibilityStyle`, `ThunderstormRiskStyle`, `PrecipitationAmountStyle`, `PrecipitationStyle`, `FreezingSprayStyle`, `SeaTemperatureIsothermStyle`, `AirTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
 | `WeatherPalette` | The styles' Day, Dusk and Night colours, as an `ApplicationPalette`. |
 | `WindBarb` | The pennants, full barbs and half barbs of a wind speed, rounded to 5 kn. |
 | `WeatherPortrayal` | Builds the coverage sub-layers of a source and its styles. |
@@ -119,6 +120,7 @@ lists several codes or names, they're alternatives in order of preference.
 | `surface.temperature` | `surface.temperature` | surface | 0,0,0 (TMP) | `surface_temperature` | K |
 | `land.cover` | `land.cover` | surface | 2,0,0 (LAND) | `land_binary_mask` | proportion |
 | `precipitation.rate` | `precipitation` | surface | 0,1,7 (PRATE) | `precipitation_flux` | kg m⁻² s⁻¹ (mm/s) |
+| `precipitation.amount` | `precipitation` | surface | 0,1,8 (APCP) | `precipitation_amount` | kg m⁻² (mm), over each step's `Interval` |
 | `cape` | `cape` | surface | 0,7,6 (CAPE) | `atmosphere_convective_available_potential_energy`, `atmosphere_convective_available_potential_energy_wrt_surface` | J/kg |
 | `cloud.cover` | `cloud` | entire atmosphere | 0,6,1 (TCDC) | `cloud_area_fraction` | percent |
 
@@ -200,6 +202,7 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `FreezingSprayStyle` | Plum fill in Overland's icing classes: light, moderate (22.4), heavy (53.3) and extreme (83.0); no icing isn't drawn | `spray.predictor` (derived) | — | On |
 | `AirTemperatureIsothermStyle` | Dashed isotherms every 5 °C, labelled in °C (`-5°`) | `air.temperature` | — | Off |
 | `PrecipitationStyle` | Rain radar fill in six bands: light from 0.1 mm/h, 0.5, moderate 2.5, heavy 7.5, very heavy 15 and violent 50 mm/h; drier isn't drawn | `precipitation.rate` | — | Off |
+| `PrecipitationAmountStyle` | The same six colours for the amount over each step's period: from 0.2 mm, then 1, 2.5, 10, 25 and 50 mm; less isn't drawn | `precipitation.amount` | — | Off |
 | `ThunderstormRiskStyle` | Ochre fill in three CAPE classes: moderate from 1000 J/kg, high 2500, extreme 4000; under 1000 J/kg isn't drawn | `cape` | — | Off |
 | `CloudCoverStyle` | Grey veil at `VeilOpacity` (0.3) in three bands: 25, 50 and 75 % and more | `cloud.cover` | — | Off |
 

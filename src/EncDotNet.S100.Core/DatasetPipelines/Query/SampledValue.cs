@@ -43,12 +43,26 @@ public abstract record SampledValue
 /// </param>
 /// <param name="Value">The numeric value, or <c>null</c> for a categorical value or one the cell does not carry.</param>
 /// <param name="Text">The value of a categorical field (e.g. an S-104 trend), or <c>null</c>.</param>
+/// <param name="Period">
+/// The time interval the value is a statistic over (an accumulated
+/// precipitation, a maximum gust), or <c>null</c> for a value at the sample time.
+/// </param>
 public sealed record SampledField(
     [property: Description("The product's name for the field (its S-100 attribute code where it has one, e.g. \"waterLevelHeight\"); unique within a sample.")] string Name,
     [property: Description("What the value measures, independent of the product, in snake case (e.g. \"depth\", \"current_speed\", \"significant_wave_height\").")] string Quantity,
     [property: Description("Unit symbol of the value (e.g. \"m\", \"m/s\", \"kn\", \"deg\" for degrees from true north); null for a unitless or categorical value.")] string? Unit,
     [property: Description("Numeric value; null for a categorical value or one the cell does not carry.")] double? Value,
-    [property: Description("Value of a categorical field (e.g. an S-104 trend); null otherwise.")] string? Text = null);
+    [property: Description("Value of a categorical field (e.g. an S-104 trend); null otherwise.")] string? Text = null,
+    [property: Description("The time interval the value is a statistic over, such as the period an accumulated precipitation fell in; null for a value at the sample time.")] SampledPeriod? Period = null);
+
+/// <summary>The time interval a <see cref="SampledField"/> is a statistic over.</summary>
+/// <param name="Start">UTC start of the interval.</param>
+/// <param name="End">UTC end of the interval: the time the value is valid for.</param>
+/// <param name="Statistic">What the value is over the interval: <c>accumulation</c>, <c>average</c>, <c>maximum</c>, <c>minimum</c> or <c>other</c>.</param>
+public sealed record SampledPeriod(
+    [property: Description("UTC start of the interval.")] DateTime Start,
+    [property: Description("UTC end of the interval: the time the value is valid for.")] DateTime End,
+    [property: Description("What the value is over the interval: \"accumulation\", \"average\", \"maximum\", \"minimum\" or \"other\".")] string Statistic);
 
 /// <summary>
 /// The generic sample shape: a list of <see cref="SampledField"/>s plus where

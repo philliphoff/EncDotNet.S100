@@ -281,6 +281,10 @@
     <value>Precipitation</value>
     <comment>Weather sub-layer name (#1230): the precipitation rate fill in rain radar colours.</comment>
   </data>
+  <data name="SubLayer_Weather_PrecipitationAmount" xml:space="preserve">
+    <value>Precipitation amount</value>
+    <comment>Weather sub-layer name (#1321): the accumulated precipitation fill over each step's period, on the rain radar ramp.</comment>
+  </data>
   <data name="SubLayer_Weather_ThunderstormRisk" xml:space="preserve">
     <value>Thunderstorm risk</value>
     <comment>Weather sub-layer name (#1230): the fill of convective available potential energy (CAPE) from 1000 J/kg.</comment>
@@ -7391,6 +7395,13 @@
   </data>
   <data name="Tooltip_EcdisPanel_Weather_Precipitation" xml:space="preserve">
     <value>Draw the precipitation rate in rain radar colours, from light rain (0.1 mm/h) to violent (50 mm/h and more), on every weather dataset that has it. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_PrecipitationAmount" xml:space="preserve">
+    <value>Precipitation amount</value>
+    <comment>Display controls switch (#1321): the accumulated precipitation fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_PrecipitationAmount" xml:space="preserve">
+    <value>Draw how much rain fell over each step's period (usually the hours since the step before), from 0.2 mm to 50 mm and more, on every weather dataset that has it. A pick states the period. Off by default.</value>
   </data>
   <data name="EcdisPanel_Weather_ThunderstormRisk" xml:space="preserve">
     <value>Thunderstorm risk</value>

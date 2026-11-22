@@ -72,6 +72,23 @@ month. For package versions and release assets, see
   then name, then other text. It is the base of the coming Chart reference
   activity (#1633).
 
+- **Accumulated precipitation with its period.** GRIB2 weather grids read
+  GFS's APCP as `precipitation.amount` (kg m⁻², shown in millimetres; CF
+  `precipitation_amount`). A total isn't readable without the period it fell
+  in, so each time step now carries one (`WeatherTimeStep.Interval`, a
+  `WeatherInterval` of start, end and `WeatherStatistic`), and a pick says
+  "4.2 mm in the 3 h to 12:00Z". GFS writes two periods at most forecast hours
+  (the 6-hourly bucket and the run total); the reader keeps the period since
+  the step before, from either message or the difference of two that share a
+  start, so on a 3-hourly GFS file every step is the 3 hours to its valid
+  time. A **Precipitation amount** switch in **Display controls** (off by
+  default; `precipitationAmount` in `get_weather_display` and
+  `set_weather_display`; `--show-layer weather.precipitation.amount`) draws it
+  on the precipitation rate's colours from 0.2 mm. The `sample` tool's fields
+  gain a `period` for any value over a time interval, such as an ECMWF
+  maximum gust, and `s100 identify` prints it. The Library's GFS sources offer
+  APCP. See [Weather](weather.md#grids). Not for navigation.
+
 - **Fewer, broader MCP tools.** Four tools fold into tools that nearly had
   their capability, so an agent's tool list is smaller (`s100 mcp serve`: 42
   tools and 84.5 KB of `tools/list` down to 38 and 79.0 KB). `list_datasets`

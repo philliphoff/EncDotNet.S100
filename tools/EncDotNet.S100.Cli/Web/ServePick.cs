@@ -5,6 +5,7 @@ using EncDotNet.S100.Cli.Infrastructure.Tiles;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Cli.Web;
@@ -377,7 +378,8 @@ internal static class ServePick
     {
         var shown = fields
             .Where(f => f.Value is not null || f.Text is not null)
-            .Select(f => f.Text ?? f.Value!.Value.ToString("0.##", CultureInfo.InvariantCulture) + (f.Unit is { } unit ? " " + unit : ""))
+            .Select(f => f.Text ?? f.Value!.Value.ToString("0.##", CultureInfo.InvariantCulture) + (f.Unit is { } unit ? " " + unit : "")
+                + (f.Period is { } period ? $" ({WeatherInterval.DescribeLength(period.End - period.Start)} to {period.End.ToString("HH:mm", CultureInfo.InvariantCulture)}Z)" : ""))
             .ToList();
         return shown.Count == 0 ? null : new PickCoverage(product, title, shown[0], null, shown.Count > 1 ? string.Join(" · ", shown.Skip(1)) : null);
     }

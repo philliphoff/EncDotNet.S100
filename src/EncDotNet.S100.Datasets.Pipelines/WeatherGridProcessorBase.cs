@@ -384,8 +384,9 @@ public abstract class WeatherGridProcessorBase :
     /// value in metres), air and surface temperature in degrees Celsius (raw
     /// value in kelvin), the freezing spray class with its predictor, the
     /// precipitation rate in millimetres an hour (raw value in kg m⁻² s⁻¹)
-    /// with its intensity, CAPE in J/kg with the thunderstorm risk, and the
-    /// total cloud cover in percent.
+    /// with its intensity, the precipitation amount in millimetres with the
+    /// period it fell in ("4.2 mm in the 3 h to 12:00Z"), CAPE in J/kg with
+    /// the thunderstorm risk, and the total cloud cover in percent.
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -497,6 +498,16 @@ public abstract class WeatherGridProcessorBase :
         return band.Label is { } label ? $"{text} ({label[..label.IndexOf(',', StringComparison.Ordinal)].ToLowerInvariant()})" : text;
     }
 
+    // The amount in millimetres with the period it fell in: "4.2 mm in the 3 h to 12:00Z".
+    // A total without its period can't be read, so one the data doesn't give is said so.
+    private static string AmountText(double kilogramsPerSquareMetre, SampledPeriod? period)
+    {
+        string text = kilogramsPerSquareMetre.ToString("0.0", CultureInfo.InvariantCulture) + " mm";
+        return period is { } p
+            ? $"{text} {new WeatherInterval(p.Start, p.End, WeatherStatistic.Accumulation).Describe(p.End)}"
+            : $"{text} (period not given)";
+    }
+
     // CAPE in J/kg, with the thunderstorm risk from 1000 J/kg: "1850 J/kg (moderate thunderstorm risk)".
     private static string CapeText(double joulesPerKilogram)
     {
@@ -534,11 +545,13 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.SurfaceTemperature => new() { Code = field.Name, Name = "Surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
             WeatherParameters.FreezingSprayPredictor => new() { Code = field.Name, Name = "Freezing spray", RawValue = raw, DisplayValue = Display(x => $"{FreezingSpray.GetLabel(FreezingSpray.Classify(x)!.Value)} (predictor {Number(x, "0")})") },
             WeatherParameters.PrecipitationRate => new() { Code = field.Name, Name = "Precipitation rate", RawValue = raw, DisplayValue = Display(PrecipitationText) },
+            WeatherParameters.PrecipitationAmount => new() { Code = field.Name, Name = "Precipitation amount", RawValue = raw, DisplayValue = Display(x => AmountText(x, field.Period)) },
             WeatherParameters.Cape => new() { Code = field.Name, Name = "CAPE (convective energy)", RawValue = raw, DisplayValue = Display(CapeText) },
             WeatherParameters.CloudCover => new() { Code = field.Name, Name = "Total cloud cover", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")} %") },
             // The knots copies of the wind and current speeds, the Celsius
             // copies of the sea and air temperatures, the nautical-mile copy
-            // of the visibility, the mm/h copy of the precipitation rate and
+            // of the visibility, the mm/h copy of the precipitation rate, the
+            // mm copy of the precipitation amount and
             // the freezing spray class are already in their display values;
             // the land cover mask isn't shown.
             _ => null,

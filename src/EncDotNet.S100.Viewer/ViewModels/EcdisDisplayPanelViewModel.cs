@@ -299,6 +299,17 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// The Weather section's Precipitation amount switch: the accumulated
+    /// precipitation over each step's period on the rain radar ramp, on every
+    /// weather dataset with it. Off by default (<see cref="PrecipitationAmountStyle"/>).
+    /// </summary>
+    public bool IsPrecipitationAmountVisible
+    {
+        get => GetWeatherLayer(PrecipitationAmountStyle.Key);
+        set => _state.SetLayerVisible(PrecipitationAmountStyle.Key, value);
+    }
+
+    /// <summary>
     /// The Weather section's Thunderstorm risk switch: CAPE from 1000 J/kg on
     /// every weather dataset with it. Off by default (<see cref="ThunderstormRiskStyle"/>).
     /// </summary>
@@ -428,6 +439,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsCurrentArrowsVisible));
         OnPropertyChanged(nameof(IsAirTemperatureVisible));
         OnPropertyChanged(nameof(IsPrecipitationVisible));
+        OnPropertyChanged(nameof(IsPrecipitationAmountVisible));
         OnPropertyChanged(nameof(IsThunderstormRiskVisible));
         OnPropertyChanged(nameof(IsCloudCoverVisible));
         OnPropertyChanged(nameof(IsWindRadiiVisible));

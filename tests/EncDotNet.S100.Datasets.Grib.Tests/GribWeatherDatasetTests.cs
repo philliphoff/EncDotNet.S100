@@ -377,6 +377,80 @@ public sealed class GribWeatherDatasetTests
     // ECMWF
     // -----------------------------------------------------------------
 
+    // -----------------------------------------------------------------
+    // Accumulated precipitation (issue #1321)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void GFS_accumulations_keep_the_period_since_the_step_before_at_every_step()
+    {
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(GfsAccumulation()), "gfs.t00z.pgrb2.0p25.f012");
+        var amount = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.PrecipitationAmount, amount.Id);
+        Assert.Equal("APCP", amount.SourceName);
+        Assert.Equal([Run.AddHours(3), Run.AddHours(6), Run.AddHours(9), Run.AddHours(12)], amount.Steps.Select(s => s.ValidTime));
+
+        // Every step is the three hours since the one before: f003's own 0–3 h,
+        // f006's 0–6 h less f003's 0–3 h, f009's 6–9 h bucket, and f012's
+        // 6–12 h less f009's 6–9 h.
+        Assert.Equal(
+            [(0, 3), (3, 6), (6, 9), (9, 12)],
+            amount.Steps.Select(s => ((int)(s.Interval!.Value.Start - Run).TotalHours, (int)(s.Interval!.Value.End - Run).TotalHours)));
+        Assert.All(amount.Steps, s => Assert.Equal(WeatherStatistic.Accumulation, s.Interval!.Value.Statistic));
+        Assert.All(amount.Steps, s => Assert.Equal(s.ValidTime, s.Interval!.Value.End));
+
+        double[] expected = [Rain(0, 3), Rain(3, 6), Rain(6, 9), Rain(9, 12)];
+        for (int step = 0; step < 4; step++)
+        {
+            var values = Read(dataset.GridSet, WeatherParameters.PrecipitationAmount, step);
+            Assert.Equal(expected[step], values[0], 2);
+            Assert.Equal(0, values[1]);
+        }
+
+        // The repeated 0–3 h and 0–6 h, and f009's run total, aren't used; f006's
+        // second 0–6 h and f012's 0–12 h only repeat what's used.
+        var reasons = dataset.IgnoredFields.Select(i => (i.Field.Index, i.Reason)).ToArray();
+        Assert.Equal([1, 3, 5, 7], reasons.Select(r => r.Index));
+        Assert.Equal("Field #0 already gives this parameter at this level and valid time.", reasons[0].Reason);
+        Assert.Equal("It's the total over 0–9 h; the step keeps 6–9 h, the period since the step before.", reasons[2].Reason);
+        Assert.Equal("It's the total over 0–12 h; the step keeps 9–12 h, the period since the step before.", reasons[3].Reason);
+    }
+
+    [Fact]
+    public void Run_totals_alone_are_differenced_and_a_lone_first_step_keeps_its_own_period()
+    {
+        // ECMWF-style totals from the run's start, f006 and f012 only.
+        byte[] Total(int to) => Encode(new Message
+        {
+            Category = 1,
+            Number = 8,
+            ForecastHours = 0,
+            IntervalHours = to,
+            Statistic = 1,
+            Grid = AccumulationGrid,
+            Values = [Rain(0, to), 0],
+            DecimalScale = 2,
+        });
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(Concat(Total(6), Total(12))));
+        var amount = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal([TimeSpan.FromHours(6), TimeSpan.FromHours(6)], amount.Steps.Select(s => s.Interval!.Value.Length));
+        Assert.Equal(Run.AddHours(6), amount.Steps[1].Interval!.Value.Start);
+        Assert.Equal(Rain(6, 12), Read(dataset.GridSet, WeatherParameters.PrecipitationAmount, 1)[0], 2);
+        Assert.Empty(dataset.IgnoredFields);
+    }
+
+    [Fact]
+    public void A_statistic_that_isnt_an_accumulation_carries_its_interval_and_a_value_at_a_time_none()
+    {
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(EcmwfOper()), "20261025000000-3h-oper-fc.grib2");
+
+        var gust = dataset.GridSet.FindParameter(WeatherParameters.WindGust)!;
+        Assert.Equal(new WeatherInterval(Run, Run.AddHours(3), WeatherStatistic.Maximum), gust.Steps[0].Interval);
+        Assert.Null(dataset.GridSet.FindParameter(WeatherParameters.PressureMsl)!.Steps[0].Interval);
+    }
+
     [Fact]
     public void ECMWF_codes_map_to_the_table()
     {

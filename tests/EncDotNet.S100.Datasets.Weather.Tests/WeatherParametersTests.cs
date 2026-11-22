@@ -120,6 +120,42 @@ public class WeatherParametersTests
     }
 
     [Fact]
+    public void Accumulated_precipitation_is_APCP_or_CF_precipitation_amount_at_the_surface_in_kilograms_per_square_metre()
+    {
+        var amount = WeatherParameters.Find(WeatherParameters.PrecipitationAmount)!;
+
+        Assert.Same(amount, WeatherParameters.FindByGribCode(new GribParameterCode(0, 1, 8), WeatherLevel.Surface));
+        Assert.Same(amount, WeatherParameters.FindByCfStandardName("precipitation_amount"));
+        Assert.Equal((WeatherParameters.PrecipitationGroup, WeatherLevel.Surface), (amount.Group, amount.Level));
+        Assert.Equal(WeatherUnit.KilogramsPerSquareMetre, amount.Unit);
+        Assert.Equal("kilograms per square metre", WeatherUnits.GetLabel(WeatherUnit.KilogramsPerSquareMetre));
+    }
+
+    [Theory]
+    [InlineData(9, 12, "in the 3 h to 12:00Z")]
+    [InlineData(0, 12, "in the 12 h to 12:00Z")]
+    [InlineData(18, 24, "in the 6 h to 00:00Z")]
+    public void An_interval_reads_as_its_length_and_end(int fromHour, int toHour, string expected)
+    {
+        var run = new DateTime(2026, 10, 25, 0, 0, 0, DateTimeKind.Utc);
+        var interval = new WeatherInterval(run.AddHours(fromHour), run.AddHours(toHour), WeatherStatistic.Accumulation);
+
+        Assert.Equal(expected, interval.Describe(interval.End));
+        Assert.Equal(TimeSpan.FromHours(toHour - fromHour), interval.Length);
+    }
+
+    [Fact]
+    public void An_interval_gives_its_date_when_it_ends_on_another_day_and_minutes_when_it_isnt_whole_hours()
+    {
+        var end = new DateTime(2026, 10, 26, 0, 30, 0, DateTimeKind.Utc);
+        var interval = new WeatherInterval(end.AddMinutes(-90), end, WeatherStatistic.Accumulation);
+
+        Assert.Equal("in the 1 h 30 min to 2026-10-26 00:30Z", interval.Describe(end.AddDays(-1)));
+        Assert.Equal("in the 1 h 30 min to 2026-10-26 00:30Z", interval.Describe());
+        Assert.Equal("45 min", WeatherInterval.DescribeLength(TimeSpan.FromMinutes(45)));
+    }
+
+    [Fact]
     public void Precipitation_and_CAPE_are_read_at_the_surface_and_cloud_cover_for_the_entire_atmosphere()
     {
         var rate = WeatherParameters.Find(WeatherParameters.PrecipitationRate)!;
@@ -142,7 +178,7 @@ public class WeatherParametersTests
     {
         var all = WeatherParameters.All;
 
-        Assert.Equal(24, all.Count);
+        Assert.Equal(25, all.Count);
         Assert.Equal(all.Count, all.Select(d => d.Id).Distinct().Count());
         // A code is shared only by rows at different levels (temperature at 2 m and at the surface).
         var codes = all.SelectMany(d => d.GribCodes.Select(c => (c, d.Level))).ToList();
@@ -166,7 +202,7 @@ public class WeatherParametersTests
     public void Unknown_codes_and_names_find_nothing()
     {
         Assert.Null(WeatherParameters.Find("wind.w"));
-        Assert.Null(WeatherParameters.FindByGribCode(new GribParameterCode(0, 1, 8)));
+        Assert.Null(WeatherParameters.FindByGribCode(new GribParameterCode(0, 1, 11)));
         Assert.Null(WeatherParameters.FindByCfStandardName("sea_water_temperature"));
     }
 

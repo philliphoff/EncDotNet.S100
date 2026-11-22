@@ -365,6 +365,27 @@ public class WeatherCoverageStyleTests
     }
 
     [Fact]
+    public void Accumulated_precipitation_is_an_off_by_default_fill_on_the_rain_ramp_in_amounts_not_rates()
+    {
+        var style = new PrecipitationAmountStyle();
+        var scheme = style.ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal("weather.precipitation.amount", style.LayerKey);
+        Assert.Equal(WeatherParameters.PrecipitationAmount, scheme.FieldName);
+        Assert.Equal(WeatherLayerKind.Fill, style.Kind);
+        Assert.False(style.IsVisibleByDefault);
+        Assert.Equal(WeatherCoverageStyle.FillOpacity, style.Opacity);
+        Assert.Equal(
+            ["0.2 to 1 mm", "1 to 2.5 mm", "2.5 to 10 mm", "10 to 25 mm", "25 to 50 mm", "50 mm and more"],
+            PrecipitationAmountStyle.Bands.Select(b => b.Label));
+        // The same six colours as the rate.
+        Assert.Equal(PrecipitationStyle.Bands.Select(b => b.Token), PrecipitationAmountStyle.Bands.Select(b => b.Token));
+        Assert.Equal(0.2f, PrecipitationAmountStyle.Bands[0].Minimum);
+        Assert.Equal(6, scheme.Bands.Count);
+        Assert.Contains(WeatherCoverageStyle.CreateAll(), s => s is PrecipitationAmountStyle);
+    }
+
+    [Fact]
     public void Cloud_cover_is_a_lighter_veil_under_the_other_fills()
     {
         var cloud = new CloudCoverStyle();
@@ -530,9 +551,10 @@ public class WeatherCoverageStyleTests
         Assert.True(new PrecipitationStyle().ClipToWater);
         Assert.True(new ThunderstormRiskStyle().ClipToWater);
         Assert.True(new CloudCoverStyle().ClipToWater);
+        Assert.True(new PrecipitationAmountStyle().ClipToWater);
         Assert.All(
             WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle or FreezingSprayStyle
-                or PrecipitationStyle or ThunderstormRiskStyle or CloudCoverStyle)),
+                or PrecipitationStyle or PrecipitationAmountStyle or ThunderstormRiskStyle or CloudCoverStyle)),
             style => Assert.False(style.ClipToWater, style.LayerKey));
     }
 
@@ -697,7 +719,7 @@ public class WeatherCoverageStyleTests
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@7|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@8|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]
