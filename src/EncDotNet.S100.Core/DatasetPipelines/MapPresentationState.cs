@@ -25,13 +25,16 @@ public sealed class MapPresentationState
 {
     /// <summary>
     /// The standard Day-palette presentation with default scales, ECDIS
-    /// settings, and mariner selections.
+    /// settings, and mariner selections. The viewing groups in
+    /// <see cref="EcdisDisplaySettings.DefaultHiddenViewingGroups"/> are
+    /// hidden, as in the viewer, so switching to the "All" category does not
+    /// cover the chart in the shallow-water and data-quality patterns.
     /// </summary>
     public static MapPresentationState Default { get; } = new(
         PaletteType.Day,
         1.0,
         1.0,
-        new EcdisDisplaySettings(),
+        new EcdisDisplaySettings { HiddenViewingGroups = EcdisDisplaySettings.DefaultHiddenViewingGroups },
         MarinerSettings.Default);
 
     /// <summary>
