@@ -248,6 +248,21 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsLeftDockShown));
         OnPropertyChanged(nameof(LeftDockContent));
         OnPropertyChanged(nameof(ContentPanelTab));
+        UpdateLeftTabsShown();
+    }
+
+    /// <summary>
+    /// Tells the left-dock tabs that care (<see cref="IActivityTabShown"/>)
+    /// whether the user can see them now: Chart reference ends a row's hover
+    /// when it stops being shown (#1655).
+    /// </summary>
+    private void UpdateLeftTabsShown()
+    {
+        foreach (var tab in LeftTabs)
+        {
+            if (tab.ViewModel is IActivityTabShown shown)
+                shown.IsTabShown = _isLeftDockOpen && ReferenceEquals(_selectedLeftTab, tab);
+        }
     }
 
     private bool _isRightDockOpen;
@@ -1273,6 +1288,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         _settingsInitialized = true;
         UpdateBottomTabsShown();
         UpdateRightTabsShown();
+        UpdateLeftTabsShown();
     }
 
     private void WireAutoOpenSubscriptions()

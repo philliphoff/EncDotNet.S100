@@ -80,6 +80,37 @@ public sealed class FinerCoverage
         || scaleDenominator <= limit;
 
     /// <summary>
+    /// Whether the world point (<paramref name="x"/>, <paramref name="y"/>), in
+    /// EPSG:3857 metres, lies inside the coverage by the even-odd rule the clip
+    /// fills it with.
+    /// </summary>
+    /// <param name="x">The X coordinate, in metres.</param>
+    /// <param name="y">The Y coordinate, in metres.</param>
+    internal bool Contains(double x, double y)
+    {
+        var (minX, minY, maxX, maxY) = Bounds;
+        if (x < minX || x > maxX || y < minY || y > maxY)
+            return false;
+
+        bool inside = false;
+        foreach (var ring in WorldRings)
+        {
+            if (ring.Count < 3)
+                continue;
+
+            for (int i = 0, j = ring.Count - 1; i < ring.Count; j = i++)
+            {
+                var (xi, yi) = ring[i];
+                var (xj, yj) = ring[j];
+                if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+                    inside = !inside;
+            }
+        }
+
+        return inside;
+    }
+
+    /// <summary>
     /// Removes the active coverages in <paramref name="coverages"/> from the
     /// canvas's clip, projected through <paramref name="transform"/>. Coverages
     /// whose bounds miss <paramref name="screen"/> are skipped.

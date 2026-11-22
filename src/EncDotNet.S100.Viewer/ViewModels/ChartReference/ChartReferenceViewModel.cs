@@ -524,6 +524,10 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
 
     private void Rebuild(bool restart = true)
     {
+        // A new list ends a row's hover (#1655); following the map keeps it,
+        // so the row under the pointer rings again once the Legend follows.
+        if (restart)
+            _map?.Leave(null);
         var keep = (_selectedItem as ChartReferenceRowViewModel)?.Key;
         _selectedItem = null;
 

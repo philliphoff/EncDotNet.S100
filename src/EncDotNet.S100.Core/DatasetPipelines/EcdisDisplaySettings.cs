@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -42,6 +43,39 @@ public enum EcdisDisplayCategory
 /// </summary>
 public sealed record EcdisDisplaySettings
 {
+    /// <summary>
+    /// The viewing groups a chart display hides until the mariner switches
+    /// them on, including in the <see cref="EcdisDisplayCategory.All"/>
+    /// category. Keys are spec codes (e.g. <c>"S-101"</c>), matched without
+    /// regard to case.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The S-101 portrayal catalogue declares "Independent Mariner Selector"
+    /// viewing groups that are in no display mode's membership. They are off
+    /// in Display Base, Standard and Other Information, but on in "All",
+    /// where there is no mode filter. Three of them paint a repeating pattern
+    /// across whole areas, which makes the chart busy and is slow to draw:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><c>90000</c>: the shallow-water pattern (DIAMOND1).</item>
+    ///   <item><c>90010</c>: survey accuracy, reliability and quality
+    ///   (the DQUALxx / NODATA03 patterns from
+    ///   <c>QualityOfBathymetricData</c>).</item>
+    ///   <item><c>90011</c>: the low-accuracy marker (LOWACC01).</item>
+    /// </list>
+    /// <para>
+    /// The viewer and the <c>s100 tiles</c> commands both start from this
+    /// set. This property's own default (<see cref="HiddenViewingGroups"/>)
+    /// stays empty: a producer opts in by assigning this set.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<string, IReadOnlySet<int>> DefaultHiddenViewingGroups { get; } =
+        new Dictionary<string, IReadOnlySet<int>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["S-101"] = new[] { 90000, 90010, 90011 }.ToFrozenSet(),
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The active ECDIS category. Defaults to Standard.</summary>
     public EcdisDisplayCategory Category { get; init; } = EcdisDisplayCategory.Standard;
 

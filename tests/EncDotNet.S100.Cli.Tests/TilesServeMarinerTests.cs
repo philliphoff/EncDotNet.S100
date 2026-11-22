@@ -84,9 +84,100 @@ public sealed class TilesServeMarinerTests
         Assert.True(MarinerStyle.TryParse("{}", out var style, out _));
         Assert.True(style.IsEmpty);
         Assert.Equal(string.Empty, style.Key);
-        Assert.Null(style.ToEcdisDisplay());
         Assert.Equal(MarinerSettings.Default, style.ToMarinerSettings(null));
         Assert.True(new TilesServeCommand.Settings { Input = S101 }.MarinerStyle.IsEmpty);
+    }
+
+    [Fact]
+    public void No_settings_hide_the_viewers_default_viewing_groups()
+    {
+        // Issue #1665: every viewing group but the ones the viewer hides by default.
+        var display = MarinerStyle.Empty.ToEcdisDisplay();
+        Assert.Equal(EcdisDisplayCategory.All, display.Category);
+        Assert.Equal([90000, 90010, 90011], display.HiddenViewingGroups["S-101"].Order());
+        Assert.Equal(
+            EcdisDisplaySettings.DefaultHiddenViewingGroups.Keys.Order(StringComparer.Ordinal),
+            display.HiddenViewingGroups.Keys.Order(StringComparer.Ordinal));
+
+        // Soundings switched off add to the default set rather than replace it.
+        var noSoundings = new MarinerStyle { Soundings = false }.ToEcdisDisplay();
+        Assert.Equal([33010, 90000, 90010, 90011], noSoundings.HiddenViewingGroups["S-101"].Order());
+        Assert.Equal([33010], noSoundings.HiddenViewingGroups["S-401"].Order());
+    }
+
+    [Theory]
+    [InlineData(new[] { "S-101:90010" }, "S-101:90010")]
+    [InlineData(new[] { "s101: 90011 , 90000" }, "S-101:90000,90011")]
+    [InlineData(new[] { "S-101:90010", "S-401:33010", "S-101:90000" }, "S-101:90000,90010;S-401:33010")]
+    [InlineData(new[] { "none" }, "")]
+    [InlineData(new[] { "NONE" }, "")]
+    public void The_hide_viewing_groups_option_is_read(string[] values, string expected)
+    {
+        Assert.True(MarinerStyle.TryParseViewingGroupsOption(values, out var canonical, out var error), error);
+        Assert.Equal(expected, canonical);
+    }
+
+    [Theory]
+    [InlineData(new[] { "90010" }, "SPEC:ID")]
+    [InlineData(new[] { "ENC:90010" }, "SPEC:ID")]
+    [InlineData(new[] { "S-101:abc" }, "viewing-group id 'abc'")]
+    [InlineData(new[] { "S-101:-1" }, "viewing-group id '-1'")]
+    [InlineData(new[] { "none", "S-101:90010" }, "cannot be combined")]
+    public void Bad_hide_viewing_groups_values_are_refused(string[] values, string expected)
+    {
+        Assert.False(MarinerStyle.TryParseViewingGroupsOption(values, out _, out var error));
+        Assert.Contains(expected, error);
+    }
+
+    [Fact]
+    public void The_hide_viewing_groups_option_replaces_the_default()
+    {
+        Assert.SkipUnless(File.Exists(S101), "S-101 fixture not present.");
+
+        var none = new TilesServeCommand.Settings { Input = S101, HideViewingGroups = ["none"] };
+        Assert.True(none.Validate().Successful);
+        Assert.Equal(string.Empty, none.MarinerStyle.HiddenViewingGroups);
+        Assert.Empty(none.MarinerStyle.ToEcdisDisplay().HiddenViewingGroups);
+
+        var some = new TilesServeCommand.Settings { Input = S101, HideViewingGroups = ["S-101:90010"] };
+        Assert.True(some.Validate().Successful);
+        Assert.Equal([90010], some.MarinerStyle.ToEcdisDisplay().HiddenViewingGroups["S-101"].Order());
+
+        var bad = new TilesServeCommand.Settings { Input = S101, HideViewingGroups = ["S-101:x"] };
+        Assert.False(bad.Validate().Successful);
+        Assert.Contains("--hide-viewing-groups", bad.Validate().Message);
+
+        // A choice is a setting: it is keyed, described and changes the fingerprint.
+        Assert.NotEqual(string.Empty, none.MarinerStyle.Key);
+        Assert.NotEqual(none.MarinerStyle.Key, some.MarinerStyle.Key);
+        Assert.Contains(new KeyValuePair<string, string>("hiddenViewingGroups", "S-101:90010"), some.MarinerStyle.Describe());
+        Assert.NotEqual(
+            TileRenderSession.Fingerprint(new TilesServeCommand.Settings { Input = S101 }),
+            TileRenderSession.Fingerprint(none));
+    }
+
+    [Fact]
+    public void Hidden_viewing_groups_are_read_from_json()
+    {
+        Assert.True(MarinerStyle.TryParse(
+            """{ "hiddenViewingGroups": { "s101": [90011, 90000], "S-401": [] } }""", out var style, out var error), error);
+        Assert.Equal("S-101:90000,90011", style.HiddenViewingGroups);
+
+        Assert.True(MarinerStyle.TryParse("""{ "hiddenViewingGroups": {} }""", out var none, out _));
+        Assert.Equal(string.Empty, none.HiddenViewingGroups);
+        Assert.False(none.IsEmpty);
+
+        // The JSON written reads back as the same settings.
+        Assert.True(MarinerStyle.TryParse(style.ToJson().ToJsonString(), out var again, out _));
+        Assert.Equal(style, again);
+
+        // Left out, the start-up choice applies.
+        Assert.Equal("", new MarinerStyle { SafetyContour = 5 }.Over(none).HiddenViewingGroups);
+
+        Assert.False(MarinerStyle.TryParse("""{ "hiddenViewingGroups": [90010] }""", out _, out error));
+        Assert.Contains("'hiddenViewingGroups' must be an object", error);
+        Assert.False(MarinerStyle.TryParse("""{ "hiddenViewingGroups": { "S-101": ["x"] } }""", out _, out _));
+        Assert.False(MarinerStyle.TryParse("""{ "hiddenViewingGroups": { "ENC": [1] } }""", out _, out _));
     }
 
     [Fact]
@@ -239,6 +330,25 @@ public sealed class TilesServeMarinerTests
         // An unknown hash or palette has no tiles.
         Assert.All(await TilesAsync(source, "day-unknown"), Assert.Null);
         Assert.All(await TilesAsync(source, "sepia-base"), Assert.Null);
+    }
+
+    [Fact]
+    public async Task The_default_hides_the_data_quality_pattern_and_the_option_shows_it()
+    {
+        // The fixture portrays CATZOC patterns in viewing group 90010 (issue #1665).
+        Assert.SkipUnless(File.Exists(S101), "S-101 fixture not present.");
+        using var source = OpenRendered();
+        source.MarinerStyles.Register("explicit", new MarinerStyle { HiddenViewingGroups = "S-101:90000,90010,90011" });
+        source.MarinerStyles.Register("all", new MarinerStyle { HiddenViewingGroups = string.Empty });
+
+        var plain = await TilesAsync(source, null);
+        Assert.True(Same(plain, await TilesAsync(source, "day-explicit")));
+        var all = await TilesAsync(source, "day-all");
+        Assert.False(Same(plain, all));
+
+        using var shown = OpenRendered(new TilesServeCommand.Settings { Input = S101, Parallel = 2, HideViewingGroups = ["none"] });
+        Assert.True(Same(all, await TilesAsync(shown, null)));
+        Assert.Equal("", (string?)shown.ToTileJson(null)["s100"]!["hiddenViewingGroups"]);
     }
 
     [Fact]
