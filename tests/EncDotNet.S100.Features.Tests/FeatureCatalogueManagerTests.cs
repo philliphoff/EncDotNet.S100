@@ -334,4 +334,21 @@ public class FeatureCatalogueManagerTests
         Assert.NotNull(hashInHandler);
         Assert.NotEqual(before, hashInHandler);
     }
+
+    [Fact]
+    public void RemoveSource_drops_the_parsed_catalogue_and_raises_CataloguesChanged()
+    {
+        var mgr = new FeatureCatalogueManager((string _) => null);
+        var spec = new SpecRef("S-101", default);
+        mgr.SetSource(spec, new CountingSource(MinimalFcXml));
+        Assert.NotNull(mgr.GetCatalogue(spec));
+        var changes = new List<SpecRef>();
+        mgr.CataloguesChanged += (_, e) => changes.Add(e.Spec);
+
+        Assert.True(mgr.RemoveSource(spec));
+        Assert.False(mgr.RemoveSource(spec));
+
+        Assert.Null(mgr.GetCatalogue(spec));
+        Assert.Equal([spec], changes);
+    }
 }

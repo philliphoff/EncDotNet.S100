@@ -6,6 +6,20 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Catalogue changes apply live.** Adding or removing a feature or
+  portrayal catalogue now takes effect at once, without a restart: the loaded
+  datasets of that product are redrawn with it, and removing a custom
+  catalogue goes back to the built-in one. A catalogue's product is read from
+  its content, so a feature catalogue is no longer always filed as S-101, and
+  one that can't be used says why. Each row says where its catalogue comes
+  from (built-in, custom, or the command line) and what it overrides, and a
+  catalogue that fails to load is drawn with the built-in one instead, with
+  the reason on the row and in Logs under **Catalogues**.
+  `--portrayal-catalogue` also takes a ZIP package. A new MCP tool,
+  `list_catalogues`, lists the catalogues in effect for every product. The
+  settings key for custom portrayal catalogues is now
+  `PortrayalCataloguePaths`.
+
 - **HYCOM current forecast in the Library.** A new weather source,
   **Surface currents, forecast — HYCOM**, fetches the global HYCOM
   ESPC-D-V02 surface current forecast for the map view from HYCOM's THREDDS

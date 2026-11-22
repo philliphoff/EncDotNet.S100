@@ -118,6 +118,28 @@ internal interface IDatasetLoaderService
     }
 
     /// <summary>
+    /// Opens the loaded entries among <paramref name="entries"/> again, so
+    /// they're drawn with the catalogues now in effect (design note
+    /// <c>catalogue-panels.md</c> D6). Each keeps its place in the panel and
+    /// on the map, its active flag and its time; the reload shows no progress
+    /// toast and doesn't move the map. Entries that aren't loaded, and source
+    /// (feed) entries, are skipped.
+    /// </summary>
+    /// <param name="entries">The entries to redraw.</param>
+    /// <param name="cancellationToken">Cancels the reloads.</param>
+    /// <remarks>
+    /// Provided as a default interface member for test doubles: it unloads
+    /// the entries and loads them again.
+    /// </remarks>
+    Task ReloadEntriesAsync(IReadOnlyList<DatasetEntry> entries, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var loaded = entries.Where(e => e.IsLoaded && !e.IsSource).ToList();
+        UnloadEntries(loaded);
+        return Task.WhenAll(loaded.Select(e => LoadAsync(e, cancellationToken)));
+    }
+
+    /// <summary>
     /// Reorders the dataset layers on the map to match the supplied
     /// entry sequence. Lowest-indexed entry paints first (bottom of
     /// the dataset stack). Entries not currently bound to layers are

@@ -304,6 +304,9 @@ public partial class App : Application
         // the user toggles the integration or edits the base URL (issue #442),
         // so the buttons appear/disappear without a catalogue reload or a new
         // pick.
+        // Created now so it hears every catalogue change.
+        _services.GetRequiredService<CatalogueRedrawCoordinator>();
+
         viewerSettings.ExaminerSettingsChanged += () =>
         {
             _services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
@@ -646,6 +649,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()),
             new McpTools.Groups.ChartReferenceMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>()),
+            new McpTools.Groups.CataloguesMcpToolGroup(
+                sp.GetRequiredService<CatalogueRegistry>(),
+                sp.GetRequiredService<CatalogueRedrawCoordinator>()),
             new McpTools.Groups.MeasuringMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
@@ -1007,18 +1013,27 @@ public partial class App : Application
             sp.GetService<IViewerUiControllerAccessor>(),
             sp.GetService<Services.Notifications.INotificationService>()));
 
-        // Feature-catalogue parsing is shared across every dataset load
-        // — the manager's parse cache must survive across factory
-        // rebuilds. The resolver delegate consults the viewer-level
-        // overrides service so transient CLI catalogues and persisted
-        // settings remain observable even though the manager itself is
-        // a singleton.
-        services.AddSingleton<FeatureCatalogueOverrides>();
-        services.AddSingleton<EncDotNet.S100.Features.FeatureCatalogueManager>(sp =>
+        // Catalogues (design note catalogue-panels.md D7): the registry owns
+        // which feature and portrayal catalogue each product uses (command
+        // line > custom > built-in) and applies them to the two managers,
+        // whose parse caches survive across factory rebuilds. The feature
+        // catalogue manager is the registry's, so bundled catalogues are
+        // registered before anything reads it.
+        services.AddSingleton(sp => new CatalogueRegistry(
+            sp.GetRequiredService<ViewerSettings>(),
+            new EncDotNet.S100.Features.FeatureCatalogueManager(),
+            sp.GetRequiredService<PortrayalCatalogueManager>(),
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<CatalogueRegistry>>()));
+        services.AddSingleton(sp => sp.GetRequiredService<CatalogueRegistry>().FeatureCatalogues);
+        // A catalogue change redraws the loaded datasets of that product (A5).
+        services.AddSingleton(sp =>
         {
-            var overrides = sp.GetRequiredService<FeatureCatalogueOverrides>();
-            return new EncDotNet.S100.Features.FeatureCatalogueManager(
-                (string spec) => overrides.Open(spec));
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            return new CatalogueRedrawCoordinator(
+                sp.GetRequiredService<CatalogueRegistry>(),
+                () => datasets.Entries,
+                sp.GetRequiredService<IDatasetLoaderService>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<CatalogueRedrawCoordinator>>());
         });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
@@ -1174,7 +1189,6 @@ public partial class App : Application
         services.AddSingleton<IRecentFilesService, RecentFilesService>();
         services.AddSingleton<IDataMaintenanceService, DataMaintenanceService>();
         services.AddSingleton<IApplicationControlService, ApplicationControlService>();
-        services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineViewTime(
             sp.GetRequiredService<GlobalTimeService>(), sp.GetRequiredService<TimeProvider>()));
@@ -1632,9 +1646,10 @@ public partial class App : Application
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
-            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetRequiredService<CatalogueRegistry>(),
             sp.GetRequiredService<ExaminerLinks>()));
-        services.AddSingleton<PortrayalCataloguesViewModel>();
+        services.AddSingleton(sp => new PortrayalCataloguesViewModel(
+            sp.GetRequiredService<CatalogueRegistry>()));
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton(sp =>
         {

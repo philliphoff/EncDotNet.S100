@@ -33,8 +33,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 {
     private readonly ViewerSettings _settings;
     private readonly PortrayalCatalogueManager _catalogueManager;
-    private readonly PortrayalCatalogueSeeder _catalogueSeeder;
-    private readonly FeatureCatalogueOverrides _fcOverrides;
+    private readonly CatalogueRegistry _catalogues;
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly IRecentFilesService _recentFiles;
     private readonly CollectionLibrary _library;
@@ -62,6 +61,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly ConditionalWeakTable<DatasetEntry, CancellationTokenSource> _storedCompletions = new();
     private readonly CellSceneStore? _cellScenes;
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
+    // Entries ReloadEntriesAsync is opening again after a catalogue change.
+    private readonly HashSet<DatasetEntry> _redraws = [];
 
     private IMapLayerCollection? _layerCollection;
     private MapsuiDatasetLayerSession? _mapSession;
@@ -77,8 +78,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public DatasetLoaderService(
         ViewerSettings settings,
         PortrayalCatalogueManager catalogueManager,
-        PortrayalCatalogueSeeder catalogueSeeder,
-        FeatureCatalogueOverrides fcOverrides,
+        CatalogueRegistry catalogues,
         DatasetPipelineFactory pipelineFactory,
         IRecentFilesService recentFiles,
         CollectionLibrary library,
@@ -95,8 +95,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
-        ArgumentNullException.ThrowIfNull(catalogueSeeder);
-        ArgumentNullException.ThrowIfNull(fcOverrides);
+        ArgumentNullException.ThrowIfNull(catalogues);
         ArgumentNullException.ThrowIfNull(pipelineFactory);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(library);
@@ -109,8 +108,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _settings = settings;
         _timeProgress = timeProgress;
         _catalogueManager = catalogueManager;
-        _catalogueSeeder = catalogueSeeder;
-        _fcOverrides = fcOverrides;
+        _catalogues = catalogues;
         _pipelineFactory = pipelineFactory;
         _recentFiles = recentFiles;
         _library = library;
@@ -318,8 +316,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _globalTime.RangeChanged += OnGlobalRangeChanged;
         _viewport = viewport;
 
-        var transientFcPaths = _catalogueSeeder.Seed(options);
-        _fcOverrides.SetTransientPaths(transientFcPaths);
+        _catalogues.Initialize(options?.FeatureCatalogues, options?.PortrayalCatalogues);
 
     }
 
@@ -412,7 +409,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // Standalone loads hold a single progress notification across the whole
         // load; exchange-set entries are covered by the aggregate exchange-set
         // progress notification, so they get no per-dataset one.
-        var loadNotification = fromExchangeSet
+        // A redraw after a catalogue change (ReloadEntriesAsync) is quiet
+        // too: no progress toast and no zoom, the dataset is already shown.
+        var redraw = _redraws.Contains(entry);
+        var loadNotification = fromExchangeSet || redraw
             ? null
             : CreateLoadProgressNotification(entry, cts);
 
@@ -520,7 +520,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 // user's manual Zoom-to-Extent toolbar action) wins. Without
                 // this, the last-completed dataset would race with the bulk
                 // load and "win" the viewport.
-                if (!fromExchangeSet && !isSource && !SuppressAutoZoom)
+                if (!fromExchangeSet && !isSource && !redraw && !SuppressAutoZoom)
                 {
                     _viewport!.ZoomToExtent(result.Extent);
                 }
@@ -728,8 +728,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         long loadGeneration,
         CancellationToken token)
     {
+        // A redraw after a catalogue change neither reads nor writes a stored
+        // scene: the scene key follows the saved catalogue paths, not a
+        // session-only catalogue or one reloaded in place.
         if (_cellScenes is null
             || !entry.IsFromExchangeSet
+            || _redraws.Contains(entry)
             || entry.ProductSpec is not { } spec
             || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) is not { } key)
         {
@@ -1520,6 +1524,41 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 _sources?.Detach(entry.Id);
             entry.IsLoaded = false;
             entry.IsDeferred = true;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ReloadEntriesAsync(IReadOnlyList<DatasetEntry> entries, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var loaded = entries.Where(e => e.IsLoaded && !e.IsSource).Distinct().ToList();
+        if (loaded.Count == 0)
+            return;
+
+        foreach (var entry in loaded)
+        {
+            InvalidateLoad(entry);
+            _redraws.Add(entry);
+        }
+
+        try
+        {
+            // Retire the old processors but keep each dataset's place, active
+            // flag and time state, as a lazy-load eviction does, then open
+            // them again with the current catalogues.
+            _mapSession?.RemoveDatasets(loaded.Select(entry => entry.Id).ToArray(), preserveState: true);
+            foreach (var entry in loaded)
+            {
+                _processorEntries.Remove(entry.Id);
+                entry.IsLoaded = false;
+            }
+
+            await Task.WhenAll(loaded.Select(entry => LoadAsync(entry, cancellationToken))).ConfigureAwait(true);
+        }
+        finally
+        {
+            foreach (var entry in loaded)
+                _redraws.Remove(entry);
         }
     }
 

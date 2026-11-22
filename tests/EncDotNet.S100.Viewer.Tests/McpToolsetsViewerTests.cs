@@ -18,6 +18,7 @@ public class McpToolsetsViewerTests
     /// </summary>
     private static readonly Dictionary<Type, string> Pinned = new()
     {
+        [typeof(CataloguesMcpToolGroup)] = McpToolsets.Display,
         [typeof(ChartReferenceMcpToolGroup)] = McpToolsets.Display,
         [typeof(DiagnosticsMcpToolGroup)] = McpToolsets.Diagnostics,
         [typeof(DisplaySettingsMcpToolGroup)] = McpToolsets.Display,
