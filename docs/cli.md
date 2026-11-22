@@ -1697,7 +1697,7 @@ says when it's over 12 months old.
 | `--near <lat,lon>` | required | The point, latitude first, in decimal degrees: `--near 47.6,-122.34`. |
 | `--radius <distance>` | `50` (km) | How far to look: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
 | `--limit <n>` | `10` | The most stations to list, 1 to 500. |
-| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_tide_stations` MCP result, with each station's datums, predictable datums and a subordinate station's offsets. |
+| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_stations` (kind `tide`) MCP result, with each station's datums, predictable datums and a subordinate station's offsets. |
 | `--catalogue <file>` | the offline cache | A tide-stations JSON file (`.json`, or `.json.gz` for gzip). |
 
 ```bash
@@ -1752,7 +1752,7 @@ catalogue is
 | `--highs-lows` | off | Lists the high and low waters instead of heights at each step. |
 | `--datum <datum>` | `MLLW` | `MLLW`, `MLW`, `MSL`, `MHW`, `MHHW`, `LAT` or `HAT`. A harmonic station can use any datum NOAA gives it; a subordinate station is MLLW only. |
 | `--utc` | off | Reads and prints times in UTC rather than this computer's time zone. |
-| `--format <format>` | `table` | `table`, `csv`, `json` or `s104`. JSON is the `predict_tide` MCP result, with times in UTC. |
+| `--format <format>` | `table` | `table`, `csv`, `json` or `s104`. JSON is the `predict` (kind `tide`) MCP result, with times in UTC. |
 | `-o`, `--output <file>` | `104ZZ01<station>.h5` | With `--format s104`, the file to write. |
 | `--catalogue <file>` | the offline cache | A tide-stations JSON file. |
 
@@ -1818,7 +1818,7 @@ the table gives the catalogue's provider and age.
 | `--near <lat,lon>` | required | The point, latitude first, in decimal degrees: `--near 48.406,-122.643`. |
 | `--radius <distance>` | `50` (km) | How far to look: kilometres, or with a unit (`20km`, `10nm`, `5000m`). |
 | `--limit <n>` | `10` | The most stations to list, 1 to 500. Each depth bin counts as one. |
-| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_current_stations` MCP result, with a subordinate station's time differences and speed ratios. |
+| `--format <format>` | `table` | `table`, `csv` or `json`. JSON is the `list_stations` (kind `current`) MCP result, with a subordinate station's time differences and speed ratios. |
 | `--catalogue <file>` | the offline cache | A tide-stations JSON file (`.json`, or `.json.gz` for gzip). |
 
 ```bash
@@ -1858,7 +1858,7 @@ forecast, isn't S-111, and isn't for navigation. The engine is
 | `--step <step>` | `30` (minutes) | The time between values: minutes, or with a unit (`10m`, `1h`, `90s`). |
 | `--events` | off | Lists the slacks and maximum and minimum floods and ebbs instead of values at each step. |
 | `--utc` | off | Reads and prints times in UTC rather than this computer's time zone. |
-| `--format <format>` | `table` | `table`, `csv`, `json` or `s111`. JSON is the `predict_current` MCP result, with times in UTC. |
+| `--format <format>` | `table` | `table`, `csv`, `json` or `s111`. JSON is the `predict` (kind `current`) MCP result, with times in UTC. |
 | `-o`, `--output <file>` | `111ZZ01<station>.h5` | With `--format s111`, the file to write. |
 | `--catalogue <file>` | the offline cache | A tide-stations JSON file. |
 
@@ -2098,7 +2098,7 @@ and `render_to_image`. The session tools change only the server's in-memory
 state: they never edit the source datasets or write files. `open_dataset`
 adds more datasets while the server runs. Each process is one session, so
 start another process for a separate session. The tide tools
-`list_tide_stations` and `predict_tide` read the offline station catalogue
+`list_stations` and `predict` (kind `tide`) read the offline station catalogue
 (see [`tides update`](#tides-update)). [MCP tools](mcp-server.md#mcp-tools)
 lists them all.
 
@@ -2107,7 +2107,7 @@ lists them all.
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
-| `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_tide_stations`, `predict_tide`, `list_current_stations` and `predict_current` read. See [`tides update`](#tides-update). |
+| `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_stations` and `predict` read. See [`tides update`](#tides-update). |
 | `--tide-predictions` | off | Fills S-104 and S-111 gaps with predictions from that catalogue: `sample` and `check_route` use the nearest tide station within 10 km by water where no S-104 covers a point and time, and `sample` uses the nearest current station within `--current-station-reach` where no S-111 does. See [Predicted values in sampling](mcp-server.md#predicted-values-in-sampling). |
 | `--current-station-reach <metres>` | `2000` | With `--tide-predictions` only. How far, by water, a current station's prediction applies. Much shorter than a tide station's 10 km, because tidal currents change over short distances. |
 | `--transport <transport>` | `stdio` | `stdio`, or `http` to serve over HTTP. |
@@ -2313,7 +2313,7 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 - [Compose S-101 and S-102](scenarios/compose-s101-s102.md): a composite
   render of a chart and a bathymetry surface.
 - [Find when the tide is above a height](scenarios/tide-above-a-height.md):
-  `tides predict` and the `predict_tide` MCP tool at Seattle.
+  `tides predict` and the `predict` (kind `tide`) MCP tool at Seattle.
 - [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): a worked
   example of `tiles serve` with QGIS, MapLibre and Leaflet.
 - [Run s100 in Docker](docker.md): the container image, with Docker Compose

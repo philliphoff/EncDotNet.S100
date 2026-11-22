@@ -30,7 +30,7 @@ public sealed record NoStationWithinReach(
     {
         var kind = quantity == "current" ? "current" : "tide";
         return FormattableString.Invariant(
-            $"No {kind} station is within reach of {latitude:0.#####}, {longitude:0.#####}: the nearest, {station.Name ?? station.Id} ({station.Id}), is {StationReach.Distance(station.DistanceMeters)} away{(station.DistanceByWater ? " by water" : string.Empty)}, beyond the {StationReach.Distance(reach)} a {kind} station reaches. Load an {(kind == "current" ? "S-111" : "S-104")} dataset that covers the point, or predict at the station with {(kind == "current" ? "predict_current" : "predict_tide")}.");
+            $"No {kind} station is within reach of {latitude:0.#####}, {longitude:0.#####}: the nearest, {station.Name ?? station.Id} ({station.Id}), is {StationReach.Distance(station.DistanceMeters)} away{(station.DistanceByWater ? " by water" : string.Empty)}, beyond the {StationReach.Distance(reach)} a {kind} station reaches. Load an {(kind == "current" ? "S-111" : "S-104")} dataset that covers the point, or predict at the station with predict (kind {kind}).");
     }
 }
 
@@ -43,7 +43,7 @@ public sealed record NoStationWithinReach(
 /// <param name="DistanceByWater">Whether the distance goes round charted land.</param>
 [Description("The nearest station that can be predicted, beyond the reach.")]
 public sealed record NearestStationBeyondReach(
-    [property: Description("The station's id; pass it to predict_tide or predict_current.")] string Id,
+    [property: Description("The station's id; pass it to predict.")] string Id,
     [property: Description("The station's name.")] string? Name,
     [property: Description("The station's latitude.")] double Latitude,
     [property: Description("The station's longitude.")] double Longitude,

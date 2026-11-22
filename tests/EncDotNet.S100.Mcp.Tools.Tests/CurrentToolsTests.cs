@@ -11,7 +11,7 @@ using EncDotNet.S100.Tides.Stations;
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 /// <summary>
-/// list_current_stations, predict_current and sample's S-111
+/// list_stations, predict and sample's S-111
 /// fallback (#1454) over NOAA's recorded current stations
 /// (tests/datasets/Tides/Stations/noaa-currents.json): Deception Pass
 /// PUG1701_33 and Golden Gate SFB1202_17 (harmonic), and Golden Gate

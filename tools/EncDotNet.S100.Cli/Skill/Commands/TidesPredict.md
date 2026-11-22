@@ -2,7 +2,7 @@
 
 Predicts the astronomical tide at a station named by id or name, or at the
 nearest station to `--near latitude,longitude`. Prefer `--format json`: it's
-the `predict_tide` MCP result, with times in UTC, heights in metres above the
+the `predict` (kind `tide`) MCP result, with times in UTC, heights in metres above the
 datum (MLLW unless `--datum`), and the station, `kind: "prediction"` and a
 `caveat`. `--highs-lows` returns the highs and lows instead of a series.
 

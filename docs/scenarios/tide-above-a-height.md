@@ -90,13 +90,13 @@ can lower it.
 ## Ask an agent
 
 The same answer is available to an AI agent through the MCP tools
-`list_tide_stations` and `predict_tide`, in SoundCharts or `s100 mcp serve`.
+`list_stations` and `predict` (kind `tide`), in SoundCharts or `s100 mcp serve`.
 See [Run the headless server](../mcp-server.md#run-the-headless-server) to
 connect one, then ask:
 
 > When is the tide above 2 m at Seattle tomorrow afternoon?
 
-The agent calls `predict_tide` with the station and a window, for example:
+The agent calls `predict` (kind `tide`) with the station and a window, for example:
 
 ```json
 {
@@ -133,7 +133,7 @@ every field.
 ## Other places and datums
 
 - **Near a point.** `--near 47.27,-122.55` (or `latitude` and `longitude` in
-  `predict_tide`) uses the nearest station within 10 km that can be predicted
+  `predict` (kind `tide`)) uses the nearest station within 10 km that can be predicted
   on the datum.
 - **Another datum.** `--datum LAT` gives heights above lowest astronomical
   tide, at harmonic stations that have it. Subordinate stations are MLLW only.

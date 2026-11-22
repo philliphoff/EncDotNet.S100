@@ -155,7 +155,7 @@ public sealed class NavigabilityGridToolTests : IDisposable
                 S101AreaSynth.DepthArea(1, S101AreaSynth.Box(0, 0.025, 0.05, 0.05)),
             ]),
             LoadedDatasetFactory.Box(0, 0, 0.05, 0.05)));
-        var tool = new NavigabilityGridTool(catalog, new RouteCheckSourceCache(new ProjNetCrsTransformFactory()), _directory);
+        var tool = new NavigabilityGridTool(catalog, new RouteCheckSourceCache(new ProjNetCrsTransformFactory()), new ResultFileStore(_directory, "navigability", "s100://grids/"));
         return tool.InvokeAsync(request, TestContext.Current.CancellationToken);
     }
 }

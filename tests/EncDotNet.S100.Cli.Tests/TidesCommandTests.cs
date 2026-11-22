@@ -31,7 +31,7 @@ public sealed class TidesCommandTests : IDisposable
     }
 
     [Fact]
-    public void Stations_json_is_the_list_tide_stations_result()
+    public void Stations_json_is_the_list_stations_result()
     {
         var (exit, stdout, _) = Run(["tides", "stations", "--near", "47.6,-122.34", "--format", "json", "--catalogue", Catalogue]);
 
@@ -59,7 +59,7 @@ public sealed class TidesCommandTests : IDisposable
     }
 
     [Fact]
-    public void Predict_json_is_the_predict_tide_result_in_utc()
+    public void Predict_json_is_the_predict_result_in_utc()
     {
         var (exit, stdout, _) = Run([
             "tides", "predict", "Seattle", "--from", "2026-11-13T12:00-08:00", "--to", "2026-11-13T18:00-08:00",
@@ -151,7 +151,7 @@ public sealed class TidesCommandTests : IDisposable
     }
 
     [Fact]
-    public void Current_stations_json_is_the_list_current_stations_result()
+    public void Current_stations_json_is_the_list_stations_result()
     {
         var (exit, stdout, _) = Run(["tides", "currents", "stations", "--near", "37.82,-122.46", "--format", "json", "--catalogue", CurrentCatalogue]);
 
@@ -180,7 +180,7 @@ public sealed class TidesCommandTests : IDisposable
     }
 
     [Fact]
-    public void Current_predict_json_is_the_predict_current_result_in_utc()
+    public void Current_predict_json_is_the_predict_result_in_utc()
     {
         var (exit, stdout, _) = Run([
             "tides", "currents", "predict", "PUG1701", "--from", "2026-11-13T00:00Z", "--to", "2026-11-13T06:00Z",

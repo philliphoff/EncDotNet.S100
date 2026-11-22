@@ -16,7 +16,7 @@ public sealed record CurrentOffsetsDto(
     [property: Description("The ratio of the maximum flood speed to the reference station's.")] double MaximumFloodRatio,
     [property: Description("The ratio of the maximum ebb speed to the reference station's.")] double MaximumEbbRatio);
 
-/// <summary>A current station, as list_current_stations returns it.</summary>
+/// <summary>A current station, as list_stations returns it.</summary>
 [Description("A tidal current station: one depth bin of a NOAA current station.")]
 public sealed record CurrentStationDto(
     [property: Description("The station identifier: NOAA's station and depth bin, such as \"PUG1701_33\".")] string Id,
@@ -28,12 +28,12 @@ public sealed record CurrentStationDto(
     [property: Description("The depth below the surface the current is predicted at, in metres; null when not known.")] double? DepthMeters,
     [property: Description("The direction the flood sets toward, degrees true.")] double FloodDirectionDegrees,
     [property: Description("The direction the ebb sets toward, degrees true.")] double EbbDirectionDegrees,
-    [property: Description("True for a rotary current: predict_current gives a direction with each value.")] bool IsRotary,
+    [property: Description("True for a rotary current: predict gives a direction with each value.")] bool IsRotary,
     [property: Description("For a subordinate station, its reference station's id.")] string? ReferenceStationId,
     [property: Description("For a subordinate station, its reference station's name.")] string? ReferenceStationName,
     [property: Description("For a subordinate station, its differences from the reference station.")] CurrentOffsetsDto? Offsets);
 
-/// <summary>The result of list_current_stations.</summary>
+/// <summary>The result of list_stations.</summary>
 [Description("Tidal current stations near a point or in a box, nearest first.")]
 public sealed record ListCurrentStationsResult(
     [property: Description("The catalogue they come from.")] TideCatalogueInfo Catalogue,
@@ -70,7 +70,7 @@ public sealed record CurrentEventDto(
     [property: Description("The predicted speed in knots (0 at slack).")] double SpeedKnots,
     [property: Description("The direction the current sets toward, degrees true; null at slack.")] double? DirectionDegrees);
 
-/// <summary>The result of predict_current.</summary>
+/// <summary>The result of predict.</summary>
 [Description("A tidal current prediction at one station: a series of speeds and directions, or its slacks and maxima, or both.")]
 public sealed record PredictCurrentResult(
     [property: Description("The station the prediction is for.")] CurrentPredictionStation Station,

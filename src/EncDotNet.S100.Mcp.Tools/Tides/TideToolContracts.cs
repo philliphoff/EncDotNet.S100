@@ -34,24 +34,24 @@ public sealed record TideOffsetsDto(
     [property: Description("Low waters' height difference in metres, for heightAdjustment \"offset\".")] double? LowOffsetMeters,
     [property: Description("The datum the differences apply on, such as \"MLLW\".")] string Datum);
 
-/// <summary>A tide station, as list_tide_stations returns it.</summary>
+/// <summary>A tide station, as list_stations returns it.</summary>
 [Description("A tide station.")]
 public sealed record TideStationDto(
     [property: Description("The station identifier, such as \"9447130\".")] string Id,
     [property: Description("The station's name.")] string Name,
-    [property: Description("Always \"tide\" (list_current_stations lists current stations).")] string Type,
+    [property: Description("Always \"tide\" (list_stations with kind \"current\" lists current stations).")] string Type,
     [property: Description("\"harmonic\" (predicted from its own constituents) or \"subordinate\" (from a reference station with offsets).")] string Kind,
     [property: Description("The station's position.")] TidePosition Position,
     [property: Description("Geodesic distance in metres from the point asked about (or the box's centre).")] double DistanceMeters,
     [property: Description("A region, such as a US state.")] string? Region,
     [property: Description("Each datum's height in metres above datumsReference, by name (MHHW, MHW, MSL, MLW, MLLW, LAT, HAT).")] IReadOnlyDictionary<string, double>? Datums,
     [property: Description("The datum the 'datums' heights are measured from: MLLW where the station has it, else MSL.")] string? DatumsReference,
-    [property: Description("The datums predict_tide can give this station's heights on.")] IReadOnlyList<string> PredictableDatums,
+    [property: Description("The datums predict can give this station's heights on.")] IReadOnlyList<string> PredictableDatums,
     [property: Description("For a subordinate station, its reference station's id.")] string? ReferenceStationId,
     [property: Description("For a subordinate station, its reference station's name.")] string? ReferenceStationName,
     [property: Description("For a subordinate station, its differences from the reference station.")] TideOffsetsDto? Offsets);
 
-/// <summary>The result of list_tide_stations.</summary>
+/// <summary>The result of list_stations.</summary>
 [Description("Tide stations near a point or in a box, nearest first.")]
 public sealed record ListTideStationsResult(
     [property: Description("The catalogue they come from.")] TideCatalogueInfo Catalogue,
@@ -81,7 +81,7 @@ public sealed record TideExtremeDto(
     [property: Description("The predicted height in metres above the datum.")] double Height,
     [property: Description("\"high\" or \"low\".")] string Kind);
 
-/// <summary>The result of predict_tide.</summary>
+/// <summary>The result of predict.</summary>
 [Description("A tide prediction at one station: a series of heights, or its highs and lows, or both.")]
 public sealed record PredictTideResult(
     [property: Description("The station the prediction is for.")] TidePredictionStation Station,

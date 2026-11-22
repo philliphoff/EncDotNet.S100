@@ -24,28 +24,24 @@ public sealed class McpServeCommandTests
         "check_route",
         "close_all_datasets",
         "close_dataset",
-        "count_features",
         "describe_feature",
         "describe_feature_type",
         "describe_library_item",
-        "find_at",
         "get_navigability_grid",
         "identify_features",
         "library_action",
-        "list_current_stations",
         "list_data_sources",
         "list_datasets",
         "list_known_sources",
         "list_library_sources",
         "list_secom_services",
         "list_specs",
-        "list_tide_stations",
+        "list_stations",
         "list_time_steps",
         "nearest_features",
         "open_dataset",
         "plan_route",
-        "predict_current",
-        "predict_tide",
+        "predict",
         "query_features",
         "query_library_items",
         "refresh_library_source",
@@ -121,9 +117,10 @@ public sealed class McpServeCommandTests
         await using var client = await McpClient.CreateAsync(transport, cancellationToken: cts.Token);
 
         var result = await client.CallToolAsync(
-            "predict_tide",
+            "predict",
             new Dictionary<string, object?>
             {
+                ["kind"] = "tide",
                 ["station"] = "9447130",
                 ["from"] = "2026-11-13T00:00:00Z",
                 ["to"] = "2026-11-14T00:00:00Z",
@@ -131,7 +128,7 @@ public sealed class McpServeCommandTests
             },
             cancellationToken: cts.Token);
 
-        Assert.False(result.IsError ?? false, "predict_tide returned an error.");
+        Assert.False(result.IsError ?? false, "predict returned an error.");
         var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "{}";
         using var doc = System.Text.Json.JsonDocument.Parse(text);
         Assert.Equal("prediction", doc.RootElement.GetProperty("kind").GetString());
@@ -160,8 +157,8 @@ public sealed class McpServeCommandTests
         }
 
         var missing = await client.CallToolAsync(
-            "list_tide_stations",
-            new Dictionary<string, object?> { ["latitude"] = 47.6 },
+            "list_stations",
+            new Dictionary<string, object?> { ["kind"] = "tide", ["latitude"] = 47.6 },
             cancellationToken: cts.Token);
         Assert.True(missing.IsError ?? false);
         Assert.Contains("invalid_argument", missing.Content.OfType<TextContentBlock>().First().Text);

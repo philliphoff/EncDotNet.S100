@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
@@ -85,7 +84,8 @@ public sealed record NavigabilityGridConnection(
 
 /// <summary>The written grid file.</summary>
 public sealed record NavigabilityGridFile(
-    [property: Description("Absolute path on the server's file system.")] string Path,
+    [property: Description("Absolute path on the server's file system, for a client on the same machine.")] string Path,
+    [property: Description("The MCP resource (s100://grids/{id}) to fetch it with resources/read, from any client.")] string Uri,
     [property: Description("npy or raw.")] string Format,
     [property: Description("File size in bytes.")] long Bytes,
     [property: Description("How to read it.")] string Layout);
@@ -135,20 +135,20 @@ public sealed class NavigabilityGridTool
 
     private readonly IDatasetCatalog _catalog;
     private readonly RouteCheckSourceCache _sources;
-    private readonly string _outputDirectory;
+    private readonly ResultFileStore _files;
 
     /// <summary>Creates the tool.</summary>
     /// <param name="catalog">The loaded datasets.</param>
     /// <param name="sources">The route-check sources, shared with <c>check_route</c>.</param>
-    /// <param name="outputDirectory">Where grid files are written; created when needed.</param>
-    public NavigabilityGridTool(IDatasetCatalog catalog, RouteCheckSourceCache sources, string outputDirectory)
+    /// <param name="files">Where grid files are written, and served from as resources.</param>
+    public NavigabilityGridTool(IDatasetCatalog catalog, RouteCheckSourceCache sources, ResultFileStore files)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(sources);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        ArgumentNullException.ThrowIfNull(files);
         _catalog = catalog;
         _sources = sources;
-        _outputDirectory = outputDirectory;
+        _files = files;
     }
 
     /// <summary>Builds the grid, writes its file and summarises it.</summary>
@@ -409,15 +409,12 @@ public sealed class NavigabilityGridTool
 
     private async Task<NavigabilityGridFile> WriteFileAsync(NavigabilityGrid grid, string format, CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(_outputDirectory);
-        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
-        var path = Path.Combine(_outputDirectory, $"navigability-{stamp}-{Guid.NewGuid().ToString("N")[..8]}.{(format == FormatNpy ? "npy" : "bin")}");
         var bytes = format == FormatNpy ? NavigabilityGridFiles.Npy(grid) : NavigabilityGridFiles.Raw(grid);
-        await File.WriteAllBytesAsync(path, bytes, cancellationToken).ConfigureAwait(false);
+        var file = await _files.WriteAsync(format == FormatNpy ? "npy" : "bin", bytes, cancellationToken).ConfigureAwait(false);
         var layout = format == FormatNpy
             ? $"NumPy structured array, shape ({grid.Rows}, {grid.Columns}), row 0 south, column 0 west; fields depth_dm (int16, least charted depth in decimetres, {NoDepthValue} for none) and class (uint8: {ClassCodes})."
             : $"{grid.Rows * grid.Columns} little-endian int16 depths in decimetres ({NoDepthValue} for none), then {grid.Rows * grid.Columns} class bytes ({ClassCodes}); both row-major from the south-west, {grid.Columns} columns per row.";
-        return new NavigabilityGridFile(Path.GetFullPath(path), format, bytes.LongLength, layout);
+        return new NavigabilityGridFile(file.Path, file.Uri, format, file.Bytes, layout);
     }
 
     private static string ClassCodes =>

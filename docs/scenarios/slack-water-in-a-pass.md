@@ -103,14 +103,14 @@ station.
 ## Ask an agent
 
 The same answer is available to an AI agent through the MCP tools
-`list_current_stations` and `predict_current`, in SoundCharts or
+`list_stations` and `predict` (kind `current`), in SoundCharts or
 `s100 mcp serve`. See
 [Run the headless server](../mcp-server.md#run-the-headless-server) to
 connect one, then ask:
 
 > When is slack water at Deception Pass tomorrow afternoon?
 
-The agent calls `predict_current` with the station, a window and the events
+The agent calls `predict` (kind `current`) with the station, a window and the events
 mode, for example:
 
 ```json
@@ -145,7 +145,7 @@ field.
 ## Other places and outputs
 
 - **Near a point.** `--near 48.4,-122.64` (or `latitude` and `longitude` in
-  `predict_current`) uses the nearest current station within 10 km, the
+  `predict` (kind `current`)) uses the nearest current station within 10 km, the
   shallowest bin where several share a place.
 - **Subordinate stations.** A **subordinate** station, such as the one 0.8
   mile east of the Golden Gate Bridge (`PCT0281_1`), is predicted from a

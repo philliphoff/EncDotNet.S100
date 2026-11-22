@@ -6,7 +6,7 @@ using EncDotNet.S100.Tides.Stations;
 
 namespace EncDotNet.S100.Mcp.Tools.Tides;
 
-/// <summary>What predict_current returns.</summary>
+/// <summary>What predict returns.</summary>
 public enum CurrentPredictionMode
 {
     /// <summary>Speeds and directions at a regular step.</summary>
@@ -19,7 +19,7 @@ public enum CurrentPredictionMode
     Both,
 }
 
-/// <summary>A predict_current request: a station (by id or name) or a point, and a time window.</summary>
+/// <summary>A predict request: a station (by id or name) or a point, and a time window.</summary>
 /// <param name="Station">A station id or name; or null to use the nearest station to the point.</param>
 /// <param name="Latitude">The point's latitude, when no station is named.</param>
 /// <param name="Longitude">The point's longitude, when no station is named.</param>
@@ -59,13 +59,10 @@ public sealed record ResolvedCurrentPrediction(
 
 /// <summary>
 /// Predicts the tidal current at a station or the nearest station to a point
-/// (MCP <c>predict_current</c>, <c>s100 tides currents predict</c>).
+/// (MCP <c>predict</c> (kind current), <c>s100 tides currents predict</c>).
 /// </summary>
 public sealed class PredictCurrentTool
 {
-    /// <summary>The MCP tool name.</summary>
-    public const string Name = "predict_current";
-
     private readonly ITideCatalogueSource _source;
     private readonly TimeProvider _time;
 

@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools.Groups;
 
-/// <summary>The read-only tide prediction tools, list_tide_stations and predict_tide (#1452).</summary>
+/// <summary>The read-only tide prediction tools, list_stations and predict (#1452).</summary>
 internal sealed class TidesMcpToolGroup : IViewerMcpToolGroup
 {
     private readonly ITideCatalogueSource _catalogue;

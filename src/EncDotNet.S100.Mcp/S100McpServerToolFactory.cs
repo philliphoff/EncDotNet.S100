@@ -7,7 +7,6 @@ using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Mcp.Tools;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Specifications;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Protocol;
@@ -18,7 +17,7 @@ namespace EncDotNet.S100.Mcp;
 /// <summary>
 /// Builds <see cref="McpServerTool"/> wrappers around the MCP-1 tools
 /// (<see cref="ListDatasetsTool"/>, <see cref="DescribeFeatureTool"/>,
-/// <see cref="SampleTool"/>, <see cref="FindAtTool"/>),
+/// <see cref="SampleTool"/>, <see cref="QueryFeaturesTool"/> and the rest),
 /// translating <see cref="ToolResult{T}"/> outcomes into MCP
 /// <see cref="CallToolResult"/> payloads.
 /// </summary>
@@ -45,11 +44,9 @@ internal static class S100McpServerToolFactory
         DescribeFeatureTool describeFeature,
         DescribeFeatureTypeTool describeFeatureType,
         SampleTool sample,
-        FindAtTool findAt,
         IdentifyFeaturesTool identifyFeatures,
         NearestFeaturesTool nearestFeatures,
         QueryFeaturesTool queryFeatures,
-        CountFeaturesTool countFeatures,
         SearchFeaturesTool searchFeatures,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps,
@@ -60,11 +57,9 @@ internal static class S100McpServerToolFactory
         yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTool(describeFeature));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateDescribeFeatureTypeTool(describeFeatureType));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateSampleTool(sample));
-        yield return McpToolsets.Assign(McpToolsets.Query, CreateFindAtTool(findAt));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateIdentifyFeaturesTool(identifyFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateNearestFeaturesTool(nearestFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateQueryFeaturesTool(queryFeatures));
-        yield return McpToolsets.Assign(McpToolsets.Query, CreateCountFeaturesTool(countFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateSearchFeaturesTool(searchFeatures));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListSpecsTool(listSpecs));
         yield return McpToolsets.Assign(McpToolsets.Query, CreateListTimeStepsTool(listTimeSteps));
@@ -75,16 +70,15 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
     {
         var description =
-            "Lists the S-100 datasets currently loaded in the host (viewer or CLI). " +
-            "Supports optional spec and bounding-box filters and pagination. " +
-            "Returns dataset IDs, spec, bounds (decimal degrees, WGS-84), and UTC time range. " +
-            "Read-only and side-effect free.";
+            "Lists the S-100 datasets loaded in the host (viewer or CLI): ids, spec, bounds (decimal degrees, WGS-84) and UTC time range, " +
+            "paginated. Filter by spec, and by place: latitude/longitude keeps the datasets whose declared bounding box contains the point, " +
+            "'query' (box, polygon or polyline) those whose bounding box intersects it. Bounding boxes only: a match doesn't mean the dataset " +
+            "has data there (sample reads the value). Read-only and side-effect free.";
 
         var del = ([Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
-                   [Description("Optional bounding-box south latitude (decimal degrees, WGS-84). Pass null to omit the bbox filter; if any one of south/west/north/east is supplied, all four must be.")] double? south = null,
-                   [Description("Optional bounding-box west longitude (decimal degrees, WGS-84).")] double? west = null,
-                   [Description("Optional bounding-box north latitude (decimal degrees, WGS-84).")] double? north = null,
-                   [Description("Optional bounding-box east longitude (decimal degrees, WGS-84).")] double? east = null,
+                   [Description("A point, in decimal degrees WGS-84: keep the datasets whose bounding box contains it. Give with longitude, instead of 'query'.")] double? latitude = null,
+                   [Description("The point's longitude, with latitude.")] double? longitude = null,
+                   [Description(GeoQueryEnvelopeDescription + " Keeps the datasets whose bounding box intersects it (a point: contains it).")] JsonElement? query = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    CancellationToken ct = default) =>
@@ -92,7 +86,7 @@ internal static class S100McpServerToolFactory
                 inner.InvokeAsync(
                     new ListDatasetsRequest(
                         ParseSpec(spec),
-                        ParseBox(south, west, north, east),
+                        OptionalQueryOrPoint(query, latitude, longitude),
                         page,
                         pageSize),
                     ct));
@@ -104,6 +98,12 @@ internal static class S100McpServerToolFactory
             SerializerOptions = JsonOptions,
         });
     }
+
+    // The spatial query envelope's shapes, as every tool that takes one describes it.
+    private const string GeoQueryEnvelopeDescription =
+        "Spatial query, as a JSON object (or a string holding one): {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, " +
+        "{\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]} or " +
+        "{\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.";
 
     private static McpServerTool CreateDescribeFeatureTool(DescribeFeatureTool inner)
     {
@@ -138,7 +138,7 @@ internal static class S100McpServerToolFactory
     {
         var description =
             "Introspects a spec's bundled Feature Catalogue (ISO 19110 / S-100 Part 5): the " +
-            "schema-discovery counterpart to count_features / query_features. Call with just a spec " +
+            "schema-discovery counterpart to query_features. Call with just a spec " +
             "(e.g. \"S-101\" or \"S-124/1.5.0\") to list every feature type with its attribute count; " +
             "add a featureType (code, name, or alias) to get that type's attribute bindings — each " +
             "attribute's value type, whether it is mandatory and/or repeatable, and its enumerated " +
@@ -250,52 +250,14 @@ internal static class S100McpServerToolFactory
         });
     }
 
-    private static McpServerTool CreateFindAtTool(FindAtTool inner)
-    {
-        var description =
-            "Returns every dataset currently loaded in the host (viewer or CLI) whose declared " +
-            "bounding box contains or intersects the supplied geographic query. The simplest call " +
-            "is point-based (latitude/longitude in WGS-84 decimal degrees); for richer spatial " +
-            "selection (bbox / polygon / polyline), pass the optional 'query' JSON envelope and the " +
-            "tool will use it in place of the lat/lon point. Containment is bbox-only — a positive " +
-            "result means the point lies inside the dataset's declared rectangle, not that the " +
-            "point has actual cell coverage (call sample to read a value). Optionally " +
-            "filtered by spec. Returns dataset IDs, spec, bounds, and time range, with pagination.";
-
-        var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90]. Ignored when 'query' is supplied.")] double latitude,
-                   [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180]. Ignored when 'query' is supplied.")] double longitude,
-                   [Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
-                   [Description("Zero-based page index.")] int page = 0,
-                   [Description("Page size (clamped to 1..500).")] int pageSize = 50,
-                   [Description("Optional spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}. When supplied, overrides latitude/longitude.")] string? query = null,
-                   CancellationToken ct = default) =>
-            DispatchAsync(() =>
-                inner.InvokeAsync(
-                    new FindAtRequest(
-                        latitude,
-                        longitude,
-                        ParseSpec(spec),
-                        page,
-                        pageSize,
-                        ParseGeoQuery(query)),
-                    ct));
-
-        return McpServerTool.Create(del, new McpServerToolCreateOptions
-        {
-            Name = FindAtTool.Name,
-            Description = description,
-            SerializerOptions = JsonOptions,
-        });
-    }
-
     private static McpServerTool CreateIdentifyFeaturesTool(IdentifyFeaturesTool inner)
     {
         var description =
             "Identifies the vector features at a geographic point — the ECDIS cursor-pick — ranked " +
             "by drawing priority where the dataset was portrayed (S-98 15.1), then most-specific " +
             "first (point features before curves before areas; within a primitive the " +
-            "smaller/nearer feature wins). The feature-aware complement to find_at (which only " +
-            "answers which datasets' bounds cover the point). Area features use exact point-in-" +
+            "smaller/nearer feature wins). The feature-aware complement to list_datasets with a point " +
+            "(which only answers which datasets' bounds cover it). Area features use exact point-in-" +
             "polygon containment (interior-ring holes honoured); point and curve features match " +
             "within radiusMeters. Works across every vector spec (S-101, S-122, S-124, S-125, " +
             "S-127, S-128, S-129, S-131, S-201, S-411, S-412, S-421, CAP and vector weather). " +
@@ -340,7 +302,7 @@ internal static class S100McpServerToolFactory
     {
         var description =
             "Ranks the vector features nearest to a geographic point by TRUE geometric distance — " +
-            "the distance-ranking and containment query that find_at (dataset-bbox membership) and " +
+            "the distance-ranking and containment query that list_datasets (dataset-bbox membership) and " +
             "query_features (feature-bbox intersection) can't answer. Answers \"nearest light/buoy/" +
             "berth to my position?\" and \"is this point inside any restricted area?\" in one call: " +
             "an area feature containing the point is returned at distanceMeters 0 with " +
@@ -398,9 +360,11 @@ internal static class S100McpServerToolFactory
             "dataset ID, spec, feature ID, feature type, bounding box, and 'depth' with its numeric depth values in metres where it has " +
             "any (depthRangeMinimumMeters, depthRangeMaximumMeters, valueOfSoundingMeters, waterLevelEffect); includeAttributes adds every " +
             "attribute as encoded. Use describe_feature for decoded attributes and geometry. The result also carries a typeBreakdown " +
-            "(per-feature-type counts of the full match set). Pagination is server-side.";
+            "(per-feature-type counts of the full match set). Pagination is server-side. countOnly answers \"what kinds of features, and how many?\": " +
+            "no feature rows, and 'counts' per dataset and feature type with how many have resolvable geometry; it takes the same filters, and " +
+            "'query' may then be left out to count every feature, those without geometry included.";
 
-        var del = ([Description("Spatial query envelope, supplied either as a JSON object (preferred) or a JSON string containing one. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}. For a point, latitude and longitude can be given instead.")] JsonElement? query = null,
+        var del = ([Description(GeoQueryEnvelopeDescription + " For a point, latitude and longitude can be given instead. Required unless countOnly.")] JsonElement? query = null,
                    [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
                    [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
@@ -412,11 +376,12 @@ internal static class S100McpServerToolFactory
                    [Description("Add each feature's attributes as encoded (code and raw value; a complex attribute's parts as complex.sub) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool includeAttributes = false,
                    [Description("A point to query, in decimal degrees WGS-84, instead of 'query' (the same as {\"kind\":\"point\",...}). Give with longitude.")] double? latitude = null,
                    [Description("The point's longitude, with latitude.")] double? longitude = null,
+                   [Description("Count instead of listing: no feature rows, and 'counts' per dataset and feature type. Default false.")] bool countOnly = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
                     new QueryFeaturesRequest(
-                        QueryOrPoint(query, latitude, longitude),
+                        countOnly ? OptionalQueryOrPoint(query, latitude, longitude) : QueryOrPoint(query, latitude, longitude),
                         ParseSpec(spec),
                         featureType,
                         ParseTimeQuery(times),
@@ -425,7 +390,8 @@ internal static class S100McpServerToolFactory
                         page,
                         pageSize,
                         string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
-                        includeAttributes),
+                        includeAttributes,
+                        countOnly),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -437,12 +403,17 @@ internal static class S100McpServerToolFactory
     }
 
     // query_features' envelope, or a point given as latitude/longitude (#1628).
-    private static GeoQuery QueryOrPoint(JsonElement? query, double? latitude, double? longitude)
+    private static GeoQuery QueryOrPoint(JsonElement? query, double? latitude, double? longitude) =>
+        OptionalQueryOrPoint(query, latitude, longitude)
+        ?? throw new ArgumentException("give 'query', or latitude and longitude for a point.", "query");
+
+    // The envelope, a point given as latitude/longitude, or neither (null).
+    private static GeoQuery? OptionalQueryOrPoint(JsonElement? query, double? latitude, double? longitude)
     {
         var envelope = query is { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } ? ParseGeoQuery(query) : null;
         if (latitude is null && longitude is null)
         {
-            return envelope ?? throw new ArgumentException("give 'query', or latitude and longitude for a point.", "query");
+            return envelope;
         }
 
         if (envelope is not null)
@@ -456,37 +427,6 @@ internal static class S100McpServerToolFactory
         }
 
         return new GeoQuery.Point(new GeoPoint(lat, lon));
-    }
-
-    private static McpServerTool CreateCountFeaturesTool(CountFeaturesTool inner)
-    {
-        var description =
-            "Enumerates the feature types present in loaded vector datasets and counts how many " +
-            "features of each type they contain — the \"what kinds of features, and how many, are " +
-            "in this cell?\" discovery question. Works across every vector spec (S-101, S-122, " +
-            "S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421). Optionally filter by " +
-            "spec, by a single dataset, and/or by a spatial envelope. Each tally reports the total " +
-            "count and how many of those features have resolvable geometry. Read-only and " +
-            "side-effect free.";
-
-        var del = ([Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
-                   [Description("Optional dataset identifier (typically from list_datasets); null counts across every matching dataset.")] string? datasetId = null,
-                   [Description("Optional spatial query envelope, supplied as a JSON object (preferred) or a JSON string (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are counted; geometry-less features are excluded.")] JsonElement? query = null,
-                   CancellationToken ct = default) =>
-            DispatchAsync(() =>
-                inner.InvokeAsync(
-                    new CountFeaturesRequest(
-                        ParseSpec(spec),
-                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
-                        ParseGeoQuery(query)),
-                    ct));
-
-        return McpServerTool.Create(del, new McpServerToolCreateOptions
-        {
-            Name = CountFeaturesTool.Name,
-            Description = description,
-            SerializerOptions = JsonOptions,
-        });
     }
 
     private static McpServerTool CreateSearchFeaturesTool(SearchFeaturesTool inner)
@@ -506,7 +446,7 @@ internal static class S100McpServerToolFactory
         var del = ([Description("The text to search for in feature names (OBJNAM / NOBJNM / objectName / featureName). Required.")] string text,
                    [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] string? datasetId = null,
-                   [Description("Optional spatial query envelope, supplied as a JSON object (preferred) or a JSON string (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are searched; geometry-less features are excluded.")] JsonElement? query = null,
+                   [Description("Optional spatial query envelope, supplied as a JSON object or a JSON string holding one (the shapes query_features takes). When supplied, only features whose bounding box intersects are searched; geometry-less features are excluded.")] JsonElement? query = null,
                    [Description("When true the match is case-sensitive; default false.")] bool caseSensitive = false,
                    [Description("When true a name must equal the search text exactly; when false (default) any name containing the text matches.")] bool exact = false,
                    [Description("Zero-based page index.")] int page = 0,
@@ -960,17 +900,6 @@ internal static class S100McpServerToolFactory
         }
         var parsed = GeoQueryJsonReader.Parse(synthesized.ToJsonString(JsonOptions));
         return ((GeoQuery.Polyline)parsed).Value;
-    }
-
-    private static BoundingBox? ParseBox(double? south, double? west, double? north, double? east)
-    {
-        if (south is null && west is null && north is null && east is null) return null;
-        if (south is null || west is null || north is null || east is null)
-        {
-            throw new ArgumentException(
-                "When supplying a bbox filter, all of south, west, north and east must be provided.");
-        }
-        return new BoundingBox(south.Value, west.Value, north.Value, east.Value);
     }
 
     /// <summary>

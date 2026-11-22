@@ -47,7 +47,7 @@ public sealed class S100McpServerOptions
     /// Each entry is appended verbatim to the built-in tool list before
     /// the MCP server is started; tool names must therefore not collide
     /// with the built-ins (<c>list_datasets</c>, <c>describe_feature</c>,
-    /// <c>sample</c>, <c>find_at</c>, <c>query_features</c>,
+    /// <c>sample</c>, <c>query_features</c>,
     /// <c>list_specs</c>,
     /// <c>list_time_steps</c>, <c>check_route</c>).
     /// </remarks>
