@@ -1,6 +1,7 @@
 # Symbol dictionary — Design Note
 
-> Status: **Planned.** Decisions D1–D6 are made. §7 slices the build: the Chart reference activity
+> Status: **Planned.** Decisions D1–D6 are made. Tracked in
+> [#1633](https://github.com/philliphoff/EncDotNet.S100/issues/1633); Phase 1 is #1634–#1639. §7 slices the build: the Chart reference activity
 > first, then the Reference tab, then Object information. A working
 > prototype of the study page, generated from the catalogues bundled in
 > `EncDotNet.S100.Specifications`, is at
@@ -380,7 +381,7 @@ Each slice ships on its own, with tests and a whats-new bullet.
 
 ### Phase 1: the Chart reference activity
 
-1. **R1 Index.** `ChartReferenceIndex` in
+1. [#1634](https://github.com/philliphoff/EncDotNet.S100/issues/1634) **R1 Index.** `ChartReferenceIndex` in
    `EncDotNet.S100.Datasets.Pipelines/Reference` (§3): entries for feature
    types, items, attributes and display settings; the Lua and XSLT rule
    readers; search with ranking (exact code or acronym, then name prefix,
@@ -393,20 +394,20 @@ Each slice ships on its own, with tests and a whats-new bullet.
    Also records each symbol's `iho:source`, for the New in S-101 badge;
    every viewing group a rule sets, by geometry or case, for D6; and the
    assembled families and unreached items for D3. No UI.
-2. **R2 Service and changes.** `CataloguesChanged` on both catalogue
+2. [#1635](https://github.com/philliphoff/EncDotNet.S100/issues/1635) **R2 Service and changes.** `CataloguesChanged` on both catalogue
    managers. A viewer `ChartReferenceService` builds indexes lazily per
    spec off the UI thread, keyed by the two hashes, and drops them on
    change. It lists the available products with the loaded ones first. MCP
    gets `search_chart_reference` and `get_chart_reference_entry`, reading
    the service, so they work headless.
-3. **R3 Glyphs.** An area fill row (`CatalogueLegendBuilder.Fill` and a
+3. [#1636](https://github.com/philliphoff/EncDotNet.S100/issues/1636) **R3 Glyphs.** An area fill row (`CatalogueLegendBuilder.Fill` and a
    `LegendGlyphRenderer` case). A fit-to-box render for reference sizes
    (40 px tiles, the 14 px legend sizes are too small). The rule for a
    feature type's lead glyph: its own point symbol, never the default `?`;
    then its fill colours; then its line; else none. An in-memory cache per
    spec, item and palette, rebuilt on `ViewerSettingsService.PaletteChanged`,
    on the palette's chart background (`LegendViewModel.TileOf`).
-4. **R4 The activity.** `ChartReferenceViewModel` and `ChartReferenceView`,
+4. [#1637](https://github.com/philliphoff/EncDotNet.S100/issues/1637) **R4 The activity.** `ChartReferenceViewModel` and `ChartReferenceView`,
    modelled on Feature search (250 ms debounce, synchronous in tests). It
    has the product combo, search, Features / Symbols, and a virtualised list
    grouped by Chart 1 section. S-401 has 926 items, so the list must
@@ -418,13 +419,13 @@ Each slice ships on its own, with tests and a whats-new bullet.
    and a shortcut, strings in `Strings.ChartReference.cs`, and automation
    ids (§4.6). Tests: view-model tests with a stub service, and a headless
    view test (`ViewHost.Show(view, 320, 800)`).
-5. **R5 In view and the Legend link.** The In view toggle, from the display
+5. [#1638](https://github.com/philliphoff/EncDotNet.S100/issues/1638) **R5 In view and the Legend link.** The In view toggle, from the display
    lists `CatalogueSymbolKey` already reads. Symbol rows match by name;
    feature rows match by the feature class in the processor's feature list.
    Hover to ring through `LegendFindService`. The Legend tab's **Show all in
    Chart reference** opens the activity at that product's symbols with In
    view on (legends D7).
-6. **R6 Study page.** **Open as page** in the full-content panel: a second
+6. [#1639](https://github.com/philliphoff/EncDotNet.S100/issues/1639) **R6 Study page.** **Open as page** in the full-content panel: a second
    tab registration with `fillsContent: true` that only code opens, sharing
    the view model. It has the tile grid, product chips, and the palette and
    symbol-style preview switches. PDF export waits for later.
