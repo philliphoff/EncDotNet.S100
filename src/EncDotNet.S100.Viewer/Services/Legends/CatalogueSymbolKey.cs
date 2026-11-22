@@ -80,19 +80,44 @@ internal sealed class CatalogueSymbolKey
 
         foreach (var symbol in Index.GetValue(payload.SubLayer, _ => Build(payload)))
         {
-            if (suppressed is not null && suppressed.Contains(symbol.FeatureReference))
-                continue;
-            if (!double.IsNaN(scaleDenominator)
-                && (symbol.ScaleMinimum is { } min && scaleDenominator > min
-                    || symbol.ScaleMaximum is { } max && scaleDenominator < max))
-            {
-                continue;
-            }
-            if (view is { } v && !v.Intersects(symbol.Bounds))
-                continue;
-            yield return symbol;
+            if (IsDrawn(symbol.FeatureReference, symbol.Bounds, symbol.ScaleMinimum, symbol.ScaleMaximum, suppressed, view, scaleDenominator))
+                yield return symbol;
         }
     }
+
+    /// <summary>
+    /// Whether an instruction is drawn: its feature isn't suppressed by an
+    /// S-98 rule, the scale is inside its SCAMIN window, and its footprint
+    /// meets the view. Shared with <see cref="CatalogueLinework"/>, so line
+    /// styles and fills are counted as symbols are.
+    /// </summary>
+    /// <param name="featureReference">The feature that draws it.</param>
+    /// <param name="bounds">Its footprint.</param>
+    /// <param name="scaleMinimum">The SCAMIN it draws to, with the out-of-band cap.</param>
+    /// <param name="scaleMaximum">The SCAMAX it draws from.</param>
+    /// <param name="suppressed">The features an S-98 rule removed, or null.</param>
+    /// <param name="view">The map view, or null for everywhere.</param>
+    /// <param name="scaleDenominator">The display scale (1:N), or NaN to ignore SCAMIN.</param>
+    internal static bool IsDrawn(
+        string featureReference, GeoBounds bounds, double? scaleMinimum, double? scaleMaximum,
+        IReadOnlySet<string>? suppressed, GeoBounds? view, double scaleDenominator)
+    {
+        if (suppressed is not null && suppressed.Contains(featureReference))
+            return false;
+        if (!double.IsNaN(scaleDenominator)
+            && (scaleMinimum is { } min && scaleDenominator > min
+                || scaleMaximum is { } max && scaleDenominator < max))
+        {
+            return false;
+        }
+        return view is not { } v || v.Intersects(bounds);
+    }
+
+    /// <summary>The SCAMIN an instruction draws to, with the sub-layer's out-of-band cap.</summary>
+    /// <param name="scaleMinimum">The instruction's SCAMIN.</param>
+    /// <param name="cap">The out-of-band cap, or null.</param>
+    internal static double? CappedScaleMinimum(double? scaleMinimum, int? cap) =>
+        cap is { } c ? Math.Min(scaleMinimum ?? double.MaxValue, c) : scaleMinimum;
 
     /// <summary>
     /// The rows: the <see cref="MaxRows"/> most drawn symbols, then by name,
@@ -160,14 +185,15 @@ internal sealed class CatalogueSymbolKey
             if (footprint is not { } box)
                 continue;
 
-            var scaleMinimum = cap is { } c ? Math.Min(point.ScaleMinimum ?? double.MaxValue, c) : point.ScaleMinimum;
-            symbols.Add(new DrawnSymbol(name, point.FeatureReference, box, scaleMinimum, point.ScaleMaximum, point.CoordinateOverride));
+            symbols.Add(new DrawnSymbol(name, point.FeatureReference, box, CappedScaleMinimum(point.ScaleMinimum, cap), point.ScaleMaximum, point.CoordinateOverride));
         }
 
         return symbols;
     }
 
-    private static GeoBounds? FootprintOf(FeatureGeometry? geometry)
+    /// <summary>A feature's footprint, or null without geometry.</summary>
+    /// <param name="geometry">The feature's geometry, or null.</param>
+    internal static GeoBounds? FootprintOf(FeatureGeometry? geometry)
     {
         if (geometry is null)
             return null;

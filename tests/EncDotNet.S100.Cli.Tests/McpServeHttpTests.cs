@@ -184,6 +184,11 @@ public sealed class McpServeHttpTests
             catch (HttpRequestException)
             {
             }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // One request outlasted the client's timeout while the server
+                // was still starting (#1663 on a Windows ARM runner): try again.
+            }
 
             await Task.Delay(250, ct);
         }
