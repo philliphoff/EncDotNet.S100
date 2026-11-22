@@ -250,6 +250,95 @@ public static class WeatherRequests
         return new UriBuilder(new Uri(Folder(erddapUri), "griddap/" + Uri.EscapeDataString(dataset.Id) + ".nc")) { Query = query }.Uri;
     }
 
+    /// <summary>The address of an NCSS grid dataset: the service root (<c>…/thredds/ncss/grid/</c>) joined with the dataset's path.</summary>
+    /// <param name="ncssUri">The NCSS grid root.</param>
+    /// <param name="datasetPath">The dataset's path below it (<c>FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd</c>).</param>
+    public static Uri NcssDatasetUri(Uri ncssUri, string datasetPath)
+    {
+        ArgumentNullException.ThrowIfNull(ncssUri);
+        ArgumentException.ThrowIfNullOrEmpty(datasetPath);
+        return new Uri(Folder(ncssUri), string.Join('/', datasetPath.Trim('/').Split('/').Select(Uri.EscapeDataString)));
+    }
+
+    /// <summary>The <c>dataset.xml</c> description of an NCSS grid dataset: its axes, area and time span.</summary>
+    public static Uri NcssDatasetXmlUri(Uri ncssUri, string datasetPath) =>
+        new(NcssDatasetUri(ncssUri, datasetPath).AbsoluteUri + "/dataset.xml");
+
+    /// <summary>
+    /// The most points an NCSS subset asks for along latitude or longitude:
+    /// 500. A finer grid is thinned with <c>horizStride</c>. Lower than
+    /// <see cref="ErddapMaxAxisPoints"/>: an NCSS forecast is 3-hourly over
+    /// days rather than one analysis, and the server is slow (#1270).
+    /// </summary>
+    public const int NcssMaxAxisPoints = 500;
+
+    /// <summary>
+    /// An NCSS subset of a grid dataset as NetCDF-4 (<c>…/&lt;dataset&gt;?var=…&amp;accept=netcdf4</c>):
+    /// each variable over <paramref name="start"/> to <paramref name="end"/>,
+    /// the area, and the first level of a vertical axis (<c>vertCoord</c>,
+    /// 0 m for an ocean model). One <c>horizStride</c> thins both axes so
+    /// neither takes more than <see cref="NcssMaxAxisPoints"/> points. The
+    /// area must not cross 0° (<see cref="SplitAtGreenwich"/>): a server
+    /// whose longitudes run 0 to 360 cuts such a box at 0°.
+    /// </summary>
+    /// <param name="ncssUri">The NCSS grid root (<c>…/thredds/ncss/grid/</c>).</param>
+    /// <param name="dataset">The dataset; its id is its path below the root.</param>
+    /// <param name="info">The dataset's description, from its <c>dataset.xml</c>.</param>
+    /// <param name="area">The area, or <see langword="null"/> for all of it.</param>
+    /// <param name="start">The first time (UTC).</param>
+    /// <param name="end">The last time (UTC).</param>
+    public static Uri NcssGridUri(
+        Uri ncssUri, WeatherServiceDataset dataset, NcssDatasetInfo info, GeoBounds? area, DateTimeOffset start, DateTimeOffset end)
+    {
+        ArgumentNullException.ThrowIfNull(ncssUri);
+        ArgumentNullException.ThrowIfNull(dataset);
+        ArgumentNullException.ThrowIfNull(info);
+
+        var query = new StringBuilder();
+        foreach (var variable in dataset.Variables)
+            query.Append(query.Length == 0 ? "" : "&").Append("var=").Append(Uri.EscapeDataString(variable));
+
+        double latitudeSpan, longitudeSpan;
+        if (area is { } box)
+        {
+            var east = box.CrossesAntimeridian ? box.East + 360 : box.East;
+            query.Append("&north=").Append(Number(box.North));
+            query.Append("&south=").Append(Number(box.South));
+            query.Append("&west=").Append(Number(box.West));
+            query.Append("&east=").Append(Number(east));
+            (latitudeSpan, longitudeSpan) = (box.North - box.South, east - box.West);
+        }
+        else
+        {
+            (latitudeSpan, longitudeSpan) = (info.LatitudeSpan ?? 180, info.LongitudeSpan ?? 360);
+        }
+
+        int stride = Math.Max(
+            Stride(info.LatitudeSpacing, latitudeSpan, NcssMaxAxisPoints),
+            Stride(info.LongitudeSpacing, longitudeSpan, NcssMaxAxisPoints));
+        if (stride > 1)
+            query.Append("&horizStride=").Append(stride.ToString(CultureInfo.InvariantCulture));
+        if (info.FirstLevel is { } level)
+            query.Append("&vertCoord=").Append(Number(level));
+        query.Append("&time_start=").Append(Time(start));
+        query.Append("&time_end=").Append(Time(end));
+        query.Append("&accept=netcdf4");
+
+        return new UriBuilder(NcssDatasetUri(ncssUri, dataset.Id)) { Query = query.ToString() }.Uri;
+    }
+
+    /// <summary>
+    /// <paramref name="area"/> as boxes that don't cross 0°: the area itself,
+    /// or, when it reaches both sides of the prime meridian, its part west of
+    /// 0° and its part east of it. A THREDDS server whose longitudes run 0 to
+    /// 360 (HYCOM) answers a box across 0° with only its eastern part (#1270).
+    /// An area across the antimeridian is returned whole.
+    /// </summary>
+    public static IReadOnlyList<GeoBounds> SplitAtGreenwich(GeoBounds area) =>
+        !area.CrossesAntimeridian && area.West < 0 && area.East > 0
+            ? [area with { East = 0 }, area with { West = 0 }]
+            : [area];
+
     /// <summary>
     /// The runs to try, newest first: the last <paramref name="cadenceHours"/>
     /// cycle at or before <paramref name="now"/>, then each earlier cycle, <paramref name="count"/> in all.
@@ -268,12 +357,16 @@ public static class WeatherRequests
         run.ToUniversalTime().ToString("yyyy-MM-dd HH'Z'", CultureInfo.InvariantCulture);
 
     // Every n-th point, so the span takes at most ErddapMaxAxisPoints points.
-    private static int Stride(ErddapAxis axis, double span)
+    private static int Stride(ErddapAxis axis, double span) => Stride(axis.Spacing, span, ErddapMaxAxisPoints);
+
+    // Every n-th point, so the span takes at most maxPoints points.
+    private static int Stride(double? spacing, double span, int maxPoints)
     {
-        if (axis.Spacing is not { } spacing || spacing <= 0 || !double.IsFinite(span) || span <= 0)
+        if (spacing is not { } step || step <= 0 || !double.IsFinite(span) || span <= 0)
             return 1;
-        double points = span / spacing + 1;
-        return Math.Max(1, (int)Math.Ceiling(points / ErddapMaxAxisPoints));
+        // The grid points within the span: a rounding error short of a whole step still counts it.
+        double points = Math.Floor((span / step) + 1e-6) + 1;
+        return Math.Max(1, (int)Math.Ceiling(points / maxPoints));
     }
 
     private static Uri Folder(Uri uri) => uri.AbsoluteUri.EndsWith('/') ? uri : new Uri(uri.AbsoluteUri + "/");

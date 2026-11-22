@@ -22,7 +22,7 @@ namespace EncDotNet.S100.Cli.Tests;
 /// </summary>
 public sealed class WeatherLibraryLoadTests : IDisposable
 {
-    /// <summary>Set to <c>1</c> to run the live smoke tests (off in CI; NOMADS, api.weather.gov and ERDDAP must be reachable).</summary>
+    /// <summary>Set to <c>1</c> to run the live smoke tests (off in CI; NOMADS, api.weather.gov, ERDDAP and HYCOM's NCSS must be reachable).</summary>
     public const string LiveVariable = "S100_LIVE_WEATHER_TESTS";
 
     private static readonly DateTimeOffset Run = new(2026, 10, 25, 0, 0, 0, TimeSpan.Zero);
@@ -203,6 +203,28 @@ public sealed class WeatherLibraryLoadTests : IDisposable
     }
 
     [Fact]
+    public async Task A_HYCOM_current_forecast_from_NCSS_loads_as_NetCDF_with_its_time_steps()
+    {
+        // #1270: the Library reads HYCOM's dataset.xml, asks NCSS for the view, and the
+        // NetCDF-4 subset opens as a current grid the Timeline steps through.
+        var server = Server();
+        server.NcssDatasetXml = WeatherFakeServer.HycomDatasetXml;
+        var nc = NetCdfFixtures.WriteCurrentNetCdf4(Path.Combine(_root, "hycom.nc"), grid: NetCdfFixtures.ChartGrid with { Steps = 3, StepHours = 3 });
+        server.NcssNetCdf = File.ReadAllBytes(nc);
+        var (library, operations, readers) = Library(new HttpClient(server), new FakeTimeProvider(Run.AddHours(5)));
+
+        var (source, item) = await AddAsync(library, readers, "hycom-ncss-currents", FirstDayOnly);
+        var loaded = await DownloadAndOpenAsync(operations, source, item);
+
+        Assert.Equal("NetCDF", loaded.Spec);
+        Assert.Equal(new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero), S100ForecastFeedIndexer.RunOf(item));
+        Assert.StartsWith("HYCOM Consortium ESPC-D-V02", WeatherRuns.CreditOf(item), StringComparison.Ordinal);
+        Assert.Contains(server.Requests, r => r.Uri.Host == "ncss.hycom.org" && r.Uri.Query.Contains("accept=netcdf4", StringComparison.Ordinal));
+        using var session = new HeadlessS100Session(_catalog);
+        Assert.Equal(NetCdfFixtures.ChartGrid.Times, ((ITimeController)session).AvailableSteps);
+    }
+
+    [Fact]
     public async Task A_folder_holding_one_run_in_hourly_files_loads_as_one_dataset()
     {
         var run = Directory.CreateDirectory(Path.Combine(_root, "runs", "gfs.20261025", "00"));
@@ -273,6 +295,7 @@ public sealed class WeatherLibraryLoadTests : IDisposable
     [InlineData("noaa-erddap-sst")]
     [InlineData("noaa-erddap-currents")]
     [InlineData("ioos-erddap-hfradar")]
+    [InlineData("hycom-ncss-currents")]
     public async Task Live_each_source_adds_downloads_and_opens(string id)
     {
         Assert.SkipUnless(Environment.GetEnvironmentVariable(LiveVariable) == "1", $"Set {LiveVariable}=1 to reach the live weather services.");

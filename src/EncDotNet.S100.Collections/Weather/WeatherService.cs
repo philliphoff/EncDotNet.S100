@@ -43,6 +43,14 @@ public enum WeatherServiceKind
     /// downloaded one as a newer model run does.
     /// </summary>
     NhcStorms,
+
+    /// <summary>
+    /// A THREDDS NetCDF Subset Service (NCSS) grid (#1270), such as HYCOM's
+    /// global current forecast: each dataset, named by its path below the
+    /// service root, is described by its <c>dataset.xml</c> and fetched as a
+    /// NetCDF-4 subset of the area, the hours and the top level.
+    /// </summary>
+    ThreddsNcss,
 }
 
 /// <summary>A parameter a GRIB2 service offers: its NCEP short name and level as the <c>.idx</c> files spell them.</summary>
@@ -56,8 +64,8 @@ public sealed record WeatherServiceParameter(string Id, string Name, string Leve
     public string IndexMatch => $":{Id}:{Level}:";
 }
 
-/// <summary>An ERDDAP <c>griddap</c> dataset, or a WPC bulletin, a service offers.</summary>
-/// <param name="Id">The ERDDAP dataset id, e.g. <c>NWW3_Global_Best</c>; for a bulletin, a short id (<c>codsus</c>) that names its item.</param>
+/// <summary>An ERDDAP <c>griddap</c> dataset, an NCSS grid, or a WPC bulletin, a service offers.</summary>
+/// <param name="Id">The ERDDAP dataset id, e.g. <c>NWW3_Global_Best</c>; for NCSS, the dataset's path below the service root (<c>FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd</c>); for a bulletin, a short id (<c>codsus</c>) that names its item.</param>
 /// <param name="Name">The display name.</param>
 /// <param name="Variables">The variables to fetch (CF names the NetCDF reader maps, such as <c>Thgt</c>); empty for a bulletin.</param>
 /// <param name="Default">True when the dataset is chosen by default.</param>
@@ -164,7 +172,7 @@ public sealed record WeatherService(
         WeatherServiceKind.GribFilter or WeatherServiceKind.GribIndex =>
             DataRoot is { IsAbsoluteUri: true } && !string.IsNullOrWhiteSpace(File) && Parameters.Count > 0
             && CadenceHours > 0 && StepHours > 0 && MaxHours >= 0,
-        WeatherServiceKind.ErddapGriddap => Datasets.Count > 0 && Datasets.All(d => d.Variables.Count > 0),
+        WeatherServiceKind.ErddapGriddap or WeatherServiceKind.ThreddsNcss => Datasets.Count > 0 && Datasets.All(d => d.Variables.Count > 0),
         WeatherServiceKind.NwsAlerts => true,
         WeatherServiceKind.WpcBulletins => DataRoot is { IsAbsoluteUri: true } && Datasets.Count > 0
             && Datasets.All(d => !string.IsNullOrWhiteSpace(d.File)),

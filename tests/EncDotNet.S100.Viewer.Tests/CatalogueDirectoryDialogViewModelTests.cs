@@ -131,7 +131,7 @@ public class CatalogueDirectoryDialogViewModelTests
         Assert.Equal(
             ["Charts", "Depth, tides & currents", "Weather & ocean", "SECOM services", "My sources"],
             vm.Categories.Select(c => c.Label));
-        Assert.Equal([17, 3, 11, 1, 0], vm.Categories.Select(c => c.Count));
+        Assert.Equal([17, 3, 12, 1, 0], vm.Categories.Select(c => c.Count));
         Assert.True(vm.Categories[0].IsOpen);
         Assert.All(vm.Rows.Where(r => !r.IsGroupHeader), r => Assert.Equal(KnownCatalogueCategory.Charts, r.Category));
 
@@ -149,7 +149,7 @@ public class CatalogueDirectoryDialogViewModelTests
         vm.Categories.Single(c => c.Category == KnownCatalogueCategory.Weather).SelectCommand.Execute(null);
 
         Assert.Equal(KnownCatalogueCategory.Weather, vm.SelectedCategory);
-        Assert.Equal(11, vm.Rows.Count(r => !r.IsGroupHeader));
+        Assert.Equal(12, vm.Rows.Count(r => !r.IsGroupHeader));
         Assert.Contains(vm.Rows, r => r.Source.Id == "noaa-erddap-currents");
         Assert.Equal(["NORTH AMERICA · UNITED STATES", "WORLDWIDE"], vm.Rows.Where(r => r.IsGroupHeader).Select(r => r.HeaderText));
         Assert.Same(vm.Rows.First(r => !r.IsGroupHeader), vm.SelectedEntry);

@@ -91,6 +91,7 @@ public class KnownCatalogueSourcesTests
         Assert.Equal(KnownCatalogueCategory.Depth, KnownCatalogueSources.Find("noaa-s111")!.Category);
         Assert.Equal(KnownCatalogueCategory.Weather, KnownCatalogueSources.Find("noaa-erddap-currents")!.Category);
         Assert.Equal(KnownCatalogueCategory.Weather, KnownCatalogueSources.Find("ioos-erddap-hfradar")!.Category);
+        Assert.Equal(KnownCatalogueCategory.Weather, KnownCatalogueSources.Find("hycom-ncss-currents")!.Category);
         Assert.Equal(KnownCatalogueCategory.Secom, KnownCatalogueSources.Find("ccg-s124-secom")!.Category);
         Assert.DoesNotContain(KnownCatalogueSources.All, s => s.Category == KnownCatalogueCategory.User);
     }

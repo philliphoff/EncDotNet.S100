@@ -60,6 +60,13 @@ public sealed record WeatherServiceSummary(DateTimeOffset? LatestRun, int Items,
 /// the item downloads a NetCDF subset from now to the last chosen hour (or
 /// the dataset's last hours, when it has ended).
 /// </description></item>
+/// <item><description>
+/// <b>THREDDS NCSS</b> (HYCOM, #1270): each dataset's <c>dataset.xml</c>
+/// gives its time span, grid spacing and newest run; the item downloads a
+/// NetCDF-4 subset like ERDDAP's, thinned with <c>horizStride</c>, and an
+/// area across 0° becomes two items, one each side, as the server cuts such
+/// a box at 0°.
+/// </description></item>
 /// </list>
 /// <para>
 /// Each item carries the source's licence and attribution
@@ -111,7 +118,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         var diagnostics = new List<IndexDiagnostic>();
         var items = new List<CollectionItem>();
         progress?.Report(new IndexProgress(0, feed.ServiceUri.AbsoluteUri));
-        if (feed.Service.Kind is WeatherServiceKind.GribFilter or WeatherServiceKind.ErddapGriddap
+        if (feed.Service.Kind is WeatherServiceKind.GribFilter or WeatherServiceKind.ErddapGriddap or WeatherServiceKind.ThreddsNcss
             && feed.Selection.Area is { } chosen && RequestArea(feed) is { } kept && kept != chosen)
         {
             diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Warning, string.Create(CultureInfo.InvariantCulture,
@@ -145,6 +152,27 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
                                 WeatherRequests.ErddapInfoUri(feed.ServiceUri, dataset.Id).AbsoluteUri));
                             if (DownloadedItem(feed, dataset.Id) is { } offline)
                                 items.Add(offline);
+                        }
+                    }
+
+                    break;
+                case WeatherServiceKind.ThreddsNcss:
+                    foreach (var dataset in feed.Selection.DatasetsOf(feed.Service))
+                    {
+                        try
+                        {
+                            items.AddRange(await NcssItemsAsync(feed, dataset, cancellationToken).ConfigureAwait(false));
+                        }
+                        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException
+                            or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+                        {
+                            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Error, $"{dataset.Name}: {ex.Message}",
+                                WeatherRequests.NcssDatasetXmlUri(feed.ServiceUri, dataset.Id).AbsoluteUri));
+                            foreach (var name in NcssNamesOf(dataset))
+                            {
+                                if (DownloadedItem(feed, name) is { } offline)
+                                    items.Add(offline);
+                            }
                         }
                     }
 
@@ -221,6 +249,17 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
                     storms.Count == 0 ? null : storms.Max(s => s.Issued),
                     storms.Count,
                     storms.Count == 0 ? null : string.Join("; ", storms.Select(StormTitle)));
+            case WeatherServiceKind.ThreddsNcss:
+                var grids = feed.Selection.DatasetsOf(feed.Service);
+                DateTimeOffset? newest = null;
+                foreach (var dataset in grids)
+                {
+                    var info = await ReadNcssInfoAsync(feed.ServiceUri, dataset.Id, cancellationToken).ConfigureAwait(false);
+                    if (info.LatestRun is { } latestRun && (newest is null || latestRun > newest))
+                        newest = latestRun;
+                }
+
+                return new WeatherServiceSummary(newest, grids.Count, string.Join("; ", grids.Select(d => d.Name)));
             default:
                 var titles = new List<string>();
                 foreach (var dataset in feed.Selection.DatasetsOf(feed.Service))
@@ -412,6 +451,86 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
             },
             Properties = properties,
         };
+    }
+
+    /// <summary>
+    /// An NCSS grid's items (#1270): one NetCDF-4 subset from now to the last
+    /// chosen hour (or the dataset's last hours, when its forecast has
+    /// ended), or two when the area crosses 0°, one each side
+    /// (<see cref="WeatherRequests.SplitAtGreenwich"/>), named
+    /// <c>…-west</c> and <c>…-east</c>. The run is the dataset's newest
+    /// <c>time_run</c>; the request starts no earlier than the dataset's
+    /// first time, as the server keeps only a couple of weeks.
+    /// </summary>
+    private async Task<IReadOnlyList<CollectionItem>> NcssItemsAsync(WeatherFeedSource feed, WeatherServiceDataset dataset, CancellationToken cancellationToken)
+    {
+        var info = await ReadNcssInfoAsync(feed.ServiceUri, dataset.Id, cancellationToken).ConfigureAwait(false);
+        var now = _time.GetUtcNow();
+        var hours = feed.Selection.HoursOf(feed.Service);
+        var ahead = TimeSpan.FromHours(hours.Count > 0 ? Math.Max(hours[^1], 1) : feed.Service.DefaultHours);
+        var end = info.End is { } last && last < now + ahead ? last : now + ahead;
+        var start = info.End is { } ended && ended < now ? ended - ahead : now - TimeSpan.FromHours(Math.Max(feed.Service.StepHours, 1));
+        if (info.Start is { } first && start < first)
+            start = first;
+        if (end < start)
+            end = start;
+
+        var run = info.LatestRun;
+        var issued = run ?? info.End ?? now;
+        var area = RequestArea(feed);
+        var name = NcssNamesOf(dataset)[0];
+        var parts = area is { } box ? WeatherRequests.SplitAtGreenwich(box) : [];
+        var items = new List<CollectionItem>();
+        for (int i = 0; i < Math.Max(parts.Count, 1); i++)
+        {
+            GeoBounds? part = parts.Count == 0 ? null : parts[i];
+            var (key, title) = parts.Count < 2
+                ? (name, dataset.Name)
+                : i == 0
+                    ? (name + WestSuffix, dataset.Name + " (west of 0°)")
+                    : (name + EastSuffix, dataset.Name + " (east of 0°)");
+            var uri = WeatherRequests.NcssGridUri(feed.ServiceUri, dataset, info, part, start, end);
+            var properties = Stamp(feed, run, run is null ? null : end);
+            if (run is null)
+                properties.Remove(WeatherRuns.StaleAfterProperty);
+            properties["variables"] = string.Join(", ", dataset.Variables);
+            items.Add(new CollectionItem
+            {
+                Key = key,
+                ProductSpec = "NetCDF",
+                Name = key,
+                Title = title,
+                IssueDate = DateOnly.FromDateTime(issued.UtcDateTime),
+                Bounds = AreaOf(feed, part),
+                Location = new RemoteItemLocation(uri, null, issued, DownloadFolderFor(feed), Layout: new PackageLayout(key + ".nc", []))
+                {
+                    Parts = [new RemotePart(uri)],
+                },
+                Properties = properties,
+            });
+        }
+
+        return items;
+    }
+
+    /// <summary>The names an NCSS dataset's items take: its file name (<c>FMRC_ESPC-D-V02_uv3z_best</c>), and that with <c>-west</c> and <c>-east</c> for an area split at 0°.</summary>
+    private static string[] NcssNamesOf(WeatherServiceDataset dataset)
+    {
+        var path = dataset.Id.TrimEnd('/');
+        var name = Safe(Path.GetFileNameWithoutExtension(path[(path.LastIndexOf('/') + 1)..]));
+        return [name, name + WestSuffix, name + EastSuffix];
+    }
+
+    private const string WestSuffix = "-west";
+    private const string EastSuffix = "-east";
+
+    internal async Task<NcssDatasetInfo> ReadNcssInfoAsync(Uri ncssUri, string datasetPath, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, WeatherRequests.NcssDatasetXmlUri(ncssUri, datasetPath));
+        Identify(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return NcssDatasetInfo.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>The item property naming a WPC bulletin's kind: <c>analysis</c> or <c>forecast</c>.</summary>
@@ -795,7 +914,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         WeatherServiceKind.NwsAlerts => "CAP",
         WeatherServiceKind.WpcBulletins => "CODSUS",
         WeatherServiceKind.NhcStorms => "TC",
-        WeatherServiceKind.ErddapGriddap => "NetCDF",
+        WeatherServiceKind.ErddapGriddap or WeatherServiceKind.ThreddsNcss => "NetCDF",
         _ => "GRIB2",
     };
 
