@@ -7,8 +7,6 @@ using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Weather;
 using EncDotNet.S100.Datasets.Cap;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
-using EncDotNet.S100.Hosting;
-using EncDotNet.S100.Maps;
 using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.TestSupport;
 using Microsoft.Extensions.Time.Testing;
