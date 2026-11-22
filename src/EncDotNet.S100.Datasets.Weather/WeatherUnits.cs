@@ -12,7 +12,7 @@ public static class WeatherUnits
     /// <returns>
     /// <c>"metres per second"</c>, <c>"degrees"</c>, <c>"metres"</c>,
     /// <c>"seconds"</c>, <c>"pascals"</c>, <c>"kelvin"</c>, <c>"proportion"</c>,
-    /// <c>"kilograms per square metre per second"</c>, <c>"joules per kilogram"</c>, <c>"percent"</c>, or an empty string for
+    /// <c>"kilograms per square metre per second"</c>, <c>"joules per kilogram"</c>, <c>"percent"</c>, <c>"kilograms per square metre"</c>, or an empty string for
     /// <see cref="WeatherUnit.Other"/>.
     /// </returns>
     public static string GetLabel(WeatherUnit unit) => unit switch
@@ -27,6 +27,7 @@ public static class WeatherUnits
         WeatherUnit.KilogramsPerSquareMetrePerSecond => "kilograms per square metre per second",
         WeatherUnit.JoulesPerKilogram => "joules per kilogram",
         WeatherUnit.Percent => "percent",
+        WeatherUnit.KilogramsPerSquareMetre => "kilograms per square metre",
         _ => string.Empty,
     };
 }

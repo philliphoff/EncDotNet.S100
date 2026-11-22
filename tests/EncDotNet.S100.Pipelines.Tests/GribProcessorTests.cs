@@ -157,6 +157,7 @@ public sealed class GribProcessorTests : IDisposable
         Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", WaveHeightStyle.Key));
         Assert.Equal(S98DisplayPlane.DynamicArrows, registry.DisplayPlanes.GetDefaultPlane("GRIB2", WindBarbStyle.Key));
         Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", PrecipitationStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", PrecipitationAmountStyle.Key));
         Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", ThunderstormRiskStyle.Key));
         Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", CloudCoverStyle.Key));
     }
@@ -329,6 +330,43 @@ public sealed class GribProcessorTests : IDisposable
         Assert.Equal(3.6, fields["precipitation.rate.mmh"].Value!.Value, 3);
         Assert.Equal(("atmosphere_convective_available_potential_energy", "J/kg"), (fields["cape"].Quantity, fields["cape"].Unit));
         Assert.Equal(("cloud_area_fraction", "%"), (fields["cloud.cover"].Quantity, fields["cloud.cover"].Unit));
+    }
+
+    [Fact]
+    public async Task GFS_accumulated_precipitation_draws_when_switched_on_and_picks_with_its_period()
+    {
+        // GFS APCP at f003 to f012, with both periods GFS writes at f009 and
+        // f012: every step reads as the 3 hours since the one before.
+        var path = Write(PathFor("gfs-apcp.grib2"), GfsAccumulation());
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+        Assert.Equal([WeatherParameters.PrecipitationAmount], processor.GridSet.Parameters.Where(p => p.IsKnown).Select(p => p.Id));
+
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        Assert.DoesNotContain(portrayal.SubLayers, l => l.LayerKey == PrecipitationAmountStyle.Key);
+        var on = new EcdisDisplaySettings { LayerVisibility = new Dictionary<string, bool> { [PrecipitationAmountStyle.Key] = true } };
+        var drawn = await processor.BuildCoveragePortrayalAsync(new RenderContext { EcdisDisplay = on, TimeStep = Run.AddHours(12) }, Ct);
+        var fill = Assert.IsType<GridCoverageSubLayer>(drawn.SubLayers.Single(l => l.LayerKey == PrecipitationAmountStyle.Key));
+        Assert.True(fill.ClipToWater);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
+
+        string? Pick(double longitude, int hour) => processor.GetCoverageInfo(25, longitude, Run.AddHours(hour))!
+            .Attributes.Single(a => a.Code == WeatherParameters.PrecipitationAmount).DisplayValue;
+        Assert.Equal("4.2 mm in the 3 h to 12:00Z", Pick(-80, 12));
+        Assert.Equal("3.0 mm in the 3 h to 06:00Z", Pick(-80, 6));
+        Assert.Equal("1.5 mm in the 3 h to 03:00Z", Pick(-80, 3));
+        Assert.Equal("0.0 mm in the 3 h to 12:00Z", Pick(-79, 12));
+        Assert.DoesNotContain(processor.GetCoverageInfo(25, -80, null)!.Attributes, a => a.Code == WeatherParameters.PrecipitationAmount + ".mm");
+
+        // The sample (MCP's sample tool) carries the period as well.
+        var query = new CoverageSampleQuery(25, -80, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(
+            processor.SampleAt(query, new DateTimeOffset(Run.AddHours(12)), nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        var amount = fields[WeatherParameters.PrecipitationAmount];
+        Assert.Equal(("precipitation_amount", "kg m-2"), (amount.Quantity, amount.Unit));
+        Assert.Equal(4.2, amount.Value!.Value, 2);
+        Assert.Equal(new SampledPeriod(Run.AddHours(9), Run.AddHours(12), "accumulation"), amount.Period);
+        Assert.Equal(("mm", amount.Period), (fields[WeatherParameters.PrecipitationAmount + ".mm"].Unit, fields[WeatherParameters.PrecipitationAmount + ".mm"].Period));
     }
 
     [Fact]

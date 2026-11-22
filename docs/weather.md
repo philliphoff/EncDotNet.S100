@@ -16,7 +16,7 @@ supported.
 
 | Data | Formats | What's drawn |
 |---|---|---|
-| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms, air isotherms, a precipitation fill, a thunderstorm risk fill and a cloud cover veil |
+| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms, air isotherms, a precipitation rate fill, a precipitation amount fill, a thunderstorm risk fill and a cloud cover veil |
 | Surface analyses | WPC coded surface bulletin (`CODSUS`), standard and high resolution, and WPC's coded forecast bulletins (such as `CODSRP`) | Fronts, troughs, highs and lows in the symbols of a printed weather map, in one dark ink |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
@@ -43,6 +43,7 @@ drawn or sampled are:
 | Surface (skin) temperature, for freezing spray | TMP at the surface | `surface_temperature` |
 | Land mask, for freezing spray | LAND | `land_binary_mask` |
 | Precipitation rate | PRATE at the surface | `precipitation_flux` |
+| Precipitation amount (accumulated) | APCP at the surface | `precipitation_amount` |
 | Thunderstorm risk (CAPE) | CAPE at the surface | `atmosphere_convective_available_potential_energy` |
 | Total cloud cover | TCDC for the entire atmosphere | `cloud_area_fraction` |
 
@@ -58,8 +59,18 @@ freezing spray risk. GFS gives the precipitation rate and cloud cover twice
 at each forecast hour, as the value at that time and as an average over the
 hours before it; the value at that time is read. CAPE for layers above the
 ground (such as GFS's 180–0 hPa) and cloud cover for single levels or cloud
-layers aren't read. Accumulated precipitation (APCP) isn't drawn: GFS
-accumulates it over periods that change from one forecast hour to the next.
+layers aren't read.
+
+Accumulated precipitation (APCP) is a total over a period, so every value
+comes with its period. GFS accumulates in 6-hour buckets and also gives the
+total since the run started, so most forecast hours hold two periods: f009
+holds 6–9 h and 0–9 h, f012 6–12 h and 0–12 h. SoundCharts keeps, at every
+time step, the rain since the step before: a file's 6–9 h as it is, and
+9–12 h worked out as 6–12 h less 6–9 h. On a GFS file with a step every
+3 hours, every step is the 3 hours to its valid time, so the fill means the
+same thing as you move the Timeline. The first step keeps the period the
+file gives (0–3 h), and so does a step after a gap in the forecast hours.
+NetCDF files don't give the period, and a pick says so.
 Other parameters are listed by `s100 info` but not drawn.
 
 GRIB2 files can hold many messages, and you can append several files, such as
@@ -108,7 +119,7 @@ made from its data. The Library can fetch some of these sources for you.
   and VGRD at 10 m above ground and PRMSL; for visibility choose VIS at the
   surface; for freezing spray choose TMP at 2 m above ground and at the
   surface, LAND at the surface, and the 10 m wind; for precipitation,
-  thunderstorm risk and cloud cover choose PRATE and CAPE at the surface and
+  thunderstorm risk and cloud cover choose PRATE, APCP and CAPE at the surface and
   TCDC for the entire atmosphere. The download has no file
   extension. The Library's two GFS sources offer these too; tick them when
   you choose parameters.
@@ -218,6 +229,7 @@ made from its data. The Library can fetch some of these sources for you.
    | **Currents** | On | Surface current arrows, coloured by speed |
    | **Air temperature** | Off | Dashed air temperature isotherms every 5 °C |
    | **Precipitation** | Off | The precipitation rate in rain radar colours |
+   | **Precipitation amount** | Off | The rain over each step's period, in the same colours |
    | **Thunderstorm risk** | Off | Where CAPE is 1000 J/kg or more |
    | **Cloud cover** | Off | A light grey veil from 25 % cloud cover |
 
@@ -232,7 +244,9 @@ made from its data. The Library can fetch some of these sources for you.
    data, not for navigation." and lists each parameter at the nearest grid
    point and time step, in knots, metres and degrees Celsius, visibility in
    nautical miles, the freezing spray class, the precipitation rate in
-   millimetres an hour, CAPE in J/kg and cloud cover in percent.
+   millimetres an hour, the precipitation amount in millimetres with the
+   period it fell in (for example "4.2 mm in the 3 h to 12:00Z"), CAPE in
+   J/kg and cloud cover in percent.
 
 Current arrows point the way the water flows. They use S-111's nine speed
 bands, colours and sizes, from purple under 0.5 kn to red at 13 kn and
@@ -261,6 +275,11 @@ Precipitation is drawn in rain radar colours: pale green for light rain from
 orange for heavy rain to 15 mm/h, red for very heavy rain to 50 mm/h, and
 violet beyond. Drier areas aren't drawn.
 
+The precipitation amount uses the same colours for the rain that fell over
+each step's period: from 0.2 mm, then 1, 2.5, 10, 25 and 50 mm and more.
+Its bands are amounts, not rates, so they aren't named light or heavy; pick
+a point to see the period.
+
 Thunderstorm risk is drawn from CAPE, the energy a parcel of air rising from
 the surface can gain, in ochre in three classes: moderate (1000 to
 2500 J/kg), high (2500 to 4000 J/kg) and extreme (4000 J/kg and more). Under
@@ -270,11 +289,11 @@ CAPE is common. Read it with the precipitation and the official forecast.
 
 Cloud cover is a light grey veil, drawn more faintly than the other fills,
 in three bands: partly cloudy (25 to 50 %), mostly cloudy (50 to 75 %) and
-cloudy (75 % and more). Precipitation, thunderstorm risk and cloud cover are
+cloudy (75 % and more). Precipitation rate and amount, thunderstorm risk and cloud cover are
 off until you switch them on, and each has its legend in the Legend tab.
 
 The wave height, sea surface temperature, visibility, freezing spray,
-precipitation, thunderstorm risk and cloud cover fills are clipped to water
+precipitation rate and amount, thunderstorm risk and cloud cover fills are clipped to water
 when an S-101 chart is loaded.
 Wind barbs south of the equator are drawn mirrored, as the convention is.
 
@@ -553,7 +572,8 @@ s100 render --layer chart.000 --layer gfswave.grib2 --layer gfs.grib2 chart.png 
 
 Layers that are off by default, such as precipitation, thunderstorm risk
 and cloud cover, are drawn with `--show-layer` and their keys, which
-`s100 info` lists:
+`s100 info` lists (`weather.precipitation.amount` for the precipitation
+amount):
 
 ```bash
 s100 render gfs.grib2 storms.png --bbox -100,5,-60,32 --show-layer weather.precipitation,weather.cape

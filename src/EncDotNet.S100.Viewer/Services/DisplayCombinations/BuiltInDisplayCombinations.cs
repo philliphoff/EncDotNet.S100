@@ -51,6 +51,7 @@ internal static class BuiltInDisplayCombinations
         CurrentArrowStyle.Key,
         AirTemperatureIsothermStyle.Key,
         PrecipitationStyle.Key,
+        PrecipitationAmountStyle.Key,
         ThunderstormRiskStyle.Key,
         CloudCoverStyle.Key,
     ];
