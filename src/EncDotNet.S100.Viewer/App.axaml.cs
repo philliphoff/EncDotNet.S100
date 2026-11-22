@@ -1876,6 +1876,25 @@ public partial class App : Application
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
                 () => datasets.Entries.Where(e => !e.IsSource).Select(e => e.PortrayalSpec));
         });
+        // Chart reference glyphs (#1636, R3): drawn once per entry, palette and
+        // size, and drawn again after a palette change.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceGlyphCache(
+            sp.GetRequiredService<ViewerSettingsService>()));
+        // The Chart reference activity (#1637, R4). The product combo follows
+        // the Datasets panel's rows, as LegendService does: the service's
+        // product list has no change event of its own.
+        services.AddSingleton(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            var reference = new EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceGlyphCache>(),
+                sp.GetRequiredService<ViewerSettingsService>(),
+                UiThread.RunOrPost);
+            datasets.Entries.CollectionChanged += (_, _) => UiThread.RunOrPost(reference.RefreshProducts);
+            datasets.EntryPortrayalSpecChanged += (_, _) => UiThread.RunOrPost(reference.RefreshProducts);
+            return reference;
+        });
         // Legends (#1402, D1): one service gathers every legend row; the
         // Legend tab, the route-check card and MCP get_legend read it.
         services.AddSingleton(sp =>
@@ -2207,6 +2226,14 @@ public partial class App : Application
             name: Strings.Label_Activity_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Chart reference (#1637, symbol dictionary D1, D2): after Feature search.
+        services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel, ChartReferenceView>(
+            id: ShellLayoutViewModel.ChartReferenceTabId,
+            order: 52,
+            title: Strings.Pane_ChartReference,
+            name: Strings.Label_Activity_ChartReference,
+            tooltip: Strings.Tooltip_ChartReference,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
             id: "Routes",
             order: 55,

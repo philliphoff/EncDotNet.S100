@@ -55,6 +55,8 @@
         <KeyBinding Gesture="Ctrl+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
         <!-- View › Legend (legends D3). -->
         <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding Layout.ToggleLegendCommand}" />
+        <!-- Help › Chart reference (#1637). -->
+        <KeyBinding Gesture="Ctrl+Shift+K" Command="{Binding Layout.ShowChartReferenceCommand}" />
         <!-- Enter / Backspace are tool actions while a tool is active. -->
         <KeyBinding Gesture="Enter" Command="{Binding MapTools.ToolCommitCommand}" />
         <KeyBinding Gesture="Back" Command="{Binding MapTools.ToolBackstepCommand}" />

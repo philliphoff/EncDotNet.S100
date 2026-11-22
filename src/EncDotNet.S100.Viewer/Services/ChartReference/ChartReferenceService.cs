@@ -40,6 +40,7 @@ internal sealed class ChartReferenceService : IDisposable
     private readonly IReadOnlyList<string> _bundledSpecs;
     private readonly Lock _gate = new();
     private readonly Dictionary<SpecRef, Slot> _slots = [];
+    private readonly Dictionary<SpecRef, ChartReferenceArtwork> _artwork = [];
     private bool _disposed;
 
     /// <summary>Creates the service and subscribes to both catalogue managers' changes.</summary>
@@ -155,6 +156,46 @@ internal sealed class ChartReferenceService : IDisposable
         return await build.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The artwork reader over <paramref name="spec"/>'s portrayal catalogue,
+    /// which Chart reference draws its glyphs from (#1637). It is kept until
+    /// the catalogue changes.
+    /// </summary>
+    /// <param name="spec">The product.</param>
+    /// <returns>The reader, or <see langword="null"/> when the product has no portrayal catalogue.</returns>
+    public ChartReferenceArtwork? GetArtwork(SpecRef spec)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_gate)
+        {
+            if (_artwork.TryGetValue(spec, out var held))
+                return held;
+        }
+
+        if (spec.Name is null || !_portrayals.HasCatalogue(spec))
+            return null;
+        PortrayalCatalogueProvider provider;
+        try
+        {
+            provider = _portrayals.GetProvider(spec);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (!_artwork.TryGetValue(spec, out var artwork))
+            {
+                artwork = new ChartReferenceArtwork(provider);
+                _artwork[spec] = artwork;
+            }
+
+            return artwork;
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -164,7 +205,10 @@ internal sealed class ChartReferenceService : IDisposable
         _features.CataloguesChanged -= OnCataloguesChanged;
         _portrayals.CataloguesChanged -= OnCataloguesChanged;
         lock (_gate)
+        {
             _slots.Clear();
+            _artwork.Clear();
+        }
     }
 
     private async Task<string?> KeyAsync(SpecRef spec)
@@ -203,6 +247,7 @@ internal sealed class ChartReferenceService : IDisposable
             // A build in flight finishes for no one: the next call sees new
             // hashes and starts another.
             _slots.Remove(e.Spec);
+            _artwork.Remove(e.Spec);
         }
 
         Changed?.Invoke(this, e);

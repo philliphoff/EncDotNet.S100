@@ -792,6 +792,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>Id of the Legend tab in the right dock (#1404, legends design note D2).</summary>
     internal const string LegendTabId = "Legend";
 
+    /// <summary>Id of the Chart reference activity in the left dock (#1637).</summary>
+    internal const string ChartReferenceTabId = "ChartReference";
+
     /// <summary>
     /// Tells the right-dock tabs that care (<see cref="IActivityTabShown"/>)
     /// whether the user can see them now: the Legend tab tells
@@ -870,6 +873,25 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
             IsRightDockFolded = false;
         SelectedRightTab = legend;
         IsRightDockOpen = true;
+    }
+
+    /// <summary>
+    /// Opens the left dock on the Chart reference activity (Help › Chart
+    /// reference, Ctrl+Shift+K, #1637). Unlike the activity bar button it
+    /// never closes the dock.
+    /// </summary>
+    public ICommand ShowChartReferenceCommand => _showChartReferenceCommand ??= new RelayCommand(ShowChartReference);
+
+    private ICommand? _showChartReferenceCommand;
+
+    private void ShowChartReference()
+    {
+        if (!_tabsById.TryGetValue(ChartReferenceTabId, out var tab) || !tab.IsVisible)
+            return;
+        if (ReferenceEquals(_selectedLeftTab, tab) && IsLeftDockOpen)
+            return;
+        SelectedLeftTab = tab;
+        IsLeftDockOpen = true;
     }
 
     /// <summary>Opens the bottom dock on the Logs tab (Help › Show logs, #1080).</summary>

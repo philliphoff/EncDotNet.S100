@@ -165,7 +165,13 @@ internal sealed class NativeMenuBuilder
         var showLogsItem = new NativeMenuItem(Strings.Menu_ShowLogs);
         showLogsItem.Click += (_, _) => _viewModel.Layout.ShowLogsCommand.Execute(null);
 
-        var helpSubMenu = new NativeMenu { reportFeedbackItem, showLogsItem };
+        var chartReferenceItem = new NativeMenuItem(Strings.Menu_ChartReference)
+        {
+            Gesture = new KeyGesture(Key.K, KeyModifiers.Meta | KeyModifiers.Shift),
+        };
+        chartReferenceItem.Click += (_, _) => _viewModel.Layout.ShowChartReferenceCommand.Execute(null);
+
+        var helpSubMenu = new NativeMenu { chartReferenceItem, new NativeMenuItemSeparator(), reportFeedbackItem, showLogsItem };
         if (!OperatingSystem.IsMacOS())
         {
             var aboutItem = new NativeMenuItem(Strings.Menu_About);
