@@ -967,6 +967,14 @@ display categories and what it is drawn with, each symbol with the conditions
 that choose it in words. A symbol links to its own row, and a symbol's row
 links back to the feature types that use it.
 
+Turn on **In view** to list only what the chart draws in the map view at the
+current scale: the symbols the Legend tab's key counts, and the feature types
+of the features drawn. The list follows the map when it stops moving. Rest
+the pointer on a row, or move keyboard focus to it, to ring its features on
+the map, as the Legend tab does. When a product's Legend key lists only some
+of the symbols drawn ("12 of 54 symbols drawn in view"), **Show all in Chart
+reference** opens the panel at that product's symbols with In view on.
+
 **Open as page**, beside the product, shows the reference over the map as a
 grid of tiles by Chart 1 section, with the selected entry on the right. Its
 **Day / Dusk / Night** and **Simplified / Paper chart** switches preview the

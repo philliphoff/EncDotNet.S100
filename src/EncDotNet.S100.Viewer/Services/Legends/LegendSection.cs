@@ -54,6 +54,14 @@ internal sealed record LegendSection
     /// <summary>A one-line caption where the unit or rule needs it ("Speed, kn · longer arrow = faster"); null for none.</summary>
     public string? Caption { get; init; }
 
+    /// <summary>
+    /// For a catalogue key that lists fewer symbols than it draws (D7,
+    /// "12 of 54 symbols drawn in view"), the portrayal spec its
+    /// <b>Show all in Chart reference</b> link opens the activity at
+    /// (<c>S-101</c>, also for S-57 cells); null when there is no link.
+    /// </summary>
+    public string? ChartReferenceSpec { get; init; }
+
     /// <summary>The Mariner settings the rows follow ("Safety contour 10 m"); null when they follow none.</summary>
     public string? MarinerSettings { get; init; }
 

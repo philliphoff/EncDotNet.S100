@@ -31,6 +31,15 @@ month. For package versions and release assets, see
   symbol links to its own row, which links back to the feature types that
   use it (#1637).
 
+- **Chart reference follows the map.** Chart reference's new **In view**
+  toggle lists only what the chart draws in the map view at the current
+  scale: the symbols the Legend tab's key counts and the feature types of the
+  features drawn. It follows the map when it stops moving. Resting the
+  pointer on a row, or focusing it, rings its features on the map, as a
+  Legend row does. A Legend key that lists only some of the symbols drawn
+  now has **Show all in Chart reference**, which opens the activity at that
+  product's symbols with In view on (#1638).
+
 - **Search the chart reference over MCP.** SoundCharts' new
   `search_chart_reference` tool finds feature types, symbols, line styles,
   area fills, attributes and display settings in any product's catalogues,

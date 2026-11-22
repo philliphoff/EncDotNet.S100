@@ -43,6 +43,7 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
 
     private readonly LegendService _service;
     private readonly LegendFindService? _find;
+    private readonly Action<string>? _showInChartReference;
     private readonly ITimeFormatProvider _timeFormat;
     private readonly IViewTime _viewTime;
     private readonly Dictionary<string, LegendSectionViewModel> _byId = new(StringComparer.Ordinal);
@@ -59,13 +60,24 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
     /// Hover to find (D19, #1412): rings a hovered or focused row's features
     /// on the map; null in hosts without a map.
     /// </param>
-    public LegendViewModel(LegendService service, IViewTime viewTime, ITimeFormatProvider timeFormat, LegendFindService? find)
+    /// <param name="showInChartReference">
+    /// Opens Chart reference at a product's symbols with In view on: a
+    /// catalogue key's <b>Show all in Chart reference</b> (D7, symbol
+    /// dictionary R5); null hides the link.
+    /// </param>
+    public LegendViewModel(
+        LegendService service,
+        IViewTime viewTime,
+        ITimeFormatProvider timeFormat,
+        LegendFindService? find,
+        Action<string>? showInChartReference = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(viewTime);
         ArgumentNullException.ThrowIfNull(timeFormat);
         _service = service;
         _find = find;
+        _showInChartReference = showInChartReference;
         _viewTime = viewTime;
         _timeFormat = timeFormat;
         CollapseAllCommand = new RelayCommand(CollapseAll, () => Sections.Any(s => s.IsExpanded));
@@ -326,7 +338,7 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
             }
             else
             {
-                vm = new LegendSectionViewModel(_service, section, tile, detail);
+                vm = new LegendSectionViewModel(_service, section, tile, detail, _showInChartReference);
                 vm.PropertyChanged += OnSectionPropertyChanged;
                 _byId.Add(section.Id, vm);
             }

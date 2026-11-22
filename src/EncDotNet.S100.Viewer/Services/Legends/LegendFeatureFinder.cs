@@ -237,6 +237,115 @@ internal static class LegendFeatureFinder
         }
     }
 
+    // ── Chart reference (R5, #1638) ──────────────────────────────────────
+
+    /// <summary>
+    /// Adds what one catalogue product sub-layer draws in view to Chart
+    /// reference's In view sets: its point symbols as the catalogue key
+    /// counts them (<see cref="CatalogueSymbolKey.Drawn"/>), and the feature
+    /// class, from the processor's feature list, of each feature it draws.
+    /// </summary>
+    /// <param name="payload">A vector stack entry's payload.</param>
+    /// <param name="suppressed">The features an S-98 rule removed from the entry, or null.</param>
+    /// <param name="processor">The dataset's processor, for feature classes; null lists none.</param>
+    /// <param name="view">The map view, or null for everywhere.</param>
+    /// <param name="scale">The display scale (1:N), or NaN to ignore SCAMIN.</param>
+    /// <param name="symbols">Receives the symbol names.</param>
+    /// <param name="featureTypes">Receives the feature class codes.</param>
+    internal static void AddDrawn(
+        VectorStackPayload payload, IReadOnlySet<string>? suppressed, IDatasetProcessor? processor,
+        GeoBounds? view, double scale, ISet<string> symbols, ISet<string> featureTypes)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        ArgumentNullException.ThrowIfNull(symbols);
+        ArgumentNullException.ThrowIfNull(featureTypes);
+        foreach (var symbol in CatalogueSymbolKey.Drawn(payload, suppressed, view, scale))
+            symbols.Add(symbol.Name);
+
+        if (processor is null)
+            return;
+        var summaries = SummariesOf(processor);
+        var cap = payload.SubLayer.ApplyOutOfBandCap ? payload.Result.OutOfBandMinDisplayScale : null;
+        var geometry = payload.Result.GeometryProvider;
+        foreach (var drawn in Drawn.GetValue(payload.SubLayer.Instructions, BuildDrawn))
+        {
+            if (!summaries.TryGetValue(drawn.FeatureReference, out var summary) || featureTypes.Contains(summary.FeatureType))
+                continue; // the footprint is read only for a class not yet seen
+            if (suppressed is not null && suppressed.Contains(drawn.FeatureReference))
+                continue;
+            if (!double.IsNaN(scale) && !drawn.IsDrawnAt(scale, cap))
+                continue;
+            if (view is { } v && (drawn.FootprintFrom(geometry) is not { } box || !v.Intersects(box)))
+                continue;
+            featureTypes.Add(summary.FeatureType);
+        }
+    }
+
+    /// <summary>
+    /// The features a Chart reference row describes that are drawn in view
+    /// (hover to find, legends D19): those that draw one of the target's
+    /// symbols, as <see cref="FindSymbols"/> finds a catalogue key row's, and
+    /// those of one of its feature classes.
+    /// </summary>
+    /// <param name="target">The row.</param>
+    /// <param name="layers">The product's sub-layers, top of the stack first.</param>
+    /// <param name="view">The map view, or null to find everywhere.</param>
+    /// <param name="scale">The display scale (1:N), or NaN to ignore SCAMIN.</param>
+    /// <param name="maxRings">The most features to ring.</param>
+    internal static LegendFeatureFind FindReference(
+        ChartReferenceTarget target,
+        IEnumerable<(VectorStackPayload Payload, IReadOnlySet<string>? Suppressed, IDatasetProcessor? Processor)> layers,
+        GeoBounds? view,
+        double scale,
+        int maxRings = MaxRings)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(layers);
+        var collector = new Collector(maxRings);
+        var symbols = target.Symbols.ToHashSet(StringComparer.Ordinal);
+        var classes = target.FeatureTypes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var any = false;
+        foreach (var (payload, suppressed, processor) in layers)
+        {
+            any = true;
+            if (symbols.Count > 0)
+            {
+                foreach (var symbol in CatalogueSymbolKey.Drawn(payload, suppressed, view, scale))
+                {
+                    if (!symbols.Contains(symbol.Name))
+                        continue;
+                    if (symbol.At is { } at)
+                        collector.Add(Point(at));
+                    else
+                        collector.Add(payload.Result.GeometryProvider.GetGeometry(symbol.FeatureReference));
+                }
+            }
+
+            if (classes.Count == 0 || processor is null)
+                continue;
+            var summaries = SummariesOf(processor);
+            var cap = payload.SubLayer.ApplyOutOfBandCap ? payload.Result.OutOfBandMinDisplayScale : null;
+            var geometryProvider = payload.Result.GeometryProvider;
+            foreach (var drawn in Drawn.GetValue(payload.SubLayer.Instructions, BuildDrawn))
+            {
+                if (!summaries.TryGetValue(drawn.FeatureReference, out var summary) || !classes.Contains(summary.FeatureType))
+                    continue;
+                if (suppressed is not null && suppressed.Contains(drawn.FeatureReference))
+                    continue;
+                if (!double.IsNaN(scale) && !drawn.IsDrawnAt(scale, cap))
+                    continue;
+                if (view is { } v && (drawn.FootprintFrom(geometryProvider) is not { } box || !v.Intersects(box)))
+                    continue;
+                collector.Add(geometryProvider.GetGeometry(drawn.FeatureReference));
+            }
+        }
+
+        return new LegendFeatureFind(target.Spec, target.Key, any ? LegendFindKind.Features : LegendFindKind.None, collector.Rings, collector.Count)
+        {
+            RingedCount = collector.Ringed,
+        };
+    }
+
     // ── Vector rows ──────────────────────────────────────────────────────
 
     private static void FindDrawn(
@@ -332,6 +441,20 @@ internal static class LegendFeatureFinder
         public string FeatureReference { get; } = featureReference;
 
         public DrawnShape Shape { get; private set; }
+
+        private bool _hasFootprint;
+        private GeoBounds? _footprint;
+
+        /// <summary>The feature's footprint, read once (Chart reference's In view reads it on every pan end).</summary>
+        public GeoBounds? FootprintFrom(IFeatureGeometryProvider geometry)
+        {
+            if (!_hasFootprint)
+            {
+                _footprint = geometry.GetGeometry(FeatureReference) is { } g ? FootprintOf(g) : null;
+                _hasFootprint = true;
+            }
+            return _footprint;
+        }
 
         public void Add(DrawingInstruction instruction)
         {
