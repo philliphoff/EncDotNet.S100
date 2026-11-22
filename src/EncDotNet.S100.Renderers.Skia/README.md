@@ -132,6 +132,11 @@ These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
   `ChartCompositor` and SoundCharts all draw land from this one asset.
 - **`SkiaSvgRasterizer`**: rasterises SVG portrayal symbols into tiled pattern
   bitmaps.
+- **`LegendGlyphRenderer`**: draws a legend row's glyph (a swatch, outlined
+  area, symbol, line sample or area fill pattern). `Render` draws it at
+  legend size (`SizeOf`); `RenderFitted` fits it to a box of your size, such
+  as a 40 px tile: a symbol keeps its aspect ratio, and a line sample shows
+  at least one whole interval of its pattern.
 
 ## Linux arm64 native dependency
 

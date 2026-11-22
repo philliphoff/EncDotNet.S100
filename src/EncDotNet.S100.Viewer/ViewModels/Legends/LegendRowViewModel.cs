@@ -8,7 +8,8 @@ namespace EncDotNet.S100.Viewer.ViewModels.Legends;
 /// <summary>
 /// One legend row: a glyph and its label (legends design note D11: every row
 /// has a label, never colour alone). A plain colour band shows as a swatch
-/// (<see cref="Swatch"/>); an outlined area, a symbol or a line sample as a
+/// (<see cref="Swatch"/>); an outlined area, a symbol, a line sample or an
+/// area fill pattern as a
 /// picture drawn by <see cref="Renderers.Skia.LegendGlyphRenderer"/>
 /// (<see cref="Glyph"/>). Either sits on a tile of the palette's chart
 /// background (<see cref="Tile"/>, D10).
@@ -71,7 +72,7 @@ internal sealed class LegendRowViewModel : ViewModelBase
     /// <summary>Whether the row is a plain colour swatch, drawn as a bordered box.</summary>
     public bool IsSwatch => Kind == LegendRowKind.Swatch;
 
-    /// <summary>Whether the row shows a drawn glyph: an area, a symbol or a line sample.</summary>
+    /// <summary>Whether the row shows a drawn glyph: an area, a symbol, a line sample or a fill pattern.</summary>
     public bool HasGlyph => !IsSwatch;
 
     /// <summary>The glyph's width in logical pixels, as shown (<see cref="GlyphZoom"/>).</summary>
@@ -81,7 +82,7 @@ internal sealed class LegendRowViewModel : ViewModelBase
     public int GlyphHeight { get; }
 
     /// <summary>
-    /// The glyph picture of an area, symbol or line row, drawn on first use;
+    /// The glyph picture of an area, symbol, line or fill row, drawn on first use;
     /// <see langword="null"/> for a plain swatch.
     /// </summary>
     public IImage? Glyph => IsSwatch ? null : _glyph ??= RenderGlyph(_entry);

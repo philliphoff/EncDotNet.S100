@@ -209,7 +209,7 @@ public sealed class LayerStackLegendTests
     }
 
     // A front-like legend: three line rows, a symbol row, an area row and a plain swatch.
-    private static IReadOnlyList<LegendEntry> FrontsLegend()
+    internal static IReadOnlyList<LegendEntry> FrontsLegend()
     {
         var legend = new LegendBuilder(FrontPipFixtures.Palette, PaletteType.Day, FrontPipFixtures.Symbols);
         return
