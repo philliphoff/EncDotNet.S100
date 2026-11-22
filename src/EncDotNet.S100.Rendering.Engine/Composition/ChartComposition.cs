@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
@@ -11,8 +12,9 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// <see cref="ChartCompositor.Prepare"/>.
 /// </summary>
 /// <remarks>
-/// A composition is immutable; <see cref="Render(Viewport, float)"/> and
-/// <see cref="Draw"/> may be called concurrently from several threads.
+/// A composition is immutable; <see cref="Render(Viewport, float)"/>,
+/// <see cref="Draw(SKCanvas, Viewport, IReadOnlyList{double}, IReadOnlySet{TextPaintOp})"/>
+/// and <see cref="SuppressedLabels"/> may be called concurrently from several threads.
 /// </remarks>
 public sealed class ChartComposition
 {
@@ -22,6 +24,7 @@ public sealed class ChartComposition
     private readonly double _minY;
     private readonly double _maxX;
     private readonly double _maxY;
+    private readonly ConcurrentDictionary<(double ScaleDenominator, double MetresPerPixel), Lazy<IReadOnlySet<TextPaintOp>>> _suppressedLabels = new();
 
     internal ChartComposition(IReadOnlyList<Entry> entries, SeamAwareBoundsAccumulator bounds, ChartCompositeOptions options)
     {
@@ -153,6 +156,35 @@ public sealed class ChartComposition
     }
 
     /// <summary>
+    /// The labels to leave out so that none overlap when the layers are drawn
+    /// at <paramref name="scaleDenominator"/> with
+    /// <paramref name="metresPerPixel"/> Web Mercator metres per pixel, decided
+    /// once over the whole composition in world space (see
+    /// <see cref="WorldLabelDeclutterer"/>). Computed on first use and kept, so
+    /// every viewport drawn at that scale drops the same labels.
+    /// </summary>
+    /// <param name="scaleDenominator">The display scale denominator.</param>
+    /// <param name="metresPerPixel">Web Mercator metres per logical pixel.</param>
+    /// <returns>The text ops to skip, by reference.</returns>
+    public IReadOnlySet<TextPaintOp> SuppressedLabels(double scaleDenominator, double metresPerPixel) =>
+        _suppressedLabels.GetOrAdd(
+            (scaleDenominator, metresPerPixel),
+            key => new Lazy<IReadOnlySet<TextPaintOp>>(
+                () => WorldLabelDeclutterer.Declutter(Layers, key.ScaleDenominator, key.MetresPerPixel),
+                LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+
+    /// <summary>
+    /// Paints the basemap and the layers onto <paramref name="canvas"/> against
+    /// a north-up <paramref name="viewport"/>, without clearing it, drawing
+    /// every label.
+    /// </summary>
+    /// <param name="canvas">The canvas to paint onto.</param>
+    /// <param name="viewport">A north-up viewport.</param>
+    /// <param name="longitudeOffsets">Extra world copies to draw, in degrees; may be empty.</param>
+    public void Draw(SKCanvas canvas, Viewport viewport, IReadOnlyList<double> longitudeOffsets) =>
+        Draw(canvas, viewport, longitudeOffsets, suppressedText: null);
+
+    /// <summary>
     /// Paints the basemap and the layers onto <paramref name="canvas"/> against
     /// a north-up <paramref name="viewport"/>, without clearing it. Each layer is
     /// also drawn shifted by each of <paramref name="longitudeOffsets"/> (in
@@ -166,7 +198,11 @@ public sealed class ChartComposition
     /// <param name="canvas">The canvas to paint onto.</param>
     /// <param name="viewport">A north-up viewport.</param>
     /// <param name="longitudeOffsets">Extra world copies to draw, in degrees; may be empty.</param>
-    public void Draw(SKCanvas canvas, Viewport viewport, IReadOnlyList<double> longitudeOffsets)
+    /// <param name="suppressedText">
+    /// Labels to skip, by reference, such as <see cref="SuppressedLabels"/> at
+    /// the viewport's scale; <see langword="null"/> draws every label.
+    /// </param>
+    public void Draw(SKCanvas canvas, Viewport viewport, IReadOnlyList<double> longitudeOffsets, IReadOnlySet<TextPaintOp>? suppressedText)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
@@ -180,7 +216,7 @@ public sealed class ChartComposition
 
         foreach (var entry in _entries)
         {
-            DrawEntry(canvas, entry, viewport);
+            DrawEntry(canvas, entry, viewport, suppressedText);
             foreach (var offset in longitudeOffsets)
             {
                 // Data stored at longitude L + offset lands where L would.
@@ -188,12 +224,12 @@ public sealed class ChartComposition
                 {
                     MinLongitude = viewport.MinLongitude + offset,
                     MaxLongitude = viewport.MaxLongitude + offset,
-                });
+                }, suppressedText);
             }
         }
     }
 
-    private void DrawEntry(SKCanvas canvas, Entry entry, Viewport viewport)
+    private void DrawEntry(SKCanvas canvas, Entry entry, Viewport viewport, IReadOnlySet<TextPaintOp>? suppressedText)
     {
         if (IsHidden(entry, viewport))
         {
@@ -201,7 +237,10 @@ public sealed class ChartComposition
             return;
         }
 
-        entry.Layer.Draw(canvas, viewport);
+        if (suppressedText is not null && entry.Layer is VectorCompositeLayer vector)
+            vector.Draw(canvas, viewport, suppressedText);
+        else
+            entry.Layer.Draw(canvas, viewport);
     }
 
     /// <summary>

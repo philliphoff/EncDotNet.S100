@@ -24,6 +24,15 @@ public sealed class ChartTileOptions
 
     /// <summary>The colour each tile is cleared to. Defaults to transparent.</summary>
     public RgbaColor Background { get; init; } = RgbaColor.Transparent;
+
+    /// <summary>
+    /// Whether overlapping labels are left out, the one drawn beneath giving way
+    /// (see <see cref="ChartComposition.SuppressedLabels"/>). Decided once per
+    /// zoom level over the whole composition, in logical pixels, so every tile,
+    /// block, pixel ratio and <see cref="ChartTileRenderer.RenderView"/> image of
+    /// a zoom level drops the same labels. Defaults to <see langword="true"/>.
+    /// </summary>
+    public bool DeclutterLabels { get; init; } = true;
 }
 
 /// <summary>
@@ -94,6 +103,12 @@ public sealed class ChartTile : IDisposable
 /// lies up to <see cref="Renderers.Skia.Scene.SkiaDisplayListRenderer.PointCullMarginPx"/>
 /// pixels outside it. So a feature crossing a tile edge draws identically on
 /// both sides, whether the two tiles share a block or not.
+/// </para>
+/// <para>
+/// Overlapping labels are removed once per zoom level, over the whole
+/// composition in world space (<see cref="ChartTileOptions.DeclutterLabels"/>),
+/// not per tile, so a label is kept or dropped on both sides of a tile edge
+/// alike, and blocks of any size give the same tiles.
 /// </para>
 /// <para>
 /// Each zoom level is evaluated at one scale denominator, measured at
@@ -236,7 +251,7 @@ public sealed class ChartTileRenderer
         {
             canvas.Clear(ToSkia(_options.Background));
             canvas.Scale(_options.PixelRatio);
-            _scene.Draw(canvas, viewport, _worldCopies);
+            _scene.Draw(canvas, viewport, _worldCopies, SuppressedLabels(block.Zoom));
             canvas.Flush();
         }
 
@@ -321,12 +336,21 @@ public sealed class ChartTileRenderer
         {
             canvas.Clear(ToSkia(_options.Background));
             canvas.Scale((float)widthPixels / logicalWidth, (float)heightPixels / logicalHeight);
-            _scene.Draw(canvas, viewport, copies);
+            _scene.Draw(canvas, viewport, copies, SuppressedLabels(zoom));
             canvas.Flush();
         }
 
         return bitmap;
     }
+
+    /// <summary>
+    /// The labels <paramref name="zoom"/> leaves out, or <see langword="null"/>
+    /// with <see cref="ChartTileOptions.DeclutterLabels"/> off. The composition
+    /// computes them on first use and keeps them, so renderers of the same
+    /// composition at other pixel ratios share them.
+    /// </summary>
+    private IReadOnlySet<TextPaintOp>? SuppressedLabels(int zoom) =>
+        _options.DeclutterLabels ? _scene.SuppressedLabels(ScaleDenominator(zoom), XyzTileGrid.Resolution(zoom)) : null;
 
     private static uint BackgroundPixel(RgbaColor color)
     {

@@ -110,7 +110,7 @@ public sealed class ChartCompositeOptions
     /// Whether vector layers wrap geometry into a viewport that crosses the ±180°
     /// antimeridian. Defaults to <see langword="true"/>, which suits a single
     /// fitted viewport. Tiled rendering turns it off and draws the world copies
-    /// itself (see <see cref="ChartComposition.Draw"/>).
+    /// itself (see <see cref="ChartComposition.Draw(SkiaSharp.SKCanvas, Viewport, IReadOnlyList{double})"/>).
     /// </summary>
     public bool EnableSeamWrap { get; init; } = true;
 
