@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using EncDotNet.S100.Mcp;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -69,7 +70,8 @@ internal sealed class McpHttpServer : IAsyncDisposable
         builder.Services
             .AddMcpServer()
             .WithHttpTransport()
-            .WithTools(tools);
+            .WithTools(tools)
+            .WithResources(S100McpTools.CreateResources(tools));
 
         var app = builder.Build();
         ServeHost.MapHealth(app);

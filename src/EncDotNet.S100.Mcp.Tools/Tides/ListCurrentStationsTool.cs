@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Mcp.Tools.Tides;
 
 /// <summary>
 /// Lists tidal current stations near a point or in a box, nearest first,
-/// from the station catalogue (MCP <c>list_current_stations</c>,
+/// from the station catalogue (MCP <c>list_stations</c> (kind current),
 /// <c>s100 tides currents stations</c>).
 /// </summary>
 /// <remarks>
@@ -16,9 +16,6 @@ namespace EncDotNet.S100.Mcp.Tools.Tides;
 /// </remarks>
 public sealed class ListCurrentStationsTool
 {
-    /// <summary>The MCP tool name.</summary>
-    public const string Name = "list_current_stations";
-
     private readonly ITideCatalogueSource _source;
     private readonly TimeProvider _time;
 
@@ -33,7 +30,7 @@ public sealed class ListCurrentStationsTool
     }
 
     /// <summary>Lists the stations.</summary>
-    /// <param name="request">The point and radius, or the box, as for <c>list_tide_stations</c>.</param>
+    /// <param name="request">The point and radius, or the box, as for <c>list_stations</c> (kind tide).</param>
     /// <param name="cancellationToken">Cancels the catalogue load.</param>
     public async Task<ToolResult<ListCurrentStationsResult>> InvokeAsync(ListTideStationsRequest request, CancellationToken cancellationToken = default)
     {

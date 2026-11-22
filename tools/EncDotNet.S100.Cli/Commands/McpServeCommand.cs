@@ -106,7 +106,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         public string? DataDir { get; init; }
 
         [CommandOption("--tide-catalogue <FILE>")]
-        [Description("The tide and current station catalogue for list_tide_stations, predict_tide, list_current_stations and predict_current: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
+        [Description("The tide and current station catalogue for list_stations and predict: a tide-stations JSON file (.json, or .json.gz). Defaults to the offline cache 's100 tides update' writes.")]
         public string? TideCatalogue { get; init; }
 
         [CommandOption("--tide-predictions")]

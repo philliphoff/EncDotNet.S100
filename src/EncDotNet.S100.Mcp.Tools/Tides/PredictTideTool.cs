@@ -6,7 +6,7 @@ using EncDotNet.S100.Tides.Stations;
 
 namespace EncDotNet.S100.Mcp.Tools.Tides;
 
-/// <summary>What predict_tide returns.</summary>
+/// <summary>What predict returns.</summary>
 public enum TidePredictionMode
 {
     /// <summary>Heights at a regular step.</summary>
@@ -19,7 +19,7 @@ public enum TidePredictionMode
     Both,
 }
 
-/// <summary>A predict_tide request: a station (by id or name) or a point, and a time window.</summary>
+/// <summary>A predict request: a station (by id or name) or a point, and a time window.</summary>
 /// <param name="Station">A station id or name; or null to use the nearest station to the point.</param>
 /// <param name="Latitude">The point's latitude, when no station is named.</param>
 /// <param name="Longitude">The point's longitude, when no station is named.</param>
@@ -61,13 +61,10 @@ public sealed record ResolvedTidePrediction(
 
 /// <summary>
 /// Predicts the tide at a station or the nearest station to a point
-/// (MCP <c>predict_tide</c>, <c>s100 tides predict</c>).
+/// (MCP <c>predict</c> (kind tide), <c>s100 tides predict</c>).
 /// </summary>
 public sealed class PredictTideTool
 {
-    /// <summary>The MCP tool name.</summary>
-    public const string Name = "predict_tide";
-
     /// <summary>How far a station may be from a point when no radius is given: 10 km, the reach of a station.</summary>
     public const double DefaultRadiusMeters = 10_000;
 

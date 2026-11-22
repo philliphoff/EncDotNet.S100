@@ -15,7 +15,9 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="Query">
 /// The geographic query. All four <see cref="GeoQuery"/> variants are
 /// supported; intersection is computed against each feature's bounding
-/// box (no full polygon intersection).
+/// box unless <paramref name="Precise"/> is set. Required unless
+/// <paramref name="CountOnly"/> is set, when <c>null</c> counts every
+/// feature, those without geometry included.
 /// </param>
 /// <param name="Spec">
 /// Optional spec filter. When supplied, only loaded datasets whose
@@ -28,8 +30,13 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// </param>
 /// <param name="Page">Zero-based page index.</param>
 /// <param name="PageSize">Page size; clamped to 1..500.</param>
+/// <param name="CountOnly">
+/// Count instead of listing (#1609, which folded <c>count_features</c> in
+/// here): no feature rows, and <see cref="QueryFeaturesResult.Counts"/> per
+/// dataset and feature type.
+/// </param>
 public sealed record QueryFeaturesRequest(
-    [property: Description("Spatial query envelope (point / box / polygon / polyline). Intersection is computed against each feature's bounding box.")] GeoQuery Query,
+    [property: Description("Spatial query envelope (point / box / polygon / polyline). Intersection is computed against each feature's bounding box. Required unless countOnly, when null counts every feature, those without geometry included.")] GeoQuery? Query,
     [property: Description("Optional spec filter; null matches every spec. A default edition matches every edition of the same spec name.")] SpecRef? Spec = null,
     [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null returns every feature type.")] string? FeatureType = null,
     [property: Description("Optional temporal filter. When supplied, features whose fixedDateRange/periodicDateRange validity window is disjoint from the query window are excluded; features without validity metadata are always included.")] TimeQuery? Times = null,
@@ -38,7 +45,8 @@ public sealed record QueryFeaturesRequest(
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
     [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50,
     [property: Description("Optional single-dataset filter; when supplied only the dataset with this identifier (from list_datasets) is queried. Null queries every matching dataset.")] DatasetId? Dataset = null,
-    [property: Description("Add each feature's attributes as encoded (code and raw value) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false);
+    [property: Description("Add each feature's attributes as encoded (code and raw value) in 'attributes'. Default false. Numeric depths are in 'depth' either way.")] bool IncludeAttributes = false,
+    [property: Description("Count instead of listing: no feature rows, and 'counts' per dataset and feature type with how many have resolvable geometry. Default false.")] bool CountOnly = false);
 
 /// <summary>
 /// Per-feature summary returned by <see cref="QueryFeaturesTool"/>.
@@ -70,6 +78,22 @@ public sealed record FeatureTypeBreakdown(
     [property: Description("Feature type code (GML element local name; for S-101 the feature-type acronym).")] string FeatureType,
     [property: Description("Number of matching features of this type across all pages.")] int Count);
 
+/// <summary>
+/// A per-dataset, per-feature-type tally returned by
+/// <see cref="QueryFeaturesTool"/> with <see cref="QueryFeaturesRequest.CountOnly"/>.
+/// </summary>
+/// <param name="DatasetId">Dataset the tally belongs to.</param>
+/// <param name="Spec">Spec the dataset declares.</param>
+/// <param name="FeatureType">Feature type code (the GML element local name; for S-101 the feature-type acronym).</param>
+/// <param name="Count">Number of matching features of this type.</param>
+/// <param name="WithGeometry">Number of those features that have resolvable geometry — i.e. are addressable by spatial tools.</param>
+public sealed record FeatureTypeTally(
+    [property: Description("Dataset the tally belongs to.")] DatasetId DatasetId,
+    [property: Description("Spec the dataset declares.")] SpecRef Spec,
+    [property: Description("Feature type code (GML element local name; for S-101 the feature-type acronym).")] string FeatureType,
+    [property: Description("Number of matching features of this type.")] int Count,
+    [property: Description("Number of those features that have resolvable geometry (addressable by spatial tools).")] int WithGeometry);
+
 /// <summary>Result of <see cref="QueryFeaturesTool"/>.</summary>
 public sealed record QueryFeaturesResult(
     [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] IReadOnlyList<FeatureMatch> Features,
@@ -77,7 +101,9 @@ public sealed record QueryFeaturesResult(
     [property: Description("Echoed (and clamped) page size.")] int PageSize,
     [property: Description("Total number of matching features across all pages.")] int TotalCount,
     [property: Description("True if additional pages remain after the current one.")] bool HasMore,
-    [property: Description("Per-feature-type tally of the full (all-pages) match set, ordered by descending count then feature type. Lets a caller gauge the result shape before paging.")] IReadOnlyList<FeatureTypeBreakdown> TypeBreakdown);
+    [property: Description("Per-feature-type tally of the full (all-pages) match set, ordered by descending count then feature type. Lets a caller gauge the result shape before paging.")] IReadOnlyList<FeatureTypeBreakdown> TypeBreakdown,
+    [property: Description("With countOnly: per-dataset, per-feature-type tallies, ordered by dataset then descending count then feature type. Null otherwise.")] IReadOnlyList<FeatureTypeTally>? Counts = null,
+    [property: Description("With countOnly: the number of datasets with at least one match. Null otherwise.")] int? DatasetCount = null);
 
 
 /// <summary>
@@ -102,7 +128,9 @@ public sealed record QueryFeaturesResult(
 /// Intersection is computed at bounding-box precision per feature.
 /// Features with no geometry at all (e.g. container-style features
 /// such as <c>S131:Authority</c>) are not returned even when their
-/// dataset's bounds intersect the query.
+/// dataset's bounds intersect the query; with
+/// <see cref="QueryFeaturesRequest.CountOnly"/> and no query they are
+/// counted, and excluded from <see cref="FeatureTypeTally.WithGeometry"/>.
 /// </para>
 /// <para>
 /// First-pass filtering uses the dataset-level bounding box; datasets
@@ -132,13 +160,14 @@ public sealed class QueryFeaturesTool
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (request.Query is null)
+        var query = request.Query;
+        if (query is null && !request.CountOnly)
         {
             return Task.FromResult(ToolResult<QueryFeaturesResult>.Err(
-                new InvalidArgument("query", "must be supplied")));
+                new InvalidArgument("query", "must be supplied unless countOnly is set")));
         }
 
-        if (GeoQueryValidator.Validate(request.Query) is { } err)
+        if (query is not null && GeoQueryValidator.Validate(query) is { } err)
         {
             return Task.FromResult(ToolResult<QueryFeaturesResult>.Err(err));
         }
@@ -149,6 +178,8 @@ public sealed class QueryFeaturesTool
         var snapshot = _catalog.Datasets;
         var matched = new List<FeatureMatch>();
         var matchedFeatures = new List<EncDotNet.S100.Features.IS100Feature>();
+        var counts = request.CountOnly ? new List<FeatureTypeTally>() : null;
+        var datasetCount = 0;
 
         foreach (var dataset in snapshot)
         {
@@ -166,7 +197,7 @@ public sealed class QueryFeaturesTool
 
             // Coarse skip: if the dataset's declared bounds are disjoint
             // from the query, no feature in it can match either.
-            if (!SpatialPredicates.Intersects(dataset.Bounds, request.Query))
+            if (query is not null && !SpatialPredicates.Intersects(dataset.Bounds, query))
             {
                 continue;
             }
@@ -177,20 +208,23 @@ public sealed class QueryFeaturesTool
                 continue;
             }
 
+            var datasetStart = matched.Count;
             foreach (var feature in features)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (request.FeatureType is { } ft
                     && !string.Equals(feature.FeatureType, ft, StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                if (!FeatureGeometryQuery.Intersects(feature, request.Query))
+                if (query is not null && !FeatureGeometryQuery.Intersects(feature, query))
                 {
                     continue;
                 }
 
-                if (request.Precise && !GeometryIntersection.Intersects(feature, request.Query))
+                if (query is not null && request.Precise && !GeometryIntersection.Intersects(feature, query))
                 {
                     continue;
                 }
@@ -214,11 +248,17 @@ public sealed class QueryFeaturesTool
                     FeatureGeometryQuery.TryGetBoundingBox(feature)));
                 matchedFeatures.Add(feature);
             }
+
+            if (counts is not null && matched.Count > datasetStart)
+            {
+                datasetCount++;
+                counts.AddRange(Tally(dataset.Id, dataset.Spec, matched, datasetStart));
+            }
         }
 
         var totalCount = matched.Count;
         var skip = page * pageSize;
-        var take = Math.Max(0, Math.Min(pageSize, totalCount - skip));
+        var take = request.CountOnly ? 0 : Math.Max(0, Math.Min(pageSize, totalCount - skip));
         var pageBuilder = new List<FeatureMatch>(take);
         for (var i = 0; i < take; i++)
         {
@@ -231,7 +271,7 @@ public sealed class QueryFeaturesTool
             });
         }
 
-        var hasMore = skip + take < totalCount;
+        var hasMore = !request.CountOnly && skip + take < totalCount;
 
         // Per-type breakdown of the full match set (all pages), so a caller
         // can gauge the result's shape before paging through it.
@@ -261,7 +301,26 @@ public sealed class QueryFeaturesTool
                 pageSize,
                 totalCount,
                 hasMore,
-                breakdown)));
+                breakdown,
+                counts,
+                counts is null ? null : datasetCount)));
+    }
+
+    // One dataset's matches by feature type: descending count, then type.
+    private static IEnumerable<FeatureTypeTally> Tally(DatasetId datasetId, SpecRef spec, List<FeatureMatch> matched, int start)
+    {
+        var byType = new Dictionary<string, (int Count, int WithGeometry)>(StringComparer.Ordinal);
+        for (var i = start; i < matched.Count; i++)
+        {
+            var match = matched[i];
+            byType.TryGetValue(match.FeatureType, out var current);
+            byType[match.FeatureType] = (current.Count + 1, current.WithGeometry + (match.Bounds is null ? 0 : 1));
+        }
+
+        return byType
+            .OrderByDescending(kv => kv.Value.Count)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => new FeatureTypeTally(datasetId, spec, kv.Key, kv.Value.Count, kv.Value.WithGeometry));
     }
 
     private static bool SpecMatches(SpecRef actual, SpecRef filter)

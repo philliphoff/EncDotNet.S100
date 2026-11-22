@@ -95,23 +95,22 @@ These read an `IDatasetCatalog` and never change it.
 
 | Class | MCP name | What it does |
 |---|---|---|
-| `ListDatasetsTool` | `list_datasets` | Lists the loaded datasets, with an optional product and bounding-box filter. |
+| `ListDatasetsTool` | `list_datasets` | Lists the loaded datasets, with an optional product filter and a `GeoQuery` filter: a point keeps the datasets whose declared bounding box contains it, any other shape those whose bounding box intersects it. |
 | `ListSpecsTool` | `list_specs` | Lists the product specifications and what each tool supports for them. |
 | `ListTimeStepsTool` | `list_time_steps` | Lists the time steps of a time-varying dataset. |
-| `FindAtTool` | `find_at` | Finds the datasets whose declared bounding box contains a point or intersects a `GeoQuery`. It doesn't check per-cell coverage or no-data masks. |
 | `IdentifyFeaturesTool` | `identify_features` | Picks the features at a point, ranked by drawing priority where the dataset was portrayed (S-98 15.1), then point before curve before area, with exact containment for areas and a radius in metres for points and curves. S-101 features include the text of the files their `fileReference` attributes name. |
 | `NearestFeaturesTool` | `nearest_features` | Ranks features by true distance to a point, including the nearest point on a segment, with the bearing. An area that contains the point has distance 0. |
-| `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. |
-| `CountFeaturesTool` | `count_features` | Counts features by type, for each dataset. |
+| `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. `CountOnly` returns per-dataset, per-type `Counts` instead of feature rows, and then takes no `Query` to count every feature. |
 | `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. `FinestOnly` keeps a chart-cell hit only where its cell is in the finest band at the feature (`CellScaleRanking.FinestBand`). |
 | `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. `IncludeGeometry = false` replaces an S-101 geometry's coordinates with counts (`WithoutCoordinates`). |
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
 | `SampleTool` | `sample` | Samples a quantity at a point or along a polyline (vertices, or every `SpacingMeters`). `Depth` is charted depth by the route check's rule (S-102, else the finest S-101 cell), with the water mask and, at a time, the water level and available depth, from the host's `RouteCheckSourceCache`. `WaterLevel`, `Current` and `Weather` sample S-104, S-111 and GRIB2 or NetCDF at one time or over a time window, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). A point along a polyline with no value has an error instead of failing the whole call. |
+| `NavigabilityGridTool` | `get_navigability_grid` | Builds a `NavigabilityGrid` over a box and summarises it; writes the grid (NumPy or raw) to a `ResultFileStore`, which serves it as an `s100://grids/{id}` resource and expires old grids. |
 | `PlanRouteTool` | `plan_route` | Plans a route through stops with `RoutePlanner` on the navigability grid, moving stops to navigable water, then checks it with `CheckRouteTool` and summarises the check. With `RouteName` and a host `IPassageRouteWriter`, creates the route. |
 | `CheckRouteTool` | `check_route` | Checks a polyline or a host route (through `IPassageRouteProvider`) with `RouteChecker`: charts, areas, S-124 warnings and, with a draft, under-keel clearance. Returns the whole `RouteCheckReport` as a `CheckRouteResult`; `CheckRouteResult.From` projects a report you ran yourself. |
 
-The vector tools (`identify_features`, `nearest_features`, `query_features`,
-`count_features` and `search_features`) work on every vector product: S-101,
+The vector tools (`identify_features`, `nearest_features`, `query_features`
+and `search_features`) work on every vector product: S-101,
 S-401, S-57 (through its S-101 translation) and the GML products. For S-101,
 S-401 and S-57, the feature type is the acronym, such as `LIGHTS`, and the
 feature ID is the record ID.
@@ -159,10 +158,10 @@ file and reloads it when the file changes.
 
 | Type | MCP name | What it does |
 |---|---|---|
-| `ListTideStationsTool` | `list_tide_stations` | Lists tide stations near a point or in a box, nearest first, with their kind, reference station, offsets and datums, and the catalogue's age. |
-| `PredictTideTool` | `predict_tide` | Predicts the astronomical tide at a station or the nearest station to a point, as a series or highs and lows. `ResolveAsync` finds the station and predictor without predicting. |
-| `ListCurrentStationsTool` | `list_current_stations` | Lists tidal current stations (one per depth bin) near a point or in a box, nearest first, with their kind, depth, flood and ebb directions and a subordinate station's offsets. |
-| `PredictCurrentTool` | `predict_current` | Predicts the astronomical tidal current at a station or the nearest station to a point, as a series of speeds and directions or the slacks and maxima. `ResolveAsync` finds the station and predictor without predicting. |
+| `ListTideStationsTool` | `list_stations` (kind `tide`) | Lists tide stations near a point or in a box, nearest first, with their kind, reference station, offsets and datums, and the catalogue's age. |
+| `PredictTideTool` | `predict` (kind `tide`) | Predicts the astronomical tide at a station or the nearest station to a point, as a series or highs and lows. `ResolveAsync` finds the station and predictor without predicting. |
+| `ListCurrentStationsTool` | `list_stations` (kind `current`) | Lists tidal current stations (one per depth bin) near a point or in a box, nearest first, with their kind, depth, flood and ebb directions and a subordinate station's offsets. |
+| `PredictCurrentTool` | `predict` (kind `current`) | Predicts the astronomical tidal current at a station or the nearest station to a point, as a series of speeds and directions or the slacks and maxima. `ResolveAsync` finds the station and predictor without predicting. |
 
 SoundCharts and `s100 mcp serve` both run them, and the `s100 tides` commands
 call them directly. `SampleCoverageTool` and `SampleCoverageAlongTool`, given

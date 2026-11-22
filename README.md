@@ -33,7 +33,7 @@ provides:
   `ghcr.io/philliphoff/s100` container image.
 - An **MCP server** that exposes datasets to AI agents — feature
   discovery and query (`identify_features`, `nearest_features`,
-  `count_features`, `describe_feature`), coverage sampling, route
+  `query_features`, `describe_feature`), coverage sampling, route
   checks and tide predictions. It runs inside the viewer, where it also
   plans routes and drives the view, or headless with `s100 mcp serve`
   over standard input and output or HTTP.

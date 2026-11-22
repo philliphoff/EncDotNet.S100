@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Pipelines;
@@ -11,12 +12,16 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// Request payload for <see cref="ListDatasetsTool"/>.
 /// </summary>
 /// <param name="Spec">Optional spec filter; <c>null</c> matches all specs.</param>
-/// <param name="IntersectsBounds">Optional bbox filter; only datasets whose bounds overlap are returned.</param>
+/// <param name="Query">
+/// Optional spatial filter (#1609, which folded <c>find_at</c> in here): a
+/// point keeps the datasets whose declared bounding box contains it; a box,
+/// polygon or polyline keeps those whose bounding box intersects it.
+/// </param>
 /// <param name="Page">Zero-based page index.</param>
 /// <param name="PageSize">Page size; clamped to 1..500.</param>
 public sealed record ListDatasetsRequest(
     [property: Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec.")] SpecRef? Spec = null,
-    [property: Description("Optional WGS-84 bounding box; only datasets whose bounds intersect this rectangle are returned.")] BoundingBox? IntersectsBounds = null,
+    [property: Description("Optional spatial filter (point / box / polygon / polyline): a point keeps the datasets whose declared bounding box contains it, any other shape those whose bounding box intersects it.")] GeoQuery? Query = null,
     [property: Description("Zero-based page index.")] int Page = 0,
     [property: Description("Page size; the tool clamps the effective value to the range 1..500.")] int PageSize = 50);
 
@@ -48,8 +53,14 @@ public sealed record ListDatasetsResult(
 
 /// <summary>
 /// Lists datasets currently loaded in an <see cref="IDatasetCatalog"/>,
-/// optionally filtered by spec and bounding-box intersection.
+/// optionally filtered by spec and a spatial query.
 /// </summary>
+/// <remarks>
+/// The spatial test is against each dataset's declared bounding box only: a
+/// match means the query falls inside the dataset's rectangle, not that the
+/// dataset has data there (sample reads the value). Antimeridian-crossing
+/// dataset bounds (stored with West &gt; East) don't match.
+/// </remarks>
 public sealed class ListDatasetsTool
 {
     /// <summary>The MCP tool name.</summary>
@@ -72,6 +83,11 @@ public sealed class ListDatasetsTool
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (request.Query is { } query && GeoQueryValidator.Validate(query) is { } err)
+        {
+            return Task.FromResult(ToolResult<ListDatasetsResult>.Err(err));
+        }
+
         var pageSize = Math.Clamp(request.PageSize, 1, 500);
         var page = Math.Max(0, request.Page);
 
@@ -84,7 +100,7 @@ public sealed class ListDatasetsTool
                 continue;
             }
 
-            if (request.IntersectsBounds is { } bbox && !Intersects(dataset.Bounds, bbox))
+            if (request.Query is { } q && !Matches(dataset.Bounds, q))
             {
                 continue;
             }
@@ -133,9 +149,9 @@ public sealed class ListDatasetsTool
         return filter.Edition == default || actual.Edition == filter.Edition;
     }
 
-    private static bool Intersects(BoundingBox a, BoundingBox b) =>
-        a.WestLongitude <= b.EastLongitude
-        && a.EastLongitude >= b.WestLongitude
-        && a.SouthLatitude <= b.NorthLatitude
-        && a.NorthLatitude >= b.SouthLatitude;
+    private static bool Matches(BoundingBox bounds, GeoQuery query) => query switch
+    {
+        GeoQuery.Point p => SpatialPredicates.Contains(bounds, p.Value),
+        _ => SpatialPredicates.Intersects(bounds, query),
+    };
 }

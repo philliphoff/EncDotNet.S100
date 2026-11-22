@@ -7,7 +7,7 @@ using EncDotNet.S100.Tides.Stations;
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 /// <summary>
-/// list_tide_stations and predict_tide (#1452) over NOAA's Puget Sound
+/// list_stations and predict (#1452) over NOAA's Puget Sound
 /// stations (tests/datasets/Tides/Stations/puget-sound.json, retrieved
 /// 2026-11-12): Seattle 9447130 and Port Townsend 9444900 (harmonic), and
 /// Tacoma Narrows 9446486, Port Ludlow 9445017 and Marrowstone Point 9444972

@@ -2,7 +2,7 @@
 
 Lists tide stations round `--near latitude,longitude` (latitude first), nearest
 first. Use it to find a station id for `s100 tides predict`. `--format json`
-is the `list_tide_stations` MCP result: each station's `kind` (`harmonic`, or
+is the `list_stations` (kind `tide`) MCP result: each station's `kind` (`harmonic`, or
 `subordinate` with `referenceStationId` and `offsets`), `distanceMeters`,
 `datums` (heights above MLLW) and `predictableDatums`, and a `catalogue`
 object with its date, `ageDays` and `stale`.

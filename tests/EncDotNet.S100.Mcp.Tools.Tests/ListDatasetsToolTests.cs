@@ -1,5 +1,6 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
@@ -88,7 +89,7 @@ public class ListDatasetsToolTests
         var tool = new ListDatasetsTool(catalog);
 
         var result = await tool.InvokeAsync(new ListDatasetsRequest(
-            IntersectsBounds: LoadedDatasetFactory.Box(5, 5, 6, 6)), TestContext.Current.CancellationToken);
+            Query: new GeoQuery.Box(new GeoBoundingBox(5, 5, 6, 6))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);
@@ -102,7 +103,7 @@ public class ListDatasetsToolTests
         var tool = new ListDatasetsTool(catalog);
 
         var result = await tool.InvokeAsync(new ListDatasetsRequest(
-            IntersectsBounds: LoadedDatasetFactory.Box(10, 10, 11, 11)), TestContext.Current.CancellationToken);
+            Query: new GeoQuery.Box(new GeoBoundingBox(10, 10, 11, 11))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Datasets);
