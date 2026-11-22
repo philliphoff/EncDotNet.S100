@@ -503,7 +503,7 @@ S-57 records.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| InitialCatalogues | S-98: 20.1 | InitialCatalogues | Partial | `src/EncDotNet.S100.Viewer/Services/FeatureCatalogueOverrides.cs` | Bundled catalogues plus one persisted override per product; nothing installs catalogues from an exchange set. |
+| InitialCatalogues | S-98: 20.1 | InitialCatalogues | Partial | `src/EncDotNet.S100.Viewer/Services/CatalogueRegistry.cs` | Bundled catalogues plus one custom override per product (command line > custom > built-in), applied live; nothing installs catalogues from an exchange set. |
 | OutOfCatalogueSequence Dataset | S-98: 20.1 and B-1 | InitialCatalogues, OutOfCatalogueSequenceDataset | Partial | `src/EncDotNet.S100.Core/DatasetPipelines/IDatasetProcessor.cs` | Version mismatch is a warning badge; the dataset still loads. |
 | UpdateCatalogues | S-98: 20.1 and B-1 | InitialCatalogues, PowerUpCatalogues, UpdatedCatalogueData | Partial | `src/EncDotNet.S100.Viewer/ViewModels/CatalogueViewModels.cs` | Overrides can be replaced by hand; no list of installed versions and no install from exchange sets. |
 | MultipleRevisions | S-98: 20.1 and B-1 | MultipleRevisions | Partial | `src/EncDotNet.S100.Datasets.S101/S101LegacyFeatureNames.cs` | The library supports a catalogue per layer; the viewer uses one per product. 1.x names map onto the 2.0.0 portrayal. |

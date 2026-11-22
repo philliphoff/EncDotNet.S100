@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,21 +22,23 @@ public partial class PortrayalCataloguesView : UserControl
         var folderPath = await fileDialog.OpenPortrayalCatalogueFolderAsync(TopLevel.GetTopLevel(this));
         if (folderPath is null) return;
 
-        // Detect the product spec from the catalogue XML
-        var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
-        if (!File.Exists(cataloguePath)) return;
+        // The product comes from the catalogue's content; a folder that
+        // can't be used says why (A2).
+        CatalogueAddFeedback.Show(vm.Add(folderPath));
+    }
+}
 
-        string? spec = null;
-        try
-        {
-            using var stream = File.OpenRead(cataloguePath);
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            spec = string.IsNullOrEmpty(catalogue.ProductId) ? null : catalogue.ProductId;
-        }
-        catch { }
-
-        if (spec is null) return;
-
-        vm.AddOrUpdate(spec, folderPath);
+/// <summary>Tells the user why a catalogue they chose isn't in use.</summary>
+internal static class CatalogueAddFeedback
+{
+    /// <summary>Shows <paramref name="reason"/> as a warning toast; does nothing when it's null.</summary>
+    public static void Show(string? reason)
+    {
+        if (reason is null) return;
+        App.Services.GetRequiredService<Services.Notifications.INotificationService>()
+            .Create(Resources.Strings.Toast_Warning)
+            .WithSeverity(Services.Notifications.NotificationSeverity.Warning)
+            .WithContent(string.Format(Resources.Strings.Catalogues_AddFailed, reason))
+            .Show();
     }
 }

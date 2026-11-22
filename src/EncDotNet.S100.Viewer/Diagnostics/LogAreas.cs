@@ -17,6 +17,8 @@ internal static class LogAreas
     private static readonly (string Fragment, string Area)[] Rules =
     [
         ("Viewer.Command", "Commands"),
+        ("CatalogueRegistry", "Catalogues"),
+        ("CatalogueRedraw", "Catalogues"),
         ("Secom", "SECOM"),
         ("Updates", "Updates"),
         ("GitHubRelease", "Updates"),

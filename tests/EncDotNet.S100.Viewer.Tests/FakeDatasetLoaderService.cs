@@ -42,6 +42,15 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     }
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries) { }
 
+    /// <summary>The entries passed to each <see cref="ReloadEntriesAsync"/> call, in call order.</summary>
+    public List<IReadOnlyList<DatasetEntry>> Reloaded { get; } = new();
+
+    public Task ReloadEntriesAsync(IReadOnlyList<DatasetEntry> entries, CancellationToken cancellationToken = default)
+    {
+        Reloaded.Add(entries);
+        return Task.CompletedTask;
+    }
+
     public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; set; } =
         new Dictionary<DatasetEntry, IDatasetProcessor>();
 

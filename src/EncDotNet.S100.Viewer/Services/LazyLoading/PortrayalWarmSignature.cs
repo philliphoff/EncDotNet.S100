@@ -35,9 +35,8 @@ internal static class PortrayalWarmSignature
         sb.Append(presentation.Mariner).Append('|');
         foreach (var (spec, mode) in presentation.EcdisDisplay.ActiveDisplayModes.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
             sb.Append("mode:").Append(spec).Append('=').Append(mode).Append('|');
-        AppendPaths(sb, "pc", settings.CataloguePaths);
+        AppendPaths(sb, "pc", settings.PortrayalCataloguePaths);
         AppendPaths(sb, "fc", settings.FeatureCataloguePaths);
-        sb.Append("pcpath:").Append(settings.PortrayalCataloguePath).Append('|');
         foreach (var assembly in new[]
                  {
                      typeof(DatasetPipelineFactory).Assembly,

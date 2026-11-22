@@ -22,8 +22,8 @@ public partial class FeatureCataloguesView : UserControl
         var path = await fileDialog.OpenFeatureCatalogueAsync(TopLevel.GetTopLevel(this));
         if (path is null) return;
 
-        // Detect spec from file name convention or ask user — for now assume S-101
-        var spec = "S-101";
-        vm.AddOrUpdate(spec, path);
+        // The product comes from the catalogue's content (A1); a file that
+        // can't be used says why (A2).
+        CatalogueAddFeedback.Show(vm.Add(path));
     }
 }

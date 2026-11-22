@@ -331,9 +331,33 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
     }
 
     /// <summary>
-    /// Raised by <see cref="SetSource(SpecRef, IAssetSource)"/> after the
-    /// spec's cached catalogue, decoder and content hash have been evicted,
-    /// on the thread that called it.
+    /// Removes the <see cref="IAssetSource"/> registered for
+    /// <paramref name="spec"/>, disposing it, and evicts the spec's cached
+    /// catalogue, decoder and content hash, so the next access consults only
+    /// the resolver. Use it to drop a catalogue for a product that has no
+    /// other one to fall back to.
+    /// </summary>
+    /// <returns><see langword="true"/> when a source was registered.</returns>
+    public bool RemoveSource(SpecRef spec)
+    {
+        if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
+
+        _catalogues.TryRemove(spec, out _);
+        _decoders.TryRemove(spec, out _);
+        _contentHashes.TryRemove(spec, out _);
+        if (!_sources.TryRemove(spec, out var previous))
+            return false;
+        try { previous.Dispose(); } catch { /* best-effort */ }
+
+        CataloguesChanged?.Invoke(this, new CataloguesChangedEventArgs(spec));
+        return true;
+    }
+
+    /// <summary>
+    /// Raised by <see cref="SetSource(SpecRef, IAssetSource)"/> and
+    /// <see cref="RemoveSource(SpecRef)"/> after the spec's cached catalogue,
+    /// decoder and content hash have been evicted, on the thread that called
+    /// them.
     /// </summary>
     /// <remarks>
     /// A change the resolver delegate makes on its own, such as a viewer

@@ -318,18 +318,6 @@ public partial class MainWindow : ShadUI.Window
         // Open Recent replays exchange sets through the same progress UI.
         _viewModel.DatasetOpening.ExchangeSetOpener = RunExchangeSetAsync;
 
-        // Show built-in specification entries in the catalogue views
-        foreach (var spec in Specifications.Specification.AvailableSpecs)
-        {
-            var (fcVersion, fcVersionDate) = CatalogueSpecDetection.ReadBuiltInFeatureCatalogueInfo(spec);
-            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, fcVersion, fcVersionDate);
-
-            if (Specifications.Specification.HasPortrayalCatalogue(spec))
-            {
-                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInPortrayalCatalogueVersion(spec));
-            }
-        }
-
         // Apply persisted accent color. Both the user's colour choice and
         // the active chrome theme feed the effective brush, so re-apply on
         // either change (the low-light themes mute the accent).
@@ -643,30 +631,6 @@ public partial class MainWindow : ShadUI.Window
         if (options?.HasExplicitViewport == true)
         {
             _loader.SuppressAutoZoom = true;
-        }
-
-        // Add CLI portrayal catalogues to the view model (transient — not persisted)
-        if (options?.PortrayalCatalogues is { } pcArgs)
-        {
-            foreach (var pcPath in pcArgs)
-            {
-                if (Directory.Exists(pcPath) && CatalogueSpecDetection.DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
-                {
-                    _viewModel.PortrayalCatalogues.AddTransient(pcSpec, pcPath);
-                }
-            }
-        }
-
-        // Add CLI feature catalogues to the view model (transient — not persisted)
-        if (options?.FeatureCatalogues is { } fcArgs)
-        {
-            foreach (var fcPath in fcArgs)
-            {
-                if (File.Exists(fcPath) && CatalogueSpecDetection.DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
-                {
-                    _viewModel.FeatureCatalogues.AddTransient(fcSpec, fcPath);
-                }
-            }
         }
 
         // Run startup automation once the window is shown: load CLI
