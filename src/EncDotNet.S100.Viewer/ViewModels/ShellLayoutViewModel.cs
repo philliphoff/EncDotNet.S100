@@ -888,6 +888,8 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     {
         if (!_tabsById.TryGetValue(ChartReferenceTabId, out var tab) || !tab.IsVisible)
             return;
+        // From the Help menu, In view is off (symbol dictionary §4.5, R5).
+        (tab.ViewModel as IActivityTabOpenedByUser)?.OnOpenedByUser();
         if (ReferenceEquals(_selectedLeftTab, tab) && IsLeftDockOpen)
             return;
         SelectedLeftTab = tab;
@@ -1074,7 +1076,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
 
         SelectTabCommand = new RelayCommand<IActivityTab>(tab =>
         {
-            if (tab is not null) RouteSelection(tab);
+            if (tab is null) return;
+            (tab.ViewModel as IActivityTabOpenedByUser)?.OnOpenedByUser();
+            RouteSelection(tab);
         });
 
         CloseDockCommand = new RelayCommand<object?>(parameter =>
@@ -1243,7 +1247,10 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
                 switch (captured.Dock)
                 {
                     case TabDock.Left:
-                        SelectedLeftTab = captured;
+                        // A link opens the tab; it never toggles the dock
+                        // closed when the tab is showing already.
+                        if (!ReferenceEquals(_selectedLeftTab, captured) || !IsLeftDockOpen)
+                            SelectedLeftTab = captured;
                         IsLeftDockOpen = true;
                         break;
                     case TabDock.Right when captured.Id == LegendTabId:

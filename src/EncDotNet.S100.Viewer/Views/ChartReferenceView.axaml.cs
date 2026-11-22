@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -33,5 +34,45 @@ public partial class ChartReferenceView : UserControl
             (DataContext as ChartReferenceViewModel)?.Activate();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+    // Hover to find (#1638, R5, legends D19): the pointer resting on a row,
+    // or keyboard focus on its list item, rings its features on the map;
+    // leaving clears them. Focus is the keyboard path to the same find.
+    private void OnRowPointerEntered(object? sender, Avalonia.Input.PointerEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            (DataContext as ChartReferenceViewModel)?.HoverRow(row);
+    }
+
+    private void OnRowPointerExited(object? sender, Avalonia.Input.PointerEventArgs e)
+    {
+        // Keyboard focus keeps its row ringed after the pointer passes over.
+        if (RowOf(sender) is { } row && ItemOf(sender) is not { IsFocused: true })
+            (DataContext as ChartReferenceViewModel)?.LeaveRow(row);
+    }
+
+    private void OnListGotFocus(object? sender, Avalonia.Input.FocusChangedEventArgs e)
+    {
+        if (e.Source is ListBoxItem { DataContext: ChartReferenceRowViewModel row })
+            (DataContext as ChartReferenceViewModel)?.HoverRow(row);
+    }
+
+    private void OnListLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (e.Source is ListBoxItem { DataContext: ChartReferenceRowViewModel row, IsPointerOver: false })
+            (DataContext as ChartReferenceViewModel)?.LeaveRow(row);
+    }
+
+    private static ChartReferenceRowViewModel? RowOf(object? sender) =>
+        (sender as Control)?.DataContext as ChartReferenceRowViewModel;
+
+    private static ListBoxItem? ItemOf(object? sender) =>
+        (sender as Control)?.FindAncestorOfType<ListBoxItem>();
+
+    private void InitializeComponent()
+    {
+        AvaloniaXamlLoader.Load(this);
+        var list = this.FindControl<ListBox>("List");
+        list?.AddHandler(GotFocusEvent, OnListGotFocus);
+        list?.AddHandler(LostFocusEvent, OnListLostFocus);
+    }
 }

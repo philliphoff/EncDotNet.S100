@@ -241,6 +241,17 @@
                                                    Opacity="0.75"
                                                    TextWrapping="Wrap"
                                                    Margin="0,8,0,3" />
+                                        <!-- D7, symbol dictionary R5: a catalogue key that lists fewer
+                                             symbols than it draws links to all of them in Chart reference. -->
+                                        <Button Classes="legendLink"
+                                                AutomationProperties.AutomationId="Legend.Section.ShowInChartReference"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Legend_ShowAllInChartReference}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendShowAllInChartReference}"
+                                                IsVisible="{Binding HasChartReferenceLink}"
+                                                Command="{Binding ShowInChartReferenceCommand}"
+                                                Margin="0,-2,0,2">
+                                            <TextBlock Text="{x:Static loc:Strings.Legend_ShowAllInChartReference}" />
+                                        </Button>
                                         <!-- Spaced as a group title, so every line under a header starts the same way. -->
                                         <TextBlock Text="{Binding MarinerSettings}"
                                                    IsVisible="{Binding HasMarinerSettings}"

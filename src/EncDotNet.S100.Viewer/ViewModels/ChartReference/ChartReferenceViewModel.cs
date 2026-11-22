@@ -33,7 +33,7 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// once.
 /// </para>
 /// </remarks>
-internal sealed class ChartReferenceViewModel : ViewModelBase, IChartReferenceRowHost, IDisposable
+internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartReferenceRowHost, IDisposable
 {
     /// <summary>The tile size in logical pixels (design note §3.4: 40 px tiles).</summary>
     public const int GlyphSize = 40;
@@ -241,7 +241,8 @@ internal sealed class ChartReferenceViewModel : ViewModelBase, IChartReferenceRo
     public bool ShowNoMatches => !_isLoading && _index is not null && _items.Count == 0;
 
     /// <summary>What the no-matches placeholder suggests: an S-57 acronym, or the other mode.</summary>
-    public string NoMatchesDescription => _mode == ChartReferenceMode.Features
+    public string NoMatchesDescription => _inView && !HasQuery ? Strings.ChartReference_NoneInView
+        : _mode == ChartReferenceMode.Features
         ? Strings.ChartReference_NoMatchesFeatures
         : Strings.ChartReference_NoMatchesSymbols;
 
@@ -414,6 +415,8 @@ internal sealed class ChartReferenceViewModel : ViewModelBase, IChartReferenceRo
         _glyphs.PaletteChanged -= OnPaletteChanged;
         if (_settings is not null)
             _settings.PropertyChanged -= OnSettingsChanged;
+        if (_map is not null)
+            _map.Changed -= OnMapChanged;
     }
 
     private async Task<IImage?> DrawAsync(ChartReferenceArtwork artwork, LeadGlyph lead, PaletteType palette)
@@ -510,7 +513,7 @@ internal sealed class ChartReferenceViewModel : ViewModelBase, IChartReferenceRo
     {
         bool simplified = _settings?.SimplifiedSymbols ?? false;
         var rows = index.FeatureTypes
-            .Where(f => !f.IsAbstract)
+            .Where(f => !f.IsAbstract && InViewAllows(f))
             .Select(f => (Section: ChartReferenceSection.Of(f.PrimaryViewingGroup), Row: Row(f, index, simplified)));
         return Grouped(rows, Titles(index), unreached: []);
     }
@@ -523,7 +526,7 @@ internal sealed class ChartReferenceViewModel : ViewModelBase, IChartReferenceRo
             StringComparer.OrdinalIgnoreCase);
 
         // Family members are listed under their family, not on their own.
-        var items = index.Items.Where(i => i.Family is null).ToList();
+        var items = index.Items.Where(i => i.Family is null && InViewAllows(i)).ToList();
         var reached = items
             .Where(i => !i.IsUnreached)
             .Select(i => (Section: SectionOfItem(i, featureSections), Row: Row(i, index)));
@@ -542,6 +545,7 @@ internal sealed class ChartReferenceViewModel : ViewModelBase, IChartReferenceRo
         [
             .. index.Search(query, kind, SearchLimit)
                 .Select(h => h.Entry)
+                .Where(InViewAllows)
                 .Select(e => e switch
                 {
                     FeatureTypeEntry f when _mode == ChartReferenceMode.Features => Row(f, index, simplified),

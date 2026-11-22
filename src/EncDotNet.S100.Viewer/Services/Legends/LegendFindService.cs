@@ -6,6 +6,8 @@ namespace EncDotNet.S100.Viewer.Services.Legends;
 /// Hover to find (legends design note D19, #1412): while a Legend tab row is
 /// hovered or has keyboard focus, the features it describes that are drawn in
 /// the map view are ringed (<see cref="Current"/>; the map overlay draws it).
+/// A Chart reference row rings the same way (<see cref="HoverReference"/>,
+/// symbol dictionary §4.5, R5).
 /// </summary>
 /// <remarks>
 /// Cheap by design: the find waits until the pointer has rested on a row for
@@ -25,6 +27,7 @@ internal sealed class LegendFindService : IDisposable
     private readonly Action<Action> _post;
     private readonly ITimer _delay;
     private RowKey? _hovered;
+    private ChartReferenceTarget? _hoveredReference;
     private (GeoBounds? View, double Resolution)? _foundAt;
     private bool _tabShown;
     private bool _disposed;
@@ -75,6 +78,7 @@ internal sealed class LegendFindService : IDisposable
         if (_hovered == row)
             return;
         _hovered = row;
+        _hoveredReference = null;
         SetCurrent(null);
         _delay.Change(HoverDelay, Timeout.InfiniteTimeSpan);
     }
@@ -91,6 +95,7 @@ internal sealed class LegendFindService : IDisposable
             return; // another row was entered before this one was left
         }
         _hovered = null;
+        _hoveredReference = null;
         _delay.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         SetCurrent(null);
     }
@@ -110,21 +115,52 @@ internal sealed class LegendFindService : IDisposable
         ArgumentNullException.ThrowIfNull(rowLabel);
         _delay.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _hovered = new RowKey(sectionId, rowLabel, groupKey);
+        _hoveredReference = null;
         Find();
         return Current;
     }
 
+    /// <summary>
+    /// A Chart reference row is hovered or focused (R5, #1638): the features
+    /// it describes are found after <see cref="HoverDelay"/>, with the same
+    /// cap and clearing rules as a Legend row.
+    /// </summary>
+    /// <param name="target">The row.</param>
+    public void HoverReference(ChartReferenceTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (_disposed || target.IsSameRow(_hoveredReference))
+            return;
+        _hovered = null;
+        _hoveredReference = target;
+        SetCurrent(null);
+        _delay.Change(HoverDelay, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>The pointer or focus left a Chart reference row: the rings clear at once.</summary>
+    /// <param name="target">The row, or null for whichever Chart reference row is hovered.</param>
+    public void LeaveReference(ChartReferenceTarget? target = null)
+    {
+        if (_hoveredReference is null || target is not null && !target.IsSameRow(_hoveredReference))
+            return; // another row was entered before this one was left, or none is hovered
+        Leave();
+    }
+
     private void FindHovered()
     {
-        if (!_disposed && _hovered is not null)
+        if (!_disposed && (_hovered is not null || _hoveredReference is not null))
             Find();
     }
 
     private void Find()
     {
-        if (_hovered is not { } row)
+        LegendFeatureFind? found;
+        if (_hoveredReference is { } target)
+            found = _legend.FindReferenceFeatures(target);
+        else if (_hovered is { } row)
+            found = _legend.FindFeatures(row.SectionId, row.RowLabel, row.GroupKey);
+        else
             return;
-        var found = _legend.FindFeatures(row.SectionId, row.RowLabel, row.GroupKey);
         _foundAt = ViewNow();
         SetCurrent(found);
     }
@@ -153,12 +189,12 @@ internal sealed class LegendFindService : IDisposable
         // tab closed, so only the change clears).
         var wasShown = _tabShown;
         _tabShown = _legend.IsTabShown;
-        if (wasShown && !_tabShown)
+        if (wasShown && !_tabShown && _hovered is not null)
         {
             Leave();
             return;
         }
-        if (_hovered is not null)
+        if (_hovered is not null || _hoveredReference is not null)
             _delay.Change(HoverDelay, Timeout.InfiniteTimeSpan);
     }
 

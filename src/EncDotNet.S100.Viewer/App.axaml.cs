@@ -1893,6 +1893,10 @@ public partial class App : Application
                 UiThread.RunOrPost);
             datasets.Entries.CollectionChanged += (_, _) => UiThread.RunOrPost(reference.RefreshProducts);
             datasets.EntryPortrayalSpecChanged += (_, _) => UiThread.RunOrPost(reference.RefreshProducts);
+            // In view and hover to find (#1638, R5) read the Legend tab's services.
+            reference.ConnectMap(new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceMap(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()));
             return reference;
         });
         // Legends (#1402, D1): one service gathers every legend row; the
@@ -2233,7 +2237,9 @@ public partial class App : Application
             title: Strings.Pane_ChartReference,
             name: Strings.Label_Activity_ChartReference,
             tooltip: Strings.Tooltip_ChartReference,
-            iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 });
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 },
+            // The Legend tab's Show all opens it (#1638, R5).
+            autoOpenOnContentSignal: true);
         services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
             id: "Routes",
             order: 55,
@@ -2313,7 +2319,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
                 sp.GetRequiredService<ITimeFormatProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>());
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>(),
+                // D7, symbol dictionary R5: Show all in Chart reference.
+                spec => sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>().ShowAllInView(spec));
             // D17: the S-98 position legend is the fixed first row (#1407).
             legend.PinnedRows.Insert(0, new EncDotNet.S100.Viewer.ViewModels.Legends.PositionLegendRowViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()));
