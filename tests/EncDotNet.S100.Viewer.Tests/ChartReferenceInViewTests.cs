@@ -432,6 +432,137 @@ public sealed class ChartReferenceInViewTests : IDisposable
         Assert.False(vm.InView);
     }
 
+    // ── Hover rings end with the panel (#1655) ───────────────────────────
+
+    /// <summary>The activity, shown in the left dock with a row hovered and its rings drawn.</summary>
+    private async Task<(ChartReferenceViewModel Vm, ShellLayoutViewModel Layout, IActivityTab Other, IActivityTab Page)> HoveredAsync(Scene scene)
+    {
+        var vm = await scene.OpenAsync();
+        var tab = new Tab(vm);
+        var other = new Tab(new object(), "Library", 10);
+        var page = new Tab(new object(), ShellLayoutViewModel.ChartReferencePageTabId, 53, fillsContent: true);
+        var layout = Layout([tab, other, page]);
+        layout.ShowChartReferenceCommand.Execute(null);
+        Assert.True(layout.IsLeftDockShown);
+        Assert.True(vm.IsTabShown);
+
+        vm.HoverRow(vm.Rows.Single(r => r.Key.Code == "LightAllAround"));
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        Assert.Equal(2, scene.Find.Current?.MatchCount);
+        return (vm, layout, other, page);
+    }
+
+    [Fact]
+    public async Task Closing_the_left_dock_clears_a_hovers_rings()
+    {
+        using var scene = new Scene();
+        var (vm, layout, _, _) = await HoveredAsync(scene);
+        using var owned = vm;
+
+        layout.IsLeftDockOpen = false;
+
+        Assert.False(vm.IsTabShown);
+        Assert.Null(scene.Find.Current);
+        // The hover ended: the Legend following the view doesn't bring the rings back.
+        scene.Service.Refresh();
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        Assert.Null(scene.Find.Current);
+    }
+
+    [Fact]
+    public async Task Selecting_another_activity_clears_a_hovers_rings()
+    {
+        using var scene = new Scene();
+        var (vm, layout, other, _) = await HoveredAsync(scene);
+        using var owned = vm;
+
+        layout.SelectedLeftTab = other;
+
+        Assert.True(layout.IsLeftDockShown);
+        Assert.False(vm.IsTabShown);
+        Assert.Null(scene.Find.Current);
+    }
+
+    [Fact]
+    public async Task Opening_the_page_clears_a_hovers_rings()
+    {
+        using var scene = new Scene();
+        var (vm, layout, _, _) = await HoveredAsync(scene);
+        using var owned = vm;
+
+        layout.ShowChartReferencePageCommand.Execute(null);
+
+        Assert.True(layout.IsContentPanelOpen);
+        Assert.False(vm.IsTabShown);
+        Assert.Null(scene.Find.Current);
+
+        // Back from the page, the activity is shown again.
+        layout.IsLeftDockOpen = false;
+        Assert.True(layout.IsLeftDockShown);
+        Assert.True(vm.IsTabShown);
+    }
+
+    [Theory]
+    [InlineData("mode")]
+    [InlineData("search")]
+    [InlineData("in view")]
+    public async Task Rebuilding_the_list_clears_a_hovers_rings(string change)
+    {
+        using var scene = new Scene();
+        var (vm, _, _, _) = await HoveredAsync(scene);
+        using var owned = vm;
+
+        switch (change)
+        {
+            case "mode": vm.Mode = ChartReferenceMode.Symbols; break;
+            case "search": vm.Query = "light"; break;
+            default: vm.InView = true; break;
+        }
+
+        Assert.Null(scene.Find.Current);
+        scene.Service.Refresh();
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        Assert.Null(scene.Find.Current);
+    }
+
+    [Fact]
+    public async Task Changing_the_product_clears_a_hovers_rings()
+    {
+        using var scene = new Scene();
+        using var catalogues = new ChartReferenceServiceTests.Fixture("S-101", "S-201");
+        using var vm = new ChartReferenceViewModel(catalogues.Service, new ChartReferenceGlyphCache(PaletteType.Day));
+        vm.ConnectMap(scene.Map);
+        vm.Activate();
+        await vm.Loading;
+        vm.HoverRow(vm.Rows.Single(r => r.Key.Code == "LightAllAround"));
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        Assert.Equal(2, scene.Find.Current?.MatchCount);
+
+        vm.SelectedProduct = vm.Products.Single(p => p.Spec.Name == "S-201");
+
+        Assert.Null(scene.Find.Current);
+    }
+
+    [Fact]
+    public async Task Following_the_map_keeps_a_hover()
+    {
+        using var scene = new Scene();
+        using var vm = await scene.OpenAsync();
+        vm.InView = true;
+        vm.HoverRow(vm.Rows.Single(r => r.Key.Code == "LightAllAround"));
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        Assert.Equal(2, scene.Find.Current?.MatchCount);
+
+        // A pan that changes what is drawn rebuilds the list where the user
+        // is; the row under the pointer is still hovered, so its rings come
+        // back once the Legend has followed the view.
+        scene.Legend.Viewport.Publish(50.35, -2, 51.35, -1);
+        Assert.Null(scene.Find.Current);
+        scene.Legend.Clock.Advance(LegendService.PanSettleDelay);
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        Assert.Equal(1, scene.Find.Current?.MatchCount);
+    }
+
     // ── The view ─────────────────────────────────────────────────────────
 
     [AvaloniaFact]
@@ -462,10 +593,12 @@ public sealed class ChartReferenceInViewTests : IDisposable
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private sealed class Tab(object viewModel) : IActivityTab
+    private sealed class Tab(object viewModel, string id = ShellLayoutViewModel.ChartReferenceTabId, int order = 52, bool fillsContent = false) : IActivityTab
     {
-        public string Id => ShellLayoutViewModel.ChartReferenceTabId;
-        public int Order => 52;
+        public string Id => id;
+        public int Order => order;
+        public bool FillsContent => fillsContent;
+        public bool ShowsInActivityBar => !fillsContent;
         public string Title => "Chart reference";
         public string Name => Title;
         public string Tooltip => "Tip";
@@ -481,9 +614,14 @@ public sealed class ChartReferenceInViewTests : IDisposable
 
     private ShellLayoutViewModel Layout(ChartReferenceViewModel vm, out IActivityTab tab)
     {
-        var settings = new ViewerSettings { SettingsFilePath = _settingsPath };
         tab = new Tab(vm);
+        return Layout([tab]);
+    }
+
+    private ShellLayoutViewModel Layout(IReadOnlyList<IActivityTab> tabs)
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _settingsPath };
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(), dispatch: action => action(), refresher: null, progress: null, scope: null, library: null);
-        return new ShellLayoutViewModel(settings, [tab], timeline, action => action());
+        return new ShellLayoutViewModel(settings, tabs, timeline, action => action());
     }
 }
