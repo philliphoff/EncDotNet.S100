@@ -644,6 +644,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel>(),
                 sp.GetRequiredService<IViewerUiControllerAccessor>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()),
+            new McpTools.Groups.ChartReferenceMcpToolGroup(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>()),
             new McpTools.Groups.MeasuringMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
@@ -1863,6 +1865,51 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService>());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IDepthAdjustmentRequests>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService>());
+        // Chart reference (#1635, symbol dictionary R2): one index per product,
+        // built on first use and dropped when its catalogues change. The
+        // product list puts those with datasets open first (D4).
+        services.AddSingleton(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            return new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService(
+                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
+                sp.GetRequiredService<PortrayalCatalogueManager>(),
+                () => datasets.Entries.Where(e => !e.IsSource).Select(e => e.PortrayalSpec));
+        });
+        // Chart reference glyphs (#1636, R3): drawn once per entry, palette and
+        // size, and drawn again after a palette change.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceGlyphCache(
+            sp.GetRequiredService<ViewerSettingsService>()));
+        // The Chart reference activity (#1637, R4). The product combo follows
+        // the Datasets panel's rows, as LegendService does: the service's
+        // product list has no change event of its own.
+        services.AddSingleton(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            var reference = new EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceGlyphCache>(),
+                sp.GetRequiredService<ViewerSettingsService>(),
+                UiThread.RunOrPost);
+            datasets.Entries.CollectionChanged += (_, _) => UiThread.RunOrPost(reference.RefreshProducts);
+            datasets.EntryPortrayalSpecChanged += (_, _) => UiThread.RunOrPost(reference.RefreshProducts);
+            // In view and hover to find (#1638, R5) read the Legend tab's services.
+            reference.ConnectMap(new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceMap(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()));
+            // Open as page (#1639); the layout is resolved on click, since it
+            // is built from the tabs, which hold this view model.
+            reference.OpenPageCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
+                () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferencePageCommand.Execute(null));
+            return reference;
+        });
+        // The Chart reference page (#1639, R6): the same view model as the
+        // activity, as tiles over the map. Its switches preview only.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferencePageViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+            sp.GetRequiredService<ViewerSettingsService>(),
+            UiThread.RunOrPost));
         // Legends (#1402, D1): one service gathers every legend row; the
         // Legend tab, the route-check card and MCP get_legend read it.
         services.AddSingleton(sp =>
@@ -2194,6 +2241,28 @@ public partial class App : Application
             name: Strings.Label_Activity_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Chart reference (#1637, symbol dictionary D1, D2): after Feature search.
+        services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel, ChartReferenceView>(
+            id: ShellLayoutViewModel.ChartReferenceTabId,
+            order: 52,
+            title: Strings.Pane_ChartReference,
+            name: Strings.Label_Activity_ChartReference,
+            tooltip: Strings.Tooltip_ChartReference,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 },
+            // The Legend tab's Show all opens it (#1638, R5).
+            autoOpenOnContentSignal: true);
+        // Its page (#1639): across the content area, as Settings is, and with
+        // no activity-bar button; only Open as page shows it.
+        services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferencePageViewModel, ChartReferencePageView>(
+            id: ShellLayoutViewModel.ChartReferencePageTabId,
+            order: 53,
+            title: Strings.Pane_ChartReference,
+            name: Strings.Label_Activity_ChartReference,
+            tooltip: Strings.Tooltip_ChartReferenceOpenPage,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            fillsContent: true,
+            showsInActivityBar: false);
         services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
             id: "Routes",
             order: 55,
@@ -2273,7 +2342,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
                 sp.GetRequiredService<ITimeFormatProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>());
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>(),
+                // D7, symbol dictionary R5: Show all in Chart reference.
+                spec => sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>().ShowAllInView(spec));
             // D17: the S-98 position legend is the fixed first row (#1407).
             legend.PinnedRows.Insert(0, new EncDotNet.S100.Viewer.ViewModels.Legends.PositionLegendRowViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()));

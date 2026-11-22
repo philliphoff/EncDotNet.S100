@@ -331,6 +331,10 @@ internal sealed class LegendService : IDisposable
                 return null; // nothing of it drawn in view
             var (caption, group) = CatalogueGroup(section, key);
             section.SetCatalogue(caption, group);
+            // "Show all in Chart reference" (D7, symbol dictionary R5): at the
+            // product the datasets are portrayed with, so S-57 opens S-101.
+            if (key.Count > group.Rows.Count)
+                section.ChartReferenceSpec = section.Datasets.Select(d => d.Entry?.PortrayalSpec).FirstOrDefault(s => s is not null) ?? section.Spec;
         }
 
         var datasets = section.Datasets;
@@ -364,6 +368,7 @@ internal sealed class LegendService : IDisposable
             IsExpanded = !_expanded.TryGetValue(section.Id, out var expanded) || expanded,
             Plane = section.Plane,
             Caption = section.Caption,
+            ChartReferenceSpec = section.ChartReferenceSpec,
             Groups = [.. section.Groups],
         };
     }
@@ -536,6 +541,74 @@ internal sealed class LegendService : IDisposable
             LegendTintView.Of(_viewport?.Current),
             CrsTransforms,
             maxRings);
+    }
+
+    /// <summary>
+    /// What <paramref name="spec"/> draws in the view the sections were last
+    /// built for (Chart reference's <b>In view</b>, symbol dictionary R5,
+    /// #1638): the point symbols, as the catalogue key counts them (D7), and
+    /// the feature classes. The view is taken on pan end, like the sections'
+    /// (D5), so read it after <see cref="Changed"/>. Call on the UI thread.
+    /// </summary>
+    /// <param name="spec">The portrayal spec name (<c>S-101</c>), which an S-57 cell is drawn with too.</param>
+    internal ChartReferenceDrawn DrawnInView(string spec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(spec);
+        var symbols = new HashSet<string>(StringComparer.Ordinal);
+        var featureTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var scale = ViewScale();
+        using var snapshot = _loader.AcquireProcessors();
+        foreach (var (payload, suppressed, processor) in CatalogueLayers(spec, snapshot))
+            LegendFeatureFinder.AddDrawn(payload, suppressed, processor, _view, scale, symbols, featureTypes);
+        return new ChartReferenceDrawn(symbols, featureTypes);
+    }
+
+    /// <summary>
+    /// The features a Chart reference row describes that are drawn in the
+    /// current map view (hover to find, D19): read like
+    /// <see cref="FindFeatures"/>, from the stack's display lists.
+    /// </summary>
+    /// <param name="target">The row.</param>
+    /// <param name="maxRings">The most features to ring.</param>
+    internal LegendFeatureFind FindReferenceFeatures(ChartReferenceTarget target, int maxRings = LegendFeatureFinder.MaxRings)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        using var snapshot = _loader.AcquireProcessors();
+        return LegendFeatureFinder.FindReference(
+            target,
+            [.. CatalogueLayers(target.Spec, snapshot)],
+            TimelineMapScope.ViewOf(_viewport?.Current),
+            ViewScale(),
+            maxRings);
+    }
+
+    // A product's catalogue sub-layers that are drawn, top of the stack
+    // first, with their processors. A dataset belongs to the product it is
+    // portrayed with, so a maritime S-57 cell counts as S-101.
+    private IEnumerable<(VectorStackPayload Payload, IReadOnlySet<string>? Suppressed, IDatasetProcessor? Processor)> CatalogueLayers(
+        string spec, IEnumerable<KeyValuePair<DatasetEntry, IDatasetProcessor>> processors)
+    {
+        var entries = new Dictionary<string, DatasetEntry>(StringComparer.Ordinal);
+        foreach (var entry in _datasets.Entries)
+            entries.TryAdd(entry.Id.Value, entry);
+        var byId = new Dictionary<string, IDatasetProcessor>(StringComparer.Ordinal);
+        foreach (var (entry, processor) in processors)
+            byId.TryAdd(entry.Id.Value, processor);
+
+        var stack = _loader.CurrentStackEntries;
+        for (var i = stack.Count - 1; i >= 0; i--)
+        {
+            var item = stack[i];
+            if (item.Item.Payload is not VectorStackPayload vector || !IsCatalogueProduct(vector))
+                continue;
+            entries.TryGetValue(item.SourceDatasetId, out var dataset);
+            if (dataset is { IsVisible: false })
+                continue;
+            var portrayedWith = dataset?.PortrayalSpec ?? vector.Result.Spec.Name;
+            if (!string.Equals(portrayedWith, spec, StringComparison.OrdinalIgnoreCase))
+                continue;
+            yield return (vector, item.SuppressedFeatures, byId.GetValueOrDefault(item.SourceDatasetId));
+        }
     }
 
     private static string? RowLabelOf(object payload, PickHit hit, double? latitude) => payload switch
@@ -723,6 +796,9 @@ internal sealed class LegendService : IDisposable
         public string? Caption => _catalogue is null ? _groups.Caption : _catalogueCaption;
 
         public List<SectionDataset> Datasets { get; } = [];
+
+        /// <summary>The spec a catalogue key's Show all link opens Chart reference at, or null.</summary>
+        public string? ChartReferenceSpec { get; set; }
 
         /// <summary>A catalogue product's drawn-symbol counter (D7), or null for a product with its own legend.</summary>
         public CatalogueSymbolKey? Key { get; init; }

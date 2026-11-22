@@ -368,4 +368,40 @@ public class PortrayalCatalogueManagerTests
         Assert.NotNull(second);
         Assert.NotEqual(first, second);
     }
+
+    [Fact]
+    public void SetPath_and_SetSource_raise_CataloguesChanged_with_the_spec()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        var changes = new List<SpecRef>();
+        mgr.CataloguesChanged += (_, e) => changes.Add(e.Spec);
+        var tmp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        try
+        {
+            mgr.SetPath("S-102", tmp);
+            mgr.SetSource("S-101", new CountingSource(MinimalPcXml));
+        }
+        finally
+        {
+            Directory.Delete(tmp, recursive: true);
+        }
+
+        Assert.Equal([new SpecRef("S-102", default), new SpecRef("S-101", default)], changes);
+    }
+
+    [Fact]
+    public void A_CataloguesChanged_handler_sees_the_new_provider()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        mgr.SetSource("S-101", new CountingSource(MinimalPcXml));
+        var old = mgr.GetProvider("S-101");
+        PortrayalCatalogueProvider? seen = null;
+        mgr.CataloguesChanged += (_, e) => seen = mgr.GetProvider(e.Spec);
+
+        mgr.SetSource("S-101", new CountingSource(MinimalPcXml));
+
+        Assert.NotNull(seen);
+        Assert.NotSame(old, seen);
+    }
 }

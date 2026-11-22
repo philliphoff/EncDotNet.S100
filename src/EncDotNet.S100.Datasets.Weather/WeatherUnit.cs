@@ -39,4 +39,7 @@ public enum WeatherUnit
 
     /// <summary>Percent, from 0 to 100 (cloud cover).</summary>
     Percent,
+
+    /// <summary>Kilograms per square metre (accumulated precipitation): millimetres of water.</summary>
+    KilogramsPerSquareMetre,
 }

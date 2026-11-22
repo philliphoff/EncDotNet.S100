@@ -58,6 +58,9 @@ another path. The provider disposes the source when you dispose it.
   - The hash is computed once per product, when first requested, and cleared
     by `SetPath` and `SetSource`. A failure (`null`) isn't cached, so the next
     call tries again.
+  - `SetPath` and `SetSource` then raise `CataloguesChanged` with the
+    product's `SpecRef`, so a cache keyed on the catalogue can drop its entry.
+    A handler already sees the new catalogue and its new hash.
 
 ## Code-defined portrayal
 

@@ -281,6 +281,10 @@
     <value>Precipitation</value>
     <comment>Weather sub-layer name (#1230): the precipitation rate fill in rain radar colours.</comment>
   </data>
+  <data name="SubLayer_Weather_PrecipitationAmount" xml:space="preserve">
+    <value>Precipitation amount</value>
+    <comment>Weather sub-layer name (#1321): the accumulated precipitation fill over each step's period, on the rain radar ramp.</comment>
+  </data>
   <data name="SubLayer_Weather_ThunderstormRisk" xml:space="preserve">
     <value>Thunderstorm risk</value>
     <comment>Weather sub-layer name (#1230): the fill of convective available potential energy (CAPE) from 1000 J/kg.</comment>
@@ -4937,6 +4941,51 @@
   <data name="Tooltip_CloseSettings" xml:space="preserve">
     <value>Close settings</value>
   </data>
+  <data name="ChartReference_OpenPage" xml:space="preserve">
+    <value>Open as page</value>
+  </data>
+  <data name="Tooltip_ChartReferenceOpenPage" xml:space="preserve">
+    <value>Open Chart reference as a page over the map, for study</value>
+  </data>
+  <data name="Tooltip_ChartReferenceClosePage" xml:space="preserve">
+    <value>Back to Chart reference</value>
+  </data>
+  <data name="ChartReferencePage_ProductsName" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="ChartReferencePage_PaletteName" xml:space="preserve">
+    <value>Preview palette</value>
+  </data>
+  <data name="Tooltip_ChartReferencePagePalette" xml:space="preserve">
+    <value>Shows the glyphs in this palette. The chart keeps its own palette.</value>
+  </data>
+  <data name="ChartReferencePage_SymbolStyleName" xml:space="preserve">
+    <value>Preview symbol style</value>
+  </data>
+  <data name="ChartReferencePage_Simplified" xml:space="preserve">
+    <value>Simplified</value>
+  </data>
+  <data name="ChartReferencePage_PaperChart" xml:space="preserve">
+    <value>Paper chart</value>
+  </data>
+  <data name="Tooltip_ChartReferencePageSymbolStyle" xml:space="preserve">
+    <value>Leads each feature type with its simplified or paper-chart symbol. The chart keeps its own setting.</value>
+  </data>
+  <data name="ChartReferencePage_PreviewNote" xml:space="preserve">
+    <value>Preview only: the chart doesn't change.</value>
+  </data>
+  <data name="ChartReferencePage_TilesName" xml:space="preserve">
+    <value>Entries</value>
+  </data>
+  <data name="ChartReferencePage_DetailName" xml:space="preserve">
+    <value>Selected entry</value>
+  </data>
+  <data name="ChartReferencePage_NoSelectionTitle" xml:space="preserve">
+    <value>Choose an entry</value>
+  </data>
+  <data name="ChartReferencePage_NoSelectionDescription" xml:space="preserve">
+    <value>Select a tile to see its definition, display category and what it is drawn with.</value>
+  </data>
   <data name="Label_SettingsCategories" xml:space="preserve">
     <value>Settings categories</value>
   </data>
@@ -7347,6 +7396,13 @@
   <data name="Tooltip_EcdisPanel_Weather_Precipitation" xml:space="preserve">
     <value>Draw the precipitation rate in rain radar colours, from light rain (0.1 mm/h) to violent (50 mm/h and more), on every weather dataset that has it. Off by default.</value>
   </data>
+  <data name="EcdisPanel_Weather_PrecipitationAmount" xml:space="preserve">
+    <value>Precipitation amount</value>
+    <comment>Display controls switch (#1321): the accumulated precipitation fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_PrecipitationAmount" xml:space="preserve">
+    <value>Draw how much rain fell over each step's period (usually the hours since the step before), from 0.2 mm to 50 mm and more, on every weather dataset that has it. A pick states the period. Off by default.</value>
+  </data>
   <data name="EcdisPanel_Weather_ThunderstormRisk" xml:space="preserve">
     <value>Thunderstorm risk</value>
     <comment>Display controls switch (#1230): the CAPE fill on every weather dataset.</comment>
@@ -8342,6 +8398,23 @@
   <data name="Legend_CatalogueAll" xml:space="preserve">
     <value>Symbols drawn in view</value>
   </data>
+  <data name="Legend_ShowAllInChartReference" xml:space="preserve">
+    <value>Show all in Chart reference</value>
+    <comment>Link under a catalogue key's "12 of 54 symbols drawn in view" caption (legends D7)</comment>
+  </data>
+  <data name="Tooltip_LegendShowAllInChartReference" xml:space="preserve">
+    <value>Open Chart reference at this product's symbols, limited to those drawn in view</value>
+  </data>
+  <data name="ChartReference_InView" xml:space="preserve">
+    <value>In view</value>
+    <comment>Chart reference toggle: list only what is drawn in the current map view</comment>
+  </data>
+  <data name="Tooltip_ChartReferenceInView" xml:space="preserve">
+    <value>List only what is drawn in the map view at this scale. Follows the map when it stops moving.</value>
+  </data>
+  <data name="ChartReference_NoneInView" xml:space="preserve">
+    <value>Nothing in this list is drawn in the map view. Turn off In view to list everything.</value>
+  </data>
   <data name="Legend_SourceCountFormat" xml:space="preserve">
     <value>{0} datasets</value>
     <comment>Legend section source summary when several datasets make the section; {0} is the count</comment>
@@ -9152,5 +9225,256 @@
   <data name="SourceStatus_NeedsSettingsOrEnvironmentFormat" xml:space="preserve">
     <value>Set {0} on its settings in the Library (Live feeds), or set the {1} environment variable, to start it.</value>
     <comment>{0} = option label; {1} = environment variable name.</comment>
+  </data>
+  <data name="Pane_ChartReference" xml:space="preserve">
+    <value>Chart reference</value>
+    <comment>Title of the Chart reference activity in the left dock (symbol dictionary D2); the panel upper-cases it</comment>
+  </data>
+  <data name="Label_Activity_ChartReference" xml:space="preserve">
+    <value>Chart reference</value>
+    <comment>Accessible name of the Chart reference activity-bar button</comment>
+  </data>
+  <data name="Tooltip_ChartReference" xml:space="preserve">
+    <value>Chart reference: every symbol, feature type and definition the catalogues draw</value>
+  </data>
+  <data name="Menu_ChartReference" xml:space="preserve">
+    <value>Chart reference</value>
+    <comment>Help menu item that opens the Chart reference activity</comment>
+  </data>
+  <data name="ChartReference_ProductName" xml:space="preserve">
+    <value>Product</value>
+    <comment>Accessible name of the Chart reference product combo</comment>
+  </data>
+  <data name="Tooltip_ChartReferenceProduct" xml:space="preserve">
+    <value>The product whose catalogues the list shows; open products come first</value>
+  </data>
+  <data name="ChartReference_ProductOpen" xml:space="preserve">
+    <value>Open</value>
+    <comment>Tag after a product in the Chart reference combo when datasets of it are open</comment>
+  </data>
+  <data name="ChartReference_QueryName" xml:space="preserve">
+    <value>Search chart reference</value>
+    <comment>Accessible name of the Chart reference search box</comment>
+  </data>
+  <data name="ChartReference_QueryPlaceholder" xml:space="preserve">
+    <value>Name, S-57 acronym or symbol code</value>
+  </data>
+  <data name="Tooltip_ChartReferenceClearQuery" xml:space="preserve">
+    <value>Clear search</value>
+  </data>
+  <data name="ChartReference_ModeName" xml:space="preserve">
+    <value>Show</value>
+    <comment>Accessible name of the Features / Symbols segments</comment>
+  </data>
+  <data name="ChartReference_ModeFeatures" xml:space="preserve">
+    <value>Features</value>
+  </data>
+  <data name="ChartReference_ModeSymbols" xml:space="preserve">
+    <value>Symbols</value>
+  </data>
+  <data name="Tooltip_ChartReferenceModeFeatures" xml:space="preserve">
+    <value>List the feature types, each with its symbol</value>
+  </data>
+  <data name="Tooltip_ChartReferenceModeSymbols" xml:space="preserve">
+    <value>List the symbols, line styles and area fills</value>
+  </data>
+  <data name="ChartReference_ListName" xml:space="preserve">
+    <value>Chart reference entries</value>
+    <comment>Accessible name of the Chart reference list</comment>
+  </data>
+  <data name="ChartReference_LoadingTitle" xml:space="preserve">
+    <value>Reading the catalogues…</value>
+  </data>
+  <data name="ChartReference_NoCatalogueTitle" xml:space="preserve">
+    <value>No catalogue to show</value>
+  </data>
+  <data name="ChartReference_NoCatalogueDescription" xml:space="preserve">
+    <value>Add a portrayal catalogue in Settings, or open a dataset, to look up its symbols and feature types.</value>
+  </data>
+  <data name="ChartReference_NoMatchesTitle" xml:space="preserve">
+    <value>No matches</value>
+  </data>
+  <data name="ChartReference_NoMatchesFeatures" xml:space="preserve">
+    <value>Try an S-57 acronym such as BCNLAT, or search Symbols.</value>
+  </data>
+  <data name="ChartReference_NoMatchesSymbols" xml:space="preserve">
+    <value>Try a symbol code such as BCNLAT21, or search Features.</value>
+  </data>
+  <data name="ChartReference_FeatureCount" xml:space="preserve">
+    <value>{0} feature types</value>
+    <comment>Footer of the Chart reference list; {0} is a count</comment>
+  </data>
+  <data name="ChartReference_SymbolCount" xml:space="preserve">
+    <value>{0} symbols, line styles and fills</value>
+    <comment>Footer of the Chart reference list; {0} is a count</comment>
+  </data>
+  <data name="ChartReference_MatchCount" xml:space="preserve">
+    <value>{0} matches</value>
+    <comment>Footer of the Chart reference list while searching; {0} is a count</comment>
+  </data>
+  <data name="ChartReference_NoSection" xml:space="preserve">
+    <value>No Chart 1 section</value>
+    <comment>Header of the Chart reference list's rows whose viewing group names no Chart 1 section</comment>
+  </data>
+  <data name="ChartReference_NotUsedByRule" xml:space="preserve">
+    <value>Not used by a rule</value>
+    <comment>Header of the symbols no portrayal rule draws (symbol dictionary D3)</comment>
+  </data>
+  <data name="ChartReference_NoSymbol" xml:space="preserve">
+    <value>No symbol of its own</value>
+    <comment>Shown on a Chart reference tile when the feature type draws nothing of its own</comment>
+  </data>
+  <data name="ChartReference_Tag_Base" xml:space="preserve">
+    <value>Base</value>
+    <comment>Display category tag: Display Base</comment>
+  </data>
+  <data name="ChartReference_Tag_Standard" xml:space="preserve">
+    <value>Standard</value>
+    <comment>Display category tag: Standard Display</comment>
+  </data>
+  <data name="ChartReference_Tag_Other" xml:space="preserve">
+    <value>Other</value>
+    <comment>Display category tag: Other Information</comment>
+  </data>
+  <data name="ChartReference_Tag_Family" xml:space="preserve">
+    <value>Family</value>
+    <comment>Tag of a symbol family a rule assembles from numbers, such as SOUNDG</comment>
+  </data>
+  <data name="ChartReference_Tag_LineStyle" xml:space="preserve">
+    <value>Line</value>
+    <comment>Tag of a line style row in Chart reference</comment>
+  </data>
+  <data name="ChartReference_Tag_AreaFill" xml:space="preserve">
+    <value>Fill</value>
+    <comment>Tag of an area fill row in Chart reference</comment>
+  </data>
+  <data name="ChartReference_DisplayCategory" xml:space="preserve">
+    <value>Display category</value>
+  </data>
+  <data name="ChartReference_Section" xml:space="preserve">
+    <value>Chart 1 section</value>
+  </data>
+  <data name="ChartReference_ViewingGroup" xml:space="preserve">
+    <value>Viewing group</value>
+  </data>
+  <data name="ChartReference_ViewingGroupFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A viewing group's id and name</comment>
+  </data>
+  <data name="ChartReference_CategoryByGeometry" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>A display category by geometry, such as 'Point: Display Base' (D6)</comment>
+  </data>
+  <data name="ChartReference_OtherCases" xml:space="preserve">
+    <value>Other cases</value>
+    <comment>Display category line for the cases that don't name a geometry</comment>
+  </data>
+  <data name="ChartReference_DrawnWith" xml:space="preserve">
+    <value>Drawn with</value>
+    <comment>Heading of the symbols a feature type is drawn with</comment>
+  </data>
+  <data name="ChartReference_UsedBy" xml:space="preserve">
+    <value>Used by</value>
+    <comment>Heading of the feature types that use a symbol</comment>
+  </data>
+  <data name="ChartReference_FamilyHeading" xml:space="preserve">
+    <value>Family</value>
+  </data>
+  <data name="ChartReference_Always" xml:space="preserve">
+    <value>Always</value>
+    <comment>A symbol drawn without conditions</comment>
+  </data>
+  <data name="ChartReference_MoreCases" xml:space="preserve">
+    <value>and {0} more cases</value>
+  </data>
+  <data name="ChartReference_ViaRule" xml:space="preserve">
+    <value>Drawn by the shared rule {0}</value>
+  </data>
+  <data name="ChartReference_DefaultSymbolNote" xml:space="preserve">
+    <value>The catalogue's fallback symbol, drawn when nothing else fits</value>
+  </data>
+  <data name="ChartReference_FamilyNote" xml:space="preserve">
+    <value>A family of {0} symbols the rule assembles from numbers</value>
+  </data>
+  <data name="ChartReference_UnreachedNote" xml:space="preserve">
+    <value>No portrayal rule draws this symbol.</value>
+  </data>
+  <data name="ChartReference_SourceFormat" xml:space="preserve">
+    <value>Source: {0}</value>
+    <comment>A symbol's iho:source, such as S52Preslib4.0</comment>
+  </data>
+  <data name="Tooltip_ChartReferenceLink" xml:space="preserve">
+    <value>Show in the list</value>
+  </data>
+  <data name="ChartReference_Condition_Is" xml:space="preserve">
+    <value>{0} is {1}</value>
+    <comment>A rule condition: '{0}' is an attribute or setting name, '{1}' its value</comment>
+  </data>
+  <data name="ChartReference_Condition_IsNot" xml:space="preserve">
+    <value>{0} is not {1}</value>
+  </data>
+  <data name="ChartReference_Condition_LessThan" xml:space="preserve">
+    <value>{0} is less than {1}</value>
+  </data>
+  <data name="ChartReference_Condition_AtMost" xml:space="preserve">
+    <value>{0} is at most {1}</value>
+  </data>
+  <data name="ChartReference_Condition_GreaterThan" xml:space="preserve">
+    <value>{0} is more than {1}</value>
+  </data>
+  <data name="ChartReference_Condition_AtLeast" xml:space="preserve">
+    <value>{0} is at least {1}</value>
+  </data>
+  <data name="ChartReference_Condition_Given" xml:space="preserve">
+    <value>{0} is given</value>
+  </data>
+  <data name="ChartReference_Condition_NotGiven" xml:space="preserve">
+    <value>{0} is not given</value>
+  </data>
+  <data name="ChartReference_Condition_On" xml:space="preserve">
+    <value>{0} is on</value>
+    <comment>A display setting condition, such as 'Simplified symbols is on'</comment>
+  </data>
+  <data name="ChartReference_Condition_Off" xml:space="preserve">
+    <value>{0} is off</value>
+  </data>
+  <data name="ChartReference_Condition_Expression" xml:space="preserve">
+    <value>Rule test: {0}</value>
+    <comment>A rule condition the reader can't put into words; {0} is its source text</comment>
+  </data>
+  <data name="ChartReference_Condition_ExpressionFails" xml:space="preserve">
+    <value>Rule test fails: {0}</value>
+  </data>
+  <data name="ChartReference_Condition_Otherwise" xml:space="preserve">
+    <value>None of the cases above</value>
+  </data>
+  <data name="ChartReference_Condition_FeatureType" xml:space="preserve">
+    <value>Feature type</value>
+  </data>
+  <data name="ChartReference_Condition_Geometry" xml:space="preserve">
+    <value>Geometry</value>
+  </data>
+  <data name="ChartReference_Condition_OrJoin" xml:space="preserve">
+    <value>{0} or {1}</value>
+    <comment>The last two listed values joined, as in 'stake, pole, perch or post'</comment>
+  </data>
+  <data name="ChartReference_Condition_ArticleA" xml:space="preserve">
+    <value>a {0}</value>
+    <comment>A listed value that names a thing, such as 'a withy'</comment>
+  </data>
+  <data name="ChartReference_Condition_ArticleAn" xml:space="preserve">
+    <value>an {0}</value>
+  </data>
+  <data name="ChartReference_Geometry_Point" xml:space="preserve">
+    <value>point</value>
+  </data>
+  <data name="ChartReference_Geometry_MultiPoint" xml:space="preserve">
+    <value>point set</value>
+  </data>
+  <data name="ChartReference_Geometry_Curve" xml:space="preserve">
+    <value>line</value>
+  </data>
+  <data name="ChartReference_Geometry_Surface" xml:space="preserve">
+    <value>area</value>
   </data>
 </root>

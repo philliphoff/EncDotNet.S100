@@ -386,9 +386,10 @@ internal sealed partial class ViewerSettings
     /// <c>weather.current.arrows</c> (#1228) and
     /// <c>weather.air.temperature.isotherms</c> (#1231), and
     /// <c>weather.precipitation</c>, <c>weather.cape</c> and
-    /// <c>weather.cloud</c> (#1230). A missing key follows the layer's default
-    /// (isobars and currents on; the wind speed fill, wave arrows, both kinds
-    /// of isotherms, precipitation, thunderstorm risk and cloud cover off).
+    /// <c>weather.cloud</c> (#1230), and <c>weather.precipitation.amount</c>
+    /// (#1321). A missing key follows the layer's default (isobars and
+    /// currents on; the wind speed fill, wave arrows, both kinds of isotherms,
+    /// precipitation rate and amount, thunderstorm risk and cloud cover off).
     /// </summary>
     public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
         = new(StringComparer.Ordinal);

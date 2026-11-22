@@ -35,6 +35,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 ///   <item><term><see cref="FreezingSprayStyle"/></term><description>A freezing spray fill in Overland's four icing classes; no icing isn't drawn. On by default.</description></item>
 ///   <item><term><see cref="AirTemperatureIsothermStyle"/></term><description>Dashed isotherms every 5 °C on <c>air.temperature</c>, labelled. Off by default.</description></item>
 ///   <item><term><see cref="PrecipitationStyle"/></term><description>A <c>precipitation.rate</c> fill in rain radar colours from 0.1 mm/h. Off by default.</description></item>
+///   <item><term><see cref="PrecipitationAmountStyle"/></term><description>A <c>precipitation.amount</c> fill on the same ramp from 0.2 mm over the step's period. Off by default.</description></item>
 ///   <item><term><see cref="ThunderstormRiskStyle"/></term><description>A <c>cape</c> fill from 1000 J/kg. Off by default.</description></item>
 ///   <item><term><see cref="CloudCoverStyle"/></term><description>A grey <c>cloud.cover</c> veil from 25 %, at <see cref="VeilOpacity"/>. Off by default.</description></item>
 ///   <item><term><see cref="SeaTemperatureIsothermStyle"/></term><description>Isotherms every 2 °C on <c>sea.temperature</c>, labelled. Off by default.</description></item>
@@ -51,7 +52,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// sub-layers <see cref="WeatherPortrayal"/> builds carry these.
 /// </para>
 /// <para>
-/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height, sea surface temperature, visibility, freezing spray, precipitation, thunderstorm risk, cloud cover) are
+/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height, sea surface temperature, visibility, freezing spray, precipitation rate and amount, thunderstorm risk, cloud cover) are
 /// clipped to water when an S-101 chart is loaded, by the S-98 rule that
 /// clips the S-104 surface (<c>S98DefaultRules.R_101_WX_B_ClipWeatherFillsToWater</c>).
 /// Wind isn't clipped: it blows over land too.
@@ -67,7 +68,7 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// The version of the weather styles, folded into <see cref="ContentScope"/>.
     /// Bump it whenever the symbols, the palette or the bands change.
     /// </summary>
-    public const int StyleVersion = 7;
+    public const int StyleVersion = 8;
 
     /// <summary>The opacity of the colour fills: 0.5, so the chart under them stays readable.</summary>
     public const double FillOpacity = 0.5;
@@ -273,14 +274,14 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <summary>
     /// New instances of every weather style, in layer-stack order: the sea
     /// surface temperature, wave height and wind speed fills, the cloud cover
-    /// veil, the visibility, thunderstorm risk, precipitation and freezing
+    /// veil, the visibility, thunderstorm risk, precipitation amount and rate and freezing
     /// spray fills, the sea and air isotherms and pressure isobars, then the current arrows, wind barbs and wave
     /// arrows.
     /// </summary>
     public static IReadOnlyList<WeatherCoverageStyle> CreateAll() =>
     [
         new SeaTemperatureStyle(), new WaveHeightStyle(), new WindSpeedStyle(),
-        new CloudCoverStyle(), new VisibilityStyle(), new ThunderstormRiskStyle(), new PrecipitationStyle(), new FreezingSprayStyle(),
+        new CloudCoverStyle(), new VisibilityStyle(), new ThunderstormRiskStyle(), new PrecipitationAmountStyle(), new PrecipitationStyle(), new FreezingSprayStyle(),
         new SeaTemperatureIsothermStyle(), new AirTemperatureIsothermStyle(), new PressureIsobarStyle(),
         new CurrentArrowStyle(), new WindBarbStyle(), new WaveDirectionStyle(),
     ];

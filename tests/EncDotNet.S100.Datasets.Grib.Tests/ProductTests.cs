@@ -92,9 +92,10 @@ public class ProductTests
     [Fact]
     public void Unknown_parameters_have_no_weather_row()
     {
-        var field = Index(Field() with { Category = 1, Number = 8, SurfaceType = 1 });
+        // Snow depth (0,1,11) isn't in the table.
+        var field = Index(Field() with { Category = 1, Number = 11, SurfaceType = 1 });
 
-        Assert.Equal(new GribParameterCode(0, 1, 8), field.Parameter);
+        Assert.Equal(new GribParameterCode(0, 1, 11), field.Parameter);
         Assert.Null(field.FindWeatherParameter());
         Assert.True(field.IsSupported);
     }

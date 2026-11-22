@@ -17,6 +17,52 @@ month. For package versions and release assets, see
   has `NcssGridUri` and `SplitAtGreenwich`. See
   [Get the data](weather.md#netcdf).
 
+- **Chart reference as a page.** **Open as page** in the Chart reference
+  activity shows the reference over the map, as Settings is, for study and
+  training: a chip per product, search, **Features** / **Symbols**, a grid of
+  tiles by Chart 1 section, each with its glyph and display category, and the
+  selected entry on the right with its glyph drawn large. **Day / Dusk /
+  Night** and **Simplified / Paper chart** preview the glyphs only; they
+  start at the chart's palette and symbol style and never change the chart.
+  The page and the activity share the product, search and selection, and
+  closing the page returns to the activity (#1639).
+
+- **Chart reference in SoundCharts.** A new **Chart reference** activity,
+  after Feature search in the activity bar (also **Help › Chart reference**,
+  Ctrl+Shift+K), lists every feature type or symbol of a product's
+  catalogues, grouped by Chart 1 section, each with its glyph on the
+  palette's chart background, its S-57 acronym or code and its display
+  category. Pick a product (open ones first, every bundled catalogue,
+  S-401 included), search by name, acronym or code, and switch between
+  **Features** and **Symbols**; symbols no rule draws are listed last under
+  **Not used by a rule**. Select a row to see its definition, display
+  categories, Chart 1 section and viewing group, and what it is **Drawn
+  with**, each symbol with its conditions in words ("Simplified symbols is
+  on · Colour is red · Beacon shape is a stake, pole, perch or post"); each
+  symbol links to its own row, which links back to the feature types that
+  use it (#1637).
+
+- **Chart reference follows the map.** Chart reference's new **In view**
+  toggle lists only what the chart draws in the map view at the current
+  scale: the symbols the Legend tab's key counts and the feature types of the
+  features drawn. It follows the map when it stops moving. Resting the
+  pointer on a row, or focusing it, rings its features on the map, as a
+  Legend row does. A Legend key that lists only some of the symbols drawn
+  now has **Show all in Chart reference**, which opens the activity at that
+  product's symbols with In view on (#1638).
+
+- **Search the chart reference over MCP.** SoundCharts' new
+  `search_chart_reference` tool finds feature types, symbols, line styles,
+  area fills, attributes and display settings in any product's catalogues,
+  S-401 included, ranked by code or S-57 acronym, then name, then other text.
+  `get_chart_reference_entry` returns one entry: what a feature type's rule
+  draws and when, the feature types that use a symbol, an attribute's values,
+  with links to the related entries. The viewer builds each product's index
+  on first use and rebuilds it when you add or replace a catalogue. For
+  library users, `FeatureCatalogueManager` and `PortrayalCatalogueManager`
+  now raise `CataloguesChanged` when `SetSource` (and, for portrayal
+  catalogues, `SetPath`) replaces a product's catalogue (#1635).
+
 - **Area fill legend rows and fitted glyphs.** `CatalogueLegendBuilder.Fill`
   builds a legend row from a portrayal catalogue's area fill, such as S-101's
   dredged area pattern (`DRGARE01`), as a new `FillLegendEntry`;
@@ -36,6 +82,23 @@ month. For package versions and release assets, see
   its 190 feature types. It ranks search results by code or S-57 acronym,
   then name, then other text. It is the base of the coming Chart reference
   activity (#1633).
+
+- **Accumulated precipitation with its period.** GRIB2 weather grids read
+  GFS's APCP as `precipitation.amount` (kg m⁻², shown in millimetres; CF
+  `precipitation_amount`). A total isn't readable without the period it fell
+  in, so each time step now carries one (`WeatherTimeStep.Interval`, a
+  `WeatherInterval` of start, end and `WeatherStatistic`), and a pick says
+  "4.2 mm in the 3 h to 12:00Z". GFS writes two periods at most forecast hours
+  (the 6-hourly bucket and the run total); the reader keeps the period since
+  the step before, from either message or the difference of two that share a
+  start, so on a 3-hourly GFS file every step is the 3 hours to its valid
+  time. A **Precipitation amount** switch in **Display controls** (off by
+  default; `precipitationAmount` in `get_weather_display` and
+  `set_weather_display`; `--show-layer weather.precipitation.amount`) draws it
+  on the precipitation rate's colours from 0.2 mm. The `sample` tool's fields
+  gain a `period` for any value over a time interval, such as an ECMWF
+  maximum gust, and `s100 identify` prints it. The Library's GFS sources offer
+  APCP. See [Weather](weather.md#grids). Not for navigation.
 
 - **Fewer, broader MCP tools.** Four tools fold into tools that nearly had
   their capability, so an agent's tool list is smaller (`s100 mcp serve`: 42

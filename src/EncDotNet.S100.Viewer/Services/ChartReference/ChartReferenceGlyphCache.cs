@@ -125,6 +125,22 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
     }
 
     /// <summary>
+    /// Looks up a glyph already drawn for <paramref name="entry"/> at this
+    /// size in the current palette, without drawing one, so a caller can make
+    /// the row off the UI thread only on a miss.
+    /// </summary>
+    /// <param name="entry">The Chart reference entry.</param>
+    /// <param name="width">The box width in logical pixels.</param>
+    /// <param name="height">The box height in logical pixels.</param>
+    /// <param name="glyph">The glyph, or <see langword="null"/> for an entry remembered as having nothing to draw.</param>
+    /// <returns>Whether the cache holds the entry at this size.</returns>
+    public bool TryGet(ReferenceKey entry, int width, int height, out IImage? glyph)
+    {
+        lock (_glyphs)
+            return _glyphs.TryGetValue(new Key(entry, _palette, width, height), out glyph);
+    }
+
+    /// <summary>
     /// Follows a palette change: drops every glyph and raises
     /// <see cref="PaletteChanged"/>. Nothing happens when the palette is the same.
     /// </summary>

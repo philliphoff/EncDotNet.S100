@@ -58,7 +58,9 @@ Console.WriteLine(decoder.ResolveFeatureTypeName("DepthArea"));
   per product specification.
   - It reads catalogues through a stream resolver you supply. `SetSource`
     registers an `IAssetSource` as a bundled fallback for a product, and
-    clears that product's cached catalogue, decoder and content hash.
+    clears that product's cached catalogue, decoder and content hash. It then
+    raises `CataloguesChanged` with the product's `SpecRef`. A change the
+    resolver makes on its own raises nothing, since the manager can't see it.
   - `GetCatalogueHashAsync(spec)` (from `ICatalogueProvider<T>`) returns the
     lowercase hexadecimal SHA-256 of the catalogue XML that the resolver
     returns. Because it hashes the resolved bytes, it reflects any command-line

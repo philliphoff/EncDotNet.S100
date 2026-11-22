@@ -956,6 +956,31 @@ type or dataset. Select a result to show the feature in the **Object
 information** panel. This works even when datasets reuse `gml:id` values for
 different features.
 
+### Look up symbols in the chart reference
+
+The **Chart reference** panel (**Help › Chart reference**, Ctrl+Shift+K)
+lists every feature type or symbol of a product's catalogues, grouped by
+Chart 1 section, each with its glyph, its S-57 acronym or code and its display
+category. Choose the product, search by name, acronym or code, and switch
+between **Features** and **Symbols**. Select a row to see its definition, its
+display categories and what it is drawn with, each symbol with the conditions
+that choose it in words. A symbol links to its own row, and a symbol's row
+links back to the feature types that use it.
+
+Turn on **In view** to list only what the chart draws in the map view at the
+current scale: the symbols the Legend tab's key counts, and the feature types
+of the features drawn. The list follows the map when it stops moving. Rest
+the pointer on a row, or move keyboard focus to it, to ring its features on
+the map, as the Legend tab does. When a product's Legend key lists only some
+of the symbols drawn ("12 of 54 symbols drawn in view"), **Show all in Chart
+reference** opens the panel at that product's symbols with In view on.
+
+**Open as page**, beside the product, shows the reference over the map as a
+grid of tiles by Chart 1 section, with the selected entry on the right. Its
+**Day / Dusk / Night** and **Simplified / Paper chart** switches preview the
+glyphs without changing the chart. Close the page to return to the panel,
+with the same product, search and selection.
+
 ### Find navigational warnings
 
 The **Navigational warnings** panel, beside **Library** in the activity bar,

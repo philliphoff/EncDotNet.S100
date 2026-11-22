@@ -1,0 +1,452 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:cr="using:EncDotNet.S100.Viewer.ViewModels.ChartReference"
+             xmlns:svc="using:EncDotNet.S100.Viewer.Services.ChartReference"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.ChartReferencePageView"
+             x:DataType="cr:ChartReferencePageViewModel">
+    <UserControl.Styles>
+        <!-- A product chip. -->
+        <Style Selector="ListBox.crChips > ListBoxItem" x:DataType="svc:ChartReferenceProduct">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Spec.Name}" />
+            <Setter Property="AutomationProperties.AutomationId" Value="ChartReferencePage.Product" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="ListBox.crChips > ListBoxItem:selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- A tile: a plain template over the visual, so the glyph's chart
+             background fills it; keyboard focus and selection show in the border. -->
+        <Style Selector="Button.crTile">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            ClipToBounds="True">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.crTile:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.crTile:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Button.crTile.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="TextBlock.crCaption">
+            <Setter Property="FontSize" Value="{StaticResource SecondaryFontSize}" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBlock.crHeading">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.4" />
+            <Setter Property="Opacity" Value="0.65" />
+        </Style>
+        <Style Selector="TextBlock.crSection">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.crLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <!-- A link to another entry, as in the activity's summary. -->
+        <DataTemplate DataType="cr:ChartReferenceLinkViewModel">
+            <Button Classes="crLink"
+                    AutomationProperties.AutomationId="ChartReferencePage.Entry.Link"
+                    AutomationProperties.Name="{Binding Name}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceLink}"
+                    Command="{Binding OpenCommand}">
+                <StackPanel Spacing="1">
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding Cases}" IsVisible="{Binding HasCases}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding Note}"
+                               IsVisible="{Binding HasNote}"
+                               Classes="crCaption"
+                               FontStyle="Italic"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
+        <!-- The selected entry's summary: the activity's expanded row, until the Reference tab exists (R7). -->
+        <DataTemplate DataType="cr:ChartReferenceRowDetails">
+            <StackPanel Spacing="12" AutomationProperties.AutomationId="ChartReferencePage.Entry.Details">
+                <TextBlock Text="{Binding Definition}"
+                           IsVisible="{Binding HasDefinition}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{x:Static loc:Strings.ChartReference_NoSymbol}"
+                           IsVisible="{Binding NoSymbol}"
+                           Classes="crCaption" />
+                <ItemsControl ItemsSource="{Binding Notes}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel IsVisible="{Binding HasCategories}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_DisplayCategory}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding Categories}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <StackPanel IsVisible="{Binding HasSection}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_Section}" Classes="crHeading" />
+                    <TextBlock Text="{Binding Section}" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel IsVisible="{Binding HasViewingGroup}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_ViewingGroup}" Classes="crHeading" />
+                    <TextBlock Text="{Binding ViewingGroup}" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel IsVisible="{Binding HasDrawnWith}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_DrawnWith}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding DrawnWith}" />
+                </StackPanel>
+                <StackPanel IsVisible="{Binding HasFamily}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_FamilyHeading}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding Family}" />
+                </StackPanel>
+                <StackPanel IsVisible="{Binding HasUsedBy}" Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedBy}" Classes="crHeading" />
+                    <ItemsControl ItemsSource="{Binding UsedBy}" />
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <DockPanel LastChildFill="True">
+        <!-- The controls (§4.5, board E): search, Features / Symbols and the
+             two preview switches; then a chip per product. -->
+        <Border DockPanel.Dock="Top"
+                Padding="16,10,16,8"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderColor}">
+            <StackPanel Spacing="8">
+                <WrapPanel Orientation="Horizontal" ItemSpacing="16" LineSpacing="8">
+                    <TextBox Width="420"
+                             AutomationProperties.AutomationId="ChartReferencePage.Query"
+                             AutomationProperties.Name="{x:Static loc:Strings.ChartReference_QueryName}"
+                             AutomationProperties.HelpText="{x:Static loc:Strings.ChartReference_QueryPlaceholder}"
+                             PlaceholderText="{x:Static loc:Strings.ChartReference_QueryPlaceholder}"
+                             Text="{Binding Reference.Query, Mode=TwoWay}">
+                        <TextBox.InnerRightContent>
+                            <Button AutomationProperties.AutomationId="ChartReferencePage.ClearQuery"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ChartReferenceClearQuery}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceClearQuery}"
+                                    IsVisible="{Binding Reference.HasQuery}"
+                                    Command="{Binding Reference.ClearQueryCommand}"
+                                    Classes="Icon"
+                                    Margin="0,0,4,0"
+                                    Padding="2">
+                                <ic:FluentIcon Icon="Dismiss" FontSize="12" />
+                            </Button>
+                        </TextBox.InnerRightContent>
+                    </TextBox>
+                    <TabControl Classes="segmentTabs"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="ChartReferencePage.Mode"
+                                AutomationProperties.Name="{x:Static loc:Strings.ChartReference_ModeName}"
+                                SelectedIndex="{Binding Reference.ModeIndex, Mode=TwoWay}">
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.Mode.Features"
+                                 Header="{x:Static loc:Strings.ChartReference_ModeFeatures}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceModeFeatures}" />
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.Mode.Symbols"
+                                 Header="{x:Static loc:Strings.ChartReference_ModeSymbols}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceModeSymbols}" />
+                    </TabControl>
+                    <!-- Preview only: the page's glyphs, never the chart's palette. -->
+                    <TabControl Classes="segmentTabs"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="ChartReferencePage.Palette"
+                                AutomationProperties.Name="{x:Static loc:Strings.ChartReferencePage_PaletteName}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ChartReferencePagePalette}"
+                                SelectedIndex="{Binding PaletteIndex, Mode=TwoWay}">
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.Palette.Day"
+                                 Header="{x:Static loc:Strings.Palette_Day}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferencePagePalette}" />
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.Palette.Dusk"
+                                 Header="{x:Static loc:Strings.Palette_Dusk}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferencePagePalette}" />
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.Palette.Night"
+                                 Header="{x:Static loc:Strings.Palette_Night}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferencePagePalette}" />
+                    </TabControl>
+                    <!-- Preview only: the lead glyphs, never the chart's Simplified symbols. -->
+                    <TabControl Classes="segmentTabs"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="ChartReferencePage.SymbolStyle"
+                                AutomationProperties.Name="{x:Static loc:Strings.ChartReferencePage_SymbolStyleName}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ChartReferencePageSymbolStyle}"
+                                SelectedIndex="{Binding SymbolStyleIndex, Mode=TwoWay}">
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.SymbolStyle.Simplified"
+                                 Header="{x:Static loc:Strings.ChartReferencePage_Simplified}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferencePageSymbolStyle}" />
+                        <TabItem AutomationProperties.AutomationId="ChartReferencePage.SymbolStyle.PaperChart"
+                                 Header="{x:Static loc:Strings.ChartReferencePage_PaperChart}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferencePageSymbolStyle}" />
+                    </TabControl>
+                    <TextBlock Text="{x:Static loc:Strings.ChartReferencePage_PreviewNote}"
+                               Classes="crCaption"
+                               VerticalAlignment="Center" />
+                </WrapPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                    <ListBox Classes="crChips"
+                             AutomationProperties.AutomationId="ChartReferencePage.Products"
+                             AutomationProperties.Name="{x:Static loc:Strings.ChartReferencePage_ProductsName}"
+                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceProduct}"
+                             ItemsSource="{Binding Reference.Products}"
+                             SelectedItem="{Binding Reference.SelectedProduct, Mode=TwoWay}"
+                             SelectionMode="Single"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             Padding="0">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" LineSpacing="6" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="svc:ChartReferenceProduct">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding Spec.Name}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.ChartReference_ProductOpen}"
+                                               IsVisible="{Binding IsLoaded}"
+                                               Classes="crCaption"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Reference.Summary}"
+                               AutomationProperties.AutomationId="ChartReferencePage.Summary"
+                               Classes="crCaption"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- The selected entry, on the right (the prototype's 400 px pane). -->
+        <Border DockPanel.Dock="Right"
+                Width="400"
+                Margin="0,12,16,12"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource BorderColor}"
+                AutomationProperties.AutomationId="ChartReferencePage.Entry"
+                AutomationProperties.Name="{x:Static loc:Strings.ChartReferencePage_DetailName}">
+            <Grid>
+                <views:PlaceholderView IsVisible="{Binding ShowNoSelection}"
+                                       Icon="BookCompass"
+                                       Header="{x:Static loc:Strings.ChartReferencePage_NoSelectionTitle}"
+                                       Description="{x:Static loc:Strings.ChartReferencePage_NoSelectionDescription}" />
+                <ScrollViewer IsVisible="{Binding HasSelection}"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ContentControl Content="{Binding SelectedTile}">
+                    <ContentControl.ContentTemplate>
+                    <DataTemplate x:DataType="cr:ChartReferenceRowViewModel">
+                    <StackPanel>
+                        <StackPanel Margin="16,14,16,12" Spacing="6">
+                            <TextBlock Text="{Binding Name}"
+                                       AutomationProperties.AutomationId="ChartReferencePage.Entry.Name"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding Code}"
+                                           IsVisible="{Binding ShowsCode}"
+                                           AutomationProperties.AutomationId="ChartReferencePage.Entry.Code"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           Classes="crCaption"
+                                           VerticalAlignment="Center" />
+                                <Border IsVisible="{Binding HasCategoryTag}"
+                                        CornerRadius="4"
+                                        Padding="5,1"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource BorderColor}">
+                                    <TextBlock Text="{Binding CategoryTag}" Classes="crCaption" />
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                        <!-- The glyph large, on the preview palette's chart background. -->
+                        <Border Background="{Binding Tile}"
+                                MinHeight="130"
+                                Padding="16"
+                                AutomationProperties.AutomationId="ChartReferencePage.Entry.Glyph"
+                                AutomationProperties.AccessibilityView="Raw">
+                            <Panel>
+                                <Image Source="{Binding $parent[UserControl].((cr:ChartReferencePageViewModel)DataContext).HeroGlyph}"
+                                       Width="96"
+                                       Height="96"
+                                       IsVisible="{Binding HasGlyph}"
+                                       Stretch="Fill" />
+                                <TextBlock Text="{x:Static loc:Strings.ChartReference_NoSymbol}"
+                                           IsVisible="{Binding HasNoGlyph}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Opacity="0.6" />
+                            </Panel>
+                        </Border>
+                        <ContentControl Margin="16,14,16,20" Content="{Binding Details}" />
+                    </StackPanel>
+                    </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid>
+            <views:PlaceholderView IsVisible="{Binding Reference.IsLoading}"
+                                   Icon="BookCompass"
+                                   Header="{x:Static loc:Strings.ChartReference_LoadingTitle}" />
+            <views:PlaceholderView IsVisible="{Binding Reference.ShowNoCatalogue}"
+                                   Icon="BookCompass"
+                                   Header="{x:Static loc:Strings.ChartReference_NoCatalogueTitle}"
+                                   Description="{x:Static loc:Strings.ChartReference_NoCatalogueDescription}" />
+            <views:PlaceholderView IsVisible="{Binding Reference.ShowNoMatches}"
+                                   Icon="SearchInfo"
+                                   Header="{x:Static loc:Strings.ChartReference_NoMatchesTitle}"
+                                   Description="{Binding Reference.NoMatchesDescription}" />
+
+            <!-- The tile grid by Chart 1 section: lines of tiles and headers in a
+                 virtualising panel (S-401 has 926 items). The view sets Columns from its width. -->
+            <ScrollViewer x:Name="GridScroller"
+                          HorizontalScrollBarVisibility="Disabled"
+                          AutomationProperties.AutomationId="ChartReferencePage.Grid"
+                          AutomationProperties.Name="{x:Static loc:Strings.ChartReferencePage_TilesName}">
+            <ItemsControl ItemsSource="{Binding Lines}"
+                          Padding="16,12,6,12">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.DataTemplates>
+                    <DataTemplate DataType="cr:ChartReferenceHeaderViewModel">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="8"
+                                    Margin="0,8,0,10"
+                                    AutomationProperties.AutomationId="ChartReferencePage.Section">
+                            <TextBlock Text="{Binding Title}" Classes="crSection" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Count}" Classes="crCaption" VerticalAlignment="Bottom" />
+                        </StackPanel>
+                    </DataTemplate>
+                    <DataTemplate DataType="cr:ChartReferenceTileLine">
+                        <ItemsControl ItemsSource="{Binding Tiles}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="1"
+                                                 Columns="{Binding $parent[ItemsControl].((cr:ChartReferenceTileLine)DataContext).Columns}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="cr:ChartReferenceRowViewModel">
+                                    <Button Classes="crTile"
+                                            Classes.selected="{Binding IsExpanded}"
+                                            AutomationProperties.AutomationId="ChartReferencePage.Tile"
+                                            AutomationProperties.Name="{Binding Name}"
+                                            AutomationProperties.HelpText="{Binding Code}"
+                                            ToolTip.Tip="{Binding Name}"
+                                            Command="{Binding $parent[UserControl].((cr:ChartReferencePageViewModel)DataContext).SelectCommand}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel>
+                                            <!-- The glyph on the preview palette's chart background, with its category tag (D6). -->
+                                            <Border Background="{Binding Tile}"
+                                                    Height="84"
+                                                    AutomationProperties.AutomationId="ChartReferencePage.Tile.Glyph"
+                                                    AutomationProperties.AccessibilityView="Raw">
+                                                <Panel>
+                                                    <Image Source="{Binding Glyph}"
+                                                           Width="40"
+                                                           Height="40"
+                                                           IsVisible="{Binding HasGlyph}"
+                                                           Stretch="Fill" />
+                                                    <TextBlock Text="–"
+                                                               IsVisible="{Binding HasNoGlyph}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               Opacity="0.5" />
+                                                    <Border IsVisible="{Binding HasCategoryTag}"
+                                                            HorizontalAlignment="Left"
+                                                            VerticalAlignment="Top"
+                                                            Margin="6"
+                                                            CornerRadius="3"
+                                                            Padding="5,0"
+                                                            Background="{DynamicResource WindowBackgroundColor}"
+                                                            BorderThickness="1"
+                                                            BorderBrush="{DynamicResource BorderColor}">
+                                                        <TextBlock Text="{Binding CategoryTag}"
+                                                                   AutomationProperties.AutomationId="ChartReferencePage.Tile.Category"
+                                                                   FontSize="10" />
+                                                    </Border>
+                                                </Panel>
+                                            </Border>
+                                            <StackPanel Margin="10,8,10,10" Spacing="2">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Code}"
+                                                           IsVisible="{Binding ShowsCode}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
+                                                           Classes="crCaption"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DataTemplate>
+                </ItemsControl.DataTemplates>
+            </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -312,6 +312,7 @@
                      The wave height, sea temperature, visibility and
                      freezing spray fills and the wind barbs are always drawn;
                      precipitation, thunderstorm risk and cloud cover (#1230)
+                     and the precipitation amount (#1321)
                      are off until switched on. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
                     <TextBlock Text="{x:Static loc:Strings.EcdisPanel_WeatherHeader}"
@@ -374,6 +375,14 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.Precipitation"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Precipitation}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Precipitation}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_PrecipitationAmount}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_PrecipitationAmount}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsPrecipitationAmountVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.PrecipitationAmount"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_PrecipitationAmount}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_PrecipitationAmount}" />
                     </Grid>
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_ThunderstormRisk}">

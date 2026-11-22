@@ -1673,6 +1673,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         "weather.spray" => Strings.SubLayer_Weather_FreezingSpray,
         "weather.air.temperature.isotherms" => Strings.SubLayer_Weather_AirTemperature,
         "weather.precipitation" => Strings.SubLayer_Weather_Precipitation,
+        "weather.precipitation.amount" => Strings.SubLayer_Weather_PrecipitationAmount,
         "weather.cape" => Strings.SubLayer_Weather_ThunderstormRisk,
         "weather.cloud" => Strings.SubLayer_Weather_CloudCover,
         _ => key,

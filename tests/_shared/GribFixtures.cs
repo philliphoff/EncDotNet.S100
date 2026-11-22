@@ -195,10 +195,14 @@ internal static class GribFixtures
 
         /// <summary>
         /// For product template 4.8: the length of the interval in hours, ending
-        /// at the forecast time plus the length (a maximum, statistical process 2).
+        /// at the forecast time plus the length (a maximum, statistical process 2,
+        /// unless <see cref="Statistic"/> says otherwise).
         /// <see langword="null"/> writes template 4.0.
         /// </summary>
         public int? IntervalHours { get; init; }
+
+        /// <summary>For product template 4.8, the statistical process (code table 4.10): 1 accumulation, 2 maximum.</summary>
+        public byte Statistic { get; init; } = 2;
 
         /// <summary>The grid.</summary>
         public required Grid Grid { get; init; }
@@ -257,7 +261,7 @@ internal static class GribFixtures
                 var end = m.ReferenceTime.AddHours(m.ForecastHours + length);
                 w.U16(end.Year).U8(end.Month).U8(end.Day).U8(end.Hour).U8(end.Minute).U8(end.Second);
                 w.U8(1).U32(0);
-                w.U8(2).U8(2).U8(1).S32(length).U8(1).S32(0);
+                w.U8(m.Statistic).U8(2).U8(1).S32(length).U8(1).S32(0);
             }
         }));
 
@@ -510,6 +514,41 @@ internal static class GribFixtures
                 PrimeMeridianGrid.Latitude(PrimeMeridianGrid.Rows - 1 - row),
                 Wrap360(PrimeMeridianGrid.Longitude(column)))),
     });
+
+    /// <summary>The grid of <see cref="GfsAccumulation"/>: two points at 25°N, 80°W and 79°W.</summary>
+    public static Grid AccumulationGrid { get; } = new(25, -80, 1, 1, 2);
+
+    /// <summary>
+    /// The rain at the first point of <see cref="AccumulationGrid"/> in each
+    /// hour of the run, in mm: 0.5 mm an hour to 3 h, 1 mm an hour to 6 h,
+    /// 0.2 to 9 h and 1.4 to 12 h. The second point stays dry.
+    /// </summary>
+    public static double HourlyRain(int hour) => hour < 3 ? 0.5 : hour < 6 ? 1 : hour < 9 ? 0.2 : 1.4;
+
+    /// <summary>The rain from hour <paramref name="from"/> to <paramref name="to"/> of the run at the first point, in mm.</summary>
+    public static double Rain(int from, int to) => Enumerable.Range(from, to - from).Sum(HourlyRain);
+
+    /// <summary>
+    /// GFS APCP (0,1,8, template 4.8 accumulation) at f003 to f012 as GFS
+    /// writes it: f003 0–3 h twice, f006 0–6 h twice, f009 6–9 h then 0–9 h,
+    /// f012 6–12 h then 0–12 h. 8 messages.
+    /// </summary>
+    public static byte[] GfsAccumulation()
+    {
+        byte[] Field(int from, int to) => Encode(new Message
+        {
+            Category = 1,
+            Number = 8,
+            ForecastHours = from,
+            IntervalHours = to - from,
+            Statistic = 1,
+            Grid = AccumulationGrid,
+            Values = [Rain(from, to), 0],
+            DecimalScale = 2,
+        });
+
+        return Concat(Field(0, 3), Field(0, 3), Field(0, 6), Field(0, 6), Field(6, 9), Field(0, 9), Field(6, 12), Field(0, 12));
+    }
 
     /// <summary>
     /// The ECMWF open data grid of the generated ECMWF files: 0.5°, 50°N to

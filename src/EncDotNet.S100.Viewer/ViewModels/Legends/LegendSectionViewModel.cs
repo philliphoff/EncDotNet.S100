@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Windows.Input;
 using Avalonia.Media;
+using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Legends;
 
@@ -14,6 +16,7 @@ namespace EncDotNet.S100.Viewer.ViewModels.Legends;
 internal sealed class LegendSectionViewModel : ViewModelBase
 {
     private readonly LegendService _service;
+    private readonly Action<string>? _showInChartReference;
     private LegendSection _section;
     private IBrush _tile;
     private string _detail;
@@ -26,14 +29,24 @@ internal sealed class LegendSectionViewModel : ViewModelBase
     /// <param name="section">The section.</param>
     /// <param name="tile">The palette's chart background, under each glyph (D10).</param>
     /// <param name="detail">The header's source and time summary.</param>
-    public LegendSectionViewModel(LegendService service, LegendSection section, IBrush tile, string detail)
+    /// <param name="showInChartReference">
+    /// Opens Chart reference at a product's symbols with In view on (D7,
+    /// symbol dictionary R5); null hides the link.
+    /// </param>
+    public LegendSectionViewModel(LegendService service, LegendSection section, IBrush tile, string detail, Action<string>? showInChartReference = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(section);
         ArgumentNullException.ThrowIfNull(tile);
         ArgumentNullException.ThrowIfNull(detail);
         _service = service;
+        _showInChartReference = showInChartReference;
         _section = section;
+        ShowInChartReferenceCommand = new RelayCommand(() =>
+        {
+            if (_section.ChartReferenceSpec is { } spec)
+                _showInChartReference?.Invoke(spec);
+        });
         _tile = tile;
         _detail = detail;
         _isExpanded = section.IsExpanded;
@@ -84,6 +97,15 @@ internal sealed class LegendSectionViewModel : ViewModelBase
 
     /// <summary>Whether <see cref="Caption"/> shows.</summary>
     public bool HasCaption => !string.IsNullOrEmpty(Caption);
+
+    /// <summary>
+    /// Whether the caption has <b>Show all in Chart reference</b>: a
+    /// catalogue key listing fewer symbols than it draws (D7).
+    /// </summary>
+    public bool HasChartReferenceLink => _showInChartReference is not null && _section.ChartReferenceSpec is not null;
+
+    /// <summary>Opens Chart reference at the section's product, in Symbols mode, with In view on (D7).</summary>
+    public ICommand ShowInChartReferenceCommand { get; }
 
     /// <summary>The Mariner settings the rows follow ("Safety contour 10 m"), or null.</summary>
     public string? MarinerSettings => _section.MarinerSettings;

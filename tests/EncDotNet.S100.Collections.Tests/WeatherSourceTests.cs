@@ -190,9 +190,9 @@ public sealed class WeatherSourceTests : IDisposable
         var parameters = Known(id).Weather!.Parameters;
 
         Assert.Equal(
-            [":PRATE:surface:", ":CAPE:surface:", ":TCDC:entire atmosphere:"],
-            parameters.Where(p => p.Id is "PRATE" or "CAPE" or "TCDC").Select(p => p.IndexMatch));
-        Assert.DoesNotContain(parameters, p => p.Id is "PRATE" or "CAPE" or "TCDC" && p.Default);
+            [":PRATE:surface:", ":APCP:surface:", ":CAPE:surface:", ":TCDC:entire atmosphere:"],
+            parameters.Where(p => p.Id is "PRATE" or "APCP" or "CAPE" or "TCDC").Select(p => p.IndexMatch));
+        Assert.DoesNotContain(parameters, p => p.Id is "PRATE" or "APCP" or "CAPE" or "TCDC" && p.Default);
     }
 
     [Fact]
