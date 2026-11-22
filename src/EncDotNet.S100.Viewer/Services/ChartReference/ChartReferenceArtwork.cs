@@ -217,6 +217,64 @@ internal sealed class ChartReferenceArtwork
         }
     }
 
+    /// <summary>
+    /// The size of symbol <paramref name="id"/> on the chart, in millimetres,
+    /// from its SVG's <c>width</c> and <c>height</c> (<c>"1.65mm"</c>), else
+    /// its <c>viewBox</c>, whose units are millimetres in S-100 symbols; for
+    /// the Reference tab's glyph at chart size (R7, #1650).
+    /// </summary>
+    /// <param name="id">The symbol id, e.g. <c>BCNLAT21</c>.</param>
+    /// <param name="cancellationToken">Stops the read.</param>
+    /// <returns>The width and height in millimetres, or <see langword="null"/> when the catalogue lacks the symbol or a size.</returns>
+    public async Task<(double Width, double Height)?> SymbolSizeAsync(string id, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await SymbolAsync(id, cancellationToken).ConfigureAwait(false) is { } svg ? SizeOf(svg) : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The millimetre size an S-100 symbol's SVG declares, or <see langword="null"/>.</summary>
+    /// <param name="svg">The SVG text.</param>
+    internal static (double Width, double Height)? SizeOf(string svg)
+    {
+        System.Xml.Linq.XElement root;
+        try
+        {
+            root = System.Xml.Linq.XDocument.Parse(svg).Root!;
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+
+        static double? Millimetres(string? value) =>
+            value is { } v && v.EndsWith("mm", StringComparison.OrdinalIgnoreCase)
+            && double.TryParse(v[..^2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var mm)
+            && mm > 0
+                ? mm
+                : null;
+
+        if (Millimetres((string?)root.Attribute("width")) is { } w && Millimetres((string?)root.Attribute("height")) is { } h)
+            return (w, h);
+        var box = ((string?)root.Attribute("viewBox"))?.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries);
+        if (box is { Length: 4 }
+            && double.TryParse(box[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var bw)
+            && double.TryParse(box[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var bh)
+            && bw > 0 && bh > 0)
+        {
+            return (bw, bh);
+        }
+
+        return null;
+    }
+
     private async Task<string?> SymbolAsync(string id, CancellationToken cancellationToken)
     {
         if (_symbols.TryGetValue(id, out var svg))

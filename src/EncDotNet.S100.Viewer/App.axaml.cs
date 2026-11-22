@@ -648,7 +648,8 @@ public partial class App : Application
                 sp.GetRequiredService<IViewerUiControllerAccessor>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()),
             new McpTools.Groups.ChartReferenceMcpToolGroup(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>()),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>()),
             new McpTools.Groups.CataloguesMcpToolGroup(
                 sp.GetRequiredService<CatalogueRegistry>(),
                 sp.GetRequiredService<CatalogueRedrawCoordinator>()),
@@ -1916,7 +1917,35 @@ public partial class App : Application
             // is built from the tabs, which hold this view model.
             reference.OpenPageCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
                 () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferencePageCommand.Execute(null));
+            // Selecting a row opens its entry in the Reference tab (R7, #1650).
+            reference.OpenEntry = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>().Open;
             return reference;
+        });
+        // The Reference tab's trail (R7, #1650): one entry at a time, with
+        // back, forward and a breadcrumb; MCP open_chart_reference uses it too.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>();
+        services.AddSingleton(sp =>
+        {
+            var tab = new EncDotNet.S100.Viewer.ViewModels.ChartReference.ReferenceViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceGlyphCache>(),
+                sp.GetRequiredService<ViewerSettingsService>(),
+                UiThread.RunOrPost);
+            // A feature type's In view and Find read the Legend tab's services, as R5 does.
+            tab.ConnectMap(new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceMap(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()));
+            // The layout is resolved on click, since it is built from the tabs, which hold this view model.
+            tab.ShowChartReferenceCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
+                () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferenceCommand.Execute(null));
+            // Change in Display settings: the mariner settings are on Settings > Chart.
+            tab.ChangeSetting = _ =>
+            {
+                sp.GetRequiredService<SettingsViewModel>().SelectedCategory = SettingsCategory.Chart;
+                sp.GetRequiredService<ShellLayoutViewModel>().SelectTab("Settings");
+            };
+            return tab;
         });
         // The Chart reference page (#1639, R6): the same view model as the
         // activity, as tiles over the map. Its switches preview only.
@@ -2372,6 +2401,20 @@ public partial class App : Application
             name: Strings.Label_Activity_Legend,
             tooltip: Strings.Tooltip_Legend,
             iconFactory: static () => new FluentIcon { Icon = Icon.ColorLine, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Right,
+            autoOpenOnContentSignal: true);
+
+        // The Reference tab (symbol dictionary R7, #1650; legends D13, D22):
+        // always in the strip, after Object information and the Legend. An
+        // entry opened from Chart reference, a link or MCP switches to it.
+        services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.ChartReference.ReferenceViewModel, ReferenceView>(
+            id: ShellLayoutViewModel.ReferenceTabId,
+            order: 30,
+            title: Strings.Reference_TabTitle,
+            name: Strings.Label_Activity_Reference,
+            tooltip: Strings.Tooltip_Reference,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookInformation, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
             dock: TabDock.Right,
             autoOpenOnContentSignal: true);

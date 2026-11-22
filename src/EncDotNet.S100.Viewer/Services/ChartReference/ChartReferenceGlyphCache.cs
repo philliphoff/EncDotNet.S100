@@ -180,9 +180,23 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
     /// <returns>The padding in logical pixels, on each side.</returns>
     public static float PaddingOf(int width, int height) => Math.Min(width, height) * PaddingFraction;
 
-    private static Bitmap Render(LegendEntry entry, int width, int height)
+    private static Bitmap Render(LegendEntry entry, int width, int height) =>
+        Render(entry, width, height, PaddingOf(width, height));
+
+    /// <summary>
+    /// Draws <paramref name="entry"/> fitted to <paramref name="width"/> ×
+    /// <paramref name="height"/> logical pixels at <see cref="DeviceScale"/>,
+    /// without holding it: the Reference tab's glyphs in each palette and at
+    /// chart size (R7, #1650).
+    /// </summary>
+    /// <param name="entry">The legend row.</param>
+    /// <param name="width">The box width in logical pixels.</param>
+    /// <param name="height">The box height in logical pixels.</param>
+    /// <param name="padding">The inset in logical pixels; <see cref="PaddingOf"/> for a tile, 0 at chart size.</param>
+    /// <returns>The glyph.</returns>
+    internal static Bitmap Render(LegendEntry entry, int width, int height, float padding)
     {
-        using var bitmap = LegendGlyphRenderer.RenderFitted(entry, width, height, DeviceScale, PaddingOf(width, height));
+        using var bitmap = LegendGlyphRenderer.RenderFitted(entry, width, height, DeviceScale, padding);
         using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
         using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
         using var stream = new MemoryStream(png.ToArray());

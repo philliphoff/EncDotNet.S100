@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The Reference tab.** The right dock has a third tab, **Reference**,
+  after Object information and the Legend. Selecting a row in Chart reference
+  opens its entry there: a feature type with its codes, display categories,
+  Chart 1 section, how many are drawn in view with **Find**, and what it is
+  drawn with; a symbol in Day, Dusk and Night with the setting that chooses
+  it, where it came from and the feature types that use it; an attribute with
+  its values; or a display setting with its current state and **Change in
+  Display settings**. Links inside an entry open their entries in the tab,
+  with **Back**, **Forward** (Alt+Left, Alt+Right) and a breadcrumb. The
+  study page's entry pane uses the same entry view, and the activity's rows
+  no longer expand in place. A new MCP tool, `open_chart_reference`, opens an
+  entry and reports the one shown.
+
 - **The same UI font on every platform.** SoundCharts now uses its bundled
   Inter font on macOS, Windows and Linux. Before, it used each platform's
   default: San Francisco on macOS, Segoe UI on Windows, and on Linux often a

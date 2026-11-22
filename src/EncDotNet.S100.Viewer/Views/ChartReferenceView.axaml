@@ -32,115 +32,7 @@
             <Setter Property="LetterSpacing" Value="0.4" />
             <Setter Property="Opacity" Value="0.65" />
         </Style>
-        <!-- A link: a plain template, so its text wraps to the panel's width
-             rather than to the theme button's measure (#1657). -->
-        <Style Selector="Button.crLink">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="4,2" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border Name="PART_Link"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="{TemplateBinding CornerRadius}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalContentAlignment="Stretch" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="Button.crLink:pointerover /template/ Border#PART_Link">
-            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-        </Style>
-        <Style Selector="Button.crLink:focus-visible /template/ Border#PART_Link">
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
     </UserControl.Styles>
-
-    <UserControl.DataTemplates>
-        <!-- A link to another entry: a symbol the feature type is drawn with, with its cases in words. -->
-        <DataTemplate DataType="cr:ChartReferenceLinkViewModel">
-            <Button Classes="crLink"
-                    AutomationProperties.AutomationId="ChartReference.Row.Link"
-                    AutomationProperties.Name="{Binding Name}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceLink}"
-                    Command="{Binding OpenCommand}">
-                <StackPanel Spacing="1">
-                    <TextBlock Text="{Binding Name}"
-                               Foreground="{DynamicResource AccentBrush}"
-                               TextWrapping="Wrap" />
-                    <ItemsControl ItemsSource="{Binding Cases}" IsVisible="{Binding HasCases}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <TextBlock Text="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Text="{Binding Note}"
-                               IsVisible="{Binding HasNote}"
-                               Classes="crCaption"
-                               FontStyle="Italic"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Button>
-        </DataTemplate>
-
-        <!-- The summary of an expanded row, until the Reference tab exists (#1637). -->
-        <DataTemplate DataType="cr:ChartReferenceRowDetails">
-            <StackPanel Spacing="6" Margin="48,2,0,4" AutomationProperties.AutomationId="ChartReference.Row.Details">
-                <TextBlock Text="{Binding Definition}"
-                           IsVisible="{Binding HasDefinition}"
-                           TextWrapping="Wrap" />
-                <TextBlock Text="{x:Static loc:Strings.ChartReference_NoSymbol}"
-                           IsVisible="{Binding NoSymbol}"
-                           Classes="crCaption" />
-                <ItemsControl ItemsSource="{Binding Notes}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                            <TextBlock Text="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <StackPanel IsVisible="{Binding HasCategories}" Spacing="1">
-                    <TextBlock Text="{x:Static loc:Strings.ChartReference_DisplayCategory}" Classes="crHeading" />
-                    <ItemsControl ItemsSource="{Binding Categories}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-                <StackPanel IsVisible="{Binding HasSection}" Spacing="1">
-                    <TextBlock Text="{x:Static loc:Strings.ChartReference_Section}" Classes="crHeading" />
-                    <TextBlock Text="{Binding Section}" TextWrapping="Wrap" />
-                </StackPanel>
-                <StackPanel IsVisible="{Binding HasViewingGroup}" Spacing="1">
-                    <TextBlock Text="{x:Static loc:Strings.ChartReference_ViewingGroup}" Classes="crHeading" />
-                    <TextBlock Text="{Binding ViewingGroup}" TextWrapping="Wrap" />
-                </StackPanel>
-                <StackPanel IsVisible="{Binding HasDrawnWith}" Spacing="1">
-                    <TextBlock Text="{x:Static loc:Strings.ChartReference_DrawnWith}" Classes="crHeading" />
-                    <ItemsControl ItemsSource="{Binding DrawnWith}" />
-                </StackPanel>
-                <StackPanel IsVisible="{Binding HasFamily}" Spacing="1">
-                    <TextBlock Text="{x:Static loc:Strings.ChartReference_FamilyHeading}" Classes="crHeading" />
-                    <ItemsControl ItemsSource="{Binding Family}" />
-                </StackPanel>
-                <StackPanel IsVisible="{Binding HasUsedBy}" Spacing="1">
-                    <TextBlock Text="{x:Static loc:Strings.ChartReference_UsedBy}" Classes="crHeading" />
-                    <ItemsControl ItemsSource="{Binding UsedBy}" />
-                </StackPanel>
-            </StackPanel>
-        </DataTemplate>
-    </UserControl.DataTemplates>
 
     <DockPanel LastChildFill="True">
         <!-- Controls (§4.5): the product, search, then Features | Symbols. -->
@@ -263,7 +155,8 @@
                                    Description="{Binding NoMatchesDescription}" />
 
             <!-- The list virtualises (VirtualizingStackPanel): S-401 has 926 items.
-                 No horizontal scrolling: an expanded row wraps to the panel's width (#1657). -->
+                 No horizontal scrolling (#1657). Selecting a row opens its entry in the
+                 Reference tab (R7, #1650). -->
             <ListBox x:Name="List"
                      Classes="accentList chartReference"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -338,8 +231,6 @@
                                                Classes="crCaption" />
                                 </Border>
                             </Grid>
-                            <ContentControl Content="{Binding Details}"
-                                            IsVisible="{Binding IsExpanded}" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.DataTemplates>

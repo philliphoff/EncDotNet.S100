@@ -10,32 +10,25 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// <summary>
 /// One entry of the Chart reference list (#1637): the glyph tile, the name,
 /// the S-57 acronym or code and the display category tag (design note D6).
-/// Selecting the row expands it in place to the entry's summary.
+/// Selecting the row opens its entry in the Reference tab (R7, #1650).
 /// </summary>
 internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListItem
 {
-    private const int MaxCases = 6;
-
-    private readonly ChartReferenceIndex _index;
     private readonly IChartReferenceRowHost _host;
     private IImage? _glyph;
     private bool _glyphRequested;
-    private bool _isExpanded;
-    private ChartReferenceRowDetails? _details;
+    private bool _isSelected;
 
     /// <summary>Creates a row.</summary>
     /// <param name="entry">The feature type or portrayal item.</param>
-    /// <param name="index">The index the entry belongs to.</param>
     /// <param name="lead">The glyph the tile shows.</param>
-    /// <param name="host">The list, which draws glyphs and opens links.</param>
-    public ChartReferenceRowViewModel(ReferenceEntry entry, ChartReferenceIndex index, LeadGlyph lead, IChartReferenceRowHost host)
+    /// <param name="host">The list, which draws glyphs.</param>
+    public ChartReferenceRowViewModel(ReferenceEntry entry, LeadGlyph lead, IChartReferenceRowHost host)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(lead);
         ArgumentNullException.ThrowIfNull(host);
         Entry = entry;
-        _index = index;
         Lead = lead;
         _host = host;
         Code = entry is FeatureTypeEntry { Alias: { Length: > 0 } alias } ? alias : entry.Code;
@@ -114,19 +107,12 @@ internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListIte
         }
     }
 
-    /// <summary>Whether the row is selected and shows its summary.</summary>
-    public bool IsExpanded
+    /// <summary>Whether the study page shows the row's tile as selected.</summary>
+    public bool IsSelected
     {
-        get => _isExpanded;
-        set
-        {
-            if (SetProperty(ref _isExpanded, value) && value)
-                OnPropertyChanged(nameof(Details));
-        }
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
     }
-
-    /// <summary>The summary an expanded row shows, made the first time the row expands.</summary>
-    public ChartReferenceRowDetails? Details => _isExpanded ? _details ??= MakeDetails() : _details;
 
     /// <summary>Sets the glyph once it is drawn.</summary>
     /// <param name="glyph">The glyph, or <see langword="null"/> when there is nothing to draw.</param>
@@ -190,7 +176,7 @@ internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListIte
     /// <summary>
     /// Whether <paramref name="entry"/>'s description says no more than its
     /// row title, <see cref="NameOf"/>: a portrayal item named by a one-line
-    /// description. The study page's entry pane then shows it once, as its heading.
+    /// description. An entry view then shows it once, as its heading.
     /// </summary>
     /// <param name="entry">The entry.</param>
     /// <returns>Whether the description only repeats the title.</returns>
@@ -220,122 +206,6 @@ internal sealed partial class ChartReferenceRowViewModel : ChartReferenceListIte
         if (!text.Any(char.IsLower))
             text = text.ToLower(CultureInfo.CurrentCulture);
         return Capitalise(text);
-    }
-
-    private ChartReferenceRowDetails MakeDetails() => Entry switch
-    {
-        FeatureTypeEntry feature => FeatureDetails(feature),
-        PortrayalItemEntry item => ItemDetails(item),
-        _ => new ChartReferenceRowDetails { Definition = Entry.Definition },
-    };
-
-    private ChartReferenceRowDetails FeatureDetails(FeatureTypeEntry feature)
-    {
-        var group = feature.PrimaryViewingGroup;
-        var section = ChartReferenceSection.Of(group);
-        return new ChartReferenceRowDetails
-        {
-            Definition = feature.Definition,
-            Categories = Categories(feature),
-            Section = section?.Title ?? (group is null ? null : Strings.ChartReference_NoSection),
-            ViewingGroup = group is null
-                ? null
-                : group.Name is { Length: > 0 } name
-                    ? string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_ViewingGroupFormat, group.Id, name)
-                    : group.Id,
-            DrawnWith = DrawnWith(feature),
-            NoSymbol = !Lead.HasGlyph,
-        };
-    }
-
-    private ChartReferenceRowDetails ItemDetails(PortrayalItemEntry item)
-    {
-        var notes = new List<string>();
-        if (item.IsFamily)
-            notes.Add(string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_FamilyNote, item.Members.Count));
-        if (item.IsUnreached)
-            notes.Add(Strings.ChartReference_UnreachedNote);
-        if (item.Source is { Length: > 0 } source)
-            notes.Add(string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_SourceFormat, source));
-
-        var usedBy = item.UsedBy
-            .Select(code => new ReferenceKey(_index.Spec, ReferenceKind.FeatureType, code))
-            .Select(key => _index.TryGet(key, out var e) ? e : null)
-            .OfType<ReferenceEntry>()
-            .OrderBy(e => e.Name, StringComparer.CurrentCulture)
-            .Select(e => new ChartReferenceLinkViewModel(e.Key, e.Name, [], null, _host.Open))
-            .ToList();
-
-        var family = item.Family is { } prefix && _index.TryGet(new ReferenceKey(_index.Spec, ReferenceKind.Symbol, prefix), out var familyEntry)
-            ? new ChartReferenceLinkViewModel(familyEntry.Key, familyEntry.Name, [], null, _host.Open)
-            : null;
-
-        return new ChartReferenceRowDetails
-        {
-            Definition = item.Definition,
-            DefinitionRepeatsTitle = DescriptionRepeatsName(item),
-            Notes = notes,
-            UsedBy = usedBy,
-            Family = family is null ? [] : [family],
-        };
-    }
-
-    // D6: one line per display category, by geometry or case.
-    private static IReadOnlyList<string> Categories(FeatureTypeEntry feature)
-    {
-        var own = feature.ViewingGroups.Where(u => u.ViaRule is null).ToList();
-        var uses = own.Count > 0 ? own : feature.ViewingGroups;
-        var pairs = uses
-            .Select(u => (
-                Geometry: u.Conditions.FirstOrDefault(c => c is { Kind: RuleConditionKind.Primitive, Operator: ConditionOperator.Equal })?.Value,
-                Mode: u.ViewingGroup.DisplayModeName ?? u.ViewingGroup.DisplayModeId))
-            .Where(p => p.Mode is not null)
-            .Distinct()
-            .ToList();
-        var modes = pairs.Select(p => p.Mode!).Distinct(StringComparer.Ordinal).ToList();
-        if (modes.Count <= 1)
-            return modes;
-
-        return pairs
-            .GroupBy(p => p.Geometry, StringComparer.OrdinalIgnoreCase)
-            .Select(g => string.Format(
-                CultureInfo.CurrentCulture,
-                Strings.ChartReference_CategoryByGeometry,
-                g.Key is null ? Strings.ChartReference_OtherCases : Capitalise(RuleConditionText.Geometry(g.Key)),
-                string.Join(" / ", g.Select(p => p.Mode).Distinct(StringComparer.Ordinal))))
-            .ToList();
-    }
-
-    // Drawn with: each item the rule draws, once, with its cases in words.
-    private IReadOnlyList<ChartReferenceLinkViewModel> DrawnWith(FeatureTypeEntry feature)
-    {
-        bool geometry = feature.PermittedPrimitives.Count != 1;
-        return feature.Uses
-            .GroupBy(u => (u.ItemKind, u.ItemId))
-            .Select(g =>
-            {
-                var key = new ReferenceKey(_index.Spec, g.Key.ItemKind, g.Key.ItemId);
-                var name = _index.TryGet(key, out var entry) && !string.Equals(entry.Name, entry.Code, StringComparison.Ordinal)
-                    ? $"{entry.Code} · {entry.Name}"
-                    : g.Key.ItemId;
-                var cases = g
-                    .Select(u => RuleConditionText.Describe(u.Conditions, _index, geometry))
-                    .Select(text => text.Length == 0 ? Strings.ChartReference_Always : text)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList();
-                if (cases.Count > MaxCases)
-                {
-                    var more = cases.Count - MaxCases;
-                    cases = [.. cases.Take(MaxCases), string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_MoreCases, more)];
-                }
-
-                var via = g.All(u => u.ViaRule is not null) ? g.First().ViaRule : null;
-                var note = LeadGlyph.DefaultSymbols.Contains(g.Key.ItemId)
-                    ? Strings.ChartReference_DefaultSymbolNote
-                    : via is null ? null : string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_ViaRule, via);
-                return new ChartReferenceLinkViewModel(key, name, cases, note, _host.Open);
-            })
-            .ToList();
     }
 
     private static string Capitalise(string text) =>

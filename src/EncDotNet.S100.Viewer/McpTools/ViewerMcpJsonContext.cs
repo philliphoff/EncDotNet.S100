@@ -52,6 +52,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(SetLegendResult))]
 [JsonSerializable(typeof(ChartReferenceSearchResult))]
 [JsonSerializable(typeof(ChartReferenceEntryDto))]
+[JsonSerializable(typeof(ChartReferenceShownDto))]
 [JsonSerializable(typeof(ListCataloguesResult))]
 [JsonSerializable(typeof(RangeBearingDto))]
 [JsonSerializable(typeof(SettleStateDto))]

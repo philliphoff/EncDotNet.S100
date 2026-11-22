@@ -1,9 +1,8 @@
 using Avalonia.Media;
-using EncDotNet.S100.Datasets.Pipelines.Reference;
 
 namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
-/// <summary>What a Chart reference row asks of its list: glyphs, the tile and links.</summary>
+/// <summary>What a Chart reference row asks of its list: glyphs and the tile.</summary>
 internal interface IChartReferenceRowHost
 {
     /// <summary>The palette's chart background, which glyphs sit on.</summary>
@@ -17,8 +16,4 @@ internal interface IChartReferenceRowHost
     /// <param name="row">The row.</param>
     /// <returns>The glyph, or <see langword="null"/>.</returns>
     IImage? RequestGlyph(ChartReferenceRowViewModel row);
-
-    /// <summary>Selects an entry's row, switching mode or clearing the search when needed.</summary>
-    /// <param name="key">The entry.</param>
-    void Open(ReferenceKey key);
 }

@@ -123,7 +123,7 @@ public sealed class ChartReferencePanelPolishTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task An_expanded_row_wraps_to_a_320_px_panel()
+    public async Task The_list_never_scrolls_sideways_in_a_320_px_panel()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         using var vm = await LoadAsync(f);
@@ -132,14 +132,9 @@ public sealed class ChartReferencePanelPolishTests : IDisposable
         vm.Open(new ReferenceKey(vm.Index!.Spec, ReferenceKind.FeatureType, "LateralBeacon"));
         host.Settle();
 
-        var details = host.Find<Control>("ChartReference.Row.Details");
-        Assert.True(details.Bounds.Width <= 320, $"details {details.Bounds.Width} px wide");
         var list = host.Find<ListBox>("ChartReference.List");
         var row = Assert.IsType<ListBoxItem>(list.ContainerFromItem(vm.SelectedItem!));
         Assert.True(row.Bounds.Width <= 320, $"row {row.Bounds.Width} px wide");
-        Assert.All(
-            details.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible),
-            t => Assert.True(t.Bounds.Width <= 320, $"\"{t.Text}\" is {t.Bounds.Width} px wide"));
         var scroller = list.GetVisualDescendants().OfType<ScrollViewer>().First();
         Assert.Equal(ScrollBarVisibility.Disabled, scroller.HorizontalScrollBarVisibility);
     }
@@ -258,23 +253,24 @@ public sealed class ChartReferencePanelPolishTests : IDisposable
     }
 
     [Fact]
-    public async Task The_entry_pane_leaves_out_a_description_that_only_repeats_its_heading()
+    public async Task The_entry_view_leaves_out_a_description_that_only_repeats_its_heading()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         using var vm = await OpenAsync(f);
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var context = new ReferenceEntryContext { Index = vm.Index!, Glyphs = cache, Open = _ => { } };
 
         // A feature type's definition adds to its name.
-        var beacon = Row(vm, "LateralBeacon");
-        beacon.IsExpanded = true;
-        Assert.True(beacon.Details!.ShowsDefinitionUnderTitle);
+        var beacon = ReferenceEntryViewModel.Create(Row(vm, "LateralBeacon").Entry, context);
+        Assert.True(beacon.HasDescription);
 
         // A symbol named by its one-line description says it once, as the heading.
         vm.Mode = ChartReferenceMode.Symbols;
         var inform = Row(vm, "INFORM01");
-        inform.IsExpanded = true;
-        Assert.True(inform.Details!.HasDefinition);
-        Assert.True(inform.Details.DefinitionRepeatsTitle);
-        Assert.False(inform.Details.ShowsDefinitionUnderTitle);
+        Assert.True(ChartReferenceRowViewModel.DescriptionRepeatsName(inform.Entry));
+        var entry = ReferenceEntryViewModel.Create(inform.Entry, context);
+        Assert.Equal(inform.Name, entry.Name);
+        Assert.False(entry.HasDescription);
     }
 
     [AvaloniaFact]

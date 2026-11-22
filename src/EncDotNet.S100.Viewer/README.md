@@ -962,10 +962,32 @@ The **Chart reference** panel (**Help › Chart reference**, Ctrl+Shift+K)
 lists every feature type or symbol of a product's catalogues, grouped by
 Chart 1 section, each with its glyph, its S-57 acronym or code and its display
 category. Choose the product, search by name, acronym or code, and switch
-between **Features** and **Symbols**. Select a row to see its definition, its
-display categories and what it is drawn with, each symbol with the conditions
-that choose it in words. A symbol links to its own row, and a symbol's row
-links back to the feature types that use it.
+between **Features** and **Symbols**. Select a row to read its entry in the
+**Reference** tab of the right dock, beside Object information and the Legend.
+
+The Reference tab shows one entry at a time, sized for the dock, with the
+glyph large and at the size the chart draws it, in millimetres:
+
+- a **feature type** has its definition, its S-100 code and S-57 acronym, its
+  display categories by geometry or case, its Chart 1 section, how many of its
+  features are drawn in view with **Find** to ring them on the map, and
+  **Drawn with**: each symbol with the conditions that choose it in words.
+  Symbols drawn by shared rules, such as a topmark or a light, are links, and
+  the catalogue's fallback **?** has its own line;
+- a **symbol**, line style or area fill shows Day, Dusk and Night side by side,
+  its description, the display setting that chooses it, its family, where it
+  came from (the S-52 Presentation Library, or new in S-101) and the feature
+  types that use it, each with its cases;
+- an **attribute** lists its values with their definitions, and the feature
+  types whose symbol it changes;
+- a **display setting** gives its default and current state, with **Change in
+  Display settings**, and the feature types it changes.
+
+Every name in an entry links to its own entry. **Back** and **Forward**
+(Alt+Left, Alt+Right) and the breadcrumb above the entry retrace the trail;
+Object information keeps its pick, one tab away. Before anything is opened,
+the tab says where to choose an entry. MCP's `open_chart_reference` opens an
+entry by key or `soundcharts://reference/{spec}/{kind}/{code}` link.
 
 Turn on **In view** to list only what the chart draws in the map view at the
 current scale: the symbols the Legend tab's key counts, and the feature types
@@ -976,7 +998,8 @@ of the symbols drawn ("12 of 54 symbols drawn in view"), **Show all in Chart
 reference** opens the panel at that product's symbols with In view on.
 
 **Open as page**, beside the product, shows the reference over the map as a
-grid of tiles by Chart 1 section, with the selected entry on the right. Its
+grid of tiles by Chart 1 section, with the selected entry on the right, in
+the same entry view as the Reference tab. Its
 **Day / Dusk / Night** and **Simplified / Paper chart** switches preview the
 glyphs without changing the chart. Close the page to return to the panel,
 with the same product, search and selection.
