@@ -6,6 +6,18 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Search the chart reference over MCP.** SoundCharts' new
+  `search_chart_reference` tool finds feature types, symbols, line styles,
+  area fills, attributes and display settings in any product's catalogues,
+  S-401 included, ranked by code or S-57 acronym, then name, then other text.
+  `get_chart_reference_entry` returns one entry: what a feature type's rule
+  draws and when, the feature types that use a symbol, an attribute's values,
+  with links to the related entries. The viewer builds each product's index
+  on first use and rebuilds it when you add or replace a catalogue. For
+  library users, `FeatureCatalogueManager` and `PortrayalCatalogueManager`
+  now raise `CataloguesChanged` when `SetSource` (and, for portrayal
+  catalogues, `SetPath`) replaces a product's catalogue (#1635).
+
 - **Area fill legend rows and fitted glyphs.** `CatalogueLegendBuilder.Fill`
   builds a legend row from a portrayal catalogue's area fill, such as S-101's
   dredged area pattern (`DRGARE01`), as a new `FillLegendEntry`;

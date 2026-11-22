@@ -644,6 +644,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel>(),
                 sp.GetRequiredService<IViewerUiControllerAccessor>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()),
+            new McpTools.Groups.ChartReferenceMcpToolGroup(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>()),
             new McpTools.Groups.MeasuringMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
@@ -1863,6 +1865,17 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService>());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IDepthAdjustmentRequests>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.ChartWaterLevelAdjustmentService>());
+        // Chart reference (#1635, symbol dictionary R2): one index per product,
+        // built on first use and dropped when its catalogues change. The
+        // product list puts those with datasets open first (D4).
+        services.AddSingleton(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            return new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService(
+                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
+                sp.GetRequiredService<PortrayalCatalogueManager>(),
+                () => datasets.Entries.Where(e => !e.IsSource).Select(e => e.PortrayalSpec));
+        });
         // Legends (#1402, D1): one service gathers every legend row; the
         // Legend tab, the route-check card and MCP get_legend read it.
         services.AddSingleton(sp =>

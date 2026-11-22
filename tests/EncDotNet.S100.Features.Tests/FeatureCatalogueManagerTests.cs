@@ -311,4 +311,27 @@ public class FeatureCatalogueManagerTests
         Assert.NotNull(h);
         Assert.Equal(2, callCount);
     }
+
+    [Fact]
+    public async Task SetSource_raises_CataloguesChanged_after_evicting_the_hash()
+    {
+        var mgr = new FeatureCatalogueManager((string _) => null);
+        var spec = new SpecRef("S-101", default);
+        mgr.SetSource(spec, new CountingSource(MinimalFcXml));
+        var before = await mgr.GetCatalogueHashAsync(spec, TestContext.Current.CancellationToken);
+
+        var changes = new List<SpecRef>();
+        string? hashInHandler = null;
+        mgr.CataloguesChanged += (_, e) =>
+        {
+            changes.Add(e.Spec);
+            hashInHandler = mgr.GetCatalogueHashAsync(e.Spec).AsTask().GetAwaiter().GetResult();
+        };
+        mgr.SetSource(spec, new CountingSource(MinimalFcXml.Replace("Test Catalogue", "Other Catalogue", StringComparison.Ordinal)));
+
+        Assert.Equal([spec], changes);
+        Assert.NotNull(before);
+        Assert.NotNull(hashInHandler);
+        Assert.NotEqual(before, hashInHandler);
+    }
 }

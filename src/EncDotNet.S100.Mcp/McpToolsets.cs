@@ -47,7 +47,7 @@ public static class McpToolsets
     /// <summary>SoundCharts' navigational warnings panel and display.</summary>
     public const string Warnings = "warnings";
 
-    /// <summary>SoundCharts' display settings: weather, bathymetry, AML, tides, depth basis, display combinations and the legend.</summary>
+    /// <summary>SoundCharts' display settings: weather, bathymetry, AML, tides, depth basis, display combinations, the legend and the chart reference.</summary>
     public const string Display = "display";
 
     /// <summary>SoundCharts' map: viewport, pick, timeline, dataset state, notifications, own ship, measure and range/bearing.</summary>
@@ -79,7 +79,7 @@ public static class McpToolsets
         new(Tides, "Tide and current stations and their predictions."),
         new(Library, "The Library: sources, items, downloads and SECOM services."),
         new(Warnings, "SoundCharts' navigational warnings panel and display."),
-        new(Display, "SoundCharts' display settings: weather, bathymetry, AML, tides, depth basis, display combinations, legend."),
+        new(Display, "SoundCharts' display settings: weather, bathymetry, AML, tides, depth basis, display combinations, legend, chart reference."),
         new(Map, "SoundCharts' map: viewport, pick, timeline, dataset state, notifications, own ship, measure, range/bearing."),
         new(Ui, "SoundCharts' window: panels, app screenshots, and with test hooks UI automation and the test clock."),
         new(Diagnostics, "SoundCharts' render and performance diagnostics and recent logs."),

@@ -326,7 +326,20 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
                 return source;
             });
         _ = previous; // suppress unused
+
+        CataloguesChanged?.Invoke(this, new CataloguesChangedEventArgs(spec));
     }
+
+    /// <summary>
+    /// Raised by <see cref="SetSource(SpecRef, IAssetSource)"/> after the
+    /// spec's cached catalogue, decoder and content hash have been evicted,
+    /// on the thread that called it.
+    /// </summary>
+    /// <remarks>
+    /// A change the resolver delegate makes on its own, such as a viewer
+    /// setting it reads, isn't seen by the manager and raises nothing.
+    /// </remarks>
+    public event EventHandler<CataloguesChangedEventArgs>? CataloguesChanged;
 
     /// <summary>
     /// Disposes every <see cref="IAssetSource"/> registered through
