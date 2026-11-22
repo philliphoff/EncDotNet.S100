@@ -834,6 +834,68 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
 - `Diagnostics/`: the `ActivitySource` and `Meter` instrumentation that the
   OpenTelemetry exporter uses. See [Observability](../../docs/observability.md).
 
+## Chart reference index
+
+`ChartReferenceIndex` (namespace `EncDotNet.S100.Datasets.Pipelines.Reference`)
+is a searchable reference of one product's catalogues, the S-100 counterpart
+of INT 1 / Chart No. 1. It is built from the feature and portrayal catalogues
+you pass, so a catalogue the user adds or replaces is described as it draws:
+
+```csharp
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Reference;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Specifications;
+
+using var fcStream = Specification.TryOpenFeatureCatalogue("S-101");
+var features = fcStream is null ? null : FeatureCatalogueReader.Read(fcStream);
+using var portrayal = await PortrayalCatalogueProvider.OpenAsync(
+    Specification.CreatePortrayalCatalogueSource("S-101"));
+
+var index = await ChartReferenceIndex.BuildAsync(new SpecRef("S-101", default), features, portrayal);
+
+foreach (var hit in index.Search("BCNLAT"))
+    Console.WriteLine($"{hit.Match}: {hit.Entry.Name}");
+```
+
+It has four kinds of entry, each addressed by a `ReferenceKey` (spec, kind
+and code):
+
+- `FeatureTypeEntry`: the feature type's name, S-57 acronym and definition,
+  and what its portrayal rule draws. `Uses` lists each symbol, line style,
+  area fill or symbol family with the conditions that choose it; `ColorFills`
+  and `Pens` the plain fills and lines. `ViewingGroups` lists every viewing
+  group the rule sets, by geometry or case, and `PrimaryViewingGroup` the most
+  visible one, which gives the display category and the Chart 1 section.
+- `PortrayalItemEntry`: a symbol, line style or area fill with its
+  description, its SVG `iho:source` and the feature types that use it. A
+  family a rule assembles from numbers (`SOUNDG`, `SOUNDS`, `SAFCON`) is one
+  entry whose `Members` are the individual symbols. `IsUnreached` marks items
+  no rule names.
+- `AttributeEntry`: a simple attribute with its listed values and the feature
+  types whose rules test it.
+- `DisplaySettingEntry`: a portrayal context parameter, such as Simplified
+  symbols, and the feature types whose rules branch on it.
+
+The rules are read statically, without running them. Lua rules (S-101, S-131,
+S-401) give each item the conditions of its enclosing `if`/`elseif`/`else`
+blocks, and `require`d shared rules are followed, so Depth Area's DEPVS fill
+is marked as reached through DEPARE03 and SEABED01. XSLT rules give each
+template's feature type and match predicate, with `xsl:if`/`xsl:choose` tests,
+named-template calls and `xsl:include`s followed. Each condition is a
+`RuleCondition`: an attribute code, index, operator and value code, a context
+parameter and its state, the primitive, the feature type, or, for what the
+reader can't break down (computed values, `or`), the source text. Each
+condition carries its line number. A viewer puts conditions into words with the
+feature catalogue's labels. Static reading can't evaluate computed values,
+and an `else` after several cases reads as `Otherwise`.
+
+`Search` ranks an exact code or S-57 acronym first, then a name or code
+prefix, then other text: definitions, symbol descriptions and the labels of
+the values the rule conditions test. Building the S-101 index takes about
+100 ms. The design is in `docs/design/symbol-dictionary.md`.
+
 ## S-101 render caching
 
 This section describes internals, for contributors.
