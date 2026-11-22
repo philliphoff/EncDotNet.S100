@@ -968,8 +968,9 @@ that choose it in words. A symbol links to its own row, and a symbol's row
 links back to the feature types that use it.
 
 Turn on **In view** to list only what the chart draws in the map view at the
-current scale: the symbols the Legend tab's key counts, and the feature types
-of the features drawn. The list follows the map when it stops moving. Rest
+current scale: the symbols the Legend tab's key counts, the line styles and
+area fills drawn, and the feature types of the features drawn. Hovering a line
+style or fill rings the curves and areas drawn with it. The list follows the map when it stops moving. Rest
 the pointer on a row, or move keyboard focus to it, to ring its features on
 the map, as the Legend tab does. When a product's Legend key lists only some
 of the symbols drawn ("12 of 54 symbols drawn in view"), **Show all in Chart

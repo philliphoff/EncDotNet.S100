@@ -42,8 +42,15 @@ public sealed class ChartReferenceInViewTests : IDisposable
 
     // ── Fixtures ─────────────────────────────────────────────────────────
 
-    /// <summary>One drawn feature: its class, the symbol it draws (or null for a line), where, and its SCAMIN.</summary>
-    private sealed record Drawn(string Type, string? Symbol, double Lat, double Lon, double? ScaleMinimum = null);
+    /// <summary>
+    /// One drawn feature: its class, the symbol it draws (or null for a
+    /// line), where, its SCAMIN, the line style and area fill it draws, and
+    /// whether it is a surface (a 0.1° square) rather than a point or curve.
+    /// A feature that draws no symbol, line style or fill draws a simple line.
+    /// </summary>
+    private sealed record Drawn(
+        string Type, string? Symbol, double Lat, double Lon, double? ScaleMinimum = null,
+        string? LineStyle = null, string? AreaFill = null, bool Surface = false);
 
     private sealed class Features(SpecRef spec, IReadOnlyList<(string Ref, string Type)> features) : IDatasetProcessor
     {
@@ -66,19 +73,21 @@ public sealed class ChartReferenceInViewTests : IDisposable
         var refs = drawn.Select((d, i) => (Ref: $"{datasetId}:{i}", Drawn: d)).ToList();
         var geometry = refs.ToDictionary(
             r => r.Ref,
-            r => r.Drawn.Symbol is null
-                ? new FeatureGeometry { Type = GeometryType.Curve, Coordinates = [new(r.Drawn.Lat, r.Drawn.Lon), new(r.Drawn.Lat + 0.05, r.Drawn.Lon + 0.05)] }
-                : new FeatureGeometry { Type = GeometryType.Point, Coordinates = [new(r.Drawn.Lat, r.Drawn.Lon)] });
+            r => r.Drawn switch
+            {
+                { Surface: true, Lat: var lat, Lon: var lon } => new FeatureGeometry
+                {
+                    Type = GeometryType.Surface,
+                    Coordinates = [new(lat, lon), new(lat, lon + 0.1), new(lat + 0.1, lon + 0.1), new(lat + 0.1, lon), new(lat, lon)],
+                },
+                { Symbol: null } => new FeatureGeometry { Type = GeometryType.Curve, Coordinates = [new(r.Drawn.Lat, r.Drawn.Lon), new(r.Drawn.Lat + 0.05, r.Drawn.Lon + 0.05)] },
+                _ => new FeatureGeometry { Type = GeometryType.Point, Coordinates = [new(r.Drawn.Lat, r.Drawn.Lon)] },
+            });
         var subLayer = new VectorSubLayer
         {
             LayerKey = "s101.linework",
             LayerName = "Linework: " + datasetId,
-            Instructions =
-            [
-                .. refs.Select(r => r.Drawn.Symbol is { } symbol
-                    ? (DrawingInstruction)new PointInstruction { FeatureReference = r.Ref, SymbolReference = symbol, ScaleMinimum = r.Drawn.ScaleMinimum }
-                    : new LineInstruction { FeatureReference = r.Ref, LineColor = "#000000", LineWidth = 1, ScaleMinimum = r.Drawn.ScaleMinimum }),
-            ],
+            Instructions = [.. refs.SelectMany(r => InstructionsOf(r.Ref, r.Drawn))],
             Plane = S98DisplayPlane.BaseChartOver,
             SourceFeatureType = "s101.linework",
         };
@@ -103,6 +112,18 @@ public sealed class ChartReferenceInViewTests : IDisposable
         return (entry, new Features(new SpecRef("S-101", default), [.. refs.Select(r => (r.Ref, r.Drawn.Type))]));
     }
 
+    private static IEnumerable<DrawingInstruction> InstructionsOf(string featureRef, Drawn drawn)
+    {
+        if (drawn.AreaFill is { } fill)
+            yield return new AreaInstruction { FeatureReference = featureRef, AreaFillReference = fill, ScaleMinimum = drawn.ScaleMinimum };
+        if (drawn.LineStyle is { } style)
+            yield return new LineInstruction { FeatureReference = featureRef, LineStyleReference = style, ScaleMinimum = drawn.ScaleMinimum };
+        if (drawn.Symbol is { } symbol)
+            yield return new PointInstruction { FeatureReference = featureRef, SymbolReference = symbol, ScaleMinimum = drawn.ScaleMinimum };
+        if (drawn is { AreaFill: null, LineStyle: null, Symbol: null })
+            yield return new LineInstruction { FeatureReference = featureRef, LineColor = "#000000", LineWidth = 1, ScaleMinimum = drawn.ScaleMinimum };
+    }
+
     /// <summary>
     /// A view of 50–51° N, 2–1° W over one S-101 cell: a lateral buoy, two
     /// lights, a beacon and a sounding in view; a coastline (a line, no
@@ -112,22 +133,18 @@ public sealed class ChartReferenceInViewTests : IDisposable
     private sealed class Scene : IDisposable
     {
         public Scene()
+            : this(Default, suppressedIndex: 8)
+        {
+        }
+
+        /// <summary>A view of 50–51° N, 2–1° W over one S-101 cell drawing <paramref name="drawn"/>.</summary>
+        public Scene(IReadOnlyList<Drawn> drawn, int? suppressedIndex = null)
         {
             Dataset = Legend.Add("101GB00TEST.000", "S-101", 50, -2, 51, -1);
             var (entry, processor) = Cell(
                 Dataset.Id.Value,
-                [
-                    new("LateralBuoy", "BOYLAT13", 50.5, -1.5),
-                    new("LightAllAround", "LIGHTS11", 50.4, -1.4),
-                    new("LightAllAround", "LIGHTS11", 50.3, -1.3),
-                    new("BCNLAT", "BCNLAT21", 50.2, -1.2), // an S-57 acronym in the feature list
-                    new("Sounding", "SOUNDG12", 50.6, -1.6),
-                    new("Coastline", null, 50.7, -1.7),
-                    new("Wreck", "WRECKS01", 52.0, -1.5), // outside the view
-                    new("CardinalBuoy", "BOYCAR01", 50.5, -1.5, ScaleMinimum: 1000), // not drawn at this scale
-                    new("Landmark", "LNDMRK01", 50.5, -1.5), // suppressed below
-                ],
-                suppressed: new HashSet<string>(StringComparer.Ordinal) { Dataset.Id.Value + ":8" });
+                drawn,
+                suppressed: suppressedIndex is { } i ? new HashSet<string>(StringComparer.Ordinal) { $"{Dataset.Id.Value}:{i}" } : null);
             Entry = entry;
             ((Dictionary<DatasetEntry, IDatasetProcessor>)Legend.Loader.Processors).Add(Dataset, processor);
             Legend.Viewport.Publish(50, -2, 51, -1);
@@ -137,6 +154,19 @@ public sealed class ChartReferenceInViewTests : IDisposable
             Find = new LegendFindService(Service, Legend.Viewport, Legend.Clock, action => action());
             Map = new ChartReferenceMap(Service, Find);
         }
+
+        private static IReadOnlyList<Drawn> Default { get; } =
+            [
+                new("LateralBuoy", "BOYLAT13", 50.5, -1.5),
+                new("LightAllAround", "LIGHTS11", 50.4, -1.4),
+                new("LightAllAround", "LIGHTS11", 50.3, -1.3),
+                new("BCNLAT", "BCNLAT21", 50.2, -1.2), // an S-57 acronym in the feature list
+                new("Sounding", "SOUNDG12", 50.6, -1.6),
+                new("Coastline", null, 50.7, -1.7),
+                new("Wreck", "WRECKS01", 52.0, -1.5), // outside the view
+                new("CardinalBuoy", "BOYCAR01", 50.5, -1.5, ScaleMinimum: 1000), // not drawn at this scale
+                new("Landmark", "LNDMRK01", 50.5, -1.5), // suppressed (index 8)
+            ];
 
         public LegendServiceTests.Fixture Legend { get; } = new();
 
@@ -338,6 +368,157 @@ public sealed class ChartReferenceInViewTests : IDisposable
         Assert.Equal(130, found.MatchCount);
         Assert.Equal(LegendFeatureFinder.MaxRings, found.RingedCount);
         Assert.True(found.IsCapped);
+    }
+
+    // ── Line styles and area fills (#1653) ───────────────────────────────
+
+    /// <summary>
+    /// An anchorage area that draws the ACHARE51 symbol and line style, a
+    /// dredged area filled with DRGARE01, a caution area that draws only the
+    /// CTNARE51 symbol, a fairway outside the view, a line style SCAMIN hides
+    /// and a fill an S-98 rule suppressed.
+    /// </summary>
+    private static IReadOnlyList<Drawn> Linework { get; } =
+    [
+        new("AnchorageArea", "ACHARE51", 50.5, -1.5, LineStyle: "ACHARE51", Surface: true),
+        new("DredgedArea", null, 50.3, -1.3, AreaFill: "DRGARE01", Surface: true),
+        new("CautionArea", "CTNARE51", 50.2, -1.2), // a point symbol only
+        new("Fairway", null, 52.0, -1.5, LineStyle: "NAVARE51", Surface: true), // outside the view
+        new("RestrictedArea", null, 50.6, -1.6, ScaleMinimum: 1000, LineStyle: "CTYARE51", Surface: true), // not drawn at this scale
+        new("DumpingGround", null, 50.7, -1.7, AreaFill: "DIAMOND1", Surface: true), // suppressed (index 5)
+    ];
+
+    [Fact]
+    public void The_line_styles_and_area_fills_in_view_are_read_from_the_display_lists()
+    {
+        using var scene = new Scene(Linework, suppressedIndex: 5);
+        scene.Service.IsTabShown = true;
+        scene.Service.Refresh();
+
+        var drawn = scene.Service.DrawnInView("S-101");
+
+        Assert.Equal(["ACHARE51"], drawn.LineStyles);
+        Assert.Equal(["DRGARE01"], drawn.AreaFills);
+        // The point symbols are still the catalogue key's, which lists no
+        // line style or fill (D7).
+        var section = Assert.Single(scene.Service.Sections);
+        Assert.Equal(section.Rows.Select(r => r.Label).Order(StringComparer.Ordinal), drawn.Symbols.Order(StringComparer.Ordinal));
+        Assert.Equal(["ACHARE51", "CTNARE51"], drawn.Symbols.Order(StringComparer.Ordinal));
+        Assert.True(drawn.Contains(ReferenceKind.Symbol, "CTNARE51"));
+        Assert.False(drawn.Contains(ReferenceKind.LineStyle, "CTNARE51"));
+
+        // Out of view, none of them is drawn.
+        scene.Legend.Viewport.Publish(53, -2, 54, -1);
+        scene.Legend.Clock.Advance(LegendService.PanSettleDelay);
+        drawn = scene.Service.DrawnInView("S-101");
+        Assert.Empty(drawn.LineStyles);
+        Assert.Empty(drawn.AreaFills);
+        Assert.Empty(drawn.Symbols);
+    }
+
+    [Fact]
+    public async Task In_view_lists_the_line_styles_and_fills_drawn_matched_by_kind()
+    {
+        using var scene = new Scene(Linework, suppressedIndex: 5);
+        using var vm = await scene.OpenAsync();
+        vm.Mode = ChartReferenceMode.Symbols;
+
+        vm.InView = true;
+
+        var keys = vm.Rows.Select(r => (r.Key.Kind, r.Key.Code)).ToList();
+        Assert.Contains((ReferenceKind.LineStyle, "ACHARE51"), keys);
+        Assert.Contains((ReferenceKind.Symbol, "ACHARE51"), keys);
+        Assert.Contains((ReferenceKind.AreaFill, "DRGARE01"), keys);
+        // CTNARE51 names a point symbol and a line style: only the symbol is drawn.
+        Assert.Contains((ReferenceKind.Symbol, "CTNARE51"), keys);
+        Assert.DoesNotContain((ReferenceKind.LineStyle, "CTNARE51"), keys);
+        // Not the line style outside the view, the one SCAMIN hides, or the
+        // fill an S-98 rule removed.
+        Assert.DoesNotContain(keys, k => k.Code is "NAVARE51" or "CTYARE51" or "DIAMOND1");
+        Assert.Equal(4, keys.Count);
+    }
+
+    [Fact]
+    public async Task A_drawn_line_style_never_puts_the_point_symbol_of_the_same_name_in_view()
+    {
+        using var scene = new Scene([new("CautionArea", null, 50.5, -1.5, LineStyle: "CTNARE51", Surface: true)]);
+        using var vm = await scene.OpenAsync();
+        vm.Mode = ChartReferenceMode.Symbols;
+
+        vm.InView = true;
+
+        var row = Assert.Single(vm.Rows);
+        Assert.Equal(ReferenceKind.LineStyle, row.Key.Kind);
+        Assert.Equal("CTNARE51", row.Key.Code);
+    }
+
+    [Fact]
+    public async Task Hovering_a_line_style_or_fill_row_rings_the_outlines_that_draw_it()
+    {
+        using var scene = new Scene(Linework, suppressedIndex: 5);
+        using var vm = await scene.OpenAsync();
+        vm.Mode = ChartReferenceMode.Symbols;
+        vm.InView = true;
+
+        // The anchorage area's outline, not its centred symbol.
+        vm.HoverRow(vm.Rows.Single(r => r.Key is { Kind: ReferenceKind.LineStyle, Code: "ACHARE51" }));
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        var anchorage = Assert.IsType<LegendFeatureFind>(scene.Find.Current);
+        Assert.Equal(1, anchorage.MatchCount);
+        var ring = Assert.Single(anchorage.Rings);
+        Assert.Equal(5, ring.ExteriorRing.Count);
+        Assert.Equal(50.5, ring.ExteriorRing.Min(p => p.Latitude), 6);
+        Assert.Empty(ring.Points);
+
+        // The dredged area's outline.
+        vm.HoverRow(vm.Rows.Single(r => r.Key is { Kind: ReferenceKind.AreaFill, Code: "DRGARE01" }));
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        var dredged = Assert.Single(Assert.IsType<LegendFeatureFind>(scene.Find.Current).Rings);
+        Assert.Equal(50.3, dredged.ExteriorRing.Min(p => p.Latitude), 6);
+
+        // The CTNARE51 symbol rings the point that draws it.
+        vm.HoverRow(vm.Rows.Single(r => r.Key is { Kind: ReferenceKind.Symbol, Code: "CTNARE51" }));
+        scene.Legend.Clock.Advance(LegendFindService.HoverDelay);
+        var caution = Assert.Single(Assert.IsType<LegendFeatureFind>(scene.Find.Current).Rings);
+        Assert.Empty(caution.ExteriorRing);
+        Assert.Single(caution.Points);
+    }
+
+    [Fact]
+    public void A_line_style_on_its_own_geometry_rings_that_line()
+    {
+        var legend = new LegendServiceTests.Fixture();
+        var dataset = legend.Add("101GB00LIGHT.000", "S-101", 50, -2, 51, -1);
+        var (entry, _) = Cell(dataset.Id.Value, [new("Light", "LIGHTS11", 50.5, -1.5)]);
+        var payload = (VectorStackPayload)entry.Item.Payload;
+        var sub = new VectorSubLayer
+        {
+            LayerKey = payload.SubLayer.LayerKey,
+            LayerName = payload.SubLayer.LayerName,
+            Plane = payload.SubLayer.Plane,
+            SourceFeatureType = payload.SubLayer.SourceFeatureType,
+            Instructions =
+            [
+                .. payload.SubLayer.Instructions,
+                // A sector limit: a line on its own geometry, not the light's.
+                new LineInstruction
+                {
+                    FeatureReference = dataset.Id.Value + ":0",
+                    LineStyleReference = "LITDEF11",
+                    CoordinatesOverride = [new(50.5, -1.5), new(50.6, -1.4)],
+                },
+            ],
+        };
+
+        var found = LegendFeatureFinder.FindReference(
+            new ChartReferenceTarget("S-101", "S-101/LineStyle/LITDEF11", [], []) { LineStyles = ["LITDEF11"] },
+            [(new VectorStackPayload(payload.Result, sub), null, null)],
+            new EncDotNet.S100.Collections.GeoBounds(50, -2, 51, -1),
+            double.NaN);
+
+        var ring = Assert.Single(found.Rings);
+        var line = Assert.Single(ring.Curves);
+        Assert.Equal([new(50.5, -1.5), new(50.6, -1.4)], line);
     }
 
     // ── Show all from the Legend tab ─────────────────────────────────────
