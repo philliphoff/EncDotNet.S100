@@ -38,6 +38,7 @@ internal sealed class ChartReferenceRowViewModel : ChartReferenceListItem
         Lead = lead;
         _host = host;
         Code = entry is FeatureTypeEntry { Alias: { Length: > 0 } alias } ? alias : entry.Code;
+        Name = NameOf(entry);
         CategoryTag = entry switch
         {
             FeatureTypeEntry feature => CategoryTagOf(feature.PrimaryViewingGroup),
@@ -54,8 +55,13 @@ internal sealed class ChartReferenceRowViewModel : ChartReferenceListItem
     /// <summary>The entry's key.</summary>
     public ReferenceKey Key => Entry.Key;
 
-    /// <inheritdoc />
-    public override string Name => Entry.Name;
+    /// <summary>
+    /// The row's title: the entry's name or, for a symbol, line style or
+    /// fill whose catalogue name is only its code, the first line of its
+    /// description in sentence case (#1657), so the code goes on the
+    /// secondary line as a feature type's S-57 acronym does.
+    /// </summary>
+    public override string Name { get; }
 
     /// <inheritdoc />
     public override bool IsRow => true;
@@ -149,6 +155,45 @@ internal sealed class ChartReferenceRowViewModel : ChartReferenceListItem
         "OtherInformation" or "All" => Strings.ChartReference_Tag_Other,
         _ => group.DisplayModeName ?? group.DisplayModeId,
     };
+
+    /// <summary>
+    /// The title of <paramref name="entry"/>'s row: its name, or for a
+    /// portrayal item named only by its code, its description's first line
+    /// in sentence case.
+    /// </summary>
+    /// <param name="entry">The entry.</param>
+    /// <returns>The title.</returns>
+    internal static string NameOf(ReferenceEntry entry)
+    {
+        if (entry is not PortrayalItemEntry { IsFamily: false } item
+            || !string.Equals(item.Name, item.Code, StringComparison.OrdinalIgnoreCase)
+            || FirstLine(item.Definition) is not { Length: > 0 } line)
+        {
+            return entry.Name;
+        }
+
+        return SentenceCase(line);
+    }
+
+    // The first non-empty line, without a closing full stop.
+    private static string? FirstLine(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        var line = text
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(l => l.Length > 0);
+        return line?.TrimEnd('.', ' ');
+    }
+
+    // "THIS OBJECT HAS…" and "this object has…" both read "This object has…";
+    // mixed case keeps its capitals (names, acronyms) after the first letter.
+    private static string SentenceCase(string text)
+    {
+        if (!text.Any(char.IsLower))
+            text = text.ToLower(CultureInfo.CurrentCulture);
+        return Capitalise(text);
+    }
 
     private ChartReferenceRowDetails MakeDetails() => Entry switch
     {

@@ -70,12 +70,35 @@
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
+        <!-- A link: a plain template, so its text wraps to the panel's width
+             rather than to the theme button's measure (#1657). -->
         <Style Selector="Button.crLink">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="4,2" />
+            <Setter Property="CornerRadius" Value="4" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Link"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="Stretch" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.crLink:pointerover /template/ Border#PART_Link">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.crLink:focus-visible /template/ Border#PART_Link">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
     </UserControl.Styles>
 
@@ -254,10 +277,13 @@
                                     <TextBlock Text="{Binding Spec.Name}"
                                                FontFamily="{StaticResource MonoFontFamily}"
                                                VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.ChartReference_ProductOpen}"
-                                               IsVisible="{Binding IsLoaded}"
-                                               Classes="crCaption"
-                                               VerticalAlignment="Center" />
+                                    <Border Classes="optionalPill"
+                                            IsVisible="{Binding IsLoaded}"
+                                            AutomationProperties.AutomationId="ChartReferencePage.Product.OpenTag">
+                                        <TextBlock Text="{x:Static loc:Strings.ChartReference_ProductOpen}"
+                                                   FontSize="10"
+                                                   Opacity="0.8" />
+                                    </Border>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

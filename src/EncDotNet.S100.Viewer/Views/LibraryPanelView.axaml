@@ -197,11 +197,6 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Opacity" Value="0.65" />
         </Style>
-        <!-- The coverage toggle reads as selected when on. -->
-        <Style Selector="ToggleButton.coverageToggle:checked">
-            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-        </Style>
         <!-- A clickable tag's button: drawn by the tag underneath it, so it has no
              look of its own, only the hit area, focus and automation peer (#784). -->
         <Style Selector="Button.libraryTagAction">

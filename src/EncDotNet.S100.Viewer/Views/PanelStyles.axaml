@@ -158,6 +158,18 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!--
+      A status pill after a name: Routes' "Optional" and "Received", the
+      Chart reference product combo's "Open". Mixed-case words on a muted fill,
+      where a kindTag is a monospace code on a hairline box.
+    -->
+    <Style Selector="Border.optionalPill">
+        <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        <Setter Property="CornerRadius" Value="9" />
+        <Setter Property="Padding" Value="6,1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!-- A panel toolbar's icon button, beside a filter field: as tall as the field. -->
     <Style Selector="Button.panelIcon, ToggleButton.panelIcon">
         <Setter Property="Width" Value="36" />
@@ -166,5 +178,13 @@
         <Setter Property="Padding" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!--
+      An icon toggle that filters a panel (the Library's Show coverage and At
+      view time, Chart reference's In view) reads as selected when on.
+    -->
+    <Style Selector="ToggleButton.coverageToggle:checked">
+        <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
 </Styles>

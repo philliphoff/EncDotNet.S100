@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Services.ChartReference;
 /// kept in memory (symbol dictionary design note §3.4, R3). A glyph
 /// is a catalogue item drawn fitted to its box by
 /// <see cref="LegendGlyphRenderer.RenderFitted"/>: a 40 px tile or a large
-/// hero glyph.
+/// hero glyph, with a symbol or line kept <see cref="PaddingOf"/> inside it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -34,6 +34,13 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
 {
     /// <summary>The device scale glyphs are drawn at, so they stay sharp on a high-density display.</summary>
     public const float DeviceScale = 2f;
+
+    /// <summary>
+    /// The space kept around a symbol or line sample inside its tile, as a
+    /// fraction of the tile's shorter side (#1657): 5.6 px on a 40 px tile,
+    /// 13.4 px on the 96 px hero glyph. Swatches and fills still fill the tile.
+    /// </summary>
+    public const float PaddingFraction = 0.14f;
 
     private readonly Dictionary<Key, IImage?> _glyphs = [];
     private readonly ViewerSettingsService? _settings;
@@ -167,9 +174,15 @@ internal sealed class ChartReferenceGlyphCache : IDisposable
             _glyphs.Clear();
     }
 
+    /// <summary>The padding a glyph of <paramref name="width"/> × <paramref name="height"/> logical pixels keeps inside its tile.</summary>
+    /// <param name="width">The box width in logical pixels.</param>
+    /// <param name="height">The box height in logical pixels.</param>
+    /// <returns>The padding in logical pixels, on each side.</returns>
+    public static float PaddingOf(int width, int height) => Math.Min(width, height) * PaddingFraction;
+
     private static Bitmap Render(LegendEntry entry, int width, int height)
     {
-        using var bitmap = LegendGlyphRenderer.RenderFitted(entry, width, height, DeviceScale);
+        using var bitmap = LegendGlyphRenderer.RenderFitted(entry, width, height, DeviceScale, PaddingOf(width, height));
         using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
         using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
         using var stream = new MemoryStream(png.ToArray());

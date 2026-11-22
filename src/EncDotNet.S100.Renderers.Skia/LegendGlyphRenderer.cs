@@ -100,14 +100,20 @@ public static class LegendGlyphRenderer
     /// <param name="width">The box width in logical pixels, e.g. 40 for a reference tile.</param>
     /// <param name="height">The box height in logical pixels.</param>
     /// <param name="deviceScale">Device pixels per logical pixel, e.g. 2 on a Retina display.</param>
-    public static SKBitmap RenderFitted(LegendEntry entry, int width, int height, float deviceScale = 1f)
+    /// <param name="padding">
+    /// Logical pixels between the box's edges and a symbol or line sample,
+    /// e.g. 5.6 on a 40 px reference tile; a swatch, area or fill still fills
+    /// the box, so it reads as an area. See <see cref="DrawFitted"/>.
+    /// </param>
+    public static SKBitmap RenderFitted(LegendEntry entry, int width, int height, float deviceScale = 1f, float padding = 0f)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(deviceScale);
+        ArgumentOutOfRangeException.ThrowIfNegative(padding);
 
-        return RenderTo(width, height, deviceScale, canvas => DrawFitted(canvas, entry, width, height));
+        return RenderTo(width, height, deviceScale, canvas => DrawFitted(canvas, entry, width, height, padding));
     }
 
     /// <summary>
@@ -154,10 +160,17 @@ public static class LegendGlyphRenderer
     /// <param name="entry">The legend row.</param>
     /// <param name="width">The box width.</param>
     /// <param name="height">The box height.</param>
-    public static void DrawFitted(SKCanvas canvas, LegendEntry entry, float width, float height)
+    /// <param name="padding">
+    /// The space kept between the box's edges and a symbol or line sample,
+    /// which are fitted to the box less this on each side, at most a third of
+    /// the box's shorter side; a swatch, area or fill ignores it and fills
+    /// the box.
+    /// </param>
+    public static void DrawFitted(SKCanvas canvas, LegendEntry entry, float width, float height, float padding = 0f)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(entry);
+        ArgumentOutOfRangeException.ThrowIfNegative(padding);
 
         switch (entry)
         {
@@ -165,15 +178,32 @@ public static class LegendGlyphRenderer
                 DrawSwatch(canvas, swatch, width, height, ChartMillimetresPerPixel);
                 break;
             case SymbolLegendEntry symbol:
-                DrawSymbol(canvas, symbol.Svg, width, height);
+                Inset(canvas, width, height, padding, (w, h) => DrawSymbol(canvas, symbol.Svg, w, h));
                 break;
             case LineLegendEntry line:
-                DrawLine(canvas, line.Line, width, height, FittedLineScale(line.Line, width));
+                Inset(canvas, width, height, padding, (w, h) => DrawLine(canvas, line.Line, w, h, FittedLineScale(line.Line, w)));
                 break;
             case FillLegendEntry fill:
                 DrawFill(canvas, fill.Fill, width, height);
                 break;
         }
+    }
+
+    // Draws into the box less `padding` on each side, keeping at least a
+    // third of the shorter side for the glyph.
+    private static void Inset(SKCanvas canvas, float width, float height, float padding, Action<float, float> draw)
+    {
+        padding = Math.Min(padding, Math.Min(width, height) / 3f);
+        if (padding <= 0)
+        {
+            draw(width, height);
+            return;
+        }
+
+        canvas.Save();
+        canvas.Translate(padding, padding);
+        draw(width - 2 * padding, height - 2 * padding);
+        canvas.Restore();
     }
 
     /// <summary>

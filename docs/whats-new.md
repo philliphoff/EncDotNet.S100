@@ -17,6 +17,17 @@ month. For package versions and release assets, see
   has `NcssGridUri` and `SplitAtGreenwich`. See
   [Get the data](weather.md#netcdf).
 
+- **Chart reference polish.** The Chart reference list now selects rows as
+  the viewer's other lists do, with the accent bar and tint. Glyphs keep a
+  margin inside their tiles, while fills still fill them. **In view** is an
+  icon toggle, like the Library's **Show coverage**. **Open** is a pill
+  beside the product id. An expanded row wraps to the panel's width.
+  Symbols, line styles and fills are listed by their description, with the
+  code beneath. The footer says "1 match". The Legend tab no longer covers
+  the Chart reference page or Settings in a narrow window. In
+  `EncDotNet.S100.Renderers.Skia`, `LegendGlyphRenderer.RenderFitted` and
+  `DrawFitted` take an optional `padding` (#1657).
+
 - **Chart reference as a page.** **Open as page** in the Chart reference
   activity shows the reference over the map, as Settings is, for study and
   training: a chip per product, search, **Features** / **Symbols**, a grid of

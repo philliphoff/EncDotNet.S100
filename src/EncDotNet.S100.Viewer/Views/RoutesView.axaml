@@ -308,12 +308,6 @@
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Border.optionalPill">
-            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-            <Setter Property="CornerRadius" Value="9" />
-            <Setter Property="Padding" Value="6,1" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
         <Style Selector="Ellipse.overrideDot">
             <Setter Property="Width" Value="5" />
             <Setter Property="Height" Value="5" />

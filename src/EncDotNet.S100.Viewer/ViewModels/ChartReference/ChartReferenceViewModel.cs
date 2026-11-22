@@ -508,16 +508,15 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         {
             Items = _mode == ChartReferenceMode.Features ? BrowseFeatures(index) : BrowseItems(index);
             var count = Rows.Count();
-            Summary = string.Format(
-                CultureInfo.CurrentCulture,
-                _mode == ChartReferenceMode.Features ? Strings.ChartReference_FeatureCount : Strings.ChartReference_SymbolCount,
-                count);
+            Summary = _mode == ChartReferenceMode.Features
+                ? Count(count, Strings.ChartReference_FeatureCountOne, Strings.ChartReference_FeatureCount)
+                : Count(count, Strings.ChartReference_SymbolCountOne, Strings.ChartReference_SymbolCount);
         }
         else
         {
             Items = Search(index, _query.Trim());
             var count = _items.Count;
-            Summary = count == 0 ? null : string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_MatchCount, count);
+            Summary = count == 0 ? null : Count(count, Strings.ChartReference_MatchCountOne, Strings.ChartReference_MatchCount);
         }
 
         OnPropertyChanged(nameof(SelectedItem));
@@ -526,6 +525,10 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
             SelectedItem = again;
         RaiseStates();
     }
+
+    // "1 match", "N matches": the singular and plural are separate strings.
+    private static string Count(int count, string one, string many) =>
+        string.Format(CultureInfo.CurrentCulture, count == 1 ? one : many, count);
 
     private List<ChartReferenceListItem> BrowseFeatures(ChartReferenceIndex index)
     {
