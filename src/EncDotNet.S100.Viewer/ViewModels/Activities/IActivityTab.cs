@@ -119,6 +119,12 @@ internal interface IActivityTab : System.ComponentModel.INotifyPropertyChanged
     bool FillsContent => false;
 
     /// <summary>
+    /// When <c>false</c>, the tab has no activity-bar button: only code opens
+    /// it, as the Chart reference activity's Open as page does (#1639).
+    /// </summary>
+    bool ShowsInActivityBar => true;
+
+    /// <summary>
     /// The count on the tab button's badge (<see cref="IActivityTabBadge"/>);
     /// 0, the default, shows none.
     /// </summary>

@@ -1,0 +1,55 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Markup.Xaml;
+using EncDotNet.S100.Viewer.ViewModels.ChartReference;
+
+namespace EncDotNet.S100.Viewer.Views;
+
+/// <summary>
+/// The Chart reference page (#1639): the reference over the map as a tile
+/// grid by Chart 1 section, with product chips, search, the preview switches
+/// and the selected entry, backed by <see cref="ChartReferencePageViewModel"/>.
+/// </summary>
+public partial class ChartReferencePageView : UserControl
+{
+    private readonly ScrollViewer _scroller;
+
+    /// <summary>Creates the view.</summary>
+    public ChartReferencePageView()
+    {
+        InitializeComponent();
+        _scroller = this.FindControl<ScrollViewer>("GridScroller")!;
+        _scroller.SizeChanged += (_, e) => UpdateColumns(e.NewSize.Width);
+    }
+
+    /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // Each time the page is shown its switches start from the chart's values.
+        (DataContext as ChartReferencePageViewModel)?.Show();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (VisualRoot is null || DataContext is not ChartReferencePageViewModel page)
+            return;
+        page.Show();
+        UpdateColumns(_scroller.Bounds.Width);
+    }
+
+    // As many tiles of at least MinTileWidth as fit, as the prototype's
+    // auto-fill grid does; the tiles stretch to fill the line.
+    private void UpdateColumns(double width)
+    {
+        if (DataContext is not ChartReferencePageViewModel page || width <= 0)
+            return;
+        // The grid's padding: 16 left, 6 right; each tile has a 10 px right margin.
+        var inner = width - 22 + ChartReferencePageViewModel.TileSpacing;
+        page.Columns = (int)Math.Max(1, Math.Floor(inner / (ChartReferencePageViewModel.MinTileWidth + ChartReferencePageViewModel.TileSpacing)));
+    }
+
+    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+}

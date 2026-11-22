@@ -1897,8 +1897,19 @@ public partial class App : Application
             reference.ConnectMap(new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceMap(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()));
+            // Open as page (#1639); the layout is resolved on click, since it
+            // is built from the tabs, which hold this view model.
+            reference.OpenPageCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
+                () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferencePageCommand.Execute(null));
             return reference;
         });
+        // The Chart reference page (#1639, R6): the same view model as the
+        // activity, as tiles over the map. Its switches preview only.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferencePageViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+            sp.GetRequiredService<ViewerSettingsService>(),
+            UiThread.RunOrPost));
         // Legends (#1402, D1): one service gathers every legend row; the
         // Legend tab, the route-check card and MCP get_legend read it.
         services.AddSingleton(sp =>
@@ -2240,6 +2251,18 @@ public partial class App : Application
             iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 },
             // The Legend tab's Show all opens it (#1638, R5).
             autoOpenOnContentSignal: true);
+        // Its page (#1639): across the content area, as Settings is, and with
+        // no activity-bar button; only Open as page shows it.
+        services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferencePageViewModel, ChartReferencePageView>(
+            id: ShellLayoutViewModel.ChartReferencePageTabId,
+            order: 53,
+            title: Strings.Pane_ChartReference,
+            name: Strings.Label_Activity_ChartReference,
+            tooltip: Strings.Tooltip_ChartReferenceOpenPage,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookCompass, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            fillsContent: true,
+            showsInActivityBar: false);
         services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
             id: "Routes",
             order: 55,

@@ -975,6 +975,12 @@ the map, as the Legend tab does. When a product's Legend key lists only some
 of the symbols drawn ("12 of 54 symbols drawn in view"), **Show all in Chart
 reference** opens the panel at that product's symbols with In view on.
 
+**Open as page**, beside the product, shows the reference over the map as a
+grid of tiles by Chart 1 section, with the selected entry on the right. Its
+**Day / Dusk / Night** and **Simplified / Paper chart** switches preview the
+glyphs without changing the chart. Close the page to return to the panel,
+with the same product, search and selection.
+
 ### Find navigational warnings
 
 The **Navigational warnings** panel, beside **Library** in the activity bar,

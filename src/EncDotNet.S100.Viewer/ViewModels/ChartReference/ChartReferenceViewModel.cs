@@ -60,6 +60,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     private string? _summary;
     private bool _disposed;
     private bool _isActive;
+    private ICommand? _openPageCommand;
 
     /// <summary>
     /// Creates the activity's view model and selects the first product. Its
@@ -264,6 +265,23 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
 
     /// <summary>Lists symbols.</summary>
     public ICommand ShowSymbolsCommand { get; }
+
+    /// <summary>
+    /// Shows the reference as a page over the map (Open as page, #1639);
+    /// <see langword="null"/>, without the app, hides the button.
+    /// </summary>
+    public ICommand? OpenPageCommand
+    {
+        get => _openPageCommand;
+        set
+        {
+            if (SetProperty(ref _openPageCommand, value))
+                OnPropertyChanged(nameof(CanOpenPage));
+        }
+    }
+
+    /// <summary>Whether the activity shows Open as page.</summary>
+    public bool CanOpenPage => _openPageCommand is not null;
 
     /// <summary>The latest load of an index; tests wait on it.</summary>
     internal Task Loading { get; private set; } = Task.CompletedTask;
