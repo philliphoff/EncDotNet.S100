@@ -64,14 +64,19 @@ internal sealed partial class ViewerSettings
     [JsonIgnore]
     public IReadOnlyList<string>? McpToolsetsOverride { get; set; }
 
-    /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
-    public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Custom portrayal catalogues kept after restart, keyed by product spec
+    /// (e.g. "S-101"): a catalogue folder or ZIP package. Read and written
+    /// only by <c>Services.CatalogueRegistry</c>.
+    /// </summary>
+    public Dictionary<string, string> PortrayalCataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Feature catalogue file paths keyed by product spec (e.g. "S-101").</summary>
+    /// <summary>
+    /// Custom feature catalogue files kept after restart, keyed by product
+    /// spec (e.g. "S-101"). Read and written only by
+    /// <c>Services.CatalogueRegistry</c>.
+    /// </summary>
     public Dictionary<string, string> FeatureCataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Legacy single path — migrated to <see cref="CataloguePaths"/> on load.</summary>
-    public string? PortrayalCataloguePath { get; set; }
 
     /// <summary>Custom accent color hex string (e.g. "#007ACC"). Defaults to VS Code blue.</summary>
     public string AccentColor { get; set; } = "#007ACC";
@@ -824,13 +829,6 @@ internal sealed partial class ViewerSettings
                     settings.BasemapMode = settings.BasemapEnabled ? BasemapMode.Online : BasemapMode.None;
                 }
                 settings.BasemapEnabled = settings.BasemapMode != BasemapMode.None;
-
-                // Migrate legacy single-path setting to S-102 entry
-                if (settings.PortrayalCataloguePath is { } legacy && !settings.CataloguePaths.ContainsKey("S-102"))
-                {
-                    settings.CataloguePaths["S-102"] = legacy;
-                    settings.PortrayalCataloguePath = null;
-                }
 
                 // PR-D2.1: migrate legacy OwnShipVisible bool into the
                 // per-source DynamicSourceVisibility dictionary so the

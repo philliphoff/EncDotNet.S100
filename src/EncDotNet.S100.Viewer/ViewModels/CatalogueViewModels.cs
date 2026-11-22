@@ -1,20 +1,24 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using EncDotNet.S100.Features;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
+/// <summary>
+/// The Feature Catalogues tab: one row per product with a feature catalogue,
+/// read from <see cref="CatalogueRegistry"/>. A stopgap until the Catalogues
+/// activity replaces it (design note <c>catalogue-panels.md</c>, CR2).
+/// </summary>
 internal sealed class FeatureCataloguesViewModel : ViewModelBase
 {
-    private readonly ViewerSettings _settings;
+    private readonly CatalogueRegistry _registry;
     private readonly Services.ExaminerLinks _examinerLinks;
 
     public ObservableCollection<CatalogueEntry> Entries { get; } = new();
 
-    public ICommand AddCommand { get; }
+    /// <summary>Reverts a custom row to the built-in catalogue.</summary>
     public ICommand RemoveCommand { get; }
 
     /// <summary>
@@ -24,17 +28,17 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     public ICommand OpenInExaminerCommand { get; }
 
     /// <summary>Creates the Feature Catalogues tab.</summary>
-    /// <param name="settings">The settings that hold the user's catalogue paths.</param>
+    /// <param name="registry">The catalogues in effect.</param>
     /// <param name="examinerLinks">Opens a catalogue in the eXaminer.</param>
-    public FeatureCataloguesViewModel(ViewerSettings settings, Services.ExaminerLinks examinerLinks)
+    public FeatureCataloguesViewModel(CatalogueRegistry registry, Services.ExaminerLinks examinerLinks)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(examinerLinks);
-        _settings = settings;
+        _registry = registry;
         _examinerLinks = examinerLinks;
-        AddCommand = new RelayCommand<string?>(_ => { }); // wired up from view
         RemoveCommand = new RelayCommand<CatalogueEntry>(Remove);
         OpenInExaminerCommand = new RelayCommand<CatalogueEntry>(OpenInExaminer);
+        _registry.CataloguesChanged += (_, _) => UiThread.RunOrPost(Reload);
         Reload();
     }
 
@@ -44,44 +48,16 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
             _examinerLinks.OpenCatalogue(entry.ProductSpec);
     }
 
-    public void Reload()
-    {
-        Entries.Clear();
-        foreach (var (spec, path) in _settings.FeatureCataloguePaths.OrderBy(kv => kv.Key))
-        {
-            Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
-        }
-    }
-
-    public void AddOrUpdate(string spec, string path)
-    {
-        _settings.FeatureCataloguePaths[spec] = path;
-        _settings.Save();
-        Reload();
-    }
+    /// <summary>Rebuilds the rows from the registry.</summary>
+    public void Reload() => CatalogueRows.Fill(
+        Entries, _registry.Products, CatalogueKind.Feature, ExaminerSupports);
 
     /// <summary>
-    /// Adds a catalogue entry for the current session only, without persisting to settings.
+    /// Uses the catalogue at <paramref name="path"/>, whatever its product
+    /// (found from its content), and keeps it after restart.
     /// </summary>
-    public void AddTransient(string spec, string path)
-    {
-        Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
-    }
-
-    /// <summary>
-    /// Adds a built-in catalogue entry that cannot be removed by the user.
-    /// Skipped if a user-provided entry already exists for the spec.
-    /// </summary>
-    public void AddBuiltIn(string spec, string displayPath, string? version = null, string? versionDate = null)
-    {
-        if (!Entries.Any(e => e.ProductSpec.Equals(spec, StringComparison.OrdinalIgnoreCase)))
-        {
-            // Built-in specs are always covered by the curated title map, so the
-            // parsed-name fallback never fires here.
-            var title = ComposeTitle(spec, Strings.SpecDisplayName(spec));
-            Entries.Add(new CatalogueEntry(spec, title, displayPath, isBuiltIn: true, version: version, versionDate: versionDate, canOpenInExaminer: ExaminerSupports(spec)));
-        }
-    }
+    /// <returns>Null when it's in use; otherwise why it can't be used.</returns>
+    public string? Add(string path) => CatalogueRows.Add(_registry, path);
 
     private bool ExaminerSupports(string spec) =>
         _examinerLinks.SupportsSpec(spec);
@@ -95,21 +71,10 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     /// </summary>
     public void RefreshExaminerAvailability()
     {
-        // Every entry in this view model is a feature catalogue, so
-        // eligibility reduces to whether the examiner currently hosts the spec.
         foreach (var entry in Entries)
         {
             entry.CanOpenInExaminer = ExaminerSupports(entry.ProductSpec);
         }
-    }
-
-    private CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
-    {
-        var (name, version, date) = ReadFeatureCatalogueInfo(path);
-        // Curated name first; fall back to the catalogue's own declared name
-        // (for custom specs outside the bundled set).
-        var name2 = Strings.SpecDisplayName(spec) ?? (string.IsNullOrWhiteSpace(name) ? null : name);
-        return new CatalogueEntry(spec, ComposeTitle(spec, name2), path, isBuiltIn: isBuiltIn, version: version, versionDate: date, canOpenInExaminer: ExaminerSupports(spec));
     }
 
     /// <summary>
@@ -120,121 +85,140 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     internal static string ComposeTitle(string spec, string? name) =>
         string.IsNullOrWhiteSpace(name) ? spec : $"{spec} {name}";
 
-    private static (string? Name, string? Version, string? VersionDate) ReadFeatureCatalogueInfo(string path)
-    {
-        try
-        {
-            using var stream = File.OpenRead(path);
-            var catalogue = FeatureCatalogueReader.Read(stream);
-            return (
-                string.IsNullOrEmpty(catalogue.Name) ? null : catalogue.Name,
-                string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber,
-                string.IsNullOrEmpty(catalogue.VersionDate) ? null : catalogue.VersionDate);
-        }
-        catch
-        {
-            return (null, null, null);
-        }
-    }
-
     private void Remove(CatalogueEntry? entry)
     {
-        if (entry is null || entry.IsBuiltIn) return;
-        _settings.FeatureCataloguePaths.Remove(entry.ProductSpec);
-        _settings.Save();
-        Reload();
+        if (entry is { CanRemove: true })
+            _registry.Revert(entry.ProductSpec, CatalogueKind.Feature);
     }
 }
 
+/// <summary>
+/// The Portrayal Catalogues tab: one row per product with a portrayal
+/// catalogue, read from <see cref="CatalogueRegistry"/>. A stopgap until the
+/// Catalogues activity replaces it (CR2).
+/// </summary>
 internal sealed class PortrayalCataloguesViewModel : ViewModelBase
 {
-    private readonly ViewerSettings _settings;
-    private readonly PortrayalCatalogueManager _catalogueManager;
+    private readonly CatalogueRegistry _registry;
 
     public ObservableCollection<CatalogueEntry> Entries { get; } = new();
 
-    public ICommand AddCommand { get; }
+    /// <summary>Reverts a custom row to the built-in catalogue.</summary>
     public ICommand RemoveCommand { get; }
 
-    public PortrayalCataloguesViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager)
+    /// <summary>Creates the Portrayal Catalogues tab.</summary>
+    /// <param name="registry">The catalogues in effect.</param>
+    public PortrayalCataloguesViewModel(CatalogueRegistry registry)
     {
-        _settings = settings;
-        _catalogueManager = catalogueManager;
-        AddCommand = new RelayCommand<string?>(_ => { });
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
         RemoveCommand = new RelayCommand<CatalogueEntry>(Remove);
+        _registry.CataloguesChanged += (_, _) => UiThread.RunOrPost(Reload);
         Reload();
     }
 
-    public void Reload()
-    {
-        Entries.Clear();
-        foreach (var (spec, path) in _settings.CataloguePaths.OrderBy(kv => kv.Key))
-        {
-            Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
-        }
-    }
-
-    public void AddOrUpdate(string spec, string path)
-    {
-        _catalogueManager.SetPath(spec, path);
-        _settings.CataloguePaths[spec] = path;
-        _settings.Save();
-        Reload();
-    }
+    /// <summary>Rebuilds the rows from the registry.</summary>
+    public void Reload() => CatalogueRows.Fill(
+        Entries, _registry.Products, CatalogueKind.Portrayal, static _ => false);
 
     /// <summary>
-    /// Adds a catalogue entry for the current session only, without persisting to settings.
+    /// Uses the catalogue folder or package at <paramref name="path"/>,
+    /// whatever its product (found from its content), and keeps it after
+    /// restart.
     /// </summary>
-    public void AddTransient(string spec, string path)
-    {
-        _catalogueManager.SetPath(spec, path);
-        Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
-    }
-
-    /// <summary>
-    /// Adds a built-in catalogue entry that cannot be removed by the user.
-    /// Skipped if a user-provided entry already exists for the spec.
-    /// </summary>
-    public void AddBuiltIn(string spec, string displayPath, string? version = null)
-    {
-        if (!Entries.Any(e => e.ProductSpec.Equals(spec, StringComparison.OrdinalIgnoreCase)))
-        {
-            var title = FeatureCataloguesViewModel.ComposeTitle(spec, Strings.SpecDisplayName(spec));
-            Entries.Add(new CatalogueEntry(spec, title, displayPath, isBuiltIn: true, version: version));
-        }
-    }
-
-    private static CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
-    {
-        // Portrayal catalogues carry no human-readable name, so the curated map
-        // is the only name source; the title degrades to the spec code alone.
-        var title = FeatureCataloguesViewModel.ComposeTitle(spec, Strings.SpecDisplayName(spec));
-        return new CatalogueEntry(spec, title, path, isBuiltIn: isBuiltIn, version: ReadPortrayalCatalogueVersion(path));
-    }
-
-    private static string? ReadPortrayalCatalogueVersion(string folderPath)
-    {
-        try
-        {
-            var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
-            if (!File.Exists(cataloguePath)) return null;
-
-            using var stream = File.OpenRead(cataloguePath);
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.Version) ? null : catalogue.Version;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    /// <returns>Null when it's in use; otherwise why it can't be used.</returns>
+    public string? Add(string path) => CatalogueRows.Add(_registry, path);
 
     private void Remove(CatalogueEntry? entry)
     {
-        if (entry is null || entry.IsBuiltIn) return;
-        _settings.CataloguePaths.Remove(entry.ProductSpec);
-        _settings.Save();
-        Reload();
+        if (entry is { CanRemove: true })
+            _registry.Revert(entry.ProductSpec, CatalogueKind.Portrayal);
+    }
+}
+
+/// <summary>Builds the stopgap panels' rows from the registry's state.</summary>
+internal static class CatalogueRows
+{
+    /// <summary>Replaces <paramref name="entries"/> with one row per product that has a <paramref name="kind"/> catalogue.</summary>
+    public static void Fill(
+        ObservableCollection<CatalogueEntry> entries,
+        IReadOnlyList<CatalogueProductState> products,
+        CatalogueKind kind,
+        Func<string, bool> examinerSupports)
+    {
+        entries.Clear();
+        foreach (var product in products)
+        {
+            var state = product[kind];
+            if (state.Source is not { } source)
+                continue;
+            var name = Strings.SpecDisplayName(product.Spec) ?? product.DeclaredName;
+            var metadata = source.Metadata;
+            entries.Add(new CatalogueEntry(
+                product.Spec,
+                FeatureCataloguesViewModel.ComposeTitle(product.Spec, name),
+                source.Path ?? Strings.Catalogue_BuiltInLabel,
+                isBuiltIn: source.Origin == CatalogueOrigin.BuiltIn,
+                version: metadata?.Version,
+                versionDate: metadata?.VersionDate,
+                canOpenInExaminer: kind == CatalogueKind.Feature && examinerSupports(product.Spec),
+                stateText: StateText(state),
+                hasError: state.Status == CatalogueStatus.Error,
+                canRemove: source.Origin == CatalogueOrigin.Custom));
+        }
+    }
+
+    /// <summary>Detects the catalogue at <paramref name="path"/> and uses it.</summary>
+    /// <returns>Null when it's in use; otherwise why it can't be used.</returns>
+    public static string? Add(CatalogueRegistry registry, string path)
+    {
+        var detected = CatalogueSpecDetection.Detect(path);
+        if (detected.Catalogue is not { } catalogue)
+            return detected.Reason;
+        var state = registry.Use(catalogue)[catalogue.Kind];
+        return state.Status == CatalogueStatus.Error ? state.Error : null;
+    }
+
+    /// <summary>
+    /// What's in effect, in one line (audit A8): "Command line, this session ·
+    /// overrides built-in 2.0.0", or the error and what's drawing instead.
+    /// </summary>
+    public static string? StateText(CatalogueState state)
+    {
+        var parts = new List<string>(2);
+        switch (state.Origin)
+        {
+            case CatalogueOrigin.CommandLine:
+                parts.Add(Strings.Catalogues_Origin_CommandLine);
+                break;
+            case CatalogueOrigin.Custom:
+                parts.Add(state.KeptAfterRestart ? Strings.Catalogues_Origin_Custom : Strings.Catalogues_Origin_CustomSession);
+                break;
+        }
+
+        if (state.Status == CatalogueStatus.Error)
+        {
+            parts.Add(state.Drawing is { } drawing
+                ? string.Format(Strings.Catalogues_State_ErrorUsing, state.Error, Describe(drawing))
+                : string.Format(Strings.Catalogues_State_Error, state.Error));
+        }
+        else if (state.Overrides is { } overridden)
+        {
+            parts.Add(string.Format(Strings.Catalogues_State_Overrides, Describe(overridden)));
+        }
+
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
+
+    private static string Describe(CatalogueSourceInfo source)
+    {
+        var origin = source.Origin switch
+        {
+            CatalogueOrigin.BuiltIn => Strings.Catalogues_Origin_BuiltIn,
+            CatalogueOrigin.Custom => Strings.Catalogues_Origin_Custom,
+            _ => Strings.Catalogues_Origin_CommandLine,
+        };
+        return source.Metadata?.Version is { } version ? $"{origin} {version}" : origin;
     }
 }
 
@@ -306,6 +290,22 @@ internal sealed class CatalogueEntry : ViewModelBase
 
     private bool _canOpenInExaminer;
 
+    /// <summary>
+    /// What's in effect, in one line (audit A8): where the catalogue comes
+    /// from, what it overrides, or why it failed and what's used instead;
+    /// null for a built-in catalogue in use.
+    /// </summary>
+    public string? StateText { get; }
+
+    /// <summary>True when <see cref="StateText"/> has content to display.</summary>
+    public bool HasStateText => !string.IsNullOrEmpty(StateText);
+
+    /// <summary>True when the catalogue failed to load.</summary>
+    public bool HasError { get; }
+
+    /// <summary>True for a custom catalogue the user can revert; false for built-in and command-line ones.</summary>
+    public bool CanRemove { get; }
+
     public CatalogueEntry(
         string productSpec,
         string displayTitle,
@@ -313,8 +313,14 @@ internal sealed class CatalogueEntry : ViewModelBase
         bool isBuiltIn = false,
         string? version = null,
         string? versionDate = null,
-        bool canOpenInExaminer = false)
+        bool canOpenInExaminer = false,
+        string? stateText = null,
+        bool hasError = false,
+        bool canRemove = false)
     {
+        StateText = stateText;
+        HasError = hasError;
+        CanRemove = canRemove;
         ProductSpec = productSpec;
         DisplayTitle = displayTitle;
         Path = path;

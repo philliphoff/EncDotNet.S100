@@ -75,11 +75,37 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
     }
 
     /// <summary>
-    /// Raised by <see cref="SetPath(SpecRef, string)"/> and
-    /// <see cref="SetSource(SpecRef, IAssetSource)"/> after the spec's cached
-    /// provider, asset cache and content hash have been evicted (and, for
-    /// <c>SetSource</c>, the new provider registered), on the thread that
-    /// called them.
+    /// Forgets the portrayal catalogue for <paramref name="spec"/>: removes
+    /// its path or source, disposes its provider and evicts its asset cache
+    /// and content hash. Afterwards <see cref="HasCatalogue(SpecRef)"/> is
+    /// <see langword="false"/> until a path or source is set again.
+    /// </summary>
+    /// <returns><see langword="true"/> when a catalogue was registered.</returns>
+    public bool Remove(SpecRef spec)
+    {
+        if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
+
+        var hadPath = _paths.TryRemove(spec, out _);
+        var hadProvider = _providers.TryRemove(spec, out var old);
+        if (hadProvider && old!.IsValueCreated)
+        {
+            old.Value.Dispose();
+        }
+        _assetCaches.TryRemove(spec, out _);
+        _catalogueHashes.TryRemove(spec, out _);
+        if (!hadPath && !hadProvider)
+            return false;
+
+        CataloguesChanged?.Invoke(this, new CataloguesChangedEventArgs(spec));
+        return true;
+    }
+
+    /// <summary>
+    /// Raised by <see cref="SetPath(SpecRef, string)"/>,
+    /// <see cref="SetSource(SpecRef, IAssetSource)"/> and
+    /// <see cref="Remove(SpecRef)"/> after the spec's cached provider, asset
+    /// cache and content hash have been evicted (and, for <c>SetSource</c>,
+    /// the new provider registered), on the thread that called them.
     /// </summary>
     public event EventHandler<CataloguesChangedEventArgs>? CataloguesChanged;
 

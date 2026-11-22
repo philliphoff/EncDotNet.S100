@@ -192,7 +192,7 @@
     <value>Open an S-100 dataset from disk</value>
   </data>
   <data name="Tooltip_RemoveCatalogue" xml:space="preserve">
-    <value>Remove this catalogue</value>
+    <value>Go back to the built-in catalogue</value>
   </data>
   <data name="Tooltip_OpenCatalogueInExaminer" xml:space="preserve">
     <value>View this catalogue in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
@@ -9476,5 +9476,71 @@
   </data>
   <data name="ChartReference_Geometry_Surface" xml:space="preserve">
     <value>area</value>
+  </data>
+  <data name="Catalogues_Refused_NotFound" xml:space="preserve">
+    <value>The file or folder doesn't exist.</value>
+  </data>
+  <data name="Catalogues_Refused_CantRead" xml:space="preserve">
+    <value>It can't be read: {0}</value>
+  </data>
+  <data name="Catalogues_Refused_NoPortrayalXmlInFolder" xml:space="preserve">
+    <value>There's no portrayal_catalogue.xml in this folder.</value>
+  </data>
+  <data name="Catalogues_Refused_NoPortrayalXmlInPackage" xml:space="preserve">
+    <value>There's no portrayal_catalogue.xml in this package.</value>
+  </data>
+  <data name="Catalogues_Refused_NotXml" xml:space="preserve">
+    <value>It isn't a catalogue: {0}</value>
+  </data>
+  <data name="Catalogues_Refused_UnknownRoot" xml:space="preserve">
+    <value>Not a feature catalogue: the root element is {0}.</value>
+  </data>
+  <data name="Catalogues_Refused_BadFeatureCatalogue" xml:space="preserve">
+    <value>The feature catalogue can't be read: {0}</value>
+  </data>
+  <data name="Catalogues_Refused_BadPortrayalCatalogue" xml:space="preserve">
+    <value>The portrayal catalogue can't be read: {0}</value>
+  </data>
+  <data name="Catalogues_Refused_NoFeatureProduct" xml:space="preserve">
+    <value>The feature catalogue doesn't say which product it's for: it has no productId.</value>
+  </data>
+  <data name="Catalogues_Refused_NoPortrayalProduct" xml:space="preserve">
+    <value>The portrayal catalogue doesn't say which product it's for: it has no productId.</value>
+  </data>
+  <data name="Catalogues_Error_Mismatch" xml:space="preserve">
+    <value>It isn't a {0} catalogue for {1} any more: it's a {2} catalogue for {3}.</value>
+  </data>
+  <data name="Catalogues_Kind_Feature" xml:space="preserve">
+    <value>feature</value>
+  </data>
+  <data name="Catalogues_Kind_Portrayal" xml:space="preserve">
+    <value>portrayal</value>
+  </data>
+  <data name="Catalogues_Origin_BuiltIn" xml:space="preserve">
+    <value>Built-in</value>
+  </data>
+  <data name="Catalogues_Origin_Custom" xml:space="preserve">
+    <value>Custom</value>
+  </data>
+  <data name="Catalogues_Origin_CustomSession" xml:space="preserve">
+    <value>Custom, this session</value>
+  </data>
+  <data name="Catalogues_Origin_CommandLine" xml:space="preserve">
+    <value>Command line, this session</value>
+  </data>
+  <data name="Catalogues_State_Overrides" xml:space="preserve">
+    <value>Overrides {0}</value>
+  </data>
+  <data name="Catalogues_State_ErrorUsing" xml:space="preserve">
+    <value>Failed to load, using {1}: {0}</value>
+  </data>
+  <data name="Catalogues_State_Error" xml:space="preserve">
+    <value>Failed to load: {0}</value>
+  </data>
+  <data name="Catalogues_AddFailed" xml:space="preserve">
+    <value>That catalogue can't be used. {0}</value>
+  </data>
+  <data name="LogArea_Catalogues" xml:space="preserve">
+    <value>Catalogues</value>
   </data>
 </root>

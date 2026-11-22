@@ -404,4 +404,20 @@ public class PortrayalCatalogueManagerTests
         Assert.NotNull(seen);
         Assert.NotSame(old, seen);
     }
+
+    [Fact]
+    public void Remove_forgets_the_catalogue_and_raises_CataloguesChanged()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        var spec = new SpecRef("S-101", default);
+        mgr.SetSource(spec, new CountingSource(MinimalPcXml));
+        var changes = new List<SpecRef>();
+        mgr.CataloguesChanged += (_, e) => changes.Add(e.Spec);
+
+        Assert.True(mgr.Remove(spec));
+        Assert.False(mgr.Remove(spec));
+
+        Assert.False(mgr.HasCatalogue(spec));
+        Assert.Equal([spec], changes);
+    }
 }

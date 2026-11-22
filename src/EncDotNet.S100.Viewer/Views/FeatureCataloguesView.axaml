@@ -36,6 +36,12 @@
                                        Opacity="0.6"
                                        Margin="0,3,0,0"
                                        IsVisible="{Binding HasSubtitle}" />
+                            <TextBlock Text="{Binding StateText}"
+                                       AutomationProperties.AutomationId="FeatureCatalogues.Row.State"
+                                       FontSize="11"
+                                       Opacity="0.8"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding HasStateText}" />
                             <TextBlock Text="{Binding Path}"
                                        FontSize="11"
                                        Opacity="0.6"
@@ -62,7 +68,7 @@
                                     Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                     CommandParameter="{Binding}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
-                                    IsVisible="{Binding !IsBuiltIn}">
+                                    IsVisible="{Binding CanRemove}">
                                 <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
                             </Button>
                         </StackPanel>
