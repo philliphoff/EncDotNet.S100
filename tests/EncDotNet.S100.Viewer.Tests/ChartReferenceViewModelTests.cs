@@ -90,7 +90,7 @@ public sealed class ChartReferenceViewModelTests : IDisposable
         // A search lists hits in rank order, without sections.
         Assert.All(vm.Items, i => Assert.IsType<ChartReferenceRowViewModel>(i));
         Assert.Equal("LateralBeacon", vm.Rows.First().Key.Code);
-        Assert.Equal($"{vm.Items.Count} matches", vm.Summary);
+        Assert.Equal(vm.Items.Count == 1 ? "1 match" : $"{vm.Items.Count} matches", vm.Summary);
 
         vm.Query = "no such thing at all";
         Assert.Empty(vm.Items);

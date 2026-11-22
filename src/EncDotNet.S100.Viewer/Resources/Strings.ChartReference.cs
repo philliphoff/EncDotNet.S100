@@ -53,6 +53,12 @@ internal static partial class Strings
 
     public static string ChartReference_MatchCount => Get(nameof(ChartReference_MatchCount));
 
+    public static string ChartReference_MatchCountOne => Get(nameof(ChartReference_MatchCountOne));
+
+    public static string ChartReference_FeatureCountOne => Get(nameof(ChartReference_FeatureCountOne));
+
+    public static string ChartReference_SymbolCountOne => Get(nameof(ChartReference_SymbolCountOne));
+
     public static string ChartReference_NoSection => Get(nameof(ChartReference_NoSection));
 
     public static string ChartReference_NotUsedByRule => Get(nameof(ChartReference_NotUsedByRule));

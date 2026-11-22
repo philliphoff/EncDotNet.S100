@@ -446,11 +446,18 @@ public sealed class ChartReferenceInViewTests : IDisposable
         Assert.True(toggle.IsVisible);
         Assert.Equal("In view", Avalonia.Automation.AutomationProperties.GetName(toggle));
 
+        // An icon toggle, as the Library's Show coverage and At view time (#1657).
+        Assert.Contains("panelIcon", toggle.Classes);
+        Assert.Contains("coverageToggle", toggle.Classes);
+        Assert.IsType<FluentIcons.Avalonia.FluentIcon>(toggle.Content);
+        Assert.NotNull(ToolTip.GetTip(toggle));
+
         toggle.IsChecked = true;
         host.Settle();
 
         Assert.True(vm.InView);
         Assert.Equal(5, vm.Rows.Count());
+        Assert.Equal(host.Window.FindResource("AccentSubtleBrush"), toggle.Background);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

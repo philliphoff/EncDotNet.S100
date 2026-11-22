@@ -13,6 +13,18 @@ internal sealed class ChartReferenceRowDetails
     /// <summary>Whether there is a definition.</summary>
     public bool HasDefinition => !string.IsNullOrWhiteSpace(Definition);
 
+    /// <summary>
+    /// Whether the definition only repeats the entry's title: a symbol named
+    /// by its one-line description (#1657).
+    /// </summary>
+    public bool DefinitionRepeatsTitle { get; init; }
+
+    /// <summary>
+    /// Whether the study page's entry pane shows the definition under its
+    /// heading: there is one, and it adds to the heading.
+    /// </summary>
+    public bool ShowsDefinitionUnderTitle => HasDefinition && !DefinitionRepeatsTitle;
+
     /// <summary>The display categories, one line per geometry or case when they differ (D6).</summary>
     public IReadOnlyList<string> Categories { get; init; } = [];
 

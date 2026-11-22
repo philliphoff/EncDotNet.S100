@@ -83,7 +83,32 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         SelectCommand = new RelayCommand<ChartReferenceRowViewModel>(Select);
         _glyphs.PaletteChanged += OnPaletteChanged;
         _reference.PropertyChanged += OnReferenceChanged;
+        _reference.ListRestarted += OnListRestarted;
         Rebuild();
+    }
+
+    /// <summary>
+    /// Raised after the grid is rebuilt for a new mode, product or search
+    /// (#1657), so the view starts it at the top, or brings the selected tile
+    /// into view (<see cref="SelectedLineIndex"/>).
+    /// </summary>
+    internal event EventHandler? GridRestarted;
+
+    /// <summary>The index in <see cref="Lines"/> of the line holding the selected tile, or -1.</summary>
+    internal int SelectedLineIndex
+    {
+        get
+        {
+            if (_selectedTile is not { } tile)
+                return -1;
+            for (int i = 0; i < _lines.Count; i++)
+            {
+                if (_lines[i] is ChartReferenceTileLine line && line.Tiles.Contains(tile))
+                    return i;
+            }
+
+            return -1;
+        }
     }
 
     /// <summary>The activity's view model: products, search, Features / Symbols and the selection.</summary>
@@ -267,6 +292,7 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
             return;
         _disposed = true;
         _reference.PropertyChanged -= OnReferenceChanged;
+        _reference.ListRestarted -= OnListRestarted;
         _glyphs.PaletteChanged -= OnPaletteChanged;
         _glyphs.Dispose();
     }
@@ -426,6 +452,12 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
                 SyncSelection();
                 break;
         }
+    }
+
+    private void OnListRestarted(object? sender, EventArgs e)
+    {
+        if (!_disposed)
+            GridRestarted?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnPaletteChanged(object? sender, EventArgs e) => _post(() =>

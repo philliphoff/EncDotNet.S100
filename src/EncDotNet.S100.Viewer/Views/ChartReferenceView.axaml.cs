@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
@@ -12,6 +13,8 @@ namespace EncDotNet.S100.Viewer.Views;
 /// </summary>
 public partial class ChartReferenceView : UserControl
 {
+    private ChartReferenceViewModel? _reference;
+
     /// <summary>Creates the view.</summary>
     public ChartReferenceView()
     {
@@ -30,6 +33,11 @@ public partial class ChartReferenceView : UserControl
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        if (_reference is not null)
+            _reference.ListRestarted -= OnListRestarted;
+        _reference = DataContext as ChartReferenceViewModel;
+        if (_reference is not null)
+            _reference.ListRestarted += OnListRestarted;
         if (VisualRoot is not null)
             (DataContext as ChartReferenceViewModel)?.Activate();
     }
@@ -61,6 +69,20 @@ public partial class ChartReferenceView : UserControl
         if (e.Source is ListBoxItem { DataContext: ChartReferenceRowViewModel row, IsPointerOver: false })
             (DataContext as ChartReferenceViewModel)?.LeaveRow(row);
     }
+
+    // A new mode, product or search starts the list at the top, or at the
+    // selected row when it is still listed (#1657). Once the list has its
+    // new items, so the scroll lands on them.
+    private void OnListRestarted(object? sender, EventArgs e) => Dispatcher.UIThread.Post(
+        () =>
+        {
+            if (this.FindControl<ListBox>("List") is not { } list)
+                return;
+            list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.ScrollToHome();
+            if (_reference?.SelectedItem is { } selected)
+                list.ScrollIntoView(selected);
+        },
+        DispatcherPriority.Background);
 
     private static ChartReferenceRowViewModel? RowOf(object? sender) =>
         (sender as Control)?.DataContext as ChartReferenceRowViewModel;

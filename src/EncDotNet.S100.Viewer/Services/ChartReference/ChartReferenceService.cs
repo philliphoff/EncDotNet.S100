@@ -262,4 +262,9 @@ internal sealed class ChartReferenceService : IDisposable
 /// <summary>A product the Chart reference can describe.</summary>
 /// <param name="Spec">The product specification.</param>
 /// <param name="IsLoaded">Whether datasets of the product are open.</param>
-internal sealed record ChartReferenceProduct(SpecRef Spec, bool IsLoaded);
+internal sealed record ChartReferenceProduct(SpecRef Spec, bool IsLoaded)
+{
+    /// <summary>The product id, e.g. <c>S-101</c>: the name a screen reader gives the combo's value (#1657).</summary>
+    /// <returns>The product id.</returns>
+    public override string ToString() => Spec.Name;
+}

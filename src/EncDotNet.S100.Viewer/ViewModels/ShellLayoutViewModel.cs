@@ -240,6 +240,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
 
     private void OnContentPanelChanged()
     {
+        // A dock shown over the map would sit over the full-content panel: fold it (#1657).
+        if (IsContentPanelOpen && _isRightDockOverlaid)
+            IsRightDockOverlaid = false;
         OnPropertyChanged(nameof(ContentPanelCloseTooltip));
         OnPropertyChanged(nameof(IsContentPanelOpen));
         OnPropertyChanged(nameof(IsLeftDockShown));
@@ -337,13 +340,17 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>
     /// True while a narrow-folded dock (D9) is shown over the map's right
     /// edge, without resizing the map. Escape or a map click folds it again
-    /// (<see cref="FoldOverlaidRightDock"/>).
+    /// (<see cref="FoldOverlaidRightDock"/>). Never while a full-content
+    /// panel (the Chart reference page, Settings) shows: the dock would cover
+    /// the panel's right side, so it stays folded (#1657).
     /// </summary>
     public bool IsRightDockOverlaid
     {
         get => _isRightDockOverlaid;
         private set
         {
+            if (value && IsContentPanelOpen)
+                return;
             if (!SetProperty(ref _isRightDockOverlaid, value))
                 return;
             OnRightDockShownChanged();

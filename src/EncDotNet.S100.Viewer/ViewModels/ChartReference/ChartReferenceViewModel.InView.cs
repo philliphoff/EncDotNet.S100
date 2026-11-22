@@ -189,6 +189,7 @@ internal sealed partial class ChartReferenceViewModel : IActivityTabContentSigna
         {
             return;
         }
-        Rebuild();
+        // Following the map keeps the list where the user is.
+        Rebuild(restart: false);
     });
 }

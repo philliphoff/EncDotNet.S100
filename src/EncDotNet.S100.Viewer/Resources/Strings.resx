@@ -9312,6 +9312,18 @@
     <value>{0} matches</value>
     <comment>Footer of the Chart reference list while searching; {0} is a count</comment>
   </data>
+  <data name="ChartReference_MatchCountOne" xml:space="preserve">
+    <value>{0} match</value>
+    <comment>Footer of the Chart reference list while searching, when one entry matches; {0} is the count, 1</comment>
+  </data>
+  <data name="ChartReference_FeatureCountOne" xml:space="preserve">
+    <value>{0} feature type</value>
+    <comment>Footer of the Chart reference list when it shows one feature type; {0} is the count, 1</comment>
+  </data>
+  <data name="ChartReference_SymbolCountOne" xml:space="preserve">
+    <value>{0} symbol, line style or fill</value>
+    <comment>Footer of the Chart reference list when it shows one portrayal item; {0} is the count, 1</comment>
+  </data>
   <data name="ChartReference_NoSection" xml:space="preserve">
     <value>No Chart 1 section</value>
     <comment>Header of the Chart reference list's rows whose viewing group names no Chart 1 section</comment>
