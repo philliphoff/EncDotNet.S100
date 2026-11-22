@@ -4937,6 +4937,51 @@
   <data name="Tooltip_CloseSettings" xml:space="preserve">
     <value>Close settings</value>
   </data>
+  <data name="ChartReference_OpenPage" xml:space="preserve">
+    <value>Open as page</value>
+  </data>
+  <data name="Tooltip_ChartReferenceOpenPage" xml:space="preserve">
+    <value>Open Chart reference as a page over the map, for study</value>
+  </data>
+  <data name="Tooltip_ChartReferenceClosePage" xml:space="preserve">
+    <value>Back to Chart reference</value>
+  </data>
+  <data name="ChartReferencePage_ProductsName" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="ChartReferencePage_PaletteName" xml:space="preserve">
+    <value>Preview palette</value>
+  </data>
+  <data name="Tooltip_ChartReferencePagePalette" xml:space="preserve">
+    <value>Shows the glyphs in this palette. The chart keeps its own palette.</value>
+  </data>
+  <data name="ChartReferencePage_SymbolStyleName" xml:space="preserve">
+    <value>Preview symbol style</value>
+  </data>
+  <data name="ChartReferencePage_Simplified" xml:space="preserve">
+    <value>Simplified</value>
+  </data>
+  <data name="ChartReferencePage_PaperChart" xml:space="preserve">
+    <value>Paper chart</value>
+  </data>
+  <data name="Tooltip_ChartReferencePageSymbolStyle" xml:space="preserve">
+    <value>Leads each feature type with its simplified or paper-chart symbol. The chart keeps its own setting.</value>
+  </data>
+  <data name="ChartReferencePage_PreviewNote" xml:space="preserve">
+    <value>Preview only: the chart doesn't change.</value>
+  </data>
+  <data name="ChartReferencePage_TilesName" xml:space="preserve">
+    <value>Entries</value>
+  </data>
+  <data name="ChartReferencePage_DetailName" xml:space="preserve">
+    <value>Selected entry</value>
+  </data>
+  <data name="ChartReferencePage_NoSelectionTitle" xml:space="preserve">
+    <value>Choose an entry</value>
+  </data>
+  <data name="ChartReferencePage_NoSelectionDescription" xml:space="preserve">
+    <value>Select a tile to see its definition, display category and what it is drawn with.</value>
+  </data>
   <data name="Label_SettingsCategories" xml:space="preserve">
     <value>Settings categories</value>
   </data>

@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 
@@ -228,8 +229,18 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>The full-content tab shown across the content area, or <c>null</c>.</summary>
     public IActivityTab? ContentPanelTab => IsContentPanelOpen ? _selectedLeftTab : null;
 
+    /// <summary>
+    /// The full-content panel's close button tooltip and accessible name:
+    /// "Close settings" for Settings, "Back to Chart reference" for the
+    /// Chart reference page (#1639).
+    /// </summary>
+    public string ContentPanelCloseTooltip => _selectedLeftTab?.Id == ChartReferencePageTabId
+        ? Strings.Tooltip_ChartReferenceClosePage
+        : Strings.Tooltip_CloseSettings;
+
     private void OnContentPanelChanged()
     {
+        OnPropertyChanged(nameof(ContentPanelCloseTooltip));
         OnPropertyChanged(nameof(IsContentPanelOpen));
         OnPropertyChanged(nameof(IsLeftDockShown));
         OnPropertyChanged(nameof(LeftDockContent));
@@ -795,6 +806,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>Id of the Chart reference activity in the left dock (#1637).</summary>
     internal const string ChartReferenceTabId = "ChartReference";
 
+    /// <summary>Id of the Chart reference page in the full-content panel (#1639); only code opens it.</summary>
+    internal const string ChartReferencePageTabId = "ChartReferencePage";
+
     /// <summary>
     /// Tells the right-dock tabs that care (<see cref="IActivityTabShown"/>)
     /// whether the user can see them now: the Legend tab tells
@@ -892,6 +906,22 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
             return;
         SelectedLeftTab = tab;
         IsLeftDockOpen = true;
+    }
+
+    /// <summary>
+    /// Shows the Chart reference page over the map (the activity's Open as
+    /// page, #1639). Closing the page returns to the panel it covered,
+    /// normally the activity.
+    /// </summary>
+    public ICommand ShowChartReferencePageCommand => _showChartReferencePageCommand ??= new RelayCommand(ShowChartReferencePage);
+
+    private ICommand? _showChartReferencePageCommand;
+
+    private void ShowChartReferencePage()
+    {
+        if (!_tabsById.TryGetValue(ChartReferencePageTabId, out var page) || !page.IsVisible || IsContentPanelOpen && ReferenceEquals(_selectedLeftTab, page))
+            return;
+        SelectedLeftTab = page;
     }
 
     /// <summary>Opens the bottom dock on the Logs tab (Help › Show logs, #1080).</summary>
@@ -1053,8 +1083,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         LeftTabs = _tabs.Where(t => t.Dock == TabDock.Left).ToArray();
         RightTabs = _tabs.Where(t => t.Dock == TabDock.Right).ToArray();
         BottomTabs = _tabs.Where(t => t.Dock == TabDock.Bottom).ToArray();
-        LeftDockTopTabs = LeftTabs.Where(t => t.Order < 1000).ToArray();
-        LeftDockBottomTabs = LeftTabs.Where(t => t.Order >= 1000).ToArray();
+        // A tab only code opens (the Chart reference page, #1639) has no button.
+        LeftDockTopTabs = LeftTabs.Where(t => t.ShowsInActivityBar && t.Order < 1000).ToArray();
+        LeftDockBottomTabs = LeftTabs.Where(t => t.ShowsInActivityBar && t.Order >= 1000).ToArray();
 
         // Watch for tabs whose visibility toggles dynamically (e.g. the
         // Helm tab, shown only while own-vessel tracking is enabled). When

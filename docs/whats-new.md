@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference as a page.** **Open as page** in the Chart reference
+  activity shows the reference over the map, as Settings is, for study and
+  training: a chip per product, search, **Features** / **Symbols**, a grid of
+  tiles by Chart 1 section, each with its glyph and display category, and the
+  selected entry on the right with its glyph drawn large. **Day / Dusk /
+  Night** and **Simplified / Paper chart** preview the glyphs only; they
+  start at the chart's palette and symbol style and never change the chart.
+  The page and the activity share the product, search and selection, and
+  closing the page returns to the activity (#1639).
+
 - **Chart reference in SoundCharts.** A new **Chart reference** activity,
   after Feature search in the activity bar (also **Help › Chart reference**,
   Ctrl+Shift+K), lists every feature type or symbol of a product's

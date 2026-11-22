@@ -121,7 +121,6 @@
               RowDefinitions="Auto,Auto,Auto"
               RowSpacing="6">
             <ComboBox Grid.Row="0"
-                      Grid.ColumnSpan="2"
                       HorizontalAlignment="Stretch"
                       AutomationProperties.AutomationId="ChartReference.Product"
                       AutomationProperties.Name="{x:Static loc:Strings.ChartReference_ProductName}"
@@ -140,6 +139,21 @@
                     </DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
+            <!-- Open as page (#1639): the reference over the map, for study. -->
+            <Button Grid.Row="0"
+                    Grid.Column="1"
+                    Classes="Icon"
+                    Margin="6,0,0,0"
+                    Padding="4"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding CanOpenPage}"
+                    Command="{Binding OpenPageCommand}"
+                    AutomationProperties.AutomationId="ChartReference.OpenPage"
+                    AutomationProperties.Name="{x:Static loc:Strings.ChartReference_OpenPage}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ChartReferenceOpenPage}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceOpenPage}">
+                <ic:FluentIcon Icon="Open" FontSize="16" />
+            </Button>
             <TextBox Grid.Row="1"
                      Grid.ColumnSpan="2"
                      AutomationProperties.AutomationId="ChartReference.Query"

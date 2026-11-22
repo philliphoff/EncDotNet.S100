@@ -967,6 +967,12 @@ display categories and what it is drawn with, each symbol with the conditions
 that choose it in words. A symbol links to its own row, and a symbol's row
 links back to the feature types that use it.
 
+**Open as page**, beside the product, shows the reference over the map as a
+grid of tiles by Chart 1 section, with the selected entry on the right. Its
+**Day / Dusk / Night** and **Simplified / Paper chart** switches preview the
+glyphs without changing the chart. Close the page to return to the panel,
+with the same product, search and selection.
+
 ### Find navigational warnings
 
 The **Navigational warnings** panel, beside **Library** in the activity bar,
