@@ -11,12 +11,13 @@ namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A row is one of three kinds:
+/// A row is one of four kinds:
 /// </para>
 /// <list type="bullet">
 ///   <item><see cref="SwatchLegendEntry"/>: a colour swatch, optionally outlined (a colour band, an area).</item>
 ///   <item><see cref="SymbolLegendEntry"/>: a point symbol (a cyclone class symbol).</item>
 ///   <item><see cref="LineLegendEntry"/>: a sample of a line style, with any symbols along it (a front).</item>
+///   <item><see cref="FillLegendEntry"/>: an area fill pattern tiled in a swatch (a dredged area).</item>
 /// </list>
 /// <para>
 /// Every colour and symbol in a row is already resolved against the palette
@@ -79,6 +80,48 @@ public sealed record SymbolLegendEntry(string Svg, string Label) : LegendEntry(L
 /// <param name="Line">The line sample.</param>
 /// <param name="Label">The row's label.</param>
 public sealed record LineLegendEntry(LegendLineSample Line, string Label) : LegendEntry(Label);
+
+/// <summary>
+/// A legend row with an area fill pattern, e.g. the dredged area pattern
+/// (<c>DRGARE01</c>) and <c>"Dredged area"</c>: the pattern symbol tiled in a
+/// swatch.
+/// </summary>
+/// <param name="Fill">The fill pattern.</param>
+/// <param name="Label">The row's label.</param>
+public sealed record FillLegendEntry(LegendFillPattern Fill, string Label) : LegendEntry(Label);
+
+/// <summary>
+/// An area fill resolved for a legend (S-100 Part 9 area fills): a symbol
+/// repeated over a lattice of two vectors, and any background colour, with
+/// colours and the symbol resolved against one palette. Lengths are in
+/// millimetres on the S-100 display surface.
+/// </summary>
+public sealed record LegendFillPattern
+{
+    /// <summary>
+    /// The repeated symbol's SVG with its palette classes resolved, or
+    /// <see langword="null"/> for a fill without a pattern.
+    /// </summary>
+    public string? Svg { get; init; }
+
+    /// <summary>
+    /// The fill's background colour as a hex string, or <see langword="null"/>
+    /// for a pattern on a transparent background (the chart shows through).
+    /// </summary>
+    public string? Color { get; init; }
+
+    /// <summary>The first lattice vector's x component: the spacing of the symbols along a row.</summary>
+    public double V1X { get; init; }
+
+    /// <summary>The first lattice vector's y component.</summary>
+    public double V1Y { get; init; }
+
+    /// <summary>The second lattice vector's x component: how far each row is shifted from the one before.</summary>
+    public double V2X { get; init; }
+
+    /// <summary>The second lattice vector's y component: the spacing of the rows.</summary>
+    public double V2Y { get; init; }
+}
 
 /// <summary>
 /// A line style resolved for a legend: pen, dashes and the symbols repeated

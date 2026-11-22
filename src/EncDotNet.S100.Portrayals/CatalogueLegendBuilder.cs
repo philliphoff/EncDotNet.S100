@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Portrayals;
 
 /// <summary>
 /// Builds legend rows (<see cref="LegendEntry"/>) from a portrayal
-/// catalogue's own assets: its colour tokens, symbols and line styles,
+/// catalogue's own assets: its colour tokens, symbols, line styles and area fills,
 /// resolved against the palette the sub-layer is drawn in. The counterpart of
 /// <c>LegendBuilder</c> for products portrayed by a catalogue rather than in code.
 /// </summary>
@@ -21,17 +21,24 @@ public sealed class CatalogueLegendBuilder
     private readonly ColorPalette _palette;
     private readonly Func<string, string?>? _symbols;
     private readonly Func<string, LineStyle?>? _lineStyles;
+    private readonly Func<string, AreaFill?>? _areaFills;
 
     /// <summary>Creates a legend builder.</summary>
     /// <param name="palette">The palette the sub-layer is drawn in.</param>
     /// <param name="symbols">Resolves a catalogue symbol name to its SVG, palette classes unresolved; <see langword="null"/> when the legend has no symbols.</param>
     /// <param name="lineStyles">Resolves a catalogue line style name; <see langword="null"/> when the legend has no named line styles.</param>
-    public CatalogueLegendBuilder(ColorPalette palette, Func<string, string?>? symbols = null, Func<string, LineStyle?>? lineStyles = null)
+    /// <param name="areaFills">Resolves a catalogue area fill name; <see langword="null"/> when the legend has no area fills.</param>
+    public CatalogueLegendBuilder(
+        ColorPalette palette,
+        Func<string, string?>? symbols = null,
+        Func<string, LineStyle?>? lineStyles = null,
+        Func<string, AreaFill?>? areaFills = null)
     {
         ArgumentNullException.ThrowIfNull(palette);
         _palette = palette;
         _symbols = symbols;
         _lineStyles = lineStyles;
+        _areaFills = areaFills;
     }
 
     /// <summary>A colour swatch row.</summary>
@@ -79,6 +86,40 @@ public sealed class CatalogueLegendBuilder
         var style = _lineStyles(lineStyleName)
             ?? throw new KeyNotFoundException($"The catalogue has no line style '{lineStyleName}'.");
         return new LineLegendEntry(Sample(style), label);
+    }
+
+    /// <summary>An area fill row: the catalogue's fill pattern tiled in a swatch.</summary>
+    /// <param name="areaFillName">The catalogue area fill's name, e.g. <c>"DRGARE01"</c>.</param>
+    /// <param name="label">The row's label.</param>
+    /// <exception cref="InvalidOperationException">The builder has no area fill resolver, or the fill has a pattern and the builder has no symbol resolver.</exception>
+    /// <exception cref="KeyNotFoundException">The catalogue has no such area fill, or no symbol the fill repeats.</exception>
+    public FillLegendEntry Fill(string areaFillName, string label)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(areaFillName);
+        ArgumentNullException.ThrowIfNull(label);
+        if (_areaFills is null)
+            throw new InvalidOperationException($"The legend has no area fill resolver to draw '{areaFillName}' from.");
+        var fill = _areaFills(areaFillName)
+            ?? throw new KeyNotFoundException($"The catalogue has no area fill '{areaFillName}'.");
+        return new FillLegendEntry(Sample(fill), label);
+    }
+
+    /// <summary>A catalogue area fill, resolved for the builder's palette.</summary>
+    /// <param name="fill">The area fill.</param>
+    /// <exception cref="InvalidOperationException">The fill has a pattern and the builder has no symbol resolver.</exception>
+    /// <exception cref="KeyNotFoundException">The catalogue has no symbol the fill repeats.</exception>
+    public LegendFillPattern Sample(AreaFill fill)
+    {
+        ArgumentNullException.ThrowIfNull(fill);
+        return new LegendFillPattern
+        {
+            Svg = fill.PatternSymbol is { Length: > 0 } symbol ? SvgProcessor.Process(RawSymbol(symbol), _palette) : null,
+            Color = fill.Color is { Length: > 0 } color ? Color(color, null) : null,
+            V1X = fill.V1X,
+            V1Y = fill.V1Y,
+            V2X = fill.V2X,
+            V2Y = fill.V2Y,
+        };
     }
 
     /// <summary>A sample of a catalogue line style, resolved for the builder's palette.</summary>
