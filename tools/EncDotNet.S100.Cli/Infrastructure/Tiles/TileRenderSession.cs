@@ -728,7 +728,7 @@ internal sealed class TileRenderSession : IDisposable
         var effectiveMariner = marinerStyle is null ? _settings.MarinerStyle : marinerStyle.Over(_settings.MarinerStyle);
         string marinerKey = effectiveMariner.Key;
         var mariner = effectiveMariner.ToMarinerSettings(nationalLanguage);
-        // Only when chosen, so the processors keep their own defaults (today's tiles) otherwise.
+        // Only when chosen, so the processors keep their own defaults otherwise.
         var contextMariner = effectiveMariner.IsEmpty ? null : mariner;
         var ecdisDisplay = effectiveMariner.ToEcdisDisplay();
 
