@@ -65,14 +65,14 @@ public sealed class ReferenceEntryPointTests
     // ---- Feature keys ----
 
     [Fact]
-    public void A_feature_key_is_its_product_and_type_and_another_catalogues_codes_give_none()
+    public void A_feature_key_is_in_the_catalogue_its_product_is_drawn_with()
     {
         Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), ReferenceTerms.FeatureKeyOf("S-101", "LateralBeacon"));
         Assert.Equal(new ReferenceKey(S124, ReferenceKind.FeatureType, "NavwarnPart"), ReferenceTerms.FeatureKeyOf("S124", "NavwarnPart"));
         Assert.Null(ReferenceTerms.FeatureKeyOf("S-101", " "));
         Assert.Null(ReferenceTerms.FeatureKeyOf(null, "LateralBeacon"));
-        // An S-57 cell is drawn with S-101's catalogue, whose codes aren't its acronyms.
-        Assert.Null(ReferenceTerms.FeatureKeyOf("S-57", "BCNLAT"));
+        // An S-57 cell is drawn with S-101's catalogue, and its features carry S-101 codes.
+        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "Wreck"), ReferenceTerms.FeatureKeyOf("S-57", "Wreck"));
     }
 
     // ---- The map's context menu ----
@@ -157,16 +157,24 @@ public sealed class ReferenceEntryPointTests
     }
 
     [AvaloniaFact]
-    public void An_S57_feature_stays_plain_until_the_catalogue_aliases_are_read()
+    public void An_S57_feature_opens_its_S101_entry_and_an_acronym_left_untranslated_stays_plain()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         var nav = new ReferenceNavigator();
         var builder = new MapReferenceMenu(Terms(f, nav));
-        using var host = ViewHost.Show(new Border(), 100, 100);
+        var target = new Border { Width = 200, Height = 200, Background = Avalonia.Media.Brushes.Transparent };
+        using var host = ViewHost.Show(target, 400, 400);
 
-        var items = builder.ItemsAsync([Hit("S-57", "BCNLAT", "Beacon, lateral")]);
-        Until(host, () => items.IsCompleted);
-        Assert.Empty(items.Result);
+        // An S-57 cell's features are translated to S-101 codes.
+        var itemsTask = builder.ItemsAsync([Hit("S-57", "LateralBeacon", "Lateral beacon"), Hit("S-57", "BCNLAT")]);
+        Until(host, () => itemsTask.IsCompleted);
+        var item = Assert.Single(itemsTask.Result);
+        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), item.Key);
+
+        builder.Build(itemsTask.Result)!.Open(target);
+        host.Settle();
+        host.Click(host.Find<MenuItem>(MapReferenceMenu.AutomationId));
+        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), nav.Current);
     }
 
     // ---- Feature search ----
@@ -204,25 +212,28 @@ public sealed class ReferenceEntryPointTests
             SearchHit("S-101", "LateralBeacon", "Lateral beacon", 0),
             SearchHit("S-101", "NoSuchFeatureType", "No such feature type", 1),
             SearchHit("S-57", "BCNLAT", "Beacon, lateral", 2),
+            SearchHit("S-57", "Wreck", "Wreck", 3),
         ]);
         var vm = new FeatureSearchViewModel(search, new StubPickService()) { Terms = Terms(f, nav) };
         using var host = ViewHost.Show(new FeatureSearchView { DataContext = vm }, 400, 600);
         vm.Query = "beacon";
         vm.SearchNow();
-        Assert.Equal(3, vm.Results.Count);
+        Assert.Equal(4, vm.Results.Count);
         Until(host, () => vm.TermsResolved.IsCompleted);
 
-        var (beacon, unknown, s57) = (vm.Results[0], vm.Results[1], vm.Results[2]);
+        var (beacon, unknown, s57, s57Wreck) = (vm.Results[0], vm.Results[1], vm.Results[2], vm.Results[3]);
         Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), beacon.TermKey);
         Assert.True(beacon.IsInReference);
         Assert.False(unknown.IsInReference);
-        Assert.Null(s57.TermKey);
+        // An S-57 hit's S-101 code is in the reference; an acronym left untranslated isn't.
         Assert.False(s57.IsInReference);
+        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "Wreck"), s57Wreck.TermKey);
+        Assert.True(s57Wreck.IsInReference);
 
         // The known type is a term; the others are plain text.
         var terms = host.FindAll<ReferenceTerm>("Reference.Term");
-        Assert.Equal(3, terms.Count);
-        Until(host, () => terms[0].IsTerm);
+        Assert.Equal(4, terms.Count);
+        Until(host, () => terms[0].IsTerm && terms[3].IsTerm);
         Assert.False(terms[1].IsTerm);
         Assert.False(terms[2].IsTerm);
         Assert.Equal("Lateral beacon", terms[0].Text);

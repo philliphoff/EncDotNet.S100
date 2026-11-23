@@ -221,21 +221,20 @@ internal sealed class ReferenceTerms
     /// the index; a term or <see cref="FeatureTypeAsync"/> does that.
     /// </summary>
     /// <remarks>
-    /// A product portrayed with another's catalogue (an S-57 cell, drawn with
-    /// S-101's) has codes that aren't that catalogue's, so it gives
-    /// <see langword="null"/>; its features stay plain.
+    /// The entry is in the catalogue the product is drawn with: an S-57
+    /// cell's features, translated to S-101 codes (<c>Wreck</c>), are in
+    /// S-101's. A code the translation left as an S-57 acronym isn't in it,
+    /// so its term stays plain.
     /// </remarks>
-    /// <param name="productSpec">The dataset's product, such as <c>S-101</c>.</param>
+    /// <param name="productSpec">The dataset's product, such as <c>S-101</c> or <c>S-57</c>.</param>
     /// <param name="featureType">The feature's type code.</param>
     /// <returns>The key, or <see langword="null"/>.</returns>
     public static ReferenceKey? FeatureKeyOf(string? productSpec, string? featureType)
     {
-        if (string.IsNullOrWhiteSpace(featureType) || !SpecName.TryNormalize(productSpec, out var spec))
+        if (string.IsNullOrWhiteSpace(featureType) || !SpecName.TryNormalize(productSpec, out var product))
             return null;
-        var portrayal = EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default.PortrayalSpecName(spec);
-        if (!string.Equals(portrayal, spec, StringComparison.Ordinal))
-            return null;
-        return new ReferenceKey(new SpecRef(spec, default), ReferenceKind.FeatureType, featureType.Trim());
+        var portrayal = EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default.PortrayalSpecName(product);
+        return new ReferenceKey(new SpecRef(portrayal, default), ReferenceKind.FeatureType, featureType.Trim());
     }
 
     /// <summary>
