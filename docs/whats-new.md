@@ -12,7 +12,7 @@ month. For package versions and release assets, see
   size, SHA-256 and NOAA's retrieval date, on a rolling `tide-stations`
   release. It publishes a new file only when NOAA's data changed, and refuses
   one that lost stations. In `EncDotNet.S100.Tides.Stations`,
-  `TideCatalogueMirrorClient` downloads it in one request of about 400 KB,
+  `TideCatalogueMirrorClient` downloads it in one request of about 1.2 MB,
   checked against the manifest, and checks for newer data with one small
   request, where a download from NOAA is some 3,400 paced requests.
   `TideCatalogueComparison` compares two catalogues station by station.

@@ -23,17 +23,17 @@ namespace EncDotNet.S100.Tides.Stations.Mirror;
 ///   "file": "tide-stations.json.gz",
 ///   "catalogueFormat": "tide-stations",
 ///   "catalogueVersion": 1,
-///   "size": 370412,
-///   "sha256": "9f2c…",
+///   "size": 1183082,
+///   "sha256": "f2c0efd2…",
 ///   "provider": "NOAA CO-OPS",
-///   "retrieved": "2026-11-23T06:20:41+00:00",
-///   "crawled": "2026-11-23T06:20:41+00:00",
+///   "retrieved": "2026-11-23T06:38:11+00:00",
+///   "crawled": "2026-11-23T06:38:19+00:00",
 ///   "checked": "2026-11-30T06:12:03+00:00",
 ///   "datumEpoch": "1983-2001",
 ///   "stationCount": 3502,
 ///   "harmonicStationCount": 1260,
 ///   "subordinateStationCount": 2242,
-///   "currentStationCount": 2871
+///   "currentStationCount": 4166
 /// }
 /// </code>
 /// <para>

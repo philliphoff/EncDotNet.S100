@@ -2,7 +2,7 @@ name: Tide stations
 
 # Mirrors NOAA CO-OPS's tide and current station catalogue as one file (#1674),
 # so SoundCharts, the s100 CLI and the EncDotNet.S100.Tides.Stations library
-# download about 400 KB instead of making some 3,400 paced requests to NOAA's
+# download about 1.2 MB instead of making some 3,400 paced requests to NOAA's
 # metadata API each.
 #
 # The catalogue and its manifest are the assets of a rolling `tide-stations`

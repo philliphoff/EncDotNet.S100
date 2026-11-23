@@ -1929,7 +1929,7 @@ path with `--catalogue` to fill it.
 
 - `noaa`, the default, reads NOAA's metadata API: about 3,400 requests at a
   pace the API accepts, so it takes about 10 minutes.
-- `mirror` downloads the same catalogue as one file of about 400 KB from the
+- `mirror` downloads the same catalogue as one file of about 1.2 MB from the
   EncDotNet.S100 mirror. A scheduled workflow refreshes the mirror from NOAA
   every week. The catalogue's provider and retrieval date are still NOAA's.
 - A URL downloads from another mirror: the address of its

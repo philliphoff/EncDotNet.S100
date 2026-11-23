@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Tides.Stations.Mirror;
 /// which downloads NOAA's stations every week with
 /// <see cref="Noaa.NoaaTideStationClient"/> and publishes a new file only
 /// when NOAA's data changed. A check is one request of a few hundred bytes
-/// and a download one of about 400 KB, where a download from NOAA itself is
+/// and a download one of about 1.2 MB, where a download from NOAA itself is
 /// some 3,400 paced requests over several minutes.
 /// </para>
 /// <para>

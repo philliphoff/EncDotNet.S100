@@ -22,7 +22,7 @@ dotnet add package EncDotNet.S100.Tides.Stations
 ## Get NOAA's catalogue
 
 `TideCatalogueMirrorClient` downloads NOAA's whole catalogue as one file of
-about 400 KB. By default it reads the EncDotNet.S100 mirror, a rolling GitHub
+about 1.2 MB. By default it reads the EncDotNet.S100 mirror, a rolling GitHub
 release that a scheduled workflow refreshes from NOAA every week. Pass it your
 `HttpClient`, which you own along with its timeout and `User-Agent`:
 
@@ -92,8 +92,8 @@ A download reads the station list, then each reference station's
 constituents and datums: about 2,500 requests. The API refuses a client that
 asks too fast (HTTP 403 for some minutes), so the client asks at most two at
 a time with a pause after each, and retries a refusal after 5, 10, 20 and 40
-seconds. A full download took 7 minutes 44 seconds in November 2026. Change
-the pace with `NoaaTideStationClientOptions`.
+seconds. A full download, with current stations, took 9 minutes 31 seconds
+in November 2026. Change the pace with `NoaaTideStationClientOptions`.
 
 The November 2026 catalogue has 3,502 stations: 1,260 reference
 (harmonic) stations and 2,242 subordinate stations. 3,496 of them can be
@@ -112,8 +112,8 @@ Console.WriteLine($"{catalogue.Provider}, {catalogue.Retrieved:d}, epoch {catalo
 ```
 
 `SaveAsync` gzips when the path ends in `.gz` and replaces the file in one
-step, so a reader never sees half a file. NOAA's catalogue is 2.7 MB as JSON
-and 362 KB gzipped (259 KB with xz).
+step, so a reader never sees half a file. NOAA's catalogue, with its current
+stations, is 9.9 MB as JSON and 1.2 MB gzipped (November 2026).
 
 ## Check NOAA for newer data
 
@@ -316,17 +316,17 @@ A mirror publishes two files side by side: the catalogue as gzip-compressed
   "file": "tide-stations.json.gz",
   "catalogueFormat": "tide-stations",
   "catalogueVersion": 1,
-  "size": 370412,
-  "sha256": "9f2c…",
+  "size": 1183082,
+  "sha256": "f2c0efd2…",
   "provider": "NOAA CO-OPS",
-  "retrieved": "2026-11-23T06:20:41+00:00",
-  "crawled": "2026-11-23T06:20:41+00:00",
+  "retrieved": "2026-11-23T06:38:11+00:00",
+  "crawled": "2026-11-23T06:38:19+00:00",
   "checked": "2026-11-30T06:12:03+00:00",
   "datumEpoch": "1983-2001",
   "stationCount": 3502,
   "harmonicStationCount": 1260,
   "subordinateStationCount": 2242,
-  "currentStationCount": 2871
+  "currentStationCount": 4166
 }
 ```
 
