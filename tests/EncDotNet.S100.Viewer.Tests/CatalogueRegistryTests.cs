@@ -2,7 +2,6 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -10,7 +9,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// <see cref="CatalogueRegistry"/> (design note <c>catalogue-panels.md</c>
 /// D4–D7, D11, D12): precedence, live replace and revert through the two
 /// managers, error fallback to the built-in catalogue, session-only and
-/// custom products, and the stopgap panels reading it.
+/// and custom products.
 /// </summary>
 public sealed class CatalogueRegistryTests : IDisposable
 {
@@ -184,13 +183,6 @@ public sealed class CatalogueRegistryTests : IDisposable
         Assert.Equal(CatalogueFixtures.BuiltInVersion, PortrayalVersionInUse("S-102"));
         Assert.Equal(CatalogueStatus.Error, s102.Feature.Status);
         Assert.Equal(CatalogueFixtures.BuiltInVersion, _features.GetCatalogue("S-102")?.VersionNumber);
-
-        // The stopgap row says what failed and what draws instead (A8).
-        var vm = new PortrayalCataloguesViewModel(registry);
-        var row = vm.Entries.Single(e => e.ProductSpec == "S-102");
-        Assert.True(row.HasError);
-        Assert.True(row.CanRemove);
-        Assert.Contains(CatalogueFixtures.BuiltInVersion, row.StateText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -221,29 +213,6 @@ public sealed class CatalogueRegistryTests : IDisposable
 
         Assert.Null(registry.Find("S-199"));
         Assert.Null(_features.GetCatalogue("S-199"));
-    }
-
-    [Fact]
-    public void The_feature_panel_shows_one_row_per_product_and_removes_through_the_registry()
-    {
-        var registry = Initialized(fc: [_files.FeatureFile("8.0.0")]);
-        var vm = new FeatureCataloguesViewModel(registry, TestPickReport.Examiner());
-
-        Assert.Single(vm.Entries, e => e.ProductSpec == "S-102");
-        var cli = vm.Entries.Single(e => e.ProductSpec == "S-102");
-        Assert.False(cli.CanRemove);
-        Assert.Equal("v8.0.0 · 2024-12-05", cli.Subtitle);
-        Assert.Contains(CatalogueFixtures.BuiltInVersion, cli.StateText, StringComparison.Ordinal);
-
-        Assert.Null(vm.Add(_files.FeatureFile("9.0.0", product: "S-104")));
-        vm.Reload();
-        var custom = vm.Entries.Single(e => e.ProductSpec == "S-104");
-        Assert.True(custom.CanRemove);
-
-        vm.RemoveCommand.Execute(custom);
-        vm.Reload();
-        Assert.True(vm.Entries.Single(e => e.ProductSpec == "S-104").IsBuiltIn);
-        Assert.NotNull(vm.Add(Path.Combine(_files.Root, "missing.xml")));
     }
 
     [Fact]

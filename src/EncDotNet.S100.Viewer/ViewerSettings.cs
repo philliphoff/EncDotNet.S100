@@ -128,6 +128,12 @@ internal sealed partial class ViewerSettings
     /// </summary>
     public string? LastSelectedActivity { get; set; }
 
+    /// <summary>
+    /// The Catalogues activity's selected filter pill (All, Loaded, Changed or
+    /// Problems; design note <c>catalogue-panels.md</c> D3); null for All.
+    /// </summary>
+    public string? CataloguesPill { get; set; }
+
     /// <summary>Id of the last-selected right-dock activity tab (PR-M3).</summary>
     public string? LastSelectedRightTab { get; set; }
 
