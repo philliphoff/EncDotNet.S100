@@ -290,6 +290,11 @@ public sealed class ReferenceTabTests : IDisposable
         Assert.Equal(5, bcnlat21.Cases.Count);
         Assert.Equal("and 3 more cases", bcnlat21.Cases[^1]);
 
+        // Cases that differ only by Simplified symbols on and off read as one:
+        // the cairn is drawn either way.
+        Assert.Equal(["Beacon shape is a cairn"], entry.DrawnWith.Single(l => l.Code == "CAIRNS01").Cases);
+        Assert.DoesNotContain(entry.DrawnWith.Single(l => l.Code == "CAIRNS11").Cases, c => c.Contains("Simplified symbols", StringComparison.Ordinal));
+
         // The fallback ? has its own line, not a row of Drawn with.
         Assert.True(entry.HasFallback);
         Assert.Equal("BCNDEF13", entry.Fallback!.Code);
@@ -537,6 +542,12 @@ public sealed class ReferenceTabTests : IDisposable
         Assert.StartsWith("Paper chart symbols (", entry.PaperChartHeader, StringComparison.Ordinal);
         var paper = host.Find<Expander>("Reference.Entry.PaperChartFold");
         var shared = host.Find<Expander>("Reference.Entry.SharedFold");
+
+        // The folds' arrows sit on the same inset, and their items too once open.
+        Assert.All([paper, shared], fold => Assert.Equal(
+            Left(kind),
+            Left(fold.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().First(p => p.IsEffectivelyVisible)),
+            1));
         Assert.False(paper.IsExpanded);
         Assert.False(shared.IsExpanded);
         Assert.False(host.IsShown("Reference.Entry.Shared"));
@@ -550,6 +561,8 @@ public sealed class ReferenceTabTests : IDisposable
         Assert.True(host.IsShown("Reference.Entry.Shared"));
         Assert.True(host.IsShown("Reference.Entry.PaperChart"));
         int after = host.FindAll<Button>("Reference.Link").Count(b => b.IsEffectivelyVisible);
+        var folded = host.Find<ItemsControl>("Reference.Entry.Shared").GetVisualDescendants().OfType<Button>().First();
+        Assert.Equal(Left(kind), Left(folded.GetVisualDescendants().OfType<TextBlock>().First()), 1);
         Assert.Equal(before + entry.DrawnByShared.Count + entry.PaperChart.Count, after);
     }
 

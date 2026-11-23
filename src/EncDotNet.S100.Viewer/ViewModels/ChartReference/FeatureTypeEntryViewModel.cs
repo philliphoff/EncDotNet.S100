@@ -254,10 +254,11 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
     /// <param name="max">The most cases to list.</param>
     internal static List<string> CasesOf(IEnumerable<RuleUse> uses, ChartReferenceIndex index, bool geometry, int max)
     {
-        var cases = uses
+        var cases = MergeOnOff(uses
             .Select(u => RuleConditionText.Describe(u.Conditions, index, geometry))
             .Distinct(StringComparer.Ordinal)
-            .ToList();
+            .Select(c => c.Split(RuleConditionText.Separator, StringSplitOptions.RemoveEmptyEntries).ToList())
+            .ToList());
 
         var lead = new List<string>();
         if (cases.Count > 1)
@@ -286,6 +287,58 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
         }
 
         return [.. lead, .. cases];
+    }
+
+    /// <summary>
+    /// Merges cases that differ only by a display setting being on in one and
+    /// off in the other, as Cairn's "Simplified symbols is on · Beacon shape
+    /// is a cairn" and "… is off · …": the symbol is drawn either way, so the
+    /// case reads "Beacon shape is a cairn" (#1650).
+    /// </summary>
+    /// <param name="cases">Each case's conditions in words.</param>
+    /// <returns>The cases, each once, as text.</returns>
+    internal static List<string> MergeOnOff(List<List<string>> cases)
+    {
+        var on = Affix(Strings.ChartReference_Condition_On);
+        var off = Affix(Strings.ChartReference_Condition_Off);
+        bool merged;
+        do
+        {
+            merged = false;
+            for (int i = 0; i < cases.Count && !merged; i++)
+            {
+                foreach (var part in cases[i])
+                {
+                    if (!part.StartsWith(on.Prefix, StringComparison.Ordinal) || !part.EndsWith(on.Suffix, StringComparison.Ordinal))
+                        continue;
+                    var name = part[on.Prefix.Length..^on.Suffix.Length];
+                    var other = cases[i].Select(p => p == part ? off.Prefix + name + off.Suffix : p).ToList();
+                    int j = cases.FindIndex(c => c.SequenceEqual(other, StringComparer.Ordinal));
+                    if (j < 0)
+                        continue;
+                    var either = cases[i].Where(p => p != part).ToList();
+                    cases[i] = either;
+                    cases.RemoveAt(j);
+                    merged = true;
+                    break;
+                }
+            }
+        }
+        while (merged);
+
+        return
+        [
+            .. cases
+                .Select(c => string.Join(RuleConditionText.Separator, c))
+                .Distinct(StringComparer.Ordinal),
+        ];
+    }
+
+    // The text around {0} in "{0} is on".
+    private static (string Prefix, string Suffix) Affix(string format)
+    {
+        int at = format.IndexOf("{0}", StringComparison.Ordinal);
+        return at < 0 ? (format, string.Empty) : (format[..at], format[(at + 3)..]);
     }
 
     // "Simplified symbols is on" after "When" reads "simplified symbols is on";

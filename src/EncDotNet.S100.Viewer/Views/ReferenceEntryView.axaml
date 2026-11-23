@@ -61,6 +61,13 @@
         <Style Selector="Button.crLink:disabled">
             <Setter Property="Opacity" Value="0.5" />
         </Style>
+        <!-- A fold (Paper chart symbols, Drawn by shared rules): the theme's Expander,
+             with its arrow on the entry's 16 px inset like every other line. -->
+        <Style Selector="Expander.crFold /template/ ToggleButton#PART_toggle /template/ Path">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <!-- Back over the toggle's 1 px border. -->
+            <Setter Property="Margin" Value="-1,0,0,0" />
+        </Style>
         <!-- An action (Find, Change in Display settings): blue is kept for actions (§4.6). -->
         <Style Selector="Button.crAction">
             <Setter Property="HorizontalAlignment" Value="Left" />
@@ -142,7 +149,8 @@
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_DrawnWith}" Classes="crHeading" />
                     <ItemsControl ItemsSource="{Binding DrawnWith}" AutomationProperties.AutomationId="Reference.Entry.DrawnWith" />
                     <!-- Paper-chart variants fold, so the simplified and always-drawn ones come first. -->
-                    <Expander IsVisible="{Binding HasPaperChart}"
+                    <Expander Classes="crFold"
+                              IsVisible="{Binding HasPaperChart}"
                               IsExpanded="False"
                               HorizontalAlignment="Stretch"
                               AutomationProperties.AutomationId="Reference.Entry.PaperChartFold"
@@ -152,7 +160,8 @@
                     </Expander>
                 </StackPanel>
                 <!-- Parts drawn by shared rules (a topmark, a light) are links, folded by default. -->
-                <Expander IsVisible="{Binding HasDrawnByShared}"
+                <Expander Classes="crFold"
+                          IsVisible="{Binding HasDrawnByShared}"
                           IsExpanded="False"
                           HorizontalAlignment="Stretch"
                           AutomationProperties.AutomationId="Reference.Entry.SharedFold"
