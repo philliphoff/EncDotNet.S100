@@ -4,8 +4,10 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.ChartReference;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -43,6 +45,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private DepthOverTimeViewModel? _locationDepth;
     private string _chartBasisLine = string.Empty;
     private Services.Legends.LegendService? _legend;
+    private ReferenceTerms? _terms;
+    private ChartReferenceIndex? _termIndex;
+    private FeatureTypeEntry? _featureTypeEntry;
+    private int _termVersion;
 
     /// <summary>Creates Object Information.</summary>
     /// <param name="picks">The picks it shows, and follows references through.</param>
@@ -91,9 +97,11 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OpenFeatureInExaminerCommand = new RelayCommand(
             () => _examinerLinks.OpenFeature(ProductSpec, FeatureType),
             () => IsExaminerAvailable && !string.IsNullOrWhiteSpace(FeatureType));
-        OpenAttributeInExaminerCommand = new RelayCommand<PickAttribute>(
-            a => { if (a is not null) _examinerLinks.OpenAttribute(ProductSpec, FeatureType, a.Code); },
-            a => IsExaminerAvailable && a is not null && !string.IsNullOrWhiteSpace(a.Code));
+        // F1 and Open in reference (R9, #1678): the feature type's entry, in the
+        // Reference tab; Object information keeps its pick (D2).
+        OpenInReferenceCommand = new RelayCommand(
+            () => { if (FeatureTypeKey is { } key) _terms?.Open(key); },
+            () => FeatureTypeKey is not null && _terms is not null);
 
         // Object Information's selection, for those that follow it without
         // holding the pick report (#1397): the warnings panel and the drawing.
@@ -167,8 +175,16 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             rows = PickAttributeFormatter.WithoutWarningText(rows);
         var longValues = new List<(PickAttribute Attribute, PickAttribute? Parent)>();
         rows = PickAttributeFormatter.WithoutLongValues(rows, longValues);
+        AttributeRows.Clear();
         foreach (var a in rows)
+        {
             Attributes.Add(a);
+            var row = new PickAttributeRowViewModel(a);
+            if (_termIndex is not null)
+                row.Apply(_termIndex);
+            AttributeRows.Add(row);
+        }
+
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(AttributeCount));
 
@@ -234,16 +250,61 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// name when one is present, otherwise the feature class name. Mirrors
     /// <see cref="PickHit.PrimaryLabel"/> for the selected hit.
     /// </summary>
-    public string? PrimaryLabel => _selectedHit?.PrimaryLabel;
+    public string? PrimaryLabel => _selectedHit is null ? null : _selectedHit.FeatureName ?? FeatureTypeLabel;
 
     /// <summary>
     /// Class-name pill shown beside <see cref="PrimaryLabel"/> when an
     /// instance name is leading; <see langword="null"/> otherwise.
     /// </summary>
-    public string? SecondaryLabel => _selectedHit?.SecondaryLabel;
+    public string? SecondaryLabel => _selectedHit?.FeatureName is not null ? FeatureTypeLabel : null;
 
     /// <summary>True when <see cref="SecondaryLabel"/> has a value to show.</summary>
     public bool HasSecondaryLabel => !string.IsNullOrEmpty(SecondaryLabel);
+
+    /// <summary>
+    /// The feature type's name: the feature catalogue's, or its chart
+    /// reference entry's when the pick names it by an S-57 acronym alone.
+    /// </summary>
+    private string? FeatureTypeLabel => _selectedHit is null
+        ? null
+        : _selectedHit.FeatureTypeName ?? _featureTypeEntry?.Name ?? _selectedHit.FeatureType;
+
+    /// <summary>
+    /// The feature type's chart reference entry (R9, #1678), by its code or
+    /// its S-57 acronym; <see langword="null"/> when the pick's product has
+    /// no index, the index has no such entry, or it isn't read yet.
+    /// </summary>
+    public ReferenceKey? FeatureTypeKey => _featureTypeEntry?.Key;
+
+    /// <summary>Whether the feature type has an entry: Open in reference and F1 open it.</summary>
+    public bool HasFeatureTypeEntry => _featureTypeEntry is not null;
+
+    /// <summary>The heading's term: the feature type, when the heading names it rather than the feature.</summary>
+    public ReferenceKey? PrimaryLabelKey => HasSecondaryLabel ? null : FeatureTypeKey;
+
+    /// <summary>The class pill's term: the feature type, when a feature name leads.</summary>
+    public ReferenceKey? SecondaryLabelKey => HasSecondaryLabel ? FeatureTypeKey : null;
+
+    /// <summary>
+    /// The chart reference behind the pick's terms (R9, #1678): opens
+    /// entries in the Reference tab. <see langword="null"/> leaves every
+    /// name plain.
+    /// </summary>
+    public ReferenceTerms? Terms
+    {
+        get => _terms;
+        set
+        {
+            if (!SetProperty(ref _terms, value))
+                return;
+            (OpenInReferenceCommand as RelayCommand)?.NotifyCanExecuteChanged();
+            if (_selectedHit is not null)
+                ResolveTerms(_selectedHit);
+        }
+    }
+
+    /// <summary>Runs work on the UI thread when an index is read; the default runs it at once.</summary>
+    public Action<Action> Post { get; set; } = static a => a();
 
     /// <summary>Category glyph for the selected hit's feature class.</summary>
     public FluentIcons.Common.Icon Glyph =>
@@ -358,7 +419,22 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 : $"{PrimaryLabel}\n{caption}";
             if (Aml is { } aml)
                 identity = $"{aml.TagText} · {aml.CellName}{(aml.HasMarking ? " · " + aml.Marking : string.Empty)}\n{identity}";
+            // The codes and S-57 acronyms the attribute rows no longer show (R9, #1678).
+            var codes = new System.Text.StringBuilder(identity);
+            if (!string.IsNullOrEmpty(FeatureType))
+                codes.Append('\n').Append(PickTerms.CodeText(FeatureType, _featureTypeEntry?.Code, _featureTypeEntry?.Alias));
+            AppendCodes(codes, AttributeRows, 0);
+            identity = codes.ToString();
             return NavigationNotice is { } notice ? $"{notice}\n{identity}" : identity;
+        }
+    }
+
+    private static void AppendCodes(System.Text.StringBuilder text, IEnumerable<PickAttributeRowViewModel> rows, int depth)
+    {
+        foreach (var row in rows)
+        {
+            text.Append('\n').Append(' ', 2 * depth).Append(row.CodeLine);
+            AppendCodes(text, row.Children, depth + 1);
         }
     }
 
@@ -607,6 +683,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// </summary>
     public ObservableCollection<PickAttribute> Attributes { get; } = new();
 
+    /// <summary>
+    /// The attribute table's rows: <see cref="Attributes"/> in the feature
+    /// catalogue's words, whose names and listed values are terms (R9, #1678).
+    /// </summary>
+    public ObservableCollection<PickAttributeRowViewModel> AttributeRows { get; } = new();
+
     /// <summary>True when the current pick has at least one displayable attribute.</summary>
     public bool HasAttributes => Attributes.Count > 0;
 
@@ -709,23 +791,23 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public ICommand OpenFeatureInExaminerCommand { get; }
 
     /// <summary>
-    /// Opens a specific attribute (parameter) of the selected hit's feature
-    /// in the S-100 Feature Catalogue eXaminer (issue #442). Enabled only
-    /// when the examiner hosts the hit's product spec.
+    /// Opens the selected hit's feature type in the Reference tab (R9,
+    /// #1678): the Open in reference action and F1. Enabled when the chart
+    /// reference holds its entry. Object information keeps its pick.
     /// </summary>
-    public ICommand OpenAttributeInExaminerCommand { get; }
+    public ICommand OpenInReferenceCommand { get; }
 
     /// <summary>
     /// True when the S-100 Feature Catalogue eXaminer integration is enabled
     /// and hosts a catalogue for the selected hit's product spec. Gates the
-    /// feature- and attribute-level "open in eXaminer" affordances.
+    /// feature-level "open in eXaminer" affordances; an attribute's is in its peek.
     /// </summary>
     public bool IsExaminerAvailable => _examinerLinks.SupportsSpec(ProductSpec);
 
     /// <summary>
     /// Re-evaluates the examiner affordances against the current settings.
     /// Called when the user toggles the integration or changes the base URL
-    /// so the feature- and attribute-level "open in eXaminer" buttons
+    /// so the feature-level "open in eXaminer" buttons
     /// appear/disappear immediately, without waiting for the next pick
     /// (issue #442).
     /// </summary>
@@ -733,7 +815,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     {
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();
-        (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -856,6 +937,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     {
         Warnings.Select(hit);
         _stationChart = hit is null ? null : StationChartFor(hit);
+        // The pick's terms are read afresh for each hit (R9, #1678).
+        _termVersion++;
+        _termIndex = null;
+        _featureTypeEntry = null;
         if (hit is null)
         {
             FeatureType = null;
@@ -864,6 +949,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             DatasetFileName = null;
             ProductSpec = null;
             Attributes.Clear();
+            AttributeRows.Clear();
             ClearTextCards();
             References.Clear();
             ReleaseSections();
@@ -892,6 +978,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ProductSpec = hit.ProductSpec;
 
         PopulateAttributeSections(FormatAttributes(hit.Attributes));
+        ResolveTerms(hit);
 
         References.Clear();
         foreach (var reference in hit.References)
@@ -911,6 +998,45 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasSections));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
+        RaiseIdentityChanged();
+    }
+
+    // Reads the pick's index, then makes its names and values terms: at once
+    // when the index is ready, else when it is read, if the hit is still shown.
+    private void ResolveTerms(PickHit hit)
+    {
+        var version = ++_termVersion;
+        if (_terms is not { } terms || PickTerms.SpecOf(hit) is not { } spec)
+            return;
+        if (terms.ReadyIndex(spec) is { } ready)
+        {
+            ApplyTerms(hit, ready);
+            return;
+        }
+
+        _ = ResolveTermsAsync(terms, spec, hit, version);
+    }
+
+    private async Task ResolveTermsAsync(ReferenceTerms terms, EncDotNet.S100.Core.SpecRef spec, PickHit hit, int version)
+    {
+        var index = await terms.IndexAsync(spec).ConfigureAwait(false);
+        if (index is null)
+            return;
+        Post(() =>
+        {
+            if (version == _termVersion && ReferenceEquals(hit, _selectedHit))
+                ApplyTerms(hit, index);
+        });
+    }
+
+    private void ApplyTerms(PickHit hit, ChartReferenceIndex index)
+    {
+        _termIndex = index;
+        _featureTypeEntry = PickTerms.FeatureType(index, hit.FeatureType);
+        foreach (var row in AttributeRows)
+            row.Apply(index);
+        OnPropertyChanged(nameof(FeatureTypeKey));
+        OnPropertyChanged(nameof(HasFeatureTypeEntry));
         RaiseIdentityChanged();
     }
 
@@ -957,6 +1083,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(PrimaryLabel));
         OnPropertyChanged(nameof(SecondaryLabel));
         OnPropertyChanged(nameof(HasSecondaryLabel));
+        OnPropertyChanged(nameof(FeatureTypeKey));
+        OnPropertyChanged(nameof(HasFeatureTypeEntry));
+        OnPropertyChanged(nameof(PrimaryLabelKey));
+        OnPropertyChanged(nameof(SecondaryLabelKey));
         OnPropertyChanged(nameof(Glyph));
         OnPropertyChanged(nameof(IdentityCaption));
         OnPropertyChanged(nameof(PortrayalNote));
@@ -974,7 +1104,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();
-        (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
+        (OpenInReferenceCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }
 
     /// <summary>

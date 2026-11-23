@@ -112,8 +112,6 @@ public class PickTextCardViewModelTests
         Assert.False(card.HasFileName);
         Assert.Equal("First.\nSecond.", card.Body);
         Assert.Equal("First.\nSecond.", card.CopyText);
-        Assert.Same(child, card.ExaminerAttribute);
-        Assert.True(card.ExaminesAttribute);
         Assert.False(card.IsMonospace);
         Assert.True(card.NotForNavigation);
     }

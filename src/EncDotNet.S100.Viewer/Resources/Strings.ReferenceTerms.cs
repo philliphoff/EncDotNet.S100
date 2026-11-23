@@ -20,4 +20,8 @@ internal static partial class Strings
     public static string Tooltip_ReferencePeekExaminer => Get(nameof(Tooltip_ReferencePeekExaminer));
 
     public static string Reference_PeekGlyphName => Get(nameof(Reference_PeekGlyphName));
+
+    public static string Label_OpenInReference => Get(nameof(Label_OpenInReference));
+
+    public static string Tooltip_OpenInReference => Get(nameof(Tooltip_OpenInReference));
 }

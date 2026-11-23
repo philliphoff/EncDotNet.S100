@@ -10,7 +10,13 @@
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
              x:Name="PickRoot"
-             x:DataType="vm:PickReportViewModel">
+             x:DataType="vm:PickReportViewModel"
+             views:ReferenceTerm.Terms="{Binding Terms}">
+
+    <!-- F1 with Object information focused opens the feature type's entry (R9, #1678). -->
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="F1" Command="{Binding OpenInReferenceCommand}" />
+    </UserControl.KeyBindings>
 
     <UserControl.Resources>
         <!-- Subtle tints for the depth card's source badge and reconciliation warning. -->
@@ -26,7 +32,7 @@
             into a tidy second column; the value column is star-sized and
             truncates with an ellipsis (full text remains in the tooltip).
         -->
-        <DataTemplate x:Key="AttributeCellTemplate" x:DataType="pp:PickAttribute">
+        <DataTemplate x:Key="AttributeCellTemplate" x:DataType="vm:PickAttributeRowViewModel">
             <Border Name="AttrRow" Padding="12,9" Background="Transparent">
                 <StackPanel>
                 <Grid>
@@ -54,23 +60,23 @@
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource ForegroundColor}" />
                     </Border>
-                    <TextBlock Text="{Binding DisplayName}"
-                               FontSize="12"
-                               Opacity="0.7"
-                               TextWrapping="NoWrap"
-                               TextTrimming="CharacterEllipsis"
-                               MaxWidth="{Binding $parent[views:PickReportView].Bounds.Width, Converter={x:Static conv:ProportionalWidthConverter.Instance}, ConverterParameter=0.55}"
-                               VerticalAlignment="Center">
-                        <ToolTip.Tip>
-                            <MultiBinding Converter="{x:Static conv:AttributeTooltipConverter.Instance}">
-                                <Binding Path="DisplayName" />
-                                <Binding Path="Code" />
-                            </MultiBinding>
-                        </ToolTip.Tip>
-                    </TextBlock>
+                    <!--
+                        The name in the feature catalogue's words, a term once the
+                        chart reference names its entry (R9, #1678). Its code is in
+                        the peek, the entry and Copy identity.
+                    -->
+                    <views:ReferenceTerm Text="{Binding Name}"
+                                         Key="{Binding NameKey}"
+                                         AutomationProperties.AutomationId="Reference.Term"
+                                         FontSize="12"
+                                         Opacity="0.7"
+                                         TextWrapping="NoWrap"
+                                         TextTrimming="CharacterEllipsis"
+                                         MaxWidth="{Binding $parent[views:PickReportView].Bounds.Width, Converter={x:Static conv:ProportionalWidthConverter.Instance}, ConverterParameter=0.55}"
+                                         VerticalAlignment="Center" />
                     </StackPanel>
                     <Grid Grid.Column="2"
-                          ColumnDefinitions="Auto,*,Auto"
+                          ColumnDefinitions="Auto,*"
                           VerticalAlignment="Center">
                         <Border Grid.Column="0"
                                 Width="12" Height="12"
@@ -79,41 +85,27 @@
                                 VerticalAlignment="Center"
                                 BorderBrush="{DynamicResource BorderColor}"
                                 BorderThickness="1"
-                                Background="{Binding Converter={x:Static conv:AttributeColourSwatchConverter.Instance}}"
-                                IsVisible="{Binding Converter={x:Static conv:AttributeColourSwatchConverter.Instance}, ConverterParameter=visible}" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding DisplayText}"
-                                   FontSize="12"
-                                   FontWeight="Medium"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="NoWrap"
-                                   TextTrimming="CharacterEllipsis">
-                            <ToolTip.Tip>
-                                <MultiBinding Converter="{x:Static conv:AttributeTooltipConverter.Instance}">
-                                    <Binding Path="DisplayText" />
-                                    <Binding Path="RawValue" />
-                                </MultiBinding>
-                            </ToolTip.Tip>
-                        </TextBlock>
-                        <Button Grid.Column="2"
-                                AutomationProperties.AutomationId="PickReport.Attribute.OpenInExaminer"
-                                AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
-                                Width="22" Height="22"
-                                MinWidth="0" MinHeight="0"
-                                Padding="0"
-                                Margin="6,0,0,0"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                VerticalAlignment="Center"
-                                HorizontalContentAlignment="Center"
-                                VerticalContentAlignment="Center"
-                                Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
-                                CommandParameter="{Binding}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
-                                IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}">
-                            <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" Opacity="0.7" />
-                        </Button>
+                                Background="{Binding Attribute, Converter={x:Static conv:AttributeColourSwatchConverter.Instance}}"
+                                IsVisible="{Binding Attribute, Converter={x:Static conv:AttributeColourSwatchConverter.Instance}, ConverterParameter=visible}" />
+                        <!-- A listed value is a term; a list of them ("red, white") is one term each. -->
+                        <views:ReferenceTerm Grid.Column="1"
+                                             IsVisible="{Binding !HasValueList}"
+                                             Text="{Binding ValueText}"
+                                             Key="{Binding ValueKey}"
+                                             Value="{Binding ValueCode}"
+                                             AutomationProperties.AutomationId="Reference.Term"
+                                             FontSize="12"
+                                             FontWeight="Medium"
+                                             VerticalAlignment="Center"
+                                             TextWrapping="NoWrap"
+                                             TextTrimming="CharacterEllipsis" />
+                        <views:ReferenceTermText Grid.Column="1"
+                                                 IsVisible="{Binding HasValueList}"
+                                                 Terms="{Binding ValueTerms}"
+                                                 FontSize="12"
+                                                 FontWeight="Medium"
+                                                 VerticalAlignment="Center"
+                                                 TextWrapping="Wrap" />
                     </Grid>
                 </Grid>
                 </StackPanel>
@@ -127,7 +119,7 @@
             attributes (a tidal stream panel's hourly values), so the children
             use this same template, looked up dynamically.
         -->
-        <DataTemplate x:Key="AttributeRowTemplate" x:DataType="pp:PickAttribute">
+        <DataTemplate x:Key="AttributeRowTemplate" x:DataType="vm:PickAttributeRowViewModel">
             <StackPanel>
                 <ContentControl Content="{Binding}"
                                 ContentTemplate="{StaticResource AttributeCellTemplate}" />
@@ -224,21 +216,7 @@
                                     AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
                                     AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
                                     Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenFeatureInExaminerCommand}"
-                                    IsVisible="{Binding ExaminesFeature}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="cardAction"
-                                    AutomationProperties.AutomationId="PickReport.TextCard.OpenAttributeInExaminer"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
-                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
-                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
-                                    CommandParameter="{Binding ExaminerAttribute}"
-                                    IsVisible="{Binding ExaminesAttribute}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
                                     <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
@@ -1182,19 +1160,24 @@
                 </Border>
                 <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                     <WrapPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding PrimaryLabel}"
-                                   FontSize="15"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,6,0" />
+                        <!-- The feature type's name is a term (R9, #1678); a feature's own name is plain. -->
+                        <views:ReferenceTerm Text="{Binding PrimaryLabel}"
+                                             Key="{Binding PrimaryLabelKey}"
+                                             AutomationProperties.AutomationId="Reference.Term"
+                                             FontSize="15"
+                                             FontWeight="SemiBold"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,6,0" />
                         <Border IsVisible="{Binding HasSecondaryLabel}"
                                 VerticalAlignment="Center"
                                 CornerRadius="4"
                                 Padding="6,1"
                                 Background="{DynamicResource MutedBackgroundColor}">
-                            <TextBlock Text="{Binding SecondaryLabel}"
-                                       FontSize="11"
-                                       Opacity="0.8" />
+                            <views:ReferenceTerm Text="{Binding SecondaryLabel}"
+                                                 Key="{Binding SecondaryLabelKey}"
+                                                 AutomationProperties.AutomationId="Reference.Term"
+                                                 FontSize="11"
+                                                 Opacity="0.8" />
                         </Border>
                     </WrapPanel>
                     <SelectableTextBlock Text="{Binding IdentityCaption}"
@@ -1214,6 +1197,18 @@
                             Orientation="Horizontal"
                             Spacing="2"
                             VerticalAlignment="Top">
+                    <!-- The feature type's entry in the Reference tab; F1 too (R9, #1678). -->
+                    <Button Padding="6"
+                            AutomationProperties.AutomationId="PickReport.OpenInReference"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInReference}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenInReference}"
+                            AutomationProperties.AcceleratorKey="F1"
+                            Background="Transparent"
+                            Command="{Binding OpenInReferenceCommand}"
+                            IsVisible="{Binding HasFeatureTypeEntry}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenInReference}">
+                        <ic:FluentIcon Icon="BookInformation" IconVariant="Regular" FontSize="16" />
+                    </Button>
                     <Button Padding="6"
                             AutomationProperties.AutomationId="PickReport.OpenFeatureInExaminer"
                             AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
@@ -1489,7 +1484,7 @@
                                 ClipToBounds="True"
                                 Grid.IsSharedSizeScope="True"
                                 IsVisible="{Binding HasAttributes}">
-                            <ItemsControl ItemsSource="{Binding Attributes}"
+                            <ItemsControl ItemsSource="{Binding AttributeRows}"
                                           Classes="attrTable"
                                           ItemTemplate="{StaticResource AttributeRowTemplate}" />
                         </Border>
@@ -1608,7 +1603,7 @@
                                 ClipToBounds="True"
                                 Grid.IsSharedSizeScope="True"
                                 IsVisible="{Binding HasAttributes}">
-                            <ItemsControl ItemsSource="{Binding Attributes}"
+                            <ItemsControl ItemsSource="{Binding AttributeRows}"
                                           Classes="attrTable"
                                           ItemTemplate="{StaticResource AttributeRowTemplate}" />
                         </Border>
@@ -1631,7 +1626,7 @@
                                 ClipToBounds="True"
                                 Grid.IsSharedSizeScope="True"
                                 IsVisible="{Binding HasAttributes}">
-                            <ItemsControl ItemsSource="{Binding Attributes}"
+                            <ItemsControl ItemsSource="{Binding AttributeRows}"
                                           Classes="attrTable"
                                           ItemTemplate="{StaticResource AttributeRowTemplate}" />
                         </Border>

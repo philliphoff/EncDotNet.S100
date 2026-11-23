@@ -18,6 +18,18 @@ month. For package versions and release assets, see
   as S-102 and weather fields, keep their key line
   ([#1679](https://github.com/philliphoff/EncDotNet.S100/issues/1679)).
 
+- **The packages restore from nuget.org again.** Since 0.28.0,
+  `EncDotNet.S100.Datasets.Pipelines`, and so `EncDotNet.S100`, have listed
+  dependencies on packages that were never published, so restoring them
+  from nuget.org failed with NU1101. Those five libraries are now published
+  too: `EncDotNet.S100.DynamicSources.Ais`,
+  `EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo`,
+  `EncDotNet.S100.DynamicSources.Ndbc`, `EncDotNet.S100.DynamicSources.Nmea`
+  and `EncDotNet.S100.Nmea`, with their READMEs and XML documentation. The
+  aisstream.io driver needs your own aisstream.io API key. CI now restores a
+  consumer of the freshly packed packages before a release can publish them
+  ([#1702](https://github.com/philliphoff/EncDotNet.S100/issues/1702)).
+
 - **Tropical cyclone advisories in Library folders.** A Library folder or
   exchange-set source now lists the NHC advisories it holds. A storm's folder
   of zips is one `TC` dataset, and a forecast zip
@@ -100,6 +112,23 @@ month. For package versions and release assets, see
   is still the default. The new `s100 tides publish` prepares a mirror's
   files and exits with code `9` when a catalogue fails its check
   ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
+- **Terms in Object information.** The picked feature type's name, each
+  attribute's name and each listed value in Object information are now chart
+  reference terms, named as the feature catalogue names them, with a peek on
+  hover or focus and a click that opens the entry. A cell from an S-57
+  product, drawn with the S-101 catalogue, reads the S-101 chart reference,
+  and a code left as an S-57 acronym maps to its S-101 entry through the
+  catalogue's aliases: `BCNLAT` to Lateral Beacon, `COLOUR` to Colour, and
+  `3,1` to Red, White. A code with no entry stays plain text. Codes and S-57
+  acronyms no longer show in the rows; **Copy identity** copies them. A new
+  **Open in reference** action, and F1 in Object information, open the
+  feature type's entry in the Reference tab, keeping the pick. The
+  per-attribute eXaminer buttons are gone: the eXaminer link is in each
+  term's peek and entry, and **Open in eXaminer** still opens the feature
+  type. In `EncDotNet.S100.Datasets.Pipelines`,
+  `ChartReferenceIndex.S57Aliases` maps S-57 acronyms to entries
+  ([#1678](https://github.com/philliphoff/EncDotNet.S100/issues/1678)).
 
 - **Chart reference terms and peeks.** Names in Reference entries are now
   terms: text with a dotted underline in the text colour. Rest the pointer on

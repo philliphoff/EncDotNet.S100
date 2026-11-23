@@ -12,10 +12,8 @@ Not for navigation.
 
 ## Install
 
-This package isn't published to NuGet. Reference the project directly:
-
-```xml
-<ProjectReference Include="path/to/src/EncDotNet.S100.Nmea/EncDotNet.S100.Nmea.csproj" />
+```bash
+dotnet add package EncDotNet.S100.Nmea
 ```
 
 ## Example: read wind from a multiplexer
