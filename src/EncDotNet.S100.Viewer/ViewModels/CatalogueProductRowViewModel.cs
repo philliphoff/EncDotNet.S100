@@ -247,7 +247,8 @@ internal sealed class CatalogueProductRowViewModel : ViewModelBase
         _ => string.Format(
             CultureInfo.CurrentCulture,
             state.Kind == CatalogueKind.Feature ? Strings.Catalogues_Row_FeatureFormat : Strings.Catalogues_Row_PortrayalFormat,
-            CatalogueText.Version(state.Source ?? state.Drawing)),
+            // The configured catalogue's version; when it can't be read, the one drawing instead.
+            CatalogueText.Version(state.Source?.Metadata is not null ? state.Source : state.Drawing ?? state.Source)),
     };
 }
 

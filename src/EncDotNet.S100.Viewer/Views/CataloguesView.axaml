@@ -86,6 +86,7 @@
         <!-- Rows are named after their product (#784). -->
         <Style Selector="ListBox#ProductList ListBoxItem" x:DataType="vm:CatalogueProductRowViewModel">
             <Setter Property="Padding" Value="8,7" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="AutomationProperties.AutomationId" Value="Catalogues.Row" />
             <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
         </Style>
@@ -230,6 +231,7 @@
                      AutomationProperties.Name="{x:Static loc:Strings.Pane_Catalogues}"
                      ItemsSource="{Binding Rows}"
                      SelectedItem="{Binding SelectedRow}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      Background="Transparent">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:CatalogueProductRowViewModel">
@@ -321,7 +323,7 @@
         <Panel Grid.Row="4">
             <TextBlock Text="{x:Static loc:Strings.Catalogues_Details_None}" IsVisible="{Binding !HasSelection}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6" TextWrapping="Wrap" Margin="16" />
-            <ScrollViewer IsVisible="{Binding HasSelection}">
+            <ScrollViewer IsVisible="{Binding HasSelection}" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel DataContext="{Binding SelectedRow}" x:DataType="vm:CatalogueProductRowViewModel"
                             Spacing="10" Margin="12,8,12,12"
                             AutomationProperties.AutomationId="Catalogues.Details">
