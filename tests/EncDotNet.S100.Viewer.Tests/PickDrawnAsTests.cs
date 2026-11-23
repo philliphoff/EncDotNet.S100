@@ -65,8 +65,11 @@ public sealed class PickDrawnAsTests
             dir = dir.Parent;
         }
 
-        throw new FileNotFoundException(string.Join('/', parts));
+        return Path.Combine(["tests", "datasets", .. parts]);
     }
+
+    private static void SkipUnlessPresent(string path) =>
+        Assert.SkipUnless(File.Exists(path), $"Test data not found at {path}");
 
     /// <summary>The cell on the stack, a legend over it, and Object information with Drawn as.</summary>
     private sealed class Scene : IDisposable
@@ -85,8 +88,11 @@ public sealed class PickDrawnAsTests
             Report.AttachDrawnAs(DrawnAs);
         }
 
-        public static async Task<Scene> CreateAsync(PaletteType palette = PaletteType.Day) =>
-            new(await Portrayed.Value, palette);
+        public static async Task<Scene> CreateAsync(PaletteType palette = PaletteType.Day)
+        {
+            SkipUnlessPresent(Fixture("S57", "US5MA1BO", "US5MA1BO.000"));
+            return new(await Portrayed.Value, palette);
+        }
 
         public Cell Cell { get; }
 
@@ -268,8 +274,10 @@ public sealed class PickDrawnAsTests
         using var scene = await Scene.CreateAsync();
         var catalogues = new PortrayalCatalogueManager();
         catalogues.SetSource("S-102", Specification.CreatePortrayalCatalogueSource("S-102"));
+        var bathymetryPath = Fixture("S102", "102US004MI1CI262227.h5");
+        SkipUnlessPresent(bathymetryPath);
         using var processor = new S102DatasetProcessor(
-            Fixture("S102", "102US004MI1CI262227.h5"), catalogues, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
+            bathymetryPath, catalogues, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
         var coverage = await processor.BuildCoveragePortrayalAsync(
             new RenderContext { Palette = PaletteType.Day }, TestContext.Current.CancellationToken);
         var bathymetry = scene.Legend.Add("102US004MI1CI262227.h5", "S-102", 42, -71, 43, -70);
