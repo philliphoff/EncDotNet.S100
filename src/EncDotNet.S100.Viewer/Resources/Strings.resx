@@ -24,12 +24,6 @@
   </data>
 
   <!-- Activity / pane titles -->
-  <data name="Pane_FeatureCatalogues" xml:space="preserve">
-    <value>FEATURE CATALOGUES</value>
-  </data>
-  <data name="Pane_PortrayalCatalogues" xml:space="preserve">
-    <value>PORTRAYAL CATALOGUES</value>
-  </data>
   <data name="Pane_Datasets" xml:space="preserve">
     <value>DATASETS</value>
   </data>
@@ -152,12 +146,6 @@
   <data name="Tooltip_Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
-  <data name="Tooltip_FeatureCatalogues" xml:space="preserve">
-    <value>Feature Catalogues</value>
-  </data>
-  <data name="Tooltip_PortrayalCatalogues" xml:space="preserve">
-    <value>Portrayal Catalogues</value>
-  </data>
   <data name="Tooltip_Datasets" xml:space="preserve">
     <value>Datasets</value>
   </data>
@@ -182,20 +170,8 @@
   <data name="Tooltip_CloseTimelinePanel" xml:space="preserve">
     <value>Close</value>
   </data>
-  <data name="Tooltip_AddFeatureCatalogue" xml:space="preserve">
-    <value>Add a feature catalogue from disk</value>
-  </data>
-  <data name="Tooltip_AddPortrayalCatalogue" xml:space="preserve">
-    <value>Add a portrayal catalogue from disk</value>
-  </data>
   <data name="Tooltip_OpenDataset" xml:space="preserve">
     <value>Open an S-100 dataset from disk</value>
-  </data>
-  <data name="Tooltip_RemoveCatalogue" xml:space="preserve">
-    <value>Go back to the built-in catalogue</value>
-  </data>
-  <data name="Tooltip_OpenCatalogueInExaminer" xml:space="preserve">
-    <value>View this catalogue in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
   </data>
   <data name="Tooltip_OpenFeatureInExaminer" xml:space="preserve">
     <value>View this feature in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
@@ -471,12 +447,6 @@
   </data>
   <data name="Label_DataSourceAlreadyAddedFormat" xml:space="preserve">
     <value>{0} (added)</value>
-  </data>
-  <data name="Button_AddFeatureCatalogue" xml:space="preserve">
-    <value>Add Feature Catalogue...</value>
-  </data>
-  <data name="Button_AddPortrayalCatalogue" xml:space="preserve">
-    <value>Add Portrayal Catalogue...</value>
   </data>
 
   <!-- Native menu -->
@@ -900,9 +870,6 @@
   </data>
 
   <!-- Catalogue list -->
-  <data name="Catalogue_BuiltInLabel" xml:space="preserve">
-    <value>(built-in)</value>
-  </data>
 
   <!-- Curated product-specification titles (spec code -> human-readable name).
        Shared by the Feature- and Portrayal-catalogue panels. Keys drop the
@@ -2755,7 +2722,7 @@
     <value>S-100 Feature Catalogue eXaminer</value>
   </data>
   <data name="Settings_ExaminerSection_Help" xml:space="preserve">
-    <value>Show links from the Feature Catalogues and Object Information panels that open the picked feature or attribute in the S-100 Feature Catalogue eXaminer website.</value>
+    <value>Show links from the Catalogues activity and Object information that open the picked feature or attribute in the S-100 Feature Catalogue eXaminer website.</value>
   </data>
   <data name="Settings_ExaminerEnabled" xml:space="preserve">
     <value>Show eXaminer links</value>
@@ -3788,9 +3755,6 @@
   <data name="Label_Activity_EcdisDisplay" xml:space="preserve">
     <value>Display controls</value>
   </data>
-  <data name="Label_Activity_FeatureCatalogues" xml:space="preserve">
-    <value>Feature catalogues</value>
-  </data>
   <data name="Label_Activity_Helm" xml:space="preserve">
     <value>Helm</value>
   </data>
@@ -3802,9 +3766,6 @@
   </data>
   <data name="Label_Activity_PickReport" xml:space="preserve">
     <value>Object information</value>
-  </data>
-  <data name="Label_Activity_PortrayalCatalogues" xml:space="preserve">
-    <value>Portrayal catalogues</value>
   </data>
   <data name="Label_Activity_Routes" xml:space="preserve">
     <value>Routes</value>
@@ -9553,9 +9514,6 @@
   <data name="Catalogues_State_Error" xml:space="preserve">
     <value>Failed to load: {0}</value>
   </data>
-  <data name="Catalogues_AddFailed" xml:space="preserve">
-    <value>That catalogue can't be used. {0}</value>
-  </data>
   <data name="LogArea_Catalogues" xml:space="preserve">
     <value>Catalogues</value>
   </data>
@@ -9855,5 +9813,321 @@
   <data name="Reference_PeekGlyphName" xml:space="preserve">
     <value>Symbol</value>
     <comment>Accessible name of the glyph in a term's peek</comment>
+  </data>
+  <data name="Pane_Catalogues" xml:space="preserve">
+    <value>Catalogues</value>
+    <comment>Title of the Catalogues activity (catalogue-panels D1)</comment>
+  </data>
+  <data name="Label_Activity_Catalogues" xml:space="preserve">
+    <value>Catalogues</value>
+    <comment>Accessible name of the Catalogues activity button</comment>
+  </data>
+  <data name="Tooltip_Catalogues" xml:space="preserve">
+    <value>Catalogues: the feature and portrayal catalogues each product is drawn with</value>
+  </data>
+  <data name="Catalogues_Add" xml:space="preserve">
+    <value>Add catalogue…</value>
+  </data>
+  <data name="Tooltip_CataloguesAdd" xml:space="preserve">
+    <value>Use a feature catalogue XML file, a portrayal catalogue folder (choose its portrayal_catalogue.xml) or a portrayal catalogue ZIP package</value>
+  </data>
+  <data name="Tooltip_CataloguesMore" xml:space="preserve">
+    <value>More</value>
+  </data>
+  <data name="Catalogues_Menu_ReloadCustom" xml:space="preserve">
+    <value>Reload custom catalogues</value>
+  </data>
+  <data name="Catalogues_Menu_ShowLogs" xml:space="preserve">
+    <value>Show catalogue logs</value>
+  </data>
+  <data name="Catalogues_FilterWatermark" xml:space="preserve">
+    <value>Filter by product or name…</value>
+  </data>
+  <data name="Label_CataloguesFilter" xml:space="preserve">
+    <value>Filter catalogues</value>
+  </data>
+  <data name="Catalogues_CountFormat" xml:space="preserve">
+    <value>{0} of {1}</value>
+    <comment>{0} products shown, {1} products in all</comment>
+  </data>
+  <data name="Catalogues_Pill_All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Catalogues_Pill_Loaded" xml:space="preserve">
+    <value>Loaded</value>
+  </data>
+  <data name="Catalogues_Pill_Changed" xml:space="preserve">
+    <value>Changed</value>
+  </data>
+  <data name="Catalogues_Pill_Problems" xml:space="preserve">
+    <value>Problems</value>
+  </data>
+  <data name="Catalogues_PillNameFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+    <comment>Accessible name of a filter pill: {0} its label, {1} its count</comment>
+  </data>
+  <data name="Catalogues_Tag_Custom" xml:space="preserve">
+    <value>Custom</value>
+  </data>
+  <data name="Catalogues_Tag_CommandLine" xml:space="preserve">
+    <value>Command line</value>
+  </data>
+  <data name="Catalogues_Tag_NotBuiltIn" xml:space="preserve">
+    <value>Not built in</value>
+  </data>
+  <data name="Catalogues_Tag_Missing" xml:space="preserve">
+    <value>Missing</value>
+  </data>
+  <data name="Catalogues_Tag_ProblemOne" xml:space="preserve">
+    <value>1 problem</value>
+  </data>
+  <data name="Catalogues_Tag_ProblemMany" xml:space="preserve">
+    <value>{0} problems</value>
+  </data>
+  <data name="Catalogues_Row_FeatureFormat" xml:space="preserve">
+    <value>Feature {0}</value>
+    <comment>{0} the feature catalogue version</comment>
+  </data>
+  <data name="Catalogues_Row_PortrayalFormat" xml:space="preserve">
+    <value>Portrayal {0}</value>
+    <comment>{0} the portrayal catalogue version</comment>
+  </data>
+  <data name="Catalogues_Row_FeatureMissing" xml:space="preserve">
+    <value>No feature catalogue</value>
+  </data>
+  <data name="Catalogues_Row_PortrayalMissing" xml:space="preserve">
+    <value>No portrayal catalogue</value>
+  </data>
+  <data name="Catalogues_Row_DrawnBySoundCharts" xml:space="preserve">
+    <value>Drawn by SoundCharts</value>
+    <comment>A product drawn by the app's own portrayal, with no portrayal catalogue (S-104)</comment>
+  </data>
+  <data name="Catalogues_Row_LoadedFormat" xml:space="preserve">
+    <value>{0} loaded</value>
+    <comment>{0} datasets of the product are open</comment>
+  </data>
+  <data name="Catalogues_Row_UnknownVersion" xml:space="preserve">
+    <value>?</value>
+    <comment>A catalogue whose version can't be read</comment>
+  </data>
+  <data name="Catalogues_RowMenuNameFormat" xml:space="preserve">
+    <value>More actions for {0}</value>
+  </data>
+  <data name="Catalogues_NoMatches" xml:space="preserve">
+    <value>No products match.</value>
+  </data>
+  <data name="Catalogues_Details_None" xml:space="preserve">
+    <value>Select a product to see its catalogues.</value>
+  </data>
+  <data name="Catalogues_Details_LoadedNone" xml:space="preserve">
+    <value>No datasets loaded</value>
+  </data>
+  <data name="Catalogues_Details_LoadedOne" xml:space="preserve">
+    <value>1 dataset loaded</value>
+  </data>
+  <data name="Catalogues_Details_LoadedMany" xml:space="preserve">
+    <value>{0} datasets loaded</value>
+  </data>
+  <data name="Catalogues_Details_DrawnWithCustom" xml:space="preserve">
+    <value>drawn with a custom catalogue</value>
+  </data>
+  <data name="Catalogues_Details_DrawnWithCommandLine" xml:space="preserve">
+    <value>drawn with a command-line catalogue</value>
+  </data>
+  <data name="Catalogues_Details_FeatureHeader" xml:space="preserve">
+    <value>FEATURE CATALOGUE</value>
+  </data>
+  <data name="Catalogues_Details_PortrayalHeader" xml:space="preserve">
+    <value>PORTRAYAL CATALOGUE</value>
+  </data>
+  <data name="Catalogues_Field_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Catalogues_Field_Source" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Catalogues_Field_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="Catalogues_Field_Overrides" xml:space="preserve">
+    <value>Overrides</value>
+  </data>
+  <data name="Catalogues_Field_Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Catalogues_Field_Replaces" xml:space="preserve">
+    <value>Replaces</value>
+  </data>
+  <data name="Catalogues_Field_Redraws" xml:space="preserve">
+    <value>Redraws</value>
+  </data>
+  <data name="Catalogues_Status_Missing" xml:space="preserve">
+    <value>Missing: datasets of this product won't open</value>
+  </data>
+  <data name="Catalogues_Status_NotRequired" xml:space="preserve">
+    <value>Drawn by SoundCharts: no portrayal catalogue needed</value>
+  </data>
+  <data name="Catalogues_Details_ErrorUsingFormat" xml:space="preserve">
+    <value>{0} Drawing with {1} instead.</value>
+    <comment>{0} why the catalogue failed to load, {1} what draws instead, e.g. 'built-in 2.0.0'</comment>
+  </data>
+  <data name="Catalogues_Details_ErrorNothingFormat" xml:space="preserve">
+    <value>{0} Nothing draws instead.</value>
+  </data>
+  <data name="Catalogues_Describe_BuiltIn" xml:space="preserve">
+    <value>built-in</value>
+  </data>
+  <data name="Catalogues_Describe_Custom" xml:space="preserve">
+    <value>custom</value>
+  </data>
+  <data name="Catalogues_Describe_CommandLine" xml:space="preserve">
+    <value>command line</value>
+  </data>
+  <data name="Catalogues_ShowInLogs" xml:space="preserve">
+    <value>Show in Logs</value>
+  </data>
+  <data name="Catalogues_Reload" xml:space="preserve">
+    <value>Reload</value>
+  </data>
+  <data name="Tooltip_CataloguesReload" xml:space="preserve">
+    <value>Read the custom catalogues from disk again</value>
+  </data>
+  <data name="Catalogues_Revert" xml:space="preserve">
+    <value>Revert to built-in</value>
+  </data>
+  <data name="Catalogues_ShowInFinder" xml:space="preserve">
+    <value>Show in Finder</value>
+  </data>
+  <data name="Catalogues_ShowInExplorer" xml:space="preserve">
+    <value>Show in Explorer</value>
+  </data>
+  <data name="Catalogues_ShowInFolder" xml:space="preserve">
+    <value>Show in folder</value>
+  </data>
+  <data name="Catalogues_AddPortrayal" xml:space="preserve">
+    <value>Add portrayal catalogue…</value>
+  </data>
+  <data name="Catalogues_AddFeature" xml:space="preserve">
+    <value>Add feature catalogue…</value>
+  </data>
+  <data name="Catalogues_RemoveProduct" xml:space="preserve">
+    <value>Remove product</value>
+  </data>
+  <data name="Catalogues_Menu_ReplaceFeature" xml:space="preserve">
+    <value>Replace feature catalogue…</value>
+  </data>
+  <data name="Catalogues_Menu_ReplacePortrayal" xml:space="preserve">
+    <value>Replace portrayal catalogue…</value>
+  </data>
+  <data name="Catalogues_Menu_OpenInChartReference" xml:space="preserve">
+    <value>Open in Chart reference</value>
+  </data>
+  <data name="Catalogues_Menu_OpenInExaminer" xml:space="preserve">
+    <value>Open in eXaminer</value>
+  </data>
+  <data name="Catalogues_Menu_OpenPublishedInExaminer" xml:space="preserve">
+    <value>Open published edition in eXaminer</value>
+    <comment>The feature catalogue in use is custom; the eXaminer shows the published edition (catalogue-panels D9)</comment>
+  </data>
+  <data name="Catalogues_Toast_Title" xml:space="preserve">
+    <value>Catalogues</value>
+  </data>
+  <data name="Catalogues_Toast_UsedFormat" xml:space="preserve">
+    <value>{0} is now drawn with {1}.</value>
+    <comment>{0} the product, {1} e.g. 'portrayal catalogue 2.1.0-draft (custom)'</comment>
+  </data>
+  <data name="Catalogues_Toast_RevertedFormat" xml:space="preserve">
+    <value>{0} is drawn with its built-in catalogues again.</value>
+  </data>
+  <data name="Catalogues_Toast_RemovedFormat" xml:space="preserve">
+    <value>{0} was removed.</value>
+  </data>
+  <data name="Catalogues_Toast_ReloadedFormat" xml:space="preserve">
+    <value>{0}'s catalogues were read again.</value>
+  </data>
+  <data name="Catalogues_Toast_FailedFormat" xml:space="preserve">
+    <value>{0}'s {1} catalogue didn't load: {2}</value>
+  </data>
+  <data name="Catalogues_Toast_RedrawnOne" xml:space="preserve">
+    <value>1 dataset redrawn.</value>
+  </data>
+  <data name="Catalogues_Toast_RedrawnMany" xml:space="preserve">
+    <value>{0} datasets redrawn.</value>
+  </data>
+  <data name="Catalogues_Undo" xml:space="preserve">
+    <value>Undo</value>
+  </data>
+  <data name="Catalogues_Sheet_Title" xml:space="preserve">
+    <value>Add catalogue</value>
+  </data>
+  <data name="Catalogues_Sheet_ReplaceFeatureTitleFormat" xml:space="preserve">
+    <value>Replace {0} feature catalogue</value>
+  </data>
+  <data name="Catalogues_Sheet_ReplacePortrayalTitleFormat" xml:space="preserve">
+    <value>Replace {0} portrayal catalogue</value>
+  </data>
+  <data name="Catalogues_Sheet_FeatureFormat" xml:space="preserve">
+    <value>Feature catalogue {0}</value>
+  </data>
+  <data name="Catalogues_Sheet_PortrayalFormat" xml:space="preserve">
+    <value>Portrayal catalogue {0}</value>
+  </data>
+  <data name="Catalogues_Sheet_OriginFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>{0} e.g. 'Portrayal catalogue 2.0.0', {1} e.g. 'built-in'</comment>
+  </data>
+  <data name="Catalogues_Sheet_ReplacesNothing" xml:space="preserve">
+    <value>No catalogue yet</value>
+  </data>
+  <data name="Catalogues_Sheet_NewProduct" xml:space="preserve">
+    <value>Adds a new product</value>
+  </data>
+  <data name="Catalogues_Sheet_RedrawsNone" xml:space="preserve">
+    <value>No loaded datasets</value>
+  </data>
+  <data name="Catalogues_Sheet_RedrawsOne" xml:space="preserve">
+    <value>1 loaded {0} dataset</value>
+  </data>
+  <data name="Catalogues_Sheet_RedrawsMany" xml:space="preserve">
+    <value>{0} loaded {1} datasets</value>
+  </data>
+  <data name="Catalogues_Sheet_CommandLineWins" xml:space="preserve">
+    <value>A catalogue given on the command line still draws {0} until you restart without it.</value>
+  </data>
+  <data name="Catalogues_Sheet_Keep" xml:space="preserve">
+    <value>Keep using it after restart</value>
+  </data>
+  <data name="Catalogues_Sheet_Use" xml:space="preserve">
+    <value>Use it</value>
+  </data>
+  <data name="Catalogues_Sheet_AddProduct" xml:space="preserve">
+    <value>Add product</value>
+  </data>
+  <data name="Catalogues_Sheet_ChooseAnother" xml:space="preserve">
+    <value>Choose another…</value>
+  </data>
+  <data name="Catalogues_Sheet_RefusedTitle" xml:space="preserve">
+    <value>This can't be used</value>
+  </data>
+  <data name="Catalogues_Refused_WrongTarget" xml:space="preserve">
+    <value>This is a {0} catalogue for {1}, not a {2} catalogue for {3}.</value>
+  </data>
+  <data name="FilePicker_CatalogueTitle" xml:space="preserve">
+    <value>Choose a feature catalogue, a portrayal_catalogue.xml or a catalogue package</value>
+  </data>
+  <data name="FilePicker_CatalogueType" xml:space="preserve">
+    <value>Catalogues (XML, ZIP)</value>
+  </data>
+  <data name="Catalogues_BadgeOne" xml:space="preserve">
+    <value>1 catalogue problem</value>
+  </data>
+  <data name="Catalogues_BadgeMany" xml:space="preserve">
+    <value>{0} catalogue problems</value>
+  </data>
+  <data name="Catalogues_Toast_FeatureFormat" xml:space="preserve">
+    <value>feature catalogue {0}</value>
+  </data>
+  <data name="Catalogues_Toast_PortrayalFormat" xml:space="preserve">
+    <value>portrayal catalogue {0}</value>
   </data>
 </root>

@@ -50,7 +50,9 @@ internal sealed class CatalogueRegistry
     private readonly Dictionary<(string Spec, CatalogueKind Kind), string> _commandLine = [];
     private readonly Dictionary<(string Spec, CatalogueKind Kind), string> _sessionCustom = [];
     private readonly Dictionary<(string Spec, CatalogueKind Kind), CatalogueState> _states = [];
+    private readonly Dictionary<(string Spec, CatalogueKind Kind), string> _fingerprints = [];
     private IReadOnlyList<CatalogueProductState>? _products;
+    private string? _identity;
     private bool _initialized;
 
     /// <summary>
@@ -106,6 +108,30 @@ internal sealed class CatalogueRegistry
             lock (_gate)
             {
                 return _products ??= BuildProducts();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Identifies the catalogues that draw, for keys of anything stored from
+    /// a drawing (the portrayal warm signature and the stored cell scene). It
+    /// names each product's catalogue in use (built-in, or a custom or
+    /// command-line one by its path, size and modification times), so it
+    /// changes with a session-only catalogue and with a Reload after an edit,
+    /// and stays the same across restarts while nothing changes.
+    /// </summary>
+    public string Identity
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _identity ??= string.Join(
+                    '|',
+                    _fingerprints
+                        .OrderBy(p => p.Key.Spec, StringComparer.Ordinal)
+                        .ThenBy(p => p.Key.Kind)
+                        .Select(p => $"{p.Key.Spec}:{(p.Key.Kind == CatalogueKind.Feature ? "fc" : "pc")}={p.Value}"));
             }
         }
     }
@@ -281,6 +307,14 @@ internal sealed class CatalogueRegistry
                 _portrayals.Remove(Ref(spec));
         }
 
+        // Built-in catalogues change only with the build, which the keys
+        // hash; only the others are named.
+        if (drawing is { Origin: not CatalogueOrigin.BuiltIn, Path: { } drawn })
+            _fingerprints[(spec, kind)] = Fingerprint(drawn);
+        else
+            _fingerprints.Remove((spec, kind));
+        _identity = null;
+
         var configured = tried.FirstOrDefault();
         var overrides = tried.Count > 1 ? tried[1]
             : sources.Count > 1 ? sources[1] with { Metadata = ReadMetadata(spec, kind, sources[1]) }
@@ -341,6 +375,38 @@ internal sealed class CatalogueRegistry
             source.Dispose();
             return ex.Message;
         }
+    }
+
+    // A file's path, size and write time; a folder's path, file count, total
+    // size and latest write time. Cheap enough to take once per apply.
+    private static string Fingerprint(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                var file = new FileInfo(path);
+                return $"{path};{file.Length};{file.LastWriteTimeUtc.Ticks}";
+            }
+
+            if (Directory.Exists(path))
+            {
+                long count = 0, bytes = 0, latest = 0;
+                foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    count++;
+                    bytes += file.Length;
+                    latest = Math.Max(latest, file.LastWriteTimeUtc.Ticks);
+                }
+
+                return $"{path};{count};{bytes};{latest}";
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return path;
     }
 
     // ── Sources and state ───────────────────────────────────────────────

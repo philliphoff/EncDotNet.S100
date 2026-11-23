@@ -82,8 +82,6 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
             appCommands: TestAppCommands.Create(),
             datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             mapChrome: TestMapChrome.Create(catalogues, datasets),
-            featureCatalogues: new FeatureCataloguesViewModel(TestCatalogues.Registry(settings, catalogues), TestPickReport.Examiner()),
-            portrayalCatalogues: new PortrayalCataloguesViewModel(TestCatalogues.Registry(settings, catalogues)),
             datasets: datasets,
             palette: new PaletteMenuViewModel(settingsVm),
             pickReport: pick ?? TestPickReport.Create(),

@@ -158,6 +158,35 @@ public static partial class TideStationCatalogueFile
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
         ArgumentNullException.ThrowIfNull(catalogue);
+        await ReplaceFileAsync(
+            path,
+            async (file, token) =>
+            {
+                if (path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+                {
+                    var gzip = new GZipStream(file, CompressionLevel.SmallestSize, leaveOpen: true);
+                    await using (gzip.ConfigureAwait(false))
+                    {
+                        await WriteAsync(gzip, catalogue, token).ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    await WriteAsync(file, catalogue, token).ConfigureAwait(false);
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes a file beside its target and moves it over the target, so a
+    /// reader never sees half a file.
+    /// </summary>
+    /// <param name="path">The file's path.</param>
+    /// <param name="write">Writes the file's content.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    internal static async Task ReplaceFileAsync(string path, Func<Stream, CancellationToken, Task> write, CancellationToken cancellationToken)
+    {
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory))
         {
@@ -170,18 +199,7 @@ public static partial class TideStationCatalogueFile
             var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true);
             await using (file.ConfigureAwait(false))
             {
-                if (path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
-                {
-                    var gzip = new GZipStream(file, CompressionLevel.SmallestSize);
-                    await using (gzip.ConfigureAwait(false))
-                    {
-                        await WriteAsync(gzip, catalogue, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                else
-                {
-                    await WriteAsync(file, catalogue, cancellationToken).ConfigureAwait(false);
-                }
+                await write(file, cancellationToken).ConfigureAwait(false);
             }
 
             File.Move(temporary, path, overwrite: true);
@@ -194,6 +212,16 @@ public static partial class TideStationCatalogueFile
             }
         }
     }
+
+    /// <summary>A tide station as the file writes it: two stations are the same data when these are equal.</summary>
+    /// <param name="station">The station.</param>
+    internal static string ToJson(TideStationEntry station) =>
+        JsonSerializer.Serialize(ToDto(station), FileJsonContext.Default.StationDto);
+
+    /// <summary>A current station as the file writes it: two stations are the same data when these are equal.</summary>
+    /// <param name="station">The station.</param>
+    internal static string ToJson(CurrentStationEntry station) =>
+        JsonSerializer.Serialize(ToDto(station), FileJsonContext.Default.CurrentStationDto);
 
     private static TideStationCatalogue FromDto(FileDto dto)
     {
@@ -625,5 +653,7 @@ public static partial class TideStationCatalogueFile
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true)]
     [JsonSerializable(typeof(FileDto))]
+    [JsonSerializable(typeof(StationDto))]
+    [JsonSerializable(typeof(CurrentStationDto))]
     private sealed partial class FileJsonContext : JsonSerializerContext;
 }
