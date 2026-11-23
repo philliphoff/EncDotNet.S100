@@ -1,4 +1,5 @@
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -92,6 +93,112 @@ public sealed class DatasetInputResolverTests
 
         Assert.True(inputs.Count > 1);
         Assert.Equal("US5MA1BO.000", inputs[^1].Id.Value);
+    }
+
+    [Fact]
+    public void A_flat_folder_of_charts_a_grib2_run_and_an_advisory_opens_all_three()
+    {
+        // Issue #1677: the advisory's zips beside a GRIB2 file were skipped as the run's.
+        var root = Directory.CreateTempSubdirectory("encdotnet-mix-").FullName;
+        try
+        {
+            TropicalCycloneFixtures.CopyIan(root);
+            File.Copy(TestData("GRIB2", "gfswave-useast.grib2"), Path.Combine(root, "gfswave-useast.grib2"));
+            Directory.CreateDirectory(Path.Combine(root, "US5MA1BO"));
+            File.Copy(TestData("US5MA1BO.000"), Path.Combine(root, "US5MA1BO", "US5MA1BO.000"));
+            var warnings = new List<string>();
+
+            var inputs = DatasetInputResolver.Resolve(root, [], exchangeSet: null, only: null, warnings, out var resolution);
+            using var _ = resolution;
+
+            Assert.Equal(["GRIB2", "TC", "S-57"], inputs.Select(i => i.Spec));
+            Assert.Equal(root, inputs[0].Path);
+            Assert.Equal("al092022_5day_020.zip", inputs[1].Id.Value);
+            Assert.Equal(Path.Combine(root, "al092022_5day_020.zip"), inputs[1].Path);
+            Assert.Equal(inputs.Count, inputs.Select(i => i.Id).Distinct().Count());
+            Assert.Equal(inputs.Count, inputs.Select(i => i.Path).Distinct().Count());
+            Assert.Empty(warnings);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void An_advisory_folder_is_one_dataset_read_from_the_folder()
+    {
+        var root = Directory.CreateTempSubdirectory("encdotnet-tc-").FullName;
+        try
+        {
+            TropicalCycloneFixtures.CopyIan(Path.Combine(root, "ian"));
+            var warnings = new List<string>();
+
+            var inputs = DatasetInputResolver.Resolve(root, [], exchangeSet: null, only: null, warnings, out var resolution);
+            using var _ = resolution;
+
+            var input = Assert.Single(inputs);
+            Assert.Equal("TC", input.Spec);
+            Assert.Equal("ian", input.Id.Value);
+            Assert.Equal(Path.Combine(root, "ian"), input.Path);
+            Assert.Empty(warnings);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_grib2_run_folder_is_one_dataset()
+    {
+        var root = Directory.CreateTempSubdirectory("encdotnet-run-").FullName;
+        try
+        {
+            var run = Path.Combine(root, "gfswave");
+            Directory.CreateDirectory(run);
+            File.Copy(TestData("GRIB2", "gfswave-useast.grib2"), Path.Combine(run, "gfswave-useast.grib2"));
+            File.Copy(TestData("GRIB2", "gfswave-useast-filter.grib2"), Path.Combine(run, "gfswave-useast-filter.grib2"));
+            var warnings = new List<string>();
+
+            var inputs = DatasetInputResolver.Resolve(root, [], exchangeSet: null, only: null, warnings, out var resolution);
+            using var _ = resolution;
+
+            var input = Assert.Single(inputs);
+            Assert.Equal("GRIB2", input.Spec);
+            Assert.Equal("gfswave", input.Id.Value);
+            Assert.Equal(run, input.Path);
+            Assert.Empty(warnings);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_zip_that_isnt_the_advisory_s_is_skipped_with_a_warning()
+    {
+        var root = Directory.CreateTempSubdirectory("encdotnet-stray-").FullName;
+        try
+        {
+            TropicalCycloneFixtures.CopyIan(root);
+            File.Copy(TestData("GRIB2", "gfswave-useast.grib2"), Path.Combine(root, "gfswave-useast.grib2"));
+            File.Copy(TestData("S101.zip"), Path.Combine(root, "S101.zip"));
+            var warnings = new List<string>();
+
+            var inputs = DatasetInputResolver.Resolve(root, [], exchangeSet: null, only: null, warnings, out var resolution);
+            using var _ = resolution;
+
+            Assert.Equal(["GRIB2", "TC"], inputs.Select(i => i.Spec));
+            var warning = Assert.Single(warnings);
+            Assert.StartsWith("Skipped archive in a folder", warning, StringComparison.Ordinal);
+            Assert.EndsWith("S101.zip", warning, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static void CopyTree(string from, string to)

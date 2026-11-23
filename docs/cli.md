@@ -517,8 +517,11 @@ without styling it. It takes the same three input forms as
   set (an `ENC_ROOT` folder holding a `CATALOG.031`) is read as a folder of
   cells, whether you pass it, its `CATALOG.031`, or a folder above it, or name
   it with `--from`. Loose S-101 cells get their update files, as a single cell
-  does, but cells in an S-100 exchange set don't. A dataset that can't be
-  opened or tiled is skipped with a warning.
+  does, but cells in an S-100 exchange set don't. The GRIB2 files in one
+  folder are one model run, and one storm's NHC advisory zips are one
+  advisory; a folder holding both is tiled as both. Any other `.zip` in a
+  folder is skipped with a warning: open it on its own. A dataset that can't
+  be opened or tiled is skipped with a warning.
 
 The container comes from the output path:
 
