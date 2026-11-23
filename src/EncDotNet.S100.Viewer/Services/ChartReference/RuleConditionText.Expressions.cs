@@ -32,7 +32,7 @@ internal static partial class RuleConditionText
     /// <param name="text">The rule's source text of the test.</param>
     /// <param name="fails">Whether the case is the test failing.</param>
     /// <param name="index">The index whose entries name the attributes, values and settings.</param>
-    internal static string? Expression(string? text, bool fails, ChartReferenceIndex index)
+    internal static TermText? Expression(string? text, bool fails, ChartReferenceIndex index)
     {
         if (string.IsNullOrWhiteSpace(text))
             return null;
@@ -52,7 +52,7 @@ internal static partial class RuleConditionText
 
     // ---- Saying it ----
 
-    private static string? Say(Node node, bool negate, ChartReferenceIndex index) => node switch
+    private static TermText? Say(Node node, bool negate, ChartReferenceIndex index) => node switch
     {
         NotNode not => Say(not.Operand, !negate, index),
         // De Morgan: "a or b" fails as "not a and not b".
@@ -63,9 +63,9 @@ internal static partial class RuleConditionText
         _ => null,
     };
 
-    private static string? SayJoin(IReadOnlyList<Node> nodes, bool isOr, bool negate, ChartReferenceIndex index)
+    private static TermText? SayJoin(IReadOnlyList<Node> nodes, bool isOr, bool negate, ChartReferenceIndex index)
     {
-        var parts = new List<string>();
+        var parts = new List<TermText>();
         foreach (var node in nodes)
         {
             if (Say(node, negate, index) is not { } part)
@@ -74,14 +74,14 @@ internal static partial class RuleConditionText
         }
 
         if (!isOr)
-            return string.Join(Separator, parts);
-        var lower = parts.Select((p, i) => i == 0 ? p : LowerFirst(p)).ToList();
+            return TermText.Join(Separator, parts);
+        var lower = parts.Select((p, i) => i == 0 ? p : p.LowerFirst()).ToList();
         return lower.Count == 1
             ? lower[0]
-            : Format(Strings.ChartReference_Condition_OrJoin, string.Join(", ", lower.Take(lower.Count - 1)), lower[^1]);
+            : Format(Strings.ChartReference_Condition_OrJoin, TermText.Join(", ", lower.Take(lower.Count - 1)), lower[^1]);
     }
 
-    private static string? SayPresence(string path, bool negate, ChartReferenceIndex index)
+    private static TermText? SayPresence(string path, bool negate, ChartReferenceIndex index)
     {
         if (Subject(path, index) is not { } subject)
             return null;
@@ -92,7 +92,7 @@ internal static partial class RuleConditionText
         return Format(negate ? Strings.ChartReference_Condition_NotGiven : Strings.ChartReference_Condition_Given, subject.Name);
     }
 
-    private static string? SayCompare(CompareNode compare, bool negate, ChartReferenceIndex index)
+    private static TermText? SayCompare(CompareNode compare, bool negate, ChartReferenceIndex index)
     {
         var op = negate ? Negate(compare.Op) : compare.Op;
 
@@ -133,11 +133,11 @@ internal static partial class RuleConditionText
         return Compare(op, subject.Name, value);
     }
 
-    private static string? SayContains(ContainsNode contains, bool negate, ChartReferenceIndex index)
+    private static TermText? SayContains(ContainsNode contains, bool negate, ChartReferenceIndex index)
     {
         if (Subject(contains.Path, index) is not { Setting: false } subject)
             return null;
-        var labels = new List<string>();
+        var labels = new List<TermText>();
         foreach (var value in contains.Values)
         {
             if (Value(value, subject.Attribute, index) is not { } label)
@@ -147,16 +147,16 @@ internal static partial class RuleConditionText
 
         if (labels.Count == 0)
             return null;
-        string list;
+        TermText list;
         if (labels.Count > MaxListedValues)
         {
-            list = Format(Strings.ChartReference_Condition_OrMore, string.Join(", ", labels.Take(MaxListedValues - 1)), labels.Count - MaxListedValues + 1);
+            list = Format(Strings.ChartReference_Condition_OrMore, TermText.Join(", ", labels.Take(MaxListedValues - 1)), labels.Count - MaxListedValues + 1);
         }
         else
         {
             list = labels.Count == 1
                 ? labels[0]
-                : Format(Strings.ChartReference_Condition_OrJoin, string.Join(", ", labels.Take(labels.Count - 1)), labels[^1]);
+                : Format(Strings.ChartReference_Condition_OrJoin, TermText.Join(", ", labels.Take(labels.Count - 1)), labels[^1]);
         }
 
         return Format(negate ? Strings.ChartReference_Condition_Excludes : Strings.ChartReference_Condition_Includes, subject.Name, list);
@@ -164,7 +164,7 @@ internal static partial class RuleConditionText
 
     // What a path names: a display setting, or an attribute of the feature
     // the catalogue knows. A rule's own locals name neither.
-    private static (string Name, AttributeEntry? Attribute, bool Setting)? Subject(string path, ChartReferenceIndex index)
+    private static (TermText Name, AttributeEntry? Attribute, bool Setting)? Subject(string path, ChartReferenceIndex index)
     {
         if (path.StartsWith("contextParameters.", StringComparison.Ordinal))
         {
@@ -179,7 +179,7 @@ internal static partial class RuleConditionText
     }
 
     // A compared value: a listed value's label, a number, or a setting.
-    private static string? Value(string token, AttributeEntry? attribute, ChartReferenceIndex index)
+    private static TermText? Value(string token, AttributeEntry? attribute, ChartReferenceIndex index)
     {
         if (token == "scaledDecimalZero")
             return "0";
@@ -187,7 +187,7 @@ internal static partial class RuleConditionText
         {
             var id = token["contextParameters.".Length..];
             return index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, id), out _)
-                ? LowerFirst(SettingName(index, id))
+                ? SettingName(index, id).LowerFirst()
                 : null;
         }
 
@@ -195,11 +195,11 @@ internal static partial class RuleConditionText
             return null;
         return attribute is { ListedValues.Count: > 0 }
             ? ValueLabel(attribute, token)
-            : number.ToString(CultureInfo.CurrentCulture);
+            : TermText.Plain(number.ToString(CultureInfo.CurrentCulture));
     }
 
-    private static string YesNo(string name, bool yes) =>
-        yes ? Format(Strings.ChartReference_Condition_Yes, name) : Format(Strings.ChartReference_Condition_No, LowerFirst(name));
+    private static TermText YesNo(TermText name, bool yes) =>
+        yes ? Format(Strings.ChartReference_Condition_Yes, name) : Format(Strings.ChartReference_Condition_No, name.LowerFirst());
 
     private static bool IsBoolean(string valueType) =>
         valueType.Equals("boolean", StringComparison.OrdinalIgnoreCase);
@@ -217,13 +217,6 @@ internal static partial class RuleConditionText
 
     // "feature.surfaceCharacteristics[1].natureOfSurface" names natureOfSurface.
     private static string Last(string path) => path.Split('.')[^1];
-
-    // "Beacon shape is given" inside a list reads "beacon shape is given";
-    // an acronym keeps its capitals.
-    private static string LowerFirst(string text) =>
-        text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1])
-            ? char.ToLower(text[0], CultureInfo.CurrentCulture) + text[1..]
-            : text;
 
     // ---- Reading it ----
 

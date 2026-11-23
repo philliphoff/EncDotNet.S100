@@ -74,7 +74,16 @@ public sealed record SwatchLegendEntry(string Color, string Label) : LegendEntry
 /// <c>SvgProcessor.Process</c> leaves it. The viewer fits it to the glyph box.
 /// </param>
 /// <param name="Label">The row's label.</param>
-public sealed record SymbolLegendEntry(string Svg, string Label) : LegendEntry(Label);
+public sealed record SymbolLegendEntry(string Svg, string Label) : LegendEntry(Label)
+{
+    /// <summary>
+    /// The portrayal catalogue's name for the symbol (<c>"BOYCAN01"</c>), when
+    /// the row shows one catalogue symbol, as a catalogue key's rows do; the
+    /// viewer makes the row a Chart reference term. <see langword="null"/>
+    /// (the default) for a symbol drawn for the legend alone.
+    /// </summary>
+    public string? SymbolName { get; init; }
+}
 
 /// <summary>A legend row with a short sample of a line style, e.g. a cold front's line and pips.</summary>
 /// <param name="Line">The line sample.</param>

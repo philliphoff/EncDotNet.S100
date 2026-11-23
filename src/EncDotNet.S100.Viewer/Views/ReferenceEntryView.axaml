@@ -1,11 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:cr="using:EncDotNet.S100.Viewer.ViewModels.ChartReference"
+             xmlns:crs="using:EncDotNet.S100.Viewer.Services.ChartReference"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.ReferenceEntryView"
              x:DataType="cr:ReferenceEntryViewModel"
              AutomationProperties.AutomationId="Reference.Entry"
-             AutomationProperties.Name="{x:Static loc:Strings.Reference_EntryName}">
+             AutomationProperties.Name="{x:Static loc:Strings.Reference_EntryName}"
+             views:ReferenceTerm.Terms="{Binding Terms}">
     <!-- One entry of the chart reference (symbol dictionary §4.4, R7, #1650), sized for
          the 360 px right dock. The Reference tab and the study page's entry pane both
          host it, so there is one entry view everywhere. -->
@@ -75,31 +78,31 @@
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
-        <!-- A link to another entry, with its cases in words and a note (§4.6: every link is two-way). -->
+        <!-- A link to another entry (§4.6: every link is two-way): its name is a term, in the
+             text colour with a dotted underline, and the names in its cases are terms too (R8). -->
         <DataTemplate DataType="cr:ChartReferenceLinkViewModel">
-            <Button Classes="crLink"
-                    AutomationProperties.AutomationId="Reference.Link"
-                    AutomationProperties.Name="{Binding Name}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceLink}"
-                    Command="{Binding OpenCommand}">
-                <StackPanel Spacing="1">
-                    <TextBlock Text="{Binding Name}"
-                               Foreground="{DynamicResource AccentBrush}"
-                               TextWrapping="Wrap" />
-                    <ItemsControl ItemsSource="{Binding Cases}" IsVisible="{Binding HasCases}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <TextBlock Text="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Text="{Binding Note}"
-                               IsVisible="{Binding HasNote}"
-                               Classes="crCaption"
-                               FontStyle="Italic"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Button>
+            <StackPanel Spacing="1"
+                        Margin="0,1"
+                        AutomationProperties.AutomationId="Reference.Link"
+                        AutomationProperties.Name="{Binding Name}">
+                <views:ReferenceTerm Text="{Binding Name}"
+                                     Key="{Binding Key}"
+                                     IsKnown="{Binding IsKnown}"
+                                     Command="{Binding OpenCommand}"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ItemsControl ItemsSource="{Binding CaseTerms}" IsVisible="{Binding HasCases}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="crs:TermText">
+                            <views:ReferenceTermText Terms="{Binding}" Classes="crCaption" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding Note}"
+                           IsVisible="{Binding HasNote}"
+                           Classes="crCaption"
+                           FontStyle="Italic"
+                           TextWrapping="Wrap" />
+            </StackPanel>
         </DataTemplate>
 
         <!-- C1: a feature type. -->

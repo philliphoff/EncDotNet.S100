@@ -143,7 +143,7 @@ internal sealed class CatalogueSymbolKey
             {
                 continue;
             }
-            rows.Add(new SymbolLegendEntry(processed, Label(name, result.SymbolTitleProvider?.Invoke(name))));
+            rows.Add(new SymbolLegendEntry(processed, Label(name, result.SymbolTitleProvider?.Invoke(name))) { SymbolName = name });
         }
 
         return rows;

@@ -5,7 +5,8 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.LegendView"
-             x:DataType="lg:LegendViewModel">
+             x:DataType="lg:LegendViewModel"
+             views:ReferenceTerm.Terms="{Binding Terms}">
 
     <UserControl.Styles>
         <!-- A section's header toggle is named after the section, as the expander is (D11). -->
@@ -277,10 +278,12 @@
                                                                       AutomationProperties.ControlTypeOverride="List">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate x:DataType="lg:LegendRowViewModel">
-                                                                    <!-- D19 (#1412): hover or focus rings the row's features on the map. -->
+                                                                    <!-- D19 (#1412): hover or focus rings the row's features on the map.
+                                                                         A catalogue key row's label is a term (D7, R8), which takes the
+                                                                         row's keyboard focus; its peek doesn't stop the rings. -->
                                                                     <Border Classes="legendRow"
                                                                             Classes.highlighted="{Binding IsHighlighted}"
-                                                                            Focusable="True"
+                                                                            Focusable="{Binding IsRowFocusable}"
                                                                             Background="Transparent"
                                                                             PointerEntered="OnRowPointerEntered"
                                                                             PointerExited="OnRowPointerExited"
@@ -316,11 +319,19 @@
                                                                                 </Panel>
                                                                             </Border>
                                                                             <TextBlock Grid.Column="1"
+                                                                                       IsVisible="{Binding !HasTerm}"
                                                                                        Text="{Binding Label}"
                                                                                        ToolTip.Tip="{Binding Label}"
                                                                                        AutomationProperties.AutomationId="Legend.Row.Label"
                                                                                        VerticalAlignment="Center"
                                                                                        TextTrimming="CharacterEllipsis" />
+                                                                            <views:ReferenceTerm Grid.Column="1"
+                                                                                                 IsVisible="{Binding HasTerm}"
+                                                                                                 Text="{Binding Label}"
+                                                                                                 Key="{Binding TermKey}"
+                                                                                                 AutomationProperties.AutomationId="Reference.Term"
+                                                                                                 TextWrapping="NoWrap"
+                                                                                                 TextTrimming="CharacterEllipsis" />
                                                                         </Grid>
                                                                     </Border>
                                                                 </DataTemplate>

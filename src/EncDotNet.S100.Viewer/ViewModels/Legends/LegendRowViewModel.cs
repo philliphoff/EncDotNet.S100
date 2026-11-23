@@ -1,6 +1,8 @@
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Viewer.Services.Legends;
 
 namespace EncDotNet.S100.Viewer.ViewModels.Legends;
@@ -33,7 +35,12 @@ internal sealed class LegendRowViewModel : ViewModelBase
     /// <summary>Creates a legend row.</summary>
     /// <param name="entry">The legend row of the sub-layer.</param>
     /// <param name="tile">The palette's chart background, which the glyph sits on.</param>
-    public LegendRowViewModel(LegendEntry entry, IBrush tile)
+    /// <param name="referenceSpec">
+    /// The product whose Chart reference a catalogue key row's symbol is in
+    /// (<see cref="LegendSection.CatalogueSpec"/>), so its label is a
+    /// term (D7, symbol dictionary R8); <see langword="null"/> for none.
+    /// </param>
+    public LegendRowViewModel(LegendEntry entry, IBrush tile, string? referenceSpec = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(entry.Label);
@@ -49,7 +56,25 @@ internal sealed class LegendRowViewModel : ViewModelBase
         var (width, height) = Renderers.Skia.LegendGlyphRenderer.SizeOf(entry);
         GlyphWidth = (int)MathF.Round(width * GlyphZoom, MidpointRounding.AwayFromZero);
         GlyphHeight = (int)MathF.Round(height * GlyphZoom, MidpointRounding.AwayFromZero);
+        TermKey = entry is SymbolLegendEntry { SymbolName: { Length: > 0 } symbol }
+            && referenceSpec is not null
+            && SpecName.TryNormalize(referenceSpec, out var spec)
+                ? new ReferenceKey(new SpecRef(spec, default), ReferenceKind.Symbol, symbol)
+                : null;
     }
+
+    /// <summary>
+    /// The Chart reference entry a catalogue key row shows (D7, symbol
+    /// dictionary R8, #1651): its label is a term. <see langword="null"/> for
+    /// any other row, whose label is plain text.
+    /// </summary>
+    public ReferenceKey? TermKey { get; }
+
+    /// <summary>Whether the label is a term, which takes keyboard focus for the row.</summary>
+    public bool HasTerm => TermKey is not null;
+
+    /// <summary>Whether the row itself takes keyboard focus: its label isn't a term.</summary>
+    public bool IsRowFocusable => TermKey is null;
 
     /// <summary>The row this view model shows.</summary>
     public LegendEntry Entry => _entry;

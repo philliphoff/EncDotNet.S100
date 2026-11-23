@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:cr="using:EncDotNet.S100.Viewer.ViewModels.ChartReference"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.ReferencePeekView"
+             x:DataType="cr:ReferencePeekViewModel"
+             AutomationProperties.AutomationId="Reference.Peek"
+             AutomationProperties.Name="{x:Static loc:Strings.Reference_PeekName}">
+    <!-- A term's peek (symbol dictionary §4.2, R8, #1651): the kind and name, the glyph
+         on the palette's chart tile, the definition, Open in reference and the eXaminer. -->
+    <UserControl.Styles>
+        <!-- A link: the entry view's plain link template, so its text lines up with the rest. -->
+        <Style Selector="Button.peekLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Margin" Value="-4,0,0,0" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Link"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.peekLink:pointerover /template/ Border#PART_Link">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.peekLink:focus-visible /template/ Border#PART_Link">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Width="288"
+            Background="{DynamicResource BackgroundColor}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="12,10"
+            Margin="0,4,12,12"
+            BoxShadow="0 4 14 0 #30000000">
+        <StackPanel Spacing="8">
+            <DockPanel>
+                <Border DockPanel.Dock="Left"
+                        Background="{Binding Tile}"
+                        IsVisible="{Binding ShowsGlyph}"
+                        CornerRadius="4"
+                        Width="56"
+                        Height="56"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Top"
+                        AutomationProperties.AutomationId="Reference.Peek.Glyph"
+                        AutomationProperties.Name="{x:Static loc:Strings.Reference_PeekGlyphName}">
+                    <Image Source="{Binding Glyph}" Width="48" Height="48" Stretch="Fill" />
+                </Border>
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding KindLabel}"
+                               AutomationProperties.AutomationId="Reference.Peek.Kind"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.4"
+                               Opacity="0.65"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Name}"
+                               AutomationProperties.AutomationId="Reference.Peek.Name"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="{Binding Definition}"
+                       IsVisible="{Binding HasDefinition}"
+                       AutomationProperties.AutomationId="Reference.Peek.Definition"
+                       FontSize="{StaticResource SecondaryFontSize}"
+                       TextWrapping="Wrap"
+                       MaxLines="6"
+                       TextTrimming="WordEllipsis" />
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <!-- An action, so blue (§4.6). -->
+                <Button x:Name="OpenLink"
+                        Classes="peekLink"
+                        AutomationProperties.AutomationId="Reference.Peek.Open"
+                        AutomationProperties.Name="{x:Static loc:Strings.Reference_PeekOpen}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferencePeekOpen}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferencePeekOpen}"
+                        Command="{Binding OpenCommand}">
+                    <TextBlock Text="{x:Static loc:Strings.Reference_PeekOpen}"
+                               Foreground="{DynamicResource AccentBrush}" />
+                </Button>
+                <!-- Secondary: the website, which needs a connection. -->
+                <Button x:Name="ExaminerLink"
+                        Classes="peekLink"
+                        IsVisible="{Binding HasExaminer}"
+                        AutomationProperties.AutomationId="Reference.Peek.Examiner"
+                        AutomationProperties.Name="{x:Static loc:Strings.Reference_PeekExaminer}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferencePeekExaminer}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferencePeekExaminer}"
+                        Command="{Binding OpenExaminerCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="4" Opacity="0.75">
+                        <TextBlock Text="{x:Static loc:Strings.Reference_PeekExaminer}" VerticalAlignment="Center" />
+                        <ic:FluentIcon Icon="Open" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

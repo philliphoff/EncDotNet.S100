@@ -35,6 +35,13 @@ internal sealed class ReferenceEntryContext
     /// <summary>The viewer settings, for a display setting's current value; <see langword="null"/> for none.</summary>
     public ViewerSettingsService? Settings { get; init; }
 
+    /// <summary>
+    /// The terms the entry's names and conditions read (R8, #1651), opening
+    /// where <see cref="Open"/> does; <see langword="null"/> for terms over
+    /// <see cref="Index"/> alone, without eXaminer links.
+    /// </summary>
+    public ReferenceTerms? Terms { get; init; }
+
     /// <summary>Opens the settings that change a display setting; <see langword="null"/> hides Change.</summary>
     public Action<string>? ChangeSetting { get; init; }
 }

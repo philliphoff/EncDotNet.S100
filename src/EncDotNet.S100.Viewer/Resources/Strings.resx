@@ -9819,4 +9819,41 @@
     <value>With no further condition</value>
     <comment>A case that needs only the shared conditions</comment>
   </data>
+  <!-- Chart reference terms and peeks (symbol dictionary R8, #1651) -->
+  <data name="Reference_Kind_ListedValue" xml:space="preserve">
+    <value>Listed value of {0}</value>
+    <comment>Peek kind line for a listed value term; {0} = the attribute's name, e.g. 'Listed value of Colour'</comment>
+  </data>
+  <data name="Reference_TermDescription" xml:space="preserve">
+    <value>{0}, {1}: {2}</value>
+    <comment>A term's accessible description, the peek's text; {0} = kind, {1} = name, {2} = definition</comment>
+  </data>
+  <data name="Reference_TermDescriptionShort" xml:space="preserve">
+    <value>{0}, {1}</value>
+    <comment>A term's accessible description when there is no definition; {0} = kind, {1} = name</comment>
+  </data>
+  <data name="Reference_PeekName" xml:space="preserve">
+    <value>Reference peek</value>
+    <comment>Accessible name of a term's peek popover</comment>
+  </data>
+  <data name="Reference_PeekOpen" xml:space="preserve">
+    <value>Open in reference</value>
+    <comment>Peek link that opens the term's entry in the Reference tab</comment>
+  </data>
+  <data name="Tooltip_ReferencePeekOpen" xml:space="preserve">
+    <value>Open this entry in the Reference tab</value>
+    <comment>Tooltip of a peek's Open in reference link</comment>
+  </data>
+  <data name="Reference_PeekExaminer" xml:space="preserve">
+    <value>S-100 eXaminer</value>
+    <comment>Peek's secondary link to the S-100 Feature Catalogue eXaminer website</comment>
+  </data>
+  <data name="Tooltip_ReferencePeekExaminer" xml:space="preserve">
+    <value>View this definition in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+    <comment>Tooltip of a peek's eXaminer link</comment>
+  </data>
+  <data name="Reference_PeekGlyphName" xml:space="preserve">
+    <value>Symbol</value>
+    <comment>Accessible name of the glyph in a term's peek</comment>
+  </data>
 </root>

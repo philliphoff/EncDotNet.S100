@@ -152,6 +152,13 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
     /// </summary>
     public Action<string>? ChangeSetting { get; set; }
 
+    /// <summary>
+    /// The terms the app shares (R8, #1651), with eXaminer links; each entry
+    /// reads them over its own index. <see langword="null"/> for terms
+    /// without eXaminer links.
+    /// </summary>
+    public ReferenceTerms? Terms { get; set; }
+
     /// <summary>The latest load of an entry; tests wait on it.</summary>
     internal Task Loading { get; private set; } = Task.CompletedTask;
 
@@ -252,6 +259,7 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
     {
         Index = index,
         Artwork = _service.GetArtwork(index.Spec),
+        Terms = Terms?.With(index, _navigator.Open, _service.GetArtwork(index.Spec)),
         Glyphs = _glyphs,
         SimplifiedSymbols = _settings?.SimplifiedSymbols ?? false,
         Open = _navigator.Open,

@@ -62,8 +62,9 @@ public partial class LegendView : UserControl
 
     private void OnRowPointerExited(object? sender, Avalonia.Input.PointerEventArgs e)
     {
-        // Keyboard focus keeps its row ringed after the pointer passes over.
-        if (RowOf(sender) is { } row && sender is Control { IsFocused: false })
+        // Keyboard focus keeps its row ringed after the pointer passes over;
+        // a catalogue key row's focus is on its term (R8).
+        if (RowOf(sender) is { } row && sender is Control { IsKeyboardFocusWithin: false })
             _viewModel?.LeaveRow(row);
     }
 

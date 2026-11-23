@@ -62,6 +62,14 @@ internal sealed record LegendSection
     /// </summary>
     public string? ChartReferenceSpec { get; init; }
 
+    /// <summary>
+    /// For a catalogue key (D7), the portrayal spec whose catalogue its
+    /// symbols come from (<c>S-101</c>, also for S-57 cells): each row's
+    /// label is a Chart reference term in it (symbol dictionary R8, #1651).
+    /// Null for any other section.
+    /// </summary>
+    public string? CatalogueSpec { get; init; }
+
     /// <summary>The Mariner settings the rows follow ("Safety contour 10 m"); null when they follow none.</summary>
     public string? MarinerSettings { get; init; }
 
