@@ -20,7 +20,23 @@ month. For package versions and release assets, see
   one's `timeSelection` with or without `--strict-time`. The WMTS capabilities
   still list the steps as `Value`s. For library users, the time rule moved
   from `MapsuiTimeSelection` to `TimeStepSelector` in Core, which
-  `MapsuiTimeSelection` now wraps.
+  `MapsuiTimeSelection` now wraps
+  ([#1676](https://github.com/philliphoff/EncDotNet.S100/issues/1676)).
+
+- **A mirror of NOAA's tide station catalogue.** A scheduled workflow now
+  checks NOAA CO-OPS every week and publishes its tide and current station
+  catalogue as one file, `tide-stations.json.gz`, with a manifest giving its
+  size, SHA-256 and NOAA's retrieval date, on a rolling `tide-stations`
+  release. It publishes a new file only when NOAA's data changed, and refuses
+  one that lost stations. In `EncDotNet.S100.Tides.Stations`,
+  `TideCatalogueMirrorClient` downloads it in one request of about 1.2 MB,
+  checked against the manifest, and checks for newer data with one small
+  request, where a download from NOAA is some 3,400 paced requests.
+  `TideCatalogueComparison` compares two catalogues station by station.
+  `s100 tides update --from mirror` downloads from the mirror; `--from noaa`
+  is still the default. The new `s100 tides publish` prepares a mirror's
+  files and exits with code `9` when a catalogue fails its check
+  ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
 
 - **Chart reference terms and peeks.** Names in Reference entries are now
   terms: text with a dotted underline in the text colour. Rest the pointer on

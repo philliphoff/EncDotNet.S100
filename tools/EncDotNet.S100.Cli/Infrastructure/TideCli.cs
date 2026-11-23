@@ -69,6 +69,10 @@ internal static class TideCli
 
     private static string Days(int days) => days == 1 ? "1 day" : $"{days} days";
 
+    /// <summary>A time as a UTC date and time, such as <c>2026-11-23 06:20 UTC</c>.</summary>
+    public static string FormatDate(DateTimeOffset time) =>
+        time.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
     /// <summary>Parses <c>lat,lon</c> in decimal degrees.</summary>
     public static bool TryParsePosition(string? text, out GeoPosition position)
     {

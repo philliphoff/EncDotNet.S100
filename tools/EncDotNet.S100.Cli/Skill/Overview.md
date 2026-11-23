@@ -14,7 +14,8 @@ command offers it, and treat paths as local filesystem paths.
 | Check an RTZ or S-421 route against datasets (land, depths, dangers, areas, S-124 warnings, UKC) | `s100 route check` |
 | Find tide stations near a point | `s100 tides stations` |
 | Predict the tide at a station (series, highs and lows, CSV, JSON or S-104) | `s100 tides predict` |
-| Download or check the offline tide station catalogue | `s100 tides update` |
+| Download or check the offline tide station catalogue (from NOAA, or `--from mirror` for one file) | `s100 tides update` |
+| Prepare a tide station catalogue and manifest for a mirror | `s100 tides publish` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
 | Write XYZ raster tiles (folder, PMTiles, MBTiles or GeoPackage) or one GeoTIFF for a web map or GIS | `s100 tiles export` |
 | Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs or to a GIS as WMTS or WMS | `s100 tiles serve` |
@@ -67,4 +68,5 @@ and no network update check.
 | `5` | Dataset schema is non-conforming. |
 | `6` | Validation findings failed the selected validation policy. |
 | `7` | `route check` findings reached the `--fail-on` level. |
-| `8` | `tides update --check` found newer NOAA data than the catalogue. |
+| `8` | `tides update --check` found newer data (from NOAA or the mirror) than the catalogue. |
+| `9` | `tides publish` refused a catalogue that failed its publish check. |
