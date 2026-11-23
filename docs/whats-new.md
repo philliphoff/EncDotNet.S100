@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`s100 tides update` downloads from the mirror.** With no `--from`, the
+  command now downloads NOAA's tide and current station catalogue from the
+  EncDotNet.S100 mirror as one file of about 1.2 MB, in a few seconds instead
+  of about 10 minutes, and `--check` reads the mirror's manifest. When the
+  mirror can't be used, it says so and downloads from, or checks, NOAA
+  instead. `--from noaa` still reads NOAA's metadata API directly, and a
+  `--from` value never falls back
+  ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
 - **Drawn as in Object information.** A picked feature of a chart drawn from
   a portrayal catalogue (S-101, or an S-57 cell drawn with S-101's) shows what
   the map drew for it. The header shows its main symbol on the chart's
