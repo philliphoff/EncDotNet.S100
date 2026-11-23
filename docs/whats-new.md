@@ -6,6 +6,18 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The packages restore from nuget.org again.** Since 0.28.0,
+  `EncDotNet.S100.Datasets.Pipelines`, and so `EncDotNet.S100`, have listed
+  dependencies on packages that were never published, so restoring them
+  from nuget.org failed with NU1101. Those five libraries are now published
+  too: `EncDotNet.S100.DynamicSources.Ais`,
+  `EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo`,
+  `EncDotNet.S100.DynamicSources.Ndbc`, `EncDotNet.S100.DynamicSources.Nmea`
+  and `EncDotNet.S100.Nmea`, with their READMEs and XML documentation. The
+  aisstream.io driver needs your own aisstream.io API key. CI now restores a
+  consumer of the freshly packed packages before a release can publish them
+  ([#1702](https://github.com/philliphoff/EncDotNet.S100/issues/1702)).
+
 - **Tropical cyclone advisories in Library folders.** A Library folder or
   exchange-set source now lists the NHC advisories it holds. A storm's folder
   of zips is one `TC` dataset, and a forecast zip

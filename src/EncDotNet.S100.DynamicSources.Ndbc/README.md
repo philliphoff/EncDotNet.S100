@@ -14,10 +14,8 @@ Not for navigation.
 
 ## Install
 
-This package isn't published to NuGet. Reference the project directly:
-
-```xml
-<ProjectReference Include="path/to/src/EncDotNet.S100.DynamicSources.Ndbc/EncDotNet.S100.DynamicSources.Ndbc.csproj" />
+```bash
+dotnet add package EncDotNet.S100.DynamicSources.Ndbc
 ```
 
 ## Example: observations for the visible area
