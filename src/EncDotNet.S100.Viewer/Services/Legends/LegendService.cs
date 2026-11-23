@@ -333,8 +333,9 @@ internal sealed class LegendService : IDisposable
             section.SetCatalogue(caption, group);
             // "Show all in Chart reference" (D7, symbol dictionary R5): at the
             // product the datasets are portrayed with, so S-57 opens S-101.
+            section.CatalogueSpec = section.Datasets.Select(d => d.Entry?.PortrayalSpec).FirstOrDefault(s => s is not null) ?? section.Spec;
             if (key.Count > group.Rows.Count)
-                section.ChartReferenceSpec = section.Datasets.Select(d => d.Entry?.PortrayalSpec).FirstOrDefault(s => s is not null) ?? section.Spec;
+                section.ChartReferenceSpec = section.CatalogueSpec;
         }
 
         var datasets = section.Datasets;
@@ -369,6 +370,7 @@ internal sealed class LegendService : IDisposable
             Plane = section.Plane,
             Caption = section.Caption,
             ChartReferenceSpec = section.ChartReferenceSpec,
+            CatalogueSpec = section.CatalogueSpec,
             Groups = [.. section.Groups],
         };
     }
@@ -802,6 +804,8 @@ internal sealed class LegendService : IDisposable
 
         /// <summary>The spec a catalogue key's Show all link opens Chart reference at, or null.</summary>
         public string? ChartReferenceSpec { get; set; }
+
+        public string? CatalogueSpec { get; set; }
 
         /// <summary>A catalogue product's drawn-symbol counter (D7), or null for a product with its own legend.</summary>
         public CatalogueSymbolKey? Key { get; init; }

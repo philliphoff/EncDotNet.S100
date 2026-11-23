@@ -31,12 +31,26 @@ internal static partial class RuleConditionText
     /// <param name="index">The index whose entries name the attributes, values and settings.</param>
     /// <param name="includeGeometry">Whether to include tests of the feature's geometry.</param>
     /// <returns>The sentence, or an empty string when there is nothing to say.</returns>
-    public static string Describe(IEnumerable<RuleCondition> conditions, ChartReferenceIndex index, bool includeGeometry = true)
+    public static string Describe(IEnumerable<RuleCondition> conditions, ChartReferenceIndex index, bool includeGeometry = true) =>
+        TermText.Join(Separator, DescribeParts(conditions, index, includeGeometry)).Text;
+
+    /// <summary>
+    /// The conditions in words as <see cref="Describe(IEnumerable{RuleCondition}, ChartReferenceIndex, bool)"/>
+    /// says them, one part per condition that must hold, with the names of
+    /// attributes, listed values, display settings and feature types as
+    /// terms (R8, #1651): in "Colour is red", "Colour" names the attribute
+    /// and "red" its listed value.
+    /// </summary>
+    /// <param name="conditions">The conditions, outermost first.</param>
+    /// <param name="index">The index whose entries name the attributes, values and settings.</param>
+    /// <param name="includeGeometry">Whether to include tests of the feature's geometry.</param>
+    /// <returns>The parts, none empty.</returns>
+    public static IReadOnlyList<TermText> DescribeParts(IEnumerable<RuleCondition> conditions, ChartReferenceIndex index, bool includeGeometry = true)
     {
         ArgumentNullException.ThrowIfNull(conditions);
         ArgumentNullException.ThrowIfNull(index);
 
-        var parts = new List<string>();
+        var parts = new List<TermText>();
         var list = conditions.Where(c => includeGeometry || c.Kind != RuleConditionKind.Primitive).ToList();
         for (int i = 0; i < list.Count; i++)
         {
@@ -59,22 +73,29 @@ internal static partial class RuleConditionText
                     parts.Add(Format(
                         Strings.ChartReference_Condition_Is,
                         AttributeName(attribute, condition.Subject),
-                        string.Join(", ", run.Select(c => ValueLabel(attribute, c.Value)))));
+                        TermText.Join(", ", run.Select(c => ValueLabel(attribute, c.Value)))));
                     continue;
                 }
             }
 
-            parts.Add(Describe(condition, index));
+            // An expression read as "a · b" is two parts.
+            parts.AddRange(DescribeTerms(condition, index).Split(Separator));
         }
 
-        return string.Join(Separator, parts.Where(p => p.Length > 0));
+        return parts;
     }
 
     /// <summary>One condition in words.</summary>
     /// <param name="condition">The condition.</param>
     /// <param name="index">The index whose entries name the attributes, values and settings.</param>
     /// <returns>The condition as a short sentence without a full stop.</returns>
-    public static string Describe(RuleCondition condition, ChartReferenceIndex index)
+    public static string Describe(RuleCondition condition, ChartReferenceIndex index) => DescribeTerms(condition, index).Text;
+
+    /// <summary>One condition in words, with its names as terms (R8, #1651).</summary>
+    /// <param name="condition">The condition.</param>
+    /// <param name="index">The index whose entries name the attributes, values and settings.</param>
+    /// <returns>The condition as a short sentence without a full stop.</returns>
+    public static TermText DescribeTerms(RuleCondition condition, ChartReferenceIndex index)
     {
         ArgumentNullException.ThrowIfNull(condition);
         ArgumentNullException.ThrowIfNull(index);
@@ -98,8 +119,8 @@ internal static partial class RuleConditionText
             case RuleConditionKind.FeatureType:
                 {
                     var name = index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.FeatureType, condition.Value ?? string.Empty), out var entry)
-                        ? entry.Name
-                        : condition.Value ?? string.Empty;
+                        ? TermText.Term(entry.Name, entry.Key)
+                        : TermText.Plain(condition.Value);
                     return Compare(condition.Operator, Strings.ChartReference_Condition_FeatureType, name);
                 }
 
@@ -134,7 +155,7 @@ internal static partial class RuleConditionText
         _ => primitive ?? string.Empty,
     };
 
-    private static string Compare(ConditionOperator op, string subject, string value) => op switch
+    private static TermText Compare(ConditionOperator op, TermText subject, TermText value) => op switch
     {
         ConditionOperator.Equal => Format(Strings.ChartReference_Condition_Is, subject, value),
         ConditionOperator.NotEqual => Format(Strings.ChartReference_Condition_IsNot, subject, value),
@@ -158,8 +179,8 @@ internal static partial class RuleConditionText
             ? entry as AttributeEntry
             : null;
 
-    private static string AttributeName(AttributeEntry? attribute, string? code) =>
-        attribute is not null ? SentenceCase(attribute.Name) : Words(code);
+    private static TermText AttributeName(AttributeEntry? attribute, string? code) =>
+        attribute is not null ? TermText.Term(SentenceCase(attribute.Name), attribute.Key) : Words(code);
 
     // A code the catalogue doesn't name, in words: "depthRangeMinimumValue"
     // reads "Depth range minimum value".
@@ -171,17 +192,17 @@ internal static partial class RuleConditionText
         return char.ToUpperInvariant(words[0]) + words[1..];
     }
 
-    private static string SettingName(ChartReferenceIndex index, string? id) =>
+    private static TermText SettingName(ChartReferenceIndex index, string? id) =>
         id is { Length: > 0 } && index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, id), out var entry)
-            ? SentenceCase(entry.Name)
-            : id ?? string.Empty;
+            ? TermText.Term(SentenceCase(entry.Name), entry.Key)
+            : TermText.Plain(id);
 
     // A listed value's label in running text: "Red" as "red", and
     // "Stake, Pole, Perch, Post" as "stake, pole, perch or post".
-    private static string ValueLabel(AttributeEntry? attribute, string? value)
+    private static TermText ValueLabel(AttributeEntry? attribute, string? value)
     {
         if (value is null)
-            return string.Empty;
+            return TermText.Empty;
         ListedValue? listed = attribute?.ListedValues.FirstOrDefault(v => v.Code == value);
         if (listed is null)
             return value;
@@ -191,17 +212,17 @@ internal static partial class RuleConditionText
             words[w] = LowerUnlessAcronym(words[w]);
         var label = string.Join(' ', words);
         int last = label.LastIndexOf(", ", StringComparison.Ordinal);
-        return last < 0
-            ? label
-            : Format(Strings.ChartReference_Condition_OrJoin, label[..last], label[(last + 2)..]);
+        if (last >= 0)
+            label = string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_Condition_OrJoin, label[..last], label[(last + 2)..]);
+        return TermText.Term(label, attribute!.Key, value);
     }
 
     // "Beacon shape is a withy", "Category of landmark is a tower": a
     // listed value that names a thing takes an article; a colour or a
     // number doesn't.
-    private static string WithArticle(AttributeEntry? attribute, string value)
+    private static TermText WithArticle(AttributeEntry? attribute, TermText value)
     {
-        if (attribute is null || attribute.ListedValues.Count == 0 || value.Length == 0)
+        if (attribute is null || attribute.ListedValues.Count == 0 || value.IsEmpty)
             return value;
         var name = attribute.Name.ToLowerInvariant();
         bool names = name.EndsWith("shape", StringComparison.Ordinal)
@@ -210,7 +231,7 @@ internal static partial class RuleConditionText
         if (!names)
             return value;
         return Format(
-            "aeiou".Contains(char.ToLowerInvariant(value[0]), StringComparison.Ordinal)
+            "aeiou".Contains(char.ToLowerInvariant(value.Text[0]), StringComparison.Ordinal)
                 ? Strings.ChartReference_Condition_ArticleAn
                 : Strings.ChartReference_Condition_ArticleA,
             value);
@@ -231,6 +252,5 @@ internal static partial class RuleConditionText
     private static string LowerUnlessAcronym(string word) =>
         word.Count(char.IsUpper) > 1 ? word : word.ToLowerInvariant();
 
-    private static string Format(string format, params object[] args) =>
-        string.Format(CultureInfo.CurrentCulture, format, args);
+    private static TermText Format(string format, params object[] args) => TermText.Format(format, args);
 }

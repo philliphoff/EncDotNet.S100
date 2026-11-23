@@ -224,6 +224,7 @@
 
         <!-- Segmented controls, kind tags and toolbar icon buttons, shared across the viewer. -->
         <StyleInclude Source="avares://SoundCharts/Views/PanelStyles.axaml" />
+        <StyleInclude Source="avares://SoundCharts/Views/ReferenceTerm.axaml" />
 
         <!--
           App-wide Slider accent colour. ShadUI's Slider template sets

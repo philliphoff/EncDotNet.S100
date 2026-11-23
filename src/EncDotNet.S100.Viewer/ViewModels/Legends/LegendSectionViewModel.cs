@@ -210,7 +210,7 @@ internal sealed class LegendSectionViewModel : ViewModelBase
             var old = previous.FirstOrDefault(g => string.Equals(g.Key, group.Key, StringComparison.Ordinal));
             var rows = old is not null && old.Rows.Select(r => r.Entry).SequenceEqual(group.Rows)
                 ? old.Rows
-                : [.. group.Rows.Select(entry => new LegendRowViewModel(entry, tile))];
+                : [.. group.Rows.Select(entry => new LegendRowViewModel(entry, tile, section.CatalogueSpec))];
             return new LegendGroupViewModel(group.Key, group.Title, showTitles, rows);
         })];
     }

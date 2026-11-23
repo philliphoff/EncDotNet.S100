@@ -18,11 +18,19 @@ internal sealed class ChartSettingsPageViewModel : SettingsPageViewModel
     /// <summary>Creates the page.</summary>
     /// <param name="settings">The settings it shows and edits.</param>
     /// <param name="tideStationList">The station list line under the tide predictions switch.</param>
-    public ChartSettingsPageViewModel(ViewerSettingsService settings, TideStationListViewModel tideStationList)
+    /// <param name="terms">
+    /// The chart reference behind the mariner settings' names, which are terms
+    /// (symbol dictionary R8, #1651); <see langword="null"/> keeps them plain.
+    /// </param>
+    public ChartSettingsPageViewModel(
+        ViewerSettingsService settings,
+        TideStationListViewModel tideStationList,
+        Services.ChartReference.ReferenceTerms? terms = null)
         : base(settings)
     {
         ArgumentNullException.ThrowIfNull(tideStationList);
         TideStationList = tideStationList;
+        Terms = terms;
         AvailableWaterLevelAdjustments =
         [
             new(Services.Depth.WaterLevelAdjustmentMode.Off, Strings.Settings_WaterLevelAdjustment_Off),
@@ -50,6 +58,12 @@ internal sealed class ChartSettingsPageViewModel : SettingsPageViewModel
         DepthUnit.FathomsFeet,
         DepthUnit.Fathoms,
     ];
+
+    /// <summary>
+    /// The chart reference behind the mariner settings' names: each is a term
+    /// that opens its display setting entry (symbol dictionary R8, #1651).
+    /// </summary>
+    public Services.ChartReference.ReferenceTerms? Terms { get; }
 
     /// <summary>
     /// Languages the user can pick. <see cref="LanguageOption.Code"/> is the

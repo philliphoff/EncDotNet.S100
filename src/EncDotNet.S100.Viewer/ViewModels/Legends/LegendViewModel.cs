@@ -90,6 +90,13 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
         Rebuild();
     }
 
+    /// <summary>
+    /// The chart reference behind catalogue key rows' terms (D7, symbol
+    /// dictionary R8, #1651); the app sets it. <see langword="null"/> keeps
+    /// every label plain.
+    /// </summary>
+    public EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms? Terms { get; set; }
+
     /// <summary>The sections shown: in the scope, with a row the filter matches; top of the stack first.</summary>
     public ObservableCollection<LegendSectionViewModel> Sections { get; } = [];
 

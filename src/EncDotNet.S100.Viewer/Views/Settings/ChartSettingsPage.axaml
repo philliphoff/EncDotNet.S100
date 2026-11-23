@@ -3,8 +3,10 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:viewer="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.Settings.ChartSettingsPage"
-             x:DataType="vm:ChartSettingsPageViewModel">
+             x:DataType="vm:ChartSettingsPageViewModel"
+             views:ReferenceTerm.Terms="{Binding Terms}">
 
     <!-- Settings → Chart display: basemap, scale indicators and mariner settings (#845). -->
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -75,9 +77,11 @@
 
             <!-- Safety Contour -->
             <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_SafetyContour}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
+                <views:ReferenceTerm Text="{x:Static loc:Strings.Settings_SafetyContour}"
+                                     Link="S-101/DisplaySetting/SafetyContour"
+                                     AutomationProperties.AutomationId="Reference.Term"
+                                     FontSize="12"
+                                     FontWeight="SemiBold" />
                 <TextBox Text="{Binding SafetyContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          AutomationProperties.AutomationId="Settings.SafetyContour"
                          AutomationProperties.Name="{x:Static loc:Strings.Settings_SafetyContour}"
@@ -88,9 +92,11 @@
 
             <!-- Safety Depth -->
             <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_SafetyDepth}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
+                <views:ReferenceTerm Text="{x:Static loc:Strings.Settings_SafetyDepth}"
+                                     Link="S-101/DisplaySetting/SafetyDepth"
+                                     AutomationProperties.AutomationId="Reference.Term"
+                                     FontSize="12"
+                                     FontWeight="SemiBold" />
                 <TextBox Text="{Binding SafetyDepthDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          AutomationProperties.AutomationId="Settings.SafetyDepth"
                          AutomationProperties.Name="{x:Static loc:Strings.Settings_SafetyDepth}"
@@ -101,9 +107,11 @@
 
             <!-- Shallow Contour -->
             <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_ShallowContour}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
+                <views:ReferenceTerm Text="{x:Static loc:Strings.Settings_ShallowContour}"
+                                     Link="S-101/DisplaySetting/ShallowContour"
+                                     AutomationProperties.AutomationId="Reference.Term"
+                                     FontSize="12"
+                                     FontWeight="SemiBold" />
                 <TextBox Text="{Binding ShallowContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          AutomationProperties.AutomationId="Settings.ShallowContour"
                          AutomationProperties.Name="{x:Static loc:Strings.Settings_ShallowContour}"
@@ -114,9 +122,11 @@
 
             <!-- Deep Contour -->
             <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_DeepContour}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
+                <views:ReferenceTerm Text="{x:Static loc:Strings.Settings_DeepContour}"
+                                     Link="S-101/DisplaySetting/DeepContour"
+                                     AutomationProperties.AutomationId="Reference.Term"
+                                     FontSize="12"
+                                     FontWeight="SemiBold" />
                 <TextBox Text="{Binding DeepContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          AutomationProperties.AutomationId="Settings.DeepContour"
                          AutomationProperties.Name="{x:Static loc:Strings.Settings_DeepContour}"
@@ -126,40 +136,61 @@
             </StackPanel>
 
             <!-- S-101 toggles -->
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_FourShades}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_FourShades}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FourShades}"  AutomationProperties.AutomationId="Settings.FourShades" AutomationProperties.Name="{x:Static loc:Strings.Settings_FourShades}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_FourShades}"
+                                     Link="S-101/DisplaySetting/FourShades"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FourShades}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_FourShades}"  AutomationProperties.AutomationId="Settings.FourShades" AutomationProperties.Name="{x:Static loc:Strings.Settings_FourShades}"/>
             </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowWaterDangers}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShallowWaterDangers}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShallowWaterDangers}"  AutomationProperties.AutomationId="Settings.ShallowWaterDangers" AutomationProperties.Name="{x:Static loc:Strings.Settings_ShallowWaterDangers}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_ShallowWaterDangers}"
+                                     Link="S-101/DisplaySetting/ShallowWaterDangers"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShallowWaterDangers}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowWaterDangers}"  AutomationProperties.AutomationId="Settings.ShallowWaterDangers" AutomationProperties.Name="{x:Static loc:Strings.Settings_ShallowWaterDangers}"/>
             </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_PlainBoundaries}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_PlainBoundaries}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding PlainBoundaries}"  AutomationProperties.AutomationId="Settings.PlainBoundaries" AutomationProperties.Name="{x:Static loc:Strings.Settings_PlainBoundaries}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_PlainBoundaries}"
+                                     Link="S-101/DisplaySetting/PlainBoundaries"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding PlainBoundaries}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_PlainBoundaries}"  AutomationProperties.AutomationId="Settings.PlainBoundaries" AutomationProperties.Name="{x:Static loc:Strings.Settings_PlainBoundaries}"/>
             </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_SimplifiedSymbols}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_SimplifiedSymbols}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding SimplifiedSymbols}"  AutomationProperties.AutomationId="Settings.SimplifiedSymbols" AutomationProperties.Name="{x:Static loc:Strings.Settings_SimplifiedSymbols}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_SimplifiedSymbols}"
+                                     Link="S-101/DisplaySetting/SimplifiedSymbols"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding SimplifiedSymbols}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_SimplifiedSymbols}"  AutomationProperties.AutomationId="Settings.SimplifiedSymbols" AutomationProperties.Name="{x:Static loc:Strings.Settings_SimplifiedSymbols}"/>
             </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_FullLightLines}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_FullLightLines}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FullLightLines}"  AutomationProperties.AutomationId="Settings.FullLightLines" AutomationProperties.Name="{x:Static loc:Strings.Settings_FullLightLines}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_FullLightLines}"
+                                     Link="S-101/DisplaySetting/FullLightLines"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FullLightLines}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_FullLightLines}"  AutomationProperties.AutomationId="Settings.FullLightLines" AutomationProperties.Name="{x:Static loc:Strings.Settings_FullLightLines}"/>
             </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_RadarOverlay}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_RadarOverlay}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding RadarOverlay}"  AutomationProperties.AutomationId="Settings.RadarOverlay" AutomationProperties.Name="{x:Static loc:Strings.Settings_RadarOverlay}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_RadarOverlay}"
+                                     Link="S-101/DisplaySetting/RadarOverlay"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding RadarOverlay}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_RadarOverlay}"  AutomationProperties.AutomationId="Settings.RadarOverlay" AutomationProperties.Name="{x:Static loc:Strings.Settings_RadarOverlay}"/>
             </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IgnoreScaleMinimum}"  AutomationProperties.AutomationId="Settings.IgnoreScaleMinimum" AutomationProperties.Name="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"/>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto">
+                <!-- A portrayal context parameter: its name is a term (symbol dictionary R8). -->
+                <views:ReferenceTerm Grid.Column="0"
+                                     Text="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"
+                                     Link="S-101/DisplaySetting/IgnoreScaleMinimum"
+                                     AutomationProperties.AutomationId="Reference.Term" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IgnoreScaleMinimum}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}"  AutomationProperties.AutomationId="Settings.IgnoreScaleMinimum" AutomationProperties.Name="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"/>
             </Grid>
 
             <!-- Water level adjustment (#1132): a viewer setting beside the mariner
@@ -328,9 +359,11 @@
 
             <!-- National Language -->
             <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_NationalLanguage}"
-                           FontSize="12"
-                           FontWeight="SemiBold" />
+                <views:ReferenceTerm Text="{x:Static loc:Strings.Settings_NationalLanguage}"
+                                     Link="S-101/DisplaySetting/NationalLanguage"
+                                     AutomationProperties.AutomationId="Reference.Term"
+                                     FontSize="12"
+                                     FontWeight="SemiBold" />
                 <ComboBox ItemsSource="{Binding AvailableLanguages}"
                           AutomationProperties.AutomationId="Settings.NationalLanguage"
                           AutomationProperties.Name="{x:Static loc:Strings.Settings_NationalLanguage}"

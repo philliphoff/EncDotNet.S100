@@ -252,34 +252,33 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
     /// <param name="index">The index, for attribute and value names.</param>
     /// <param name="geometry">Whether to say the geometry a case tests.</param>
     /// <param name="max">The most cases to list.</param>
-    internal static List<string> CasesOf(IEnumerable<RuleUse> uses, ChartReferenceIndex index, bool geometry, int max)
+    internal static List<TermText> CasesOf(IEnumerable<RuleUse> uses, ChartReferenceIndex index, bool geometry, int max)
     {
         var cases = MergeOnOff(uses
-            .Select(u => RuleConditionText.Describe(u.Conditions, index, geometry))
-            .Distinct(StringComparer.Ordinal)
-            .Select(c => c.Split(RuleConditionText.Separator, StringSplitOptions.RemoveEmptyEntries).ToList())
+            .Select(u => RuleConditionText.DescribeParts(u.Conditions, index, geometry).ToList())
+            .DistinctBy(c => TermText.Join(RuleConditionText.Separator, c))
             .ToList());
 
-        var lead = new List<string>();
+        var lead = new List<TermText>();
         if (cases.Count > 1)
         {
-            var parts = cases.Select(c => c.Split(RuleConditionText.Separator, StringSplitOptions.RemoveEmptyEntries)).ToList();
-            var common = parts[0].Where(p => parts.All(other => other.Contains(p, StringComparer.Ordinal))).ToList();
+            var parts = cases.Select(c => c.Split(RuleConditionText.Separator)).ToList();
+            var common = parts[0].Where(p => parts.All(other => other.Contains(p))).ToList();
             if (common.Count > 0)
             {
-                var shared = string.Join(RuleConditionText.Separator, common);
-                lead.Add(string.Format(CultureInfo.CurrentCulture, Strings.Reference_CasesWhen, LowerFirst(shared)));
+                var shared = TermText.Join(RuleConditionText.Separator, common);
+                lead.Add(TermText.Format(Strings.Reference_CasesWhen, shared.LowerFirst()));
                 cases =
                 [
                     .. parts
-                        .Select(p => string.Join(RuleConditionText.Separator, p.Where(x => !common.Contains(x, StringComparer.Ordinal))))
-                        .Select(c => c.Length == 0 ? Strings.Reference_NoFurtherCondition : c)
-                        .Distinct(StringComparer.Ordinal),
+                        .Select(p => TermText.Join(RuleConditionText.Separator, p.Where(x => !common.Contains(x))))
+                        .Select(c => c.IsEmpty ? Strings.Reference_NoFurtherCondition : c)
+                        .Distinct(),
                 ];
             }
         }
 
-        cases = [.. cases.Select(c => c.Length == 0 ? Strings.ChartReference_Always : c)];
+        cases = [.. cases.Select(c => c.IsEmpty ? Strings.ChartReference_Always : c)];
         if (cases.Count > max)
         {
             var more = cases.Count - max;
@@ -296,8 +295,8 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
     /// case reads "Beacon shape is a cairn" (#1650).
     /// </summary>
     /// <param name="cases">Each case's conditions in words.</param>
-    /// <returns>The cases, each once, as text.</returns>
-    internal static List<string> MergeOnOff(List<List<string>> cases)
+    /// <returns>The cases, each once.</returns>
+    internal static List<TermText> MergeOnOff(List<List<TermText>> cases)
     {
         var on = Affix(Strings.ChartReference_Condition_On);
         var off = Affix(Strings.ChartReference_Condition_Off);
@@ -309,11 +308,13 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
             {
                 foreach (var part in cases[i])
                 {
-                    if (!part.StartsWith(on.Prefix, StringComparison.Ordinal) || !part.EndsWith(on.Suffix, StringComparison.Ordinal))
+                    var text = part.Text;
+                    if (!text.StartsWith(on.Prefix, StringComparison.Ordinal) || !text.EndsWith(on.Suffix, StringComparison.Ordinal))
                         continue;
-                    var name = part[on.Prefix.Length..^on.Suffix.Length];
-                    var other = cases[i].Select(p => p == part ? off.Prefix + name + off.Suffix : p).ToList();
-                    int j = cases.FindIndex(c => c.SequenceEqual(other, StringComparer.Ordinal));
+                    var name = text[on.Prefix.Length..^on.Suffix.Length];
+                    var offText = off.Prefix + name + off.Suffix;
+                    var other = cases[i].Select(p => p == part ? offText : p.Text).ToList();
+                    int j = cases.FindIndex(c => c.Select(p => p.Text).SequenceEqual(other, StringComparer.Ordinal));
                     if (j < 0)
                         continue;
                     var either = cases[i].Where(p => p != part).ToList();
@@ -326,12 +327,7 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
         }
         while (merged);
 
-        return
-        [
-            .. cases
-                .Select(c => string.Join(RuleConditionText.Separator, c))
-                .Distinct(StringComparer.Ordinal),
-        ];
+        return [.. cases.Select(c => TermText.Join(RuleConditionText.Separator, c)).Distinct()];
     }
 
     // The text around {0} in "{0} is on".
@@ -348,11 +344,11 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
             ? char.ToLower(text[0], CultureInfo.CurrentCulture) + text[1..]
             : text;
 
-    private List<string> CasesOf(IEnumerable<SymbolUse> uses, bool geometry) => CasesOf(uses, Index, geometry, DrawnWithCases);
+    private List<TermText> CasesOf(IEnumerable<SymbolUse> uses, bool geometry) => CasesOf(uses, Index, geometry, DrawnWithCases);
 
-    // An item without an entry of its own (an unknown id) still shows, by its id.
-    private ChartReferenceLinkViewModel Link(ReferenceKey key, IReadOnlyList<string> cases, string? note) =>
-        LinkTo(key, cases, note) ?? new ChartReferenceLinkViewModel(key, key.Code, cases, note, Context.Open);
+    // An item without an entry of its own (an unknown id) still shows, by its id, as plain text.
+    private ChartReferenceLinkViewModel Link(ReferenceKey key, IReadOnlyList<TermText> cases, string? note) =>
+        LinkTo(key, cases, note) ?? new ChartReferenceLinkViewModel(key, key.Code, cases, note, Context.Open) { IsKnown = false };
 
     // A use drawn only when Simplified symbols is off.
     private static bool IsPaperChart(RuleUse use) =>
