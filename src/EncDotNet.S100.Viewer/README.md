@@ -983,6 +983,15 @@ glyph large and at the size the chart draws it, in millimetres:
 - a **display setting** gives its default and current state, with **Change in
   Display settings**, and the feature types it changes.
 
+Every name in an entry is a **term**, with a dotted underline, and so are the
+attribute, value and setting names in Drawn with ("Colour is red"). Rest the
+pointer on a term, or tab to it, for half a second to see a peek: its kind,
+name, glyph and definition, **Open in reference**, and the S-100 eXaminer
+link when eXaminer links are on. Space pins the peek so Tab reaches its links;
+Escape closes it. Click a term to open its entry. The Legend tab's catalogue
+key rows and the mariner settings' names in **Settings › Chart** are terms
+too.
+
 Every name in an entry links to its own entry. **Back** and **Forward**
 (Alt+Left, Alt+Right) and the breadcrumb above the entry retrace the trail;
 Object information keeps its pick, one tab away. Before anything is opened,

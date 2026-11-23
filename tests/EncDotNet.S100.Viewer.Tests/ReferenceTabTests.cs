@@ -529,7 +529,7 @@ public sealed class ReferenceTabTests : IDisposable
         double Left(Avalonia.Visual v) => Avalonia.VisualExtensions.TranslatePoint(v, new Avalonia.Point(0, 0), entryView)!.Value.X;
         var kind = host.Find<TextBlock>("Reference.Entry.Kind");
         var label = entryView.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("crHeading") && t.IsEffectivelyVisible && t != kind);
-        var link = host.FindAll<Button>("Reference.Link").First(b => b.IsEffectivelyVisible);
+        var link = host.FindAll<StackPanel>("Reference.Link").First(b => b.IsEffectivelyVisible);
         var linkText = link.GetVisualDescendants().OfType<TextBlock>().First();
         Assert.Equal(Left(kind), Left(label), 1);
         Assert.Equal(Left(kind), Left(linkText), 1);
@@ -554,14 +554,14 @@ public sealed class ReferenceTabTests : IDisposable
         Assert.True(entryView.Bounds.Height < 1500, $"entry {entryView.Bounds.Height} px tall");
 
         // Expanding reveals the items.
-        int before = host.FindAll<Button>("Reference.Link").Count(b => b.IsEffectivelyVisible);
+        int before = host.FindAll<StackPanel>("Reference.Link").Count(b => b.IsEffectivelyVisible);
         shared.IsExpanded = true;
         paper.IsExpanded = true;
         host.Settle();
         Assert.True(host.IsShown("Reference.Entry.Shared"));
         Assert.True(host.IsShown("Reference.Entry.PaperChart"));
-        int after = host.FindAll<Button>("Reference.Link").Count(b => b.IsEffectivelyVisible);
-        var folded = host.Find<ItemsControl>("Reference.Entry.Shared").GetVisualDescendants().OfType<Button>().First();
+        int after = host.FindAll<StackPanel>("Reference.Link").Count(b => b.IsEffectivelyVisible);
+        var folded = host.Find<ItemsControl>("Reference.Entry.Shared").GetVisualDescendants().OfType<ReferenceTerm>().First();
         Assert.Equal(Left(kind), Left(folded.GetVisualDescendants().OfType<TextBlock>().First()), 1);
         Assert.Equal(before + entry.DrawnByShared.Count + entry.PaperChart.Count, after);
     }
@@ -635,7 +635,7 @@ public sealed class ReferenceTabTests : IDisposable
         Assert.False(host.Find<Button>("Reference.Forward").IsEffectivelyEnabled);
         Assert.True(host.IsShown("Reference.Breadcrumb"));
         Assert.True(host.IsShown("Reference.Entry.ChartGlyph"));
-        var links = host.FindAll<Button>("Reference.Link");
+        var links = host.FindAll<StackPanel>("Reference.Link");
         Assert.Contains(links, b => Avalonia.Automation.AutomationProperties.GetName(b)!.StartsWith("BCNLAT21", StringComparison.Ordinal));
 
         // Everything wraps inside the 360 px dock.
@@ -645,7 +645,8 @@ public sealed class ReferenceTabTests : IDisposable
             t => Assert.True(t.Bounds.Width <= 360, $"\"{t.Text}\" is {t.Bounds.Width} px wide"));
 
         // Following a link, then Alt+Left and Alt+Right.
-        host.Click(links.First(b => Avalonia.Automation.AutomationProperties.GetName(b)!.StartsWith("BCNLAT21", StringComparison.Ordinal)));
+        host.Click(links.First(b => Avalonia.Automation.AutomationProperties.GetName(b)!.StartsWith("BCNLAT21", StringComparison.Ordinal))
+            .GetVisualDescendants().OfType<ReferenceTerm>().First());
         await tab.Loading;
         Dispatcher.UIThread.RunJobs();
         host.Settle();

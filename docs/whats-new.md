@@ -21,6 +21,17 @@ month. For package versions and release assets, see
   files and exits with code `9` when a catalogue fails its check
   ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
 
+- **Chart reference terms and peeks.** Names in Reference entries are now
+  terms: text with a dotted underline in the text colour. Rest the pointer on
+  a term, or move keyboard focus to it, and after half a second a peek shows
+  its kind, name, glyph and definition, with **Open in reference** and, when
+  eXaminer links are on, the S-100 eXaminer. Space pins the peek so Tab can
+  reach its links, Escape closes it, and a click opens the entry. The words in
+  Drawn with are terms too: in "Colour is red", both Colour and red. The
+  Legend tab's catalogue key rows and the mariner settings' names in
+  **Settings › Chart** are terms as well. A Legend row still rings its
+  features on the map while its peek shows.
+
 - **The Reference tab.** The right dock has a third tab, **Reference**,
   after Object information and the Legend. Selecting a row in Chart reference
   opens its entry there: a feature type with its codes, display categories,

@@ -40,6 +40,7 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
     private double _chartGlyphWidth;
     private double _chartGlyphHeight;
     private string? _chartSize;
+    private ReferenceTerms? _terms;
 
     /// <summary>Creates an entry view.</summary>
     /// <param name="entry">The entry.</param>
@@ -146,6 +147,9 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
         }
     }
 
+    /// <summary>The terms its names and conditions read (R8, #1651); the view hands them to its terms.</summary>
+    public ReferenceTerms Terms => _terms ??= Context.Terms ?? ReferenceTerms.Of(Context);
+
     /// <summary>The host.</summary>
     protected ReferenceEntryContext Context { get; }
 
@@ -200,7 +204,7 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
     /// <param name="key">The entry.</param>
     /// <param name="cases">Its cases in words.</param>
     /// <param name="note">A note under them.</param>
-    protected ChartReferenceLinkViewModel? LinkTo(ReferenceKey key, IReadOnlyList<string>? cases = null, string? note = null) =>
+    protected ChartReferenceLinkViewModel? LinkTo(ReferenceKey key, IReadOnlyList<TermText>? cases = null, string? note = null) =>
         Index.TryGet(key, out var entry)
             ? new ChartReferenceLinkViewModel(entry.Key, LinkName(entry), cases ?? [], note, Context.Open)
             : null;

@@ -1924,6 +1924,20 @@ public partial class App : Application
         // The Reference tab's trail (R7, #1650): one entry at a time, with
         // back, forward and a breadcrumb; MCP open_chart_reference uses it too.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>();
+        // Terms and peeks (R8, #1651): the Legend tab's catalogue key rows and
+        // the mariner settings' names open entries in the Reference tab; each
+        // entry reads them over its own index.
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<ViewerSettingsService>();
+            return EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms.For(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceGlyphCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>(),
+                sp.GetRequiredService<IS100ExaminerLinkBuilder>(),
+                sp.GetRequiredService<IUrlOpener>(),
+                () => settings.SimplifiedSymbols);
+        });
         services.AddSingleton(sp =>
         {
             var tab = new EncDotNet.S100.Viewer.ViewModels.ChartReference.ReferenceViewModel(
@@ -1936,6 +1950,7 @@ public partial class App : Application
             tab.ConnectMap(new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceMap(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()));
+            tab.Terms = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>();
             // The layout is resolved on click, since it is built from the tabs, which hold this view model.
             tab.ShowChartReferenceCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
                 () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferenceCommand.Execute(null));
@@ -2389,6 +2404,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>(),
                 // D7, symbol dictionary R5: Show all in Chart reference.
                 spec => sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>().ShowAllInView(spec));
+            // D7, symbol dictionary R8: catalogue key rows are terms.
+            legend.Terms = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>();
             // D17: the S-98 position legend is the fixed first row (#1407).
             legend.PinnedRows.Insert(0, new EncDotNet.S100.Viewer.ViewModels.Legends.PositionLegendRowViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()));

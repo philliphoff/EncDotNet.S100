@@ -179,7 +179,7 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
                 .GroupBy(c => c.Subject!, StringComparer.OrdinalIgnoreCase)
                 .Select(g => LinkTo(
                     new ReferenceKey(Index.Spec, ReferenceKind.DisplaySetting, g.Key),
-                    [.. g.Select(c => RuleConditionText.Describe(c, Index)).Distinct(StringComparer.Ordinal)]))
+                    [.. g.Select(c => RuleConditionText.DescribeTerms(c, Index)).Distinct()]))
                 .OfType<ChartReferenceLinkViewModel>(),
         ];
     }

@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
+using EncDotNet.S100.Viewer.Services.ChartReference;
 
 namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
@@ -10,18 +11,22 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// symbol. Opening it selects that entry's row (design note §4.6: every link
 /// is two-way).
 /// </summary>
+/// <remarks>
+/// The view shows the name as a term (R8, #1651), and the cases as text
+/// whose attribute, value and setting names are terms too (<see cref="CaseTerms"/>).
+/// </remarks>
 internal sealed class ChartReferenceLinkViewModel
 {
     /// <summary>Creates a link.</summary>
     /// <param name="key">The entry the link opens.</param>
     /// <param name="name">The entry's name.</param>
-    /// <param name="cases">The conditions under which it is drawn, one line per case; empty for none.</param>
+    /// <param name="cases">The conditions under which it is drawn, one line per case, with their names as terms; empty for none.</param>
     /// <param name="note">A note under the cases, such as the shared rule that draws it, or <see langword="null"/>.</param>
     /// <param name="open">Selects the entry's row.</param>
     public ChartReferenceLinkViewModel(
         ReferenceKey key,
         string name,
-        IReadOnlyList<string> cases,
+        IReadOnlyList<TermText> cases,
         string? note,
         Action<ReferenceKey> open)
     {
@@ -30,7 +35,8 @@ internal sealed class ChartReferenceLinkViewModel
         ArgumentNullException.ThrowIfNull(open);
         Key = key;
         Name = name;
-        Cases = cases;
+        CaseTerms = cases;
+        Cases = [.. cases.Select(c => c.Text)];
         Note = note;
         OpenCommand = new RelayCommand(() => open(key));
     }
@@ -46,6 +52,15 @@ internal sealed class ChartReferenceLinkViewModel
 
     /// <summary>The conditions under which the entry is drawn, in words, one line per case.</summary>
     public IReadOnlyList<string> Cases { get; }
+
+    /// <summary>The conditions as <see cref="Cases"/> says them, with the names in them as terms (R8).</summary>
+    public IReadOnlyList<TermText> CaseTerms { get; }
+
+    /// <summary>
+    /// Whether the index holds the entry, so its name is a term; an item
+    /// without an entry of its own shows its id as plain text.
+    /// </summary>
+    public bool IsKnown { get; init; } = true;
 
     /// <summary>Whether there are cases to show.</summary>
     public bool HasCases => Cases.Count > 0;
