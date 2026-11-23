@@ -31,6 +31,8 @@ command offers it, and treat paths as local filesystem paths.
   time-step indices are unknown.
 - Use `--format json` for automation where supported. Diagnostics and update
   notices are written to standard error so standard output remains parseable.
+- Redirected text output wraps at the console's width; when none is reported
+  it uses `COLUMNS` if set to a positive number, and 80 columns otherwise.
 - A dataset path may be an HDF5 coverage (`.h5`), ISO 8211 cell (`.000`), or
   GML feature dataset (`.gml`). Commands that accept exchange sets also accept
   a directory, `CATALOG.XML`, or a ZIP whose root contains `CATALOG.XML`.
