@@ -46,6 +46,13 @@
             </ControlTemplate>
         </Setter>
     </Style>
+    <!-- An inline term keeps its exact width, so punctuation after it sits tight (#1651). -->
+    <Style Selector="views|ReferenceTerm.inline /template/ Border#PART_Border">
+        <Setter Property="UseLayoutRounding" Value="False" />
+    </Style>
+    <Style Selector="views|ReferenceTerm.inline /template/ TextBlock#PART_Text">
+        <Setter Property="UseLayoutRounding" Value="False" />
+    </Style>
     <!-- The dotted underline is set in code, in the text's own colour (ReferenceTerm.Underline). -->
     <Style Selector="views|ReferenceTerm:term:pointerover /template/ Border#PART_Border">
         <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />

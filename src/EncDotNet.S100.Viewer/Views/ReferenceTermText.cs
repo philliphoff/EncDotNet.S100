@@ -56,7 +56,11 @@ internal sealed class ReferenceTermText : TextBlock
                         // height to the line; taking back the line gap keeps lines
                         // with terms as tall as lines without.
                         Margin = new Avalonia.Thickness(0, -InlineTrim, 0, 0),
+                        // Its exact width, not one rounded up to a whole pixel, so
+                        // punctuation after it sits tight: "red, green" (#1651).
+                        UseLayoutRounding = false,
                     };
+                    term.Classes.Add("inline");
                     AutomationProperties.SetAutomationId(term, "Reference.Term");
                     inlines.Add(new InlineUIContainer(term) { BaselineAlignment = Avalonia.Media.BaselineAlignment.TextBottom });
                 }

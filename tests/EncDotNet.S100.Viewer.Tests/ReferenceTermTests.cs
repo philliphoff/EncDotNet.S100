@@ -354,6 +354,56 @@ public sealed class ReferenceTermTests : IDisposable
         Assert.IsType<AttributeEntryViewModel>(tab.Entry);
     }
 
+    [AvaloniaFact]
+    public async Task Punctuation_sits_tight_against_the_term_before_it()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var nav = new ReferenceNavigator();
+        using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a));
+        using var host = ViewHost.Show(new ReferenceView { DataContext = tab }, 360, 900);
+        nav.Open(Key(ReferenceKind.FeatureType, "LateralBeacon"));
+        await tab.Loading;
+        Dispatcher.UIThread.RunJobs();
+        host.Settle();
+
+        // The rendered text, run by run: no space before a comma.
+        var texts = host.Window.GetVisualDescendants().OfType<ReferenceTermText>().ToList();
+        static string Rendered(ReferenceTermText t) => string.Concat(t.Inlines!.Select(i => i switch
+        {
+            Avalonia.Controls.Documents.Run run => run.Text,
+            Avalonia.Controls.Documents.InlineUIContainer { Child: ReferenceTerm term } => term.Text,
+            _ => string.Empty,
+        }));
+        var colour = texts.First(t => Rendered(t).StartsWith("Colour is red, green, red · Beacon shape is ", StringComparison.Ordinal));
+        Assert.Equal("Colour is red, green, red · Beacon shape is a stake, pole, perch or post", Rendered(colour));
+        Assert.All(texts, t => Assert.DoesNotContain(" ,", Rendered(t), StringComparison.Ordinal));
+        Assert.Contains(texts, t => Rendered(t) == "When simplified symbols is on:");
+
+        // Laid out: each term's box is as wide as its words, not rounded up,
+        // and the gap from "red" to "green" is exactly the width of ", ", so
+        // the comma's left edge touches the end of "red".
+        var terms = colour.Inlines!.OfType<Avalonia.Controls.Documents.InlineUIContainer>().Select(c => (ReferenceTerm)c.Child).ToList();
+        var red = terms.First(t => t.Text == "red");
+        var green = terms.First(t => t.Text == "green");
+        double Left(Control c) => c.TranslatePoint(new Point(0, 0), colour)!.Value.X;
+        using var comma = new Avalonia.Media.TextFormatting.TextLayout(
+            ", ",
+            new Avalonia.Media.Typeface(colour.FontFamily, colour.FontStyle, colour.FontWeight),
+            colour.FontSize,
+            colour.Foreground);
+        Assert.Equal(comma.WidthIncludingTrailingWhitespace, Left(green) - (Left(red) + red.Bounds.Width), 0.5);
+        Assert.All(terms, t =>
+        {
+            using var words = new Avalonia.Media.TextFormatting.TextLayout(
+                t.Text,
+                new Avalonia.Media.Typeface(colour.FontFamily, colour.FontStyle, colour.FontWeight),
+                colour.FontSize,
+                colour.Foreground);
+            Assert.True(Math.Abs(words.WidthIncludingTrailingWhitespace - t.Bounds.Width) < 0.1, $"\"{t.Text}\" is {t.Bounds.Width} px for {words.WidthIncludingTrailingWhitespace} px of text");
+        });
+    }
+
     // ---- The Legend tab (D7, D19) ----
 
     private const string Svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><circle class=\"sCHBLK\" cx=\"5\" cy=\"5\" r=\"4\"/></svg>";
