@@ -18,6 +18,8 @@
         <conv:SignatureStatusConverter x:Key="SignatureStatusUnsignedConverter" Match="Unsigned" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusInvalidConverter" Match="Invalid,Untrusted,Mixed,Error" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusCheckingConverter" Match="Checking,Unknown" />
+        <conv:SignatureStatusConverter x:Key="SignatureStatusUnverifiedConverter" Match="Unverified" />
+        <conv:SignatureStatusConverter x:Key="SignatureStatusNotCheckedConverter" Match="NotChecked" />
 
     </UserControl.Resources>
 
@@ -313,6 +315,12 @@
                                             <ic:FluentIcon FontSize="18"
                                                            IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
                                                            Icon="ShieldError" IconVariant="Filled" Foreground="#dc2626" />
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusUnverifiedConverter}}"
+                                                           Icon="ShieldQuestion" IconVariant="Filled" Foreground="#d97706" />
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusNotCheckedConverter}}"
+                                                           Icon="ShieldQuestion" IconVariant="Regular" Opacity="0.5" />
                                             <ic:FluentIcon FontSize="18"
                                                            IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
                                                            Icon="Shield" IconVariant="Regular" Opacity="0.4" />
@@ -805,6 +813,12 @@
                                 <ic:FluentIcon FontSize="18"
                                                IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
                                                Icon="ShieldError" IconVariant="Filled" Foreground="#dc2626" />
+                                <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusUnverifiedConverter}}"
+                                               Icon="ShieldQuestion" IconVariant="Filled" Foreground="#d97706" />
+                                <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusNotCheckedConverter}}"
+                                               Icon="ShieldQuestion" IconVariant="Regular" Opacity="0.5" />
                                 <ic:FluentIcon FontSize="18"
                                                IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
                                                Icon="Shield" IconVariant="Regular" Opacity="0.4" />

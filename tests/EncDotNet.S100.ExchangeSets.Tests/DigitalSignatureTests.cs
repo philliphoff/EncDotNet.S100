@@ -403,7 +403,7 @@ public class DigitalSignatureTests
         var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.FileResults.Count);
-        Assert.Equal(VerificationOutcome.Ok, result.FileResults[0].Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, result.FileResults[0].Outcome);
         Assert.Equal(VerificationOutcome.NotSigned, result.FileResults[1].Outcome);
         Assert.False(result.AllValid);
         Assert.False(result.IsUnsigned);

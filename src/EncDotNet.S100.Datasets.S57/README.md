@@ -492,8 +492,10 @@ How the result is mapped:
   `AllValid == false`. Only `ChecksumMismatch`, `FileMissing`, `Error` and
   invalid signatures fail integrity. This matches the upstream S-57
   `AllValid`.
-- The upstream S-57 verifier reports every file as `NotSigned`, because it
-  doesn't verify S-63 signatures yet. CRC checking works.
+- S-63 signatures aren't checked yet: the upstream verifier has only a seam
+  for them (`IS63SignatureVerifier`). So `VerifyAsync` reports each file's
+  signature as `SignatureNotChecked`, not `NotSigned`, because the set may be
+  signed; `SignaturesNotChecked` is `true`. CRC checking works.
 
 ## Exchange-set cell enumeration
 

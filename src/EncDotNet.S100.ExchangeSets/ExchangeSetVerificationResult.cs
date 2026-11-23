@@ -49,9 +49,36 @@ public sealed class ExchangeSetVerificationResult
     /// A catalogue that fails its <c>CATALOG.SIGN</c> check makes this
     /// <c>false</c> too (<see cref="CatalogueSignatureFailed"/>).
     /// </para>
+    /// <para>
+    /// A signature from a signer that doesn't chain to a trusted root
+    /// (<see cref="VerificationOutcome.SignatureValidUntrusted"/>), on a file
+    /// or on the catalogue, makes this <c>false</c>: <see cref="AllValid"/>
+    /// means every signer is verified. <see cref="AllSignaturesIntact"/> is the
+    /// weaker check that only the signatures are correct.
+    /// </para>
     /// </remarks>
     public bool AllValid =>
-        Delivered.All(r => r.Outcome == VerificationOutcome.Ok) && !CatalogueSignatureFailed;
+        Delivered.All(r => r.Outcome == VerificationOutcome.Ok)
+        && CatalogueSignature?.Outcome is null or VerificationOutcome.Ok or VerificationOutcome.NotSigned;
+
+    /// <summary>
+    /// Returns <c>true</c> when every file is signed and each signature, and
+    /// the catalogue's if it has one, matches its content, whether or not the
+    /// signer chains to a trusted root (<see cref="VerificationOutcome.Ok"/> or
+    /// <see cref="VerificationOutcome.SignatureValidUntrusted"/>).
+    /// </summary>
+    public bool AllSignaturesIntact =>
+        Delivered.All(r => r.Outcome is VerificationOutcome.Ok or VerificationOutcome.SignatureValidUntrusted)
+        && !CatalogueSignatureFailed;
+
+    /// <summary>
+    /// Returns <c>true</c> when at least one file, or the catalogue, has a
+    /// correct signature from a signer that doesn't chain to a trusted root
+    /// (<see cref="VerificationOutcome.SignatureValidUntrusted"/>).
+    /// </summary>
+    public bool HasUnverifiedSigners =>
+        FileResults.Any(r => r.Outcome == VerificationOutcome.SignatureValidUntrusted)
+        || CatalogueSignature?.Outcome == VerificationOutcome.SignatureValidUntrusted;
 
     /// <summary>
     /// Returns <c>true</c> when at least one file, or the catalogue, has
@@ -66,7 +93,10 @@ public sealed class ExchangeSetVerificationResult
     /// the catalogue didn't verify against it (see <see cref="CatalogueSignature"/>).
     /// </summary>
     public bool CatalogueSignatureFailed =>
-        CatalogueSignature is { Outcome: not (VerificationOutcome.Ok or VerificationOutcome.NotSigned) };
+        CatalogueSignature is
+        {
+            Outcome: not (VerificationOutcome.Ok or VerificationOutcome.NotSigned or VerificationOutcome.SignatureValidUntrusted),
+        };
 
     /// <summary>
     /// Returns <c>true</c> when no file carries a signature
@@ -74,6 +104,16 @@ public sealed class ExchangeSetVerificationResult
     /// withdrawn records.
     /// </summary>
     public bool IsUnsigned => Delivered.All(r => r.Outcome == VerificationOutcome.NotSigned);
+
+    /// <summary>
+    /// Returns <c>true</c> when the verifier couldn't check any file's
+    /// signature (all are <see cref="VerificationOutcome.SignatureNotChecked"/>),
+    /// leaving out withdrawn records: the set may be signed, but nothing was
+    /// verified. The S-57 bridge reports this, since S-63 signatures aren't
+    /// checked yet.
+    /// </summary>
+    public bool SignaturesNotChecked =>
+        Delivered.Any() && Delivered.All(r => r.Outcome == VerificationOutcome.SignatureNotChecked);
 
     /// <summary>
     /// Returns <c>true</c> when at least one file's computed digest did not

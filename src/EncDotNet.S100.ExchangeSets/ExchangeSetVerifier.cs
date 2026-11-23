@@ -501,7 +501,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
     private static SignatureFailureReason MapFailureReason(VerificationOutcome outcome) =>
         outcome switch
         {
-            VerificationOutcome.Ok => SignatureFailureReason.None,
+            VerificationOutcome.Ok or VerificationOutcome.SignatureValidUntrusted => SignatureFailureReason.None,
             VerificationOutcome.SignatureInvalid => SignatureFailureReason.SignatureMismatch,
             VerificationOutcome.CertificateNotFound => SignatureFailureReason.CertificateNotFound,
             VerificationOutcome.CertificateUntrusted => SignatureFailureReason.CertificateUntrusted,
@@ -543,8 +543,12 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             schemeAdministratorId,
             trustAnchors,
             cancellationToken).ConfigureAwait(false);
+        // The file takes its worst signature: any failure, then a valid
+        // signature from a signer that isn't trusted, then Ok.
         var firstFailure = signatureResults.FirstOrDefault(
-            result => result.Outcome != VerificationOutcome.Ok);
+            result => result.Outcome is not (VerificationOutcome.Ok or VerificationOutcome.SignatureValidUntrusted))
+            ?? signatureResults.FirstOrDefault(
+                result => result.Outcome == VerificationOutcome.SignatureValidUntrusted);
         var signatureOutcome = signatureResults.Count == 0
             ? VerificationOutcome.NotSigned
             : firstFailure?.Outcome ?? VerificationOutcome.Ok;
@@ -644,12 +648,12 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         {
             // Check certificate trust
             var trustOutcome = ValidateCertificateTrust(cert, trustAnchors, certificateChain);
-            if (trustOutcome is not null)
+            if (trustOutcome is { } failure && failure != VerificationOutcome.SignatureValidUntrusted)
             {
-                var detail = trustOutcome.Value == VerificationOutcome.CertificateExpired
+                var detail = failure == VerificationOutcome.CertificateExpired
                     ? $"Certificate '{signatureValue.CertificateRef}' expired on {cert.NotAfter:O}."
                     : $"Certificate '{signatureValue.CertificateRef}' is not trusted.";
-                return (trustOutcome.Value, detail);
+                return (failure, detail);
             }
 
             // Verify the signature
@@ -662,7 +666,14 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                     signatureValue.Value,
                     signatureFormat,
                     requireP384);
-                return (valid ? VerificationOutcome.Ok : VerificationOutcome.SignatureInvalid, null);
+                if (!valid)
+                {
+                    return (VerificationOutcome.SignatureInvalid, null);
+                }
+
+                return trustOutcome is null
+                    ? (VerificationOutcome.Ok, null)
+                    : (VerificationOutcome.SignatureValidUntrusted, UntrustedSignerDetail(cert));
             }
             catch (CryptographicException ex)
             {
@@ -685,10 +696,10 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         foreach (var certificate in certificates)
         {
             var trustOutcome = ValidateCertificateTrust(certificate, trustAnchors, null);
-            if (trustOutcome is not null)
+            if (trustOutcome is { } trustFailure && trustFailure != VerificationOutcome.SignatureValidUntrusted)
             {
-                failure = trustOutcome;
-                detail = trustOutcome == VerificationOutcome.CertificateExpired
+                failure = trustFailure;
+                detail = trustFailure == VerificationOutcome.CertificateExpired
                     ? $"Scheme Administrator certificate expired on {certificate.NotAfter:O}."
                     : "Scheme Administrator certificate is not trusted.";
                 continue;
@@ -704,7 +715,9 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                     signatureFormat,
                     requireP384))
                 {
-                    return (VerificationOutcome.Ok, null);
+                    return trustOutcome is null
+                        ? (VerificationOutcome.Ok, null)
+                        : (VerificationOutcome.SignatureValidUntrusted, UntrustedSignerDetail(certificate));
                 }
 
                 failure = VerificationOutcome.SignatureInvalid;
@@ -720,10 +733,16 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         return (failure ?? VerificationOutcome.CertificateNotFound, detail);
     }
 
+    private static string UntrustedSignerDetail(X509Certificate2 cert) =>
+        $"Signature is valid, but the signer '{cert.Subject}' doesn't chain to a trusted Scheme Administrator.";
+
     /// <summary>
     /// Validates the certificate against the configured trust anchors.
-    /// Returns <c>null</c> if the certificate is trusted (or trust validation is skipped),
-    /// otherwise returns the appropriate <see cref="VerificationOutcome"/>.
+    /// Returns <c>null</c> if the certificate chains to one of
+    /// <see cref="TrustAnchorOptions.TrustedRoots"/>;
+    /// <see cref="VerificationOutcome.SignatureValidUntrusted"/> if it doesn't
+    /// but <see cref="TrustAnchorOptions.AllowUntrustedCertificates"/> is set,
+    /// so the caller still checks the signature; otherwise the failure.
     /// </summary>
     private static VerificationOutcome? ValidateCertificateTrust(
         X509Certificate2 cert,
@@ -737,16 +756,14 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             return VerificationOutcome.CertificateExpired;
         }
 
-        // If caller allows untrusted certs, skip chain validation
-        if (trustAnchors.AllowUntrustedCertificates)
-        {
-            return null;
-        }
+        var untrusted = trustAnchors.AllowUntrustedCertificates
+            ? VerificationOutcome.SignatureValidUntrusted
+            : VerificationOutcome.CertificateUntrusted;
 
-        // If no trusted roots configured, we cannot validate
+        // With no trusted roots, nothing can vouch for the signer.
         if (trustAnchors.TrustedRoots.Count == 0)
         {
-            return VerificationOutcome.CertificateUntrusted;
+            return untrusted;
         }
 
         using var chain = new X509Chain();
@@ -776,7 +793,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                 }
             }
 
-            return chain.Build(cert) ? null : VerificationOutcome.CertificateUntrusted;
+            return chain.Build(cert) ? null : untrusted;
         }
         catch (CryptographicException)
         {

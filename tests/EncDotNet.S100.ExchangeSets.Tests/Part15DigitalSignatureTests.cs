@@ -185,11 +185,11 @@ public class Part15DigitalSignatureTests
             TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
-        Assert.Equal(VerificationOutcome.Ok, file.Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, file.Outcome);
         Assert.Equal(3, file.SignatureResults.Count);
         Assert.All(file.SignatureResults, signature =>
         {
-            Assert.Equal(VerificationOutcome.Ok, signature.Outcome);
+            Assert.Equal(VerificationOutcome.SignatureValidUntrusted, signature.Outcome);
             Assert.Equal(SignatureFailureReason.None, signature.FailureReason);
         });
     }
@@ -222,9 +222,9 @@ public class Part15DigitalSignatureTests
             TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
-        Assert.Equal(VerificationOutcome.Ok, file.Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, file.Outcome);
         Assert.All(file.SignatureResults, signature =>
-            Assert.Equal(VerificationOutcome.Ok, signature.Outcome));
+            Assert.Equal(VerificationOutcome.SignatureValidUntrusted, signature.Outcome));
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public class Part15DigitalSignatureTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            VerificationOutcome.Ok,
+            VerificationOutcome.SignatureValidUntrusted,
             Assert.Single(Assert.Single(result.FileResults).SignatureResults).Outcome);
     }
 
@@ -297,7 +297,7 @@ public class Part15DigitalSignatureTests
             new TrustAnchorOptions { AllowUntrustedCertificates = true },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(VerificationOutcome.Ok, Assert.Single(result.FileResults).Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, Assert.Single(result.FileResults).Outcome);
     }
 
     [Fact]
@@ -353,7 +353,7 @@ public class Part15DigitalSignatureTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            VerificationOutcome.Ok,
+            VerificationOutcome.SignatureValidUntrusted,
             Assert.Single(Assert.Single(result.FileResults).SignatureResults).Outcome);
     }
 

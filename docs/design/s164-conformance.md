@@ -116,8 +116,9 @@ issue.
 3. **Protected data stops at the library.** ([#1128](https://github.com/philliphoff/EncDotNet.S100/issues/1128)) Part 15 decryption, permits and
    signature checks work in the library, but SoundCharts and `s100` don't
    open protected datasets. The viewer verifies exchange sets with
-   `AllowUntrustedCertificates = true`, shows the result as a badge and
-   never refuses data. Authorities added in Keys & certificates are used
+   `AllowUntrustedCertificates = true` and no Scheme Administrator roots,
+   shows the result as a badge and never refuses data. A correct signature
+   shows an amber "signer not verified" badge, never the green one. Authorities added in Keys & certificates are used
    only for SECOM. Since slice 3 the library checks `CATALOG.SIGN`, and a
    catalogue that fails it shows as an invalid signature. Affects most of
    §2.6–2.7.
