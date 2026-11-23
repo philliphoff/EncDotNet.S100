@@ -31,6 +31,29 @@ public class PortrayalAssetReaderTests
     }
 
     [Fact]
+    public void ColorProfileReader_ReadsEachTokensDescription()
+    {
+        // As S-101's profile: the colors section unqualified under cp:colorProfile.
+        var xml = """
+            <cp:colorProfile xmlns:cp="http://www.iho.int/S100ColorProfile/5.1">
+              <colors>
+                <color token="DEPVS" name="medium_blue"><description> Very shallow water </description></color>
+                <color token="DEPDW" name="white"><description>deep water</description></color>
+                <color token="NODESC" name="grey" />
+              </colors>
+              <palette name="Day"><item token="DEPVS"><srgb><red>97</red><green>183</green><blue>255</blue></srgb></item></palette>
+            </cp:colorProfile>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
+        var descriptions = ColorProfileReader.ReadDescriptions(stream);
+
+        Assert.Equal("Very shallow water", descriptions["depvs"]);
+        Assert.Equal("deep water", descriptions["DEPDW"]);
+        Assert.False(descriptions.ContainsKey("NODESC"));
+    }
+
+    [Fact]
     public void ColorProfileReader_HandlesUnqualifiedNamespace()
     {
         var xml = """

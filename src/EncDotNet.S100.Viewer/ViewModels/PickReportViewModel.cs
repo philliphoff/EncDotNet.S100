@@ -547,7 +547,29 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// <summary>True when <see cref="LegendKey"/> has lines to show.</summary>
     public bool HasLegendKey => LegendKey.Count > 0;
 
-    private void OnLegendChanged(object? sender, EventArgs e) => RefreshLegendKey();
+    private void OnLegendChanged(object? sender, EventArgs e)
+    {
+        RefreshLegendKey();
+        DrawnAs?.Refresh();
+    }
+
+    /// <summary>
+    /// Shows what the renderer drew for the selected feature of a
+    /// catalogue-portrayed product (symbol dictionary R10, #1679): its parts
+    /// in <b>Drawn as</b>, and its main part's glyph in the header in place of
+    /// the generic feature icon. Without it the header keeps the icon.
+    /// </summary>
+    /// <param name="drawnAs">The Drawn as section.</param>
+    internal void AttachDrawnAs(PickDrawnAsViewModel drawnAs)
+    {
+        ArgumentNullException.ThrowIfNull(drawnAs);
+        DrawnAs = drawnAs;
+        OnPropertyChanged(nameof(DrawnAs));
+        drawnAs.Show(_selectedHit);
+    }
+
+    /// <summary>The Drawn as section and header glyph (R10, #1679), or <see langword="null"/> when not attached.</summary>
+    public PickDrawnAsViewModel? DrawnAs { get; private set; }
 
     private void RefreshLegendKey()
     {
@@ -605,6 +627,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectedOtherHit));
             ApplyHitToDetailFields(value);
+            DrawnAs?.Show(value);
         }
     }
 
@@ -876,6 +899,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             _selectedHit = null;
             OnPropertyChanged(nameof(SelectedHit));
         }
+        DrawnAs?.Show(null);
 
         FeatureType = null;
         FeatureTypeName = null;

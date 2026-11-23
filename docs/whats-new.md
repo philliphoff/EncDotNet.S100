@@ -6,6 +6,20 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Drawn as in Object information.** A picked feature of a chart drawn from
+  a portrayal catalogue (S-101, or an S-57 cell drawn with S-101's) shows what
+  the map drew for it. The header shows its main symbol on the chart's
+  background, in the current palette, in place of the generic icon: a line
+  sample for a line, a colour patch for an area. A new **Drawn as** section
+  lists each part drawn, the symbols, line styles, fills and text, such as
+  "BCNLAT21 · Minor lateral beacon, red, simplified", each a term that opens
+  its Reference entry. A colour fill or line is named by its colour in the
+  catalogue's colour profile, "Colour fill: Very shallow water", with the
+  token (`DEPVS`) in its tooltip. When a part is the catalogue's fallback symbol, the
+  magenta ?, it says so. Products drawn without a portrayal catalogue, such
+  as S-102 and weather fields, keep their key line
+  ([#1679](https://github.com/philliphoff/EncDotNet.S100/issues/1679)).
+
 - **The packages restore from nuget.org again.** Since 0.28.0,
   `EncDotNet.S100.Datasets.Pipelines`, and so `EncDotNet.S100`, have listed
   dependencies on packages that were never published, so restoring them

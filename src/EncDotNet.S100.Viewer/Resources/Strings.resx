@@ -1060,6 +1060,54 @@
     <value>KEY · WHAT YOU SEE HERE</value>
     <comment>Header above the picked features' legend rows in Object information (legends design note D3, D16)</comment>
   </data>
+  <data name="Pick_DrawnAsHeading" xml:space="preserve">
+    <value>DRAWN AS</value>
+    <comment>Header above the parts the renderer drew for the picked feature in Object information (symbol dictionary R10)</comment>
+  </data>
+  <data name="Pick_DrawnAsName" xml:space="preserve">
+    <value>Drawn as</value>
+    <comment>Accessible name of Object information's Drawn as section (symbol dictionary R10)</comment>
+  </data>
+  <data name="Pick_DrawnAs_ItemFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A drawn symbol, line style or area fill: {0} its id (BCNLAT21), {1} what the catalogue says it shows</comment>
+  </data>
+  <data name="Pick_DrawnAs_ColourFillFormat" xml:space="preserve">
+    <value>Colour fill: {0}</value>
+    <comment>A drawn plain colour fill: {0} its colour token (DEPMS)</comment>
+  </data>
+  <data name="Pick_DrawnAs_LineFormat" xml:space="preserve">
+    <value>Line: {0}</value>
+    <comment>A drawn solid simple line: {0} its colour token (CSTLN)</comment>
+  </data>
+  <data name="Pick_DrawnAs_DashedLineFormat" xml:space="preserve">
+    <value>Line: {0}, dashed</value>
+    <comment>A drawn dashed simple line: {0} its colour token</comment>
+  </data>
+  <data name="Pick_DrawnAs_DottedLineFormat" xml:space="preserve">
+    <value>Line: {0}, dotted</value>
+    <comment>A drawn dotted simple line: {0} its colour token</comment>
+  </data>
+  <data name="Pick_DrawnAs_ColourTokenFormat" xml:space="preserve">
+    <value>Colour token: {0}</value>
+    <comment>Tooltip and accessible help text of a drawn colour fill or line, whose label names the colour: {0} the colour token (DEPVS)</comment>
+  </data>
+  <data name="Pick_DrawnAs_TextFormat" xml:space="preserve">
+    <value>Text: {0}</value>
+    <comment>A drawn text label: {0} its words</comment>
+  </data>
+  <data name="Pick_DrawnAs_Fallback" xml:space="preserve">
+    <value>The catalogue's fallback symbol: nothing else matched</value>
+    <comment>Said under a drawn part that is the catalogue's fallback symbol, the magenta ? (BCNDEF13)</comment>
+  </data>
+  <data name="Pick_DrawnAs_PartNameFormat" xml:space="preserve">
+    <value>{0}. {1}</value>
+    <comment>Accessible name of a fallback drawn part: {0} the part, {1} the fallback note</comment>
+  </data>
+  <data name="Pick_DrawnAs_GlyphNameFormat" xml:space="preserve">
+    <value>Drawn as {0}</value>
+    <comment>Accessible name of the pick header's glyph: {0} the main drawn part</comment>
+  </data>
   <data name="Pick_LegendKeyLineFormat" xml:space="preserve">
     <value>{0} · {1}</value>
     <comment>A key line in Object information; {0} is the product ("S-102", "Wave height"), {1} the legend row ("2–10 m")</comment>
