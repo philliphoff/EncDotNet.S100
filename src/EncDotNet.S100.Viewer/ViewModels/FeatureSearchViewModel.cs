@@ -210,19 +210,23 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
     /// <summary>
     /// Marks the hits whose feature type the chart reference holds, so their
-    /// <b>Open in reference</b> shows; each product and type is read once.
+    /// <b>Open in reference</b> shows, and points an S-57 acronym's term at
+    /// the entry its alias names; each product and type is read once.
     /// </summary>
     private async Task ResolveTermsAsync(IReadOnlyList<FeatureSearchResultItem> items)
     {
         if (Terms is not { } terms)
             return;
-        foreach (var group in items.Where(i => i.TermKey is not null).GroupBy(i => i.TermKey!.Value))
+        foreach (var group in items.Where(i => i.TermKey is not null).GroupBy(i => (i.ProductSpec, i.Hit.FeatureType)))
         {
-            var info = await terms.DescribeAsync(group.Key).ConfigureAwait(true);
+            var info = await terms.FeatureTypeAsync(group.Key.ProductSpec, group.Key.FeatureType).ConfigureAwait(true);
             if (info is null)
                 continue;
             foreach (var item in group)
+            {
+                item.TermKey = info.Key;
                 item.IsInReference = true;
+            }
         }
 
         OpenInReferenceCommand.NotifyCanExecuteChanged();
@@ -259,6 +263,7 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 internal sealed class FeatureSearchResultItem : ViewModelBase
 {
     private bool _isInReference;
+    private Datasets.Pipelines.Reference.ReferenceKey? _termKey;
 
     public required FeatureSearchHit Hit { get; init; }
 
@@ -273,10 +278,15 @@ internal sealed class FeatureSearchResultItem : ViewModelBase
 
     /// <summary>
     /// The Chart reference entry of the hit's feature type (symbol dictionary
-    /// R9b, #1681): its name is a term. <see langword="null"/> for a product
-    /// whose codes the reference doesn't key, whose name is plain text.
+    /// R9b, #1681): its name is a term. An S-57 acronym's moves to the entry
+    /// its alias names once the index is read. <see langword="null"/> for a
+    /// hit without a type, whose name is plain text.
     /// </summary>
-    public Datasets.Pipelines.Reference.ReferenceKey? TermKey { get; init; }
+    public Datasets.Pipelines.Reference.ReferenceKey? TermKey
+    {
+        get => _termKey;
+        set => SetProperty(ref _termKey, value);
+    }
 
     /// <summary>
     /// Whether the chart reference holds <see cref="TermKey"/>, so the hit's

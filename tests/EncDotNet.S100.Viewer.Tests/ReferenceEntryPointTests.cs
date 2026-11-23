@@ -165,7 +165,7 @@ public sealed class ReferenceEntryPointTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void An_S57_feature_opens_its_S101_entry_and_an_acronym_left_untranslated_stays_plain()
+    public void An_S57_feature_opens_its_S101_entry_and_an_acronym_its_alias()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         var nav = new ReferenceNavigator();
@@ -173,16 +173,27 @@ public sealed class ReferenceEntryPointTests : IDisposable
         var target = new Border { Width = 200, Height = 200, Background = Avalonia.Media.Brushes.Transparent };
         using var host = ViewHost.Show(target, 400, 400);
 
-        // An S-57 cell's features are translated to S-101 codes.
-        var itemsTask = builder.ItemsAsync([Hit("S-57", "LateralBeacon", "Lateral beacon"), Hit("S-57", "BCNLAT")]);
+        // An S-57 cell's features are translated to S-101 codes; a code left
+        // as an acronym is found by the catalogue's S-57 alias, and the two
+        // are one entry. An acronym several entries share (LIGHTS) gives none.
+        var itemsTask = builder.ItemsAsync(
+        [
+            Hit("S-57", "LateralBeacon", "Lateral beacon"),
+            Hit("S-57", "BCNLAT"),
+            Hit("S-57", "WRECKS"),
+            Hit("S-57", "LIGHTS"),
+        ]);
         Until(host, () => itemsTask.IsCompleted);
-        var item = Assert.Single(itemsTask.Result);
-        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), item.Key);
+        Assert.Equal(
+            [new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), new ReferenceKey(S101, ReferenceKind.FeatureType, "Wreck")],
+            itemsTask.Result.Select(i => i.Key));
 
         builder.Build(itemsTask.Result)!.Open(target);
         host.Settle();
-        host.Click(host.Find<MenuItem>(MapReferenceMenu.AutomationId));
-        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), nav.Current);
+        host.Find<MenuItem>(MapReferenceMenu.AutomationId).IsSubMenuOpen = true;
+        host.Settle();
+        host.Click(host.FindAll<MenuItem>(MapReferenceMenu.ItemAutomationId)[1]);
+        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "Wreck"), nav.Current);
     }
 
     // ---- Feature search ----
@@ -233,17 +244,18 @@ public sealed class ReferenceEntryPointTests : IDisposable
         Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), beacon.TermKey);
         Assert.True(beacon.IsInReference);
         Assert.False(unknown.IsInReference);
-        // An S-57 hit's S-101 code is in the reference; an acronym left untranslated isn't.
-        Assert.False(s57.IsInReference);
+        // An S-57 hit's S-101 code is in the reference, and an acronym left
+        // untranslated points at the entry its alias names.
+        Assert.True(s57.IsInReference);
+        Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "LateralBeacon"), s57.TermKey);
         Assert.Equal(new ReferenceKey(S101, ReferenceKind.FeatureType, "Wreck"), s57Wreck.TermKey);
         Assert.True(s57Wreck.IsInReference);
 
         // The known type is a term; the others are plain text.
         var terms = host.FindAll<ReferenceTerm>("Reference.Term");
         Assert.Equal(4, terms.Count);
-        Until(host, () => terms[0].IsTerm && terms[3].IsTerm);
+        Until(host, () => terms[0].IsTerm && terms[2].IsTerm && terms[3].IsTerm);
         Assert.False(terms[1].IsTerm);
-        Assert.False(terms[2].IsTerm);
         Assert.Equal("Lateral beacon", terms[0].Text);
 
         // A click on the term opens its entry.
@@ -253,7 +265,7 @@ public sealed class ReferenceEntryPointTests : IDisposable
         // Open in reference is offered only for the known type.
         Assert.True(vm.OpenInReferenceCommand.CanExecute(beacon));
         Assert.False(vm.OpenInReferenceCommand.CanExecute(unknown));
-        Assert.False(vm.OpenInReferenceCommand.CanExecute(s57));
+        Assert.True(vm.OpenInReferenceCommand.CanExecute(s57));
 
         var rows = host.All<ListBoxItem>().ToList();
         var menu = host.RightClick(rows[0].GetVisualDescendants().OfType<TextBlock>().Last());

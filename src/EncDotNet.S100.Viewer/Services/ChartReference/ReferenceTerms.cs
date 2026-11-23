@@ -244,8 +244,9 @@ internal sealed class ReferenceTerms
     /// <remarks>
     /// The entry is in the catalogue the product is drawn with: an S-57
     /// cell's features, translated to S-101 codes (<c>Wreck</c>), are in
-    /// S-101's. A code the translation left as an S-57 acronym isn't in it,
-    /// so its term stays plain.
+    /// S-101's. A code the translation left as an S-57 acronym isn't keyed
+    /// here; <see cref="FeatureTypeAsync"/> finds it through the
+    /// catalogue's S-57 aliases.
     /// </remarks>
     /// <param name="productSpec">The dataset's product, such as <c>S-101</c> or <c>S-57</c>.</param>
     /// <param name="featureType">The feature's type code.</param>
@@ -260,13 +261,28 @@ internal sealed class ReferenceTerms
 
     /// <summary>
     /// What the term of a dataset feature's type says (<see cref="FeatureKeyOf"/>),
-    /// reading its index first when needed (R9b, #1681).
+    /// reading its index first when needed (R9b, #1681). A product drawn with
+    /// another's catalogue (an S-57 cell) whose code isn't an entry there is
+    /// looked up by the catalogue's S-57 alias: <c>BCNLAT</c> gives Lateral
+    /// Beacon. An acronym more than one entry shares (<c>LIGHTS</c>) gives none.
     /// </summary>
-    /// <param name="productSpec">The dataset's product, such as <c>S-101</c>.</param>
+    /// <param name="productSpec">The dataset's product, such as <c>S-101</c> or <c>S-57</c>.</param>
     /// <param name="featureType">The feature's type code.</param>
     /// <returns>What the term says, or <see langword="null"/> when the catalogues have no such entry.</returns>
-    public Task<ReferenceTermInfo?> FeatureTypeAsync(string? productSpec, string? featureType) =>
-        FeatureKeyOf(productSpec, featureType) is { } key ? DescribeAsync(key) : Task.FromResult<ReferenceTermInfo?>(null);
+    public async Task<ReferenceTermInfo?> FeatureTypeAsync(string? productSpec, string? featureType)
+    {
+        if (FeatureKeyOf(productSpec, featureType) is not { } key)
+            return null;
+        if (await DescribeAsync(key).ConfigureAwait(false) is { } info)
+            return info;
+        // An S-57 acronym the translation left: the catalogue's alias for it.
+        if (!SpecName.TryNormalize(productSpec, out var product) || string.Equals(product, key.Spec.Name, StringComparison.Ordinal))
+            return null;
+        return await IndexAsync(key.Spec).ConfigureAwait(false) is { } index
+            && index.FindFeatureTypeByS57Alias(key.Code) is { } aliased
+                ? Describe(index, aliased.Key, null)
+                : null;
+    }
 
     /// <summary>The S-100 eXaminer page of a term, or <see langword="null"/>: links are off, or it has no page.</summary>
     /// <param name="info">The term.</param>
