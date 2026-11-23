@@ -233,21 +233,28 @@ Object information today shows a generic Fluent icon per feature type
 a connection a ship may not have. The proposal:
 
 - **The drawn symbol** replaces the generic icon: the symbol the renderer
-  actually drew for this feature, in the current palette. This needs the
-  pick hit to carry the portrayal instructions emitted for the feature
-  (symbol, line style or fill names). Areas show a fill swatch, lines a
-  short sample.
-- **Drawn as** names the symbol, with a folded **Why this symbol**: the
-  rule's conditions that held for this feature, in words. For example:
-  "Simplified symbols is on · Colour is red · Beacon shape is a stake, pole,
-  perch or post". A setting in the reason links to that switch in Display
-  settings. When the symbol is the catalogue's fallback (the magenta ? of
-  BCNDEF13), say so plainly.
+  actually drew for this feature, in the current palette. The stack's
+  display list already holds every instruction a feature emitted, keyed by
+  its feature reference (`CatalogueSymbolKey` and `CatalogueLinework` read
+  it for the Legend), so the pick reads its parts from there: no renderer
+  change and no second portrayal. Areas show a patch, lines a short sample.
+  Products that aren't catalogue-portrayed (S-102, weather fields) keep
+  their key line (`PickLegendKeyLine`), which doesn't cover catalogue
+  portrayal.
+- **Drawn as** names each drawn part as a term, with a **Why this symbol**
+  folded by default: the rule's conditions that held for this feature, in
+  words. For example: "Simplified symbols is on · Colour is red · Beacon
+  shape is a stake, pole, perch or post". A setting in the reason links to
+  that switch in Display settings. When the symbol is the catalogue's
+  fallback (the magenta ? of BCNDEF13), say so plainly.
 - **Attributes** use the feature catalogue's names, not camel-case codes,
   and every name and value is a term. Codes and S-57 acronyms move into the
   entry and Copy identity.
+- **S-57 cells** are drawn with the S-101 catalogue, so their picks map to
+  S-101 entries through the feature catalogue's S-57 aliases (`BCNLAT` →
+  Lateral Beacon, `COLOUR` → Colour). A code with no alias stays plain text.
 - The **eXaminer link** stays, in the peek and the entry, but is never the
-  only way to a definition.
+  only way to a definition. The per-attribute eXaminer buttons go.
 
 ### 4.4 Entries, in the right dock (artboard C)
 
@@ -452,20 +459,33 @@ Each slice ships on its own, with tests and a whats-new bullet.
 ### Phase 3: Object information
 
 9. **R9 Terms in the pick.** The feature type's name and attribute names and
-   values come from the feature catalogue and become terms. The raw codes
+   values come from the feature catalogue and become terms. An S-57 pick
+   maps to S-101 entries through the catalogue's S-57 aliases. The raw codes
    move to Copy identity. F1 and **Open in reference** read the feature
-   type. The eXaminer link moves into the peek and the entry.
-10. **R10 The drawn symbol.** The pick header shows the glyph of the
-    picked feature's key line (`PickLegendKeyLine`, from legends slice 8)
-    instead of the generic `FeatureGlyphs` icon. **Drawn as** names the
-    symbol and links its entry.
+   type. The per-attribute eXaminer buttons go; the eXaminer link lives in
+   the peek and the entry.
+10. **R10 Drawn as.** The picked feature's parts are read from the stack's
+    display list by feature reference: point symbols, line styles, fills
+    and text. The pick header shows the main part's glyph (a symbol, a line
+    sample or an area patch, on the palette's tile) instead of the generic
+    `FeatureGlyphs` icon. **Drawn as** lists each part as a term that opens
+    its entry, and says plainly when a part is the catalogue's fallback.
+    Products that aren't catalogue-portrayed keep `PickLegendKeyLine`.
 11. **R11 Why this symbol, from attributes.** The picked feature's
-    attributes are matched against the R1 conditions for the drawn symbol,
-    giving the conditions that hold. This is a match, not a trace: it can't
-    see computed values, so it says "likely" when more than one case
-    matches. It explains every drawn part (D5): the main symbol in full,
-    the topmark, light and text one line each, with their reasons folded.
-    R12 keeps that layout.
+    attributes and the current display settings are matched against the
+    drawn symbol's conditions (R1, as put in words for R7 and R8), giving
+    the conditions that hold. This is a match, not a trace: it can't see
+    computed values, so it says "likely" when more than one case matches.
+    It explains every drawn part (D5): the main symbol in full, the
+    topmark, light and text one line each. Reasons are folded by default,
+    and a setting in a reason links to Display settings. R12 keeps that
+    layout.
+
+**R9b Other entry points**, added in planning: the rest of §4.6's entry
+points, that is **Look up in reference** on the map's context menu, Feature
+search hits, and Layer stack legend rows.
+
+R9, R10 and R9b can run side by side. R11 needs R10's drawn parts.
 
 ### Phase 4: exact variants
 
