@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Advisories beside a model run in a folder.** A folder holding GRIB2
+  files and a storm's NHC advisory zips now opens as two datasets, a model
+  run and the advisory, in `tiles serve`, `tiles export`, `mcp serve` and the
+  other commands that take a folder. The advisory used to be dropped without
+  a word. A `.zip` in a folder that isn't the advisory's is skipped with a
+  warning, as before.
+
 - **Chart reference terms and peeks.** Names in Reference entries are now
   terms: text with a dotted underline in the text colour. Rest the pointer on
   a term, or move keyboard focus to it, and after half a second a peek shows
