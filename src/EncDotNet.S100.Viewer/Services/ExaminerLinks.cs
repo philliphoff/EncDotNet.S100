@@ -38,13 +38,6 @@ internal sealed class ExaminerLinks
     public void OpenFeature(string? productSpec, string? featureCode) =>
         Open(_links.BuildFeatureUrl(productSpec, featureCode));
 
-    /// <summary>Opens the page of a feature type's attribute, when there is one.</summary>
-    /// <param name="productSpec">The product specification.</param>
-    /// <param name="featureCode">The feature type's code.</param>
-    /// <param name="attributeCode">The attribute's code.</param>
-    public void OpenAttribute(string? productSpec, string? featureCode, string? attributeCode) =>
-        Open(_links.BuildAttributeUrl(productSpec, featureCode, attributeCode));
-
     private void Open(string? url)
     {
         if (!string.IsNullOrEmpty(url))

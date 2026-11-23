@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -70,18 +69,6 @@ internal abstract class LongTextCardViewModel : ViewModelBase
 
     /// <summary>The Copy button's tooltip.</summary>
     public abstract string CopyTooltip { get; }
-
-    /// <summary>
-    /// The attribute Examiner opens, for a card lifted from an attribute;
-    /// <see langword="null"/> opens the feature.
-    /// </summary>
-    public virtual PickAttribute? ExaminerAttribute => null;
-
-    /// <summary>Whether Examiner opens <see cref="ExaminerAttribute"/> rather than the feature.</summary>
-    public bool ExaminesAttribute => ExaminerAttribute is not null;
-
-    /// <summary>Whether Examiner opens the feature.</summary>
-    public bool ExaminesFeature => ExaminerAttribute is null;
 
     /// <summary>
     /// Whether the dataset's exchange-set metadata marks it not for
