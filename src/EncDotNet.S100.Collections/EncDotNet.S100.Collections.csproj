@@ -12,6 +12,7 @@
     <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.TropicalCyclones\EncDotNet.S100.Datasets.TropicalCyclones.csproj" />
   </ItemGroup>
 
 </Project>
