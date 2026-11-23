@@ -834,6 +834,15 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>Id of the Chart reference page in the full-content panel (#1639); only code opens it.</summary>
     internal const string ChartReferencePageTabId = "ChartReferencePage";
 
+    /// <summary>The Catalogues activity's id (catalogue-panels D1).</summary>
+    internal const string CataloguesTabId = "Catalogues";
+
+    /// <summary>
+    /// The Feature Catalogues and Portrayal Catalogues activities it replaced:
+    /// a persisted last-selected id of either opens Catalogues.
+    /// </summary>
+    private static readonly string[] FormerCataloguesTabIds = ["FeatureCatalogues", "PortrayalCatalogues"];
+
     /// <summary>
     /// Tells the right-dock tabs that care (<see cref="IActivityTabShown"/>)
     /// whether the user can see them now: the Legend tab tells
@@ -1071,6 +1080,10 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(post);
         _settings = settings;
         _timeline = timeline;
+
+        // Catalogues replaced the two catalogue activities (catalogue-panels D1).
+        if (settings.LastSelectedActivity is { } former && FormerCataloguesTabIds.Contains(former, StringComparer.Ordinal))
+            settings.LastSelectedActivity = CataloguesTabId;
 
         // PR-M3: debounced settings writer used by the splitter-size
         // setters. 500 ms window coalesces rapid drag updates into one

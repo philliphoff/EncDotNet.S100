@@ -70,7 +70,7 @@ public sealed class ViewerLuaEngineTests
         moonSharp.LuaEngine = "moonsharp";
 
         Assert.NotEqual(
-            PortrayalWarmSignature.Of(MapPresentationState.Default, luaCSharp),
-            PortrayalWarmSignature.Of(MapPresentationState.Default, moonSharp));
+            PortrayalWarmSignature.Of(MapPresentationState.Default, luaCSharp, string.Empty),
+            PortrayalWarmSignature.Of(MapPresentationState.Default, moonSharp, string.Empty));
     }
 }

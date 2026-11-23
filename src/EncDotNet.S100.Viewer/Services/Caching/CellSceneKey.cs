@@ -18,8 +18,8 @@ namespace EncDotNet.S100.Viewer.Services.Caching;
 /// <para>
 /// It folds the cell's files (path, size and modification time of the base
 /// cell and each update, as the portrayal warm ledger does), the product, the
-/// portrayal warm signature (mariner settings, display modes, catalogue
-/// overrides, the portraying assemblies and Lua engine), the rest of the
+/// portrayal warm signature (mariner settings, display modes, the catalogues
+/// in effect, the portraying assemblies and Lua engine), the rest of the
 /// presentation (palette, symbol and text scale, display category, hidden
 /// viewing groups and planes, layer visibility), the scene mode, and the
 /// builds of the assemblies that lower and store scenes.
@@ -45,8 +45,9 @@ internal static class CellSceneKey
     /// <param name="spec">The cell's product specification.</param>
     /// <param name="presentation">The map's presentation.</param>
     /// <param name="settings">The viewer settings.</param>
+    /// <param name="catalogues">The catalogues in effect, <see cref="CatalogueRegistry.Identity"/>.</param>
     /// <returns>The store key, or null.</returns>
-    public static string? For(DatasetEntry entry, string spec, MapPresentationState presentation, ViewerSettings settings)
+    public static string? For(DatasetEntry entry, string spec, MapPresentationState presentation, ViewerSettings settings, string catalogues)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(presentation);
@@ -67,7 +68,7 @@ internal static class CellSceneKey
             .Append("|store:").Append(CellSceneStore.FormatVersion.ToString(c))
             .Append("|cell:").Append(cell)
             .Append("|spec:").Append(spec)
-            .Append("|warm:").Append(PortrayalWarmSignature.Of(presentation, settings))
+            .Append("|warm:").Append(PortrayalWarmSignature.Of(presentation, settings, catalogues))
             .Append("|palette:").Append(presentation.Palette)
             .Append("|symbolScale:").Append(presentation.SymbolScale.ToString("R", c))
             .Append("|textScale:").Append(presentation.TextScale.ToString("R", c))
