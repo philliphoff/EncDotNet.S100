@@ -29,8 +29,16 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// and the terms of a product's own Legend rows. A type the reference
 /// doesn't hold gets no item and stays plain.
 /// </summary>
-public sealed class ReferenceEntryPointTests
+public sealed class ReferenceEntryPointTests : IDisposable
 {
+    // Terms time their peeks on this clock: on the real one, a peek armed by a
+    // click could fire after the test, into the next test's application.
+    private readonly FakeTimeProvider _clock = new();
+
+    public ReferenceEntryPointTests() => ReferenceTerm.Clock = _clock;
+
+    public void Dispose() => ReferenceTerm.Clock = TimeProvider.System;
+
     private static readonly SpecRef S101 = new("S-101", default);
 
     private static readonly SpecRef S124 = new("S-124", default);
