@@ -166,6 +166,21 @@ output. Network and cache failures are silent. Development builds don't check.
 To turn the check off, set the `S100_NO_UPDATE_CHECK` environment variable to
 `1`, `true` or `yes`. The [container image](docker.md) sets it.
 
+### Redirected output
+
+When standard output is a pipe or a file, tables and text wrap at the width
+the console reports. If it reports none, as .NET does on Linux for some `TERM`
+values when there's no terminal, `s100` uses `COLUMNS` when it holds a positive
+number, and 80 columns otherwise:
+
+```bash
+s100 info dataset.h5 > info.txt              # wraps at 80 columns
+COLUMNS=120 s100 info dataset.h5 > info.txt  # wraps at 120 columns
+```
+
+A wide table can still abbreviate its column headers to fit, as it does in a
+terminal of that width. Use `--format json` where a command offers it.
+
 ## render
 
 ```text
