@@ -1,3 +1,5 @@
+using EncDotNet.S100.Datasets.Pipelines;
+
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>How a time-aware dataset picks the sample it draws for the clock.</summary>
@@ -23,79 +25,44 @@ public enum MapsuiTimeSelectionKind
 /// The time rule shared by the session's time policy and
 /// <see cref="MapsuiMapTimedDataset.SampleAt"/>: which sample a dataset draws
 /// at a clock value, or none when nothing lies within its tolerance (#706).
+/// A thin wrapper over the renderer-neutral <see cref="TimeStepSelector"/>,
+/// which <c>s100 tiles serve</c> uses too (#1676).
 /// </summary>
 public static class MapsuiTimeSelection
 {
     /// <summary>
     /// The sample of <paramref name="sorted"/> drawn at <paramref name="time"/>,
-    /// or <see langword="null"/> when none is within <paramref name="tolerance"/>.
+    /// or <see langword="null"/> when none is within <paramref name="tolerance"/>
+    /// (<see cref="TimeStepSelector.Select(IReadOnlyList{DateTime}, TimeStepSelection, TimeSpan, DateTime)"/>).
     /// </summary>
     /// <param name="sorted">The dataset's samples, ascending and distinct.</param>
     /// <param name="kind">How the sample is picked.</param>
     /// <param name="tolerance">How far from the clock a sample may be.</param>
     /// <param name="time">The clock value.</param>
-    public static DateTime? Select(IReadOnlyList<DateTime> sorted, MapsuiTimeSelectionKind kind, TimeSpan tolerance, DateTime time)
-    {
-        ArgumentNullException.ThrowIfNull(sorted);
-        if (sorted.Count == 0)
-            return null;
-
-        // The clock to the minute, so a moving clock redraws once a minute at
-        // most. Outside its range the dataset still draws what isn't tied to
-        // a time (a storm's cone), so it's never hidden.
-        if (kind == MapsuiTimeSelectionKind.Continuous)
-            return new DateTime(time.Ticks - time.Ticks % TimeSpan.TicksPerMinute, time.Kind);
-
-        var next = FirstAfterOrAt(sorted, time);
-        if (next < sorted.Count && sorted[next] == time)
-            return time;
-
-        if (kind == MapsuiTimeSelectionKind.AtOrBefore)
-        {
-            if (next == 0)
-                return null;
-            var previous = sorted[next - 1];
-            return time - previous <= tolerance ? previous : null;
-        }
-
-        DateTime? nearest = null;
-        if (next > 0)
-            nearest = sorted[next - 1];
-        if (next < sorted.Count && (nearest is not { } before || sorted[next] - time < time - before))
-            nearest = sorted[next];
-        return nearest is { } sample && (sample - time).Duration() <= tolerance ? sample : null;
-    }
+    public static DateTime? Select(IReadOnlyList<DateTime> sorted, MapsuiTimeSelectionKind kind, TimeSpan tolerance, DateTime time) =>
+        TimeStepSelector.Select(sorted, ToSelection(kind), tolerance, time);
 
     /// <summary>The latest sample before <paramref name="time"/>, or null.</summary>
-    public static DateTime? Previous(IReadOnlyList<DateTime> sorted, DateTime time)
-    {
-        ArgumentNullException.ThrowIfNull(sorted);
-        var index = FirstAfterOrAt(sorted, time);
-        return index > 0 ? sorted[index - 1] : null;
-    }
+    public static DateTime? Previous(IReadOnlyList<DateTime> sorted, DateTime time) => TimeStepSelector.Previous(sorted, time);
 
     /// <summary>The earliest sample after <paramref name="time"/>, or null.</summary>
-    public static DateTime? Next(IReadOnlyList<DateTime> sorted, DateTime time)
-    {
-        ArgumentNullException.ThrowIfNull(sorted);
-        var index = FirstAfterOrAt(sorted, time);
-        if (index < sorted.Count && sorted[index] == time)
-            index++;
-        return index < sorted.Count ? sorted[index] : null;
-    }
+    public static DateTime? Next(IReadOnlyList<DateTime> sorted, DateTime time) => TimeStepSelector.Next(sorted, time);
 
-    /// <summary>The index of the first sample at or after <paramref name="time"/>.</summary>
-    private static int FirstAfterOrAt(IReadOnlyList<DateTime> sorted, DateTime time)
+    /// <summary>The <see cref="TimeStepSelection"/> of <paramref name="kind"/>.</summary>
+    /// <param name="kind">How a sample is picked.</param>
+    public static TimeStepSelection ToSelection(MapsuiTimeSelectionKind kind) => kind switch
     {
-        int low = 0, high = sorted.Count;
-        while (low < high)
-        {
-            var mid = (low + high) / 2;
-            if (sorted[mid] < time)
-                low = mid + 1;
-            else
-                high = mid;
-        }
-        return low;
-    }
+        MapsuiTimeSelectionKind.AtOrBefore => TimeStepSelection.AtOrBefore,
+        MapsuiTimeSelectionKind.Continuous => TimeStepSelection.Continuous,
+        _ => TimeStepSelection.Nearest,
+    };
+
+    /// <summary>The <see cref="MapsuiTimeSelectionKind"/> of <paramref name="selection"/>.</summary>
+    /// <param name="selection">How a step is picked.</param>
+    public static MapsuiTimeSelectionKind FromSelection(TimeStepSelection selection) => selection switch
+    {
+        TimeStepSelection.AtOrBefore => MapsuiTimeSelectionKind.AtOrBefore,
+        TimeStepSelection.Continuous => MapsuiTimeSelectionKind.Continuous,
+        _ => MapsuiTimeSelectionKind.Nearest,
+    };
 }

@@ -18,6 +18,50 @@ month. For package versions and release assets, see
   as S-102 and weather fields, keep their key line
   ([#1679](https://github.com/philliphoff/EncDotNet.S100/issues/1679)).
 
+- **`tiles serve` draws each dataset at a time as the viewer does.** A
+  time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension no longer
+  snaps to the nearest listed step. Each time-varying dataset picks what it
+  draws by its own time selection: a tropical cyclone draws the storm at the
+  time itself, to the minute, so it moves smoothly between forecast points and
+  can be seen on its past track; S-104, S-411, S-412, CAP warnings and surface
+  analyses draw their step at or before the time, never a later one, and
+  nothing before their first step; others draw their nearest step.
+  `--strict-time` now uses each dataset's validity, as the viewer does, rather
+  than half a step. `/datasets` gives each time-varying dataset's
+  `timeSelection` and `timeRange`, and TileJSON's `s100.datasets` lists each
+  one's `timeSelection` with or without `--strict-time`. The WMTS capabilities
+  still list the steps as `Value`s. For library users, the time rule moved
+  from `MapsuiTimeSelection` to `TimeStepSelector` in Core, which
+  `MapsuiTimeSelection` now wraps
+  ([#1676](https://github.com/philliphoff/EncDotNet.S100/issues/1676)).
+
+- **Advisories beside a model run in a folder.** A folder holding GRIB2
+  files and a storm's NHC advisory zips now opens as two datasets, a model
+  run and the advisory, in `tiles serve`, `tiles export`, `mcp serve` and the
+  other commands that take a folder. The advisory used to be dropped without
+  a word. A `.zip` in a folder that isn't the advisory's is skipped with a
+  warning, as before
+  ([#1677](https://github.com/philliphoff/EncDotNet.S100/issues/1677)).
+
+- **One Catalogues activity.** The Feature Catalogues and Portrayal
+  Catalogues activities are replaced by **Catalogues**, which lists every
+  product with both its catalogues: "Feature 2.0.0 · Portrayal 2.1.0", how
+  many of its datasets are loaded, and tags only when something isn't the
+  default (*Custom*, *Command line*, *Not built in*, a problem count,
+  *Missing*). Filter by product or name, or use the **All**, **Loaded**,
+  **Changed** and **Problems** pills. The details pane shows each
+  catalogue's version, source, path and what it overrides, and a catalogue
+  that failed to load shows why, with **Show in Logs**. **Add catalogue…**
+  takes a feature catalogue, a portrayal catalogue's
+  `portrayal_catalogue.xml` or a ZIP package, reads its product from the
+  content and confirms what it replaces and how many datasets it redraws,
+  with **Keep using it after restart** (cleared, it lasts for the session).
+  Changes apply at once with a toast that can **Undo** them. A custom
+  catalogue has **Reload**, **Revert to built-in** and **Show in Finder**,
+  and a product SoundCharts doesn't include can be added and removed. The
+  activity's badge counts catalogue problems. Lazily loaded cells no longer
+  reuse a stored scene drawn with a catalogue that has since changed.
+
 - **A mirror of NOAA's tide station catalogue.** A scheduled workflow now
   checks NOAA CO-OPS every week and publishes its tide and current station
   catalogue as one file, `tide-stations.json.gz`, with a manifest giving its

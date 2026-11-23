@@ -7,9 +7,12 @@ using EncDotNet.S100.Rendering.Scene;
 namespace EncDotNet.S100.Cli.Tests;
 
 /// <summary>
-/// Tests for <c>tiles serve --strict-time</c> (issue #1498): a time more than
-/// half a step outside a time-varying dataset's steps draws nothing for it,
-/// instead of snapping to its nearest step.
+/// Tests for <c>tiles serve --strict-time</c> (issue #1498): a time outside a
+/// time-varying dataset's validity draws nothing for it, instead of holding its
+/// step however far away. The validity is the dataset's time semantics'
+/// (issue #1676; the rule itself is <c>TimeStepSelectorTests</c>'): for the
+/// S-111 fixture, <see cref="Datasets.Pipelines.TimeStepSelection.Nearest"/>
+/// within its hourly step either side.
 /// </summary>
 public sealed class TilesServeStrictTimeTests
 {
@@ -21,10 +24,6 @@ public sealed class TilesServeStrictTimeTests
     private static readonly DateTime First = new(2026, 3, 20, 19, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime Last = First.AddHours(47);
-
-    private static readonly DateTime Origin = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-    private static DateTime At(double hours) => Origin.AddHours(hours);
 
     private static RenderedTileSource OpenRendered(TilesServeCommand.Settings settings)
     {
@@ -51,43 +50,6 @@ public sealed class TilesServeStrictTimeTests
         throw new InvalidOperationException("No tile drew anything.");
     }
 
-    // Hourly steps 00:00–03:00, a gap, then 10:00–12:00.
-    private static readonly DateTime[] Steps = [At(0), At(1), At(2), At(3), At(10), At(11), At(12)];
-
-    [Fact]
-    public void A_time_in_range_draws_its_nearest_step()
-    {
-        Assert.Equal(At(1), TileRenderSession.StrictStep(Steps, At(1)));
-        Assert.Equal(At(1), TileRenderSession.StrictStep(Steps, At(1.4)));
-        Assert.Equal(At(2), TileRenderSession.StrictStep(Steps, At(1.6)));
-
-        // Half a step either side of the range still draws its end.
-        Assert.Equal(At(3), TileRenderSession.StrictStep(Steps, At(3.5)));
-        Assert.Equal(At(0), TileRenderSession.StrictStep(Steps, At(-0.5)));
-    }
-
-    [Fact]
-    public void A_time_in_a_gap_draws_nothing()
-    {
-        Assert.Null(TileRenderSession.StrictStep(Steps, At(5)));
-        Assert.Null(TileRenderSession.StrictStep(Steps, At(9.4)));
-        Assert.Equal(At(10), TileRenderSession.StrictStep(Steps, At(9.5)));
-    }
-
-    [Fact]
-    public void A_time_before_or_after_the_range_draws_nothing()
-    {
-        Assert.Null(TileRenderSession.StrictStep(Steps, At(-0.6)));
-        Assert.Null(TileRenderSession.StrictStep(Steps, At(-48)));
-        Assert.Null(TileRenderSession.StrictStep(Steps, At(12.6)));
-        Assert.Null(TileRenderSession.StrictStep(Steps, At(24 * 365)));
-
-        // A single step counts as an hour long.
-        Assert.Equal(At(0), TileRenderSession.StrictStep([At(0)], At(0.5)));
-        Assert.Null(TileRenderSession.StrictStep([At(0)], At(0.6)));
-        Assert.Null(TileRenderSession.StrictStep([], At(0)));
-    }
-
     [Fact]
     public async Task Without_strict_time_times_outside_the_range_still_snap()
     {
@@ -100,8 +62,10 @@ public sealed class TilesServeStrictTimeTests
         Assert.Equal(
             await source.ReadAsync(zoom, x, y, null, First, ct),
             await source.ReadAsync(zoom, x, y, null, First.AddDays(-3), ct));
-        Assert.Null(source.ToTileJson(null, First.AddDays(-3))["s100"]!["datasets"]);
         Assert.Null(source.ToTileJson(null, First.AddDays(-3))["s100"]!["strictTime"]);
+        var dataset = Assert.Single(source.ToTileJson(null, First.AddDays(-3))["s100"]!["datasets"]!.AsArray())!;
+        Assert.Equal("nearest", (string?)dataset["timeSelection"]);
+        Assert.Equal("2026-03-20T19:00:00Z", (string?)dataset["time"]);
     }
 
     [Fact]
@@ -113,14 +77,14 @@ public sealed class TilesServeStrictTimeTests
         var ct = TestContext.Current.CancellationToken;
         var first = await source.ReadAsync(zoom, x, y, null, First, ct);
 
-        // In range, as without --strict-time.
+        // In range, as without --strict-time: within a step either side.
         Assert.NotNull(first);
-        Assert.Equal(first, await source.ReadAsync(zoom, x, y, null, First.AddMinutes(-29), ct));
-        Assert.NotNull(await source.ReadAsync(zoom, x, y, null, Last.AddMinutes(29), ct));
+        Assert.Equal(first, await source.ReadAsync(zoom, x, y, null, First.AddMinutes(-59), ct));
+        Assert.NotNull(await source.ReadAsync(zoom, x, y, null, Last.AddMinutes(59), ct));
 
         // Before and after the range.
-        Assert.Null(await source.ReadAsync(zoom, x, y, null, First.AddMinutes(-31), ct));
-        Assert.Null(await source.ReadAsync(zoom, x, y, null, Last.AddMinutes(31), ct));
+        Assert.Null(await source.ReadAsync(zoom, x, y, null, First.AddMinutes(-61), ct));
+        Assert.Null(await source.ReadAsync(zoom, x, y, null, Last.AddMinutes(61), ct));
         Assert.Null(await source.ReadAsync(zoom, x, y, null, new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), ct));
 
         // Without t, --time-step applies.
@@ -177,6 +141,7 @@ public sealed class TilesServeStrictTimeTests
         Assert.Equal("111US00_DBOFS_20260320T18Z_US4DE1BB.h5", (string?)dataset["name"]);
         Assert.Equal("S-111", (string?)dataset["spec"]);
         Assert.Equal("2026-03-21T07:00:00Z", (string?)dataset["time"]);
+        Assert.Equal("nearest", (string?)dataset["timeSelection"]);
 
         // Outside the range, the dataset has no time, and the tile URL keeps
         // the time asked for so its tiles draw nothing too.

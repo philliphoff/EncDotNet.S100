@@ -64,21 +64,26 @@ each row's glyph (default 28×14, max 256); `DPI`/`MAP_RESOLUTION`/
 `FORMAT_OPTIONS=dpi:N` scale it. Each WMS and WMTS style has a `LegendURL` to
 it, and the WMS capabilities list `sld:GetLegendGraphic`.
 
-For time-varying datasets (S-104, S-111), add `?t=<ISO 8601>` to a tile or
-`tiles.json` URL to pick the time step: it snaps to the nearest of the steps
-listed in TileJSON `s100.times`, the chosen one is echoed in `s100.time` and in
-the TileJSON tile URL, and each dataset uses its own nearest step. Without `t`,
+For time-varying datasets (S-104, S-111, weather, tropical cyclones), add
+`?t=<ISO 8601>` to a tile or `tiles.json` URL to pick the time. Each dataset
+draws by its own time selection, as the viewer's map does: `continuous` (a
+tropical cyclone: the storm at the time itself, to the minute), `atOrBefore`
+(S-104, S-411, S-412, CAP, surface analyses: the latest step at or before the
+time, nothing before the first) or `nearest` (S-111, weather grids). TileJSON
+`s100.times` lists the steps, `s100.time` and the TileJSON tile URL echo the
+time drawn, and `s100.datasets` gives each time-varying dataset's `name`,
+`spec`, `timeSelection` and, with `t`, the step it draws in `time`;
+`/datasets` adds each one's `timeSelection` and `timeRange`. Without `t`,
 `--time-step` applies; an unparseable `t` answers 400; datasets without time
 steps ignore it. Vector datasets are portrayed once per palette and reused
 across time steps; only the most recent eight palette/time combinations are
 kept prepared.
 
-With `--strict-time`, a time more than half a step (the median interval
-between a dataset's steps) before, after or in a gap in a time-varying
-dataset's steps draws nothing for it instead of its nearest step; a tile on
-which nothing draws answers `204`. TileJSON then sets `s100.strictTime` and,
-with `t`, lists each time-varying dataset in `s100.datasets` (`name`, `spec`,
-`time`, `null` when it has no data at that time).
+With `--strict-time`, a step draws only within the dataset's validity (its
+own, or else the median interval between its steps), so a time before, after
+or in a gap in a time-varying dataset's steps draws nothing for it instead of
+holding a step however far away (a tropical cyclone still draws its cone); a
+tile on which nothing draws answers `204`, and TileJSON sets `s100.strictTime`.
 
 With `--overview` (datasets only; off by default), tiles and WMS GetMap below
 the chart's minimum zoom draw each dataset's coverage outline (from

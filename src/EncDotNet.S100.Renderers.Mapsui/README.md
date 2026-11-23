@@ -211,7 +211,9 @@ Each processor says which sample it shows through
 `ITimeAwareDatasetProcessor.TimeSemantics`: `Nearest` or `AtOrBefore`, held for
 its `Validity`, or for one step (the dataset's median sample interval) when that
 is `null`. The session has no rules of its own per product, so a new time-aware
-product needs no changes here. The bundled processors report:
+product needs no changes here. `MapsuiTimeSelection` wraps Core's
+`TimeStepSelector`, which `s100 tiles serve` uses too, so both draw the same
+step at the same time. The bundled processors report:
 
 | Product | Shows |
 |---|---|

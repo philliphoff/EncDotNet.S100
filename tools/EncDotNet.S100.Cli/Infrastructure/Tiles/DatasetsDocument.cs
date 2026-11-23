@@ -17,8 +17,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <remarks>
 /// Per dataset: an id and the file name, the product and its edition, the
 /// producer code, the WGS-84 bounds and a coverage polygon (GeoJSON), the time
-/// steps, the issue time and data dynamicity of time-varying data, and the
-/// not-for-navigation flag. Chart cells (S-101, S-57) add their edition,
+/// steps, the issue time and data dynamicity of time-varying data, how it
+/// picks its step at a time asked for and the span it draws in (issue #1676),
+/// and the not-for-navigation flag. Chart cells (S-101, S-57) add their edition,
 /// update and issue date; S-101 cells their <c>DataCoverage</c> display scale
 /// range (issue #1578). Bounds are per dataset, not only their union: the
 /// union of a harbour cell and a distant water-level grid frames empty ocean.
@@ -95,6 +96,15 @@ internal static partial class DatasetsDocument
                 datasets[^1]!["updateNumber"] = edition.Update;
                 if (edition.IssueDate is { } issueDate)
                     datasets[^1]!["issueDate"] = issueDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            // How a time-varying dataset picks its step at a time asked for
+            // (issue #1676), and the span in which it draws something tied to
+            // a time: only for one, so other entries are as before.
+            if (session.TimingOf(i) is { } timing)
+            {
+                datasets[^1]!["timeSelection"] = TileRenderSession.SelectionName(timing.Semantics.Selection);
+                datasets[^1]!["timeRange"] = new JsonArray(TileRenderSession.FormatTime(timing.Start), TileRenderSession.FormatTime(timing.End));
             }
 
             if (DisplayScaleOf(processor) is { } scale)

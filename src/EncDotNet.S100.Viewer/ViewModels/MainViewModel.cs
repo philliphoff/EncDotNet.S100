@@ -8,8 +8,6 @@ internal sealed class MainViewModel : ViewModelBase
     /// <summary>The docks, the activity tabs and the panel sizes.</summary>
     public ShellLayoutViewModel Layout { get; }
 
-    public FeatureCataloguesViewModel FeatureCatalogues { get; }
-    public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
     /// <summary>The display toolbar's palette menu.</summary>
     public PaletteMenuViewModel Palette { get; }
@@ -61,8 +59,6 @@ internal sealed class MainViewModel : ViewModelBase
         AppCommandsViewModel appCommands,
         DatasetOpeningViewModel datasetOpening,
         MapChromeViewModel mapChrome,
-        FeatureCataloguesViewModel featureCatalogues,
-        PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
         PaletteMenuViewModel palette,
         PickReportViewModel pickReport,
@@ -75,8 +71,6 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(appCommands);
         ArgumentNullException.ThrowIfNull(datasetOpening);
         ArgumentNullException.ThrowIfNull(mapChrome);
-        ArgumentNullException.ThrowIfNull(featureCatalogues);
-        ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -91,8 +85,6 @@ internal sealed class MainViewModel : ViewModelBase
         MapChrome = mapChrome;
         _routes = routes;
 
-        FeatureCatalogues = featureCatalogues;
-        PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
         Palette = palette;
         PickReport = pickReport;

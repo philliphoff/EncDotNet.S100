@@ -18,14 +18,12 @@ internal interface IFileDialogService
     Task<IReadOnlyList<string>> OpenDatasetsAsync(TopLevel? topLevel, bool allowMultiple);
 
     /// <summary>
-    /// Prompts for a single Feature Catalogue XML file.
+    /// Prompts for one catalogue (design note <c>catalogue-panels.md</c> D5):
+    /// a feature catalogue XML file, a portrayal catalogue's
+    /// <c>portrayal_catalogue.xml</c> (which stands for its folder), or a
+    /// portrayal catalogue ZIP package.
     /// </summary>
-    Task<string?> OpenFeatureCatalogueAsync(TopLevel? topLevel);
-
-    /// <summary>
-    /// Prompts for a single Portrayal Catalogue folder.
-    /// </summary>
-    Task<string?> OpenPortrayalCatalogueFolderAsync(TopLevel? topLevel);
+    Task<string?> OpenCatalogueAsync(TopLevel? topLevel);
 
     /// <summary>
     /// Prompts for a single folder containing an S-100 exchange set

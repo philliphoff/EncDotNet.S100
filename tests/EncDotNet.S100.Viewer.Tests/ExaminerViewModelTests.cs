@@ -59,42 +59,6 @@ public class ExaminerViewModelTests
     }
 
     [Fact]
-    public void Fc_builtin_entry_supported_spec_can_open_and_links()
-    {
-        var settings = NewSettings();
-        var opener = new StubUrlOpener();
-        var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(TestCatalogues.Registry(settings), TestPickReport.Examiner(links, opener));
-
-        var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
-        Assert.True(entry.CanOpenInExaminer);
-
-        vm.OpenInExaminerCommand.Execute(entry);
-        Assert.Equal("https://s100examiner.com/?catalog=S-101", opener.LastUrl);
-    }
-
-    [Fact]
-    public void Fc_refresh_updates_can_open_when_links_disabled()
-    {
-        var settings = NewSettings();
-        var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(TestCatalogues.Registry(settings), TestPickReport.Examiner(links, new StubUrlOpener()));
-
-        var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
-        Assert.True(entry.CanOpenInExaminer);
-
-        // Simulate the user disabling the integration in Settings.
-        settings.S100ExaminerLinksEnabled = false;
-        vm.RefreshExaminerAvailability();
-        Assert.False(entry.CanOpenInExaminer);
-
-        // ...and re-enabling it.
-        settings.S100ExaminerLinksEnabled = true;
-        vm.RefreshExaminerAvailability();
-        Assert.True(entry.CanOpenInExaminer);
-    }
-
-    [Fact]
     public void Settings_change_raises_examiner_settings_changed()
     {
         var s = NewSettings();
@@ -106,25 +70,5 @@ public class ExaminerViewModelTests
         vm.ExaminerBaseUrl = "https://mirror.example.org/";
 
         Assert.Equal(2, count);
-    }
-
-    [Fact]
-    public void Fc_refresh_raises_property_changed_on_entry()
-    {
-        var settings = NewSettings();
-        var links = new S100ExaminerLinkBuilder(settings);
-        var vm = new FeatureCataloguesViewModel(TestCatalogues.Registry(settings), TestPickReport.Examiner(links, new StubUrlOpener()));
-
-        var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
-        var raised = false;
-        entry.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(CatalogueEntry.CanOpenInExaminer))
-                raised = true;
-        };
-
-        settings.S100ExaminerLinksEnabled = false;
-        vm.RefreshExaminerAvailability();
-        Assert.True(raised);
     }
 }
