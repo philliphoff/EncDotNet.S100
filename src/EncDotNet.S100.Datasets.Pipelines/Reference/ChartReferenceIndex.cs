@@ -33,6 +33,7 @@ public sealed partial class ChartReferenceIndex
 
     private readonly Dictionary<(ReferenceKind Kind, string Code), ReferenceEntry> _entries;
     private readonly List<SearchRow> _searchRows;
+    private readonly Lazy<S57Aliases> _s57Aliases;
 
     private ChartReferenceIndex(
         SpecRef spec,
@@ -55,6 +56,8 @@ public sealed partial class ChartReferenceIndex
             _entries.TryAdd((entry.Key.Kind, entry.Code), entry);
             _searchRows.Add(SearchRow.For(entry, conditionText.GetValueOrDefault(entry.Code)));
         }
+
+        _s57Aliases = new Lazy<S57Aliases>(() => new S57Aliases(this));
     }
 
     /// <summary>The product specification the index describes.</summary>
@@ -74,6 +77,12 @@ public sealed partial class ChartReferenceIndex
 
     /// <summary>The display settings (context parameters), in catalogue order.</summary>
     public IReadOnlyList<DisplaySettingEntry> DisplaySettings { get; }
+
+    /// <summary>
+    /// The S-57 acronyms of the feature types and attributes, for S-57 cells
+    /// drawn with this product's catalogue (design note §4.3, R9).
+    /// </summary>
+    public S57Aliases S57Aliases => _s57Aliases.Value;
 
     /// <summary>
     /// Builds the index for <paramref name="spec"/> from its catalogues.

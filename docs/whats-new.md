@@ -21,6 +21,23 @@ month. For package versions and release assets, see
   files and exits with code `9` when a catalogue fails its check
   ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
 
+- **Terms in Object information.** The picked feature type's name, each
+  attribute's name and each listed value in Object information are now chart
+  reference terms, named as the feature catalogue names them, with a peek on
+  hover or focus and a click that opens the entry. A cell from an S-57
+  product, drawn with the S-101 catalogue, reads the S-101 chart reference,
+  and a code left as an S-57 acronym maps to its S-101 entry through the
+  catalogue's aliases: `BCNLAT` to Lateral Beacon, `COLOUR` to Colour, and
+  `3,1` to Red, White. A code with no entry stays plain text. Codes and S-57
+  acronyms no longer show in the rows; **Copy identity** copies them. A new
+  **Open in reference** action, and F1 in Object information, open the
+  feature type's entry in the Reference tab, keeping the pick. The
+  per-attribute eXaminer buttons are gone: the eXaminer link is in each
+  term's peek and entry, and **Open in eXaminer** still opens the feature
+  type. In `EncDotNet.S100.Datasets.Pipelines`,
+  `ChartReferenceIndex.S57Aliases` maps S-57 acronyms to entries
+  ([#1678](https://github.com/philliphoff/EncDotNet.S100/issues/1678)).
+
 - **Chart reference terms and peeks.** Names in Reference entries are now
   terms: text with a dotted underline in the text colour. Rest the pointer on
   a term, or move keyboard focus to it, and after half a second a peek shows

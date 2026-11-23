@@ -151,7 +151,6 @@ internal static partial class Strings
     public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
     public static string Tooltip_OpenCatalogueInExaminer => Get(nameof(Tooltip_OpenCatalogueInExaminer));
     public static string Tooltip_OpenFeatureInExaminer => Get(nameof(Tooltip_OpenFeatureInExaminer));
-    public static string Tooltip_OpenAttributeInExaminer => Get(nameof(Tooltip_OpenAttributeInExaminer));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_ToggleDatasetVisibility => Get(nameof(Tooltip_ToggleDatasetVisibility));
     public static string Tooltip_DatasetOpacity => Get(nameof(Tooltip_DatasetOpacity));

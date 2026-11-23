@@ -200,9 +200,6 @@
   <data name="Tooltip_OpenFeatureInExaminer" xml:space="preserve">
     <value>View this feature in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
   </data>
-  <data name="Tooltip_OpenAttributeInExaminer" xml:space="preserve">
-    <value>View this attribute in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
-  </data>
   <data name="Tooltip_RemoveDataset" xml:space="preserve">
     <value>Remove this dataset</value>
   </data>
@@ -9839,6 +9836,14 @@
   <data name="Reference_PeekOpen" xml:space="preserve">
     <value>Open in reference</value>
     <comment>Peek link that opens the term's entry in the Reference tab</comment>
+  </data>
+  <data name="Label_OpenInReference" xml:space="preserve">
+    <value>Open in reference</value>
+    <comment>Object information action that opens the picked feature type's entry in the Reference tab (R9, #1678)</comment>
+  </data>
+  <data name="Tooltip_OpenInReference" xml:space="preserve">
+    <value>Open this feature type in the Reference tab (F1)</value>
+    <comment>Tooltip of Object information's Open in reference action</comment>
   </data>
   <data name="Tooltip_ReferencePeekOpen" xml:space="preserve">
     <value>Open this entry in the Reference tab</value>

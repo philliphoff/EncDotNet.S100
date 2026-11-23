@@ -1841,6 +1841,10 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ExaminerLinks>(),
                 sp.GetRequiredService<PickWarningCardsViewModel>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>());
+            // Symbol dictionary R9 (#1678): names and listed values are terms,
+            // and F1 / Open in reference open the feature type's entry.
+            pick.Terms = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>();
+            pick.Post = UiThread.RunOrPost;
             // The depth card's "The chart shows charted depths" line (#1191).
             if (sp.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is { } depthBasis)
             {
