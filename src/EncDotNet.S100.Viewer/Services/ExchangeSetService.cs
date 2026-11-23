@@ -549,7 +549,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 source,
                 owner: source,
                 verifier: ct => S57ExchangeSetVerification.VerifyAsync(
-                    root, allowUntrustedCertificates: true, ct));
+                    root, ct));
             _tracked.Add(tracked);
             // Lifetime ownership has transferred to the tracked entry; do not
             // dispose `source` directly below.
@@ -1213,7 +1213,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             && Directory.Exists(root))
         {
             var s57Root = Path.GetDirectoryName(Path.Combine(root, catalogue.Replace('/', Path.DirectorySeparatorChar)))!;
-            verifier = ct => S57ExchangeSetVerification.VerifyAsync(s57Root, allowUntrustedCertificates: true, ct);
+            verifier = ct => S57ExchangeSetVerification.VerifyAsync(s57Root, ct);
         }
 
         var tracked = new TrackedExchangeSet(root, source, owner, verifier);
@@ -1479,9 +1479,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     /// surface identical integrity/signature semantics.
     /// </summary>
     private static (SignatureStatus Status, string Tooltip) SignatureOf(ExchangeSetVerificationResult result) =>
-        result.IsUnsigned ? (SignatureStatus.Unsigned, Strings.Tooltip_SignatureUnsigned)
+        result.SignaturesNotChecked ? (SignatureStatus.NotChecked, Strings.Tooltip_SignatureNotChecked)
+        : result.IsUnsigned ? (SignatureStatus.Unsigned, Strings.Tooltip_SignatureUnsigned)
         : result.AllValid ? (SignatureStatus.Verified, Strings.Tooltip_SignatureVerified)
         : result.HasInvalidSignatures ? (SignatureStatus.Invalid, Strings.Tooltip_SignatureInvalid)
+        // Every signature matches, but some signer isn't from a trusted SA.
+        : result.AllSignaturesIntact ? (SignatureStatus.Unverified, Strings.Tooltip_SignatureUnverified)
         // Some files ok, some not — e.g. certificate issues
         : (SignatureStatus.Mixed, Strings.Tooltip_SignatureMixed);
 

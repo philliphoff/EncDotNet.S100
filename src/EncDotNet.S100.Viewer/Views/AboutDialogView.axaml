@@ -287,6 +287,76 @@
                                      Opacity="0.6"
                                      TextWrapping="Wrap" />
             </StackPanel>
+
+            <!-- Catalogues (catalogue-panels §6.5, CR3): every product's feature and
+                 portrayal catalogue editions and where each comes from. Read-only;
+                 a product opens the Catalogues activity at its row. -->
+            <StackPanel Spacing="4"
+                        IsVisible="{Binding HasCatalogues}"
+                        AutomationProperties.AutomationId="About.Catalogues"
+                        AutomationProperties.Name="{x:Static loc:Strings.About_CataloguesName}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{x:Static loc:Strings.About_CataloguesTitle}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Opacity="0.7"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Classes="link"
+                            IsVisible="{Binding CanShowCatalogues}"
+                            AutomationProperties.AutomationId="About.Catalogues.Open"
+                            AutomationProperties.Name="{x:Static loc:Strings.About_Catalogues_Open}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.About_Catalogues_OpenTooltip}"
+                            Command="{Binding ShowCataloguesCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.About_Catalogues_OpenTooltip}">
+                        <TextBlock Classes="linktext" FontSize="12" Text="{x:Static loc:Strings.About_Catalogues_Open}" />
+                    </Button>
+                </Grid>
+                <Grid ColumnDefinitions="64,*,*" ColumnSpacing="8" Opacity="0.6">
+                    <TextBlock Grid.Column="0" FontSize="11" Text="{x:Static loc:Strings.About_Catalogues_Product}" />
+                    <TextBlock Grid.Column="1" FontSize="11" Text="{x:Static loc:Strings.About_Catalogues_Feature}" />
+                    <TextBlock Grid.Column="2" FontSize="11" Text="{x:Static loc:Strings.About_Catalogues_Portrayal}" />
+                </Grid>
+                <ScrollViewer MaxHeight="132"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Catalogues}"
+                                  AutomationProperties.AutomationId="About.Catalogues.Rows">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AboutCatalogueRow">
+                                <Grid ColumnDefinitions="64,*,*" ColumnSpacing="8"
+                                      AutomationProperties.AutomationId="About.Catalogues.Row"
+                                      AutomationProperties.Name="{Binding AccessibleName}">
+                                    <Button Grid.Column="0"
+                                            Classes="link"
+                                            HorizontalAlignment="Left"
+                                            Padding="0,1"
+                                            IsEnabled="{Binding $parent[UserControl].((vm:AboutDialogViewModel)DataContext).CanShowCatalogues, FallbackValue=False}"
+                                            AutomationProperties.AutomationId="About.Catalogues.Row.Product"
+                                            AutomationProperties.Name="{Binding Spec}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                            Command="{Binding $parent[UserControl].((vm:AboutDialogViewModel)DataContext).ShowCataloguesCommand}"
+                                            CommandParameter="{Binding Spec}">
+                                        <TextBlock Classes="linktext" FontSize="12" Text="{Binding Spec}" />
+                                    </Button>
+                                    <SelectableTextBlock Grid.Column="1" FontSize="12" Opacity="0.8"
+                                                         VerticalAlignment="Center"
+                                                         TextWrapping="Wrap"
+                                                         AutomationProperties.AutomationId="About.Catalogues.Row.Feature"
+                                                         Text="{Binding Feature}" />
+                                    <SelectableTextBlock Grid.Column="2" FontSize="12" Opacity="0.8"
+                                                         VerticalAlignment="Center"
+                                                         TextWrapping="Wrap"
+                                                         AutomationProperties.AutomationId="About.Catalogues.Row.Portrayal"
+                                                         Text="{Binding Portrayal}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
         </StackPanel>
 
         <!-- Footer -->

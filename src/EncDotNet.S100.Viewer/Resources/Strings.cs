@@ -184,6 +184,8 @@ internal static partial class Strings
     public static string Tooltip_SignatureUnsigned => Get(nameof(Tooltip_SignatureUnsigned));
     public static string Tooltip_SignatureInvalid => Get(nameof(Tooltip_SignatureInvalid));
     public static string Tooltip_SignatureUntrusted => Get(nameof(Tooltip_SignatureUntrusted));
+    public static string Tooltip_SignatureUnverified => Get(nameof(Tooltip_SignatureUnverified));
+    public static string Tooltip_SignatureNotChecked => Get(nameof(Tooltip_SignatureNotChecked));
     public static string Tooltip_SignatureMixed => Get(nameof(Tooltip_SignatureMixed));
     public static string Tooltip_SignatureChecking => Get(nameof(Tooltip_SignatureChecking));
     public static string Tooltip_SignatureError => Get(nameof(Tooltip_SignatureError));

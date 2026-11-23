@@ -1596,15 +1596,17 @@ translation. Findings from the second pass have rule ids prefixed with
 
 **An exchange set** (a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a
 `.zip`) has each file's digital signature and checksum verified (S-100
-Part 15). An S-57 or S-63 exchange set (`CATALOG.031`) has its CRCs and
-signatures verified. The datasets themselves aren't checked against rule
+Part 15). An S-57 or S-63 exchange set (`CATALOG.031`) has its CRCs
+verified. Its S-63 signatures aren't checked yet: each file shows
+`SignatureNotChecked` rather than `NotSigned`, and the summary says the
+signatures weren't checked. The datasets themselves aren't checked against rule
 packs; validate them one at a time.
 
 | Option | Default | Description |
 |---|---|---|
 | `--format <format>` | `text` | `text` prints a table. `json` prints a report for scripts and CI. |
 | `--suppress <patterns>` | none | Drops findings whose rule id matches, comma-separated, for example `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. |
-| `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files and files without a checksum. |
+| `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files, files without a checksum, and signatures from a signer that isn't verified. |
 | `--no-updates` | off | Validates an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--debug` | off | Prints full stack traces on error. |
 
@@ -1618,6 +1620,11 @@ s100 validate exchange-set/CATALOG.XML
 s100 validate exchange-set.zip --format json
 s100 validate s57-set/CATALOG.031
 ```
+
+`validate` doesn't take trust roots yet. A signature that matches the file but
+whose signer doesn't chain to a trusted IHO Scheme Administrator shows as
+`SignatureValidUntrusted`, and the summary reads "Signer not verified" rather
+than "Verified". The JSON report's `hasUnverifiedSigners` is `true`.
 
 `--suppress` patterns match rule ids without regard to case. `*` matches any
 run of characters and is the only wildcard, so a pattern without `*` matches

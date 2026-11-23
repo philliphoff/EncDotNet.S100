@@ -18,6 +18,14 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// <c>CATALOG.031</c> plus a read of each cell's leading <c>DSID</c> record.
 /// Per-file problems become <see cref="IndexDiagnostic"/>s; they never fail
 /// the whole index.
+/// <para>
+/// A ZIP is a dataset when it is one (#1688): an NHC tropical cyclone
+/// advisory, or a folder of one storm's zips, planned by
+/// <see cref="LocalSourceScanner"/>, is one item probed as a loose dataset
+/// is. Any other ZIP is offered to the probe first, so a zipped dataset under
+/// a name of its own is still found, and is otherwise read for exchange-set
+/// catalogues as before.
+/// </para>
 /// </remarks>
 public sealed class LocalSourceIndexer : ICollectionSourceIndexer
 {
@@ -88,6 +96,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
                 S100FolderUnit f => f.Directory,
                 S57FolderUnit f => f.Directory,
                 ZipUnit z => z.Path,
+                AdvisoryUnit a => a.Path,
                 LooseFileUnit l => l.Path,
                 _ => null,
             };
@@ -105,6 +114,10 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
                         break;
                     case ZipUnit zip:
                         items.AddRange(ReadZip(scan.RootDirectory, zip, diagnostics, cancellationToken));
+                        break;
+                    case AdvisoryUnit advisory:
+                        if (ReadAdvisory(scan.RootDirectory, advisory, diagnostics, cancellationToken) is { } advisoryItem)
+                            items.Add(advisoryItem);
                         break;
                     case LooseFileUnit loose:
                         if (ReadLoose(scan.RootDirectory, loose, diagnostics, cancellationToken) is { } item)
@@ -162,10 +175,21 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
     }
 
     /// <summary>
-    /// Indexes every exchange set in a ZIP: each S-100 or S-57 catalogue entry,
-    /// at any depth, roots one exchange set at its directory within the ZIP.
+    /// Indexes a ZIP: as one dataset when the probe names its product (a
+    /// zipped dataset, #1688), else every exchange set in it: each S-100 or
+    /// S-57 catalogue entry, at any depth, roots one exchange set at its
+    /// directory within the ZIP.
     /// </summary>
-    private static List<CollectionItem> ReadZip(
+    private List<CollectionItem> ReadZip(
+        string sourceRoot, ZipUnit zip, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        if (TryProbe(zip.Path, diagnostics, cancellationToken) is { } metadata)
+            return [LooseItem(sourceRoot, new LooseFileUnit(zip.Path, []), metadata, header: null, latest: null, diagnostics)];
+
+        return ReadExchangeSetZip(sourceRoot, zip, diagnostics, cancellationToken);
+    }
+
+    private static List<CollectionItem> ReadExchangeSetZip(
         string sourceRoot, ZipUnit zip, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         var items = new List<CollectionItem>();
@@ -233,18 +257,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
     private CollectionItem? ReadLoose(
         string sourceRoot, LooseFileUnit loose, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
-        Core.DatasetMetadata? metadata = null;
-        if (_probe is not null)
-        {
-            try
-            {
-                metadata = _probe(loose.Path, cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Warning, ex.Message, loose.Path));
-            }
-        }
+        var metadata = TryProbe(loose.Path, diagnostics, cancellationToken);
 
         var isCell = string.Equals(Path.GetExtension(loose.Path), ".000", StringComparison.OrdinalIgnoreCase);
         var header = isCell && metadata?.Spec.Name is null or "S-57" or AmlDatasetInfo.SpecName ? TryReadHeader(loose.Path) : null;
@@ -257,6 +270,35 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
             return null;
         }
 
+        return LooseItem(sourceRoot, loose, metadata, header, latest, diagnostics);
+    }
+
+    /// <summary>Asks the probe for a dataset's metadata; a probe failure is a warning, not an error.</summary>
+    private Core.DatasetMetadata? TryProbe(string path, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        if (_probe is null)
+            return null;
+
+        try
+        {
+            return _probe(path, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Warning, ex.Message, path));
+            return null;
+        }
+    }
+
+    /// <summary>The item of a loose dataset, from its probed metadata and, for an S-57 cell, its <c>DSID</c>.</summary>
+    private static CollectionItem LooseItem(
+        string sourceRoot,
+        LooseFileUnit loose,
+        Core.DatasetMetadata? metadata,
+        S57DatasetHeader? header,
+        S57DatasetHeader? latest,
+        List<IndexDiagnostic> diagnostics)
+    {
         var spec = header?.Aml is not null ? AmlDatasetInfo.SpecName : metadata?.Spec.Name ?? "S-57";
         var version = metadata is { Spec.Edition: var edition } && edition != default ? edition.ToString() : null;
 
@@ -324,31 +366,49 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
         string sourceRoot, RunFolderUnit run, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         if (ReadLoose(sourceRoot, new LooseFileUnit(run.Directory, []), [], cancellationToken) is { } folder)
-        {
-            var parent = Path.GetDirectoryName(run.Directory) ?? run.Directory;
-            var name = Path.GetFileName(run.Directory);
-            var properties = new Dictionary<string, string>(folder.Properties, StringComparer.Ordinal)
-            {
-                ["files"] = run.Files.Count.ToString(CultureInfo.InvariantCulture),
-            };
-            return
-            [
-                folder with
-                {
-                    Key = LocalSourceScanner.RelativePath(sourceRoot, run.Directory) is { Length: > 0 } relative && relative != "."
-                        ? relative + "/"
-                        : name + "/",
-                    Name = name,
-                    Location = new LocalItemLocation(parent, name, []),
-                    Properties = properties,
-                },
-            ];
-        }
+            return [AsFolderItem(sourceRoot, folder, run.Directory, run.Files.Count)];
 
         return run.Files
             .Select(file => ReadLoose(sourceRoot, new LooseFileUnit(file, []), diagnostics, cancellationToken))
             .OfType<CollectionItem>()
             .ToArray();
+    }
+
+    /// <summary>
+    /// Indexes an NHC advisory (#1688) as a loose dataset: from its forecast
+    /// zip, keyed and located as that file, or from its folder, keyed and
+    /// located as a folder, as a GRIB2 run is.
+    /// </summary>
+    private CollectionItem? ReadAdvisory(
+        string sourceRoot, AdvisoryUnit advisory, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        var item = ReadLoose(sourceRoot, new LooseFileUnit(advisory.Path, []), diagnostics, cancellationToken);
+        return item is not null && Directory.Exists(advisory.Path)
+            ? AsFolderItem(sourceRoot, item, advisory.Path, advisory.Files.Count)
+            : item;
+    }
+
+    /// <summary>
+    /// Re-keys an item read from a folder: keyed by the folder's relative path
+    /// with a trailing slash, named after it, and located at it.
+    /// </summary>
+    private static CollectionItem AsFolderItem(string sourceRoot, CollectionItem folder, string directory, int files)
+    {
+        var parent = Path.GetDirectoryName(directory) ?? directory;
+        var name = Path.GetFileName(directory);
+        var properties = new Dictionary<string, string>(folder.Properties, StringComparer.Ordinal)
+        {
+            ["files"] = files.ToString(CultureInfo.InvariantCulture),
+        };
+        return folder with
+        {
+            Key = LocalSourceScanner.RelativePath(sourceRoot, directory) is { Length: > 0 } relative && relative != "."
+                ? relative + "/"
+                : name + "/",
+            Name = name,
+            Location = new LocalItemLocation(parent, name, []),
+            Properties = properties,
+        };
     }
 
     private static S57DatasetHeader? TryReadHeader(string path)

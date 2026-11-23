@@ -18,6 +18,17 @@ month. For package versions and release assets, see
   as S-102 and weather fields, keep their key line
   ([#1679](https://github.com/philliphoff/EncDotNet.S100/issues/1679)).
 
+- **Tropical cyclone advisories in Library folders.** A Library folder or
+  exchange-set source now lists the NHC advisories it holds. A storm's folder
+  of zips is one `TC` dataset, and a forecast zip
+  (`al092022_5day_020.zip`) beside a GRIB2 run or other data is one dataset,
+  read with its wind radii and best track zips. Those two zips aren't listed
+  on their own, but replacing either refreshes the advisory. Zipped S-100 and
+  S-57 exchange sets are listed as before, and sources that hold no advisory
+  aren't re-indexed. Previously every `.zip` was read as an exchange set, so
+  an advisory listed nothing. This works in SoundCharts and in `s100 mcp
+  serve`'s Library tools.
+
 - **`tiles serve` draws each dataset at a time as the viewer does.** A
   time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension no longer
   snaps to the nearest listed step. Each time-varying dataset picks what it
@@ -42,6 +53,19 @@ month. For package versions and release assets, see
   a word. A `.zip` in a folder that isn't the advisory's is skipped with a
   warning, as before
   ([#1677](https://github.com/philliphoff/EncDotNet.S100/issues/1677)).
+
+- **Catalogue warnings lead to Catalogues.** A dataset whose product edition
+  doesn't match its feature catalogue now says why on its Datasets row, with
+  **Catalogues…**, which opens the Catalogues activity at that product. The
+  row menu has **Catalogues…** too. The dataset inspector's Dataset tab has a
+  **Drawn with** line naming both catalogues and any that aren't built in,
+  such as "Feature 2.0.0 · Portrayal 2.1.0-draft (custom)", or "Drawn by
+  SoundCharts" for S-104; an S-57 cell names the S-101 portrayal it's drawn
+  with. The toast for a missing portrayal catalogue has **Choose
+  catalogue…**, which opens Add catalogue… for the product. Help › About
+  lists every product's feature and portrayal catalogue versions and where
+  each comes from (built-in, custom, command line or missing), and each
+  product opens Catalogues. Feedback reports include the same table.
 
 - **One Catalogues activity.** The Feature Catalogues and Portrayal
   Catalogues activities are replaced by **Catalogues**, which lists every
