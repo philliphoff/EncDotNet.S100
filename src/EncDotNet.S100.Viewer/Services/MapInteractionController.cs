@@ -71,6 +71,19 @@ internal sealed class MapInteractionController
     /// </summary>
     public IMapViewportController? Viewport { get; init; }
 
+    /// <summary>
+    /// The map's context menu (symbol dictionary R9b, #1681): <b>Look up in
+    /// reference</b> for the features under the pointer. Null in hosts
+    /// without a chart reference, where right-click does nothing.
+    /// </summary>
+    public ChartReference.MapReferenceMenu? ReferenceMenu { get; init; }
+
+    /// <summary>The context menu shown last, while it may still be open.</summary>
+    internal ContextMenu? OpenContextMenu { get; private set; }
+
+    /// <summary>Where a right-button press on the map landed, for the drag-is-not-a-click test.</summary>
+    private Point? _rightPressOrigin;
+
     private MapControl? _mapControl;
     private MapsuiMapNavigator? _mapNavigator;
 
@@ -183,6 +196,12 @@ internal sealed class MapInteractionController
         mapControl.AddHandler(InputElement.PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
         mapControl.AddHandler(InputElement.PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
         mapControl.PointerExited += OnMapPointerExited;
+
+        // The context menu (R9b, #1681): a right click opens it at the
+        // pointer, from the press and release, since the map handles its own
+        // pointer events; the keyboard (Shift+F10, the Menu key) and UI
+        // automation raise ContextRequested.
+        mapControl.AddHandler(Control.ContextRequestedEvent, OnMapContextRequested, RoutingStrategies.Bubble, handledEventsToo: true);
 
         // Trackpad scroll/swipe to pan (tunnel phase to intercept before MapControl).
         mapControl.AddHandler(InputElement.PointerWheelChangedEvent, OnMapPointerWheelChanged, RoutingStrategies.Tunnel);
@@ -562,6 +581,7 @@ internal sealed class MapInteractionController
         }
 
         var props = e.GetCurrentPoint(_mapControl).Properties;
+        _rightPressOrigin = props.IsRightButtonPressed ? e.GetPosition(_mapControl) : null;
         if (!props.IsLeftButtonPressed)
             return;
 
@@ -687,6 +707,19 @@ internal sealed class MapInteractionController
         {
             e.Handled = true;
         }
+        else if (e.InitialPressMouseButton == MouseButton.Right
+            && _rightPressOrigin is { } rightOrigin
+            && _mapControl is not null
+            && _toolController?.ActiveTool is null)
+        {
+            var at = e.GetPosition(_mapControl);
+            var tapSize = PlatformSettings()?.GetTapSize(e.Pointer.Type) ?? new Size(4, 4);
+            if (!MovedBeyondTap(rightOrigin, at, tapSize))
+                _ = ShowContextMenuAsync(at);
+        }
+
+        if (e.InitialPressMouseButton == MouseButton.Right)
+            _rightPressOrigin = null;
 
         TrackPressMovement(e);
         CancelLongPress();
@@ -734,6 +767,55 @@ internal sealed class MapInteractionController
     }
 
     private void PerformPickAt(BaseEventArgs e) => PickAt(e.WorldPosition);
+
+    private void OnMapContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (ReferenceMenu is null || _mapControl is null)
+            return;
+        e.Handled = true;
+        // A right click opens the menu from its release (OnMapPointerReleased).
+        if (e.TryGetPosition(_mapControl, out _) || _toolController?.ActiveTool is not null)
+            return;
+        // The keyboard and UI automation: where the pointer last was over
+        // the map, else the map's centre.
+        var bounds = _mapControl.Bounds;
+        _ = ShowContextMenuAsync(_lastMouseScreenPos ?? new Point(bounds.Width / 2, bounds.Height / 2));
+    }
+
+    /// <summary>
+    /// Opens the map's context menu at <paramref name="screen"/>, for the
+    /// features drawn there; nothing opens when none can be looked up.
+    /// </summary>
+    /// <param name="screen">The point on the map, in its own coordinates.</param>
+    /// <returns>A task that completes once the menu is open, or isn't.</returns>
+    internal async Task ShowContextMenuAsync(Point screen)
+    {
+        if (ReferenceMenu is not { } builder || _mapControl?.Map?.Navigator is not { } navigator)
+            return;
+        var viewport = navigator.Viewport;
+        var world = viewport.ScreenToWorld(screen.X, screen.Y);
+        ContextMenu? menu;
+        try
+        {
+            var hits = await _pickService.QueryAsync(world, viewport.Resolution).ConfigureAwait(true);
+            menu = await builder.BuildAsync(hits).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A dataset that can't be read leaves the click without a menu.
+            return;
+        }
+
+        if (menu is null || _mapControl is not { } map)
+            return;
+        OpenContextMenu?.Close();
+        menu.Placement = Avalonia.Controls.PlacementMode.AnchorAndGravity;
+        menu.PlacementAnchor = Avalonia.Controls.Primitives.PopupPositioning.PopupAnchor.TopLeft;
+        menu.PlacementGravity = Avalonia.Controls.Primitives.PopupPositioning.PopupGravity.BottomRight;
+        menu.PlacementRect = new Rect(screen, new Size(1, 1));
+        menu.Open(map);
+        OpenContextMenu = menu;
+    }
 
     /// <summary>
     /// Picks at <paramref name="world"/> through the map session's engine

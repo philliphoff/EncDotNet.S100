@@ -31,6 +31,14 @@ namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
 public abstract record LegendEntry(string Label)
 {
     /// <summary>
+    /// The feature catalogue code of the feature type the row stands for
+    /// (<c>"NavwarnPart"</c>), when the product's legend says it; the viewer
+    /// makes the row a Chart reference term. <see langword="null"/> (the
+    /// default) for a row that names no one feature type.
+    /// </summary>
+    public string? FeatureType { get; init; }
+
+    /// <summary>
     /// The legend of a colour scheme: one swatch per band, lowest first, or
     /// empty when any band has no <see cref="ColorBand.Label"/> (a legend with
     /// gaps would mislead).
@@ -88,7 +96,16 @@ public sealed record SymbolLegendEntry(string Svg, string Label) : LegendEntry(L
 /// <summary>A legend row with a short sample of a line style, e.g. a cold front's line and pips.</summary>
 /// <param name="Line">The line sample.</param>
 /// <param name="Label">The row's label.</param>
-public sealed record LineLegendEntry(LegendLineSample Line, string Label) : LegendEntry(Label);
+public sealed record LineLegendEntry(LegendLineSample Line, string Label) : LegendEntry(Label)
+{
+    /// <summary>
+    /// The portrayal catalogue's name for the line style
+    /// (<c>"NavigationalWarningFeaturePartLine"</c>), when the row shows one
+    /// catalogue line style; the viewer makes the row a Chart reference term.
+    /// <see langword="null"/> (the default) for a line drawn for the legend alone.
+    /// </summary>
+    public string? LineStyleName { get; init; }
+}
 
 /// <summary>
 /// A legend row with an area fill pattern, e.g. the dredged area pattern
@@ -97,7 +114,16 @@ public sealed record LineLegendEntry(LegendLineSample Line, string Label) : Lege
 /// </summary>
 /// <param name="Fill">The fill pattern.</param>
 /// <param name="Label">The row's label.</param>
-public sealed record FillLegendEntry(LegendFillPattern Fill, string Label) : LegendEntry(Label);
+public sealed record FillLegendEntry(LegendFillPattern Fill, string Label) : LegendEntry(Label)
+{
+    /// <summary>
+    /// The portrayal catalogue's name for the area fill (<c>"DRGARE01"</c>),
+    /// when the row shows one catalogue area fill; the viewer makes the row a
+    /// Chart reference term. <see langword="null"/> (the default) for a fill
+    /// drawn for the legend alone.
+    /// </summary>
+    public string? AreaFillName { get; init; }
+}
 
 /// <summary>
 /// An area fill resolved for a legend (S-100 Part 9 area fills): a symbol

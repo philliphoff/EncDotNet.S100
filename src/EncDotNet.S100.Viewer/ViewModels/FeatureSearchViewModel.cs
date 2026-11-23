@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.ChartReference;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -39,6 +40,7 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
         Results = new ObservableCollection<FeatureSearchResultItem>();
         OpenResultCommand = new RelayCommand<FeatureSearchResultItem>(OpenResult, item => item is not null);
+        OpenInReferenceCommand = new RelayCommand<FeatureSearchResultItem>(OpenInReference, item => item is { IsInReference: true });
         ClearQueryCommand = new RelayCommand(() => Query = string.Empty);
 
         // Debounce only when running inside a real Avalonia application
@@ -137,6 +139,26 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
     public ICommand OpenResultCommand { get; }
     public ICommand ClearQueryCommand { get; }
 
+    /// <summary>
+    /// The chart reference behind each hit's feature type term (symbol
+    /// dictionary R9b, #1681); the app sets it. <see langword="null"/> keeps
+    /// every feature type plain and hides <b>Open in reference</b>.
+    /// </summary>
+    public ReferenceTerms? Terms { get; set; }
+
+    /// <summary>A hit's context menu <b>Open in reference</b>: opens its feature type's entry.</summary>
+    public IRelayCommand<FeatureSearchResultItem> OpenInReferenceCommand { get; }
+
+    /// <summary>Completes when the current results' feature types are checked against the index; for tests.</summary>
+    internal Task TermsResolved { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Runs a search still waiting on its debounce at once; for tests, whose dispatcher runs no timers.</summary>
+    internal void SearchNow()
+    {
+        _debounceTimer?.Stop();
+        RefreshResults();
+    }
+
     private void RefreshResults()
     {
         using var __cmd = ViewerObservability.BeginCommand("search");
@@ -166,6 +188,8 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         foreach (var hit in hits)
             Results.Add(FeatureSearchResultItem.From(hit));
 
+        TermsResolved = ResolveTermsAsync([.. Results]);
+
         __cmd.SetTag("s100.viewer.search.result_count", hits.Count);
         __cmd.SetTag("s100.viewer.search.total_matched", total);
         __cmd.SetTag("s100.viewer.search.truncated", total > hits.Count);
@@ -182,6 +206,35 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(ShowEmptyPrompt));
         OnPropertyChanged(nameof(ShowNoResults));
+    }
+
+    /// <summary>
+    /// Marks the hits whose feature type the chart reference holds, so their
+    /// <b>Open in reference</b> shows; each product and type is read once.
+    /// </summary>
+    private async Task ResolveTermsAsync(IReadOnlyList<FeatureSearchResultItem> items)
+    {
+        if (Terms is not { } terms)
+            return;
+        foreach (var group in items.Where(i => i.TermKey is not null).GroupBy(i => i.TermKey!.Value))
+        {
+            var info = await terms.DescribeAsync(group.Key).ConfigureAwait(true);
+            if (info is null)
+                continue;
+            foreach (var item in group)
+                item.IsInReference = true;
+        }
+
+        OpenInReferenceCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OpenInReference(FeatureSearchResultItem? item)
+    {
+        if (item is not { IsInReference: true, TermKey: { } key } || Terms is not { } terms)
+            return;
+        using var __cmd = ViewerObservability.BeginCommand("search.open_in_reference");
+        __cmd.SetTag("s100.viewer.product_spec", item.ProductSpec);
+        terms.Open(key);
     }
 
     private void OpenResult(FeatureSearchResultItem? item)
@@ -203,8 +256,10 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 /// search results list. Carries the underlying hit so the open command
 /// can route back to the pick service without re-querying.
 /// </summary>
-internal sealed class FeatureSearchResultItem
+internal sealed class FeatureSearchResultItem : ViewModelBase
 {
+    private bool _isInReference;
+
     public required FeatureSearchHit Hit { get; init; }
 
     /// <summary>Feature type label preferring the FC-resolved name.</summary>
@@ -216,6 +271,27 @@ internal sealed class FeatureSearchResultItem
 
     public required string ProductSpec { get; init; }
 
+    /// <summary>
+    /// The Chart reference entry of the hit's feature type (symbol dictionary
+    /// R9b, #1681): its name is a term. <see langword="null"/> for a product
+    /// whose codes the reference doesn't key, whose name is plain text.
+    /// </summary>
+    public Datasets.Pipelines.Reference.ReferenceKey? TermKey { get; init; }
+
+    /// <summary>
+    /// Whether the chart reference holds <see cref="TermKey"/>, so the hit's
+    /// context menu offers <b>Open in reference</b>.
+    /// </summary>
+    public bool IsInReference
+    {
+        get => _isInReference;
+        set => SetProperty(ref _isInReference, value);
+    }
+
+    /// <summary>The tooltip of <b>Open in reference</b>: "Open Lateral beacon in the Reference tab".</summary>
+    public string OpenInReferenceTip => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, Strings.Tooltip_SearchOpenInReferenceFormat, DisplayType);
+
     public static FeatureSearchResultItem From(FeatureSearchHit hit)
         => new()
         {
@@ -224,5 +300,6 @@ internal sealed class FeatureSearchResultItem
             FeatureRef = hit.FeatureRef,
             DatasetFileName = hit.DatasetFileName,
             ProductSpec = hit.ProductSpec,
+            TermKey = ReferenceTerms.FeatureKeyOf(hit.ProductSpec, hit.FeatureType),
         };
 }

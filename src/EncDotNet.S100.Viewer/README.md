@@ -990,7 +990,12 @@ name, glyph and definition, **Open in reference**, and the S-100 eXaminer
 link when eXaminer links are on. Space pins the peek so Tab reaches its links;
 Escape closes it. Click a term to open its entry. The Legend tab's catalogue
 key rows and the mariner settings' names in **Settings › Chart** are terms
-too.
+too, as are the Legend rows of a product's own legend that name a feature
+type, symbol, line style or area fill (an S-124 warning's), and the feature
+type of each Feature search hit, whose context menu also has **Open in
+reference**. Right-click the map (or Shift+F10) for **Look up in
+reference**: it opens the feature type under the pointer, or lists each one
+when there are several. Names the reference doesn't hold stay plain.
 
 Every name in an entry links to its own entry. **Back** and **Forward**
 (Alt+Left, Alt+Right) and the breadcrumb above the entry retrace the trail;

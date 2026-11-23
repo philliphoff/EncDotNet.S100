@@ -36,9 +36,9 @@ internal sealed class LegendRowViewModel : ViewModelBase
     /// <param name="entry">The legend row of the sub-layer.</param>
     /// <param name="tile">The palette's chart background, which the glyph sits on.</param>
     /// <param name="referenceSpec">
-    /// The product whose Chart reference a catalogue key row's symbol is in
+    /// The product whose Chart reference the row's names are in
     /// (<see cref="LegendSection.CatalogueSpec"/>), so its label is a
-    /// term (D7, symbol dictionary R8); <see langword="null"/> for none.
+    /// term (D7, symbol dictionary R8, R9b); <see langword="null"/> for none.
     /// </param>
     public LegendRowViewModel(LegendEntry entry, IBrush tile, string? referenceSpec = null)
     {
@@ -56,25 +56,44 @@ internal sealed class LegendRowViewModel : ViewModelBase
         var (width, height) = Renderers.Skia.LegendGlyphRenderer.SizeOf(entry);
         GlyphWidth = (int)MathF.Round(width * GlyphZoom, MidpointRounding.AwayFromZero);
         GlyphHeight = (int)MathF.Round(height * GlyphZoom, MidpointRounding.AwayFromZero);
-        TermKey = entry is SymbolLegendEntry { SymbolName: { Length: > 0 } symbol }
-            && referenceSpec is not null
-            && SpecName.TryNormalize(referenceSpec, out var spec)
-                ? new ReferenceKey(new SpecRef(spec, default), ReferenceKind.Symbol, symbol)
-                : null;
+        TermKey = TermKeyOf(entry, referenceSpec);
     }
 
     /// <summary>
-    /// The Chart reference entry a catalogue key row shows (D7, symbol
-    /// dictionary R8, #1651): its label is a term. <see langword="null"/> for
-    /// any other row, whose label is plain text.
+    /// The Chart reference entry a row names (D7, symbol dictionary R8,
+    /// R9b, #1651, #1681): a catalogue key row's symbol, or a sub-layer
+    /// legend row's feature type, symbol, line style or area fill; its label
+    /// is a term. <see langword="null"/> for any other row, whose label is
+    /// plain text. A term whose entry the index doesn't hold is plain too.
     /// </summary>
     public ReferenceKey? TermKey { get; }
 
-    /// <summary>Whether the label is a term, which takes keyboard focus for the row.</summary>
-    public bool HasTerm => TermKey is not null;
+    /// <summary>
+    /// The entry <paramref name="entry"/> names in <paramref name="referenceSpec"/>'s
+    /// Chart reference: its feature type first, as the label usually names
+    /// the feature, then the catalogue item it draws.
+    /// </summary>
+    /// <param name="entry">The legend row.</param>
+    /// <param name="referenceSpec">The product whose catalogue the row's names are in, or <see langword="null"/>.</param>
+    /// <returns>The entry, or <see langword="null"/> when the row names none.</returns>
+    internal static ReferenceKey? TermKeyOf(LegendEntry entry, string? referenceSpec)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (referenceSpec is null || !SpecName.TryNormalize(referenceSpec, out var name))
+            return null;
+        var spec = new SpecRef(name, default);
+        return entry switch
+        {
+            { FeatureType: { Length: > 0 } type } => new ReferenceKey(spec, ReferenceKind.FeatureType, type),
+            SymbolLegendEntry { SymbolName: { Length: > 0 } symbol } => new ReferenceKey(spec, ReferenceKind.Symbol, symbol),
+            LineLegendEntry { LineStyleName: { Length: > 0 } line } => new ReferenceKey(spec, ReferenceKind.LineStyle, line),
+            FillLegendEntry { AreaFillName: { Length: > 0 } fill } => new ReferenceKey(spec, ReferenceKind.AreaFill, fill),
+            _ => null,
+        };
+    }
 
-    /// <summary>Whether the row itself takes keyboard focus: its label isn't a term.</summary>
-    public bool IsRowFocusable => TermKey is null;
+    /// <summary>Whether the label may be a term, which takes keyboard focus for the row once its entry resolves.</summary>
+    public bool HasTerm => TermKey is not null;
 
     /// <summary>The row this view model shows.</summary>
     public LegendEntry Entry => _entry;

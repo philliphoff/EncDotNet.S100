@@ -213,6 +213,41 @@ internal sealed class ReferenceTerms
         return Describe(index, key, value);
     }
 
+    /// <summary>
+    /// The feature type entry of a feature a dataset holds, by the dataset's
+    /// product and the feature's type code (symbol dictionary R9b, #1681):
+    /// <c>S-101</c> and <c>LateralBeacon</c> give
+    /// <c>S-101/FeatureType/LateralBeacon</c>. The key is not checked against
+    /// the index; a term or <see cref="FeatureTypeAsync"/> does that.
+    /// </summary>
+    /// <remarks>
+    /// A product portrayed with another's catalogue (an S-57 cell, drawn with
+    /// S-101's) has codes that aren't that catalogue's, so it gives
+    /// <see langword="null"/>; its features stay plain.
+    /// </remarks>
+    /// <param name="productSpec">The dataset's product, such as <c>S-101</c>.</param>
+    /// <param name="featureType">The feature's type code.</param>
+    /// <returns>The key, or <see langword="null"/>.</returns>
+    public static ReferenceKey? FeatureKeyOf(string? productSpec, string? featureType)
+    {
+        if (string.IsNullOrWhiteSpace(featureType) || !SpecName.TryNormalize(productSpec, out var spec))
+            return null;
+        var portrayal = EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default.PortrayalSpecName(spec);
+        if (!string.Equals(portrayal, spec, StringComparison.Ordinal))
+            return null;
+        return new ReferenceKey(new SpecRef(spec, default), ReferenceKind.FeatureType, featureType.Trim());
+    }
+
+    /// <summary>
+    /// What the term of a dataset feature's type says (<see cref="FeatureKeyOf"/>),
+    /// reading its index first when needed (R9b, #1681).
+    /// </summary>
+    /// <param name="productSpec">The dataset's product, such as <c>S-101</c>.</param>
+    /// <param name="featureType">The feature's type code.</param>
+    /// <returns>What the term says, or <see langword="null"/> when the catalogues have no such entry.</returns>
+    public Task<ReferenceTermInfo?> FeatureTypeAsync(string? productSpec, string? featureType) =>
+        FeatureKeyOf(productSpec, featureType) is { } key ? DescribeAsync(key) : Task.FromResult<ReferenceTermInfo?>(null);
+
     /// <summary>The S-100 eXaminer page of a term, or <see langword="null"/>: links are off, or it has no page.</summary>
     /// <param name="info">The term.</param>
     public string? ExaminerUrl(ReferenceTermInfo info)

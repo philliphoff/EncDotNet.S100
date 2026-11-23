@@ -337,6 +337,13 @@ internal sealed class LegendService : IDisposable
             if (key.Count > group.Rows.Count)
                 section.ChartReferenceSpec = section.CatalogueSpec;
         }
+        else if (section.Groups.Any(g => g.Rows.Any(NamesCatalogueItem)))
+        {
+            // A catalogue product's own legend (symbol dictionary R9b, #1681):
+            // rows that name a feature type, symbol, line style or fill are
+            // terms in the product's Chart reference.
+            section.CatalogueSpec = section.Datasets.Select(d => d.Entry?.PortrayalSpec).FirstOrDefault(s => s is not null) ?? section.Spec;
+        }
 
         var datasets = section.Datasets;
         var source = datasets.Count == 1
@@ -374,6 +381,16 @@ internal sealed class LegendService : IDisposable
             Groups = [.. section.Groups],
         };
     }
+
+    /// <summary>Whether a sub-layer legend row names a catalogue item, so it can be a Chart reference term.</summary>
+    private static bool NamesCatalogueItem(LegendEntry row) => row switch
+    {
+        { FeatureType: { Length: > 0 } } => true,
+        SymbolLegendEntry { SymbolName: { Length: > 0 } } => true,
+        LineLegendEntry { LineStyleName: { Length: > 0 } } => true,
+        FillLegendEntry { AreaFillName: { Length: > 0 } } => true,
+        _ => false,
+    };
 
     /// <summary>A catalogue product's key (D7): its most drawn symbols, and how many it draws in all.</summary>
     private static (string Caption, LegendGroup Group) CatalogueGroup(SectionBuilder section, CatalogueSymbolKey key)
