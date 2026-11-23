@@ -174,6 +174,13 @@ public partial class App : Application
         var legend = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>();
         _services.GetRequiredService<DatasetsViewModel>().AttachLegend(legend);
         _services.GetRequiredService<PickReportViewModel>().AttachLegend(legend);
+        // Drawn as (symbol dictionary R10, #1679): the picked feature's drawn
+        // parts, read from the stack's display lists, as terms with glyphs.
+        _services.GetRequiredService<PickReportViewModel>().AttachDrawnAs(new PickDrawnAsViewModel(
+            legend.DrawnParts,
+            _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>(),
+            _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>().GetArtwork,
+            UiThread.RunOrPost));
         _services.GetRequiredService<ViewerPresentationCoordinator>();
         _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();

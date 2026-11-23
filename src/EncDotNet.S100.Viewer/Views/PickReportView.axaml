@@ -1152,12 +1152,33 @@
                         CornerRadius="7"
                         Margin="0,0,10,0"
                         VerticalAlignment="Top"
+                        IsVisible="{Binding !DrawnAs.HasGlyph, FallbackValue=True}"
                         Background="{DynamicResource MutedBackgroundColor}">
                     <ic:FluentIcon Icon="{Binding Glyph}"
                                    IconVariant="Regular"
                                    FontSize="22"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
+                </Border>
+                <!--
+                    The drawn symbol (symbol dictionary R10, #1679): the main
+                    drawn part's glyph on the palette's chart tile, in place of
+                    the generic icon, for a catalogue-portrayed feature.
+                -->
+                <Border Grid.Column="0"
+                        Width="36" Height="36"
+                        CornerRadius="7"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Top"
+                        ClipToBounds="True"
+                        IsVisible="{Binding DrawnAs.HasGlyph, FallbackValue=False}"
+                        Background="{Binding DrawnAs.Tile, FallbackValue={x:Null}}">
+                    <Image Source="{Binding DrawnAs.Glyph, FallbackValue={x:Null}}"
+                           Width="36" Height="36"
+                           Stretch="Uniform"
+                           AutomationProperties.AutomationId="PickReport.Glyph"
+                           AutomationProperties.Name="{Binding DrawnAs.GlyphName, FallbackValue={x:Null}}"
+                           ToolTip.Tip="{Binding DrawnAs.GlyphName, FallbackValue={x:Null}}" />
                 </Border>
                 <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                     <WrapPanel Orientation="Horizontal">
@@ -1379,6 +1400,71 @@
                             </DataTemplate>
                         </ContentControl.DataTemplates>
                     </ContentControl>
+                </Border>
+
+                <!--
+                    Drawn as (symbol dictionary R10, #1679): each part the renderer
+                    drew for the selected feature of a catalogue-portrayed product,
+                    read from the stack's display list, as a term that opens its
+                    entry, with its glyph on the palette's chart tile. A fallback
+                    symbol says so. Other products keep their key line below.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        AutomationProperties.AutomationId="PickReport.DrawnAs"
+                        AutomationProperties.Name="{x:Static loc:Strings.Pick_DrawnAsName}"
+                        views:ReferenceTerm.Terms="{Binding DrawnAs.Terms, FallbackValue={x:Null}}"
+                        IsVisible="{Binding DrawnAs.HasParts, FallbackValue=False}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{x:Static loc:Strings.Pick_DrawnAsHeading}"
+                                   FontSize="10"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1"
+                                   Opacity="0.7" />
+                        <ItemsControl ItemsSource="{Binding DrawnAs.Parts, FallbackValue={x:Null}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PickDrawnPartViewModel">
+                                    <Grid ColumnDefinitions="Auto,*"
+                                          RowDefinitions="Auto,Auto"
+                                          MinHeight="26"
+                                          AutomationProperties.AutomationId="PickReport.DrawnAs.Part"
+                                          AutomationProperties.Name="{Binding AccessibleName}">
+                                        <Border Grid.Column="0"
+                                                Grid.RowSpan="2"
+                                                Background="{Binding Tile}"
+                                                CornerRadius="3"
+                                                Width="24"
+                                                Height="24"
+                                                Margin="0,0,8,0"
+                                                VerticalAlignment="Top"
+                                                AutomationProperties.AccessibilityView="Raw">
+                                            <Image Source="{Binding Glyph}"
+                                                   Width="24"
+                                                   Height="24"
+                                                   IsVisible="{Binding HasGlyph}"
+                                                   Stretch="Uniform" />
+                                        </Border>
+                                        <views:ReferenceTerm Grid.Column="1"
+                                                             Text="{Binding Label}"
+                                                             Key="{Binding Key}"
+                                                             FontSize="12"
+                                                             VerticalAlignment="Center"
+                                                             AutomationProperties.AutomationId="Reference.Term"
+                                                             TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="1"
+                                                   Grid.Row="1"
+                                                   IsVisible="{Binding IsFallback}"
+                                                   Text="{Binding FallbackNote}"
+                                                   AutomationProperties.AutomationId="PickReport.DrawnAs.Fallback"
+                                                   FontSize="11.5"
+                                                   Opacity="0.75"
+                                                   TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </Border>
 
                 <!--
