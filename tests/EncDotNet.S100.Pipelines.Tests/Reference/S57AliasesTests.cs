@@ -28,6 +28,21 @@ public class S57AliasesTests
     }
 
     [Fact]
+    public async Task The_index_finds_BCNLAT_and_COLOUR_by_their_S57_alias_and_not_an_unknown_acronym()
+    {
+        var index = await ChartReferenceFixture.GetAsync("S-101");
+
+        Assert.Equal("LateralBeacon", index.FindFeatureTypeByS57Alias("BCNLAT")?.Code);
+        Assert.Equal("LateralBeacon", index.FindFeatureTypeByS57Alias("bcnlat")?.Code);
+        Assert.Equal("colour", index.FindAttributeByS57Alias("COLOUR")?.Code);
+        Assert.Null(index.FindFeatureTypeByS57Alias("NOSUCH"));
+        Assert.Null(index.FindAttributeByS57Alias("NOSUCH"));
+        // A feature type's acronym isn't an attribute's, and the other way round.
+        Assert.Null(index.FindAttributeByS57Alias("BCNLAT"));
+        Assert.Null(index.FindFeatureTypeByS57Alias("COLOUR"));
+    }
+
+    [Fact]
     public async Task Maps_listed_values_by_code_and_each_code_of_a_list()
     {
         var aliases = await S101();

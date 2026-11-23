@@ -39,7 +39,7 @@ internal static class PickTerms
             return null;
         return index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.FeatureType, code), out var entry)
             ? entry as FeatureTypeEntry
-            : index.S57Aliases.FeatureType(code);
+            : index.FindFeatureTypeByS57Alias(code);
     }
 
     /// <summary>The attribute <paramref name="code"/> names: by its code, or by its S-57 acronym.</summary>
@@ -53,7 +53,7 @@ internal static class PickTerms
             return null;
         return index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.Attribute, code), out var entry)
             ? entry as AttributeEntry
-            : index.S57Aliases.Attribute(code);
+            : index.FindAttributeByS57Alias(code);
     }
 
     /// <summary>
