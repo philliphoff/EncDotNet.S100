@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.TestSupport;
 using Spectre.Console;
@@ -14,7 +15,7 @@ namespace EncDotNet.S100.Cli.Tests;
 /// redirected and <c>TERM=linux</c>: on Linux, .NET then reports a console
 /// width of -1, which is what truncated every line before the fix.
 /// </remarks>
-public sealed class RedirectedOutputTests : IDisposable
+public sealed partial class RedirectedOutputTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("redirected-cli-").FullName;
 
@@ -139,8 +140,15 @@ public sealed class RedirectedOutputTests : IDisposable
         var stderr = process.StandardError.ReadToEndAsync(cts.Token);
         await process.WaitForExitAsync(cts.Token);
         await stderr;
-        return (process.ExitCode, await stdout);
+
+        // Spectre.Console styles output on CI servers (GITHUB_ACTIONS, TF_BUILD
+        // and others) even when it's redirected; the width doesn't count the
+        // escape sequences, so compare the text without them.
+        return (process.ExitCode, AnsiEscape().Replace(await stdout, string.Empty));
     }
+
+    [GeneratedRegex(@"\x1b\[[0-9;?]*[A-Za-z]")]
+    private static partial Regex AnsiEscape();
 
     private static void SetOrRemove(ProcessStartInfo start, string name, string? value)
     {
