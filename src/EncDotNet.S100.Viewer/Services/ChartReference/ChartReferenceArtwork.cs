@@ -33,6 +33,7 @@ internal sealed class ChartReferenceArtwork
     private readonly Dictionary<string, LineStyle> _lineStyles = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AreaFill> _areaFills = new(StringComparer.OrdinalIgnoreCase);
     private bool _palettesLoaded;
+    private IReadOnlyDictionary<string, string>? _colourNames;
 
     /// <summary>Creates the artwork reader over a product's portrayal catalogue.</summary>
     /// <param name="provider">The product's portrayal catalogue.</param>
@@ -232,6 +233,49 @@ internal sealed class ChartReferenceArtwork
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// What a colour token stands for, from the catalogue's colour profile:
+    /// its description, such as "Very shallow water" for <c>DEPVS</c>, as it
+    /// is written there; <see langword="null"/> when the profile gives none.
+    /// </summary>
+    /// <param name="token">The colour token.</param>
+    /// <param name="cancellationToken">Stops the read.</param>
+    public async Task<string?> ColourNameAsync(string token, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(token);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _colourNames ??= await ReadColourNamesAsync(cancellationToken).ConfigureAwait(false);
+            return _colourNames.GetValueOrDefault(token);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // Every profile's descriptions; the first that names a token wins.
+    private async Task<IReadOnlyDictionary<string, string>> ReadColourNamesAsync(CancellationToken cancellationToken)
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in _provider.Catalogue.ColorProfiles)
+        {
+            try
+            {
+                using var stream = await _provider.FetchAssetAsync(item, "ColorProfiles", cancellationToken).ConfigureAwait(false);
+                foreach (var (token, name) in ColorProfileReader.ReadDescriptions(stream))
+                    names.TryAdd(token, name);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A profile that can't be read names nothing.
+            }
+        }
+
+        return names;
     }
 
     /// <summary>

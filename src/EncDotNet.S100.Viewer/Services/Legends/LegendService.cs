@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -516,6 +517,51 @@ internal sealed class LegendService : IDisposable
                 return new LegendRowMatch(section, row);
         }
         return null;
+    }
+
+    /// <summary>
+    /// What the renderer drew for a picked feature of a catalogue-portrayed
+    /// product (S-101, an S-57 cell drawn with S-101's catalogue…): its point
+    /// symbols, line styles, fills and text, read from the display lists of
+    /// the stack entries its dataset draws now (symbol dictionary R10,
+    /// #1679). Null when the feature's product isn't catalogue-portrayed, so
+    /// its key line (<see cref="FindRow"/>) stands instead, or when nothing
+    /// of it is drawn.
+    /// </summary>
+    /// <param name="hit">The picked feature.</param>
+    internal PickDrawing? DrawnParts(PickHit hit)
+    {
+        ArgumentNullException.ThrowIfNull(hit);
+        if (hit.DatasetId is not { } datasetId || string.IsNullOrEmpty(hit.FeatureRef))
+            return null;
+        var dataset = _datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal));
+        if (dataset is { IsVisible: false })
+            return null;
+
+        var scale = ViewScale();
+        var parts = new List<PickDrawnPart>();
+        SpecRef? spec = null;
+        foreach (var item in _loader.CurrentStackEntries)
+        {
+            if (!string.Equals(item.SourceDatasetId, datasetId, StringComparison.Ordinal)
+                || item.Item.Payload is not VectorStackPayload vector
+                || !IsCatalogueProduct(vector))
+            {
+                continue;
+            }
+
+            var portrayedWith = dataset?.PortrayalSpec ?? vector.Result.Spec.Name;
+            if (spec is null)
+            {
+                if (portrayedWith is null || !SpecName.TryNormalize(portrayedWith, out var name))
+                    continue;
+                spec = new SpecRef(name, default);
+            }
+
+            PickDrawnParts.Add(vector, spec.Value, hit.FeatureRef, item.SuppressedFeatures, scale, parts);
+        }
+
+        return spec is { } s && parts.Count > 0 ? new PickDrawing(s, PickDrawnParts.Ordered(parts)) : null;
     }
 
     // Transforms WGS-84 into a grid's CRS for a band row's tint (#1433).

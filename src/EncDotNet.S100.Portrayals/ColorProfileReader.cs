@@ -84,6 +84,33 @@ public static class ColorProfileReader
     }
 
     /// <summary>
+    /// Reads what a color profile says each color token stands for: its
+    /// <c>&lt;description&gt;</c>, such as "Very shallow water" for
+    /// <c>DEPVS</c>, from <c>&lt;colors&gt;&lt;color token="DEPVS"&gt;&lt;description&gt;…</c>
+    /// (S-100 Part 9 color profile) or a flat <c>&lt;color&gt;</c> list.
+    /// Tokens without a description are left out.
+    /// </summary>
+    /// <param name="stream">The stream containing the color profile XML.</param>
+    /// <returns>The descriptions by token, ignoring case.</returns>
+    public static IReadOnlyDictionary<string, string> ReadDescriptions(Stream stream)
+    {
+        var doc = XDocument.Load(stream);
+        var root = doc.Root ?? throw new System.Xml.XmlException("Missing root element.");
+
+        var descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var colors = FindElements(root, "colors").SelectMany(c => FindElements(c, "color")).Concat(FindElements(root, "color"));
+        foreach (var color in colors)
+        {
+            var token = (string?)color.Attribute("token");
+            var description = FindElement(color, "description")?.Value.Trim();
+            if (!string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(description))
+                descriptions.TryAdd(token, description);
+        }
+
+        return descriptions;
+    }
+
+    /// <summary>
     /// Parses sRGB from attributes: <c>&lt;sRGB red="163" green="180" blue="183"/&gt;</c>.
     /// </summary>
     private static string? SRgbAttributesToHex(XElement srgb)
