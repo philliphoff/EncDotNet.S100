@@ -6,6 +6,22 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`tiles serve` draws each dataset at a time as the viewer does.** A
+  time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension no longer
+  snaps to the nearest listed step. Each time-varying dataset picks what it
+  draws by its own time selection: a tropical cyclone draws the storm at the
+  time itself, to the minute, so it moves smoothly between forecast points and
+  can be seen on its past track; S-104, S-411, S-412, CAP warnings and surface
+  analyses draw their step at or before the time, never a later one, and
+  nothing before their first step; others draw their nearest step.
+  `--strict-time` now uses each dataset's validity, as the viewer does, rather
+  than half a step. `/datasets` gives each time-varying dataset's
+  `timeSelection` and `timeRange`, and TileJSON's `s100.datasets` lists each
+  one's `timeSelection` with or without `--strict-time`. The WMTS capabilities
+  still list the steps as `Value`s. For library users, the time rule moved
+  from `MapsuiTimeSelection` to `TimeStepSelector` in Core, which
+  `MapsuiTimeSelection` now wraps.
+
 - **Chart reference terms and peeks.** Names in Reference entries are now
   terms: text with a dotted underline in the text colour. Rest the pointer on
   a term, or move keyboard focus to it, and after half a second a peek shows

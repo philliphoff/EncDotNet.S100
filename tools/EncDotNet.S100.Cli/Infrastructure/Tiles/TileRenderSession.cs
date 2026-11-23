@@ -78,6 +78,10 @@ internal sealed class TileRenderSession : IDisposable
     // Keyed by the mariner settings too (MarinerStyle.Key), as they change the portrayal.
     private readonly Dictionary<(PaletteType Palette, string Mariner, int Index), VectorPortrayalResult> _timelessPortrayals = [];
 
+    // Each dataset's steps and time semantics, by input index; null for one
+    // that doesn't vary with time.
+    private readonly DatasetTiming?[] _timings;
+
     // The S-124 warnings, read on the first time asked for (issue #1499),
     // and the parts left out at the last instant asked for: a client asks
     // for many tiles at one time.
@@ -113,6 +117,7 @@ internal sealed class TileRenderSession : IDisposable
             .Distinct()
             .Order()
             .ToArray();
+        _timings = [.. processors.Select(DatasetTiming.Of)];
         _warnings = new Lazy<SessionWarnings?>(ReadWarnings);
         DatasetFingerprints = [.. Paths.Select(DatasetFingerprint)];
     }
@@ -447,14 +452,14 @@ internal sealed class TileRenderSession : IDisposable
     /// </summary>
     /// <param name="palette">The palette; <see langword="null"/> for <c>--palette</c>.</param>
     /// <param name="time">
-    /// One of <see cref="Times"/>, each time-varying dataset being portrayed at
-    /// its own step nearest it; <see langword="null"/> for <c>--time-step</c>.
+    /// The time drawn (<see cref="TimeChoice.Time"/>), each time-varying
+    /// dataset being portrayed at its own step nearest it unless
+    /// <paramref name="steps"/> says otherwise; <see langword="null"/> for <c>--time-step</c>.
     /// </param>
     /// <param name="steps">
-    /// With <c>--strict-time</c>, the step each dataset draws, by input index
-    /// (<see cref="TimeChoice.Steps"/>): a time-varying dataset without one
-    /// is left out. <see langword="null"/> for each dataset's step nearest
-    /// <paramref name="time"/>.
+    /// The step each dataset draws, by input index (<see cref="TimeChoice.Steps"/>):
+    /// a time-varying dataset without one is left out. <see langword="null"/>
+    /// for each dataset's step nearest <paramref name="time"/>.
     /// </param>
     /// <param name="mariner">
     /// Mariner settings over the start-up ones (issue #1493); <see langword="null"/>
@@ -475,14 +480,11 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>
-    /// What draws at <paramref name="instant"/>. By default each time-varying
-    /// dataset draws its step nearest the entry of <see cref="Times"/>
-    /// nearest the instant, however far away. With <paramref name="strict"/>
-    /// (<c>--strict-time</c>), each draws its own step nearest the instant only
-    /// when that step is at most half a step away (<see cref="StrictStep"/>),
-    /// and nothing otherwise. Either way S-124 warnings draw only when in
-    /// force at the instant (issue #1499), as the viewer's map draws them at
-    /// its view time (<see cref="NavigationalWarningSet.IsDrawnAt"/>).
+    /// What draws at <paramref name="instant"/>: each time-varying dataset
+    /// picks its own step by its <see cref="ITimeAwareDatasetProcessor.TimeSemantics"/>,
+    /// as the viewer's map does (issue #1676, <see cref="SelectStep"/>). S-124
+    /// warnings draw only when in force at the instant (issue #1499), as the
+    /// viewer's map draws them at its view time (<see cref="NavigationalWarningSet.IsDrawnAt"/>).
     /// </summary>
     /// <param name="instant">The time asked for.</param>
     /// <param name="strict">Whether <c>--strict-time</c> applies.</param>
@@ -507,41 +509,109 @@ internal sealed class TileRenderSession : IDisposable
     /// <summary>The steps drawn at <paramref name="instant"/>, before warnings are judged (<see cref="ChooseTime"/>).</summary>
     private TimeChoice ChooseStep(DateTime instant, bool strict, IReadOnlySet<int>? datasets)
     {
-        var times = datasets is null ? Times : TimesOf(datasets);
-        var snapped = times.Count == 0 ? (DateTime?)null : RenderContextBuilder.Nearest(times, AsUtc(instant));
-        if (!strict || snapped is not { } at)
-            return new TimeChoice(snapped);
-
         instant = AsUtc(instant);
         var steps = new DateTime?[_processors.Count];
-        bool differs = false, drawsSomething = false;
+        bool timed = false, continuous = false, drawsSomething = false;
+        DateTime? latest = null;
         for (int i = 0; i < _processors.Count; i++)
         {
             if (datasets is not null && !datasets.Contains(i))
                 continue;
 
-            if (!VariesWithTime(_processors[i]))
+            if (_timings[i] is not { } timing)
             {
                 drawsSomething = true;
                 continue;
             }
 
-            var own = ((ITimeAwareDatasetProcessor)_processors[i]).AvailableTimes
-                .Select(AsUtc).Distinct().Order().ToArray();
-            steps[i] = StrictStep(own, instant);
-            drawsSomething |= steps[i] is not null;
-            differs |= steps[i] != AsUtc(RenderContextBuilder.Nearest(own, at));
+            timed = true;
+            continuous |= timing.Semantics.Selection == TimeStepSelection.Continuous;
+            steps[i] = SelectStep(i, instant, strict);
+            if (steps[i] is { } step)
+            {
+                drawsSomething = true;
+                if (latest is not { } later || step > later)
+                    latest = step;
+            }
         }
 
-        // When every dataset draws what it would by default, the default
-        // scene and its cached tiles serve.
+        if (!timed)
+            return new TimeChoice(null);
+
+        // The time the scene is kept under: the time itself, to the minute,
+        // when a dataset draws continuously; otherwise the latest step drawn,
+        // so times that draw the same steps share a scene and its tiles.
+        var times = datasets is null ? Times : TimesOf(datasets);
+        var at = continuous
+            ? TimeStepSelector.ToMinute(instant)
+            : latest ?? RenderContextBuilder.Nearest(times, instant);
+
+        // When every dataset draws its step nearest that time, the scene and
+        // tiles are those of that time alone, as before issue #1676.
+        bool differs = false;
+        for (int i = 0; i < _processors.Count; i++)
+        {
+            if (_timings[i] is { } timing && (datasets is null || datasets.Contains(i)))
+                differs |= steps[i] != RenderContextBuilder.Nearest(timing.Steps, at);
+        }
+
         if (!differs)
-            return new TimeChoice(at);
+            return new TimeChoice(at, steps);
 
         // A short, stable name for the steps, for cache keys and file names.
         var signature = string.Join('.', steps.Select(s => s is { } t ? t.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-"));
         return new TimeChoice(at, steps, Hash(signature), !drawsSomething);
     }
+
+    /// <summary>
+    /// The step the dataset at <paramref name="index"/> draws at
+    /// <paramref name="instant"/>, by its <see cref="ITimeAwareDatasetProcessor.TimeSemantics"/>
+    /// (<see cref="TimeStepSelector"/>), or <see langword="null"/> when it
+    /// draws nothing then or doesn't vary with time:
+    /// <list type="bullet">
+    /// <item><see cref="TimeStepSelection.Continuous"/>: the instant itself, to
+    /// the minute. Outside its range the dataset draws only what doesn't move
+    /// with time (a storm's cone and track).</item>
+    /// <item><see cref="TimeStepSelection.AtOrBefore"/>: the latest step at or
+    /// before the instant, never a later one; nothing before the first step.</item>
+    /// <item><see cref="TimeStepSelection.Nearest"/>: the nearest step.</item>
+    /// </list>
+    /// Without <paramref name="strict"/> a step is held however far away; with
+    /// it (<c>--strict-time</c>), only within the dataset's validity
+    /// (<see cref="TimeStepSelector.ToleranceOf"/>), as in the viewer.
+    /// </summary>
+    /// <param name="index">The dataset's input index.</param>
+    /// <param name="instant">The time asked for.</param>
+    /// <param name="strict">Whether <c>--strict-time</c> applies.</param>
+    internal DateTime? SelectStep(int index, DateTime instant, bool strict)
+    {
+        if (_timings[index] is not { } timing)
+            return null;
+
+        var tolerance = strict ? timing.Tolerance : TimeSpan.MaxValue;
+        return TimeStepSelector.Select(timing.Steps, timing.Semantics.Selection, tolerance, AsUtc(instant));
+    }
+
+    /// <summary>
+    /// The time semantics of the dataset at <paramref name="index"/> and the
+    /// span it draws something tied to a time in with <c>--strict-time</c>
+    /// (<see cref="TimeStepSelector.RangeOf"/>), or <see langword="null"/>
+    /// when it doesn't vary with time.
+    /// </summary>
+    /// <param name="index">The dataset's input index.</param>
+    internal (TimeSemantics Semantics, DateTime Start, DateTime End)? TimingOf(int index) =>
+        _timings[index] is { } timing && TimeStepSelector.RangeOf(timing.Semantics, timing.Steps) is { } range
+            ? (timing.Semantics, range.Start, range.End)
+            : null;
+
+    /// <summary>The name a selection is given in JSON: <c>nearest</c>, <c>atOrBefore</c> or <c>continuous</c>.</summary>
+    /// <param name="selection">The selection.</param>
+    internal static string SelectionName(TimeStepSelection selection) => selection switch
+    {
+        TimeStepSelection.AtOrBefore => "atOrBefore",
+        TimeStepSelection.Continuous => "continuous",
+        _ => "nearest",
+    };
 
     /// <summary>A short, stable name for <paramref name="signature"/>: 16 lowercase hexadecimal characters.</summary>
     private static string Hash(string signature) =>
@@ -629,52 +699,22 @@ internal sealed class TileRenderSession : IDisposable
     private sealed record SessionWarnings(NavigationalWarningSet Set, IReadOnlyList<NavigationalWarningFeature>?[] Parts);
 
     /// <summary>
-    /// The step of <paramref name="sorted"/> nearest <paramref name="instant"/>,
-    /// or <see langword="null"/> when it is more than half a step away: before
-    /// the first step, after the last or in a gap. A step is the median
-    /// interval between steps, an hour for a single step.
-    /// </summary>
-    /// <param name="sorted">A dataset's steps, ascending and distinct.</param>
-    /// <param name="instant">The time asked for.</param>
-    internal static DateTime? StrictStep(IReadOnlyList<DateTime> sorted, DateTime instant)
-    {
-        if (sorted.Count == 0)
-            return null;
-
-        var nearest = RenderContextBuilder.Nearest(sorted, instant);
-        return (nearest - instant).Duration() <= TypicalStep(sorted) / 2 ? nearest : null;
-    }
-
-    /// <summary>The median interval between steps, robust to long gaps; an hour for a single step.</summary>
-    private static TimeSpan TypicalStep(IReadOnlyList<DateTime> sorted)
-    {
-        if (sorted.Count < 2)
-            return TimeSpan.FromHours(1);
-
-        var intervals = new TimeSpan[sorted.Count - 1];
-        for (int i = 1; i < sorted.Count; i++)
-            intervals[i - 1] = sorted[i] - sorted[i - 1];
-        Array.Sort(intervals);
-        return intervals[intervals.Length / 2];
-    }
-
-    /// <summary>
     /// Each time-varying dataset and the step it draws in <paramref name="choice"/>,
     /// <see langword="null"/> when it has no data then.
     /// </summary>
     /// <param name="choice">What draws.</param>
     /// <param name="datasets">The datasets of one WMTS layer, by input index; <see langword="null"/> for all.</param>
-    public IEnumerable<(string Name, string Spec, DateTime? Step)> DescribeTime(TimeChoice choice, IReadOnlySet<int>? datasets = null)
+    public IEnumerable<(string Name, string Spec, DateTime? Step, TimeStepSelection Selection)> DescribeTime(TimeChoice choice, IReadOnlySet<int>? datasets = null)
     {
         for (int i = 0; i < _processors.Count; i++)
         {
-            if (!VariesWithTime(_processors[i]) || (datasets is not null && !datasets.Contains(i)))
+            if (_timings[i] is not { } timing || (datasets is not null && !datasets.Contains(i)))
                 continue;
 
             var step = choice.Steps is { } steps
                 ? steps[i]
-                : choice.Time is { } at ? RenderContextBuilder.NearestTimeStep(_processors[i], at) is { } s ? AsUtc(s) : null : null;
-            yield return (Names[i], Specs[i], step);
+                : choice.Time is { } at ? RenderContextBuilder.Nearest(timing.Steps, at) : null;
+            yield return (Names[i], Specs[i], step, timing.Semantics.Selection);
         }
     }
 
@@ -696,13 +736,6 @@ internal sealed class TileRenderSession : IDisposable
             .Select(AsUtc)
             .Distinct()
             .Order()];
-
-    /// <summary>
-    /// The entry of <see cref="Times"/> nearest <paramref name="instant"/>, or
-    /// <see langword="null"/> when no dataset varies with time.
-    /// </summary>
-    public DateTime? SnapTime(DateTime instant) =>
-        Times.Count == 0 ? null : RenderContextBuilder.Nearest(Times, AsUtc(instant));
 
     /// <summary>
     /// <paramref name="time"/> as UTC. Dataset time steps are UTC; one read
@@ -1303,7 +1336,12 @@ internal sealed class TileScene
 /// <summary>
 /// What draws at a time asked for (<see cref="TileRenderSession.ChooseTime"/>).
 /// </summary>
-/// <param name="Time">The entry of <see cref="TileRenderSession.Times"/> nearest the time asked for; <see langword="null"/> for <c>--time-step</c>.</param>
+/// <param name="Time">
+/// The time the scene is kept under: the time asked for, to the minute, when a
+/// dataset draws continuously, otherwise the latest step drawn (or the entry of
+/// <see cref="TileRenderSession.Times"/> nearest the time asked for when none
+/// draws); <see langword="null"/> for <c>--time-step</c>.
+/// </param>
 /// <param name="Steps">
 /// With <c>--strict-time</c>, when some dataset draws other than at its step
 /// nearest <paramref name="Time"/>: the step each dataset draws, by input
@@ -1325,3 +1363,25 @@ internal sealed record TimeChoice(DateTime? Time, IReadOnlyList<DateTime?>? Step
 /// <param name="Hidden">The parts left out, by input index; <see langword="null"/> when every part draws.</param>
 /// <param name="Signature">A stable text of <paramref name="Hidden"/>, for cache keys.</param>
 internal sealed record WarningsAtInstant(DateTime Instant, IReadOnlyList<IReadOnlySet<string>?>? Hidden, string Signature);
+
+/// <summary>
+/// How a time-varying dataset of a <see cref="TileRenderSession"/> picks its
+/// step (issue #1676): its steps in UTC, its time semantics and their tolerance.
+/// </summary>
+/// <param name="Steps">The steps, in UTC, ascending and distinct.</param>
+/// <param name="Semantics">The dataset's <see cref="ITimeAwareDatasetProcessor.TimeSemantics"/>.</param>
+/// <param name="Tolerance">How far from the time asked for a step may be with <c>--strict-time</c> (<see cref="TimeStepSelector.ToleranceOf"/>).</param>
+internal sealed record DatasetTiming(IReadOnlyList<DateTime> Steps, TimeSemantics Semantics, TimeSpan Tolerance)
+{
+    /// <summary>The timing of <paramref name="processor"/>, or <see langword="null"/> when it doesn't vary with time.</summary>
+    /// <param name="processor">The dataset.</param>
+    public static DatasetTiming? Of(IDatasetProcessor processor)
+    {
+        if (processor is not ITimeAwareDatasetProcessor { AvailableTimes.Count: > 0 } timeAware)
+            return null;
+
+        DateTime[] steps = [.. timeAware.AvailableTimes.Select(TileRenderSession.AsUtc).Distinct().Order()];
+        var semantics = timeAware.TimeSemantics;
+        return new DatasetTiming(steps, semantics, TimeStepSelector.ToleranceOf(semantics, steps));
+    }
+}

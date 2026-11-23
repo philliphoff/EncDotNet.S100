@@ -2690,9 +2690,6 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
     /// </summary>
     private sealed class TimePolicy
     {
-        /// <summary>Tolerance when a dataset has a single sample and so no step.</summary>
-        private static readonly TimeSpan SingleSampleTolerance = TimeSpan.FromHours(1);
-
         private readonly TimePolicyKind _kind;
         private readonly DateTime[] _times;
         private readonly TimeSpan _tolerance;
@@ -2752,9 +2749,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                 TimeStepSelection.Continuous => TimePolicyKind.Continuous,
                 _ => TimePolicyKind.Nearest,
             };
-            var tolerance = kind == TimePolicyKind.Continuous
-                ? semantics.Validity is { } lead && lead > TimeSpan.Zero ? lead : TimeSpan.Zero
-                : semantics.Validity ?? TypicalStep(times);
+            var tolerance = TimeStepSelector.ToleranceOf(semantics, times);
             return new TimePolicy(kind, times, tolerance, semantics);
         }
 
@@ -2800,22 +2795,6 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             }
             segments.Add(new MapsuiMapTimeSegment(start, end));
             return segments;
-        }
-
-        /// <summary>
-        /// The median interval between samples: robust to the long gaps of
-        /// multi-window exchange sets, which an average would turn into a
-        /// tolerance of weeks.
-        /// </summary>
-        private static TimeSpan TypicalStep(DateTime[] times)
-        {
-            if (times.Length < 2)
-                return SingleSampleTolerance;
-            var steps = new TimeSpan[times.Length - 1];
-            for (var index = 1; index < times.Length; index++)
-                steps[index - 1] = times[index] - times[index - 1];
-            Array.Sort(steps);
-            return steps[steps.Length / 2];
         }
 
         private static DateTime AddClamped(DateTime value, TimeSpan delta)
