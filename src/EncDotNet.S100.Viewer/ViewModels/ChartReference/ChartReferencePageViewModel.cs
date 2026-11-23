@@ -43,6 +43,12 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
     private readonly ChartReferenceGlyphCache _glyphs;
     private readonly Action<Action> _post;
     private readonly Dictionary<(ReferenceKey, PaletteType, int), Task<IImage?>> _pending = [];
+
+    // The glyph deliveries in flight, guarded by _pending's lock. Each completes
+    // once its draw is done and its result has been posted, so GlyphsDrawn never
+    // completes in the gap between a draw finishing (and leaving _pending) and
+    // its glyph being posted.
+    private readonly HashSet<Task> _deliveries = [];
     private ChartReferenceArtwork? _artwork;
     private bool _previewSimplified;
     private int _columns = 4;
@@ -245,7 +251,7 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         get
         {
             lock (_pending)
-                return Task.WhenAll(_pending.Values);
+                return Task.WhenAll(_deliveries.ToArray());
         }
     }
 
@@ -279,15 +285,11 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
             return held;
 
         var palette = _glyphs.Palette;
-        Draw(lead, palette, size).ContinueWith(
-            t =>
-            {
-                if (t.IsCompletedSuccessfully && _glyphs.Palette == palette)
-                    _post(() => row.SetGlyph(t.Result));
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        Deliver(Draw(lead, palette, size), t =>
+        {
+            if (_glyphs.Palette == palette)
+                _post(() => row.SetGlyph(t.Result));
+        });
         return null;
     }
 
@@ -394,6 +396,32 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
             Post = _post,
             Settings = _settings,
         });
+    }
+
+    // Runs post once the draw succeeds, tracking the delivery until post has
+    // run so GlyphsDrawn covers it.
+    private void Deliver(Task<IImage?> draw, Action<Task<IImage?>> post)
+    {
+        var delivery = draw.ContinueWith(
+            t =>
+            {
+                if (t.IsCompletedSuccessfully)
+                    post(t);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        lock (_pending)
+            _deliveries.Add(delivery);
+        delivery.ContinueWith(
+            d =>
+            {
+                lock (_pending)
+                    _deliveries.Remove(d);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private Task<IImage?> Draw(LeadGlyph lead, PaletteType palette, int size)

@@ -48,6 +48,12 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     private readonly Action<Action> _post;
     private readonly DispatcherTimer? _debounceTimer;
     private readonly Dictionary<(ReferenceKey, PaletteType), Task<IImage?>> _pendingGlyphs = [];
+
+    // The glyph deliveries in flight, guarded by _pendingGlyphs' lock. Each
+    // completes once its draw is done and the row's SetGlyph has been posted,
+    // so GlyphsDrawn never completes in the gap between a draw finishing (and
+    // leaving _pendingGlyphs) and its glyph being posted to the row.
+    private readonly HashSet<Task> _glyphDeliveries = [];
     private ChartReferenceProduct? _selectedProduct;
     private ChartReferenceIndex? _index;
     private ChartReferenceArtwork? _artwork;
@@ -302,7 +308,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         get
         {
             lock (_pendingGlyphs)
-                return Task.WhenAll(_pendingGlyphs.Values);
+                return Task.WhenAll(_glyphDeliveries.ToArray());
         }
     }
 
@@ -434,11 +440,22 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
             }
         }
 
-        draw.ContinueWith(
+        var delivery = draw.ContinueWith(
             t =>
             {
                 if (t.IsCompletedSuccessfully && _glyphs.Palette == palette)
                     _post(() => row.SetGlyph(t.Result));
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        lock (_pendingGlyphs)
+            _glyphDeliveries.Add(delivery);
+        delivery.ContinueWith(
+            d =>
+            {
+                lock (_pendingGlyphs)
+                    _glyphDeliveries.Remove(d);
             },
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
