@@ -1,0 +1,415 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             x:Class="EncDotNet.S100.Viewer.Views.CataloguesView"
+             x:DataType="vm:CataloguesViewModel">
+
+    <!-- The Catalogues activity (catalogue-panels D1–D6, D11–D13, §6.1): a header,
+         a filter with pills, the product list and the selected product's details,
+         in the Library panel's layout. -->
+
+    <UserControl.Styles>
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!-- Tags only when something isn't the default (D4): small sentence-case pills. -->
+        <Style Selector="Border.catalogueTag">
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Padding" Value="7,0" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Border.catalogueTag > TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.catalogueTag.error">
+            <Setter Property="Background" Value="{DynamicResource CatalogueErrorBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CatalogueErrorBorder}" />
+        </Style>
+        <Style Selector="Border.catalogueTag.error > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorColor}" />
+        </Style>
+        <Style Selector="Border.catalogueTag.warning">
+            <Setter Property="Background" Value="{DynamicResource CatalogueWarningBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CatalogueWarningBorder}" />
+        </Style>
+        <Style Selector="Border.catalogueTag.warning > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+
+        <!-- The state bar at a row's left edge: red for Error, amber for Missing, as dataset rows mark theirs. -->
+        <Style Selector="Border.stateBar">
+            <Setter Property="Width" Value="3" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.stateBar.error">
+            <Setter Property="Background" Value="{DynamicResource ErrorColor}" />
+        </Style>
+        <Style Selector="Border.stateBar.missing">
+            <Setter Property="Background" Value="{DynamicResource WarningColor}" />
+        </Style>
+
+        <Style Selector="TextBlock.catalogueGroupHeader">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+        <Style Selector="TextBlock.fieldLabel">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+        <Style Selector="SelectableTextBlock.fieldValue">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style Selector="SelectableTextBlock.fieldValue.missing">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+
+        <!-- Rows are named after their product (#784). -->
+        <Style Selector="ListBox#ProductList ListBoxItem" x:DataType="vm:CatalogueProductRowViewModel">
+            <Setter Property="Padding" Value="8,7" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="AutomationProperties.AutomationId" Value="Catalogues.Row" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="CatalogueWarningBackground" Color="{DynamicResource WarningColor}" Opacity="0.10" />
+        <SolidColorBrush x:Key="CatalogueWarningBorder" Color="{DynamicResource WarningColor}" Opacity="0.35" />
+        <SolidColorBrush x:Key="CatalogueErrorBackground" Color="{DynamicResource ErrorColor}" Opacity="0.08" />
+        <SolidColorBrush x:Key="CatalogueErrorBorder" Color="{DynamicResource ErrorColor}" Opacity="0.35" />
+
+        <!-- One catalogue's fields in the details pane. -->
+        <DataTemplate x:Key="DetailsGroupTemplate" x:DataType="vm:CatalogueDetailsGroupViewModel">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="catalogueGroupHeader" Text="{Binding Header}" />
+                <Grid ColumnDefinitions="88,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="2" Margin="12,0,0,0">
+                    <TextBlock Grid.Row="0" Classes="fieldLabel" Text="{x:Static loc:Strings.Catalogues_Field_Version}" IsVisible="{Binding HasSource}" />
+                    <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="fieldValue" Text="{Binding VersionText}" IsVisible="{Binding HasSource}" />
+                    <TextBlock Grid.Row="1" Classes="fieldLabel" Text="{x:Static loc:Strings.Catalogues_Field_Source}" IsVisible="{Binding HasSource}" />
+                    <SelectableTextBlock Grid.Row="1" Grid.Column="1" Classes="fieldValue" Text="{Binding SourceText}" IsVisible="{Binding HasSource}" />
+                    <TextBlock Grid.Row="2" Classes="fieldLabel" Text="{x:Static loc:Strings.Catalogues_Field_Path}" IsVisible="{Binding HasPath}" />
+                    <SelectableTextBlock Grid.Row="2" Grid.Column="1" Classes="fieldValue" Text="{Binding PathText}" IsVisible="{Binding HasPath}"
+                                         ToolTip.Tip="{Binding FullPath}" FontFamily="{StaticResource MonoFontFamily}" />
+                    <TextBlock Grid.Row="3" Classes="fieldLabel" Text="{x:Static loc:Strings.Catalogues_Field_Overrides}" IsVisible="{Binding HasOverrides}" />
+                    <SelectableTextBlock Grid.Row="3" Grid.Column="1" Classes="fieldValue" Text="{Binding OverridesText}" IsVisible="{Binding HasOverrides}" Opacity="0.7" />
+                    <TextBlock Grid.Row="4" Classes="fieldLabel" Text="{x:Static loc:Strings.Catalogues_Field_Status}" IsVisible="{Binding HasStatus}" />
+                    <SelectableTextBlock Grid.Row="4" Grid.Column="1" Classes="fieldValue" Text="{Binding StatusText}" IsVisible="{Binding HasStatus}"
+                                         Classes.missing="{Binding IsMissing}" />
+                </Grid>
+                <!-- The error inline (D4), with the link to Logs (D11). -->
+                <Border IsVisible="{Binding HasError}" Background="{DynamicResource CatalogueErrorBackground}"
+                        BorderBrush="{DynamicResource CatalogueErrorBorder}" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,4,0,0">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <ic:FluentIcon Icon="Warning" FontSize="14" Foreground="{DynamicResource ErrorColor}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <SelectableTextBlock Text="{Binding ErrorText}" FontSize="12" TextWrapping="Wrap"
+                                                 AutomationProperties.AutomationId="Catalogues.Details.Error" />
+                            <Button Classes="Ghost" Padding="0" HorizontalAlignment="Left" FontSize="12"
+                                    AutomationProperties.AutomationId="Catalogues.Details.ShowInLogs"
+                                    Content="{x:Static loc:Strings.Catalogues_ShowInLogs}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Catalogues_Menu_ShowLogs}"
+                                    IsVisible="{Binding $parent[UserControl].((vm:CataloguesViewModel)DataContext).CanShowLogs, FallbackValue=False}"
+                                    Command="{Binding $parent[UserControl].((vm:CataloguesViewModel)DataContext).ShowLogsCommand}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid x:Name="PanelGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="80" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="120" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: Add catalogue… and the overflow (the dock's own header says CATALOGUES). -->
+        <DockPanel Grid.Row="0" Margin="6,4">
+            <Button DockPanel.Dock="Right" Classes="Icon panelIcon"
+                    AutomationProperties.AutomationId="Catalogues.More"
+                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CataloguesMore}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CataloguesMore}">
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                        <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_ReloadCustom}" Command="{Binding ReloadAllCommand}"
+                                  AutomationProperties.AutomationId="Catalogues.More.ReloadCustom" />
+                        <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_ShowLogs}" Command="{Binding ShowLogsCommand}"
+                                  IsVisible="{Binding CanShowLogs}"
+                                  AutomationProperties.AutomationId="Catalogues.More.ShowLogs" />
+                    </MenuFlyout>
+                </Button.Flyout>
+                <ic:FluentIcon Icon="MoreHorizontal" FontSize="16" />
+            </Button>
+            <Button Classes="Secondary" HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="Catalogues.Add"
+                    AutomationProperties.Name="{x:Static loc:Strings.Catalogues_Add}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CataloguesAdd}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CataloguesAdd}"
+                    Command="{Binding AddCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <ic:FluentIcon Icon="Add" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Static loc:Strings.Catalogues_Add}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </DockPanel>
+
+        <!-- Filter with its count, and the pills (D3). -->
+        <StackPanel Grid.Row="1" Spacing="6" Margin="8,2,8,6">
+            <TextBox Text="{Binding FilterText}"
+                     AutomationProperties.AutomationId="Catalogues.Filter"
+                     AutomationProperties.Name="{x:Static loc:Strings.Label_CataloguesFilter}"
+                     AutomationProperties.HelpText="{x:Static loc:Strings.Catalogues_FilterWatermark}"
+                     PlaceholderText="{x:Static loc:Strings.Catalogues_FilterWatermark}">
+                <TextBox.InnerRightContent>
+                    <TextBlock Text="{Binding CountText}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.6"
+                               AutomationProperties.AutomationId="Catalogues.Count"
+                               VerticalAlignment="Center" Margin="4,0,8,0" />
+                </TextBox.InnerRightContent>
+            </TextBox>
+            <Border Classes="segmentTrack">
+                <UniformGrid Rows="1">
+                    <RadioButton Classes="segment" GroupName="CataloguesPill" IsChecked="{Binding IsAllPill}"
+                                 AutomationProperties.AutomationId="Catalogues.Pill.All" AutomationProperties.Name="{Binding AllPillName}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{x:Static loc:Strings.Catalogues_Pill_All}" />
+                            <TextBlock Text="{Binding AllCount}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Classes="segment" GroupName="CataloguesPill" IsChecked="{Binding IsLoadedPill}"
+                                 AutomationProperties.AutomationId="Catalogues.Pill.Loaded" AutomationProperties.Name="{Binding LoadedPillName}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{x:Static loc:Strings.Catalogues_Pill_Loaded}" />
+                            <TextBlock Text="{Binding LoadedCount}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Classes="segment" GroupName="CataloguesPill" IsChecked="{Binding IsChangedPill}"
+                                 AutomationProperties.AutomationId="Catalogues.Pill.Changed" AutomationProperties.Name="{Binding ChangedPillName}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{x:Static loc:Strings.Catalogues_Pill_Changed}" />
+                            <TextBlock Text="{Binding ChangedCount}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Classes="segment" GroupName="CataloguesPill" IsChecked="{Binding IsProblemsPill}"
+                                 IsVisible="{Binding HasProblems}"
+                                 AutomationProperties.AutomationId="Catalogues.Pill.Problems" AutomationProperties.Name="{Binding ProblemsPillName}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{x:Static loc:Strings.Catalogues_Pill_Problems}" />
+                            <TextBlock Text="{Binding ProblemsCount}" Opacity="0.7" FontWeight="Normal" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                </UniformGrid>
+            </Border>
+        </StackPanel>
+
+        <!-- The products: loaded first, then by spec. -->
+        <Panel Grid.Row="2">
+            <ListBox x:Name="ProductList"
+                     AutomationProperties.AutomationId="Catalogues.List"
+                     AutomationProperties.Name="{x:Static loc:Strings.Pane_Catalogues}"
+                     ItemsSource="{Binding Rows}"
+                     SelectedItem="{Binding SelectedRow}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     Background="Transparent">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CatalogueProductRowViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <Border Grid.Column="0" Classes="stateBar" Classes.error="{Binding IsError}" Classes.missing="{Binding IsMissingOnly}" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <WrapPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <ItemsControl ItemsSource="{Binding Tags}" IsVisible="{Binding HasTags}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CatalogueTagViewModel">
+                                                <Border Classes="catalogueTag" Classes.error="{Binding IsError}" Classes.warning="{Binding IsWarning}" Margin="0,1,4,1">
+                                                    <TextBlock Text="{Binding Text}" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </WrapPanel>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Text="{Binding CataloguesText}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Text="{Binding LoadedText}" FontSize="12" Opacity="0.7" />
+                                </Grid>
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="Icon" Padding="4" VerticalAlignment="Center"
+                                    AutomationProperties.AutomationId="Catalogues.Row.Menu"
+                                    AutomationProperties.Name="{Binding MenuName}"
+                                    ToolTip.Tip="{Binding MenuName}">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_ReplaceFeature}"
+                                                  Command="{Binding Owner.ReplaceFeatureCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.ReplaceFeature" />
+                                        <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_ReplacePortrayal}"
+                                                  Command="{Binding Owner.ReplacePortrayalCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  IsVisible="{Binding HasPortrayalCatalogue}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.ReplacePortrayal" />
+                                        <MenuItem Header="{x:Static loc:Strings.Catalogues_Revert}"
+                                                  Command="{Binding Owner.RevertCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  IsVisible="{Binding CanRevert}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.Revert" />
+                                        <MenuItem Header="{x:Static loc:Strings.Catalogues_RemoveProduct}"
+                                                  Command="{Binding Owner.RemoveProductCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  IsVisible="{Binding CanRemoveProduct}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.RemoveProduct" />
+                                        <MenuItem Header="{Binding Owner.RevealLabel, FallbackValue={x:Null}}"
+                                                  Command="{Binding Owner.RevealCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  IsVisible="{Binding CanReveal}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.Reveal" />
+                                        <Separator />
+                                        <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_OpenInChartReference}"
+                                                  Command="{Binding Owner.OpenInChartReferenceCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  IsVisible="{Binding Owner.CanOpenInChartReference, FallbackValue=False}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.OpenInChartReference" />
+                                        <MenuItem Header="{Binding ExaminerLabel}"
+                                                  Command="{Binding Owner.OpenInExaminerCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                                  IsVisible="{Binding CanOpenInExaminer}"
+                                                  AutomationProperties.AutomationId="Catalogues.Row.Menu.OpenInExaminer" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                                <ic:FluentIcon Icon="MoreHorizontal" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{x:Static loc:Strings.Catalogues_NoMatches}" IsVisible="{Binding HasNoMatches}"
+                       HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0" Opacity="0.6" />
+        </Panel>
+
+        <Border Grid.Row="3" Height="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                IsHitTestVisible="False" Background="{DynamicResource BorderColor}" />
+        <GridSplitter Grid.Row="3"
+                      Classes="PaneSplitter"
+                      AutomationProperties.AccessibilityView="Raw"
+                      Height="4"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      ResizeDirection="Rows"
+                      ResizeBehavior="PreviousAndNext"
+                      bh:HoverDelay.DelayMilliseconds="500" />
+
+        <!-- The selected product's details (§6.1). -->
+        <Panel Grid.Row="4">
+            <TextBlock Text="{x:Static loc:Strings.Catalogues_Details_None}" IsVisible="{Binding !HasSelection}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6" TextWrapping="Wrap" Margin="16" />
+            <ScrollViewer IsVisible="{Binding HasSelection}" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel DataContext="{Binding SelectedRow}" x:DataType="vm:CatalogueProductRowViewModel"
+                            Spacing="10" Margin="12,8,12,12"
+                            AutomationProperties.AutomationId="Catalogues.Details">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="2">
+                        <StackPanel Spacing="1">
+                            <SelectableTextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap"
+                                                 AutomationProperties.AutomationId="Catalogues.Details.Title" />
+                            <TextBlock Text="{Binding DetailsSummary}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="Catalogues.Details.Summary" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="Icon panelIcon" VerticalAlignment="Top"
+                                AutomationProperties.AutomationId="Catalogues.Details.OpenInChartReference"
+                                AutomationProperties.Name="{x:Static loc:Strings.Catalogues_Menu_OpenInChartReference}"
+                                ToolTip.Tip="{x:Static loc:Strings.Catalogues_Menu_OpenInChartReference}"
+                                IsVisible="{Binding Owner.CanOpenInChartReference, FallbackValue=False}"
+                                Command="{Binding Owner.OpenInChartReferenceCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}">
+                            <ic:FluentIcon Icon="BookCompass" FontSize="16" />
+                        </Button>
+                        <Button Grid.Column="2" Classes="Icon panelIcon" VerticalAlignment="Top"
+                                AutomationProperties.AutomationId="Catalogues.Details.Menu"
+                                AutomationProperties.Name="{Binding MenuName}"
+                                ToolTip.Tip="{Binding MenuName}">
+                            <Button.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_ReplaceFeature}"
+                                              Command="{Binding Owner.ReplaceFeatureCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                              AutomationProperties.AutomationId="Catalogues.Details.Menu.ReplaceFeature" />
+                                    <MenuItem Header="{x:Static loc:Strings.Catalogues_Menu_ReplacePortrayal}"
+                                              Command="{Binding Owner.ReplacePortrayalCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                              IsVisible="{Binding HasPortrayalCatalogue}"
+                                              AutomationProperties.AutomationId="Catalogues.Details.Menu.ReplacePortrayal" />
+                                    <MenuItem Header="{Binding ExaminerLabel}"
+                                              Command="{Binding Owner.OpenInExaminerCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}"
+                                              IsVisible="{Binding CanOpenInExaminer}"
+                                              AutomationProperties.AutomationId="Catalogues.Details.Menu.OpenInExaminer" />
+                                </MenuFlyout>
+                            </Button.Flyout>
+                            <ic:FluentIcon Icon="MoreHorizontal" FontSize="16" />
+                        </Button>
+                    </Grid>
+
+                    <ContentControl Content="{Binding Feature}" ContentTemplate="{StaticResource DetailsGroupTemplate}" />
+                    <ContentControl Content="{Binding Portrayal}" ContentTemplate="{StaticResource DetailsGroupTemplate}" />
+
+                    <!-- Actions (D11, D12): the main one first. -->
+                    <WrapPanel Orientation="Horizontal" IsVisible="{Binding HasDetailsActions}">
+                        <Button Classes="Primary" Margin="0,0,6,6"
+                                AutomationProperties.AutomationId="Catalogues.Details.AddPortrayal"
+                                Content="{x:Static loc:Strings.Catalogues_AddPortrayal}"
+                                ToolTip.Tip="{x:Static loc:Strings.Catalogues_AddPortrayal}"
+                                IsVisible="{Binding IsPortrayalMissing}"
+                                Command="{Binding Owner.ReplacePortrayalCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}" />
+                        <Button Classes="Primary" Margin="0,0,6,6"
+                                AutomationProperties.AutomationId="Catalogues.Details.AddFeature"
+                                Content="{x:Static loc:Strings.Catalogues_AddFeature}"
+                                ToolTip.Tip="{x:Static loc:Strings.Catalogues_AddFeature}"
+                                IsVisible="{Binding IsFeatureMissing}"
+                                Command="{Binding Owner.ReplaceFeatureCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}" />
+                        <Button Classes="Outline" Margin="0,0,6,6"
+                                AutomationProperties.AutomationId="Catalogues.Details.Reload"
+                                Content="{x:Static loc:Strings.Catalogues_Reload}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CataloguesReload}"
+                                IsVisible="{Binding CanReload}"
+                                Command="{Binding Owner.ReloadCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}" />
+                        <Button Classes="Outline" Margin="0,0,6,6"
+                                AutomationProperties.AutomationId="Catalogues.Details.Revert"
+                                Content="{x:Static loc:Strings.Catalogues_Revert}"
+                                ToolTip.Tip="{x:Static loc:Strings.Catalogues_Revert}"
+                                IsVisible="{Binding CanRevert}"
+                                Command="{Binding Owner.RevertCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}" />
+                        <Button Classes="Outline" Margin="0,0,6,6"
+                                AutomationProperties.AutomationId="Catalogues.Details.RemoveProduct"
+                                Content="{x:Static loc:Strings.Catalogues_RemoveProduct}"
+                                ToolTip.Tip="{x:Static loc:Strings.Catalogues_RemoveProduct}"
+                                IsVisible="{Binding CanRemoveProduct}"
+                                Command="{Binding Owner.RemoveProductCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}" />
+                        <Button Classes="Outline" Margin="0,0,6,6"
+                                AutomationProperties.AutomationId="Catalogues.Details.Reveal"
+                                Content="{Binding Owner.RevealLabel, FallbackValue={x:Null}}"
+                                ToolTip.Tip="{Binding Owner.RevealLabel, FallbackValue={x:Null}}"
+                                AutomationProperties.Name="{Binding Owner.RevealLabel, FallbackValue={x:Null}}"
+                                IsVisible="{Binding CanReveal}"
+                                Command="{Binding Owner.RevealCommand, FallbackValue={x:Null}}" CommandParameter="{Binding}" />
+                    </WrapPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Panel>
+    </Grid>
+</UserControl>
