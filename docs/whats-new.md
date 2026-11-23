@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Advisories beside a model run in a folder.** A folder holding GRIB2
+  files and a storm's NHC advisory zips now opens as two datasets, a model
+  run and the advisory, in `tiles serve`, `tiles export`, `mcp serve` and the
+  other commands that take a folder. The advisory used to be dropped without
+  a word. A `.zip` in a folder that isn't the advisory's is skipped with a
+  warning, as before
+  ([#1677](https://github.com/philliphoff/EncDotNet.S100/issues/1677)).
+
 - **One Catalogues activity.** The Feature Catalogues and Portrayal
   Catalogues activities are replaced by **Catalogues**, which lists every
   product with both its catalogues: "Feature 2.0.0 · Portrayal 2.1.0", how
