@@ -24,6 +24,7 @@ internal static class SkillContent
             ["tides stations"] = "Commands.TidesStations.md",
             ["tides predict"] = "Commands.TidesPredict.md",
             ["tides update"] = "Commands.TidesUpdate.md",
+            ["tides publish"] = "Commands.TidesPublish.md",
             ["tides currents stations"] = "Commands.TidesCurrentStations.md",
             ["tides currents predict"] = "Commands.TidesCurrentPredict.md",
         };

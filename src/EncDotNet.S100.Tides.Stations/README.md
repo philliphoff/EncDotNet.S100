@@ -1,9 +1,10 @@
 # EncDotNet.S100.Tides.Stations
 
 `EncDotNet.S100.Tides.Stations` is the station catalogue for
-[`EncDotNet.S100.Tides`](../EncDotNet.S100.Tides/README.md). It reads NOAA
+[`EncDotNet.S100.Tides`](../EncDotNet.S100.Tides/README.md). It gets NOAA
 CO-OPS's tide stations with their harmonic constituents, tidal datums and
-subordinate-station offsets, keeps them in a JSON file that works offline,
+subordinate-station offsets, from a mirror in one download or from NOAA
+itself, keeps them in a JSON file that works offline,
 finds stations near a point or in a box, and creates a station's predictor
 on a chosen S-100 vertical datum with the provenance to label it. Reference
 it when you need a predicted water level where NOAA has a tide station.
@@ -18,8 +19,58 @@ aren't for navigation.
 dotnet add package EncDotNet.S100.Tides.Stations
 ```
 
+## Get NOAA's catalogue
+
+`TideCatalogueMirrorClient` downloads NOAA's whole catalogue as one file of
+about 1.2 MB. By default it reads the EncDotNet.S100 mirror, a rolling GitHub
+release that a scheduled workflow refreshes from NOAA every week. Pass it your
+`HttpClient`, which you own along with its timeout and `User-Agent`:
+
+```csharp
+using EncDotNet.S100.Tides.Stations.Mirror;
+
+using var http = new HttpClient();
+var mirror = new TideCatalogueMirrorClient(http);
+
+var download = await mirror.DownloadCatalogueAsync("noaa-tide-stations.json.gz");
+var catalogue = download.Catalogue;
+Console.WriteLine($"{catalogue.Provider}, retrieved {catalogue.Retrieved:d}, checked {download.Manifest.Checked:d}");
+```
+
+The download is two requests: the mirror's manifest,
+`tide-stations.manifest.json`, then the catalogue file it names. The file's
+size and SHA-256 must match the manifest before it's read. If they don't, the
+client reads both again, since the mirror replaces the file and the manifest
+one after the other. A path ending in `.gz` gets the mirror's file exactly as
+published. Any other path gets uncompressed JSON. `DownloadCatalogueAsync()`
+without a path returns the catalogue without saving it.
+
+The catalogue is still NOAA's. Its `Provider` is `NOAA CO-OPS`, and its
+`Retrieved` is when the mirror read the stations from NOAA, not when it
+published them.
+
+To check for newer data, `CheckForUpdatesAsync` reads only the manifest:
+
+```csharp
+var check = await mirror.CheckForUpdatesAsync(catalogue);
+if (check.HasNewerData)
+{
+    await mirror.DownloadCatalogueAsync("noaa-tide-stations.json.gz");
+}
+```
+
+The mirror has newer data when its catalogue was retrieved from NOAA later
+than yours, or yours is undated. A manifest that names a newer catalogue
+format than this library reads is never offered as newer data
+(`check.Manifest.IsSupported` is false), and downloading it throws
+`NotSupportedException`.
+
+`TideCatalogueMirrorClientOptions` sets another mirror's manifest address,
+the retries, and the largest file the client accepts (64 MB by default).
+
 ## Download NOAA's stations
 
+To read NOAA's stations straight from NOAA instead of a mirror,
 `NoaaTideStationClient` reads the
 [CO-OPS metadata API](https://api.tidesandcurrents.noaa.gov/mdapi/prod/).
 Pass it your `HttpClient`, which you own along with its timeout and
@@ -41,8 +92,8 @@ A download reads the station list, then each reference station's
 constituents and datums: about 2,500 requests. The API refuses a client that
 asks too fast (HTTP 403 for some minutes), so the client asks at most two at
 a time with a pause after each, and retries a refusal after 5, 10, 20 and 40
-seconds. A full download took 7 minutes 44 seconds in November 2026. Change
-the pace with `NoaaTideStationClientOptions`.
+seconds. A full download, with current stations, took 9 minutes 31 seconds
+in November 2026. Change the pace with `NoaaTideStationClientOptions`.
 
 The November 2026 catalogue has 3,502 stations: 1,260 reference
 (harmonic) stations and 2,242 subordinate stations. 3,496 of them can be
@@ -61,13 +112,15 @@ Console.WriteLine($"{catalogue.Provider}, {catalogue.Retrieved:d}, epoch {catalo
 ```
 
 `SaveAsync` gzips when the path ends in `.gz` and replaces the file in one
-step, so a reader never sees half a file. NOAA's catalogue is 2.7 MB as JSON
-and 362 KB gzipped (259 KB with xz).
+step, so a reader never sees half a file. NOAA's catalogue, with its current
+stations, is 9.9 MB as JSON and 1.2 MB gzipped (November 2026).
 
-## Check for newer data
+## Check NOAA for newer data
 
-Newer NOAA data, not age, makes a catalogue stale. `CheckForUpdatesAsync`
-finds out cheaply: it reads the station list (one request, about 140 KB
+Newer NOAA data, not age, makes a catalogue stale. A mirror's manifest says
+when its catalogue was retrieved (see [Get NOAA's catalogue](#get-noaas-catalogue)).
+Against NOAA itself, `NoaaTideStationClient.CheckForUpdatesAsync` finds out
+cheaply: it reads the station list (one request, about 140 KB
 compressed) and the datums of five long-running stations, not every
 station's constants:
 
@@ -249,6 +302,62 @@ A file that breaks these rules fails to load with a `FormatException` that
 names the station and the problem. Check the terms of any constituents you
 use: some national offices license theirs rather than publishing them
 openly.
+
+## Run a mirror
+
+A mirror publishes two files side by side: the catalogue as gzip-compressed
+`tide-stations` JSON, `tide-stations.json.gz`, and its manifest,
+`tide-stations.manifest.json`:
+
+```json
+{
+  "format": "tide-stations-manifest",
+  "version": 1,
+  "file": "tide-stations.json.gz",
+  "catalogueFormat": "tide-stations",
+  "catalogueVersion": 1,
+  "size": 1183082,
+  "sha256": "f2c0efd2…",
+  "provider": "NOAA CO-OPS",
+  "retrieved": "2026-11-23T06:38:11+00:00",
+  "crawled": "2026-11-23T06:38:19+00:00",
+  "checked": "2026-11-30T06:12:03+00:00",
+  "datumEpoch": "1983-2001",
+  "stationCount": 3502,
+  "harmonicStationCount": 1260,
+  "subordinateStationCount": 2242,
+  "currentStationCount": 4166
+}
+```
+
+| Member | Meaning |
+|---|---|
+| `file` | The catalogue file, relative to the manifest. |
+| `catalogueFormat`, `catalogueVersion` | The catalogue's file format: `tide-stations`, version 1. |
+| `size`, `sha256` | The catalogue file's size in bytes and its SHA-256, as 64 lowercase hexadecimal digits. |
+| `provider`, `retrieved` | The catalogue's own provider and retrieval time. |
+| `crawled` | When the mirror last downloaded the whole catalogue from the provider. |
+| `checked` | When the mirror last confirmed that the provider has no newer data. |
+| `datumEpoch`, the counts | What the catalogue holds, for a summary without downloading it. |
+
+`TideCatalogueManifest.Create` describes a file, and `SaveAsync` and
+`LoadAsync` write and read a manifest. Two more types help decide what to
+publish:
+
+- `TideCatalogueComparison.Compare` compares two catalogues station by
+  station: every field the file format writes, not just the station list.
+  Publish a new file only when `HasChanges` is true. That way `retrieved`
+  moves only when the data changes, and clients don't download the same
+  stations again.
+- `TideCataloguePublishCheck.FindProblems` refuses a catalogue that is
+  undated, older than the published one, or from another provider. It also
+  refuses one that lost more than 5% of its stations, of the tide stations it
+  can predict on MLLW, of its current stations, or of those it can predict.
+  Its result is empty when the catalogue may be published.
+
+Upload the catalogue file before the manifest. The EncDotNet.S100 mirror does this with `s100 tides publish`, in the
+repository's `tide-stations.yml` workflow. See the
+[CLI reference](../../docs/cli.md#tides-publish).
 
 ## Terms
 
