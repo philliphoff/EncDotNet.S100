@@ -176,21 +176,30 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         var parts = Parts.ToList();
         try
         {
+            var artwork = _artwork(drawing.Spec);
             if (namesToo)
             {
                 foreach (var part in parts)
                 {
-                    if (part.Part.Key is not { } key)
-                        continue;
-                    var info = await Terms.DescribeAsync(key).ConfigureAwait(false);
-                    if (info is not null)
-                        _post(() => { if (version == _version) part.SetName(info.Name); });
+                    if (part.Part.Key is { } key)
+                    {
+                        var info = await Terms.DescribeAsync(key).ConfigureAwait(false);
+                        if (info is not null)
+                            _post(() => { if (version == _version) part.SetName(info.Name); });
+                    }
+                    else if (part.Part.Colour is { } colour && artwork is not null)
+                    {
+                        // A colour fill or line is named by its colour: "Very shallow water".
+                        var name = await artwork.ColourNameAsync(colour).ConfigureAwait(false);
+                        if (name is not null)
+                            _post(() => { if (version == _version) part.SetName(name); });
+                    }
                 }
 
                 _post(() => { if (version == _version) GlyphName = NameOf(drawing); });
             }
 
-            if (_artwork(drawing.Spec) is not { } artwork)
+            if (artwork is null)
                 return;
             foreach (var part in parts)
             {
@@ -265,6 +274,15 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// The colour token of a colour fill or a simple line, "Colour token:
+    /// DEPVS", which the row's tooltip and accessible help text give while
+    /// the label names the colour; <see langword="null"/> for other parts.
+    /// </summary>
+    public string? HelpText => Part.Colour is { } colour
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Pick_DrawnAs_ColourTokenFormat, colour)
+        : null;
+
     /// <summary>Whether the part is the catalogue's fallback symbol.</summary>
     public bool IsFallback => Part.IsFallback;
 
@@ -301,8 +319,11 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
     /// <param name="tile">The new palette's chart background.</param>
     internal void SetTile(IBrush tile) => Tile = tile;
 
-    /// <summary>Names the part from its entry.</summary>
-    /// <param name="name">What the catalogue says the item shows.</param>
+    /// <summary>
+    /// Names the part: a symbol, line style or area fill from its entry, a
+    /// colour fill or line from its colour's description in the colour profile.
+    /// </summary>
+    /// <param name="name">What the catalogue says the item or colour shows.</param>
     internal void SetName(string name) => Label = LabelOf(Part, name);
 
     /// <summary>
@@ -330,7 +351,7 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
 
     private static string LabelOf(PickDrawnPart part, string? name) => part.Kind switch
     {
-        PickDrawnPartKind.ColourFill => string.Format(CultureInfo.CurrentCulture, Strings.Pick_DrawnAs_ColourFillFormat, part.Colour),
+        PickDrawnPartKind.ColourFill => string.Format(CultureInfo.CurrentCulture, Strings.Pick_DrawnAs_ColourFillFormat, ColourOf(part, name)),
         PickDrawnPartKind.Line => string.Format(
             CultureInfo.CurrentCulture,
             part.Dash switch
@@ -339,9 +360,14 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
                 "dot" => Strings.Pick_DrawnAs_DottedLineFormat,
                 _ => Strings.Pick_DrawnAs_LineFormat,
             },
-            part.Colour),
+            ColourOf(part, name)),
         PickDrawnPartKind.Text => string.Format(CultureInfo.CurrentCulture, Strings.Pick_DrawnAs_TextFormat, part.Text),
         _ when string.IsNullOrWhiteSpace(name) || string.Equals(name.Trim(), part.ItemId, StringComparison.OrdinalIgnoreCase) => part.ItemId ?? string.Empty,
         _ => string.Format(CultureInfo.CurrentCulture, Strings.Pick_DrawnAs_ItemFormat, part.ItemId, name.Trim()),
     };
+
+    // A colour's name, capitalised as the Legend's labels are ("Very shallow
+    // water", "Deep water"), else its token.
+    private static string ColourOf(PickDrawnPart part, string? name) =>
+        CatalogueSymbolKey.Label(part.Colour ?? string.Empty, name);
 }

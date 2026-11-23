@@ -17,6 +17,8 @@ internal static partial class Strings
 
     public static string Pick_DrawnAs_DottedLineFormat => Get(nameof(Pick_DrawnAs_DottedLineFormat));
 
+    public static string Pick_DrawnAs_ColourTokenFormat => Get(nameof(Pick_DrawnAs_ColourTokenFormat));
+
     public static string Pick_DrawnAs_TextFormat => Get(nameof(Pick_DrawnAs_TextFormat));
 
     public static string Pick_DrawnAs_Fallback => Get(nameof(Pick_DrawnAs_Fallback));

@@ -1088,6 +1088,10 @@
     <value>Line: {0}, dotted</value>
     <comment>A drawn dotted simple line: {0} its colour token</comment>
   </data>
+  <data name="Pick_DrawnAs_ColourTokenFormat" xml:space="preserve">
+    <value>Colour token: {0}</value>
+    <comment>Tooltip and accessible help text of a drawn colour fill or line, whose label names the colour: {0} the colour token (DEPVS)</comment>
+  </data>
   <data name="Pick_DrawnAs_TextFormat" xml:space="preserve">
     <value>Text: {0}</value>
     <comment>A drawn text label: {0} its words</comment>

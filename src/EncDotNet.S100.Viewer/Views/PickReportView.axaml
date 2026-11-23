@@ -1409,7 +1409,6 @@
                         Padding="0,8,0,0"
                         AutomationProperties.AutomationId="PickReport.DrawnAs"
                         AutomationProperties.Name="{x:Static loc:Strings.Pick_DrawnAsName}"
-                        views:ReferenceTerm.Terms="{Binding DrawnAs.Terms, FallbackValue={x:Null}}"
                         IsVisible="{Binding DrawnAs.HasParts, FallbackValue=False}">
                     <StackPanel Spacing="4">
                         <TextBlock Text="{x:Static loc:Strings.Pick_DrawnAsHeading}"
@@ -1424,7 +1423,9 @@
                                           RowDefinitions="Auto,Auto"
                                           MinHeight="26"
                                           AutomationProperties.AutomationId="PickReport.DrawnAs.Part"
-                                          AutomationProperties.Name="{Binding AccessibleName}">
+                                          AutomationProperties.Name="{Binding AccessibleName}"
+                                          AutomationProperties.HelpText="{Binding HelpText}"
+                                          ToolTip.Tip="{Binding HelpText}">
                                         <Border Grid.Column="0"
                                                 Grid.RowSpan="2"
                                                 Background="{Binding Tile}"

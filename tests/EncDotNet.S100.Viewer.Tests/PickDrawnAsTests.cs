@@ -84,6 +84,8 @@ public sealed class PickDrawnAsTests
             Terms = new ReferenceTerms(Glyphs, _ => { }, spec => Catalogues.Service.GetIndexAsync(spec), Catalogues.Service.GetArtwork);
             DrawnAs = new PickDrawnAsViewModel(Service.DrawnParts, Terms, Catalogues.Service.GetArtwork, action => action());
             Report = TestPickReport.Create();
+            // As App does: the report's terms are the view's (R9), which Drawn as shares.
+            Report.Terms = Terms;
             Report.AttachLegend(Service);
             Report.AttachDrawnAs(DrawnAs);
         }
@@ -196,9 +198,12 @@ public sealed class PickDrawnAsTests
 
         var area = scene.DrawnAs.Drawing!.Main!;
         Assert.Equal(PickDrawnPartKind.ColourFill, area.Kind);
-        Assert.StartsWith("DEP", area.Colour, StringComparison.Ordinal);
+        Assert.Equal("DEPVS", area.Colour);
         var fill = scene.DrawnAs.Parts.Single(p => p.Part == area);
-        Assert.Equal("Colour fill: " + area.Colour, fill.Label);
+        // Named by the colour profile's description, the token kept in the help text.
+        Assert.Equal("Colour fill: Very shallow water", fill.Label);
+        Assert.Equal("Colour token: DEPVS", fill.HelpText);
+        Assert.Equal("Drawn as Colour fill: Very shallow water", scene.DrawnAs.GlyphName);
         Assert.Null(fill.Key);
         Assert.True(fill.HasGlyph);
         Assert.True(scene.DrawnAs.HasGlyph);
@@ -206,8 +211,13 @@ public sealed class PickDrawnAsTests
         await scene.PickAsync(scene.Hit("COALNE", "Coastline"));
 
         var line = scene.DrawnAs.Drawing!.Main!;
-        Assert.Contains(line.Kind, new[] { PickDrawnPartKind.Line, PickDrawnPartKind.LineStyle });
-        Assert.True(scene.DrawnAs.Parts.Single(p => p.Part == line).HasGlyph);
+        Assert.Equal(PickDrawnPartKind.Line, line.Kind);
+        var coast = scene.DrawnAs.Parts.Single(p => p.Part == line);
+        Assert.Equal("CSTLN", line.Colour);
+        Assert.DoesNotContain("CSTLN", coast.Label, StringComparison.Ordinal);
+        Assert.StartsWith("Line: ", coast.Label, StringComparison.Ordinal);
+        Assert.Equal("Colour token: CSTLN", coast.HelpText);
+        Assert.True(coast.HasGlyph);
         Assert.True(scene.DrawnAs.HasGlyph);
     }
 
@@ -243,6 +253,7 @@ public sealed class PickDrawnAsTests
         Assert.True(parts[0].IsFallback);
         Assert.Equal("The catalogue's fallback symbol: nothing else matched", parts[0].FallbackNote);
         Assert.EndsWith(". The catalogue's fallback symbol: nothing else matched", parts[0].AccessibleName, StringComparison.Ordinal);
+        Assert.Null(parts[0].HelpText);
         Assert.Equal("Text: No 3", parts[1].Label);
         Assert.False(parts[1].IsFallback);
         Assert.False(parts[1].HasGlyph);
