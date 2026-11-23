@@ -168,4 +168,20 @@ internal static partial class Strings
     public static string ChartReference_Condition_Yes => Get(nameof(ChartReference_Condition_Yes));
 
     public static string ChartReference_Condition_No => Get(nameof(ChartReference_Condition_No));
+
+    public static string ChartReference_HeaderName => Get(nameof(ChartReference_HeaderName));
+
+    public static string ChartReference_Header_SourceFormat => Get(nameof(ChartReference_Header_SourceFormat));
+
+    public static string ChartReference_Header_Catalogues => Get(nameof(ChartReference_Header_Catalogues));
+
+    public static string Tooltip_ChartReferenceHeaderCatalogues => Get(nameof(Tooltip_ChartReferenceHeaderCatalogues));
+
+    public static string ChartReference_Header_Examiner => Get(nameof(ChartReference_Header_Examiner));
+
+    public static string ChartReference_Header_ExaminerPublished => Get(nameof(ChartReference_Header_ExaminerPublished));
+
+    public static string Tooltip_ChartReferenceHeaderExaminer => Get(nameof(Tooltip_ChartReferenceHeaderExaminer));
+
+    public static string Tooltip_ChartReferenceHeaderExaminerPublished => Get(nameof(Tooltip_ChartReferenceHeaderExaminerPublished));
 }

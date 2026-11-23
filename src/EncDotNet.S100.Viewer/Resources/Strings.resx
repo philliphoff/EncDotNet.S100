@@ -4909,6 +4909,31 @@
   <data name="Tooltip_ChartReferenceOpenPage" xml:space="preserve">
     <value>Open Chart reference as a page over the map, for study</value>
   </data>
+  <data name="ChartReference_Header_SourceFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>A catalogue in the Chart reference header with where it comes from when that isn't built in: "Portrayal 2.1.0-draft (custom)". {0} = "Feature 2.0.0" or "Portrayal 2.0.0"; {1} = custom or command line.</comment>
+  </data>
+  <data name="ChartReference_Header_Catalogues" xml:space="preserve">
+    <value>Catalogues…</value>
+  </data>
+  <data name="Tooltip_ChartReferenceHeaderCatalogues" xml:space="preserve">
+    <value>Open Catalogues at this product, to see or change its feature and portrayal catalogues</value>
+  </data>
+  <data name="ChartReference_Header_Examiner" xml:space="preserve">
+    <value>eXaminer</value>
+  </data>
+  <data name="ChartReference_Header_ExaminerPublished" xml:space="preserve">
+    <value>Published edition in eXaminer</value>
+  </data>
+  <data name="Tooltip_ChartReferenceHeaderExaminer" xml:space="preserve">
+    <value>Open this product's feature catalogue on the eXaminer website</value>
+  </data>
+  <data name="Tooltip_ChartReferenceHeaderExaminerPublished" xml:space="preserve">
+    <value>Open the published edition of this product's feature catalogue on the eXaminer website. The feature catalogue in use is custom, so it may differ.</value>
+  </data>
+  <data name="ChartReference_HeaderName" xml:space="preserve">
+    <value>Catalogues in use</value>
+  </data>
   <data name="Tooltip_ChartReferenceClosePage" xml:space="preserve">
     <value>Back to Chart reference</value>
   </data>

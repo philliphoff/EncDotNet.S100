@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Chart reference names its catalogues.** Under the product, Chart
+  reference (and its Open-as-page view) shows which catalogues it reads,
+  for example "S-101 · Feature 2.0.0 · Portrayal 2.1.0-draft (custom)", or
+  "· Built-in" when both are built in. The line updates as soon as a
+  catalogue is added, replaced or reverted. **Catalogues…** opens the
+  Catalogues activity at that product. Where the eXaminer is on and hosts
+  the product, an **eXaminer** link opens its feature catalogue there. When
+  the feature catalogue in use is custom, the link reads **Published edition
+  in eXaminer**, because the website has only the published edition.
+
 - **`tiles serve` draws each dataset at a time as the viewer does.** A
   time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension no longer
   snaps to the nearest listed step. Each time-varying dataset picks what it
