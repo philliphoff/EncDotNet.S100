@@ -9455,11 +9455,11 @@
     <value>{0} is off</value>
   </data>
   <data name="ChartReference_Condition_Expression" xml:space="preserve">
-    <value>Rule test: {0}</value>
-    <comment>A rule condition the reader can't put into words; {0} is its source text</comment>
+    <value>In some cases</value>
+    <comment>A rule condition that can't be put into words: a test of values the rule works out itself</comment>
   </data>
   <data name="ChartReference_Condition_ExpressionFails" xml:space="preserve">
-    <value>Rule test fails: {0}</value>
+    <value>In other cases</value>
   </data>
   <data name="ChartReference_Condition_Otherwise" xml:space="preserve">
     <value>None of the cases above</value>
@@ -9558,5 +9558,265 @@
   </data>
   <data name="LogArea_Catalogues" xml:space="preserve">
     <value>Catalogues</value>
+  </data>
+  <data name="Reference_TabTitle" xml:space="preserve">
+    <value>Reference</value>
+    <comment>Title of the right dock's Reference tab</comment>
+  </data>
+  <data name="Label_Activity_Reference" xml:space="preserve">
+    <value>Reference</value>
+    <comment>Accessible name of the Reference tab</comment>
+  </data>
+  <data name="Tooltip_Reference" xml:space="preserve">
+    <value>Reference: one chart reference entry, with its trail</value>
+    <comment>Tooltip of the Reference tab</comment>
+  </data>
+  <data name="Reference_EmptyTitle" xml:space="preserve">
+    <value>Nothing opened yet</value>
+    <comment>Empty state of the Reference tab</comment>
+  </data>
+  <data name="Reference_EmptyDescription" xml:space="preserve">
+    <value>Choose a feature type or symbol in Chart reference (Ctrl+Shift+K) to read its entry here: what it means, and how the chart draws it.</value>
+    <comment>Empty state of the Reference tab</comment>
+  </data>
+  <data name="Reference_OpenChartReference" xml:space="preserve">
+    <value>Open Chart reference</value>
+    <comment>Button in the Reference tab's empty state</comment>
+  </data>
+  <data name="Tooltip_ReferenceOpenChartReference" xml:space="preserve">
+    <value>Open the Chart reference activity to choose an entry</value>
+    <comment>Tooltip of the empty state's button</comment>
+  </data>
+  <data name="Reference_Back" xml:space="preserve">
+    <value>Back</value>
+    <comment>Accessible name of the Reference tab's back button</comment>
+  </data>
+  <data name="Tooltip_ReferenceBack" xml:space="preserve">
+    <value>Back to the previous entry (Alt+Left)</value>
+    <comment>Tooltip of the back button</comment>
+  </data>
+  <data name="Reference_Forward" xml:space="preserve">
+    <value>Forward</value>
+    <comment>Accessible name of the Reference tab's forward button</comment>
+  </data>
+  <data name="Tooltip_ReferenceForward" xml:space="preserve">
+    <value>Forward to the next entry (Alt+Right)</value>
+    <comment>Tooltip of the forward button</comment>
+  </data>
+  <data name="Reference_BreadcrumbName" xml:space="preserve">
+    <value>Trail</value>
+    <comment>Accessible name of the breadcrumb</comment>
+  </data>
+  <data name="Tooltip_ReferenceCrumb" xml:space="preserve">
+    <value>Go back to this entry</value>
+    <comment>Tooltip of a breadcrumb link</comment>
+  </data>
+  <data name="Reference_EntryName" xml:space="preserve">
+    <value>Reference entry</value>
+    <comment>Accessible name of an entry</comment>
+  </data>
+  <data name="Reference_NotFoundTitle" xml:space="preserve">
+    <value>No such entry</value>
+    <comment>The key names no entry</comment>
+  </data>
+  <data name="Reference_NotFoundDescription" xml:space="preserve">
+    <value>The loaded catalogues have no entry {0}.</value>
+    <comment>{0} is the entry key, e.g. S-101/Symbol/XYZ</comment>
+  </data>
+  <data name="Reference_Kind_FeatureType" xml:space="preserve">
+    <value>Feature type</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_Kind_Symbol" xml:space="preserve">
+    <value>Symbol</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_Kind_LineStyle" xml:space="preserve">
+    <value>Line style</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_Kind_AreaFill" xml:space="preserve">
+    <value>Area fill</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_Kind_Family" xml:space="preserve">
+    <value>Symbol family</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_Kind_Attribute" xml:space="preserve">
+    <value>Attribute</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_Kind_DisplaySetting" xml:space="preserve">
+    <value>Display setting</value>
+    <comment>Kind of entry</comment>
+  </data>
+  <data name="Reference_CodeWithAcronym" xml:space="preserve">
+    <value>{0} · S-57 {1}</value>
+    <comment>{0} is the S-100 code, {1} the S-57 acronym</comment>
+  </data>
+  <data name="Reference_ChartSize" xml:space="preserve">
+    <value>At chart size, {0} × {1} mm</value>
+    <comment>{0} and {1} are the width and height in millimetres</comment>
+  </data>
+  <data name="Reference_GlyphName" xml:space="preserve">
+    <value>Glyph</value>
+    <comment>Accessible name of the large glyph</comment>
+  </data>
+  <data name="Reference_ChartGlyphName" xml:space="preserve">
+    <value>Glyph at chart size</value>
+    <comment>Accessible name of the glyph at chart size</comment>
+  </data>
+  <data name="Reference_InView" xml:space="preserve">
+    <value>In view</value>
+    <comment>Heading of the count drawn in the map view</comment>
+  </data>
+  <data name="Reference_InViewCount" xml:space="preserve">
+    <value>{0} in view</value>
+    <comment>{0} is how many features are drawn in the map view</comment>
+  </data>
+  <data name="Reference_InViewOne" xml:space="preserve">
+    <value>1 in view</value>
+    <comment>One feature drawn in the map view</comment>
+  </data>
+  <data name="Reference_NoneInView" xml:space="preserve">
+    <value>None in view</value>
+    <comment>No feature drawn in the map view</comment>
+  </data>
+  <data name="Reference_Find" xml:space="preserve">
+    <value>Find</value>
+    <comment>Button that rings the features in view</comment>
+  </data>
+  <data name="Tooltip_ReferenceFind" xml:space="preserve">
+    <value>Ring the features drawn in view on the map</value>
+    <comment>Tooltip of Find</comment>
+  </data>
+  <data name="Reference_DrawnByShared" xml:space="preserve">
+    <value>Drawn by shared rules</value>
+    <comment>Heading of the items a shared rule draws</comment>
+  </data>
+  <data name="Reference_Fallback" xml:space="preserve">
+    <value>When nothing else fits</value>
+    <comment>Heading of the catalogue's fallback symbol</comment>
+  </data>
+  <data name="Reference_Palettes" xml:space="preserve">
+    <value>Day, Dusk and Night</value>
+    <comment>Heading of a symbol in each palette</comment>
+  </data>
+  <data name="Reference_DependsOn" xml:space="preserve">
+    <value>Depends on</value>
+    <comment>Heading of the display settings that choose a symbol</comment>
+  </data>
+  <data name="Reference_Origin" xml:space="preserve">
+    <value>Where it came from</value>
+    <comment>Heading of a symbol's source</comment>
+  </data>
+  <data name="Reference_FromPresLib" xml:space="preserve">
+    <value>S-52 Presentation Library ({0})</value>
+    <comment>{0} is the iho:source, e.g. S52Preslib4.0</comment>
+  </data>
+  <data name="Reference_NewIn" xml:space="preserve">
+    <value>New in {0}</value>
+    <comment>{0} is the product, e.g. S-101</comment>
+  </data>
+  <data name="Reference_NewInFrom" xml:space="preserve">
+    <value>New in {0}, from {1}</value>
+    <comment>{0} is the product, {1} the iho:source</comment>
+  </data>
+  <data name="Reference_Members" xml:space="preserve">
+    <value>Members</value>
+    <comment>Heading of a symbol family's members</comment>
+  </data>
+  <data name="Reference_ValueType" xml:space="preserve">
+    <value>Value type: {0}</value>
+    <comment>{0} is the value type, e.g. enumeration</comment>
+  </data>
+  <data name="Reference_ListedValues" xml:space="preserve">
+    <value>Listed values</value>
+    <comment>Heading of an attribute's values</comment>
+  </data>
+  <data name="Reference_ChangesSymbolOf" xml:space="preserve">
+    <value>Changes the symbol of</value>
+    <comment>Heading of the feature types whose rules test an attribute</comment>
+  </data>
+  <data name="Reference_Default" xml:space="preserve">
+    <value>Default: {0}</value>
+    <comment>{0} is the catalogue default</comment>
+  </data>
+  <data name="Reference_Current" xml:space="preserve">
+    <value>Now: {0}</value>
+    <comment>{0} is the current value</comment>
+  </data>
+  <data name="Reference_On" xml:space="preserve">
+    <value>On</value>
+    <comment>A display setting that is on</comment>
+  </data>
+  <data name="Reference_Off" xml:space="preserve">
+    <value>Off</value>
+    <comment>A display setting that is off</comment>
+  </data>
+  <data name="Reference_Metres" xml:space="preserve">
+    <value>{0} m</value>
+    <comment>{0} is a depth in metres</comment>
+  </data>
+  <data name="Reference_ChangeInSettings" xml:space="preserve">
+    <value>Change in Display settings</value>
+    <comment>Opens the settings where a display setting is changed</comment>
+  </data>
+  <data name="Tooltip_ReferenceChangeInSettings" xml:space="preserve">
+    <value>Open the chart settings, where this display setting is changed</value>
+    <comment>Tooltip of Change in Display settings</comment>
+  </data>
+  <data name="Reference_ChangesFeatureTypes" xml:space="preserve">
+    <value>Feature types it changes</value>
+    <comment>Heading of the feature types whose rules branch on a display setting</comment>
+  </data>
+  <data name="Tooltip_ReferenceLink" xml:space="preserve">
+    <value>Open this entry</value>
+    <comment>Tooltip of a link inside an entry</comment>
+  </data>
+  <data name="Reference_Places" xml:space="preserve">
+    <value>Places</value>
+    <comment>Heading of the symbols a line style places along its line or an area fill tiles as its pattern</comment>
+  </data>
+  <data name="ChartReference_Condition_Includes" xml:space="preserve">
+    <value>{0} includes {1}</value>
+    <comment>{0} is an attribute, {1} one or more of its values: Restriction includes anchoring prohibited</comment>
+  </data>
+  <data name="ChartReference_Condition_Excludes" xml:space="preserve">
+    <value>{0} does not include {1}</value>
+    <comment>{0} is an attribute, {1} one or more of its values</comment>
+  </data>
+  <data name="ChartReference_Condition_OrMore" xml:space="preserve">
+    <value>{0} or {1} more</value>
+    <comment>{0} is a list of values, {1} how many more there are</comment>
+  </data>
+  <data name="ChartReference_Condition_AndJoin" xml:space="preserve">
+    <value>{0} and {1}</value>
+    <comment>Joins conditions that must all hold inside a longer condition</comment>
+  </data>
+  <data name="ChartReference_Condition_Yes" xml:space="preserve">
+    <value>{0}</value>
+    <comment>A yes/no attribute that is true, by its name: Radar conspicuous</comment>
+  </data>
+  <data name="ChartReference_Condition_No" xml:space="preserve">
+    <value>Not {0}</value>
+    <comment>A yes/no attribute that is false: Not radar conspicuous</comment>
+  </data>
+  <data name="Reference_PaperChartSymbols" xml:space="preserve">
+    <value>Paper chart symbols</value>
+    <comment>Folded heading of the symbols drawn only when Simplified symbols is off</comment>
+  </data>
+  <data name="Reference_HeadingCount" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>A folded heading with how many items it holds: Drawn by shared rules (30)</comment>
+  </data>
+  <data name="Reference_CasesWhen" xml:space="preserve">
+    <value>When {0}:</value>
+    <comment>Leads a symbol's cases with the conditions they all share: When simplified symbols is on:</comment>
+  </data>
+  <data name="Reference_NoFurtherCondition" xml:space="preserve">
+    <value>With no further condition</value>
+    <comment>A case that needs only the shared conditions</comment>
   </data>
 </root>

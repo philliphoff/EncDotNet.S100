@@ -18,7 +18,8 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// The Chart reference activity (#1637, symbol dictionary design note §4.5,
 /// R4): every feature type or symbol of a product's catalogues, grouped by
 /// Chart 1 section, glyph first, with a product combo, search and
-/// Features / Symbols. Selecting a row expands it in place.
+/// Features / Symbols. Selecting a row opens its entry in the Reference tab
+/// (R7, #1650).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -67,6 +68,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     private bool _disposed;
     private bool _isActive;
     private ICommand? _openPageCommand;
+    private bool _selectingQuietly;
 
     /// <summary>
     /// Creates the activity's view model and selects the first product. Its
@@ -204,7 +206,11 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     /// <summary>The rows of <see cref="Items"/>, without the headers.</summary>
     public IEnumerable<ChartReferenceRowViewModel> Rows => _items.OfType<ChartReferenceRowViewModel>();
 
-    /// <summary>The selected row, which is expanded. A header can't be selected.</summary>
+    /// <summary>
+    /// The selected row. Selecting one in the list opens its entry in the
+    /// Reference tab (<see cref="OpenEntry"/>); <see cref="Open"/> selects
+    /// without opening. A header can't be selected.
+    /// </summary>
     public ChartReferenceListItem? SelectedItem
     {
         get => _selectedItem;
@@ -216,16 +222,20 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
                 return;
             }
 
-            var previous = _selectedItem as ChartReferenceRowViewModel;
             if (!SetProperty(ref _selectedItem, value))
                 return;
-            if (previous is not null)
-                previous.IsExpanded = false;
-            if (value is ChartReferenceRowViewModel row)
-                row.IsExpanded = true;
             OnPropertyChanged(nameof(SelectedRow));
+            if (!_selectingQuietly && value is ChartReferenceRowViewModel row)
+                OpenEntry?.Invoke(row.Key);
         }
     }
+
+    /// <summary>
+    /// Opens an entry in the Reference tab when a row is selected in the
+    /// list (<see cref="ReferenceNavigator.Open(ReferenceKey)"/>, R7);
+    /// <see langword="null"/>, in hosts without the tab, only selects.
+    /// </summary>
+    public Action<ReferenceKey>? OpenEntry { get; set; }
 
     /// <summary>The selected row, or <see langword="null"/>.</summary>
     public ChartReferenceRowViewModel? SelectedRow => _selectedItem as ChartReferenceRowViewModel;
@@ -360,11 +370,25 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     }
 
     /// <summary>
-    /// Selects an entry's row: switches to Features or Symbols, and clears or
+    /// Selects an entry's row without opening it in the Reference tab (the
+    /// study page's tiles): switches to Features or Symbols, and clears or
     /// sets the search, so the row is in the list.
     /// </summary>
     /// <param name="key">The entry.</param>
     public void Open(ReferenceKey key)
+    {
+        _selectingQuietly = true;
+        try
+        {
+            Select(key);
+        }
+        finally
+        {
+            _selectingQuietly = false;
+        }
+    }
+
+    private void Select(ReferenceKey key)
     {
         var mode = key.Kind == ReferenceKind.FeatureType ? ChartReferenceMode.Features : ChartReferenceMode.Symbols;
         var row = Find(key);
@@ -521,10 +545,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         // so the row under the pointer rings again once the Legend follows.
         if (restart)
             _map?.Leave(null);
-        var previous = _selectedItem as ChartReferenceRowViewModel;
-        var keep = previous?.Key;
-        if (previous is not null)
-            previous.IsExpanded = false;
+        var keep = (_selectedItem as ChartReferenceRowViewModel)?.Key;
         _selectedItem = null;
 
         var index = _index;
@@ -551,7 +572,11 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         OnPropertyChanged(nameof(SelectedItem));
         OnPropertyChanged(nameof(SelectedRow));
         if (keep is { } key && Find(key) is { } again)
+        {
+            _selectingQuietly = true;
             SelectedItem = again;
+            _selectingQuietly = false;
+        }
         RaiseStates();
         if (restart)
             ListRestarted?.Invoke(this, EventArgs.Empty);
@@ -581,10 +606,10 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         var items = index.Items.Where(i => i.Family is null && InViewAllows(i)).ToList();
         var reached = items
             .Where(i => !i.IsUnreached)
-            .Select(i => (Section: SectionOfItem(i, index, featureSections), Row: Row(i, index)));
+            .Select(i => (Section: SectionOfItem(i, index, featureSections), Row: Row(i)));
         var unreached = items
             .Where(i => i.IsUnreached)
-            .Select(i => Row(i, index))
+            .Select(i => Row(i))
             .ToList();
         return Grouped(reached, Titles(index), unreached);
     }
@@ -601,7 +626,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
                 .Select(e => e switch
                 {
                     FeatureTypeEntry f when _mode == ChartReferenceMode.Features => Row(f, index, simplified),
-                    PortrayalItemEntry i when _mode == ChartReferenceMode.Symbols => Row(i, index),
+                    PortrayalItemEntry i when _mode == ChartReferenceMode.Symbols => Row(i),
                     _ => null,
                 })
                 .OfType<ChartReferenceRowViewModel>(),
@@ -670,10 +695,10 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
             .FirstOrDefault();
 
     private ChartReferenceRowViewModel Row(FeatureTypeEntry feature, ChartReferenceIndex index, bool simplified) =>
-        new(feature, index, LeadGlyph.For(feature, index, simplified), this);
+        new(feature, LeadGlyph.For(feature, index, simplified), this);
 
-    private ChartReferenceRowViewModel Row(PortrayalItemEntry item, ChartReferenceIndex index) =>
-        new(item, index, LeadGlyph.For(item), this);
+    private ChartReferenceRowViewModel Row(PortrayalItemEntry item) =>
+        new(item, LeadGlyph.For(item), this);
 
     private ChartReferenceRowViewModel? Find(ReferenceKey key) =>
         Rows.FirstOrDefault(r => r.Key.Kind == key.Kind && string.Equals(r.Key.Code, key.Code, StringComparison.OrdinalIgnoreCase));

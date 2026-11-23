@@ -6,12 +6,26 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The Reference tab.** The right dock has a third tab, **Reference**,
+  after Object information and the Legend. Selecting a row in Chart reference
+  opens its entry there: a feature type with its codes, display categories,
+  Chart 1 section, how many are drawn in view with **Find**, and what it is
+  drawn with; a symbol in Day, Dusk and Night with the setting that chooses
+  it, where it came from and the feature types that use it; an attribute with
+  its values; or a display setting with its current state and **Change in
+  Display settings**. Links inside an entry open their entries in the tab,
+  with **Back**, **Forward** (Alt+Left, Alt+Right) and a breadcrumb. The
+  study page's entry pane uses the same entry view, and the activity's rows
+  no longer expand in place. A new MCP tool, `open_chart_reference`, opens an
+  entry and reports the one shown.
+
 - **Chart reference counts symbols inside line styles and fills.** A symbol
   that a line style places along its line, such as `EMACHAR1` on the
   anchorage boundary `ACHARE51`, or that an area fill tiles, such as
   `AIRARE02P` in `AIRARE02`, is no longer listed under **Not used by a
-  rule**. Its expanded row lists those line styles and fills under **Used
-  inside**, and `get_chart_reference_entry` gives them as `usedIn` with
+  rule**. Its entry in the Reference tab lists those line styles and fills
+  under **Used inside**, a line style's or fill's entry lists its symbols
+  under **Places**, and `get_chart_reference_entry` gives them as `usedIn` with
   `used_in` links, and a line style's or fill's symbols as `places` with
   `places` links. In S-101, 58 of the 130 items no rule names are drawn
   this way.

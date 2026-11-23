@@ -156,4 +156,16 @@ internal static partial class Strings
     public static string ChartReference_Geometry_Curve => Get(nameof(ChartReference_Geometry_Curve));
 
     public static string ChartReference_Geometry_Surface => Get(nameof(ChartReference_Geometry_Surface));
+
+    public static string ChartReference_Condition_Includes => Get(nameof(ChartReference_Condition_Includes));
+
+    public static string ChartReference_Condition_Excludes => Get(nameof(ChartReference_Condition_Excludes));
+
+    public static string ChartReference_Condition_OrMore => Get(nameof(ChartReference_Condition_OrMore));
+
+    public static string ChartReference_Condition_AndJoin => Get(nameof(ChartReference_Condition_AndJoin));
+
+    public static string ChartReference_Condition_Yes => Get(nameof(ChartReference_Condition_Yes));
+
+    public static string ChartReference_Condition_No => Get(nameof(ChartReference_Condition_No));
 }

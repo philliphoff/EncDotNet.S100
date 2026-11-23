@@ -12,7 +12,8 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// <summary>
 /// The Chart reference page (#1639, symbol dictionary design note §4.5, R6):
 /// the reference over the map for study, as a tile grid by Chart 1 section
-/// with the selected entry on the right.
+/// with the selected entry on the right, in the same entry view as the
+/// Reference tab (<see cref="ReferenceEntryViewModel"/>, R7, #1650).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,9 +31,6 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// </remarks>
 internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferenceRowHost, IDisposable
 {
-    /// <summary>The selected entry's large glyph, in logical pixels.</summary>
-    public const int HeroGlyphSize = 96;
-
     /// <summary>The narrowest a tile gets, in logical pixels (the prototype's 150 px columns).</summary>
     public const double MinTileWidth = 150;
 
@@ -57,7 +55,7 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
     private IReadOnlyList<ChartReferenceRowViewModel> _tiles = [];
     private IReadOnlyList<object> _lines = [];
     private ChartReferenceRowViewModel? _selectedTile;
-    private IImage? _heroGlyph;
+    private ReferenceEntryViewModel? _entry;
     private bool _disposed;
 
     /// <summary>Creates the page over the activity's view model.</summary>
@@ -208,12 +206,30 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
             if (!SetProperty(ref _selectedTile, value))
                 return;
             if (previous is not null)
-                previous.IsExpanded = false;
+                previous.IsSelected = false;
             if (value is not null)
-                value.IsExpanded = true;
+                value.IsSelected = true;
             OnPropertyChanged(nameof(HasSelection));
             OnPropertyChanged(nameof(ShowNoSelection));
-            RequestHeroGlyph();
+            Entry = MakeEntry(value);
+        }
+    }
+
+    /// <summary>
+    /// The selected entry, in the same entry view as the Reference tab, in
+    /// the page's preview palette and symbol style; <see langword="null"/>
+    /// when no tile is selected.
+    /// </summary>
+    public ReferenceEntryViewModel? Entry
+    {
+        get => _entry;
+        private set
+        {
+            var previous = _entry;
+            if (!SetProperty(ref _entry, value))
+                return;
+            previous?.Close();
+            value?.Start();
         }
     }
 
@@ -222,13 +238,6 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
 
     /// <summary>Whether the entry pane says to choose a tile.</summary>
     public bool ShowNoSelection => _selectedTile is null && _tiles.Count > 0;
-
-    /// <summary>The selected entry's large glyph, or <see langword="null"/> until it is drawn.</summary>
-    public IImage? HeroGlyph
-    {
-        get => _heroGlyph;
-        private set => SetProperty(ref _heroGlyph, value);
-    }
 
     /// <inheritdoc />
     public IBrush Tile => _glyphs.Tile;
@@ -284,7 +293,8 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         return null;
     }
 
-    /// <inheritdoc />
+    /// <summary>A link in the entry pane: selects that entry's tile, on the page.</summary>
+    /// <param name="key">The entry.</param>
     public void Open(ReferenceKey key) => _reference.Open(key);
 
     /// <inheritdoc />
@@ -296,6 +306,7 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         _reference.PropertyChanged -= OnReferenceChanged;
         _reference.ListRestarted -= OnListRestarted;
         _glyphs.PaletteChanged -= OnPaletteChanged;
+        _entry?.Close();
         _glyphs.Dispose();
     }
 
@@ -313,12 +324,10 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         var tiles = index is null
             ? []
             : _reference.Rows.Select(r => MakeTile(r, index)).ToList();
-        if (_selectedTile is { } previous)
-            previous.IsExpanded = false;
-        _selectedTile = null;
         Tiles = tiles;
         Lines = Lay(_reference.Items, tiles, _columns);
-        OnPropertyChanged(nameof(SelectedTile));
+        // The old tile goes with the old grid; the entry is made again, in
+        // the preview's symbol style.
         SyncSelection();
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(ShowNoSelection));
@@ -329,7 +338,7 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         var lead = row.Entry is FeatureTypeEntry feature
             ? LeadGlyph.For(feature, index, _previewSimplified)
             : row.Lead;
-        return new ChartReferenceRowViewModel(row.Entry, index, lead, this);
+        return new ChartReferenceRowViewModel(row.Entry, lead, this);
     }
 
     // Headers as they are; each section's tiles in lines of `columns`. A
@@ -373,25 +382,20 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         SelectedTile = key is null ? null : _tiles.FirstOrDefault(t => t.Key == key);
     }
 
-    private void RequestHeroGlyph()
+    private ReferenceEntryViewModel? MakeEntry(ChartReferenceRowViewModel? tile)
     {
-        HeroGlyph = null;
-        var tile = _selectedTile;
-        if (tile is null || !tile.Lead.HasGlyph || _artwork is null)
-            return;
-        if (_glyphs.TryGet(tile.Lead.Key, HeroGlyphSize, HeroGlyphSize, out var held))
+        if (tile is null || _reference.Index is not { } index)
+            return null;
+        return ReferenceEntryViewModel.Create(tile.Entry, new ReferenceEntryContext
         {
-            HeroGlyph = held;
-            return;
-        }
-
-        var palette = _glyphs.Palette;
-        Deliver(Draw(tile.Lead, palette, HeroGlyphSize), t =>
-            _post(() =>
-            {
-                if (ReferenceEquals(_selectedTile, tile) && _glyphs.Palette == palette)
-                    HeroGlyph = t.Result;
-            }));
+            Index = index,
+            Artwork = _artwork,
+            Glyphs = _glyphs,
+            SimplifiedSymbols = _previewSimplified,
+            Open = Open,
+            Post = _post,
+            Settings = _settings,
+        });
     }
 
     // Runs post once the draw succeeds, tracking the delivery until post has
@@ -486,6 +490,6 @@ internal sealed class ChartReferencePageViewModel : ViewModelBase, IChartReferen
         foreach (var tile in _tiles)
             tile.ResetGlyph();
         OnPropertyChanged(nameof(Tile));
-        RequestHeroGlyph();
+        _entry?.ReloadGlyphs();
     });
 }

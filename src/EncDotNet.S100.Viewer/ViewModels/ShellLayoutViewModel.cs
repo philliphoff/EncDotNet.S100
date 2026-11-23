@@ -828,6 +828,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     /// <summary>Id of the Chart reference activity in the left dock (#1637).</summary>
     internal const string ChartReferenceTabId = "ChartReference";
 
+    /// <summary>Id of the right dock's Reference tab (symbol dictionary R7, #1650; legends D13), after the Legend.</summary>
+    internal const string ReferenceTabId = "Reference";
+
     /// <summary>Id of the Chart reference page in the full-content panel (#1639); only code opens it.</summary>
     internal const string ChartReferencePageTabId = "ChartReferencePage";
 
@@ -1310,6 +1313,14 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
                     case TabDock.Right when captured.Id == LegendTabId:
                         // LegendService.Show: a link opened the tab (D8).
                         ShowLegendTab(captured);
+                        break;
+                    case TabDock.Right when captured.Id == ReferenceTabId:
+                        // ReferenceNavigator.Open (R7): a Check passage fold
+                        // unfolds, as for the Legend; a narrow fold (D9) stays.
+                        if (IsRightDockFolded && !_isRightDockNarrowFolded)
+                            IsRightDockFolded = false;
+                        SelectedRightTab = captured;
+                        IsRightDockOpen = true;
                         break;
                     case TabDock.Right:
                         SelectedRightTab = captured;

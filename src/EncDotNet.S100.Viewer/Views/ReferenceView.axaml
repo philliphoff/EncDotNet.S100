@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:cr="using:EncDotNet.S100.Viewer.ViewModels.ChartReference"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.ReferenceView"
+             x:DataType="cr:ReferenceViewModel"
+             Focusable="True"
+             FocusAdorner="{x:Null}">
+    <!-- The right dock's Reference tab (symbol dictionary §4.4, R7, #1650; legends D13, D22):
+         one entry with back, forward and a breadcrumb. -->
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Alt+Left" Command="{Binding BackCommand}" />
+        <KeyBinding Gesture="Alt+Right" Command="{Binding ForwardCommand}" />
+    </UserControl.KeyBindings>
+    <UserControl.Styles>
+        <Style Selector="Button.crCrumb">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="3,1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Link"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.crCrumb:pointerover /template/ Border#PART_Link">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.crCrumb:focus-visible /template/ Border#PART_Link">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+        <!-- Back, forward and the breadcrumb (Alt+Left, Alt+Right). -->
+        <Border DockPanel.Dock="Top"
+                Padding="8,4,8,4"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderColor}"
+                IsVisible="{Binding !IsEmpty}">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="2">
+                <Button Classes="Icon"
+                        Padding="4"
+                        VerticalAlignment="Top"
+                        Command="{Binding BackCommand}"
+                        AutomationProperties.AutomationId="Reference.Back"
+                        AutomationProperties.Name="{x:Static loc:Strings.Reference_Back}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferenceBack}"
+                        AutomationProperties.AcceleratorKey="Alt+Left"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceBack}">
+                    <ic:FluentIcon Icon="ChevronLeft" FontSize="14" />
+                </Button>
+                <Button Grid.Column="1"
+                        Classes="Icon"
+                        Padding="4"
+                        VerticalAlignment="Top"
+                        Command="{Binding ForwardCommand}"
+                        AutomationProperties.AutomationId="Reference.Forward"
+                        AutomationProperties.Name="{x:Static loc:Strings.Reference_Forward}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferenceForward}"
+                        AutomationProperties.AcceleratorKey="Alt+Right"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceForward}">
+                    <ic:FluentIcon Icon="ChevronRight" FontSize="14" />
+                </Button>
+                <ItemsControl Grid.Column="2"
+                              Margin="6,0,0,0"
+                              VerticalAlignment="Center"
+                              ItemsSource="{Binding Crumbs}"
+                              AutomationProperties.AutomationId="Reference.Breadcrumb"
+                              AutomationProperties.Name="{x:Static loc:Strings.Reference_BreadcrumbName}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="cr:ReferenceCrumbViewModel">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <Button Classes="crCrumb"
+                                        IsVisible="{Binding IsLink}"
+                                        Command="{Binding OpenCommand}"
+                                        AutomationProperties.AutomationId="Reference.Breadcrumb.Item"
+                                        AutomationProperties.Name="{Binding Name}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceCrumb}">
+                                    <TextBlock Text="{Binding Name}"
+                                               MaxWidth="140"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontSize="{StaticResource SecondaryFontSize}"
+                                               Foreground="{DynamicResource AccentBrush}" />
+                                </Button>
+                                <ic:FluentIcon Icon="ChevronRight"
+                                               IsVisible="{Binding IsLink}"
+                                               FontSize="10"
+                                               Opacity="0.5"
+                                               VerticalAlignment="Center"
+                                               AutomationProperties.AccessibilityView="Raw" />
+                                <TextBlock Text="{Binding Name}"
+                                           IsVisible="{Binding IsCurrent}"
+                                           AutomationProperties.AutomationId="Reference.Breadcrumb.Current"
+                                           MaxWidth="160"
+                                           TextTrimming="CharacterEllipsis"
+                                           FontSize="{StaticResource SecondaryFontSize}"
+                                           FontWeight="SemiBold"
+                                           Margin="3,1"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <Grid>
+            <!-- The empty state (legends D22): what will appear, and where to choose it. -->
+            <StackPanel IsVisible="{Binding IsEmpty}"
+                        AutomationProperties.AutomationId="Reference.Empty"
+                        Spacing="8"
+                        Margin="16,24"
+                        MaxWidth="280"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <ic:FluentIcon Icon="BookInformation"
+                               IconVariant="Regular"
+                               FontSize="28"
+                               Opacity="0.45"
+                               HorizontalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.Reference_EmptyTitle}"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Opacity="0.7"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{x:Static loc:Strings.Reference_EmptyDescription}"
+                           AutomationProperties.AutomationId="Reference.Empty.Description"
+                           FontSize="{StaticResource SecondaryFontSize}"
+                           Opacity="0.6"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+                <Button HorizontalAlignment="Center"
+                        Margin="0,4,0,0"
+                        IsVisible="{Binding CanShowChartReference}"
+                        Command="{Binding ShowChartReferenceCommand}"
+                        Content="{x:Static loc:Strings.Reference_OpenChartReference}"
+                        AutomationProperties.AutomationId="Reference.OpenChartReference"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferenceOpenChartReference}"
+                        AutomationProperties.AcceleratorKey="Ctrl+Shift+K"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceOpenChartReference}" />
+            </StackPanel>
+            <views:PlaceholderView IsVisible="{Binding IsLoading}"
+                                   Icon="BookInformation"
+                                   Header="{x:Static loc:Strings.ChartReference_LoadingTitle}" />
+            <views:PlaceholderView IsVisible="{Binding ShowNotFound}"
+                                   Icon="SearchInfo"
+                                   Header="{x:Static loc:Strings.Reference_NotFoundTitle}"
+                                   Description="{Binding NotFoundDescription}" />
+            <ScrollViewer x:Name="EntryScroller"
+                          IsVisible="{Binding HasEntry}"
+                          HorizontalScrollBarVisibility="Disabled">
+                <views:ReferenceEntryView DataContext="{Binding Entry}" />
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

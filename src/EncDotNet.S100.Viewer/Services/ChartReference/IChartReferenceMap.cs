@@ -27,6 +27,21 @@ internal interface IChartReferenceMap
     /// <summary>The pointer or focus left a row: its rings clear.</summary>
     /// <param name="target">The row, or null for whichever row is hovered.</param>
     void Leave(ChartReferenceTarget? target);
+
+    /// <summary>
+    /// How many features of <paramref name="target"/> are drawn in the map
+    /// view now: the Reference tab's In view count (R7, #1650).
+    /// </summary>
+    /// <param name="target">The entry.</param>
+    int CountInView(ChartReferenceTarget target);
+
+    /// <summary>
+    /// Rings <paramref name="target"/>'s features in view now, without the
+    /// hover delay: the Reference tab's Find (R7, #1650). They clear on
+    /// <see cref="Leave"/> or when the map moves.
+    /// </summary>
+    /// <param name="target">The entry.</param>
+    void Find(ChartReferenceTarget target);
 }
 
 /// <summary>
@@ -62,6 +77,12 @@ internal sealed class ChartReferenceMap : IChartReferenceMap, IDisposable
 
     /// <inheritdoc />
     public void Leave(ChartReferenceTarget? target) => _find?.LeaveReference(target);
+
+    /// <inheritdoc />
+    public int CountInView(ChartReferenceTarget target) => _legend.FindReferenceFeatures(target, maxRings: 0).MatchCount;
+
+    /// <inheritdoc />
+    public void Find(ChartReferenceTarget target) => _find?.FindReferenceNow(target);
 
     /// <inheritdoc />
     public void Dispose() => _legend.Changed -= OnLegendChanged;

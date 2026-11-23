@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Pipelines;
@@ -100,8 +99,8 @@ internal sealed class ChartReferenceArtwork
                         return Builder(colors).Fill(id, label);
                     }
 
-                case LeadGlyphKind.Stripes when glyph.Tokens is { Count: > 0 } tokens:
-                    return new SymbolLegendEntry(Stripes(tokens.Select(t => Resolve(colors, t)).ToList()), label);
+                case LeadGlyphKind.Area when glyph.AreaToken is { } token:
+                    return new SymbolLegendEntry(Patch(Resolve(colors, token), colors.TryResolve("CHGRD", out var edge) ? edge : "#808080"), label);
 
                 case LeadGlyphKind.Pen when glyph.Pen is { } pen:
                     return new LineLegendEntry(Sample(pen, Resolve(colors, pen.Token)), label);
@@ -117,26 +116,20 @@ internal sealed class ChartReferenceArtwork
     }
 
     /// <summary>
-    /// Square stripes, one per colour, left to right, as a symbol SVG so it
-    /// fills a fitted tile.
+    /// A small area patch, as the Legend shows an area: a rounded square
+    /// filled with <paramref name="fill"/> and edged with
+    /// <paramref name="edge"/>, as a symbol SVG so a tile keeps it inset (#1650).
     /// </summary>
-    /// <param name="colors">The colours as hex strings.</param>
+    /// <param name="fill">The fill colour as a hex string.</param>
+    /// <param name="edge">The edge colour as a hex string.</param>
     /// <returns>The SVG.</returns>
-    internal static string Stripes(IReadOnlyList<string> colors)
+    internal static string Patch(string fill, string edge)
     {
-        ArgumentNullException.ThrowIfNull(colors);
-        const double size = 12;
-        var svg = new StringBuilder();
-        svg.Append(CultureInfo.InvariantCulture, $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{size}mm\" height=\"{size}mm\" viewBox=\"0 0 {size} {size}\">");
-        double width = size / Math.Max(1, colors.Count);
-        for (int i = 0; i < colors.Count; i++)
-        {
-            svg.Append(CultureInfo.InvariantCulture,
-                $"<rect x=\"{i * width:0.###}\" y=\"0\" width=\"{width:0.###}\" height=\"{size}\" fill=\"{colors[i]}\" />");
-        }
-
-        svg.Append("</svg>");
-        return svg.ToString();
+        ArgumentNullException.ThrowIfNull(fill);
+        ArgumentNullException.ThrowIfNull(edge);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12mm\" height=\"12mm\" viewBox=\"0 0 12 12\"><rect x=\"0.3\" y=\"0.3\" width=\"11.4\" height=\"11.4\" rx=\"1.6\" fill=\"{fill}\" stroke=\"{edge}\" stroke-width=\"0.6\" /></svg>");
     }
 
     private static LegendLineSample Sample(PenUse pen, string color)
@@ -215,6 +208,88 @@ internal sealed class ChartReferenceArtwork
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// A colour token's hex colour in <paramref name="palette"/>, from the
+    /// catalogue's colour profile, such as <c>DEPDW</c> for the chart's deep
+    /// water; <see langword="null"/> when the profile doesn't define it.
+    /// </summary>
+    /// <param name="token">The colour token.</param>
+    /// <param name="palette">The palette.</param>
+    /// <param name="cancellationToken">Stops the read.</param>
+    public async Task<string?> ColorAsync(string token, PaletteType palette, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(token);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await PaletteAsync(palette, cancellationToken).ConfigureAwait(false) is { } colors && colors.TryResolve(token, out var hex)
+                ? hex
+                : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The size of symbol <paramref name="id"/> on the chart, in millimetres,
+    /// from its SVG's <c>width</c> and <c>height</c> (<c>"1.65mm"</c>), else
+    /// its <c>viewBox</c>, whose units are millimetres in S-100 symbols; for
+    /// the Reference tab's glyph at chart size (R7, #1650).
+    /// </summary>
+    /// <param name="id">The symbol id, e.g. <c>BCNLAT21</c>.</param>
+    /// <param name="cancellationToken">Stops the read.</param>
+    /// <returns>The width and height in millimetres, or <see langword="null"/> when the catalogue lacks the symbol or a size.</returns>
+    public async Task<(double Width, double Height)?> SymbolSizeAsync(string id, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await SymbolAsync(id, cancellationToken).ConfigureAwait(false) is { } svg ? SizeOf(svg) : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The millimetre size an S-100 symbol's SVG declares, or <see langword="null"/>.</summary>
+    /// <param name="svg">The SVG text.</param>
+    internal static (double Width, double Height)? SizeOf(string svg)
+    {
+        System.Xml.Linq.XElement root;
+        try
+        {
+            root = System.Xml.Linq.XDocument.Parse(svg).Root!;
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+
+        static double? Millimetres(string? value) =>
+            value is { } v && v.EndsWith("mm", StringComparison.OrdinalIgnoreCase)
+            && double.TryParse(v[..^2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var mm)
+            && mm > 0
+                ? mm
+                : null;
+
+        if (Millimetres((string?)root.Attribute("width")) is { } w && Millimetres((string?)root.Attribute("height")) is { } h)
+            return (w, h);
+        var box = ((string?)root.Attribute("viewBox"))?.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries);
+        if (box is { Length: 4 }
+            && double.TryParse(box[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var bw)
+            && double.TryParse(box[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var bh)
+            && bw > 0 && bh > 0)
+        {
+            return (bw, bh);
+        }
+
+        return null;
     }
 
     private async Task<string?> SymbolAsync(string id, CancellationToken cancellationToken)

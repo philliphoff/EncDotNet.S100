@@ -133,43 +133,34 @@ public sealed class ChartReferenceViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task Selecting_a_row_expands_it_and_Drawn_with_links_select_the_symbols_row()
+    public async Task Selecting_a_row_opens_its_entry_and_Open_only_selects()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         using var vm = await OpenAsync(f);
+        var opened = new List<ReferenceKey>();
+        vm.OpenEntry = opened.Add;
 
         // A header can't be selected.
         vm.SelectedItem = vm.Items[0];
         Assert.Null(vm.SelectedItem);
+        Assert.Empty(opened);
 
+        // Selecting a row in the list opens its entry in the Reference tab (R7).
         var beacon = Row(vm, "LateralBeacon");
         vm.SelectedItem = beacon;
-        Assert.True(beacon.IsExpanded);
-        var details = Assert.IsType<ChartReferenceRowDetails>(beacon.Details);
-        Assert.True(details.HasDefinition);
-        Assert.Equal(["Standard Display"], details.Categories);
-        Assert.StartsWith("P, Q, R, S – ", details.Section, StringComparison.Ordinal);
-        Assert.StartsWith("27020", details.ViewingGroup, StringComparison.Ordinal);
+        Assert.Equal([beacon.Key], opened);
 
-        var bcnlat21 = details.DrawnWith.Single(l => l.Code == "BCNLAT21");
-        Assert.Contains("Simplified symbols is on · Colour is red · Beacon shape is a stake, pole, perch or post", bcnlat21.Cases);
-        Assert.Equal(6, bcnlat21.Cases.Count);
-        Assert.Equal("and 2 more cases", details.DrawnWith.Single(l => l.Code == "BCNLAT15").Cases[^1]);
-        Assert.Equal("The catalogue's fallback symbol, drawn when nothing else fits", details.DrawnWith.Single(l => l.Code == "BCNDEF13").Note);
-
-        bcnlat21.OpenCommand.Execute(null);
-
+        // Open (the page's tiles) selects the row without opening it.
+        var symbol = new ReferenceKey(vm.Index!.Spec, ReferenceKind.Symbol, "BCNLAT21");
+        vm.Open(symbol);
         Assert.Equal(ChartReferenceMode.Symbols, vm.Mode);
-        Assert.False(beacon.IsExpanded);
-        var symbol = Assert.IsType<ChartReferenceRowViewModel>(vm.SelectedRow);
-        Assert.Equal(new ReferenceKey(vm.Index!.Spec, ReferenceKind.Symbol, "BCNLAT21"), symbol.Key);
-        Assert.True(symbol.IsExpanded);
+        Assert.Equal(symbol, vm.SelectedRow?.Key);
+        Assert.Equal([beacon.Key], opened);
 
-        // And back: every link is two-way.
-        var usedBy = Assert.IsType<ChartReferenceRowDetails>(symbol.Details).UsedBy.Single(l => l.Code == "LateralBeacon");
-        usedBy.OpenCommand.Execute(null);
-        Assert.Equal(ChartReferenceMode.Features, vm.Mode);
-        Assert.Equal("LateralBeacon", vm.SelectedRow?.Key.Code);
+        // A rebuild that keeps the selected row doesn't open it again.
+        vm.Query = "BCNLAT";
+        Assert.Equal(symbol, vm.SelectedRow?.Key);
+        Assert.Equal([beacon.Key], opened);
     }
 
     [Fact]
@@ -178,18 +169,24 @@ public sealed class ChartReferenceViewModelTests : IDisposable
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         using var vm = await OpenAsync(f);
         vm.Mode = ChartReferenceMode.Symbols;
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var opened = new List<ReferenceKey>();
+        var context = new ReferenceEntryContext { Index = vm.Index!, Glyphs = cache, Open = opened.Add };
 
+        // The symbol's entry, which the Reference tab and the page show (R7).
         var symbol = Row(vm, "AIRARE02P");
-        vm.SelectedItem = symbol;
-        var details = Assert.IsType<ChartReferenceRowDetails>(symbol.Details);
-
-        Assert.DoesNotContain("Not used by a rule", details.Notes);
-        Assert.True(details.HasUsedIn);
-        var fill = Assert.Single(details.UsedIn);
+        var entry = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(symbol.Entry, context));
+        Assert.False(entry.IsUnreached);
+        Assert.True(entry.HasUsedIn);
+        var fill = Assert.Single(entry.UsedIn);
         Assert.Equal(new ReferenceKey(vm.Index!.Spec, ReferenceKind.AreaFill, "AIRARE02"), fill.Key);
 
+        // And back: the fill's entry lists the symbol it places.
         fill.OpenCommand.Execute(null);
-        Assert.Equal(fill.Key, vm.SelectedRow?.Key);
+        Assert.Equal([fill.Key], opened);
+        Assert.True(vm.Index.TryGet(fill.Key, out var fillEntry));
+        var places = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(fillEntry, context)).Places;
+        Assert.Contains(places, l => l.Key == symbol.Key);
     }
 
     [Fact]
@@ -203,8 +200,6 @@ public sealed class ChartReferenceViewModelTests : IDisposable
 
         Assert.Equal(member.Code, vm.Query);
         Assert.Equal(member.Key, vm.SelectedRow?.Key);
-        var family = Assert.Single(Assert.IsType<ChartReferenceRowDetails>(vm.SelectedRow!.Details).Family);
-        Assert.Equal("SOUNDG", family.Code);
     }
 
     [Fact]
@@ -297,7 +292,7 @@ public sealed class ChartReferenceViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task The_view_shows_the_controls_a_virtualised_list_and_an_expanded_row()
+    public async Task The_view_shows_the_controls_a_virtualised_list_and_opens_a_selected_row()
     {
         using var f = new ChartReferenceServiceTests.Fixture("S-101");
         using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
@@ -324,13 +319,15 @@ public sealed class ChartReferenceViewModelTests : IDisposable
         var tiles = host.FindAll<Border>("ChartReference.Row.Tile");
         Assert.Contains(tiles, t => t.GetVisualDescendants().OfType<Image>().Any(i => i.IsVisible && i.Source is Bitmap));
 
-        // Selecting a row expands it in place.
-        vm.Query = string.Empty;
-        vm.Open(new ReferenceKey(vm.Index!.Spec, ReferenceKind.FeatureType, "LateralBeacon"));
+        // Selecting a row in the list opens its entry in the Reference tab; it doesn't expand.
+        var opened = new List<ReferenceKey>();
+        vm.OpenEntry = opened.Add;
+        var first = rows.First();
+        list.SelectedItem = first.DataContext;
         host.Settle();
         Assert.Same(vm.SelectedItem, list.SelectedItem);
-        Assert.True(host.IsShown("ChartReference.Row.Details"));
-        Assert.Contains(host.FindAll<Button>("ChartReference.Row.Link"), b => Avalonia.Automation.AutomationProperties.GetName(b)!.StartsWith("BCNLAT21", StringComparison.Ordinal));
+        Assert.Equal([((ChartReferenceRowViewModel)first.DataContext!).Key], opened);
+        Assert.Empty(host.FindAll<Control>("ChartReference.Row.Details"));
 
         // Switching mode through the segments.
         host.Find<TabControl>("ChartReference.Mode").SelectedIndex = 1;

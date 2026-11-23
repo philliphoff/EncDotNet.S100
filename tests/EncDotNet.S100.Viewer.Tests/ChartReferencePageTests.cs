@@ -69,7 +69,8 @@ public sealed class ChartReferencePageTests : IDisposable
         page.Show();
         Assert.Equal("S-101", page.Reference.SelectedProduct?.Spec.Name);
         Assert.Equal(beacon, page.SelectedTile?.Key);
-        Assert.True(page.SelectedTile!.IsExpanded);
+        Assert.True(page.SelectedTile!.IsSelected);
+        Assert.Equal(beacon, page.Entry?.Key);
         Assert.Equal(reference.Rows.Count(), page.Tiles.Count);
 
         // A tile chosen on the page is selected in the activity too.
@@ -77,8 +78,10 @@ public sealed class ChartReferencePageTests : IDisposable
         page.SelectCommand.Execute(depth);
         Assert.Same(depth, page.SelectedTile);
         Assert.Equal(depth.Key, reference.SelectedRow?.Key);
-        Assert.True(reference.SelectedRow!.IsExpanded);
-        Assert.False(page.Tiles.Single(t => t.Key == beacon).IsExpanded);
+        Assert.True(depth.IsSelected);
+        Assert.False(page.Tiles.Single(t => t.Key == beacon).IsSelected);
+        Assert.IsType<FeatureTypeEntryViewModel>(page.Entry);
+        Assert.Equal(depth.Key, page.Entry!.Key);
 
         // Closing returns to the activity, with that selection.
         layout.CloseDockCommand.Execute("Left");
@@ -197,11 +200,13 @@ public sealed class ChartReferencePageTests : IDisposable
         host.Click(tile);
         Assert.Equal(row.Key, reference.SelectedRow?.Key);
         Assert.Same(row, page.SelectedTile);
-        Assert.Equal(row.Name, host.Find<TextBlock>("ChartReferencePage.Entry.Name").Text);
-        Assert.True(host.IsShown("ChartReferencePage.Entry.Details"));
-        await page.GlyphsDrawn;
+        // The page hosts the Reference tab's entry view (R7, #1650).
+        var pane = host.Find<Control>("ChartReferencePage.Entry");
+        Assert.Equal(row.Name, host.Find<TextBlock>("Reference.Entry.Name", pane).Text);
+        Assert.True(host.IsShown("Reference.Entry"));
+        await page.Entry!.GlyphsDrawn;
         Dispatcher.UIThread.RunJobs();
-        Assert.IsAssignableFrom<Bitmap>(page.HeroGlyph);
+        Assert.IsAssignableFrom<Bitmap>(page.Entry.HeroGlyph);
 
         // The palette switch previews only.
         var palette = settings.SelectedPalette;

@@ -137,6 +137,25 @@ internal sealed class LegendFindService : IDisposable
         _delay.Change(HoverDelay, Timeout.InfiniteTimeSpan);
     }
 
+    /// <summary>
+    /// Finds and rings a Chart reference entry's features now, without the
+    /// hover delay: the Reference tab's Find (R7, #1650). The rings stay
+    /// until <see cref="LeaveReference"/>, another row or a map move.
+    /// </summary>
+    /// <param name="target">The entry.</param>
+    /// <returns>What was found; null once the service is disposed.</returns>
+    public LegendFeatureFind? FindReferenceNow(ChartReferenceTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (_disposed)
+            return null;
+        _delay.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _hovered = null;
+        _hoveredReference = target;
+        Find();
+        return Current;
+    }
+
     /// <summary>The pointer or focus left a Chart reference row: the rings clear at once.</summary>
     /// <param name="target">The row, or null for whichever Chart reference row is hovered.</param>
     public void LeaveReference(ChartReferenceTarget? target = null)
