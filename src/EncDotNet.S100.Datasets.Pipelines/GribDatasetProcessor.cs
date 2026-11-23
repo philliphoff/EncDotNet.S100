@@ -62,20 +62,11 @@ public sealed class GribDatasetProcessor : WeatherGridProcessorBase
     /// <remarks>A folder in a <see cref="FileSystemAssetSource"/> is read as one run (<see cref="GribRunFolder"/>, #1075).</remarks>
     public GribDatasetProcessor(IAssetSource source, string relativePath, ICrsTransformFactory crsTransformFactory)
         : this(
-            FolderIn(source, relativePath) is { } folder
+            AssetSourceHelpers.FolderIn(source, relativePath) is { } folder
                 ? OpenFolder(folder)
                 : Open(AssetSourceHelpers.OpenSeekable(source, relativePath), AssetSourceHelpers.GetFileName(relativePath)),
             crsTransformFactory)
     {
-    }
-
-    // The folder a file-system source's relative path names, if it is one.
-    private static string? FolderIn(IAssetSource source, string relativePath)
-    {
-        if (source is not FileSystemAssetSource files)
-            return null;
-        var full = Path.GetFullPath(Path.Combine(files.RootPath, relativePath));
-        return full.StartsWith(files.RootPath, StringComparison.Ordinal) && Directory.Exists(full) ? full : null;
     }
 
     private GribDatasetProcessor((GribWeatherDataset Dataset, string FileName, string Hash) opened, ICrsTransformFactory crsTransformFactory)

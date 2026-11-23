@@ -330,7 +330,10 @@ Or download an advisory's zips from NHC's
 [GIS page](https://www.nhc.noaa.gov/gis/) into one folder: the forecast track
 and cone (`al092022_5day_020.zip`), the wind radii (`al092022_fcst_020.zip`)
 and the past track (`al092022_best_track.zip`). Then open the forecast zip,
-or the folder, as you would a grid. SoundCharts draws the whole advisory in
+or the folder, as you would a grid. To list your downloaded advisories in the
+Library, add the folder that holds them as a Library folder: each storm's
+folder is one dataset, and a forecast zip in a folder of other data is one
+dataset. SoundCharts draws the whole advisory in
 one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
 
 - **Cone.** NHC's cone, tinted. The part beyond 72 hours (days 4 and 5) is

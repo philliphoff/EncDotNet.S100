@@ -58,6 +58,21 @@ public sealed class TropicalCycloneProcessorTests : IDisposable
     }
 
     [Fact]
+    public void A_storm_folder_opens_through_a_file_system_source()
+    {
+        // Issue #1688: the viewer opens a Library item located at a folder through a source rooted above it.
+        TropicalCycloneFixtures.CopyIan(Path.Combine(_dir, "ian"));
+        using var source = FileSystemAssetSource.Create(_dir);
+
+        var processor = new TropicalCycloneDatasetProcessor(source, "ian");
+
+        Assert.Equal("ian", processor.FileName);
+        Assert.Equal("20", processor.Advisory.Advisory);
+        Assert.NotEmpty(processor.Advisory.PastTrack);
+        Assert.NotEmpty(processor.Advisory.Forecast.SelectMany(p => p.Radii));
+    }
+
+    [Fact]
     public void A_storm_folder_is_detected_and_reads_its_latest_advisory()
     {
         var folder = Path.Combine(_dir, "ian");

@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tropical cyclone advisories in Library folders.** A Library folder or
+  exchange-set source now lists the NHC advisories it holds. A storm's folder
+  of zips is one `TC` dataset, and a forecast zip
+  (`al092022_5day_020.zip`) beside a GRIB2 run or other data is one dataset,
+  read with its wind radii and best track zips. Those two zips aren't listed
+  on their own, but replacing either refreshes the advisory. Zipped S-100 and
+  S-57 exchange sets are listed as before, and sources that hold no advisory
+  aren't re-indexed. Previously every `.zip` was read as an exchange set, so
+  an advisory listed nothing. This works in SoundCharts and in `s100 mcp
+  serve`'s Library tools.
+
 - **`tiles serve` draws each dataset at a time as the viewer does.** A
   time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension no longer
   snaps to the nearest listed step. Each time-varying dataset picks what it

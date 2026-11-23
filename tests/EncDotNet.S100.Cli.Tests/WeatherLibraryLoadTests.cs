@@ -245,6 +245,43 @@ public sealed class WeatherLibraryLoadTests : IDisposable
         Assert.Equal("GRIB2", dataset.Spec.Name);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_local_advisory_indexes_loads_and_draws(bool besideARun)
+    {
+        // Issue #1688: an NHC advisory folder is one TC item; beside a GRIB2 run it's its forecast zip.
+        var folder = Path.Combine(_root, "storms", "ian");
+        TropicalCycloneFixtures.CopyIan(folder);
+        if (besideARun)
+        {
+            File.Copy(TestData("GRIB2", "gfswave-useast.grib2"), Path.Combine(folder, "gfswave-useast.grib2"));
+            File.Copy(TestData("GRIB2", "gfswave-useast-filter.grib2"), Path.Combine(folder, "gfswave-useast-filter.grib2"));
+        }
+
+        var (library, operations, _) = Library(new HttpClient(Server()), new FakeTimeProvider(Run));
+        var source = new LocalFolderSource(Guid.NewGuid(), null, Path.Combine(_root, "storms"));
+        library.AddCollection("Storms", [source]);
+        await library.WhenIdle().WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        var index = library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == source.Id).Index!;
+        Assert.Equal(besideARun ? ["GRIB2", "TC"] : ["TC"], index.Items.Select(i => i.ProductSpec).Order(StringComparer.Ordinal));
+        var item = index.Items.Single(i => i.ProductSpec == "TC");
+        Assert.Equal(besideARun ? "ian/al092022_5day_020.zip" : "ian/", item.Key);
+        Assert.NotNull(item.Bounds);
+
+        var result = await operations.LoadAsync([item], cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Opened == 1, string.Join("; ", result.Problems ?? []));
+        var dataset = Assert.Single(_catalog.Datasets);
+        Assert.Equal("TC", dataset.Spec.Name);
+        using var session = new HeadlessS100Session(_catalog);
+        var png = await ((EncDotNet.S100.Maps.IImageRenderer)session).RenderToPngAsync(256, 256, pixelDensity: 1.0, TestContext.Current.CancellationToken);
+        Assert.NotNull(png);
+        using var bitmap = SkiaSharp.SKBitmap.Decode(png);
+        var first = bitmap.GetPixel(0, 0);
+        Assert.Contains(bitmap.Pixels, p => p != first);
+    }
+
     [Fact]
     public async Task Load_latest_run_closes_the_open_run_before_replacing_its_folder_then_opens_the_new_run()
     {

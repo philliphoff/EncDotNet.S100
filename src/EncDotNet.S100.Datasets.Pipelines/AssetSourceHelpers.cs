@@ -21,6 +21,22 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 internal static class AssetSourceHelpers
 {
     /// <summary>
+    /// The folder <paramref name="relativePath"/> names in a file-system
+    /// source, for a product read from a folder (a GRIB2 run, #1075, or an NHC
+    /// advisory, #1688); <see langword="null"/> when the source isn't the file
+    /// system, or the path is a file or lies outside the source's root.
+    /// </summary>
+    /// <param name="source">The source.</param>
+    /// <param name="relativePath">The dataset's path within it.</param>
+    public static string? FolderIn(IAssetSource source, string relativePath)
+    {
+        if (source is not FileSystemAssetSource files)
+            return null;
+        var full = Path.GetFullPath(Path.Combine(files.RootPath, relativePath));
+        return full.StartsWith(files.RootPath, StringComparison.Ordinal) && Directory.Exists(full) ? full : null;
+    }
+
+    /// <summary>
     /// Opens <paramref name="relativePath"/> from <paramref name="source"/>
     /// synchronously and returns a seekable stream positioned at the start.
     /// Prefer <see cref="OpenSeekableAsync"/> on new code paths.

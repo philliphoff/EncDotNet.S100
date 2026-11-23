@@ -74,8 +74,9 @@ Other properties, such as `$schema` for an editor's schema, are ignored.
 - `/` and `\` both work as separators.
 - A path can be anything a Library folder source accepts: a folder, which is
   scanned for S-100 `CATALOG.XML` and S-57 `CATALOG.031` exchange sets, zipped
-  exchange sets and loose datasets; a single exchange-set folder or catalogue;
-  a ZIP; or a loose dataset file.
+  exchange sets, loose datasets, GRIB2 model runs and NHC tropical cyclone
+  advisories; a single exchange-set folder or catalogue; a ZIP, such as an
+  exchange set or an advisory's forecast zip; or a loose dataset file.
 - The same folder can appear in more than one group. Its datasets are then
   listed once in each group.
 - A path that doesn't exist isn't an error. You can still pick the group. It

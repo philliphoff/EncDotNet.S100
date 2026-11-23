@@ -30,6 +30,10 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <see langword="null"/> and is not cached (there is no negative caching), so
 /// a transient error simply retries next time and never blocks loading.
 /// </para>
+/// <para>
+/// An NHC tropical cyclone advisory is read but not cached: its metadata
+/// depends on the zips beside its forecast zip as well (#1688).
+/// </para>
 /// </remarks>
 internal sealed class CachingDatasetMetadataReader : IDatasetMetadataReader
 {
@@ -65,7 +69,14 @@ internal sealed class CachingDatasetMetadataReader : IDatasetMetadataReader
 
         try
         {
-            return _cache.GetOrRead(path, producer);
+            // An NHC advisory's metadata also comes from the wind radii and best
+            // track zips beside its forecast zip, which the cache's identity (the
+            // one file's time and length) doesn't cover, so it's read fresh: a
+            // changed sibling then refreshes the Library item (#1688). It's a few
+            // small shapefiles.
+            return spec == TropicalCycloneDatasetProcessor.SpecName
+                ? producer(path)
+                : _cache.GetOrRead(path, producer);
         }
         catch
         {
