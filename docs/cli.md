@@ -777,24 +777,31 @@ The server has these routes:
 - When rendering datasets, `settings/{hash}` registers a set of mariner
   settings, served as the style `{palette}-{hash}`, for example
   `day-a1b2/{z}/{x}/{y}.png`. See [Mariner settings](#mariner-settings).
-- When rendering time-varying datasets (S-104, S-111), a `t` query parameter
-  on either route picks the time step, for example
+- When rendering time-varying datasets (S-104, S-111, weather, tropical
+  cyclones), a `t` query parameter on either route picks the time, for example
   `{z}/{x}/{y}.png?t=2026-03-21T07:00Z`. The time is ISO 8601, UTC unless it
-  says otherwise, and snaps to the nearest step; each dataset then uses its own
-  step nearest to it. The TileJSON lists every step in `s100.times`, and with
-  `t` it names the chosen step in `s100.time` and carries it in its tile URL.
-  Without `t`, `--time-step` applies. A `t` that isn't a time answers
-  `400 Bad Request`; datasets that don't vary with time ignore it.
-- With `--strict-time`, a `t` (or WMS/WMTS `TIME`) more than half a step
-  before a time-varying dataset's first step, after its last or inside a gap
-  in its steps draws nothing for that dataset, instead of its nearest step. A
-  step is the median interval between the dataset's steps (an hour for a single
-  step). A tile on which nothing draws answers `204 No Content`. The TileJSON
-  then sets `s100.strictTime` and, with `t`, lists each time-varying dataset in
-  `s100.datasets` with its file `name`, `spec` and the step it draws in `time`,
-  `null` when it has no data at that time. When the datasets draw other than at
-  their steps nearest the nearest listed step, `s100.time` and the tile URL keep
-  the `t` asked for.
+  says otherwise. Each dataset picks what it draws by its own time selection,
+  as the viewer's map does (see [Time selection](#time-selection)): a tropical
+  cyclone draws the storm at the time itself, an S-104 or ice chart its step at
+  or before it, and an S-111 its nearest step. The TileJSON lists every step in
+  `s100.times`, and with `t` it names the time drawn in `s100.time` and carries
+  it in its tile URL. Without `t`, `--time-step` applies. A `t` that isn't a
+  time answers `400 Bad Request`; datasets that don't vary with time ignore it.
+- The TileJSON lists each time-varying dataset in `s100.datasets` with its
+  file `name`, `spec` and `timeSelection` (`nearest`, `atOrBefore` or
+  `continuous`), and, with `t`, the step it draws in `time`, `null` when it has
+  no data at that time.
+- With `--strict-time`, a `t` (or WMS/WMTS `TIME`) outside a time-varying
+  dataset's validity draws nothing for that dataset, instead of holding its
+  step however far away: more than the validity from its nearest step
+  (`nearest`), more than the validity after its last step at or before the time
+  (`atOrBefore`), or inside a gap in its steps. A tropical cyclone still draws
+  its cone and track at any time. The validity is the dataset's own, or else
+  the median interval between its steps (an hour for a single step), as in
+  the viewer. A tile on which nothing draws answers `204 No Content`. The
+  TileJSON then sets `s100.strictTime`. When the datasets draw other than at
+  their steps nearest `s100.time`, `s100.time` and the tile URL keep the `t`
+  asked for.
 - When rendering S-124 navigational warnings, a `t` (or WMS `TIME`, or the
   WMTS `Time` dimension) draws only the warnings in force at that instant, as
   the viewer's map does at its view time: a warning that has ended, been
@@ -854,7 +861,7 @@ area, the tile format and display settings apply too; the output options
 | `--ready-json` | off | When the server is listening, also prints one line of JSON with the bound port and URLs. See [Run under a supervising process](#run-under-a-supervising-process). |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 | `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
-| `--strict-time` | off | When rendering datasets, a time more than half a step outside a time-varying dataset's steps draws nothing for it, instead of snapping to its nearest step. |
+| `--strict-time` | off | When rendering datasets, a time outside a time-varying dataset's validity (its own, or else the median interval between its steps) draws nothing for it, instead of holding its step however far away. See [Time selection](#time-selection). |
 | `--manage-datasets` | off | When rendering datasets, accepts requests to add and remove datasets while serving. See [Add and remove datasets](#add-and-remove-datasets). |
 | `--overview` | off | When rendering datasets, draws each dataset's coverage outline and name below their minimum zoom instead of nothing, and advertises WMS and WMTS down to zoom 0. See [Overview below the minimum zoom](#overview-below-the-minimum-zoom). |
 | `--layers-by <grouping>` | `none` | When rendering datasets, also serves them as a WMTS layer per group, each with its own time steps and extent: `product`, or `none`. See [WMTS layers](#wmts-layers). |
@@ -1046,9 +1053,30 @@ a reload; a built tile set has none, and `datasets` answers
 | `coverageSource` | `dataCoverage` or `bounds`, for where `coverage` came from. |
 | `times` | The dataset's time steps in UTC, ascending; empty when it doesn't vary with time. |
 | `issueTime` | When a time-varying dataset was issued (a forecast's run), or `null`. |
+| `timeSelection` | How a time-varying dataset picks what it draws at a time: `nearest`, `atOrBefore` or `continuous`. See [Time selection](#time-selection). Present only for a time-varying dataset. |
+| `timeRange` | `[start, end]` in UTC: the span in which a time-varying dataset draws data tied to a time with `--strict-time`, as the viewer's timeline shows it. For a tropical cyclone, from the first best-track point to the last forecast point. Present only for a time-varying dataset. |
 | `dataDynamicity` | How S-104 water levels and S-111 currents were produced: the S-104 `dataDynamicity` code, its name (`observation`, `astronomicalPrediction`, `analysisOrHybrid`, `hydrodynamicHindcast` or `hydrodynamicForecast`) and the viewer's label (`Observed`, `Predicted`, `Analysis`, `Hindcast` or `Forecast`). `null` when the dataset doesn't say. |
 | `layer` | The [WMTS layer](#wmts-layers) the dataset is in besides `s100`, or `null` for none. Present only when the server has such layers. |
 | `notForNavigation` | Always `true`: nothing `tiles serve` serves is for navigation. |
+
+### Time selection
+
+A time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension draws each
+time-varying dataset as the viewer's map does at the same time. Each dataset
+says how it picks what it draws (its `timeSelection` in `/datasets` and
+`s100.datasets`):
+
+| Selection | Datasets | Draws |
+|---|---|---|
+| `continuous` | Tropical cyclone advisories | The time itself, to the minute: the storm at its best-track position before the advisory, estimated between forecast points after it. Before the first best-track point or after the last forecast point, the cone and track without the storm. |
+| `atOrBefore` | S-104, S-411, S-412, CAP, coded surface analyses | Its latest step at or before the time, never a later one. Before its first step, nothing. |
+| `nearest` | S-111, GRIB2 and NetCDF weather, and others | Its nearest step, before or after. |
+
+Without `--strict-time`, a step is held however far from the time. With it, a
+step draws only within the dataset's validity, and the dataset draws nothing
+outside it. Times that draw the same steps share their tiles; a `continuous`
+dataset's time is rounded down to the minute, so times in the same minute
+share theirs.
 
 ### Overview below the minimum zoom
 
@@ -1217,7 +1245,11 @@ see the chart; with `--overview` they show the datasets' coverage and names
 [mariner settings](#mariner-settings) adds a style per palette; a built tile
 set has one style, `default`.
 For time-varying datasets (S-104, S-111), a `Time` dimension lists the time
-steps and defaults to `--time-step`.
+steps as `Value`s and defaults to `--time-step`. A client may also ask for a
+time between them: each dataset then draws by its
+[time selection](#time-selection), so a tropical cyclone moves smoothly
+between forecast points. `/datasets` gives each dataset's `timeSelection`
+and `timeRange`.
 
 Tiles are served in both WMTS encodings:
 
@@ -1258,8 +1290,8 @@ matrix set as `s100`, and its styles link the same [legends](#legends),
 of every dataset. In the capabilities it has its own extent, the union of
 its datasets' bounds, and its own `Time` dimension, listing only its
 datasets' time steps, or none when they don't vary with time. Its tiles are
-at `wmts/1.0.0/{layer}/…` and `LAYER={layer}` like `s100`'s. A time snaps to
-the nearest of the layer's own steps. For XYZ clients, `tiles.json` lists the
+at `wmts/1.0.0/{layer}/…` and `LAYER={layer}` like `s100`'s. A time draws
+each of the layer's datasets by its [time selection](#time-selection). For XYZ clients, `tiles.json` lists the
 layers in `s100.layers`, each with the URL of its own TileJSON,
 `layers/{layer}/tiles.json` (or `layers/{layer}/{palette}/tiles.json`), whose
 tiles are `layers/{layer}/{z}/{x}/{y}.png`; it names the layer in `s100.layer`.

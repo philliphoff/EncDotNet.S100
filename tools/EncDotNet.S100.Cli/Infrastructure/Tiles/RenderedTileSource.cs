@@ -25,9 +25,9 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// With <c>--cache-dir</c>, tiles are also kept on disk across runs
 /// (<see cref="DiskTileCache"/>) and read from there before rendering.
 /// At most <c>--parallel</c> blocks render at once. Each palette, and each
-/// time step asked for with a <c>t</c> query parameter (snapped to the nearest
-/// of <see cref="Times"/>; with <c>--strict-time</c>, each dataset to its own
-/// step within half a step, or left out), is portrayed the first time it is asked for
+/// time asked for with a <c>t</c> query parameter (each dataset picking its
+/// own step by its time semantics, <see cref="TileRenderSession.SelectStep"/>;
+/// with <c>--strict-time</c>, only within its validity, or left out), is portrayed the first time it is asked for
 /// (<see cref="SceneCache"/>). Tiles outside the tiled area or its zoom
 /// range, and tiles on which nothing was drawn, read as <see langword="null"/>.
 /// </para>
@@ -83,9 +83,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <param name="featureQuery">Finds the features at a point in the same datasets, for WMS GetFeatureInfo; <see langword="null"/> for none. The source disposes it.</param>
     /// <param name="marinerStyles">The mariner settings sets clients register; <see langword="null"/> for a new, empty one.</param>
     /// <param name="strictTime">
-    /// Whether a time-varying dataset draws nothing at a time more than half a
-    /// step from its own steps (<c>--strict-time</c>), instead of its step
-    /// nearest the nearest of <see cref="Times"/>.
+    /// Whether a time-varying dataset draws nothing at a time outside its
+    /// validity (<c>--strict-time</c>), instead of holding its step however
+    /// far away (<see cref="TileRenderSession.SelectStep"/>).
     /// </param>
     /// <param name="memoryCache">
     /// The memory cache, shared with the sources the datasets are reopened as;
@@ -270,7 +270,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// </summary>
     public string Revision { get; }
 
-    /// <summary>Whether times outside a dataset's steps draw nothing for it (<c>--strict-time</c>).</summary>
+    /// <summary>Whether times outside a dataset's validity draw nothing for it (<c>--strict-time</c>).</summary>
     public bool StrictTime { get; }
 
     /// <summary>The area and zoom range served.</summary>
@@ -343,8 +343,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
-        time = time is { } requested ? _session.SnapTime(requested) : null;
-        if (!AllPalettes.Contains(palette) || zoom < _layout.MinZoom || zoom > _layout.MaxZoom)
+        var choice = time is { } requested ? _session.ChooseTime(requested, StrictTime) : new TimeChoice(null);
+        if (choice.Empty || !AllPalettes.Contains(palette) || zoom < _layout.MinZoom || zoom > _layout.MaxZoom)
             return null;
 
         await _renderSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -352,7 +352,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         {
             // As for a block: the scene and the zoom level's renderer are
             // prepared off the request thread, outside a job.
-            var renderer = await Task.Run(() => _scenes.Get(palette, time).RendererFor(zoom, _layout), cancellationToken).ConfigureAwait(false);
+            var renderer = await Task.Run(() => _scenes.Get(palette, palette, null, choice).RendererFor(zoom, _layout), cancellationToken).ConfigureAwait(false);
             return await WorkScheduler.Shared.RunAsync(
                 WorkStage.Raster,
                 _ => ClipToTiles(renderer.RenderView(zoom, minX, minY, maxX, maxY, width, height), zoom, minX, maxY, (maxX - minX) / width, (maxY - minY) / height),
@@ -435,19 +435,24 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         if (times.Count > 0)
             json["s100"]!["times"] = new JsonArray(times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
         if (StrictTime && times.Count > 0)
-        {
-            // Each time-varying dataset and the step it draws, null when it
-            // has no data at the time asked for.
             json["s100"]!["strictTime"] = true;
-            if (choice.Time is not null)
+        if (times.Count > 0)
+        {
+            // Each time-varying dataset, how it picks its step (issue #1676)
+            // and, at a time asked for, the step it draws: null when it has
+            // no data then.
+            json["s100"]!["datasets"] = new JsonArray([.. _session.DescribeTime(choice, layer?.Members).Select(d =>
             {
-                json["s100"]!["datasets"] = new JsonArray([.. _session.DescribeTime(choice, layer?.Members).Select(d => (JsonNode?)new JsonObject
+                var entry = new JsonObject
                 {
                     ["name"] = d.Name,
                     ["spec"] = d.Spec,
-                    ["time"] = d.Step is { } step ? TileRenderSession.FormatTime(step) : null,
-                })]);
-            }
+                    ["timeSelection"] = TileRenderSession.SelectionName(d.Selection),
+                };
+                if (choice.Time is not null)
+                    entry["time"] = d.Step is { } step ? TileRenderSession.FormatTime(step) : null;
+                return (JsonNode?)entry;
+            })]);
         }
 
         return json;
