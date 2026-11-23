@@ -174,6 +174,15 @@ public partial class App : Application
         var legend = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>();
         _services.GetRequiredService<DatasetsViewModel>().AttachLegend(legend);
         _services.GetRequiredService<PickReportViewModel>().AttachLegend(legend);
+        // Links to the Catalogues activity (catalogue-panels D10, CR3): the
+        // Datasets version warning, the inspector's Drawn with line and the
+        // missing-catalogue toast. The activity is resolved when first used.
+        var services = _services;
+        _services.GetRequiredService<DatasetsViewModel>().AttachCatalogues(
+            _services.GetRequiredService<CatalogueRegistry>(),
+            spec => services.GetRequiredService<CataloguesViewModel>().ShowProduct(spec));
+        _services.GetRequiredService<DatasetLoaderService>().ChooseCatalogue =
+            (spec, kind) => services.GetRequiredService<CataloguesViewModel>().ChooseCatalogue(spec, kind);
         _services.GetRequiredService<ViewerPresentationCoordinator>();
         _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();
@@ -1344,7 +1353,15 @@ public partial class App : Application
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetService<ILogger<EncDotNet.S100.Viewer.Services.Updates.UpdateService>>()));
         services.AddSingleton<IUpdateNotificationCoordinator, UpdateNotificationCoordinator>();
-        services.AddTransient<AboutDialogViewModel>();
+        // Help › About lists every product's catalogues (catalogue-panels §6.5, CR3).
+        services.AddTransient(sp => new AboutDialogViewModel(
+            sp.GetRequiredService<ShadUI.DialogManager>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IUpdateService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(),
+            sp.GetRequiredService<IUrlOpener>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<CatalogueRegistry>(),
+            spec => sp.GetRequiredService<CataloguesViewModel>().ShowProduct(spec)));
         services.AddSingleton<Func<AboutDialogViewModel>>(sp =>
             sp.GetRequiredService<AboutDialogViewModel>);
 

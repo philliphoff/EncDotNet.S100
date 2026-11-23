@@ -568,6 +568,13 @@
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).ShowLegendCommand}"
                                               CommandParameter="{Binding}"
                                               IsVisible="{Binding $self.IsEffectivelyEnabled}" />
+                                    <!-- catalogue-panels D10 (CR3): Catalogues at the dataset's product. -->
+                                    <MenuItem Header="{x:Static loc:Strings.Catalogues_Link}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.Catalogues"
+                                              ToolTip.Tip="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).ShowCataloguesCommand}"
+                                              CommandParameter="{Binding}"
+                                              IsVisible="{Binding $self.IsEffectivelyEnabled}" />
                                 </ContextMenu>
                             </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
@@ -617,6 +624,32 @@
                                                    ToolTip.Tip="{Binding SubtitleTooltip}"
                                                    AutomationProperties.AutomationId="Datasets.Row.Subtitle"
                                                    AutomationProperties.Name="{Binding Subtitle}" />
+                                    </StackPanel>
+                                    <!-- Spec-version warning (catalogue-panels D10, §6.4): what's wrong and
+                                         Catalogues… at the product, where a newer catalogue can be added. -->
+                                    <StackPanel IsVisible="{Binding HasVersionWarning}"
+                                                Margin="0,2,0,0"
+                                                Spacing="0">
+                                        <TextBlock Text="{Binding VersionWarningTooltip}"
+                                                   FontSize="11"
+                                                   Opacity="0.7"
+                                                   TextWrapping="Wrap"
+                                                   MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding VersionWarningTooltip}"
+                                                   AutomationProperties.AutomationId="Datasets.Row.VersionWarning"
+                                                   AutomationProperties.Name="{Binding VersionWarningTooltip}" />
+                                        <Button Classes="Ghost"
+                                                Padding="0"
+                                                FontSize="11"
+                                                HorizontalAlignment="Left"
+                                                Content="{x:Static loc:Strings.Catalogues_Link}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                                AutomationProperties.AutomationId="Datasets.Row.VersionWarning.Catalogues"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Catalogues_Link}"
+                                                AutomationProperties.HelpText="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                                Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).ShowCataloguesCommand}"
+                                                CommandParameter="{Binding}" />
                                     </StackPanel>
                                     <!-- Made inactive by the active display combination (#1192):
                                          "Not in Pilotage". The layer stack's Active toggle turns it back on. -->
@@ -670,6 +703,7 @@
                                                VerticalAlignment="Center"
                                                Margin="6,0,0,0"
                                                IsVisible="{Binding HasDatasetWarning}"
+                                               AutomationProperties.AutomationId="Datasets.Row.Warning"
                                                ToolTip.Tip="{Binding DatasetWarningTooltip}" />
                                 <Button Grid.Column="3"
                                         AutomationProperties.Name="{x:Static loc:Strings.Label_MoveUp}"
@@ -844,6 +878,31 @@
                                         <TextBlock Grid.Row="1" Grid.Column="1"
                                                    Text="{Binding SelectedEntry.CurrentTimeLabel}"
                                                    IsVisible="{Binding SelectedEntry.HasTimeSteps, FallbackValue=False}" />
+                                    </Grid>
+
+                                    <!-- The catalogues it's drawn with (catalogue-panels D10, §6.4, CR3). -->
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12"
+                                          IsVisible="{Binding HasSelectedDrawnWith}">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{x:Static loc:Strings.Catalogues_DrawnWith_Label}"
+                                                   Opacity="0.6" />
+                                        <StackPanel Grid.Column="1" Spacing="0">
+                                            <TextBlock Text="{Binding SelectedDrawnWith}"
+                                                       TextWrapping="Wrap"
+                                                       AutomationProperties.AutomationId="Datasets.Inspector.DrawnWith"
+                                                       AutomationProperties.Name="{Binding SelectedDrawnWith}" />
+                                            <Button Classes="Ghost"
+                                                    Padding="0"
+                                                    FontSize="12"
+                                                    HorizontalAlignment="Left"
+                                                    Content="{x:Static loc:Strings.Catalogues_Link}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                                    AutomationProperties.AutomationId="Datasets.Inspector.DrawnWith.Catalogues"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Catalogues_Link}"
+                                                    AutomationProperties.HelpText="{x:Static loc:Strings.Catalogues_LinkTooltip}"
+                                                    Command="{Binding ShowCataloguesCommand}"
+                                                    CommandParameter="{Binding SelectedEntry}" />
+                                        </StackPanel>
                                     </Grid>
 
                                     <!-- The product defines no portrayal, so its symbols are ours (issue #937). -->
