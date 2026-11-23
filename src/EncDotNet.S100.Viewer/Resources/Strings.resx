@@ -341,6 +341,12 @@
   <data name="Tooltip_SignatureUntrusted" xml:space="preserve">
     <value>The signing certificate is not trusted</value>
   </data>
+  <data name="Tooltip_SignatureNotChecked" xml:space="preserve">
+    <value>Signatures weren't checked: S-63 signature checking isn't supported yet</value>
+  </data>
+  <data name="Tooltip_SignatureUnverified" xml:space="preserve">
+    <value>Signatures match the data, but the signer isn't from a trusted Scheme Administrator</value>
+  </data>
   <data name="Tooltip_SignatureMixed" xml:space="preserve">
     <value>Mixed signature verification results</value>
   </data>

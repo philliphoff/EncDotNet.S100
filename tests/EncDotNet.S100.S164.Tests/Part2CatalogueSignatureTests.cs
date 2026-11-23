@@ -26,7 +26,8 @@ public sealed class Part2CatalogueSignatureTests
 
         var result = await CatalogueSignatureVerifier.VerifyAsync(source, Untrusted, ct);
 
-        Assert.True(result.IsValid, $"{result.Outcome}: {result.Detail}");
+        // With no anchor, a correct signature is never Ok.
+        Assert.True(result.Outcome == VerificationOutcome.SignatureValidUntrusted, $"{result.Outcome}: {result.Detail}");
     }
 
     [Fact]

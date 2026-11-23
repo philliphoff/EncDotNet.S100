@@ -41,18 +41,17 @@ public static class S57ExchangeSetVerification
     /// The exchange-set root directory (the folder that contains
     /// <c>CATALOG.031</c>).
     /// </param>
-    /// <param name="allowUntrustedCertificates">
-    /// When <see langword="true"/> (the default), signature checks do not fail
-    /// solely because the signing certificate chains to an untrusted root —
-    /// mirrors the S-100 verifier's
-    /// <see cref="TrustAnchorOptions.AllowUntrustedCertificates"/>.
-    /// </param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The verification result in the S-100 result model.</returns>
+    /// <returns>
+    /// The verification result in the S-100 result model. S-63 signatures
+    /// aren't checked yet, so every file's signature outcome is
+    /// <see cref="VerificationOutcome.SignatureNotChecked"/> (unless the file is
+    /// missing or unreadable), never <see cref="VerificationOutcome.NotSigned"/>:
+    /// the set may well be signed.
+    /// </returns>
     /// <exception cref="ArgumentException"><paramref name="rootPath"/> is null or empty.</exception>
     public static async Task<ExchangeSetVerificationResult> VerifyAsync(
         string rootPath,
-        bool allowUntrustedCertificates = true,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(rootPath);
@@ -65,17 +64,37 @@ public static class S57ExchangeSetVerification
         var catalogue = await S57CatalogReader.ReadFromFileAsync(cataloguePath, logger: null, cancellationToken)
             .ConfigureAwait(false);
 
+        // No S-63 signature verifier exists upstream yet (IS63SignatureVerifier
+        // is a seam), so the trust options are unused and every file comes
+        // back NotSigned, which only means "not checked".
         var s57Result = await new S57ExchangeSetVerifier(signatureVerifier: null)
             .VerifyAsync(
                 rootPath,
                 catalogue,
-                new S63TrustAnchorOptions { AllowUntrustedCertificates = allowUntrustedCertificates },
+                new S63TrustAnchorOptions(),
                 logger: null,
                 cancellationToken)
             .ConfigureAwait(false);
 
-        return Map(s57Result);
+        var mapped = Map(s57Result);
+        return new ExchangeSetVerificationResult
+        {
+            FileResults = [.. mapped.FileResults.Select(MarkSignatureNotChecked)],
+        };
     }
+
+    private static FileVerificationResult MarkSignatureNotChecked(FileVerificationResult file) =>
+        file.Outcome != VerificationOutcome.NotSigned
+            ? file
+            : new FileVerificationResult
+            {
+                FileName = file.FileName,
+                Outcome = VerificationOutcome.SignatureNotChecked,
+                SignatureResults = file.SignatureResults,
+                ChecksumOutcome = file.ChecksumOutcome,
+                ComputedSha256 = file.ComputedSha256,
+                Detail = file.Detail,
+            };
 
     private const string CatalogueFileName = "CATALOG.031";
 
