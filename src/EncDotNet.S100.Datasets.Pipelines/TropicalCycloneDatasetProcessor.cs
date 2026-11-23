@@ -562,6 +562,10 @@ public sealed class TropicalCycloneDatasetProcessor :
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
+        // An advisory folder in a file-system source, as a Library item locates one (#1688), is read from disk.
+        if (AssetSourceHelpers.FolderIn(source, relativePath) is { } folder)
+            return ReadNamed(folder);
+
         var fileName = AssetSourceHelpers.GetFileName(relativePath);
         using var forecast = AssetSourceHelpers.OpenSeekable(source, relativePath);
         Stream? radii = null;
@@ -570,10 +574,10 @@ public sealed class TropicalCycloneDatasetProcessor :
         {
             if (NhcAdvisoryFiles.TryParseFileName(fileName, out var kind, out var atcfId, out var advisory) && kind == NhcFileKind.Forecast)
             {
-                var folder = relativePath[..^fileName.Length];
-                radii = TryOpen(source, folder + NhcAdvisoryFiles.WindRadiiZipName(atcfId, advisory));
-                bestTrack = TryOpen(source, folder + NhcAdvisoryFiles.BestTrackZipName(atcfId));
-                using var final = TryOpen(source, folder + NhcAdvisoryFiles.FinalMarkerName(atcfId));
+                var prefix = relativePath[..^fileName.Length];
+                radii = TryOpen(source, prefix + NhcAdvisoryFiles.WindRadiiZipName(atcfId, advisory));
+                bestTrack = TryOpen(source, prefix + NhcAdvisoryFiles.BestTrackZipName(atcfId));
+                using var final = TryOpen(source, prefix + NhcAdvisoryFiles.FinalMarkerName(atcfId));
                 if (final is not null)
                     return NhcAdvisoryReader.Read(forecast, radii, bestTrack) with { IsFinal = true };
             }
