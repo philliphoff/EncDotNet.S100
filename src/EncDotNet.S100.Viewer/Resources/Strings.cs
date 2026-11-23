@@ -143,7 +143,6 @@ internal static partial class Strings
     public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
     public static string Tooltip_OpenFeatureInExaminer => Get(nameof(Tooltip_OpenFeatureInExaminer));
-    public static string Tooltip_OpenAttributeInExaminer => Get(nameof(Tooltip_OpenAttributeInExaminer));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_ToggleDatasetVisibility => Get(nameof(Tooltip_ToggleDatasetVisibility));
     public static string Tooltip_DatasetOpacity => Get(nameof(Tooltip_DatasetOpacity));

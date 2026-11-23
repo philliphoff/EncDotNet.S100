@@ -160,7 +160,7 @@ internal static class AisStreamIoJson
     /// <summary>
     /// aisstream.io emits timestamps in Go's <c>"2006-01-02 15:04:05.000000000 -0700 MST"</c> form
     /// (e.g. <c>"2026-05-29 14:23:01.234567 +0000 UTC"</c>). Strip the trailing zone-name token
-    /// before handing to <see cref="DateTimeOffset.TryParseExact"/>.
+    /// before handing to <c>DateTimeOffset.TryParseExact</c>.
     /// </summary>
     internal static bool TryParseAisStreamTimestamp(string text, out DateTimeOffset value)
     {

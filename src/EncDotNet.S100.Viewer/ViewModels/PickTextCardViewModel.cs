@@ -38,11 +38,9 @@ internal sealed class PickTextCardViewModel : LongTextCardViewModel
 
     private readonly string _body;
     private readonly string _copyText;
-    private readonly PickAttribute _attribute;
 
-    private PickTextCardViewModel(PickAttribute attribute, string title, string? fileName, string body, string copyText)
+    private PickTextCardViewModel(string title, string? fileName, string body, string copyText)
     {
-        _attribute = attribute;
         Title = title;
         FileName = fileName;
         _body = body;
@@ -80,9 +78,6 @@ internal sealed class PickTextCardViewModel : LongTextCardViewModel
     /// <inheritdoc />
     public override string? NoTextMessage => null;
 
-    /// <inheritdoc />
-    public override PickAttribute? ExaminerAttribute => _attribute;
-
     /// <summary>
     /// Builds a referenced-text card from a resolved file-reference
     /// attribute: <see cref="PickAttribute.RawValue"/> is the file name,
@@ -100,7 +95,7 @@ internal sealed class PickTextCardViewModel : LongTextCardViewModel
         if (string.IsNullOrEmpty(title))
             title = attribute.DisplayName;
 
-        return new PickTextCardViewModel(attribute, title, attribute.RawValue, body, text)
+        return new PickTextCardViewModel(title, attribute.RawValue, body, text)
         {
             NotForNavigation = notForNavigation,
         };
@@ -116,7 +111,7 @@ internal sealed class PickTextCardViewModel : LongTextCardViewModel
 
         var title = parent is null ? attribute.DisplayName : parent.DisplayName + " · " + attribute.DisplayName;
         var text = ValueOf(attribute).Replace("\r\n", "\n").Replace('\r', '\n').Trim('\n');
-        return new PickTextCardViewModel(attribute, title, null, text, text)
+        return new PickTextCardViewModel(title, null, text, text)
         {
             NotForNavigation = notForNavigation,
         };

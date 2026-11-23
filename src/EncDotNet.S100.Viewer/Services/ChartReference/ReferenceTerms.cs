@@ -194,23 +194,44 @@ internal sealed class ReferenceTerms
     {
         if (TryDescribe(key, value, out var held))
             return held;
-        if (_indexes is null || key.Spec.Name is null)
+        // A catalogue that can't be read: the word stays plain.
+        return await IndexAsync(key.Spec).ConfigureAwait(false) is { } index ? Describe(index, key, value) : null;
+    }
+
+    /// <summary>
+    /// <paramref name="spec"/>'s index when it is ready, without reading it;
+    /// otherwise <see langword="null"/>, and <see cref="IndexAsync"/> reads it.
+    /// </summary>
+    /// <param name="spec">The product specification.</param>
+    public ChartReferenceIndex? ReadyIndex(SpecRef spec) =>
+        spec.Name is not null && _ready.TryGetValue(spec.Name, out var index) ? index : null;
+
+    /// <summary>
+    /// <paramref name="spec"/>'s index, reading it first when needed, as a
+    /// term does: for a host that maps its own codes to entries, such as
+    /// Object information's S-57 aliases (R9, #1678).
+    /// </summary>
+    /// <param name="spec">The product specification.</param>
+    /// <returns>The index, or <see langword="null"/> when the product has none or its catalogues can't be read.</returns>
+    public async Task<ChartReferenceIndex?> IndexAsync(SpecRef spec)
+    {
+        if (ReadyIndex(spec) is { } held)
+            return held;
+        if (_indexes is null || spec.Name is null)
             return null;
         ChartReferenceIndex? index;
         try
         {
-            index = await _indexes(key.Spec).ConfigureAwait(false);
+            index = await _indexes(spec).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A catalogue that can't be read: the word stays plain.
             return null;
         }
 
-        if (index is null)
-            return null;
-        _ready[key.Spec.Name] = index;
-        return Describe(index, key, value);
+        if (index is not null)
+            _ready[spec.Name] = index;
+        return index;
     }
 
     /// <summary>

@@ -8,10 +8,8 @@ to show live AIS targets from aisstream.io. You need an aisstream.io API key.
 
 ## Install
 
-This package isn't published to NuGet. Reference the project directly:
-
-```xml
-<ProjectReference Include="path/to/src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+```bash
+dotnet add package EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo
 ```
 
 It uses only the .NET base class library
@@ -61,6 +59,14 @@ Two internal types do the rest:
 The driver never logs the API key. Every outgoing frame goes through
 `AisStreamIoJson.RedactApiKey` before it's logged, and a regression test checks
 this.
+
+## The aisstream.io service
+
+aisstream.io is a third-party service, not part of this project. The package
+doesn't include an API key: get your own from aisstream.io and use it under
+their terms. The service's availability, coverage and protocol are outside
+this project's control; if aisstream.io changes its protocol, the driver may
+need an update.
 
 ## See also
 

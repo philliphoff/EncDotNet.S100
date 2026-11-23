@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A stand-in for a library consumer, restored by check-package-restore.sh
+    from a folder of freshly packed packages plus nuget.org (issue #1702).
+    The script copies it out of the repository before restoring, so the
+    repository's Directory.Build.* and central package versions don't apply.
+    It isn't in the solution and isn't built.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EncDotNetVersion Condition="'$(EncDotNetVersion)' == ''">0.0.0-dev</EncDotNetVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EncDotNet.S100" Version="$(EncDotNetVersion)" />
+    <PackageReference Include="EncDotNet.S100.Collections" Version="$(EncDotNetVersion)" />
+    <PackageReference Include="EncDotNet.S100.Routes.Rtz" Version="$(EncDotNetVersion)" />
+  </ItemGroup>
+
+</Project>

@@ -74,6 +74,28 @@ All NuGet versions are managed centrally via **Central Package Management** in
 - Before introducing any new dependency, run the `gh-advisory-database`
   security check and confirm the package is free of known advisories.
 
+## Published packages
+
+CI packs every packable project in the solution, and a release pushes them
+all to NuGet, so a new library is published with no workflow edit. Libraries
+are packable by default; hosts, tools and tests opt out with
+`<IsPackable>false</IsPackable>`.
+
+A packable library must not reference a project that isn't packable: the
+reference becomes a package dependency that is never published, and
+consumers fail to restore with NU1101. CI checks this after packing. To run
+the check yourself:
+
+```bash
+dotnet pack EncDotNet.S100.slnx -c Release -o nupkgs
+tools/package-check/check-package-restore.sh nupkgs 0.0.0-dev
+```
+
+It checks that every package's `EncDotNet.S100*` dependencies were packed,
+then restores a small consumer of `EncDotNet.S100`,
+`EncDotNet.S100.Collections` and `EncDotNet.S100.Routes.Rtz` from `nupkgs`
+plus nuget.org.
+
 ## Spec routing (skills & instructions)
 
 This repository is organized around individual IHO S-100 product

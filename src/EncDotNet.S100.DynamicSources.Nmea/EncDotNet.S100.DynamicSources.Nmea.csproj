@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
     <Description>Own-ship wind, water and air temperature and pressure from an NMEA 0183 stream as a dynamic feature source: one feature at own ship, true wind as a WMO barb next to the own-ship symbol (from MWD, derived from apparent wind and the vessel's motion, or MWV true), relative wind labelled as such when true wind can't be had, and a pick report with units. Built on EncDotNet.S100.Nmea. Not for navigation.</Description>
+    <PackageTags>S-100;NMEA;NMEA-0183;wind;weather;own-ship;IHO;hydrography</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

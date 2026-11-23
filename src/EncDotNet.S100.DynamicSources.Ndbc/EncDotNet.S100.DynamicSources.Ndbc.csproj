@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
     <Description>NOAA National Data Buoy Center (NDBC) observations as a dynamic feature source: the activestations.xml station table, the realtime2 standard meteorological text format, a polling IDynamicFeatureSource that fetches only the stations in view with backoff and ageing, and a code-defined station-model portrayal (wind barb and wave height). Not for navigation.</Description>
+    <PackageTags>S-100;NDBC;NOAA;buoy;weather;observations;IHO;hydrography</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
