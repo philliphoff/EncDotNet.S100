@@ -178,6 +178,25 @@ The `EncDotNet.S100.Core.Metadata` namespace caches metadata between sessions:
   loading. Writes are atomic and the content store's budget bounds the cache,
   as for the portrayal-instruction cache.
 
+### Time steps
+
+A time-varying dataset's processor implements `ITimeAwareDatasetProcessor`
+(namespace `EncDotNet.S100.Datasets.Pipelines`): its `AvailableTimes` and its
+`TimeSemantics`, which say whether it draws its `Nearest` step, its step
+`AtOrBefore` the map time, or the map time itself (`Continuous`), and for how
+long a step stays valid.
+
+`TimeStepSelector` applies that rule for any host, so the viewer's map and
+`s100 tiles serve` draw the same step at the same time:
+
+- `Select(steps, semantics, time)` returns the step drawn at `time`, or `null`
+  when none is within the tolerance. A `Continuous` dataset gets the time
+  itself, rounded down to the minute.
+- `Select(steps, selection, tolerance, time)` takes the tolerance directly;
+  pass `TimeSpan.MaxValue` to hold a step however far away.
+- `ToleranceOf`, `TypicalStep` and `RangeOf` give the tolerance, the median
+  interval between steps and the span in which the dataset draws.
+
 ### Content store
 
 `ContentStore` (`EncDotNet.S100.Core.Caching`) is one disk store for every
