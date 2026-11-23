@@ -729,13 +729,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         CancellationToken token)
     {
         // A redraw after a catalogue change neither reads nor writes a stored
-        // scene: the scene key follows the saved catalogue paths, not a
-        // session-only catalogue or one reloaded in place.
+        // scene: it must draw with the new catalogues, whatever was stored.
+        // Lazily loaded cells key on the catalogues in effect.
         if (_cellScenes is null
             || !entry.IsFromExchangeSet
             || _redraws.Contains(entry)
             || entry.ProductSpec is not { } spec
-            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) is not { } key)
+            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings, _catalogues.Identity) is not { } key)
         {
             return null;
         }
@@ -893,7 +893,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (_cellScenes is not { } store
             || sceneKey is null
             || result.SceneLayers is null
-            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) != sceneKey
+            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings, _catalogues.Identity) != sceneKey
             || StoredCellScene.TryCreate(result, processor.Metadata) is not { } scene)
         {
             return;
