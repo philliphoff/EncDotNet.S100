@@ -147,6 +147,18 @@ public sealed partial class LiveAccessibleNameTests
         await AssertRealNamesAsync(host, minimumRows: 2);
     }
 
+    [AvaloniaFact]
+    public async Task Catalogues_rows_have_real_names()
+    {
+        var settings = new ViewerSettings { SettingsFilePath = Path.Combine(Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json") };
+        var registry = TestCatalogues.Registry(settings);
+        registry.Initialize(null, null);
+        var catalogues = TestCatalogues.ViewModel(registry, settings);
+        using var host = ViewHost.Show(new CataloguesView { DataContext = catalogues }, width: 420, height: 2400);
+
+        await AssertRealNamesAsync(host, minimumRows: 3);
+    }
+
     /// <summary>
     /// Fails on any element whose name is a type name, and on any element a
     /// user acts on (a row, a button, a tree item) that has no name at all:

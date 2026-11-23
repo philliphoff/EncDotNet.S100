@@ -49,18 +49,18 @@ internal sealed class FileDialogService : IFileDialogService
         return result;
     }
 
-    public async Task<string?> OpenFeatureCatalogueAsync(TopLevel? topLevel)
+    public async Task<string?> OpenCatalogueAsync(TopLevel? topLevel)
     {
         if (topLevel?.StorageProvider is not { } picker)
             return null;
 
         var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Select Feature Catalogue XML",
+            Title = Strings.FilePicker_CatalogueTitle,
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("Feature Catalogue XML") { Patterns = new[] { "*.xml" } },
+                new FilePickerFileType(Strings.FilePicker_CatalogueType) { Patterns = new[] { "*.xml", "*.zip" } },
                 FilePickerFileTypes.All,
             },
         });
@@ -69,23 +69,6 @@ internal sealed class FileDialogService : IFileDialogService
             return null;
 
         return files[0].TryGetLocalPath();
-    }
-
-    public async Task<string?> OpenPortrayalCatalogueFolderAsync(TopLevel? topLevel)
-    {
-        if (topLevel?.StorageProvider is not { } picker)
-            return null;
-
-        var folders = await picker.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select Portrayal Catalogue Folder",
-            AllowMultiple = false,
-        });
-
-        if (folders is null || folders.Count == 0)
-            return null;
-
-        return folders[0].TryGetLocalPath();
     }
 
     public async Task<string?> OpenExchangeSetFolderAsync(TopLevel? topLevel)

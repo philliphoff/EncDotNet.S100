@@ -213,7 +213,8 @@ public partial class App : Application
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
-            .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>();
+            .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>()
+            .Register<Views.AddCatalogueSheetView, ViewModels.AddCatalogueSheetViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AddOnlineCatalogueWizardView, ViewModels.AddOnlineCatalogueWizardViewModel>()
             .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>()
@@ -300,7 +301,7 @@ public partial class App : Application
             }, TaskScheduler.Default);
         };
 
-        // Live-refresh the examiner affordances in the FC and pick panels when
+        // Live-refresh the examiner affordances in the Catalogues and pick panels when
         // the user toggles the integration or edits the base URL (issue #442),
         // so the buttons appear/disappear without a catalogue reload or a new
         // pick.
@@ -309,7 +310,7 @@ public partial class App : Application
 
         viewerSettings.ExaminerSettingsChanged += () =>
         {
-            _services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
+            _services.GetService<CataloguesViewModel>()?.RefreshExaminerAvailability();
             _services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
         };
         _ = mcpHost.Apply().ContinueWith(t =>
@@ -1161,7 +1162,7 @@ public partial class App : Application
                     && clips.TotalBytes < clips.Kind.ShareBytes * PortrayalPrewarmCacheShare,
                 isCached: recorder.IsCached,
                 signature: () => EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmSignature.Of(
-                    projection.CreateSnapshot(), settings),
+                    projection.CreateSnapshot(), settings, sp.GetRequiredService<CatalogueRegistry>().Identity),
                 ledger: new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmLedger(
                     settings.IsReadOnly ? null : Path.Combine(paths.PortrayalInstructionCacheDirectory, "prewarm-ledger.json")),
                 options: options,
@@ -1646,11 +1647,40 @@ public partial class App : Application
             UiThread.InvokeAsync));
 
         // View models
-        services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
-            sp.GetRequiredService<CatalogueRegistry>(),
-            sp.GetRequiredService<ExaminerLinks>()));
-        services.AddSingleton(sp => new PortrayalCataloguesViewModel(
-            sp.GetRequiredService<CatalogueRegistry>()));
+        // The Catalogues activity (catalogue-panels D1, CR2).
+        services.AddSingleton<ICatalogueDialogs>(sp => new CatalogueDialogs(
+            sp.GetRequiredService<ShadUI.DialogManager>(),
+            sp.GetRequiredService<IFileDialogService>()));
+        services.AddSingleton(sp =>
+        {
+            var redraw = sp.GetRequiredService<CatalogueRedrawCoordinator>();
+            var catalogues = new CataloguesViewModel(
+                sp.GetRequiredService<CatalogueRegistry>(),
+                sp.GetRequiredService<ViewerSettings>(),
+                sp.GetRequiredService<ICatalogueDialogs>(),
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<ExaminerLinks>(),
+                spec => redraw.AffectedBy(spec).Count,
+                // D8: Chart reference at the product.
+                openInChartReference: spec =>
+                {
+                    var reference = sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>();
+                    if (reference.Products.FirstOrDefault(p => string.Equals(p.Spec.Name, spec, StringComparison.OrdinalIgnoreCase)) is { } product)
+                        reference.SelectedProduct = product;
+                    sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferenceCommand.Execute(null);
+                },
+                // D11: Logs, filtered to the Catalogues area.
+                showLogs: () =>
+                {
+                    sp.GetRequiredService<LogsViewModel>().SearchText = "area:Catalogues";
+                    sp.GetRequiredService<ShellLayoutViewModel>().ShowLogsCommand.Execute(null);
+                });
+            // The Loaded pill and the rows' loaded counts follow the datasets.
+            var loader = sp.GetRequiredService<IDatasetLoaderService>();
+            loader.DatasetLoaded += _ => UiThread.RunOrPost(catalogues.Refresh);
+            loader.DatasetRemoved += _ => UiThread.RunOrPost(catalogues.Refresh);
+            return catalogues;
+        });
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton(sp =>
         {
@@ -2355,20 +2385,17 @@ public partial class App : Application
             visibilitySourceFactory: static sp =>
                 new EncDotNet.S100.Viewer.ViewModels.Activities.OwnShipTrackingVisibilitySource(
                     sp.GetRequiredService<ViewerSettingsService>()));
-        services.AddActivityTab<FeatureCataloguesViewModel, FeatureCataloguesView>(
-            id: "FeatureCatalogues",
+        // Catalogues (catalogue-panels D1): both of each product's catalogues,
+        // replacing the Feature and Portrayal Catalogues activities. Links
+        // elsewhere open it at a product (CataloguesViewModel.ShowProduct).
+        services.AddActivityTab<CataloguesViewModel, CataloguesView>(
+            id: ShellLayoutViewModel.CataloguesTabId,
             order: 80,
-            title: Strings.Pane_FeatureCatalogues,
-            name: Strings.Label_Activity_FeatureCatalogues,
-            tooltip: Strings.Tooltip_FeatureCatalogues,
-            iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 });
-        services.AddActivityTab<PortrayalCataloguesViewModel, PortrayalCataloguesView>(
-            id: "PortrayalCatalogues",
-            order: 90,
-            title: Strings.Pane_PortrayalCatalogues,
-            name: Strings.Label_Activity_PortrayalCatalogues,
-            tooltip: Strings.Tooltip_PortrayalCatalogues,
-            iconFactory: static () => new FluentIcon { Icon = Icon.PaintBrush, IconVariant = IconVariant.Regular, FontSize = 22 });
+            title: Strings.Pane_Catalogues,
+            name: Strings.Label_Activity_Catalogues,
+            tooltip: Strings.Tooltip_Catalogues,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 },
+            autoOpenOnContentSignal: true);
         services.AddActivityTab<SettingsViewModel, SettingsView>(
             id: "Settings",
             order: 1000,

@@ -17,6 +17,25 @@ month. For package versions and release assets, see
   an advisory listed nothing. This works in SoundCharts and in `s100 mcp
   serve`'s Library tools.
 
+- **One Catalogues activity.** The Feature Catalogues and Portrayal
+  Catalogues activities are replaced by **Catalogues**, which lists every
+  product with both its catalogues: "Feature 2.0.0 · Portrayal 2.1.0", how
+  many of its datasets are loaded, and tags only when something isn't the
+  default (*Custom*, *Command line*, *Not built in*, a problem count,
+  *Missing*). Filter by product or name, or use the **All**, **Loaded**,
+  **Changed** and **Problems** pills. The details pane shows each
+  catalogue's version, source, path and what it overrides, and a catalogue
+  that failed to load shows why, with **Show in Logs**. **Add catalogue…**
+  takes a feature catalogue, a portrayal catalogue's
+  `portrayal_catalogue.xml` or a ZIP package, reads its product from the
+  content and confirms what it replaces and how many datasets it redraws,
+  with **Keep using it after restart** (cleared, it lasts for the session).
+  Changes apply at once with a toast that can **Undo** them. A custom
+  catalogue has **Reload**, **Revert to built-in** and **Show in Finder**,
+  and a product SoundCharts doesn't include can be added and removed. The
+  activity's badge counts catalogue problems. Lazily loaded cells no longer
+  reuse a stored scene drawn with a catalogue that has since changed.
+
 - **A mirror of NOAA's tide station catalogue.** A scheduled workflow now
   checks NOAA CO-OPS every week and publishes its tide and current station
   catalogue as one file, `tide-stations.json.gz`, with a manifest giving its
