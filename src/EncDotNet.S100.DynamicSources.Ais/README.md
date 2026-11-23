@@ -9,10 +9,8 @@ you add live AIS targets to a host. SoundCharts uses it.
 
 ## Install
 
-This package isn't published to NuGet. Reference the project directly:
-
-```xml
-<ProjectReference Include="path/to/src/EncDotNet.S100.DynamicSources.Ais/EncDotNet.S100.DynamicSources.Ais.csproj" />
+```bash
+dotnet add package EncDotNet.S100.DynamicSources.Ais
 ```
 
 You also need a driver, such as

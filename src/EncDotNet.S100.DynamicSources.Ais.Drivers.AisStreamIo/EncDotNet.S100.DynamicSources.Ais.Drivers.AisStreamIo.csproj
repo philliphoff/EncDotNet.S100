@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <Description>An IAisMessageSource driver for the aisstream.io WebSocket AIS service, for EncDotNet.S100.DynamicSources.Ais. Needs your own aisstream.io API key; none is bundled. Uses only the .NET base class library (ClientWebSocket and System.Text.Json). Not affiliated with aisstream.io. Not for navigation.</Description>
+    <PackageTags>S-100;AIS;aisstream.io;WebSocket;vessel;IHO;hydrography</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
