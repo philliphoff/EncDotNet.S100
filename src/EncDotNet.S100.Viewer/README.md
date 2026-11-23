@@ -1694,6 +1694,45 @@ everything under the pointer. An AIS hit has a **Take the helm** button. The
 hit radius is 12 device pixels, the size of the AIS symbol's outer disc. See
 [Dynamic source pick](../../docs/design/dynamic-source-pick.md).
 
+## Manage catalogues
+
+Each product is drawn with a feature catalogue and a portrayal catalogue. The
+**Catalogues** panel (the open-book icon in the activity bar) lists every
+product the viewer knows, with both its catalogues on one row: "Feature 2.0.0
+· Portrayal 2.0.0" and how many of its datasets are loaded. Tags show only
+what isn't the default: *Custom*, *Command line*, *Not built in*, a problem
+count, or *Missing*. A red bar marks a catalogue that failed to load; an amber
+bar, one that is missing. Filter by product or name, or use the pills: **All**,
+**Loaded**, **Changed** (anything not built in) and **Problems**, which shows
+only while there are some. The activity's badge counts the products with a
+problem.
+
+Select a product to see, for each catalogue, its version, where it comes from
+(*Built-in*, *Custom*, *Custom, this session* or *Command line, this session*),
+its path, and what it overrides. A catalogue that failed to load says why and
+what draws instead, with **Show in Logs**.
+
+- **Add catalogue…** takes a feature catalogue XML file, a portrayal
+  catalogue's `portrayal_catalogue.xml` (for its folder) or a portrayal
+  catalogue ZIP package. It reads the product and kind from the content, then
+  shows what it replaces and how many loaded datasets are redrawn. Clear
+  **Keep using it after restart** to use it for this session only. A
+  catalogue for a product the viewer doesn't include adds the product.
+- A row's **⋯** menu has **Replace feature catalogue…** and **Replace
+  portrayal catalogue…** (the same, with the product fixed), **Revert to
+  built-in**, **Show in Finder** (Explorer on Windows), **Open in Chart
+  reference** and **Open in eXaminer** ("published edition" when the feature
+  catalogue in use is custom).
+- A custom catalogue's details have **Reload**, to read it from disk again
+  after an edit, **Revert to built-in** and **Show in Finder**. A product
+  that isn't built in has **Remove product**, and while it has no portrayal
+  catalogue, **Add portrayal catalogue…**.
+
+Every change applies at once: the product's loaded datasets are redrawn and a
+notification says so, with **Undo**. Catalogues given with
+`--feature-catalogue` and `--portrayal-catalogue` show as *Command line, this
+session*; restart without the flag to stop using one.
+
 ## Settings
 
 Open **Settings** from the gear icon in the activity bar. Settings are grouped

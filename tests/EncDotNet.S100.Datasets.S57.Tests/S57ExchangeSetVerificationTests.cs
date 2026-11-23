@@ -28,8 +28,17 @@ public sealed class S57ExchangeSetVerificationTests
         // Every S-100 outcome must be reachable from an S-57 outcome of the same
         // name, otherwise the two enumerations have silently diverged. Withdrawn
         // is S-100 only: an S-57 catalogue has no cancellation records (#919).
+        // SignatureValidUntrusted is S-100 only until EncDotNet.S57 reports it:
+        // its verifier doesn't check S-63 signatures here, so it never applies.
+        // SignatureNotChecked is set by the bridge itself, not mapped.
         var s57Names = Enum.GetNames<S57Outcome>().ToHashSet();
-        foreach (string name in Enum.GetNames<VerificationOutcome>().Except([nameof(VerificationOutcome.Withdrawn)]))
+        foreach (string name in Enum.GetNames<VerificationOutcome>()
+            .Except(
+            [
+                nameof(VerificationOutcome.Withdrawn),
+                nameof(VerificationOutcome.SignatureValidUntrusted),
+                nameof(VerificationOutcome.SignatureNotChecked),
+            ]))
             Assert.Contains(name, s57Names);
     }
 
@@ -178,6 +187,11 @@ public sealed class S57ExchangeSetVerificationTests
 
             Assert.Equal(VerificationOutcome.Ok, Assert.Single(result.FileResults, r => r.FileName == "GB5X01SW.001").ChecksumOutcome);
             Assert.Equal(VerificationOutcome.ChecksumMismatch, Assert.Single(result.FileResults, r => r.FileName == "GB5X01SW.002").ChecksumOutcome);
+
+            // S-63 signatures aren't checked, so no file claims to be unsigned.
+            Assert.All(result.FileResults, r => Assert.Equal(VerificationOutcome.SignatureNotChecked, r.Outcome));
+            Assert.True(result.SignaturesNotChecked);
+            Assert.False(result.IsUnsigned);
         }
         finally
         {

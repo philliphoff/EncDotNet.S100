@@ -78,7 +78,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         public bool ManageDatasets { get; init; }
 
         [CommandOption("--strict-time")]
-        [Description("When rendering datasets: a time more than half a step outside a time-varying dataset's steps (before, after or in a gap) draws nothing for it, instead of its nearest step; a tile on which nothing draws answers 204.")]
+        [Description("When rendering datasets: a time outside a time-varying dataset's validity (its own, or else the median interval between its steps; before, after or in a gap) draws nothing for it, instead of holding its step however far away; a tile on which nothing draws answers 204.")]
         public bool StrictTime { get; init; }
 
         [CommandOption("--overview")]

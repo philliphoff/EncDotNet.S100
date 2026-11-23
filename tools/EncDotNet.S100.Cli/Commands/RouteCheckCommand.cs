@@ -473,7 +473,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
     private static void WriteText(RouteFile route, DateTimeOffset departure, RouteCheckReport report)
     {
         // Through Console.Out as it is now, so redirected output (and tests) see it.
-        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Out) });
+        var console = CliConsoleWidth.Create(Console.Out);
         var check = CheckRouteResult.From(report, route.RouteId, route.Name);
         var format = route.Format == "rtz" ? $"RTZ {route.Version}" : $"S-421{(route.Version is null ? "" : " " + route.Version)}";
         console.MarkupLineInterpolated($"[bold]{route.Name ?? Path.GetFileName(route.Path)}[/] ({format}, {route.Waypoints.Count} waypoints, {check.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM)");

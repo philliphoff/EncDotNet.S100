@@ -108,7 +108,7 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
 
             // JSON goes to stdout, so the S-101 update summary goes to stderr there.
             var updateConsole = format == OutputFormat.Json
-                ? AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Error) })
+                ? CliConsoleWidth.Create(Console.Error)
                 : null;
             var processor = DatasetProcessorLoader.Create(factory, spec, settings, updateConsole);
             var report = processor.Validate();
@@ -206,7 +206,7 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
             var root = ExchangeSetInput.ResolveS57Root(settings.DatasetPath);
 
             var result = S57ExchangeSetVerification
-                .VerifyAsync(root, allowUntrustedCertificates: true)
+                .VerifyAsync(root)
                 .GetAwaiter()
                 .GetResult();
 
@@ -237,6 +237,8 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
             VerificationOutcome.FileMissing => true,
             VerificationOutcome.Error => true,
             VerificationOutcome.NotSigned => strict,
+            VerificationOutcome.SignatureValidUntrusted => strict,
+            VerificationOutcome.SignatureNotChecked => strict,
             _ => false,
         };
 
@@ -283,6 +285,20 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         AnsiConsole.MarkupLineInterpolated(
             $"[grey]{result.FileResults.Count} file(s) in {kind}; integrity {(result.IntegrityVerified ? "intact" : "compromised")}; signatures {SignatureSummary(result)}.[/]");
 
+        if (failed == 0 && result.SignaturesNotChecked)
+        {
+            AnsiConsole.MarkupLine(
+                "[green]Integrity verified[/] — signatures weren't checked: S-63 signature checking isn't supported yet.");
+            return 0;
+        }
+
+        if (failed == 0 && result.HasUnverifiedSigners)
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]Signer not verified[/] — signatures match the content, but no signer chains to a trusted Scheme Administrator.");
+            return 0;
+        }
+
         if (failed == 0)
         {
             AnsiConsole.MarkupLine("[green]Verified[/] — no verification failures.");
@@ -305,6 +321,8 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
             HasChecksumMismatches: result.HasChecksumMismatches,
             HasMissingFiles: result.HasMissingFiles,
             IsUnsigned: result.FileResults.Count > 0 && result.IsUnsigned,
+            HasUnverifiedSigners: result.HasUnverifiedSigners,
+            SignaturesNotChecked: result.SignaturesNotChecked,
             Valid: failed == 0,
             FailedCount: failed,
             Files: result.FileResults
@@ -331,9 +349,15 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
 
     private static string SignatureSummary(ExchangeSetVerificationResult result)
     {
+        if (result.SignaturesNotChecked)
+            return "not checked (S-63 signatures aren't supported yet)";
         if (result.FileResults.Any(f => f.Outcome != VerificationOutcome.Withdrawn) && result.IsUnsigned)
             return "unsigned";
-        return result.AllValid ? "all valid" : "see table";
+        if (result.AllValid)
+            return "all valid";
+        return result.AllSignaturesIntact && result.HasUnverifiedSigners
+            ? "intact, signers not verified"
+            : "see table";
     }
 
     private static string ShortDigest(string? hex) =>
@@ -344,7 +368,9 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         var colour = outcome switch
         {
             VerificationOutcome.Ok => "green",
-            VerificationOutcome.NotSigned or VerificationOutcome.NoChecksum => failed ? "yellow" : "grey",
+            VerificationOutcome.NotSigned or VerificationOutcome.NoChecksum or VerificationOutcome.SignatureNotChecked
+                => failed ? "yellow" : "grey",
+            VerificationOutcome.SignatureValidUntrusted => failed ? "red" : "yellow",
             VerificationOutcome.Withdrawn => "grey",
             _ => "red",
         };
@@ -517,6 +543,8 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         bool HasChecksumMismatches,
         bool HasMissingFiles,
         bool IsUnsigned,
+        bool HasUnverifiedSigners,
+        bool SignaturesNotChecked,
         bool Valid,
         int FailedCount,
         IReadOnlyList<VerifyFilePayload> Files);

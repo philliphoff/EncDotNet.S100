@@ -22,9 +22,15 @@ internal static class CliApp
             config.SetApplicationName("s100");
             config.SetApplicationVersion(
                 applicationVersion ?? CliVersionInfo.FromAssembly(typeof(CliApp).Assembly).InformationalVersion);
+            // Without a terminal the detected width can be -1, which
+            // truncates every line to "…" (issue #1692).
             if (console is not null)
             {
-                config.ConfigureConsole(console);
+                config.ConfigureConsole(CliConsoleWidth.Ensure(console));
+            }
+            else
+            {
+                CliConsoleWidth.Ensure(AnsiConsole.Console);
             }
             config.SetHelpProvider(helpProvider ?? new S100HelpProvider(config.Settings));
 

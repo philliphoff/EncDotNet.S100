@@ -729,13 +729,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         CancellationToken token)
     {
         // A redraw after a catalogue change neither reads nor writes a stored
-        // scene: the scene key follows the saved catalogue paths, not a
-        // session-only catalogue or one reloaded in place.
+        // scene: it must draw with the new catalogues, whatever was stored.
+        // Lazily loaded cells key on the catalogues in effect.
         if (_cellScenes is null
             || !entry.IsFromExchangeSet
             || _redraws.Contains(entry)
             || entry.ProductSpec is not { } spec
-            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) is not { } key)
+            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings, _catalogues.Identity) is not { } key)
         {
             return null;
         }
@@ -893,7 +893,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (_cellScenes is not { } store
             || sceneKey is null
             || result.SceneLayers is null
-            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings) != sceneKey
+            || CellSceneKey.For(entry, spec, CurrentPresentation, _settings, _catalogues.Identity) != sceneKey
             || StoredCellScene.TryCreate(result, processor.Metadata) is not { } scene)
         {
             return;
@@ -945,6 +945,53 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     }
 
     /// <summary>
+    /// Opens Add catalogue… with the product and kind fixed
+    /// (<see cref="ViewModels.CataloguesViewModel.ChooseCatalogue"/>): the
+    /// missing-catalogue toast's <b>Choose catalogue…</b> (catalogue-panels
+    /// D10, CR3). Set by the app once the Catalogues activity exists; while
+    /// null, the toast has no action.
+    /// </summary>
+    internal Func<string, CatalogueKind, Task>? ChooseCatalogue { get; set; }
+
+    /// <summary>
+    /// Shows the missing-catalogue warning for <paramref name="spec"/>, with
+    /// <b>Choose catalogue…</b> when <paramref name="choose"/> is set
+    /// (catalogue-panels D10).
+    /// </summary>
+    /// <param name="notifications">Shows the toast.</param>
+    /// <param name="spec">The product whose portrayal catalogue is missing, e.g. <c>"S-101"</c>.</param>
+    /// <param name="choose">Opens Add catalogue… for the product; null leaves the toast without an action.</param>
+    /// <param name="logger">Logs a failure of <paramref name="choose"/>.</param>
+    internal static INotificationHandle ShowMissingCatalogueToast(
+        INotificationService notifications,
+        string spec,
+        Func<string, CatalogueKind, Task>? choose,
+        ILogger logger)
+    {
+        var toast = notifications.Create(Strings.Toast_Warning)
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent(string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Status_SelectPortrayalCatalogue, spec));
+        if (choose is not null)
+            toast = toast.WithAction(
+                Strings.Catalogues_ChooseCatalogue,
+                () => _ = ChooseLoggingFailuresAsync(),
+                isPrimary: true);
+        return toast.Show();
+
+        async Task ChooseLoggingFailuresAsync()
+        {
+            try
+            {
+                await choose(spec, CatalogueKind.Portrayal).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Couldn't choose a {Spec} portrayal catalogue", spec);
+            }
+        }
+    }
+
+    /// <summary>
     /// Coordinator policy: ensures the portrayal catalogue a spec needs is
     /// present, warning the user and returning <see langword="false"/> if not.
     /// A product drawn by an application portrayal (S-104, whose specification
@@ -962,10 +1009,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             _logger.LogWarning(
                 "Could not open a {Spec} dataset: the {Catalogue} portrayal catalogue is not installed",
                 spec, requiredCatalogue);
-            _notifications.Create(Strings.Toast_Warning)
-                .WithSeverity(NotificationSeverity.Warning)
-                .WithContent(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue))
-                .Show();
+            ShowMissingCatalogueToast(_notifications, requiredCatalogue, ChooseCatalogue, _logger);
             return false;
         }
 

@@ -117,7 +117,8 @@ if (!authentication.IsAuthenticated)
 
 Permit authentication always requires a trusted root. It rejects
 `AllowUntrustedCertificates = true`, even though exchange-set signature
-verification accepts it for development. `PermitFile.Read` can parse a permit
+verification accepts it, reporting a correct signature from an untrusted
+signer as `SignatureValidUntrusted` rather than `Ok`. `PermitFile.Read` can parse a permit
 for inspection, but `PermitKeyProvider` refuses a permit that hasn't been
 authenticated.
 

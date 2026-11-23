@@ -54,8 +54,6 @@ internal static partial class Strings
     public static string Window_Title => Get(nameof(Window_Title));
 
     // Activity / pane titles
-    public static string Pane_FeatureCatalogues => Get(nameof(Pane_FeatureCatalogues));
-    public static string Pane_PortrayalCatalogues => Get(nameof(Pane_PortrayalCatalogues));
     public static string Pane_Datasets => Get(nameof(Pane_Datasets));
     public static string Pane_DatasetOpacity => Get(nameof(Pane_DatasetOpacity));
     public static string Pane_DatasetSelectPlaceholder => Get(nameof(Pane_DatasetSelectPlaceholder));
@@ -127,8 +125,6 @@ internal static partial class Strings
     public static string Tooltip_ToggleTheme => Get(nameof(Tooltip_ToggleTheme));
     public static string Tooltip_ReportFeedback => Get(nameof(Tooltip_ReportFeedback));
     public static string Tooltip_Settings => Get(nameof(Tooltip_Settings));
-    public static string Tooltip_FeatureCatalogues => Get(nameof(Tooltip_FeatureCatalogues));
-    public static string Tooltip_PortrayalCatalogues => Get(nameof(Tooltip_PortrayalCatalogues));
     public static string Tooltip_Datasets => Get(nameof(Tooltip_Datasets));
     public static string Tooltip_LayerStack => Get(nameof(Tooltip_LayerStack));
     public static string Tooltip_PickMode => Get(nameof(Tooltip_PickMode));
@@ -145,11 +141,7 @@ internal static partial class Strings
     public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
     public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
     public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
-    public static string Tooltip_AddFeatureCatalogue => Get(nameof(Tooltip_AddFeatureCatalogue));
-    public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
-    public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
-    public static string Tooltip_OpenCatalogueInExaminer => Get(nameof(Tooltip_OpenCatalogueInExaminer));
     public static string Tooltip_OpenFeatureInExaminer => Get(nameof(Tooltip_OpenFeatureInExaminer));
     public static string Tooltip_OpenAttributeInExaminer => Get(nameof(Tooltip_OpenAttributeInExaminer));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
@@ -192,6 +184,8 @@ internal static partial class Strings
     public static string Tooltip_SignatureUnsigned => Get(nameof(Tooltip_SignatureUnsigned));
     public static string Tooltip_SignatureInvalid => Get(nameof(Tooltip_SignatureInvalid));
     public static string Tooltip_SignatureUntrusted => Get(nameof(Tooltip_SignatureUntrusted));
+    public static string Tooltip_SignatureUnverified => Get(nameof(Tooltip_SignatureUnverified));
+    public static string Tooltip_SignatureNotChecked => Get(nameof(Tooltip_SignatureNotChecked));
     public static string Tooltip_SignatureMixed => Get(nameof(Tooltip_SignatureMixed));
     public static string Tooltip_SignatureChecking => Get(nameof(Tooltip_SignatureChecking));
     public static string Tooltip_SignatureError => Get(nameof(Tooltip_SignatureError));
@@ -245,8 +239,6 @@ internal static partial class Strings
     public static string Datasets_EmptyTitle => Get(nameof(Datasets_EmptyTitle));
     public static string Datasets_EmptyDescription => Get(nameof(Datasets_EmptyDescription));
     public static string Tooltip_AddDataset => Get(nameof(Tooltip_AddDataset));
-    public static string Button_AddFeatureCatalogue => Get(nameof(Button_AddFeatureCatalogue));
-    public static string Button_AddPortrayalCatalogue => Get(nameof(Button_AddPortrayalCatalogue));
 
     // Native menu
     public static string Menu_File => Get(nameof(Menu_File));
@@ -336,7 +328,6 @@ internal static partial class Strings
     public static string FilePicker_ExchangeSetZipType => Get(nameof(FilePicker_ExchangeSetZipType));
 
     // Catalogue list
-    public static string Catalogue_BuiltInLabel => Get(nameof(Catalogue_BuiltInLabel));
 
 
     // Pick (Object Information) panel
@@ -1379,12 +1370,10 @@ internal static partial class Strings
     public static string Library_ToggleGroup => Get(nameof(Library_ToggleGroup));
     public static string Label_Activity_Datasets => Get(nameof(Label_Activity_Datasets));
     public static string Label_Activity_EcdisDisplay => Get(nameof(Label_Activity_EcdisDisplay));
-    public static string Label_Activity_FeatureCatalogues => Get(nameof(Label_Activity_FeatureCatalogues));
     public static string Label_Activity_Helm => Get(nameof(Label_Activity_Helm));
     public static string Label_Activity_LayerStack => Get(nameof(Label_Activity_LayerStack));
     public static string Label_Activity_Library => Get(nameof(Label_Activity_Library));
     public static string Label_Activity_PickReport => Get(nameof(Label_Activity_PickReport));
-    public static string Label_Activity_PortrayalCatalogues => Get(nameof(Label_Activity_PortrayalCatalogues));
     public static string Label_Activity_Routes => Get(nameof(Label_Activity_Routes));
     public static string Label_Activity_Search => Get(nameof(Label_Activity_Search));
     public static string Label_Activity_Settings => Get(nameof(Label_Activity_Settings));

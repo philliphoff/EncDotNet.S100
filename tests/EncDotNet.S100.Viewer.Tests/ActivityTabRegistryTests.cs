@@ -89,8 +89,6 @@ public sealed class ActivityTabRegistryTests : IDisposable
             appCommands: TestAppCommands.Create(),
             datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             mapChrome: TestMapChrome.Create(catalogues, datasets),
-            featureCatalogues: new FeatureCataloguesViewModel(TestCatalogues.Registry(settings, catalogues), TestPickReport.Examiner()),
-            portrayalCatalogues: new PortrayalCataloguesViewModel(TestCatalogues.Registry(settings, catalogues)),
             datasets: datasets,
             palette: new PaletteMenuViewModel(settingsVm),
             pickReport: TestPickReport.Create(),
@@ -192,6 +190,67 @@ public sealed class ActivityTabRegistryTests : IDisposable
 
         Assert.Same(search, vm.Layout.SelectedLeftTab);
         Assert.Equal("Search", settings.LastSelectedActivity);
+    }
+
+    /// <summary>
+    /// The Feature and Portrayal Catalogues activities became one Catalogues
+    /// activity (catalogue-panels D1): a persisted id of either opens it.
+    /// </summary>
+    [Theory]
+    [InlineData("FeatureCatalogues")]
+    [InlineData("PortrayalCatalogues")]
+    public void Startup_WithAFormerCataloguesActivity_OpensCatalogues(string former)
+    {
+        var settings = new ViewerSettings
+        {
+            SettingsFilePath = _tempSettingsPath,
+            LastSelectedActivity = former,
+        };
+        var datasets = new FakeTab { Id = "Datasets", Order = 10 };
+        var catalogues = new FakeTab { Id = ShellLayoutViewModel.CataloguesTabId, Order = 80 };
+        var vm = CreateViewModel(new IActivityTab[] { datasets, catalogues }, settings);
+
+        Assert.Same(catalogues, vm.Layout.SelectedLeftTab);
+        Assert.Equal("Catalogues", settings.LastSelectedActivity);
+    }
+
+    /// <summary>
+    /// App registers one Catalogues activity (order 80, BookOpen, opened by a
+    /// link's content signal) and neither of the activities it replaced.
+    /// </summary>
+    [Fact]
+    public void App_registers_the_catalogues_activity_and_not_the_two_it_replaced()
+    {
+        var app = File.ReadAllText(LibraryTestContext.RepoFile("src", "EncDotNet.S100.Viewer", "App.axaml.cs"));
+        var registration = System.Text.RegularExpressions.Regex.Match(
+            app, @"AddActivityTab<CataloguesViewModel, CataloguesView>\((?<args>.*?)\);", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        Assert.True(registration.Success);
+        var args = registration.Groups["args"].Value;
+        Assert.Contains("id: ShellLayoutViewModel.CataloguesTabId", args, StringComparison.Ordinal);
+        Assert.Contains("order: 80", args, StringComparison.Ordinal);
+        Assert.Contains("Icon.BookOpen", args, StringComparison.Ordinal);
+        Assert.Contains("autoOpenOnContentSignal: true", args, StringComparison.Ordinal);
+        Assert.Equal("Catalogues", ShellLayoutViewModel.CataloguesTabId);
+        Assert.DoesNotContain("\"FeatureCatalogues\"", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"PortrayalCatalogues\"", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icon.PaintBrush", app, StringComparison.Ordinal);
+    }
+
+    /// <summary>The activity's badge counts the products under Problems (D13).</summary>
+    [Fact]
+    public void The_catalogues_badge_reaches_its_tab()
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
+        settings.FeatureCataloguePaths["S-102"] = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.xml");
+        var registry = TestCatalogues.Registry(settings);
+        registry.Initialize(null, null);
+        var tab = new ActivityTab<CataloguesViewModel, ContentControl>(
+            ShellLayoutViewModel.CataloguesTabId, 80, "Catalogues", "Catalogues", () => new ContentControl(),
+            TestCatalogues.ViewModel(registry, settings), persistAsLastSelected: true, visibility: null);
+
+        Assert.Equal(1, tab.BadgeCount);
+        Assert.Equal("1 catalogue problem", tab.BadgeName);
     }
 
     [Fact]

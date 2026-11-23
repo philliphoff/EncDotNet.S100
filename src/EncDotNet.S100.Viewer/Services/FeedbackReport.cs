@@ -41,6 +41,12 @@ internal sealed partial record FeedbackReport
     /// <summary>Currently-loaded datasets (may be empty).</summary>
     public required IReadOnlyList<FeedbackDatasetInfo> Datasets { get; init; }
 
+    /// <summary>
+    /// Every product's catalogues and where they come from, as Help › About
+    /// shows them (catalogue-panels §6.5). Empty when not collected.
+    /// </summary>
+    public IReadOnlyList<FeedbackCatalogueInfo> Catalogues { get; init; } = Array.Empty<FeedbackCatalogueInfo>();
+
     /// <summary>The most recent unhandled error this session, or
     /// <see langword="null"/> when none was recorded.</summary>
     public FeedbackErrorInfo? LastError { get; init; }
@@ -101,6 +107,23 @@ internal sealed partial record FeedbackReport
     [JsonSerializable(typeof(FeedbackReport))]
     private sealed partial class ReportJsonContext : JsonSerializerContext;
 }
+
+/// <summary>A product's catalogues as in effect (catalogue-panels §6.5).</summary>
+/// <param name="Spec">The product, e.g. <c>S-101</c>.</param>
+/// <param name="FeatureVersion">The feature catalogue's version; null when missing or unreadable.</param>
+/// <param name="FeatureSource">BuiltIn, Custom or CommandLine; null when missing.</param>
+/// <param name="FeatureStatus">InUse, Error, Missing or NotRequired.</param>
+/// <param name="PortrayalVersion">The portrayal catalogue's version; null when missing or unreadable.</param>
+/// <param name="PortrayalSource">BuiltIn, Custom or CommandLine; null when missing.</param>
+/// <param name="PortrayalStatus">InUse, Error, Missing or NotRequired.</param>
+internal sealed record FeedbackCatalogueInfo(
+    string Spec,
+    string? FeatureVersion,
+    string? FeatureSource,
+    string FeatureStatus,
+    string? PortrayalVersion,
+    string? PortrayalSource,
+    string PortrayalStatus);
 
 /// <summary>Application identity / build information.</summary>
 /// <param name="Name">Product name.</param>

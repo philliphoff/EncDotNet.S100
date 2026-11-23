@@ -16,9 +16,14 @@ namespace EncDotNet.S100.ExchangeSets;
 public enum VerificationOutcome
 {
     /// <summary>
-    /// The signature was verified successfully, or (in the checksum
+    /// The signature was verified and its certificate chains to one of
+    /// <see cref="TrustAnchorOptions.TrustedRoots"/>, or (in the checksum
     /// dimension) the computed digest matched the declared digest.
     /// </summary>
+    /// <remarks>
+    /// A correct signature whose signer couldn't be traced to a trusted root
+    /// is <see cref="SignatureValidUntrusted"/>, never <see cref="Ok"/>.
+    /// </remarks>
     Ok,
 
     /// <summary>The file or catalogue carries no digital signature.</summary>
@@ -63,4 +68,27 @@ public enum VerificationOutcome
     /// verified: nothing loads it, and its file is usually absent. Not a failure.
     /// </summary>
     Withdrawn,
+
+    /// <summary>
+    /// Signature dimension only: the signature matches the content and its
+    /// certificate is within its validity period, but the certificate doesn't
+    /// chain to any of <see cref="TrustAnchorOptions.TrustedRoots"/>, so who
+    /// signed it isn't verified. Reported only when
+    /// <see cref="TrustAnchorOptions.AllowUntrustedCertificates"/> is set;
+    /// otherwise the same signature is <see cref="CertificateUntrusted"/>.
+    /// </summary>
+    /// <remarks>
+    /// The content hasn't changed since the holder of the signing key signed
+    /// it, but anyone can make such a key. Not a failure, and not
+    /// <see cref="Ok"/>. S-100 Edition 5.2.1 Part 15 §15-8.11.
+    /// </remarks>
+    SignatureValidUntrusted,
+
+    /// <summary>
+    /// Signature dimension only: the verifier can't check this kind of
+    /// signature, so whether the file is signed, and by whom, is unknown. The
+    /// S-57 bridge reports it for every file, because S-63 signatures aren't
+    /// checked yet. Not a failure, and not <see cref="NotSigned"/>.
+    /// </summary>
+    SignatureNotChecked,
 }

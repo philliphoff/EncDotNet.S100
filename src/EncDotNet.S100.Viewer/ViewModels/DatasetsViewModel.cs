@@ -1396,6 +1396,71 @@ internal sealed class DatasetsViewModel : ViewModelBase
             _legend!.Show(sectionId);
     }
 
+    // ── Catalogues entry points (catalogue-panels D10, §6.4, CR3) ───────
+
+    /// <summary>
+    /// Opens the Catalogues activity at a dataset's product: <b>Catalogues…</b>
+    /// on a row's version warning, in its menu, and on the inspector's
+    /// Drawn with line. Disabled until <see cref="AttachCatalogues"/>.
+    /// </summary>
+    public IRelayCommand<DatasetEntry> ShowCataloguesCommand { get; }
+
+    private CatalogueRegistry? _catalogueRegistry;
+    private Action<string>? _showCatalogueProduct;
+
+    /// <summary>
+    /// Connects <see cref="ShowCataloguesCommand"/> and the Drawn with line
+    /// to the catalogues in effect.
+    /// </summary>
+    /// <param name="registry">The catalogues in effect.</param>
+    /// <param name="showProduct">Opens Catalogues at a product (<see cref="CataloguesViewModel.ShowProduct"/>).</param>
+    internal void AttachCatalogues(CatalogueRegistry registry, Action<string> showProduct)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(showProduct);
+        if (_catalogueRegistry is not null)
+            _catalogueRegistry.CataloguesChanged -= OnCataloguesChanged;
+        _catalogueRegistry = registry;
+        _showCatalogueProduct = showProduct;
+        registry.CataloguesChanged += OnCataloguesChanged;
+        ShowCataloguesCommand.NotifyCanExecuteChanged();
+        RaiseDrawnWithChanged();
+    }
+
+    /// <summary>
+    /// The inspector's Drawn with line for <see cref="SelectedEntry"/>:
+    /// "Feature 2.0.0 · Portrayal 2.1.0-draft (custom)", "Feature 1.1.0 ·
+    /// Drawn by SoundCharts" for S-104; null before
+    /// <see cref="AttachCatalogues"/> or when no product is known.
+    /// </summary>
+    public string? SelectedDrawnWith =>
+        _catalogueRegistry is { } registry && SelectedEntry is { } entry
+            ? CatalogueEntryPointText.DrawnWith(registry, entry.ProductSpec, entry.PortrayalSpec)
+            : null;
+
+    /// <summary>True when <see cref="SelectedDrawnWith"/> has a line to show.</summary>
+    public bool HasSelectedDrawnWith => SelectedDrawnWith is not null;
+
+    /// <summary>The Catalogues product a dataset's <b>Catalogues…</b> opens at.</summary>
+    internal string? CatalogueProductOf(DatasetEntry? entry) =>
+        entry is null || string.IsNullOrEmpty(entry.ProductSpec)
+            ? null
+            : CatalogueEntryPointText.CatalogueProduct(_catalogueRegistry, entry.ProductSpec, entry.PortrayalSpec);
+
+    private void ShowCatalogues(DatasetEntry? entry)
+    {
+        if (CatalogueProductOf(entry) is { } spec)
+            _showCatalogueProduct?.Invoke(spec);
+    }
+
+    private void OnCataloguesChanged(object? sender, CataloguesChangedEventArgs e) => RaiseDrawnWithChanged();
+
+    private void RaiseDrawnWithChanged()
+    {
+        OnPropertyChanged(nameof(SelectedDrawnWith));
+        OnPropertyChanged(nameof(HasSelectedDrawnWith));
+    }
+
     /// <summary>
     /// Raised with the file's path when <see cref="LoadFromPathAsync"/> (or
     /// <see cref="ReportUnrecognizedFile"/>) rejects a file because no product
@@ -1458,6 +1523,14 @@ internal sealed class DatasetsViewModel : ViewModelBase
         IsolateCommand = new RelayCommand<DatasetEntry>(Isolate);
         ResetOpacityCommand = new RelayCommand(ResetOpacity);
         ShowLegendCommand = new RelayCommand<DatasetEntry>(ShowLegend, entry => LegendSectionOf(entry) is not null);
+        ShowCataloguesCommand = new RelayCommand<DatasetEntry>(
+            ShowCatalogues, entry => _showCatalogueProduct is not null && CatalogueProductOf(entry) is not null);
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SelectedEntry))
+                RaiseDrawnWithChanged();
+        };
+        EntryPortrayalSpecChanged += (_, _) => RaiseDrawnWithChanged();
 
         // Re-apply paint order whenever the entries collection is
         // mutated by reorder commands. Add/remove side-effects flow

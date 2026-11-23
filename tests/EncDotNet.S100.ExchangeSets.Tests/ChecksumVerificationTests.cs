@@ -173,7 +173,7 @@ public class ChecksumVerificationTests
             source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
-        Assert.Equal(VerificationOutcome.Ok, file.Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, file.Outcome);
         Assert.Equal(VerificationOutcome.NoChecksum, file.ChecksumOutcome);
         Assert.Equal(Sha256Hex(content), file.ComputedSha256);
         Assert.False(result.IsUnsigned);

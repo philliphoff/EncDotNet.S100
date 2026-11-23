@@ -1,6 +1,8 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Grib;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.TropicalCyclones;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
@@ -153,7 +155,10 @@ internal static class DatasetInputResolver
     /// <summary>
     /// Adds a plain folder: each exchange set in it (a folder holding a
     /// catalogue, not searched further) and every loose dataset file, searched
-    /// recursively; archives are left for the caller to open directly.
+    /// recursively. A folder holding a GRIB2 model run is one dataset, and
+    /// a folder holding one storm's NHC advisory zips is another, both at
+    /// once when it holds both (#1677). Other archives are left for the
+    /// caller to open directly, with a warning.
     /// </summary>
     private static void AddFolder(
         string folder, IReadOnlySet<string>? onlySpecs, List<FileDatasetInput> inputs, HashSet<string> usedIds,
@@ -174,25 +179,47 @@ internal static class DatasetInputResolver
             }
 
             // A folder holding one weather model run (GRIB2 files, one per forecast hour) is one dataset (#1075),
-            // as is a folder of one storm's NHC advisory zips (#1294).
-            var isRun = DatasetPipelineFactory.DetectProductSpec(directory) is { } runSpec
-                && (onlySpecs is null || onlySpecs.Contains(NormalizeOnlyToken(runSpec)));
-            if (isRun)
+            // as is a folder of one storm's NHC advisory zips (#1294). Each kind is detected on its own, so a
+            // folder holding both is two datasets (#1677).
+            var folderId = directory == root ? Path.GetFileName(root) : relative;
+            var isGribRun = GribRunFolder.IsRunFolder(directory);
+            if (isGribRun && IsIncluded(GribDatasetProcessor.SpecName, onlySpecs))
             {
-                var runId = UniqueId(directory == root ? Path.GetFileName(root) : relative, usedIds);
-                inputs.Add(new FileDatasetInput(new DatasetId(runId), DatasetPipelineFactory.DetectProductSpec(directory)!, directory, null));
+                inputs.Add(new FileDatasetInput(
+                    new DatasetId(UniqueId(folderId, usedIds)), GribDatasetProcessor.SpecName, directory, null));
+            }
+
+            var advisory = NhcAdvisoryFiles.Find(directory);
+            string? advisoryStorm = null;
+            if (advisory is not null)
+            {
+                NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(advisory.ForecastZip), out _, out advisoryStorm, out _);
+                if (IsIncluded(TropicalCycloneDatasetProcessor.SpecName, onlySpecs))
+                {
+                    // Beside a GRIB2 run, the folder's path is the run's: the advisory is read from its
+                    // latest forecast zip, which finds the same siblings, so each dataset keeps a path of its own.
+                    var (id, path) = isGribRun
+                        ? (Path.GetRelativePath(root, advisory.ForecastZip).Replace(Path.DirectorySeparatorChar, '/'), advisory.ForecastZip)
+                        : (folderId, directory);
+                    inputs.Add(new FileDatasetInput(
+                        new DatasetId(UniqueId(id, usedIds)), TropicalCycloneDatasetProcessor.SpecName, path, null));
+                }
             }
 
             foreach (var file in Directory.EnumerateFiles(directory, "*", options).Order(StringComparer.Ordinal))
             {
-                if (isRun && EncDotNet.S100.Datasets.Grib.GribRunFolder.IsGrib2(file))
+                if (isGribRun && GribRunFolder.IsGrib2(file))
                     continue;
                 var extension = Path.GetExtension(file);
                 if (string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase))
                 {
-                    // A tropical cyclone advisory folder's zips are the folder's dataset (#1294).
-                    if (isRun && EncDotNet.S100.Datasets.TropicalCyclones.NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(file), out _, out _, out _))
+                    // The advisory folder's storm's zips are the folder's advisory dataset (#1294).
+                    if (advisoryStorm is not null
+                        && NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(file), out _, out var storm, out _)
+                        && string.Equals(storm, advisoryStorm, StringComparison.Ordinal))
+                    {
                         continue;
+                    }
                     skipped.Add(new SkippedDataset(
                         file,
                         SkippedDatasetKind.Unsupported,
@@ -211,7 +238,7 @@ internal static class DatasetInputResolver
                     continue;
                 }
 
-                if (onlySpecs is not null && !onlySpecs.Contains(NormalizeOnlyToken(spec)))
+                if (!IsIncluded(spec, onlySpecs))
                     continue;
 
                 var id = UniqueId(Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'), usedIds);
@@ -280,6 +307,10 @@ internal static class DatasetInputResolver
                 return next;
         }
     }
+
+    /// <summary>Whether <paramref name="spec"/> passes the <c>--only</c> filter; everything does without one.</summary>
+    private static bool IsIncluded(string spec, IReadOnlySet<string>? onlySpecs) =>
+        onlySpecs is null || onlySpecs.Contains(NormalizeOnlyToken(spec));
 
     private static IReadOnlySet<string> ParseOnlySpecs(string only) =>
         only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
