@@ -25,13 +25,24 @@ internal sealed class AboutDialogViewModel : ViewModelBase
     private readonly IAppVersionProvider _versionProvider;
     private readonly IUrlOpener _urlOpener;
     private readonly TimeProvider _timeProvider;
+    private readonly Action<string>? _showCatalogues;
 
+    /// <summary>Creates the dialog.</summary>
+    /// <param name="dialogManager">Hosts the dialog and closes it.</param>
+    /// <param name="updateService">The update check.</param>
+    /// <param name="versionProvider">The running version.</param>
+    /// <param name="urlOpener">Opens the website, notes and licences.</param>
+    /// <param name="timeProvider">The clock.</param>
+    /// <param name="catalogues">The catalogues in effect, for the per-product table (catalogue-panels §6.5); null hides it.</param>
+    /// <param name="showCatalogues">Opens the Catalogues activity at a product (<see cref="CataloguesViewModel.ShowProduct"/>); null hides the links.</param>
     public AboutDialogViewModel(
         DialogManager dialogManager,
         IUpdateService updateService,
         IAppVersionProvider versionProvider,
         IUrlOpener urlOpener,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        CatalogueRegistry? catalogues = null,
+        Action<string>? showCatalogues = null)
     {
         ArgumentNullException.ThrowIfNull(dialogManager);
         ArgumentNullException.ThrowIfNull(updateService);
@@ -44,6 +55,14 @@ internal sealed class AboutDialogViewModel : ViewModelBase
         _versionProvider = versionProvider;
         _urlOpener = urlOpener;
         _timeProvider = timeProvider;
+        _showCatalogues = showCatalogues;
+        Catalogues = catalogues is null
+            ? []
+            : [.. catalogues.Products.Select(p => new AboutCatalogueRow(
+                p.Spec,
+                CatalogueEntryPointText.AboutCell(p.Feature),
+                CatalogueEntryPointText.AboutCell(p.Portrayal),
+                p.HasProblem))];
 
         CheckNowCommand = new AsyncRelayCommand(() => RunCheckAsync(force: true), () => !IsChecking);
         UpdateNowCommand = new RelayCommand(UpdateNow);
@@ -55,6 +74,36 @@ internal sealed class AboutDialogViewModel : ViewModelBase
         LicenseCommand = new RelayCommand(() => _urlOpener.Open(GitHubReleaseClient.LicenseUrl));
         ThirdPartyNoticesCommand = new RelayCommand(() => _urlOpener.Open(GitHubReleaseClient.ThirdPartyNoticesUrl));
         CloseCommand = new RelayCommand(() => _dialogManager.Close(this));
+        ShowCataloguesCommand = new RelayCommand<string>(ShowCatalogues, _ => _showCatalogues is not null);
+    }
+
+    // ---- Catalogues (catalogue-panels §6.5, CR3) --------------------------
+
+    /// <summary>
+    /// Every product's feature and portrayal catalogue versions and where
+    /// each comes from: built-in, custom, command line or missing. Read-only.
+    /// </summary>
+    public IReadOnlyList<AboutCatalogueRow> Catalogues { get; }
+
+    /// <summary>True when there's a catalogue table to show.</summary>
+    public bool HasCatalogues => Catalogues.Count > 0;
+
+    /// <summary>True when the table's products link to the Catalogues activity.</summary>
+    public bool CanShowCatalogues => _showCatalogues is not null;
+
+    /// <summary>
+    /// Closes About and opens the Catalogues activity at the product given as
+    /// the parameter, or at the first product when there's none.
+    /// </summary>
+    public IRelayCommand<string> ShowCataloguesCommand { get; }
+
+    private void ShowCatalogues(string? spec)
+    {
+        if (_showCatalogues is null) return;
+        var product = spec ?? (Catalogues.Count > 0 ? Catalogues[0].Spec : null);
+        _dialogManager.Close(this);
+        if (product is not null)
+            _showCatalogues(product);
     }
 
     // ---- Branding / static product info -----------------------------------
@@ -328,4 +377,16 @@ internal sealed class AboutDialogViewModel : ViewModelBase
             return string.Format(CultureInfo.CurrentCulture, "{0:0.#} MB", bytes / mb);
         return string.Format(CultureInfo.CurrentCulture, "{0:0.#} KB", bytes / kb);
     }
+}
+
+/// <summary>A row of Help › About's catalogue table (catalogue-panels §6.5).</summary>
+/// <param name="Spec">The product, e.g. <c>S-101</c>.</param>
+/// <param name="Feature">"2.0.0 · built-in", "2.1.0 · custom", "missing"…</param>
+/// <param name="Portrayal">The same for the portrayal catalogue, or "drawn by SoundCharts".</param>
+/// <param name="HasProblem">True when either catalogue is in error or missing.</param>
+internal sealed record AboutCatalogueRow(string Spec, string Feature, string Portrayal, bool HasProblem)
+{
+    /// <summary>The row's accessible name: "S-101: feature 2.0.0 · built-in, portrayal 2.0.0 · built-in".</summary>
+    public string AccessibleName =>
+        string.Format(CultureInfo.CurrentCulture, Strings.About_Catalogues_RowNameFormat, Spec, Feature, Portrayal);
 }

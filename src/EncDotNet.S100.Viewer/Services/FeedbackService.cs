@@ -39,6 +39,7 @@ internal sealed class FeedbackService : IFeedbackService
     private readonly IAppScreenshotProvider _screenshot;
     private readonly ICapabilityAccessor<IImageRenderer> _mapRendererAccessor;
     private readonly LogBuffer? _logs;
+    private readonly CatalogueRegistry? _catalogues;
 
     public FeedbackService(
         DatasetsViewModel datasets,
@@ -49,7 +50,8 @@ internal sealed class FeedbackService : IFeedbackService
         ViewerSettingsService settings,
         IAppScreenshotProvider screenshot,
         ICapabilityAccessor<IImageRenderer> mapRendererAccessor,
-        LogBuffer? logs)
+        LogBuffer? logs,
+        CatalogueRegistry? catalogues = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);
@@ -69,6 +71,7 @@ internal sealed class FeedbackService : IFeedbackService
         _screenshot = screenshot;
         _mapRendererAccessor = mapRendererAccessor;
         _logs = logs;
+        _catalogues = catalogues;
     }
 
     /// <inheritdoc />
@@ -153,6 +156,7 @@ internal sealed class FeedbackService : IFeedbackService
             Runtime = runtime,
             Viewport = viewport,
             Datasets = datasets,
+            Catalogues = _catalogues is null ? [] : DescribeCatalogues(_catalogues),
             LastError = lastError,
             PreviousCrashes = previousCrashes,
             CrashLogTail = _crashes.HasCrashes ? _crashes.CrashLogTail : null,
@@ -160,6 +164,17 @@ internal sealed class FeedbackService : IFeedbackService
         };
         return Redacted(report, _logs?.Snapshot() ?? Array.Empty<LogEntry>(), HomePathRedactor.Redact);
     }
+
+    /// <summary>Every product's catalogues, as Help › About lists them (catalogue-panels §6.5).</summary>
+    internal static IReadOnlyList<FeedbackCatalogueInfo> DescribeCatalogues(CatalogueRegistry registry) =>
+        [.. registry.Products.Select(p => new FeedbackCatalogueInfo(
+            p.Spec,
+            p.Feature.Source?.Metadata?.Version,
+            p.Feature.Source?.Origin.ToString(),
+            p.Feature.Status.ToString(),
+            p.Portrayal.Source?.Metadata?.Version,
+            p.Portrayal.Source?.Origin.ToString(),
+            p.Portrayal.Status.ToString()))];
 
     /// <summary>
     /// Adds <paramref name="recentLogs"/> to <paramref name="report"/> and

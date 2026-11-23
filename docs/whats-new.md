@@ -31,6 +31,19 @@ month. For package versions and release assets, see
   warning, as before
   ([#1677](https://github.com/philliphoff/EncDotNet.S100/issues/1677)).
 
+- **Catalogue warnings lead to Catalogues.** A dataset whose product edition
+  doesn't match its feature catalogue now says why on its Datasets row, with
+  **Catalogues…**, which opens the Catalogues activity at that product. The
+  row menu has **Catalogues…** too. The dataset inspector's Dataset tab has a
+  **Drawn with** line naming both catalogues and any that aren't built in,
+  such as "Feature 2.0.0 · Portrayal 2.1.0-draft (custom)", or "Drawn by
+  SoundCharts" for S-104; an S-57 cell names the S-101 portrayal it's drawn
+  with. The toast for a missing portrayal catalogue has **Choose
+  catalogue…**, which opens Add catalogue… for the product. Help › About
+  lists every product's feature and portrayal catalogue versions and where
+  each comes from (built-in, custom, command line or missing), and each
+  product opens Catalogues. Feedback reports include the same table.
+
 - **One Catalogues activity.** The Feature Catalogues and Portrayal
   Catalogues activities are replaced by **Catalogues**, which lists every
   product with both its catalogues: "Feature 2.0.0 · Portrayal 2.1.0", how
