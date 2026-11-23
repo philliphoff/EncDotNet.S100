@@ -132,7 +132,8 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`tides predict`](#tides-predict) | Predicts the tide at a station, as heights, highs and lows, or an S-104 dataset. |
 | [`tides currents stations`](#tides-currents-stations) | Lists tidal current stations near a point, from the offline station catalogue. |
 | [`tides currents predict`](#tides-currents-predict) | Predicts the tidal current at a station, as speeds and directions, slacks and maxima, or an S-111 dataset. |
-| [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, or checks for newer data. |
+| [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, from NOAA or a mirror, or checks for newer data. |
+| [`tides publish`](#tides-publish) | Prepares a tide station catalogue for a mirror: checks it, and writes it with its manifest. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`sources`](#sources) | Lists the live data sources `--source` takes, with their options and what each still needs. |
 | [`health`](#health) | Checks that a `tiles serve`, `feed serve` or `mcp serve --transport http` on this computer answers, for container health checks. |
@@ -1915,16 +1916,24 @@ written with PureHDF, which doesn't work in a NativeAOT build.
 ## tides update
 
 ```text
-s100 tides update [--check] [--catalogue <file>]
+s100 tides update [--check] [--from <source>] [--catalogue <file>]
 ```
 
 `tides update` downloads NOAA CO-OPS's tide and tidal current stations, with
 their harmonic constituents, datums and subordinate-station offsets, into the
-offline catalogue. It reads about 2,100 pages from NOAA's metadata API at a
-pace the API accepts, so it takes about 10 minutes. The other `tides`
-commands and `s100 mcp serve` read the catalogue with no network.
-SoundCharts reads its own station list; pass its path with `--catalogue` to
-fill it.
+offline catalogue. The other `tides` commands and `s100 mcp serve` read the
+catalogue with no network. SoundCharts reads its own station list; pass its
+path with `--catalogue` to fill it.
+
+`--from` says where to download from:
+
+- `noaa`, the default, reads NOAA's metadata API: about 3,400 requests at a
+  pace the API accepts, so it takes about 10 minutes.
+- `mirror` downloads the same catalogue as one file of about 400 KB from the
+  EncDotNet.S100 mirror. A scheduled workflow refreshes the mirror from NOAA
+  every week. The catalogue's provider and retrieval date are still NOAA's.
+- A URL downloads from another mirror: the address of its
+  `tide-stations.manifest.json` (see [`tides publish`](#tides-publish)).
 
 The catalogue is `noaa-tide-stations.json.gz` in an `EncDotNet.S100/Tides`
 folder in your local application data:
@@ -1939,19 +1948,76 @@ folder in your local application data:
 [station catalogue README](../src/EncDotNet.S100.Tides.Stations/README.md#bring-your-own-stations),
 so you can also write your own.
 
-`--check` asks NOAA whether it has newer data than the catalogue, with a few
-requests: a new datum epoch, stations added, removed or moved, and datums
-accepted again. It exits with code `8` when there's newer data. Without a
-network, a catalogue over 12 months old counts as stale.
+`--check` asks whether there's newer data than the catalogue, and downloads
+nothing. With `--from noaa` it asks NOAA with a few requests: a new datum
+epoch, stations added, removed or moved, and datums accepted again. With a
+mirror it reads the mirror's manifest, one request, and there's newer data
+when the mirror's catalogue was retrieved from NOAA later than yours. It
+exits with code `8` when there's newer data. Without a network, a catalogue
+over 12 months old counts as stale.
 
 | Option | Default | Description |
 |---|---|---|
 | `--check` | off | Only checks for newer data. Exits with `0` when the catalogue is current and `8` when it isn't. |
+| `--from <source>` | `noaa` | `noaa`, `mirror`, or the URL of a mirror's manifest. |
 | `--catalogue <file>` | the offline cache | Where to keep the catalogue. |
 
 ```bash
 s100 tides update
 s100 tides update --check
+s100 tides update --from mirror
+s100 tides update --from mirror --check
+```
+
+## tides publish
+
+```text
+s100 tides publish <output> --catalogue <file> [options]
+```
+
+`tides publish` prepares a tide station catalogue for a mirror. It writes
+the two files a mirror publishes into the `<output>` folder:
+`tide-stations.json.gz`, the catalogue, and `tide-stations.manifest.json`,
+its size, SHA-256, provider and dates. Upload the catalogue first, then the
+manifest. The manifest format is in the
+[station catalogue README](../src/EncDotNet.S100.Tides.Stations/README.md#run-a-mirror).
+You only need this command to run a mirror; the EncDotNet.S100 mirror runs
+it every week in the `tide-stations.yml` workflow.
+
+`--previous` names a folder with the mirror's published files. The catalogue
+is checked against them, and the command exits with code `9`, writing
+nothing, when the catalogue:
+
+- doesn't say when it was retrieved, or was retrieved before the published
+  one;
+- names another provider than `--provider`;
+- has no tide stations;
+- has lost more than `--max-drop` percent of its tide stations, of those it
+  can predict on MLLW, of its current stations, or of those it can predict,
+  or is missing that many of the published stations.
+
+When the stations are the same as the published ones, field for field, the
+published file is kept, so the manifest's retrieval date moves only when the
+data changes. Each run sets the manifest's `checked` time to now. Pass
+`--crawled` when the catalogue is a new full download, to set its `crawled`
+time too. Without `--previous`, or with an empty folder, it's a first
+publication.
+
+The command writes a Markdown summary to standard output, and appends it to
+`--summary` too: the result, the dates and counts, and which stations changed.
+
+| Option | Default | Description |
+|---|---|---|
+| `--catalogue <file>` | required | The catalogue to publish, usually from `tides update --from noaa`. |
+| `--previous <folder>` | none | The mirror's published files, to check against. |
+| `--crawled` | off | The catalogue is a new full download from the provider. |
+| `--provider <name>` | `NOAA CO-OPS` | The provider the catalogue must name. |
+| `--max-drop <percent>` | `5` | The largest share of stations the catalogue may lose. |
+| `--summary <file>` | none | A Markdown file to append the summary to, such as `$GITHUB_STEP_SUMMARY`. |
+
+```bash
+s100 tides update --from noaa --catalogue candidate/tide-stations.json.gz
+s100 tides publish out/ --catalogue candidate/tide-stations.json.gz --previous published/ --crawled
 ```
 
 ## sources
@@ -2308,7 +2374,8 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
 | `6` | `validate` only: failing findings, or failed signature or checksum checks. |
 | `7` | `route check` only: findings at or above `--fail-on`. |
-| `8` | `tides update --check` only: NOAA has newer data than the catalogue. |
+| `8` | `tides update --check` only: NOAA or the mirror has newer data than the catalogue. |
+| `9` | `tides publish` only: the catalogue failed the publish check, and nothing was written. |
 | other non-zero | Invalid arguments, such as a missing file or an unknown palette. |
 
 ## See also

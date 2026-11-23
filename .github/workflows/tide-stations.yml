@@ -1,0 +1,162 @@
+name: Tide stations
+
+# Mirrors NOAA CO-OPS's tide and current station catalogue as one file (#1674),
+# so SoundCharts, the s100 CLI and the EncDotNet.S100.Tides.Stations library
+# download about 400 KB instead of making some 3,400 paced requests to NOAA's
+# metadata API each.
+#
+# The catalogue and its manifest are the assets of a rolling `tide-stations`
+# prerelease, replaced in place, so their URLs never change:
+#
+#   https://github.com/<owner>/<repo>/releases/download/tide-stations/tide-stations.manifest.json
+#   https://github.com/<owner>/<repo>/releases/download/tide-stations/tide-stations.json.gz
+#
+# Every week the job checks the published catalogue against NOAA cheaply
+# (`s100 tides update --check`). It downloads everything from NOAA when that
+# finds newer data, when the last full download is FULL_EVERY_DAYS old (the
+# cheap check can't see a station's constituents revised on their own), when
+# nothing is published yet, or when asked. `s100 tides publish` then refuses a
+# catalogue that lost stations or is otherwise wrong, so a bad day at NOAA
+# fails the job and leaves the published files alone, and keeps the published
+# file when the stations are the same, so clients see newer data only when
+# NOAA's changed. The manifest is uploaded every run: its `checked` time says
+# the mirror is current.
+#
+# The tag is `tide-stations`, not v*, so neither CI's release jobs nor the Docs
+# site rebuild run for it, and the release is a prerelease that is never
+# "latest", so the apps' update checks (releases/latest) never see it.
+on:
+  schedule:
+    # Mondays, 09:23 UTC.
+    - cron: '23 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Download everything from NOAA even if the cheap check finds nothing new.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tide-stations
+  cancel-in-progress: false
+
+env:
+  TAG: tide-stations
+  FULL_EVERY_DAYS: 30
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build the s100 CLI
+        run: dotnet build tools/EncDotNet.S100.Cli --configuration Release --output cli
+
+      - name: Download the published catalogue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p published
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir published \
+              --pattern 'tide-stations.json.gz' --pattern 'tide-stations.manifest.json'
+          fi
+          ls -l published
+
+      - name: Decide whether to download everything from NOAA
+        id: plan
+        env:
+          FULL: ${{ inputs.full || false }}
+        run: |
+          reason=""
+          if [ ! -f published/tide-stations.json.gz ] || [ ! -f published/tide-stations.manifest.json ]; then
+            reason="nothing is published yet"
+          elif [ "$FULL" = "true" ]; then
+            reason="the run asked for it"
+          else
+            crawled="$(jq -r '.crawled' published/tide-stations.manifest.json)"
+            age=$(( ( $(date -u +%s) - $(date -u -d "$crawled" +%s) ) / 86400 ))
+            if [ "$age" -ge "$FULL_EVERY_DAYS" ]; then
+              reason="the last full download was $age days ago"
+            else
+              set +e
+              ./cli/s100 tides update --from noaa --check --catalogue published/tide-stations.json.gz
+              code=$?
+              set -e
+              case "$code" in
+                0) ;;
+                8) reason="NOAA has newer data" ;;
+                *) echo "::error::The check against NOAA failed with exit code $code."; exit "$code" ;;
+              esac
+            fi
+          fi
+
+          if [ -n "$reason" ]; then
+            echo "Downloading everything from NOAA: $reason."
+            echo "full=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "NOAA has no newer data than the published catalogue."
+            echo "full=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download NOAA's catalogue
+        if: steps.plan.outputs.full == 'true'
+        run: ./cli/s100 tides update --from noaa --catalogue candidate/tide-stations.json.gz
+
+      - name: Prepare the files
+        env:
+          FULL_DOWNLOAD: ${{ steps.plan.outputs.full }}
+        run: |
+          if [ "$FULL_DOWNLOAD" = "true" ]; then
+            ./cli/s100 tides publish out --catalogue candidate/tide-stations.json.gz \
+              --previous published --crawled --summary "$GITHUB_STEP_SUMMARY"
+          else
+            ./cli/s100 tides publish out --catalogue published/tide-stations.json.gz \
+              --previous published --summary "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publish
+        env:
+          # RELEASE_TOKEN (a PAT with Contents and Workflows write), as in
+          # nightly.yml: an Actions token can't create a ref on a commit that
+          # changes workflow files.
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          cat > notes.md <<EOF
+          **Not an app release.** NOAA CO-OPS's tide and tidal current station catalogue, mirrored for SoundCharts, the \`s100\` CLI and the \`EncDotNet.S100.Tides.Stations\` library, which download it from here instead of from NOAA's metadata API.
+
+          - \`tide-stations.json.gz\`: the catalogue, in the [\`tide-stations\` file format](https://github.com/$GITHUB_REPOSITORY/blob/main/src/EncDotNet.S100.Tides.Stations/README.md).
+          - \`tide-stations.manifest.json\`: its size, SHA-256, NOAA's retrieval date, and when this mirror last checked it against NOAA.
+
+          A [scheduled workflow](https://github.com/$GITHUB_REPOSITORY/actions/workflows/tide-stations.yml) checks NOAA every week and replaces these files in place when NOAA's data changes. NOAA's station data is a work of the US Government and in the public domain. Predictions from it are astronomical only and aren't for navigation.
+          EOF
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # The catalogue first, then the manifest that describes it: a client
+            # that reads the manifest in between sees a mismatch and reads both again.
+            if ! cmp -s out/tide-stations.json.gz published/tide-stations.json.gz; then
+              gh release upload "$TAG" out/tide-stations.json.gz --repo "$GITHUB_REPOSITORY" --clobber
+            fi
+            gh release upload "$TAG" out/tide-stations.manifest.json --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+              --title "Tide station catalogue" --notes-file notes.md
+          else
+            # First run: create the release (and the tag) once; later runs only
+            # replace its assets, so release watchers aren't notified each week.
+            gh release create "$TAG" out/tide-stations.json.gz out/tide-stations.manifest.json \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --prerelease --latest=false --title "Tide station catalogue" --notes-file notes.md
+          fi
