@@ -35,7 +35,7 @@ public sealed class ChartReferenceLeadGlyphTests
     }
 
     [Fact]
-    public async Task Depth_Area_leads_with_its_colour_fills_as_stripes_its_own_first()
+    public async Task Depth_Area_leads_with_an_area_patch_in_a_representative_shade()
     {
         var index = await ChartReferenceIndexes.S101Async();
         var depthArea = ChartReferenceIndexes.Feature(index, "DepthArea");
@@ -43,13 +43,16 @@ public sealed class ChartReferenceLeadGlyphTests
         var lead = LeadGlyph.For(depthArea, index, simplifiedSymbols: false);
 
         // Not the restriction symbols its shared rule draws for some values.
-        Assert.Equal(LeadGlyphKind.Stripes, lead.Kind);
+        Assert.Equal(LeadGlyphKind.Area, lead.Kind);
         Assert.Equal(depthArea.Key, lead.Key);
         Assert.NotNull(lead.Tokens);
         Assert.Equal("NODTA", lead.Tokens[0]);
         Assert.Contains("DEPVS", lead.Tokens);
         Assert.Contains("DEPDW", lead.Tokens);
-        Assert.True(lead.Tokens.Count <= LeadGlyph.MaxStripes);
+        Assert.True(lead.Tokens.Count <= LeadGlyph.MaxColours);
+
+        // One patch, in a blue shade: not "no data", not the tile's deep water.
+        Assert.Equal("DEPVS", lead.AreaToken);
     }
 
     [Fact]

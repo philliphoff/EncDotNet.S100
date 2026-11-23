@@ -284,9 +284,11 @@ public sealed class ReferenceTabTests : IDisposable
         // Drawn with: each symbol once, with its cases in words.
         var bcnlat21 = entry.DrawnWith.Single(l => l.Code == "BCNLAT21");
         Assert.StartsWith("BCNLAT21 · ", bcnlat21.Name, StringComparison.Ordinal);
-        Assert.Contains("Simplified symbols is on · Colour is red · Beacon shape is a stake, pole, perch or post", bcnlat21.Cases);
-        Assert.Equal(6, bcnlat21.Cases.Count);
-        Assert.Equal("and 2 more cases", entry.DrawnWith.Single(l => l.Code == "BCNLAT15").Cases[^1]);
+        // What every case shares is said once, first; three cases, then "and N more cases".
+        Assert.Equal("When simplified symbols is on:", bcnlat21.Cases[0]);
+        Assert.Equal("Colour is red, green, red · Beacon shape is a stake, pole, perch or post", bcnlat21.Cases[1]);
+        Assert.Equal(5, bcnlat21.Cases.Count);
+        Assert.Equal("and 3 more cases", bcnlat21.Cases[^1]);
 
         // The fallback ? has its own line, not a row of Drawn with.
         Assert.True(entry.HasFallback);
@@ -340,7 +342,8 @@ public sealed class ReferenceTabTests : IDisposable
         Assert.Equal("S-52 Presentation Library (S52Preslib4.0)", entry.Origin);
         Assert.False(entry.IsNew);
         var usedBy = entry.UsedBy.Single(l => l.Code == "LateralBeacon");
-        Assert.Contains("Simplified symbols is on · Colour is red · Beacon shape is a stake, pole, perch or post", usedBy.Cases);
+        Assert.Equal("When simplified symbols is on:", usedBy.Cases[0]);
+        Assert.Contains(usedBy.Cases, c => c.Contains("Beacon shape is a stake, pole, perch or post", StringComparison.Ordinal));
 
         await entry.GlyphsDrawn;
         Assert.All(entry.Palettes, p => Assert.IsAssignableFrom<Bitmap>(p.Glyph));
@@ -411,6 +414,143 @@ public sealed class ReferenceTabTests : IDisposable
         entry.Close();
         settings.SimplifiedSymbols = true;
         Assert.Equal("Now: Off", entry.Current);
+    }
+
+    // ---- Review fixes (#1650) ----
+
+    [Fact]
+    public async Task No_case_in_the_S101_catalogue_shows_rule_code()
+    {
+        var index = await ChartReferenceIndexes.S101Async();
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var context = new ReferenceEntryContext { Index = index, Glyphs = cache, Open = _ => { } };
+        var cases = new List<(string Entry, string Text)>();
+        foreach (var feature in index.FeatureTypes)
+        {
+            var entry = Assert.IsType<FeatureTypeEntryViewModel>(ReferenceEntryViewModel.Create(feature, context));
+            var links = entry.DrawnWith.Concat(entry.PaperChart).Concat(entry.DrawnByShared);
+            if (entry.Fallback is { } fallback)
+                links = links.Append(fallback);
+            cases.AddRange(links.SelectMany(l => l.Cases.Append(l.Name)).Select(c => (feature.Code, c)));
+        }
+
+        foreach (var item in index.Items)
+        {
+            var entry = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(item, context));
+            cases.AddRange(entry.UsedBy.Concat(entry.DependsOn).SelectMany(l => l.Cases).Select(c => (item.Code, c)));
+        }
+
+        Assert.NotEmpty(cases);
+        string[] code = ["feature.", "contextParameters", "contains(", "==", "~=", "<=", ">=", "#", "{", "[", "Rule test", "scaledDecimal", "PrimitiveType"];
+        Assert.All(cases, c => Assert.DoesNotContain(code, t => c.Text.Contains(t, StringComparison.Ordinal)));
+        // No camelCase identifier (depthRangeMinimumValue) reaches a case.
+        var camel = new System.Text.RegularExpressions.Regex(@"\b[a-z]+[A-Z][A-Za-z]*\b");
+        Assert.All(cases, c => Assert.False(camel.IsMatch(c.Text), $"{c.Entry}: {c.Text}"));
+
+        // Depth Area's "no depth range" case reads in the catalogue's words.
+        var depth = Assert.IsType<FeatureTypeEntryViewModel>(ReferenceEntryViewModel.Create(ChartReferenceIndexes.Feature(index, "DepthArea"), context));
+        Assert.Contains(
+            depth.DrawnWith.Concat(depth.PaperChart).SelectMany(l => l.Cases),
+            c => c.Contains("Depth range minimum value is not given", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_area_feature_type_leads_with_one_area_patch_in_the_activity_the_page_and_its_entry()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        using var reference = new ChartReferenceViewModel(f.Service, cache);
+        using var page = new ChartReferencePageViewModel(reference, f.Service);
+        page.Show();
+        await reference.Loading;
+        var index = reference.Index!;
+
+        var row = reference.Rows.Single(r => r.Key.Code == "DepthArea");
+        var tile = page.Tiles.Single(t => t.Key.Code == "DepthArea");
+        var entry = ReferenceEntryViewModel.Create(row.Entry, new ReferenceEntryContext { Index = index, Glyphs = cache, Open = _ => { } });
+        Assert.All([row.Lead, tile.Lead, entry.Lead!], l => Assert.Equal(LeadGlyphKind.Area, l.Kind));
+        Assert.All([row.Lead, tile.Lead, entry.Lead!], l => Assert.Equal("DEPVS", l.AreaToken));
+
+        // One rounded patch with an edge, not a row of stripes.
+        var artwork = f.Service.GetArtwork(index.Spec)!;
+        var drawn = Assert.IsType<EncDotNet.S100.Datasets.Pipelines.Portrayal.SymbolLegendEntry>(await artwork.BuildAsync(row.Lead, PaletteType.Day, TestContext.Current.CancellationToken));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(drawn.Svg, "<rect"));
+        Assert.Contains("fill=\"#61B7FF\"", drawn.Svg, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("stroke=", drawn.Svg, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public async Task Each_palette_tile_is_that_palettes_deep_water_from_the_colour_profile()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        var index = Assert.IsType<ChartReferenceIndex>(await f.Service.GetIndexAsync(S101));
+        var artwork = f.Service.GetArtwork(S101)!;
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var entry = Assert.IsType<SymbolEntryViewModel>(ReferenceEntryViewModel.Create(
+            Item(index, ReferenceKind.Symbol, "BCNLAT21"),
+            new ReferenceEntryContext { Index = index, Artwork = artwork, Glyphs = cache, Open = _ => { } }));
+        entry.Start();
+        await entry.GlyphsDrawn;
+
+        foreach (var tile in entry.Palettes)
+        {
+            var expected = await artwork.ColorAsync("DEPDW", tile.Palette, TestContext.Current.CancellationToken);
+            Assert.NotNull(expected);
+            var brush = Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(tile.Tile);
+            Assert.Equal(Avalonia.Media.Color.Parse(expected), brush.Color);
+        }
+
+        Assert.Equal(Avalonia.Media.Color.Parse("#C9EDFF"), ((Avalonia.Media.ISolidColorBrush)entry.Palettes[0].Tile).Color);
+    }
+
+    [AvaloniaFact]
+    public async Task The_entry_has_one_left_inset_and_Lateral_Beacon_folds_its_long_lists()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        using var cache = new ChartReferenceGlyphCache(PaletteType.Day);
+        var nav = new ReferenceNavigator();
+        using var tab = new ReferenceViewModel(nav, f.Service, cache, post: a => Dispatcher.UIThread.Post(a));
+        using var host = ViewHost.Show(new ReferenceView { DataContext = tab }, 360, 900);
+
+        nav.Open(Key(ReferenceKind.FeatureType, "LateralBeacon"));
+        await tab.Loading;
+        Dispatcher.UIThread.RunJobs();
+        await tab.Entry!.GlyphsDrawn;
+        Dispatcher.UIThread.RunJobs();
+        host.Settle();
+
+        // One left edge for the heading, a section label and a link's text.
+        var entryView = host.Find<ReferenceEntryView>("Reference.Entry");
+        double Left(Avalonia.Visual v) => Avalonia.VisualExtensions.TranslatePoint(v, new Avalonia.Point(0, 0), entryView)!.Value.X;
+        var kind = host.Find<TextBlock>("Reference.Entry.Kind");
+        var label = entryView.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("crHeading") && t.IsEffectivelyVisible && t != kind);
+        var link = host.FindAll<Button>("Reference.Link").First(b => b.IsEffectivelyVisible);
+        var linkText = link.GetVisualDescendants().OfType<TextBlock>().First();
+        Assert.Equal(Left(kind), Left(label), 1);
+        Assert.Equal(Left(kind), Left(linkText), 1);
+
+        // Folded by default: the paper-chart symbols and the shared rules' parts.
+        var entry = Assert.IsType<FeatureTypeEntryViewModel>(tab.Entry);
+        Assert.True(entry.HasPaperChart);
+        Assert.True(entry.HasDrawnByShared);
+        Assert.Equal($"Drawn by shared rules ({entry.DrawnByShared.Count})", entry.DrawnBySharedHeader);
+        Assert.StartsWith("Paper chart symbols (", entry.PaperChartHeader, StringComparison.Ordinal);
+        var paper = host.Find<Expander>("Reference.Entry.PaperChartFold");
+        var shared = host.Find<Expander>("Reference.Entry.SharedFold");
+        Assert.False(paper.IsExpanded);
+        Assert.False(shared.IsExpanded);
+        Assert.False(host.IsShown("Reference.Entry.Shared"));
+        Assert.True(entryView.Bounds.Height < 1500, $"entry {entryView.Bounds.Height} px tall");
+
+        // Expanding reveals the items.
+        int before = host.FindAll<Button>("Reference.Link").Count(b => b.IsEffectivelyVisible);
+        shared.IsExpanded = true;
+        paper.IsExpanded = true;
+        host.Settle();
+        Assert.True(host.IsShown("Reference.Entry.Shared"));
+        Assert.True(host.IsShown("Reference.Entry.PaperChart"));
+        int after = host.FindAll<Button>("Reference.Link").Count(b => b.IsEffectivelyVisible);
+        Assert.Equal(before + entry.DrawnByShared.Count + entry.PaperChart.Count, after);
     }
 
     // ---- MCP ----

@@ -11,8 +11,11 @@ internal enum LeadGlyphKind
     /// <summary>A point symbol (<see cref="LeadGlyph.ItemId"/>).</summary>
     Symbol,
 
-    /// <summary>The plain colour fills as stripes (<see cref="LeadGlyph.Tokens"/>).</summary>
-    Stripes,
+    /// <summary>
+    /// An area patch in the plain colour fills' representative colour
+    /// (<see cref="LeadGlyph.AreaToken"/>), as the Legend shows an area (#1650).
+    /// </summary>
+    Area,
 
     /// <summary>An area fill pattern (<see cref="LeadGlyph.ItemId"/>).</summary>
     AreaFill,
@@ -33,10 +36,10 @@ internal enum LeadGlyphKind
 /// <param name="Key">
 /// The <see cref="ChartReferenceGlyphCache"/> key: the item's own key for a
 /// symbol, line style or area fill, so feature types that lead with the same
-/// symbol share its glyph; the feature type's key for stripes and plain lines.
+/// symbol share its glyph; the feature type's key for area patches and plain lines.
 /// </param>
 /// <param name="ItemId">The symbol, line style or area fill id, or <see langword="null"/>.</param>
-/// <param name="Tokens">The colour tokens of <see cref="LeadGlyphKind.Stripes"/>, in order.</param>
+/// <param name="Tokens">The colour tokens of <see cref="LeadGlyphKind.Area"/>, in order.</param>
 /// <param name="Pen">The plain line of <see cref="LeadGlyphKind.Pen"/>.</param>
 internal sealed record LeadGlyph(
     LeadGlyphKind Kind,
@@ -45,8 +48,27 @@ internal sealed record LeadGlyph(
     IReadOnlyList<string>? Tokens = null,
     PenUse? Pen = null)
 {
-    /// <summary>The most stripes a tile shows.</summary>
-    public const int MaxStripes = 6;
+    /// <summary>The most colour tokens an <see cref="LeadGlyphKind.Area"/> glyph keeps.</summary>
+    public const int MaxColours = 6;
+
+    /// <summary>
+    /// The colour an <see cref="LeadGlyphKind.Area"/> patch is filled with:
+    /// the middle of <see cref="Tokens"/> after leaving out <c>NODTA</c>
+    /// ("no data") and <c>DEPDW</c> (deep water, the tile's own colour, so a
+    /// patch in it wouldn't show). Depth Area's shades give a blue
+    /// (<c>DEPVS</c>); a single token is used as it is.
+    /// </summary>
+    public string? AreaToken
+    {
+        get
+        {
+            if (Tokens is not { Count: > 0 } tokens)
+                return null;
+            var shades = tokens.Where(t => !string.Equals(t, "NODTA", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(t, "DEPDW", StringComparison.OrdinalIgnoreCase)).ToList();
+            return shades.Count == 0 ? tokens[0] : shades[(shades.Count - 1) / 2];
+        }
+    }
 
     /// <summary>
     /// The catalogue's default symbols, the magenta <c>?</c> a rule draws when
@@ -60,7 +82,7 @@ internal sealed record LeadGlyph(
 
     /// <summary>
     /// The lead glyph of a feature type, in order of preference: its own point
-    /// symbol, never the default <c>?</c>; else its colour fills as stripes;
+    /// symbol, never the default <c>?</c>; else its colour fills as an area patch;
     /// else its area fill pattern; else its line; else nothing.
     /// </summary>
     /// <remarks>
@@ -103,9 +125,9 @@ internal sealed record LeadGlyph(
                     .OrderBy(f => Tier(f) == tier ? 0 : 1)
                     .Select(f => f.Token)
                     .Distinct(StringComparer.Ordinal)
-                    .Take(MaxStripes)
+                    .Take(MaxColours)
                     .ToList();
-                return new LeadGlyph(LeadGlyphKind.Stripes, feature.Key, Tokens: tokens);
+                return new LeadGlyph(LeadGlyphKind.Area, feature.Key, Tokens: tokens);
             }
 
             var fill = feature.Uses.FirstOrDefault(u => u.ItemKind == ReferenceKind.AreaFill && !u.IsFamily && Tier(u) == tier);

@@ -128,6 +128,13 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
             tile.Glyph = glyph;
     }
 
+    /// <inheritdoc />
+    protected override void OnPaletteTile(PaletteType palette, IBrush tile)
+    {
+        if (Palettes.FirstOrDefault(p => p.Palette == palette) is { } each)
+            each.Tile = tile;
+    }
+
     private static bool IsPresentationLibrary(string source) =>
         source.StartsWith("S52", StringComparison.OrdinalIgnoreCase);
 
@@ -153,7 +160,7 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
             .Select(f => new ChartReferenceLinkViewModel(
                 f.Key,
                 f.Name,
-                FeatureTypeEntryViewModel.CasesOf(UsesIn(f), Index, f.PermittedPrimitives.Count != 1),
+                FeatureTypeEntryViewModel.CasesOf(UsesIn(f), Index, f.PermittedPrimitives.Count != 1, FeatureTypeEntryViewModel.UsedByCases),
                 null,
                 Context.Open)),
     ];
@@ -182,6 +189,7 @@ internal sealed class SymbolEntryViewModel : ReferenceEntryViewModel
 internal sealed class ReferencePaletteGlyph : ViewModelBase
 {
     private IImage? _glyph;
+    private IBrush _tile;
 
     /// <summary>Creates the tile.</summary>
     /// <param name="palette">The palette.</param>
@@ -190,7 +198,7 @@ internal sealed class ReferencePaletteGlyph : ViewModelBase
     {
         Palette = palette;
         Label = label;
-        Tile = LegendViewModel.TileOf(palette);
+        _tile = LegendViewModel.TileOf(palette);
     }
 
     /// <summary>The palette.</summary>
@@ -199,8 +207,15 @@ internal sealed class ReferencePaletteGlyph : ViewModelBase
     /// <summary>Its name: "Day", "Dusk" or "Night".</summary>
     public string Label { get; }
 
-    /// <summary>The palette's chart background.</summary>
-    public IBrush Tile { get; }
+    /// <summary>
+    /// The palette's chart background: the viewer's until the catalogue's
+    /// colour profile is read, then that palette's <c>DEPDW</c>.
+    /// </summary>
+    public IBrush Tile
+    {
+        get => _tile;
+        set => SetProperty(ref _tile, value);
+    }
 
     /// <summary>The glyph in the palette, or <see langword="null"/> until it is drawn.</summary>
     public IImage? Glyph

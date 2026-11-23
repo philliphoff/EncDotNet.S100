@@ -9455,11 +9455,11 @@
     <value>{0} is off</value>
   </data>
   <data name="ChartReference_Condition_Expression" xml:space="preserve">
-    <value>Rule test: {0}</value>
-    <comment>A rule condition the reader can't put into words; {0} is its source text</comment>
+    <value>In some cases</value>
+    <comment>A rule condition that can't be put into words: a test of values the rule works out itself</comment>
   </data>
   <data name="ChartReference_Condition_ExpressionFails" xml:space="preserve">
-    <value>Rule test fails: {0}</value>
+    <value>In other cases</value>
   </data>
   <data name="ChartReference_Condition_Otherwise" xml:space="preserve">
     <value>None of the cases above</value>
@@ -9778,5 +9778,45 @@
   <data name="Reference_Places" xml:space="preserve">
     <value>Places</value>
     <comment>Heading of the symbols a line style places along its line or an area fill tiles as its pattern</comment>
+  </data>
+  <data name="ChartReference_Condition_Includes" xml:space="preserve">
+    <value>{0} includes {1}</value>
+    <comment>{0} is an attribute, {1} one or more of its values: Restriction includes anchoring prohibited</comment>
+  </data>
+  <data name="ChartReference_Condition_Excludes" xml:space="preserve">
+    <value>{0} does not include {1}</value>
+    <comment>{0} is an attribute, {1} one or more of its values</comment>
+  </data>
+  <data name="ChartReference_Condition_OrMore" xml:space="preserve">
+    <value>{0} or {1} more</value>
+    <comment>{0} is a list of values, {1} how many more there are</comment>
+  </data>
+  <data name="ChartReference_Condition_AndJoin" xml:space="preserve">
+    <value>{0} and {1}</value>
+    <comment>Joins conditions that must all hold inside a longer condition</comment>
+  </data>
+  <data name="ChartReference_Condition_Yes" xml:space="preserve">
+    <value>{0}</value>
+    <comment>A yes/no attribute that is true, by its name: Radar conspicuous</comment>
+  </data>
+  <data name="ChartReference_Condition_No" xml:space="preserve">
+    <value>Not {0}</value>
+    <comment>A yes/no attribute that is false: Not radar conspicuous</comment>
+  </data>
+  <data name="Reference_PaperChartSymbols" xml:space="preserve">
+    <value>Paper chart symbols</value>
+    <comment>Folded heading of the symbols drawn only when Simplified symbols is off</comment>
+  </data>
+  <data name="Reference_HeadingCount" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>A folded heading with how many items it holds: Drawn by shared rules (30)</comment>
+  </data>
+  <data name="Reference_CasesWhen" xml:space="preserve">
+    <value>When {0}:</value>
+    <comment>Leads a symbol's cases with the conditions they all share: When simplified symbols is on:</comment>
+  </data>
+  <data name="Reference_NoFurtherCondition" xml:space="preserve">
+    <value>With no further condition</value>
+    <comment>A case that needs only the shared conditions</comment>
   </data>
 </root>

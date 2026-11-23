@@ -222,6 +222,16 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
     {
     }
 
+    /// <summary>Called once a palette's tile colour is read from the catalogue; a symbol entry shows it.</summary>
+    /// <param name="palette">The palette.</param>
+    /// <param name="tile">The palette's chart background.</param>
+    protected virtual void OnPaletteTile(PaletteType palette, IBrush tile)
+    {
+    }
+
+    /// <summary>The colour token a palette's tile is filled with: the chart's deep water.</summary>
+    internal const string TileToken = "DEPDW";
+
     /// <summary>Whether the entry shows its glyph in each palette (a symbol does).</summary>
     protected virtual bool DrawsPalettes => false;
 
@@ -285,6 +295,14 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
                     ? ChartReferenceGlyphCache.Render(row, PaletteGlyphSize, PaletteGlyphSize, ChartReferenceGlyphCache.PaddingOf(PaletteGlyphSize, PaletteGlyphSize))
                     : null,
                 glyph => OnPaletteGlyph(p, glyph));
+            // Each palette's tile is that palette's deep water, from the catalogue's colour profile.
+            Track(
+                () => artwork.ColorAsync(TileToken, p),
+                hex =>
+                {
+                    if (hex is not null && Avalonia.Media.Color.TryParse(hex, out var color))
+                        OnPaletteTile(p, new Avalonia.Media.Immutable.ImmutableSolidColorBrush(color));
+                });
         }
     }
 
@@ -309,7 +327,8 @@ internal abstract class ReferenceEntryViewModel : ViewModelBase
             heightMm.ToString("0.##", CultureInfo.CurrentCulture));
     });
 
-    private void Track(Func<Task<IImage?>> draw, Action<IImage?> apply)
+    private void Track<T>(Func<Task<T?>> draw, Action<T?> apply)
+        where T : class
     {
         var task = Task.Run(async () =>
         {

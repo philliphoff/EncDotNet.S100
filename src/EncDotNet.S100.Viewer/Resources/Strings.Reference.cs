@@ -111,5 +111,13 @@ internal static partial class Strings
 
     public static string Reference_Places => Get(nameof(Reference_Places));
 
+    public static string Reference_PaperChartSymbols => Get(nameof(Reference_PaperChartSymbols));
+
+    public static string Reference_HeadingCount => Get(nameof(Reference_HeadingCount));
+
+    public static string Reference_CasesWhen => Get(nameof(Reference_CasesWhen));
+
+    public static string Reference_NoFurtherCondition => Get(nameof(Reference_NoFurtherCondition));
+
     public static string Tooltip_ReferenceLink => Get(nameof(Tooltip_ReferenceLink));
 }

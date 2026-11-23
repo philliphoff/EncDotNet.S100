@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Viewer.Services.ChartReference;
 /// setting entries, so they follow the catalogue; a code the index doesn't
 /// know is shown as it is.
 /// </remarks>
-internal static class RuleConditionText
+internal static partial class RuleConditionText
 {
     /// <summary>What separates conditions that must all hold.</summary>
     public const string Separator = " · ";
@@ -110,11 +110,12 @@ internal static class RuleConditionText
                 return Strings.ChartReference_Condition_Otherwise;
 
             default:
-                return Format(
-                    condition.Operator == ConditionOperator.DoesNotHold
+                // A test the reader couldn't break down: read the common Lua
+                // forms with the catalogue's names; never show the code (#1650).
+                return Expression(condition.Text, condition.Operator == ConditionOperator.DoesNotHold, index)
+                    ?? (condition.Operator == ConditionOperator.DoesNotHold
                         ? Strings.ChartReference_Condition_ExpressionFails
-                        : Strings.ChartReference_Condition_Expression,
-                    condition.Text ?? string.Empty);
+                        : Strings.ChartReference_Condition_Expression);
         }
     }
 
@@ -158,7 +159,17 @@ internal static class RuleConditionText
             : null;
 
     private static string AttributeName(AttributeEntry? attribute, string? code) =>
-        attribute is not null ? SentenceCase(attribute.Name) : code ?? string.Empty;
+        attribute is not null ? SentenceCase(attribute.Name) : Words(code);
+
+    // A code the catalogue doesn't name, in words: "depthRangeMinimumValue"
+    // reads "Depth range minimum value".
+    private static string Words(string? code)
+    {
+        if (string.IsNullOrEmpty(code))
+            return string.Empty;
+        var words = System.Text.RegularExpressions.Regex.Replace(code, "(?<=[a-z0-9])(?=[A-Z])", " ").Replace('_', ' ').ToLowerInvariant();
+        return char.ToUpperInvariant(words[0]) + words[1..];
+    }
 
     private static string SettingName(ChartReferenceIndex index, string? id) =>
         id is { Length: > 0 } && index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, id), out var entry)

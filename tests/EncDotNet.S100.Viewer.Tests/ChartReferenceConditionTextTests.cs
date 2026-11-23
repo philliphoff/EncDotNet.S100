@@ -56,11 +56,24 @@ public sealed class ChartReferenceConditionTextTests
         Assert.Equal("Geometry is area", Say(new RuleCondition { Kind = RuleConditionKind.Primitive, Operator = ConditionOperator.Equal, Value = "Surface" }));
         Assert.Equal("Feature type is Dredged Area", Say(new RuleCondition { Kind = RuleConditionKind.FeatureType, Operator = ConditionOperator.Equal, Value = "DredgedArea" }));
         Assert.Equal("None of the cases above", Say(new RuleCondition { Kind = RuleConditionKind.Otherwise, Operator = ConditionOperator.Holds }));
-        Assert.Equal("Rule test: a or b", Say(Expression("a or b", ConditionOperator.Holds)));
-        Assert.Equal("Rule test fails: a or b", Say(Expression("a or b", ConditionOperator.DoesNotHold)));
+        // A test of the rule's own values is never shown as code (#1650).
+        Assert.Equal("In some cases", Say(Expression("a or b", ConditionOperator.Holds)));
+        Assert.Equal("In other cases", Say(Expression("a or b", ConditionOperator.DoesNotHold)));
+        Assert.Equal("In some cases", Say(Expression("#spatialAssociations == 1", ConditionOperator.Holds)));
 
-        // A code the catalogue doesn't know is shown as it is.
-        Assert.Equal("madeUp is 7", Say(Attr("madeUp", 7)));
+        // A test of the feature's attributes reads in the catalogue's words.
+        Assert.Equal(
+            "Depth range minimum value is not given · Depth range maximum value is not given",
+            Say(Expression("feature.depthRangeMinimumValue or feature.depthRangeMaximumValue", ConditionOperator.DoesNotHold)));
+        Assert.Equal(
+            "Depth range minimum value is at least safety contour · Depth range maximum value is not given or depth range maximum value is more than safety contour",
+            Say(Expression("depthRangeMinimumValue >= contextParameters.SafetyContour and (not depthRangeMaximumValue or depthRangeMaximumValue > contextParameters.SafetyContour)", ConditionOperator.Holds)));
+        Assert.Equal("Category of landmark includes tower", Say(Expression("contains(17, feature.categoryOfLandmark)", ConditionOperator.Holds)));
+        Assert.Equal("Colour is not white", Say(Expression("colour[1] ~= 1", ConditionOperator.Holds)));
+        Assert.Equal("Geometry is area or geometry is line", Say(Expression("feature.PrimitiveType == PrimitiveType.Surface or feature.PrimitiveType == PrimitiveType.Curve", ConditionOperator.Holds)));
+
+        // A code the catalogue doesn't name reads as words.
+        Assert.Equal("Made up is 7", Say(Attr("madeUp", 7)));
         Assert.Equal(string.Empty, RuleConditionText.Describe([], index));
     }
 

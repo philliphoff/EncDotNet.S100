@@ -25,9 +25,12 @@
         </Style>
         <!-- A link: a plain template, so its text wraps to the panel's width
              rather than to the theme button's measure (#1657). -->
+        <!-- Everything starts at the entry's one 16 px inset: a link's hover box
+             reaches 4 px into the margin, so its text lines up with the headings. -->
         <Style Selector="Button.crLink">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Margin" Value="-4,0,0,0" />
             <Setter Property="Padding" Value="4,2" />
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -138,11 +141,25 @@
                 <StackPanel Classes="crPart" IsVisible="{Binding HasDrawnWith}">
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_DrawnWith}" Classes="crHeading" />
                     <ItemsControl ItemsSource="{Binding DrawnWith}" AutomationProperties.AutomationId="Reference.Entry.DrawnWith" />
+                    <!-- Paper-chart variants fold, so the simplified and always-drawn ones come first. -->
+                    <Expander IsVisible="{Binding HasPaperChart}"
+                              IsExpanded="False"
+                              HorizontalAlignment="Stretch"
+                              AutomationProperties.AutomationId="Reference.Entry.PaperChartFold"
+                              AutomationProperties.Name="{Binding PaperChartHeader}"
+                              Header="{Binding PaperChartHeader}">
+                        <ItemsControl ItemsSource="{Binding PaperChart}" AutomationProperties.AutomationId="Reference.Entry.PaperChart" />
+                    </Expander>
                 </StackPanel>
-                <StackPanel Classes="crPart" IsVisible="{Binding HasDrawnByShared}">
-                    <TextBlock Text="{x:Static loc:Strings.Reference_DrawnByShared}" Classes="crHeading" />
+                <!-- Parts drawn by shared rules (a topmark, a light) are links, folded by default. -->
+                <Expander IsVisible="{Binding HasDrawnByShared}"
+                          IsExpanded="False"
+                          HorizontalAlignment="Stretch"
+                          AutomationProperties.AutomationId="Reference.Entry.SharedFold"
+                          AutomationProperties.Name="{Binding DrawnBySharedHeader}"
+                          Header="{Binding DrawnBySharedHeader}">
                     <ItemsControl ItemsSource="{Binding DrawnByShared}" AutomationProperties.AutomationId="Reference.Entry.Shared" />
-                </StackPanel>
+                </Expander>
                 <StackPanel Classes="crPart" IsVisible="{Binding HasFallback}">
                     <TextBlock Text="{x:Static loc:Strings.Reference_Fallback}" Classes="crHeading" />
                     <ContentControl Content="{Binding Fallback}" AutomationProperties.AutomationId="Reference.Entry.Fallback" />
@@ -336,6 +353,6 @@
                    Margin="16,0"
                    TextWrapping="Wrap" />
 
-        <ContentControl Content="{Binding}" Margin="12,0,16,0" />
+        <ContentControl Content="{Binding}" Margin="16,0" />
     </StackPanel>
 </UserControl>

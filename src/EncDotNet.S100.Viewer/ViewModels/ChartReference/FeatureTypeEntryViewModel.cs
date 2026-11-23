@@ -21,7 +21,14 @@ namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 /// </remarks>
 internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
 {
-    private const int MaxCases = 6;
+    /// <summary>
+    /// The cases a Drawn with item shows before "and N more cases", so a long
+    /// entry fits the 360 px dock; the symbol's own entry lists them all.
+    /// </summary>
+    internal const int DrawnWithCases = 3;
+
+    /// <summary>The cases a symbol entry's Used by lists before "and N more cases".</summary>
+    internal const int UsedByCases = 8;
 
     private readonly FeatureTypeEntry _feature;
     private readonly ChartReferenceTarget? _target;
@@ -50,7 +57,8 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
                 : group.Id;
 
         var (own, shared, fallback) = DrawnWithOf(feature);
-        DrawnWith = own;
+        DrawnWith = [.. own.Where(o => !o.PaperChart).Select(o => o.Link)];
+        PaperChart = [.. own.Where(o => o.PaperChart).Select(o => o.Link)];
         DrawnByShared = shared;
         Fallback = fallback;
         FindCommand = new RelayCommand(Find, () => CanFind);
@@ -84,7 +92,23 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
     public IReadOnlyList<ChartReferenceLinkViewModel> DrawnWith { get; }
 
     /// <summary>Whether its own rule draws anything listed.</summary>
-    public bool HasDrawnWith => DrawnWith.Count > 0;
+    public bool HasDrawnWith => DrawnWith.Count > 0 || PaperChart.Count > 0;
+
+    /// <summary>
+    /// The items drawn only when Simplified symbols is off, folded under
+    /// <see cref="PaperChartHeader"/> so the simplified and always-drawn
+    /// items come first.
+    /// </summary>
+    public IReadOnlyList<ChartReferenceLinkViewModel> PaperChart { get; }
+
+    /// <summary>Whether there are paper-chart items to fold.</summary>
+    public bool HasPaperChart => PaperChart.Count > 0;
+
+    /// <summary>"Paper chart symbols (15)".</summary>
+    public string PaperChartHeader => Counted(Strings.Reference_PaperChartSymbols, PaperChart.Count);
+
+    /// <summary>"Drawn by shared rules (30)", the folded header of <see cref="DrawnByShared"/>.</summary>
+    public string DrawnBySharedHeader => Counted(Strings.Reference_DrawnByShared, DrawnByShared.Count);
 
     /// <summary>Items drawn only through a shared rule (a topmark, a light): links, without cases.</summary>
     public IReadOnlyList<ChartReferenceLinkViewModel> DrawnByShared { get; }
@@ -190,10 +214,10 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
 
     // Drawn with: each item the rule draws, once, with its cases in words;
     // shared-rule items and the fallback apart.
-    private (List<ChartReferenceLinkViewModel> Own, List<ChartReferenceLinkViewModel> Shared, ChartReferenceLinkViewModel? Fallback) DrawnWithOf(FeatureTypeEntry feature)
+    private (List<(ChartReferenceLinkViewModel Link, bool PaperChart)> Own, List<ChartReferenceLinkViewModel> Shared, ChartReferenceLinkViewModel? Fallback) DrawnWithOf(FeatureTypeEntry feature)
     {
         bool geometry = feature.PermittedPrimitives.Count != 1;
-        var own = new List<ChartReferenceLinkViewModel>();
+        var own = new List<(ChartReferenceLinkViewModel, bool)>();
         var shared = new List<ChartReferenceLinkViewModel>();
         ChartReferenceLinkViewModel? fallback = null;
         foreach (var g in feature.Uses.GroupBy(u => (u.ItemKind, u.ItemId)))
@@ -212,34 +236,81 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
                 continue;
             }
 
-            own.Add(Link(key, CasesOf(g, geometry), null));
+            own.Add((Link(key, CasesOf(g, geometry), null), g.All(IsPaperChart)));
         }
 
         return (own, shared, fallback);
     }
 
-    /// <summary>The cases of a set of uses in words, each once, up to six and then "and N more cases".</summary>
+    /// <summary>
+    /// The cases of a set of uses in words, each once, up to
+    /// <paramref name="max"/> and then "and N more cases". Conditions every case shares are said once, first,
+    /// as "When simplified symbols is on:", so each case shows only what
+    /// differs (#1650).
+    /// </summary>
     /// <param name="uses">The uses.</param>
     /// <param name="index">The index, for attribute and value names.</param>
     /// <param name="geometry">Whether to say the geometry a case tests.</param>
-    internal static List<string> CasesOf(IEnumerable<RuleUse> uses, ChartReferenceIndex index, bool geometry)
+    /// <param name="max">The most cases to list.</param>
+    internal static List<string> CasesOf(IEnumerable<RuleUse> uses, ChartReferenceIndex index, bool geometry, int max)
     {
         var cases = uses
             .Select(u => RuleConditionText.Describe(u.Conditions, index, geometry))
-            .Select(text => text.Length == 0 ? Strings.ChartReference_Always : text)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        if (cases.Count <= MaxCases)
-            return cases;
-        var more = cases.Count - MaxCases;
-        return [.. cases.Take(MaxCases), string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_MoreCases, more)];
+
+        var lead = new List<string>();
+        if (cases.Count > 1)
+        {
+            var parts = cases.Select(c => c.Split(RuleConditionText.Separator, StringSplitOptions.RemoveEmptyEntries)).ToList();
+            var common = parts[0].Where(p => parts.All(other => other.Contains(p, StringComparer.Ordinal))).ToList();
+            if (common.Count > 0)
+            {
+                var shared = string.Join(RuleConditionText.Separator, common);
+                lead.Add(string.Format(CultureInfo.CurrentCulture, Strings.Reference_CasesWhen, LowerFirst(shared)));
+                cases =
+                [
+                    .. parts
+                        .Select(p => string.Join(RuleConditionText.Separator, p.Where(x => !common.Contains(x, StringComparer.Ordinal))))
+                        .Select(c => c.Length == 0 ? Strings.Reference_NoFurtherCondition : c)
+                        .Distinct(StringComparer.Ordinal),
+                ];
+            }
+        }
+
+        cases = [.. cases.Select(c => c.Length == 0 ? Strings.ChartReference_Always : c)];
+        if (cases.Count > max)
+        {
+            var more = cases.Count - max;
+            cases = [.. cases.Take(max), string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_MoreCases, more)];
+        }
+
+        return [.. lead, .. cases];
     }
 
-    private List<string> CasesOf(IEnumerable<SymbolUse> uses, bool geometry) => CasesOf(uses, Index, geometry);
+    // "Simplified symbols is on" after "When" reads "simplified symbols is on";
+    // an acronym keeps its capitals.
+    private static string LowerFirst(string text) =>
+        text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1])
+            ? char.ToLower(text[0], CultureInfo.CurrentCulture) + text[1..]
+            : text;
+
+    private List<string> CasesOf(IEnumerable<SymbolUse> uses, bool geometry) => CasesOf(uses, Index, geometry, DrawnWithCases);
 
     // An item without an entry of its own (an unknown id) still shows, by its id.
     private ChartReferenceLinkViewModel Link(ReferenceKey key, IReadOnlyList<string> cases, string? note) =>
         LinkTo(key, cases, note) ?? new ChartReferenceLinkViewModel(key, key.Code, cases, note, Context.Open);
+
+    // A use drawn only when Simplified symbols is off.
+    private static bool IsPaperChart(RuleUse use) =>
+        use.Conditions.Any(c =>
+            c.Kind == RuleConditionKind.ContextParameter
+            && string.Equals(c.Subject, "SimplifiedSymbols", StringComparison.OrdinalIgnoreCase)
+            && (c.Operator == ConditionOperator.IsFalse
+                || c.Operator == ConditionOperator.Equal && string.Equals(c.Value, "false", StringComparison.OrdinalIgnoreCase)));
+
+    private static string Counted(string heading, int count) =>
+        string.Format(CultureInfo.CurrentCulture, Strings.Reference_HeadingCount, heading, count);
 
     private static string Capitalise(string text) =>
         text.Length == 0 ? text : char.ToUpper(text[0], CultureInfo.CurrentCulture) + text[1..];
