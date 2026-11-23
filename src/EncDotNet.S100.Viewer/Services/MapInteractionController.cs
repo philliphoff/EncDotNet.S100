@@ -81,9 +81,6 @@ internal sealed class MapInteractionController
     /// <summary>The context menu shown last, while it may still be open.</summary>
     internal ContextMenu? OpenContextMenu { get; private set; }
 
-    /// <summary>Where a right-button press on the map landed, for the drag-is-not-a-click test.</summary>
-    private Point? _rightPressOrigin;
-
     private MapControl? _mapControl;
     private MapsuiMapNavigator? _mapNavigator;
 
@@ -197,10 +194,8 @@ internal sealed class MapInteractionController
         mapControl.AddHandler(InputElement.PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
         mapControl.PointerExited += OnMapPointerExited;
 
-        // The context menu (R9b, #1681): a right click opens it at the
-        // pointer, from the press and release, since the map handles its own
-        // pointer events; the keyboard (Shift+F10, the Menu key) and UI
-        // automation raise ContextRequested.
+        // The context menu (R9b, #1681): a right click, the keyboard
+        // (Shift+F10, the Menu key) and UI automation raise ContextRequested.
         mapControl.AddHandler(Control.ContextRequestedEvent, OnMapContextRequested, RoutingStrategies.Bubble, handledEventsToo: true);
 
         // Trackpad scroll/swipe to pan (tunnel phase to intercept before MapControl).
@@ -581,7 +576,6 @@ internal sealed class MapInteractionController
         }
 
         var props = e.GetCurrentPoint(_mapControl).Properties;
-        _rightPressOrigin = props.IsRightButtonPressed ? e.GetPosition(_mapControl) : null;
         if (!props.IsLeftButtonPressed)
             return;
 
@@ -707,19 +701,6 @@ internal sealed class MapInteractionController
         {
             e.Handled = true;
         }
-        else if (e.InitialPressMouseButton == MouseButton.Right
-            && _rightPressOrigin is { } rightOrigin
-            && _mapControl is not null
-            && _toolController?.ActiveTool is null)
-        {
-            var at = e.GetPosition(_mapControl);
-            var tapSize = PlatformSettings()?.GetTapSize(e.Pointer.Type) ?? new Size(4, 4);
-            if (!MovedBeyondTap(rightOrigin, at, tapSize))
-                _ = ShowContextMenuAsync(at);
-        }
-
-        if (e.InitialPressMouseButton == MouseButton.Right)
-            _rightPressOrigin = null;
 
         TrackPressMovement(e);
         CancelLongPress();
@@ -773,13 +754,18 @@ internal sealed class MapInteractionController
         if (ReferenceMenu is null || _mapControl is null)
             return;
         e.Handled = true;
-        // A right click opens the menu from its release (OnMapPointerReleased).
-        if (e.TryGetPosition(_mapControl, out _) || _toolController?.ActiveTool is not null)
+        // A tool that uses the right button (Measure ends a path with it)
+        // keeps it; Pick mode doesn't.
+        if (_toolController?.ActiveTool is { } tool && tool is not PickTool)
             return;
-        // The keyboard and UI automation: where the pointer last was over
-        // the map, else the map's centre.
+        // A right click opens it at the pointer; the keyboard and UI
+        // automation where the pointer last was over the map, else at the
+        // map's centre.
         var bounds = _mapControl.Bounds;
-        _ = ShowContextMenuAsync(_lastMouseScreenPos ?? new Point(bounds.Width / 2, bounds.Height / 2));
+        var at = e.TryGetPosition(_mapControl, out var pointer)
+            ? pointer
+            : _lastMouseScreenPos ?? new Point(bounds.Width / 2, bounds.Height / 2);
+        _ = ShowContextMenuAsync(at);
     }
 
     /// <summary>
