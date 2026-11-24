@@ -249,6 +249,8 @@ public sealed class PickWhyThisSymbolTests
         Assert.Equal("ISODGR01", main.Part.ItemId);
         Assert.Equal(PickReasonKind.Likely, main.Reason!.Kind);
         Assert.StartsWith("Likely", main.Reason.Text, StringComparison.Ordinal);
+        // A case that holds only for want of a condition that could be checked says what wasn't checked.
+        Assert.DoesNotContain("Always", main.Reason.Text, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]

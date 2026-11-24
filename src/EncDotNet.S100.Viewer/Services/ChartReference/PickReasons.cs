@@ -160,11 +160,23 @@ internal static class PickReasons
 
         // Several cases hold: what each says, with what they share said once
         // ("When simplified symbols is on:"), as the Reference tab says them.
-        var cases = FeatureTypeEntryViewModel.CasesOf(
-            candidates.Select(c => new HeldCase { RuleFile = c.Use.RuleFile, Line = c.Use.Line, Conditions = c.Held }),
-            index,
-            geometry,
-            MaxCases);
+        // A case with a condition that couldn't be checked says so, rather than
+        // reading "Always" for want of a condition that held.
+        var checkedCases = candidates.Where(c => c.Unknown.Count == 0).ToList();
+        var cases = checkedCases.Count == 0
+            ? []
+            : FeatureTypeEntryViewModel.CasesOf(
+                checkedCases.Select(c => new HeldCase { RuleFile = c.Use.RuleFile, Line = c.Use.Line, Conditions = c.Held }),
+                index,
+                geometry,
+                MaxCases);
+        foreach (var partial in candidates.Where(c => c.Unknown.Count > 0))
+        {
+            var unknown = TermText.Join(RuleConditionText.Separator, RuleConditionText.DescribeParts(partial.Unknown, index, geometry));
+            var notChecked = TermText.Format(Strings.Pick_Why_NotCheckedFormat, unknown.LowerFirst());
+            cases.Add(TermText.Join(RuleConditionText.Separator, [.. RuleConditionText.DescribeParts(partial.Held, index, geometry), notChecked]));
+        }
+
         return new PickReason(PickReasonKind.Likely, [Strings.Pick_Why_LikelyOneOf, .. cases], settings);
     }
 
