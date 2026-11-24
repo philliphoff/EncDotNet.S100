@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The `s100` CLI keeps its files in your data folder on a new Linux
+  account.** When the local application data folder didn't exist yet, such
+  as `~/.local/share` for a new Linux user or in a container, the tide
+  station catalogue and the update check's cache were written under the
+  folder `s100` was run from, and a run from another folder didn't find
+  them. They now go in that data folder, which is created when needed.
+
 - **Tide predictions work on first launch.** SoundCharts and the `s100` CLI
   now ship a copy of NOAA's tide and current station list, taken from the
   mirror when they're built. When there's no list yet, or the one there is
