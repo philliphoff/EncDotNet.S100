@@ -116,11 +116,10 @@ internal static class CliApp
                 });
 
                 tides.AddCommand<TidesUpdateCommand>("update")
-                    .WithDescription("Download NOAA CO-OPS's tide and current stations into the offline catalogue, from NOAA (about 10 minutes) or a mirror (one file), or check whether there's newer data.")
+                    .WithDescription("Download NOAA CO-OPS's tide and current stations into the offline catalogue, from the EncDotNet.S100 mirror (one file) or NOAA itself (about 10 minutes), or check whether there's newer data.")
                     .WithExample("tides", "update")
                     .WithExample("tides", "update", "--check")
-                    .WithExample("tides", "update", "--from", "mirror")
-                    .WithExample("tides", "update", "--from", "mirror", "--check");
+                    .WithExample("tides", "update", "--from", "noaa");
 
                 tides.AddCommand<TidesPublishCommand>("publish")
                     .WithDescription("Prepare a tide station catalogue for a mirror: check it against the published one, keep the published file when the data hasn't changed, and write the catalogue and its manifest into a folder to upload. Exits with code 9 when the catalogue fails the check.")
