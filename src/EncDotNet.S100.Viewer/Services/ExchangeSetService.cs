@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S57;
@@ -36,6 +37,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private readonly Caching.IS57CatalogCache? _s57CatalogCache;
     private readonly int _maxConcurrentLoads;
     private readonly List<TrackedExchangeSet> _tracked = new();
+    private readonly SchemeAdministratorStore? _schemeAdministrators;
+    private CancellationTokenSource? _reverifyDebounce;
     private bool _subscribed;
     private bool _disposed;
 
@@ -45,7 +48,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator,
         IDatasetMetadataReader? metadataReader,
         Caching.IS57CatalogCache? s57CatalogCache,
-        int? maxConcurrentLoads = null)
+        int? maxConcurrentLoads = null,
+        SchemeAdministratorStore? schemeAdministrators = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(notifications);
@@ -54,6 +58,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         _lazyCoordinator = lazyCoordinator;
         _metadataReader = metadataReader;
         _s57CatalogCache = s57CatalogCache;
+        _schemeAdministrators = schemeAdministrators;
+        if (_schemeAdministrators is not null)
+            _schemeAdministrators.Changed += OnSchemeAdministratorsChanged;
         _maxConcurrentLoads = maxConcurrentLoads switch
         {
             > 0 => maxConcurrentLoads.Value,
@@ -243,7 +250,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 verifier: ct => new ExchangeSetVerifier().VerifyAsync(
                     assetSource,
                     catalogue,
-                    new TrustAnchorOptions { AllowUntrustedCertificates = true },
+                    TrustAnchors(),
                     ct));
             _tracked.Add(tracked);
             // From this point on, lifetime ownership transfers to the tracked
@@ -1199,7 +1206,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     : new SubfolderAssetSource(exchangeSet.Source, folder);
                 var parsed = exchangeSet.Catalogue;
                 verifier = ct => new ExchangeSetVerifier().VerifyAsync(
-                    assetSource, parsed, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
+                    assetSource, parsed, TrustAnchors(), ct);
                 producer = parsed.Contact?.Organization;
                 issueDate = ResolveLatestIssueDate(parsed.DatasetDiscoveryMetadata);
             }
@@ -1474,24 +1481,83 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     }
 
     /// <summary>
+    /// The Scheme Administrator roots to verify with, read when each
+    /// verification runs so a change to the roots applies to the next one.
+    /// </summary>
+    private TrustAnchorOptions TrustAnchors() =>
+        _schemeAdministrators?.TrustAnchors() ?? new TrustAnchorOptions { AllowUntrustedCertificates = true };
+
+    /// <summary>
+    /// Re-verifies every open exchange set when the roots change, once the
+    /// changes settle (toggling twice verifies once).
+    /// </summary>
+    private void OnSchemeAdministratorsChanged(object? sender, EventArgs e)
+    {
+        _reverifyDebounce?.Cancel();
+        var debounce = _reverifyDebounce = new CancellationTokenSource();
+        _ = ReverifyAfterAsync(debounce.Token);
+    }
+
+    private async Task ReverifyAfterAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (_disposed)
+            return;
+        foreach (var tracked in _tracked.ToArray())
+            _ = VerifySignaturesAsync(tracked);
+    }
+
+    /// <summary>
     /// Maps an <see cref="ExchangeSetVerificationResult"/> onto the header's
     /// signature badge. Shared by the S-100 and S-57 exchange-set paths so both
     /// surface identical integrity/signature semantics.
     /// </summary>
-    private static (SignatureStatus Status, string Tooltip) SignatureOf(ExchangeSetVerificationResult result) =>
+    private (SignatureStatus Status, string Tooltip) SignatureOf(ExchangeSetVerificationResult result) =>
         result.SignaturesNotChecked ? (SignatureStatus.NotChecked, Strings.Tooltip_SignatureNotChecked)
         : result.IsUnsigned ? (SignatureStatus.Unsigned, Strings.Tooltip_SignatureUnsigned)
-        : result.AllValid ? (SignatureStatus.Verified, Strings.Tooltip_SignatureVerified)
+        : result.AllValid ? Verified(result)
         : result.HasInvalidSignatures ? (SignatureStatus.Invalid, Strings.Tooltip_SignatureInvalid)
         // Every signature matches, but some signer isn't from a trusted SA.
-        : result.AllSignaturesIntact ? (SignatureStatus.Unverified, Strings.Tooltip_SignatureUnverified)
+        : result.AllSignaturesIntact ? (SignatureStatus.Unverified, _schemeAdministrators is { AnyEnabled: false }
+            ? Strings.Tooltip_SignatureUnverifiedNoneOn
+            : Strings.Tooltip_SignatureUnverified)
         // Some files ok, some not — e.g. certificate issues
         : (SignatureStatus.Mixed, Strings.Tooltip_SignatureMixed);
+
+    /// <summary>
+    /// A verified set: "Verified (test)" when any signer chained only to the
+    /// IHO testing root (the weakest anchor wins), else verified against the
+    /// named roots.
+    /// </summary>
+    private (SignatureStatus Status, string Tooltip) Verified(ExchangeSetVerificationResult result)
+    {
+        var entries = result.TrustedRootsUsed
+            .Select(root => _schemeAdministrators?.Find(root))
+            .OfType<SchemeAdministrator>()
+            .ToList();
+        if (entries.Any(e => e.IsTest))
+            return (SignatureStatus.VerifiedTest, Strings.Tooltip_SignatureVerifiedTest);
+        return entries.Count == 0
+            ? (SignatureStatus.Verified, Strings.Tooltip_SignatureVerified)
+            : (SignatureStatus.Verified, string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_SignatureVerifiedFormat,
+                string.Join(", ", entries.Select(e => e.Name).Distinct())));
+    }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        if (_schemeAdministrators is not null)
+            _schemeAdministrators.Changed -= OnSchemeAdministratorsChanged;
+        _reverifyDebounce?.Cancel();
 
         if (_subscribed)
         {

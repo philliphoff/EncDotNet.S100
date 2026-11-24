@@ -1607,6 +1607,7 @@ packs; validate them one at a time.
 | `--format <format>` | `text` | `text` prints a table. `json` prints a report for scripts and CI. |
 | `--suppress <patterns>` | none | Drops findings whose rule id matches, comma-separated, for example `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. |
 | `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files, files without a checksum, and signatures from a signer that isn't verified. |
+| `--trust-root <path>` | none | Trusts a Scheme Administrator root certificate, a DER or PEM file, when verifying an S-100 exchange set. Repeat it to trust several. See below. |
 | `--no-updates` | off | Validates an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--debug` | off | Prints full stack traces on error. |
 
@@ -1619,12 +1620,22 @@ s100 validate chart.000 --suppress "S101-*"
 s100 validate exchange-set/CATALOG.XML
 s100 validate exchange-set.zip --format json
 s100 validate s57-set/CATALOG.031
+s100 validate exchange-set --trust-root iho-sa.crt --strict
 ```
 
-`validate` doesn't take trust roots yet. A signature that matches the file but
-whose signer doesn't chain to a trusted IHO Scheme Administrator shows as
-`SignatureValidUntrusted`, and the summary reads "Signer not verified" rather
-than "Verified". The JSON report's `hasUnverifiedSigners` is `true`.
+A signature counts as verified only when its signer chains to a root you pass
+with `--trust-root`. `validate` never uses the operating system's certificate
+store, and it trusts no root unless you pass one. Get the root from its Scheme
+Administrator, not from the exchange set, and check its SHA-256 fingerprint
+against the one the Scheme Administrator publishes. A file that isn't a
+certificate, or holds a certificate that isn't a certificate authority, stops
+`validate` with an error.
+
+A signature that matches the file but whose signer doesn't chain to a trusted
+root shows as `SignatureValidUntrusted`, and the summary reads "Signer not
+verified" rather than "Verified". The JSON report's `hasUnverifiedSigners` is
+`true`. With `--strict`, such a signature fails. `--trust-root` doesn't apply
+to S-57 exchange sets, whose signatures aren't checked yet.
 
 `--suppress` patterns match rule ids without regard to case. `*` matches any
 run of characters and is the only wildcard, so a pattern without `*` matches

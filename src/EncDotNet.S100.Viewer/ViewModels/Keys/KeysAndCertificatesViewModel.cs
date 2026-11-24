@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Security.Cryptography.X509Certificates;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections.Secom;
+using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Secom;
 
 namespace EncDotNet.S100.Viewer.ViewModels.Keys;
@@ -16,6 +19,9 @@ internal enum KeysTab
 
     /// <summary>Roots trusted to vouch for servers and signers.</summary>
     Authorities,
+
+    /// <summary>S-100 Part 15 Scheme Administrator roots that vouch for chart data.</summary>
+    SchemeAdministrators,
 
     /// <summary>Part 15 system IDs (layout only this round).</summary>
     SystemIds,
@@ -46,6 +52,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
 
     private readonly SecomIdentityStore _identities;
     private readonly TrustedAuthorityStore _authorities;
+    private readonly SchemeAdministratorStore? _schemeAdministrators;
     private readonly IKeysDialogs? _dialogs;
     private readonly TimeProvider _time;
     private readonly Action<Action> _post;
@@ -60,7 +67,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
         TrustedAuthorityStore authorities,
         IKeysDialogs? dialogs,
         TimeProvider time,
-        Action<Action> post)
+        Action<Action> post,
+        SchemeAdministratorStore? schemeAdministrators = null)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(authorities);
@@ -71,9 +79,12 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
         _dialogs = dialogs;
         _time = time;
         _post = post;
+        _schemeAdministrators = schemeAdministrators;
 
         ImportIdentityCommand = new RelayCommand(() => _ = ImportAsync(replacing: null));
         AddAuthorityCommand = new RelayCommand(() => _ = AddAuthorityAsync());
+        AddSchemeAdministratorCommand = new RelayCommand(() => _ = AddSchemeAdministratorAsync());
+        NoSchemeAdministratorActionCommand = new RelayCommand(OnNoSchemeAdministratorAction);
         UseIdentityCommand = new RelayCommand<string>(id => Use(id));
         SelectTabCommand = new RelayCommand<string>(tab =>
         {
@@ -84,6 +95,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
         _identities.Changed += OnStoreChanged;
         _identities.Trust.IdentitiesChanged += OnStoreChanged;
         _authorities.Changed += OnStoreChanged;
+        if (_schemeAdministrators is not null)
+            _schemeAdministrators.Changed += OnStoreChanged;
 
         // Recompute "ends in N days" when the date turns (H4).
         _daily = _time.CreateTimer(_ => _post(OnTick), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
@@ -114,6 +127,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
 
     public ObservableCollection<KeysRow> IdentityRows { get; } = [];
     public ObservableCollection<KeysRow> AuthorityRows { get; } = [];
+    public ObservableCollection<KeysRow> SchemeAdministratorRows { get; } = [];
 
     /// <summary>Identities to switch to from the revoked banner: (id, name).</summary>
     public ObservableCollection<KeysRowAction> AlternativeIdentities { get; } = [];
@@ -134,6 +148,21 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
     public bool HasExpiredAuthorityBanner { get; private set; }
     public string ExpiredAuthorityBannerBody { get; private set; } = "";
 
+    public string SchemeAdministratorsCount { get; private set; } = "0";
+    public bool SchemeAdministratorsHasError { get; private set; }
+
+    /// <summary>Whether this build has a Scheme administrators store (it always does outside tests).</summary>
+    public bool HasSchemeAdministrators => _schemeAdministrators is not null;
+
+    public bool HasExpiredSchemeAdministratorBanner { get; private set; }
+    public string ExpiredSchemeAdministratorBannerBody { get; private set; } = "";
+
+    /// <summary>No root is on, so nothing can be verified (shown only when no root has expired).</summary>
+    public bool HasNoSchemeAdministratorBanner { get; private set; }
+
+    /// <summary>"Turn on IHO" when the built-in IHO root is off, else "Add from file…".</summary>
+    public string NoSchemeAdministratorActionLabel { get; private set; } = "";
+
     /// <summary>Where private keys stay, for the Identities note (C6).</summary>
     public string IdentitiesNote => string.Format(CultureInfo.CurrentCulture, Strings.Keys_Identities_NoteFormat, _identities.Keys.DisplayName);
 
@@ -145,6 +174,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
 
     public ICommand ImportIdentityCommand { get; }
     public ICommand AddAuthorityCommand { get; }
+    public ICommand AddSchemeAdministratorCommand { get; }
+    public ICommand NoSchemeAdministratorActionCommand { get; }
     public ICommand UseIdentityCommand { get; }
     public ICommand SelectTabCommand { get; }
 
@@ -174,6 +205,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
         _lastRefreshDay = DateOnly.FromDateTime(now.LocalDateTime);
         BuildIdentities(now);
         BuildAuthorities(now);
+        BuildSchemeAdministrators(now);
         OnPropertyChanged(string.Empty);
         Refreshed?.Invoke(this, EventArgs.Empty);
     }
@@ -187,6 +219,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
         _identities.Changed -= OnStoreChanged;
         _identities.Trust.IdentitiesChanged -= OnStoreChanged;
         _authorities.Changed -= OnStoreChanged;
+        if (_schemeAdministrators is not null)
+            _schemeAdministrators.Changed -= OnStoreChanged;
         if (_watchedLibrary is not null)
             _watchedLibrary.Changed -= OnLibraryChanged;
     }
@@ -441,6 +475,127 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, ISettingsPag
             expired.Name, CertificateText.Date(new DateTimeOffset(expired.Root.NotAfter.ToUniversalTime(), TimeSpan.Zero)));
         AuthoritiesHasError = expired is not null;
         AuthoritiesCount = AuthoritiesHasError ? "!" : AuthorityRows.Count.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void BuildSchemeAdministrators(DateTimeOffset now)
+    {
+        SchemeAdministratorRows.Clear();
+        if (_schemeAdministrators is null)
+            return;
+
+        SchemeAdministrator? expired = null;
+        foreach (var entry in _schemeAdministrators.Entries)
+        {
+            var root = entry.Root;
+            var notAfter = new DateTimeOffset(root.NotAfter.ToUniversalTime(), TimeSpan.Zero);
+            var notBefore = new DateTimeOffset(root.NotBefore.ToUniversalTime(), TimeSpan.Zero);
+            var isExpired = notAfter <= now;
+            var notYetValid = notBefore > now;
+            if (isExpired && entry.Enabled)
+                expired ??= entry;
+
+            var badges = new List<KeysBadge>();
+            badges.Add(entry.BuiltIn
+                ? new KeysBadge(Strings.Keys_Badge_BuiltIn, KeysTone.Neutral)
+                : new KeysBadge(Strings.Keys_Badge_Added, KeysTone.Neutral));
+            if (entry.IsTest)
+                badges.Add(new KeysBadge(Strings.Keys_Kind_Test, KeysTone.Warning));
+
+            var issuer = root.Subject == root.Issuer
+                ? Strings.Keys_SchemeAdmin_SelfSigned
+                : string.Format(CultureInfo.CurrentCulture, Strings.Keys_SchemeAdmin_IssuedByFormat,
+                    root.GetNameInfo(X509NameType.SimpleName, forIssuer: true));
+            var origin = entry.BuiltIn ? Strings.Keys_Authority_BuiltInOrigin
+                : string.Format(CultureInfo.CurrentCulture, Strings.Keys_Authority_AddedOriginFormat, CertificateText.Date(entry.AddedAt ?? now));
+            var sub = string.Format(CultureInfo.CurrentCulture, Strings.Keys_SchemeAdmin_SubFormat,
+                issuer, CertificateText.Date(notBefore), CertificateText.Date(notAfter), origin);
+
+            var actions = new List<KeysRowAction> { new("View", Strings.Keys_Action_View, new RelayCommand(() => ShowDetails(entry))) };
+            if (entry.BuiltIn)
+            {
+                actions.Add(entry.Enabled
+                    ? new("TurnOff", Strings.Keys_Action_TurnOff, new RelayCommand(() => _schemeAdministrators.SetEnabled(entry.Id, false)))
+                    : new("TurnOn", Strings.Keys_Action_TurnOn, new RelayCommand(() => _schemeAdministrators.SetEnabled(entry.Id, true))));
+            }
+            else
+            {
+                actions.Add(new("Remove", Strings.Keys_Action_Remove, new RelayCommand(() => ConfirmRemove(entry)), IsDestructive: true));
+            }
+
+            var (status, tone) = isExpired ? (Strings.Keys_Status_Expired, KeysTone.Destructive)
+                : !entry.Enabled ? (Strings.Keys_Status_Off, KeysTone.Neutral)
+                : notYetValid ? (Strings.Keys_Status_NotYetValid, KeysTone.Warning)
+                : ((string?)null, KeysTone.Neutral);
+
+            SchemeAdministratorRows.Add(new KeysRow
+            {
+                Id = entry.Id,
+                Title = entry.Name,
+                Badges = badges,
+                Status = status,
+                StatusTone = tone,
+                Mono = ShortColonFingerprint(root),
+                Sub = sub,
+                WarningNote = entry.IsTest ? Strings.Keys_SchemeAdmin_TestLine : null,
+                Actions = actions,
+                IsDimmed = !entry.Enabled,
+                IsSchemeAdministrator = true,
+            });
+        }
+
+        HasExpiredSchemeAdministratorBanner = expired is not null;
+        ExpiredSchemeAdministratorBannerBody = expired is null ? "" : string.Format(CultureInfo.CurrentCulture, Strings.Keys_SchemeAdmin_Expired_BodyFormat,
+            expired.Name, CertificateText.Date(new DateTimeOffset(expired.Root.NotAfter.ToUniversalTime(), TimeSpan.Zero)));
+        HasNoSchemeAdministratorBanner = expired is null && !_schemeAdministrators.AnyEnabled;
+        NoSchemeAdministratorActionLabel = IhoRoot() is not null ? Strings.Keys_SchemeAdmin_NoneOnAction : Strings.Keys_AddSchemeAdmin;
+        SchemeAdministratorsHasError = expired is not null;
+        SchemeAdministratorsCount = SchemeAdministratorsHasError ? "!" : SchemeAdministratorRows.Count.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private SchemeAdministrator? IhoRoot() => _schemeAdministrators?.Entries.FirstOrDefault(e => e.BuiltIn && !e.IsTest);
+
+    private void OnNoSchemeAdministratorAction()
+    {
+        if (IhoRoot() is { } iho)
+            _schemeAdministrators!.SetEnabled(iho.Id, true);
+        else
+            _ = AddSchemeAdministratorAsync();
+    }
+
+    /// <summary>"SHA-256 24:51:A0:B2 … A9:45": the first four and last two pairs of the colon fingerprint.</summary>
+    internal static string ShortColonFingerprint(System.Security.Cryptography.X509Certificates.X509Certificate2 root)
+    {
+        var pairs = SchemeAdministratorRoots.Sha256Fingerprint(root).Split(':');
+        return string.Format(CultureInfo.InvariantCulture, Strings.Keys_FingerprintShortFormat,
+            string.Join(':', pairs[..4]), string.Join(':', pairs[^2..]));
+    }
+
+    private async Task AddSchemeAdministratorAsync()
+    {
+        if (_dialogs is null || _schemeAdministrators is null || await _dialogs.PickAuthorityFileAsync() is not { } path)
+            return;
+        var dialog = new AddSchemeAdministratorDialogViewModel(_schemeAdministrators, _authorities, path, _time);
+        dialog.Closed += (_, _) => _dialogs.Close(dialog);
+        _dialogs.Show(dialog, 480);
+    }
+
+    private void ConfirmRemove(SchemeAdministrator entry) =>
+        _dialogs?.Confirm(
+            string.Format(CultureInfo.CurrentCulture, Strings.Keys_RemoveSchemeAdmin_TitleFormat, entry.Name),
+            Strings.Keys_RemoveSchemeAdmin_Body,
+            Strings.Keys_RemoveSchemeAdmin_Confirm,
+            () => _schemeAdministrators?.Remove(entry.Id));
+
+    private void ShowDetails(SchemeAdministrator entry)
+    {
+        if (_dialogs is null)
+            return;
+        var fields = new List<KeysField>(AddSchemeAdministratorDialogViewModel.FieldsOf(entry.Root))
+        {
+            new(Strings.Keys_Field_Origin, entry.BuiltIn ? Strings.Keys_Authority_BuiltInOrigin
+                : string.Format(CultureInfo.CurrentCulture, Strings.Keys_Authority_AddedOriginFormat, CertificateText.Date(entry.AddedAt ?? _time.GetUtcNow()))),
+        };
+        ShowDetails(entry.Name, fields);
     }
 
     private void Use(string? id)

@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:keys="using:EncDotNet.S100.Viewer.ViewModels.Keys"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.AddSchemeAdministratorDialogView"
+             x:DataType="keys:AddSchemeAdministratorDialogViewModel"
+             Width="480">
+
+    <!-- Add a Scheme Administrator root from a DER or PEM file. -->
+    <UserControl.Styles>
+        <Style Selector="SelectableTextBlock.mono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="18,14,18,14" RowSpacing="12">
+        <StackPanel Spacing="4">
+            <TextBlock Text="{x:Static loc:Strings.Keys_AddSchemeAdmin_Title}" FontSize="14.5" FontWeight="SemiBold" />
+            <TextBlock Text="{x:Static loc:Strings.Keys_AddSchemeAdmin_Intro}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="12">
+            <TextBlock Text="{Binding FileName}" FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding BundleText}" IsVisible="{Binding IsBundle}" FontSize="12.5" TextWrapping="Wrap" />
+            <ItemsControl ItemsSource="{Binding Certificates}" IsVisible="{Binding HasCertificates}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource MutedBackgroundColor}" BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1" CornerRadius="6" Padding="12,11">
+                            <ItemsControl ItemsSource="{Binding}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="7" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="keys:KeysField">
+                                        <Grid ColumnDefinitions="96,*,Auto" ColumnSpacing="12">
+                                            <TextBlock Text="{Binding Label}" FontSize="12" Opacity="0.65" />
+                                            <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" TextWrapping="Wrap"
+                                                                 Classes.mono="{Binding IsMono}" />
+                                            <Button Grid.Column="2" Classes="Outline" Padding="8,2" FontSize="11.5" VerticalAlignment="Top"
+                                                    Content="{x:Static loc:Strings.Keys_Copy}" IsVisible="{Binding CanCopy}"
+                                                    Click="OnCopy"
+                                                    AutomationProperties.AutomationId="AddSchemeAdmin.Copy"
+                                                    AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Copy_Help}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="96,*" ColumnSpacing="12" IsVisible="{Binding ShowsName}">
+                <TextBlock Text="{x:Static loc:Strings.Keys_AddAuthority_Name}" FontSize="12" Opacity="0.65" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" Text="{Binding Name}"
+                         AutomationProperties.AutomationId="AddSchemeAdmin.Name"
+                         AutomationProperties.Name="{x:Static loc:Strings.Keys_AddAuthority_Name}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Keys_AddSchemeAdmin_Name_Help}" />
+            </Grid>
+            <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}"
+                       FontSize="11.5" Foreground="{DynamicResource DestructiveColor}" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="AddSchemeAdmin.Error" />
+            <TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}"
+                       FontSize="11.5" Foreground="{DynamicResource WarningColor}" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="AddSchemeAdmin.Warning" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"
+                    AutomationProperties.AutomationId="AddSchemeAdmin.Cancel" />
+            <Button Classes="Primary" Content="{Binding AddLabel}" Command="{Binding AddCommand}"
+                    IsEnabled="{Binding CanAdd}" IsDefault="True"
+                    AutomationProperties.AutomationId="AddSchemeAdmin.Add" />
+        </StackPanel>
+    </Grid>
+</UserControl>

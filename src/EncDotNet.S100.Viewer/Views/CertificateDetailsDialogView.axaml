@@ -26,11 +26,16 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="keys:KeysField">
-                    <Grid ColumnDefinitions="110,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="12">
                         <TextBlock Text="{Binding Label}" FontSize="12" Opacity="0.65" />
                         <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" TextWrapping="Wrap"
                                              Classes.mono="{Binding IsMono}"
                                              Classes.destructive="{Binding IsDestructive}" />
+                        <Button Grid.Column="2" Classes="Outline" Padding="8,2" FontSize="11.5" VerticalAlignment="Top"
+                                Content="{x:Static loc:Strings.Keys_Copy}" IsVisible="{Binding CanCopy}"
+                                Click="OnCopy"
+                                AutomationProperties.AutomationId="CertificateDetails.Copy"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Copy_Help}" />
                     </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

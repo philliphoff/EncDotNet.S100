@@ -345,7 +345,7 @@
     <value>Signatures weren't checked: S-63 signature checking isn't supported yet</value>
   </data>
   <data name="Tooltip_SignatureUnverified" xml:space="preserve">
-    <value>Signatures match the data, but the signer isn't from a trusted Scheme Administrator</value>
+    <value>Signatures match the data, but the signer isn't from a trusted scheme administrator. Manage them in Settings, Keys and certificates.</value>
   </data>
   <data name="Tooltip_SignatureMixed" xml:space="preserve">
     <value>Mixed signature verification results</value>
@@ -5159,7 +5159,7 @@
     <value>Trust the root certificate in a PEM file</value>
   </data>
   <data name="Keys_Authorities_Note" xml:space="preserve">
-    <value>Self-signed sample data still opens. Its badge reads "Signed · untrusted source". Authorities for protected datasets (Part 15) will be listed here too.</value>
+    <value>Self-signed sample data still opens. Its badge reads "Signed · untrusted source". Roots for S-100 chart data are on the Scheme administrators tab.</value>
   </data>
   <data name="Keys_Authority_SubFormat" xml:space="preserve">
     <value>{0} · valid {1} to {2} · {3}</value>
@@ -10207,5 +10207,134 @@
   <data name="About_Catalogues_RowNameFormat" xml:space="preserve">
     <value>{0}: feature {1}, portrayal {2}</value>
     <comment>Accessible name of an About catalogue row. {0} the product, {1} and {2} the cells, e.g. '2.0.0 · built-in'</comment>
+  </data>
+  <data name="Keys_Tab_SchemeAdmins" xml:space="preserve">
+    <value>Scheme administrators</value>
+  </data>
+  <data name="Keys_SchemeAdmins_Intro" xml:space="preserve">
+    <value>Who SoundCharts trusts to vouch for S-100 chart data. An exchange set is verified only if its signer chains to one of these. Kept apart from SECOM authorities.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin" xml:space="preserve">
+    <value>Add from file…</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_Help" xml:space="preserve">
+    <value>Trust a scheme administrator's root certificate from a .cer, .crt, .pem or .der file</value>
+  </data>
+  <data name="Keys_SchemeAdmins_Note" xml:space="preserve">
+    <value>Exchange sets whose signer doesn't chain to a root here still open. Their badge reads Unverified. Open exchange sets are checked again when you change this list.</value>
+  </data>
+  <data name="Keys_SchemeAdmin_IhoName" xml:space="preserve">
+    <value>IHO scheme administrator</value>
+  </data>
+  <data name="Keys_SchemeAdmin_IhoTestName" xml:space="preserve">
+    <value>IHO test scheme administrator</value>
+  </data>
+  <data name="Keys_SchemeAdmin_TestLine" xml:space="preserve">
+    <value>For conformance testing and producer rehearsal. Data it verifies is test data, not for navigation.</value>
+  </data>
+  <data name="Keys_SchemeAdmin_SubFormat" xml:space="preserve">
+    <value>{0} · valid {1} to {2} · {3}</value>
+  </data>
+  <data name="Keys_SchemeAdmin_SelfSigned" xml:space="preserve">
+    <value>Self-signed</value>
+  </data>
+  <data name="Keys_SchemeAdmin_IssuedByFormat" xml:space="preserve">
+    <value>Issued by {0}</value>
+  </data>
+  <data name="Keys_Badge_Added" xml:space="preserve">
+    <value>ADDED</value>
+  </data>
+  <data name="Keys_SchemeAdmin_NoneOnTitle" xml:space="preserve">
+    <value>No scheme administrator is on</value>
+  </data>
+  <data name="Keys_SchemeAdmin_NoneOnBody" xml:space="preserve">
+    <value>No exchange set can be verified. Signed sets show as Unverified.</value>
+  </data>
+  <data name="Keys_SchemeAdmin_NoneOnAction" xml:space="preserve">
+    <value>Turn on IHO</value>
+  </data>
+  <data name="Keys_SchemeAdmin_NoneOnAction_Help" xml:space="preserve">
+    <value>Turns the built-in IHO scheme administrator back on</value>
+  </data>
+  <data name="Keys_SchemeAdmin_Expired_Title" xml:space="preserve">
+    <value>A scheme administrator certificate has expired</value>
+  </data>
+  <data name="Keys_SchemeAdmin_Expired_BodyFormat" xml:space="preserve">
+    <value>{0} expired {1}. Exchange sets signed under it now show as Unverified.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_Title" xml:space="preserve">
+    <value>Add scheme administrator</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_Intro" xml:space="preserve">
+    <value>Exchange sets signed under this root will show as verified. Before you add it, check its SHA-256 against the one the scheme administrator publishes.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_BundleFormat" xml:space="preserve">
+    <value>This file holds {0} roots. Each is added separately.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_Name_Help" xml:space="preserve">
+    <value>How this scheme administrator is named in badges, e.g. IHO</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_Add" xml:space="preserve">
+    <value>Add scheme administrator</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_AddBundleFormat" xml:space="preserve">
+    <value>Add {0} roots</value>
+  </data>
+  <data name="Keys_Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Keys_Copied" xml:space="preserve">
+    <value>Copied</value>
+  </data>
+  <data name="Keys_Copy_Help" xml:space="preserve">
+    <value>Copies the full SHA-256 fingerprint</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_CannotRead" xml:space="preserve">
+    <value>SoundCharts can't open this file. Check it's still there and you can read it.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_NotCertificate" xml:space="preserve">
+    <value>This file isn't a certificate. Use a .cer, .crt, .pem or .der file.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_NoCertificate" xml:space="preserve">
+    <value>This file holds no certificate.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_NotCaFormat" xml:space="preserve">
+    <value>{0} isn't a certificate authority, so it can't be a scheme administrator root. It may be a signer's certificate: add the root it chains to.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_DuplicateFormat" xml:space="preserve">
+    <value>{0} is already in the list.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_SecomDuplicateFormat" xml:space="preserve">
+    <value>{0} is a SECOM trusted authority. It can be a scheme administrator too, but check that's what you mean.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_Expired" xml:space="preserve">
+    <value>This certificate has expired, so nothing signed under it can be verified.</value>
+  </data>
+  <data name="Keys_AddSchemeAdmin_NotYetValidFormat" xml:space="preserve">
+    <value>This certificate isn't valid until {0}. It's added now and used from then.</value>
+  </data>
+  <data name="Keys_RemoveSchemeAdmin_TitleFormat" xml:space="preserve">
+    <value>Remove {0}?</value>
+  </data>
+  <data name="Keys_RemoveSchemeAdmin_Body" xml:space="preserve">
+    <value>Exchange sets signed under it will show as Unverified. To trust it again you'll need the certificate file.</value>
+  </data>
+  <data name="Keys_RemoveSchemeAdmin_Confirm" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Keys_Fix_SchemeAdmins" xml:space="preserve">
+    <value>Scheme administrators…</value>
+  </data>
+  <data name="Keys_Fix_SchemeAdmins_Help" xml:space="preserve">
+    <value>Opens Settings, Keys and certificates, where chart data roots are managed.</value>
+  </data>
+  <data name="Tooltip_SignatureVerifiedFormat" xml:space="preserve">
+    <value>Signatures verified against {0}</value>
+  </data>
+  <data name="Tooltip_SignatureVerifiedTest" xml:space="preserve">
+    <value>Verified against the IHO test scheme administrator. Test data, not for navigation.</value>
+  </data>
+  <data name="Tooltip_SignatureUnverifiedNoneOn" xml:space="preserve">
+    <value>Signatures match the data, but no scheme administrator is trusted yet. Add one in Settings, Keys and certificates.</value>
   </data>
 </root>

@@ -1,3 +1,5 @@
+using System.Security.Cryptography.X509Certificates;
+
 namespace EncDotNet.S100.ExchangeSets;
 
 /// <summary>
@@ -19,4 +21,12 @@ public sealed class SignatureVerificationResult
 
     /// <summary>Optional diagnostic detail.</summary>
     public string? Detail { get; init; }
+
+    /// <summary>
+    /// The certificate from <see cref="TrustAnchorOptions.TrustedRoots"/> that
+    /// the signer chained to, when <see cref="Outcome"/> is
+    /// <see cref="VerificationOutcome.Ok"/>; otherwise <see langword="null"/>.
+    /// It's the caller's own instance, so the caller still owns it.
+    /// </summary>
+    public X509Certificate2? TrustedRoot { get; init; }
 }

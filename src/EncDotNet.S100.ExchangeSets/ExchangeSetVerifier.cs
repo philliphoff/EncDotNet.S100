@@ -316,7 +316,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                 resource.Algorithm != DigitalSignatureAlgorithm.ECDSA384SHA2
                 ? DSASignatureFormat.IeeeP1363FixedFieldConcatenation
                 : DSASignatureFormat.Rfc3279DerSequence;
-            var (outcome, detail) = EvaluateSignature(
+            var (outcome, detail, trustedRoot) = EvaluateSignature(
                 signature,
                 resource.Algorithm,
                 signedHash,
@@ -334,6 +334,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                 Outcome = outcome,
                 FailureReason = MapFailureReason(outcome),
                 Detail = detail,
+                TrustedRoot = trustedRoot,
             });
         }
 
@@ -593,7 +594,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
     /// already been hashed. Returns <see cref="VerificationOutcome.NotSigned"/>
     /// when the file carries no signature.
     /// </summary>
-    internal static (VerificationOutcome Outcome, string? Detail) EvaluateSignature(
+    internal static SignatureEvaluation EvaluateSignature(
         DigitalSignatureValue? signatureValue,
         DigitalSignatureAlgorithm algorithm,
         byte[] fileHash,
@@ -647,7 +648,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         using (cert)
         {
             // Check certificate trust
-            var trustOutcome = ValidateCertificateTrust(cert, trustAnchors, certificateChain);
+            var trustOutcome = ValidateCertificateTrust(cert, trustAnchors, certificateChain, out var trustedRoot);
             if (trustOutcome is { } failure && failure != VerificationOutcome.SignatureValidUntrusted)
             {
                 var detail = failure == VerificationOutcome.CertificateExpired
@@ -672,7 +673,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                 }
 
                 return trustOutcome is null
-                    ? (VerificationOutcome.Ok, null)
+                    ? new SignatureEvaluation(VerificationOutcome.Ok, null, trustedRoot)
                     : (VerificationOutcome.SignatureValidUntrusted, UntrustedSignerDetail(cert));
             }
             catch (CryptographicException ex)
@@ -682,7 +683,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         }
     }
 
-    private static (VerificationOutcome Outcome, string? Detail) EvaluateSchemeAdministratorSignature(
+    private static SignatureEvaluation EvaluateSchemeAdministratorSignature(
         DigitalSignatureValue signatureValue,
         DigitalSignatureAlgorithm algorithm,
         byte[] fileHash,
@@ -695,7 +696,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         string? detail = null;
         foreach (var certificate in certificates)
         {
-            var trustOutcome = ValidateCertificateTrust(certificate, trustAnchors, null);
+            var trustOutcome = ValidateCertificateTrust(certificate, trustAnchors, null, out var trustedRoot);
             if (trustOutcome is { } trustFailure && trustFailure != VerificationOutcome.SignatureValidUntrusted)
             {
                 failure = trustFailure;
@@ -716,7 +717,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                     requireP384))
                 {
                     return trustOutcome is null
-                        ? (VerificationOutcome.Ok, null)
+                        ? new SignatureEvaluation(VerificationOutcome.Ok, null, trustedRoot)
                         : (VerificationOutcome.SignatureValidUntrusted, UntrustedSignerDetail(certificate));
                 }
 
@@ -743,12 +744,17 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
     /// <see cref="VerificationOutcome.SignatureValidUntrusted"/> if it doesn't
     /// but <see cref="TrustAnchorOptions.AllowUntrustedCertificates"/> is set,
     /// so the caller still checks the signature; otherwise the failure.
+    /// <paramref name="trustedRoot"/> is the root the chain ended at, when it
+    /// chained.
     /// </summary>
     private static VerificationOutcome? ValidateCertificateTrust(
         X509Certificate2 cert,
         TrustAnchorOptions trustAnchors,
-        IReadOnlyCollection<CertificateEntry>? certificateChain)
+        IReadOnlyCollection<CertificateEntry>? certificateChain,
+        out X509Certificate2? trustedRoot)
     {
+        trustedRoot = null;
+
         // Check expiry
         var now = DateTimeOffset.UtcNow;
         if (now < cert.NotBefore || now > cert.NotAfter)
@@ -793,7 +799,16 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                 }
             }
 
-            return chain.Build(cert) ? null : untrusted;
+            if (!chain.Build(cert))
+            {
+                return untrusted;
+            }
+
+            // Report the caller's own instance of the root the chain ended at.
+            var anchor = chain.ChainElements[^1].Certificate;
+            trustedRoot = trustAnchors.TrustedRoots.FirstOrDefault(
+                root => root.RawData.AsSpan().SequenceEqual(anchor.RawData));
+            return null;
         }
         catch (CryptographicException)
         {
