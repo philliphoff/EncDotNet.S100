@@ -153,6 +153,15 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     [ObservableProperty]
     private string? _signatureTooltip;
 
+    /// <summary>
+    /// Whether the inspector offers the way to the Scheme administrators tab:
+    /// the signer isn't trusted, or is trusted only through the test root.
+    /// </summary>
+    public bool ShowsSchemeAdministratorsLink =>
+        SignatureStatus is SignatureStatus.Unverified or SignatureStatus.VerifiedTest;
+
+    partial void OnSignatureStatusChanged(SignatureStatus value) => OnPropertyChanged(nameof(ShowsSchemeAdministratorsLink));
+
     /// <summary>Single-line summary combining loaded/unsupported counts,
     /// producer and issue date, joined with " · ". Bound to the
     /// trimmable secondary line in the header so any of the three

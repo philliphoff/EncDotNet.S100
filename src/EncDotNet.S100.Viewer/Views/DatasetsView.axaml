@@ -20,6 +20,7 @@
         <conv:SignatureStatusConverter x:Key="SignatureStatusCheckingConverter" Match="Checking,Unknown" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusUnverifiedConverter" Match="Unverified" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusNotCheckedConverter" Match="NotChecked" />
+        <conv:SignatureStatusConverter x:Key="SignatureStatusVerifiedTestConverter" Match="VerifiedTest" />
 
     </UserControl.Resources>
 
@@ -309,6 +310,9 @@
                                             <ic:FluentIcon FontSize="18"
                                                            IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
                                                            Icon="ShieldCheckmark" IconVariant="Filled" Foreground="#16a34a" />
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusVerifiedTestConverter}}"
+                                                           Icon="ShieldCheckmark" IconVariant="Regular" Foreground="#d97706" />
                                             <ic:FluentIcon FontSize="18"
                                                            IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
                                                            Icon="ShieldDismiss" IconVariant="Regular" Opacity="0.5" />
@@ -842,6 +846,9 @@
                                                IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
                                                Icon="ShieldCheckmark" IconVariant="Filled" Foreground="#16a34a" />
                                 <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusVerifiedTestConverter}}"
+                                               Icon="ShieldCheckmark" IconVariant="Regular" Foreground="#d97706" />
+                                <ic:FluentIcon FontSize="18"
                                                IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
                                                Icon="ShieldDismiss" IconVariant="Regular" Opacity="0.5" />
                                 <ic:FluentIcon FontSize="18"
@@ -860,6 +867,13 @@
                                            VerticalAlignment="Center" FontSize="12" Opacity="0.8"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
+                            <Button Classes="Outline" HorizontalAlignment="Left" Padding="10,3" FontSize="12"
+                                    IsVisible="{Binding InspectedExchangeSet.ShowsSchemeAdministratorsLink}"
+                                    Content="{x:Static loc:Strings.Keys_Fix_SchemeAdmins}"
+                                    Command="{Binding OpenSchemeAdministratorsCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Keys_Fix_SchemeAdmins_Help}"
+                                    AutomationProperties.AutomationId="Datasets.Inspector.SchemeAdmins"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Fix_SchemeAdmins_Help}" />
                         </StackPanel>
                     </ScrollViewer>
 

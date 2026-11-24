@@ -24,7 +24,14 @@ internal abstract class TilesRenderSettings : CommandSettings
 
     [CommandOption("--layer <PATH>")]
     [Description("Add a dataset as a composite layer (repeatable). The S-98 authority orders layers by display plane, so --layer order is only a within-plane tiebreak.")]
-    public string[] Layers { get; init; } = [];
+    public string[] Layers { get => _layers; init => _layers = value; }
+
+    private string[] _layers = [];
+    private bool _layerListsRead;
+
+    [CommandOption(LayerListFile.Template)]
+    [Description(LayerListFile.Description)]
+    public string[] LayersFrom { get; init; } = [];
 
     [CommandOption("--exchange-set|--from <PATH>")]
     [Description("Tile every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one; an S-57 exchange set (a directory containing a CATALOG.031, or the CATALOG.031) is read as a folder of datasets. Applies no S-101 updates from an S-100 exchange set; data-protected and unsupported datasets are skipped with a warning. Mutually exclusive with --layer.")]
@@ -259,14 +266,28 @@ internal abstract class TilesRenderSettings : CommandSettings
 
     public string? ExchangeSetSource => IsExplicitExchangeSet ? ExchangeSet : Input;
 
+    /// <summary>
+    /// Adds the datasets in the <c>--layers-from</c> lists to
+    /// <see cref="Layers"/>, once. Call it first in <c>Validate</c>, since
+    /// the other checks read <see cref="Layers"/>.
+    /// </summary>
+    protected ValidationResult ReadLayerLists()
+    {
+        if (_layerListsRead)
+            return ValidationResult.Success();
+        var result = LayerListFile.Expand(ref _layers, LayersFrom);
+        _layerListsRead = result.Successful;
+        return result;
+    }
+
     /// <summary>Validates the inputs and the rendering options.</summary>
     protected ValidationResult ValidateRender()
     {
         if (IsComposite && IsExplicitExchangeSet)
-            return ValidationResult.Error("--layer and --exchange-set/--from cannot be combined. Use one or the other.");
+            return ValidationResult.Error("--layer/--layers-from and --exchange-set/--from cannot be combined. Use one or the other.");
 
         if ((IsComposite || IsExplicitExchangeSet) && !string.IsNullOrWhiteSpace(Input))
-            return ValidationResult.Error("With --layer or --exchange-set, do not also pass a positional dataset.");
+            return ValidationResult.Error("With --layer, --layers-from or --exchange-set, do not also pass a positional dataset.");
 
         if (IsFolder)
         {

@@ -213,7 +213,8 @@ other extension writes PNG, unless you set `--format`.
 | Option | Default | Description |
 |---|---|---|
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
-| `--exchange-set`, `--from <path>` | none | Composites an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
+| `--layers-from <file>` | none | Adds every dataset listed in a text file, as if each were given with `--layer`. See [Datasets from a list file](#datasets-from-a-list-file). |
+| `--exchange-set`, `--from <path>` | none | Composites an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer` or `--layers-from`. |
 | `--only <specs>` | all | Exchange-set form only. Composites only these product specifications, comma-separated, for example `--only S101,S128`. Hyphens and case are ignored. |
 | `-o`, `--output <path>` | positional | The output path. Use it instead of the positional output argument. |
 | `--source <source>` | none | Composite and exchange-set forms only. Also draws a live data source above the datasets, such as NDBC observations or AIS targets. Repeat it for each source. A source id, optionally followed by `:` and comma-separated `name=value` options. Needs `--bbox` or `--center` and `--scale`: the source is started for that area. See [Live sources in a render](#live-sources-in-a-render). |
@@ -305,6 +306,34 @@ With an explicit viewport:
   own CRS, and the sampled cells are reprojected for output.
 - Station and node datasets (S-104, S-111) draw their glyphs in the viewport.
 - Any part of the image outside the data shows the background or basemap.
+
+### Datasets from a list file
+
+Windows stops a command line at 32,767 characters, which a few hundred
+`--layer` options with long paths can pass. `--layers-from <file>` reads the
+datasets from a file instead. `render`, `tiles export`, `tiles serve`,
+`identify` and `mcp serve` all take it.
+
+- The file is UTF-8 text with one dataset path per line.
+- Blank lines and lines starting with `#` are skipped, and spaces around a
+  path are trimmed.
+- A relative path is read from the list file's folder, not the current
+  folder.
+- The listed datasets come after any `--layer` options, in file order, and are
+  checked and drawn the same way. You can give `--layers-from` more than once.
+- A list that's missing or names no datasets is an error.
+- The list is read once, when the command starts.
+
+```text
+# charts.txt
+US5MA1AM/US5MA1AM.000
+US5MA1BO/US5MA1BO.000
+bathy/102US00_BOSTON.h5
+```
+
+```bash
+s100 tiles serve --layers-from charts.txt
+```
 
 ### Compositing multiple datasets
 
@@ -583,7 +612,8 @@ the old file is left as it was.
 | Option | Default | Description |
 |---|---|---|
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
-| `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
+| `--layers-from <file>` | none | Adds every dataset listed in a text file, as if each were given with `--layer`. See [Datasets from a list file](#datasets-from-a-list-file). |
+| `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer` or `--layers-from`. |
 | `--only <specs>` | all | Exchange-set and folder forms only. Tiles only these product specifications, comma-separated. |
 | `-o`, `--output <path>` | required | A folder, a `.pmtiles` file, a `.mbtiles` file, a `.gpkg` file or a `.tif` file. Its parent folder must exist. |
 | `--container <kind>` | from the output | `xyz` (a folder), `pmtiles`, `mbtiles`, `gpkg` or `geotiff`. |
@@ -1544,6 +1574,7 @@ variable, such as `ENCDOTNET_AIS_STREAM_KEY`: a key is never accepted as a
 | `--lat <latitude>` | required | Latitude in decimal degrees, WGS-84, from -90 to 90. |
 | `--lon <longitude>` | required | Longitude in decimal degrees, WGS-84, from -180 to 180. |
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with the exchange-set form. |
+| `--layers-from <file>` | none | Adds every dataset listed in a text file, as if each were given with `--layer`. See [Datasets from a list file](#datasets-from-a-list-file). |
 | `--from`, `--exchange-set <path>` | none | Picks across every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--radius <metres>` | `50` | Search distance for point and curve features, from 0 to 100,000. Area features must contain the point, so they ignore it. |
@@ -1607,6 +1638,7 @@ packs; validate them one at a time.
 | `--format <format>` | `text` | `text` prints a table. `json` prints a report for scripts and CI. |
 | `--suppress <patterns>` | none | Drops findings whose rule id matches, comma-separated, for example `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. |
 | `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files, files without a checksum, and signatures from a signer that isn't verified. |
+| `--trust-root <path>` | none | Trusts a Scheme Administrator root certificate, a DER or PEM file, when verifying an S-100 exchange set. Repeat it to trust several. See below. |
 | `--no-updates` | off | Validates an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--debug` | off | Prints full stack traces on error. |
 
@@ -1619,12 +1651,22 @@ s100 validate chart.000 --suppress "S101-*"
 s100 validate exchange-set/CATALOG.XML
 s100 validate exchange-set.zip --format json
 s100 validate s57-set/CATALOG.031
+s100 validate exchange-set --trust-root iho-sa.crt --strict
 ```
 
-`validate` doesn't take trust roots yet. A signature that matches the file but
-whose signer doesn't chain to a trusted IHO Scheme Administrator shows as
-`SignatureValidUntrusted`, and the summary reads "Signer not verified" rather
-than "Verified". The JSON report's `hasUnverifiedSigners` is `true`.
+A signature counts as verified only when its signer chains to a root you pass
+with `--trust-root`. `validate` never uses the operating system's certificate
+store, and it trusts no root unless you pass one. Get the root from its Scheme
+Administrator, not from the exchange set, and check its SHA-256 fingerprint
+against the one the Scheme Administrator publishes. A file that isn't a
+certificate, or holds a certificate that isn't a certificate authority, stops
+`validate` with an error.
+
+A signature that matches the file but whose signer doesn't chain to a trusted
+root shows as `SignatureValidUntrusted`, and the summary reads "Signer not
+verified" rather than "Verified". The JSON report's `hasUnverifiedSigners` is
+`true`. With `--strict`, such a signature fails. `--trust-root` doesn't apply
+to S-57 exchange sets, whose signatures aren't checked yet.
 
 `--suppress` patterns match rule ids without regard to case. `*` matches any
 run of characters and is the only wildcard, so a pattern without `*` matches
@@ -2245,6 +2287,7 @@ lists them all.
 | Option | Default | Description |
 |---|---|---|
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
+| `--layers-from <file>` | none | Adds every dataset listed in a text file, as if each were given with `--layer`. See [Datasets from a list file](#datasets-from-a-list-file). |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--tide-catalogue <file>` | the offline cache | The tide and current station catalogue `list_stations` and `predict` read. See [`tides update`](#tides-update). |

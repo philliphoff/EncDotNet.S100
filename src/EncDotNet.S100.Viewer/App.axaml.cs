@@ -195,6 +195,8 @@ public partial class App : Application
         _services.GetRequiredService<DatasetsViewModel>().AttachCatalogues(
             _services.GetRequiredService<CatalogueRegistry>(),
             spec => services.GetRequiredService<CataloguesViewModel>().ShowProduct(spec));
+        _services.GetRequiredService<DatasetsViewModel>().AttachSchemeAdministrators(
+            () => services.GetRequiredService<Services.Secom.KeysNavigator>().Open(ViewModels.Keys.KeysTab.SchemeAdministrators));
         _services.GetRequiredService<DatasetLoaderService>().ChooseCatalogue =
             (spec, kind) => services.GetRequiredService<CataloguesViewModel>().ChooseCatalogue(spec, kind);
         _services.GetRequiredService<ViewerPresentationCoordinator>();
@@ -247,6 +249,7 @@ public partial class App : Application
             .Register<Views.RouteExportDialogView, ViewModels.RouteExportDialogViewModel>()
             .Register<Views.RouteImportErrorDialogView, ViewModels.RouteImportErrorDialogViewModel>()
             .Register<Views.AddAuthorityDialogView, ViewModels.Keys.AddAuthorityDialogViewModel>()
+            .Register<Views.AddSchemeAdministratorDialogView, ViewModels.Keys.AddSchemeAdministratorDialogViewModel>()
             .Register<Views.CertificateDetailsDialogView, ViewModels.Keys.CertificateDetailsDialogViewModel>()
             .Register<Views.RemoveIdentityDialogView, ViewModels.Keys.RemoveIdentityDialogViewModel>();
 
@@ -821,6 +824,7 @@ public partial class App : Application
         services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Trust);
         services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Identities);
         services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Authorities);
+        services.AddSingleton(sp => new Services.SchemeAdministratorStore(sp.GetRequiredService<ViewerSettings>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IRouteDialogs>(sp => new EncDotNet.S100.Viewer.Services.RouteDialogs(
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<IFileDialogService>(),
@@ -841,7 +845,8 @@ public partial class App : Application
             sp.GetRequiredService<Services.Secom.TrustedAuthorityStore>(),
             sp.GetRequiredService<ViewModels.Keys.IKeysDialogs>(),
             sp.GetRequiredService<TimeProvider>(),
-            UiThread.Post));
+            UiThread.Post,
+            sp.GetRequiredService<Services.SchemeAdministratorStore>()));
         services.AddSingleton(sp =>
         {
             // SECOM services (issue #804): objects get bounds once downloaded.

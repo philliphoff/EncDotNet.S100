@@ -345,8 +345,9 @@ palette as a PDF.
 
 - **Chart 1 cells.** When the IHO S-101 Chart 1 test cells are loaded, link
   each entry to its place in them and show a rendered crop.
-- **CLI export.** `encdotnet reference export --spec S-101 --palette day`
-  writes a static HTML reference, which is how the prototype was made.
+- **Export key… to PDF** from the study page, through SkiaSharp's PDF
+  backend (`SKDocument.CreatePdf`), after the HTML export (R14) settles
+  what a printed key holds.
 - **Localisation.** Catalogue descriptions carry a language; show the
   mariner's language where a catalogue has it.
 - **Overlay entries.** Weather, AIS, NDBC and CAP have legend rows but no
@@ -489,18 +490,44 @@ R9, R10 and R9b can run side by side. R11 needs R10's drawn parts.
 
 ### Phase 4: exact variants
 
-12. **R12 Rule trace.** Run the picked feature's rule once through
-    `LuaPortrayalSession.Portray` with a line hook. With the line numbers R1
-    recorded, that gives the exact conditions taken. This replaces R11's
-    match for Lua products.
-13. **R13 Probing.** Run each feature type's rule over the values of the
+Tracing and probing always run on the LuaCSharp engine, in their own
+session, whichever engine draws the map: both engines run the same rules
+over the same features, so the results don't depend on the engine. Rules
+written in XSLT keep R11's match.
+
+12. **R12a Trace hook.** An optional line hook on `ILuaContext`, implemented
+    for LuaCSharp (`state.SetHook(hook, "l")`) and absent for MoonSharp. It
+    must say which rule file each line is in; if the hook can't, run an
+    instrumented copy of the rule source instead. Library only.
+13. **R12b Rule trace in the pick.** Run the picked feature's rule once with
+    the hook. With the line numbers R1 recorded, that gives the exact
+    conditions taken, including values the rule works out. Why this symbol
+    (R11) drops "Likely" and its note for Lua products and keeps its layout.
+14. **R13a Probing.** Run each feature type's rule over the values of the
     attributes it reads, using synthetic features through a custom
-    `ILuaDataProviderFactory` on `LuaRuleExecutor`, capped per feature type.
-    That fills the variant tables (C1), the value columns of attribute
-    entries (C3) and the before/after pairs of display settings (C4).
-    Results are cached on disk under the two catalogue hashes. A build step
-    pre-fills the cache for the built-in catalogues, so the first run has
-    them; a changed catalogue misses the cache and builds in the
-    background.
-14. **R14 Export.** **Export key…** to PDF from the study page, and the CLI
-    export (§5).
+    `ILuaDataProviderFactory`, with the trace recording each variant's
+    conditions. At most 512 combinations per feature type, taking the
+    attributes the rule's conditions test first; numeric attributes are
+    sampled either side of the thresholds the rule compares them with and
+    of the display settings it reads. A feature type that hits the cap is
+    marked partial.
+    - `encdotnet reference probe --spec S-101` writes the results to a file
+      committed next to the catalogue (`content/S101/pc/`), keyed by the two
+      catalogue hashes. It's run when a bundled catalogue changes, not on
+      every build; a test fails when the committed file's hashes don't match.
+    - A user-added or changed catalogue misses the committed file and is
+      probed in the background, cached on disk under its hashes.
+15. **R13b Variant table.** The feature type entry's **How it is drawn**
+    becomes the variant table (C1), with the **Simplified / Paper chart**
+    switch, the current variant ringed when opened from a pick, and
+    "partial" when the probe was capped.
+16. **R13c Value columns and before/after pairs.** Attribute entries opened
+    from a feature show each listed value's symbol in both styles (C3);
+    display setting entries show before/after pairs (C4).
+17. **R14 HTML export.** `encdotnet reference export --spec S-101 --palette
+    day` writes a static HTML reference: every entry, with the variant
+    tables when the probe file is present. PDF from the study page comes
+    later (§5).
+
+R12a comes first. R12b and R13a can then run side by side, then R13b and
+R13c side by side. R14 can follow R13a.

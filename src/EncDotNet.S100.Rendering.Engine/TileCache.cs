@@ -9,7 +9,10 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// when the total passes the pool's limit (map rendering slice&#160;4), so the
 /// tiles nobody has drawn for longest go first, whichever layer holds them.
 /// Decoded <see cref="SKImage"/> pixels live in native memory, which is the
-/// out-of-memory risk the design calls out (§3.4).
+/// out-of-memory risk the design calls out (§3.4). Caches whose keys are
+/// content-addressed and that name one <see cref="ShareScope"/> (the chart
+/// layers of every map, per pool and, for textures, per graphics context)
+/// share one copy of each tile through the pool.
 /// </summary>
 /// <remarks>
 /// Both the UI/compositor thread (via <see cref="TryGet"/> /
@@ -33,15 +36,54 @@ internal sealed class TileCache : IDisposable
     private long _generation;
     private long _residentBytes;
     private bool _disposed;
+    private object? _shareScope;
 
-    /// <summary>One resident tile, linked into its pool's recency list.</summary>
-    internal sealed record Entry(TileCache Owner, TileKey Key, SKImage Image, long Bytes)
+    /// <summary>
+    /// One rasterised tile image. Caches of one <see cref="ShareScope"/> can
+    /// each hold the same tile, through an
+    /// entry of their own; the pool charges its bytes once, and the image is
+    /// retired when the last holder lets it go. All fields are guarded by the
+    /// pool's lock.
+    /// </summary>
+    internal sealed class Tile(SKImage image, long bytes)
     {
-        /// <summary>Snapshots copying this tile's pixels outside the lock. Guarded by the pool's lock.</summary>
+        /// <summary>The image.</summary>
+        public SKImage Image { get; } = image;
+
+        /// <summary>The native bytes the image occupies.</summary>
+        public long Bytes { get; } = bytes;
+
+        /// <summary>The cache entries holding this tile.</summary>
+        public int Holders;
+
+        /// <summary>Snapshots copying this tile's pixels outside the lock.</summary>
         public int Readers;
 
-        /// <summary>Removed from the cache while a snapshot was reading it; the last reader disposes it.</summary>
+        /// <summary>Let go by its last holder while a snapshot was reading it; the last reader disposes it.</summary>
         public bool Retired;
+
+        /// <summary>
+        /// The scope the pool's shared index lists this tile under, so other
+        /// caches of that scope can adopt it; <see langword="null"/> when it isn't listed.
+        /// </summary>
+        public object? IndexedIn;
+
+        /// <summary>
+        /// Whether more than one cache has held this tile. A deferred-disposal
+        /// (GPU) cache can't free such a tile at its own next frame, because
+        /// another cache may have drawn it in the frame still in flight.
+        /// </summary>
+        public bool Shared;
+    }
+
+    /// <summary>One cache's hold on a resident tile, linked into its pool's recency list.</summary>
+    internal sealed record Entry(TileCache Owner, TileKey Key, Tile Tile)
+    {
+        /// <summary>The tile's image.</summary>
+        public SKImage Image => Tile.Image;
+
+        /// <summary>The native bytes the tile's image occupies.</summary>
+        public long Bytes => Tile.Bytes;
     }
 
     /// <summary>
@@ -110,6 +152,23 @@ internal sealed class TileCache : IDisposable
         get { lock (_sync) { return _map.Count; } }
     }
 
+    /// <summary>
+    /// The scope within which this cache's tile keys are content-addressed,
+    /// or <see langword="null"/> (the default) to share nothing. Caches of one
+    /// scope share tiles: a tile one of them holds is one the others can adopt
+    /// instead of rasterising or uploading, and an equal tile put by two of
+    /// them is kept once. Chart tiles set it, because their key's stack slice
+    /// hashes everything a tile draws; their texture caches scope it to the
+    /// graphics context, since a texture belongs to the context that made it.
+    /// A single-scene layer's keys don't identify its scene, so its caches
+    /// must not set it.
+    /// </summary>
+    public object? ShareScope
+    {
+        get { lock (_sync) { return _shareScope; } }
+        set { lock (_sync) { _shareScope = value; } }
+    }
+
     /// <summary>Whether the owner passed at construction is still alive (always, without one).</summary>
     internal bool OwnerAlive => _owner is null || _owner.IsAlive;
 
@@ -128,13 +187,18 @@ internal sealed class TileCache : IDisposable
     {
         lock (_sync)
         {
-            if (_disposed || !_map.TryGetValue(key, out var node))
+            if (_disposed)
             {
                 return null;
             }
 
-            _pool.Touch(node);
-            return node.Value.Image;
+            if (_map.TryGetValue(key, out var node))
+            {
+                _pool.Touch(node);
+                return node.Value.Image;
+            }
+
+            return Adopt(key, pixelSize: null)?.Image;
         }
     }
 
@@ -161,7 +225,7 @@ internal sealed class TileCache : IDisposable
 
             _pool.Touch(node);
             entry = node.Value;
-            entry.Readers++;
+            entry.Tile.Readers++;
         }
 
         // Copy outside the pool's lock (a 2x tile is about 1 MB), so the
@@ -177,8 +241,8 @@ internal sealed class TileCache : IDisposable
             bool dispose;
             lock (_sync)
             {
-                entry.Readers--;
-                dispose = entry.Retired && entry.Readers == 0;
+                entry.Tile.Readers--;
+                dispose = entry.Tile.Retired && entry.Tile.Readers == 0;
             }
 
             if (dispose)
@@ -208,7 +272,7 @@ internal sealed class TileCache : IDisposable
     {
         lock (_sync)
         {
-            return !_disposed && _map.ContainsKey(key);
+            return !_disposed && (_map.ContainsKey(key) || Adopt(key, pixelSize: null) is not null);
         }
     }
 
@@ -227,9 +291,17 @@ internal sealed class TileCache : IDisposable
     {
         lock (_sync)
         {
-            return !_disposed
-                && _map.TryGetValue(key, out var node)
-                && node.Value.Image.Width == pixelSize;
+            if (_disposed)
+            {
+                return false;
+            }
+
+            if (_map.TryGetValue(key, out var node) && node.Value.Image.Width == pixelSize)
+            {
+                return true;
+            }
+
+            return Adopt(key, pixelSize) is not null;
         }
     }
 
@@ -245,6 +317,7 @@ internal sealed class TileCache : IDisposable
         ArgumentNullException.ThrowIfNull(image);
 
         List<SKImage>? evicted = null;
+        SKImage? duplicate = null;
         lock (_sync)
         {
             if (_disposed)
@@ -253,25 +326,89 @@ internal sealed class TileCache : IDisposable
                 return;
             }
 
-            if (_map.TryGetValue(key, out var existing))
+            // Another cache may have put an equal tile meanwhile: hold that one
+            // and drop this copy.
+            Tile tile;
+            if (_shareScope is { } scope
+                && _pool.TryGetShared(scope, key, out var shared)
+                && shared.Image.Width == image.Width)
             {
-                Evict(existing.Value, ref evicted);
+                tile = shared;
+                duplicate = ReferenceEquals(shared.Image, image) ? null : image;
+            }
+            else
+            {
+                tile = new Tile(image, BytesFor(image));
+                if (_shareScope is { } listIn)
+                {
+                    _pool.Index(listIn, key, tile);
+                }
             }
 
-            var entry = new Entry(this, key, image, BytesFor(image));
-            var node = _pool.AddFirst(entry);
-            _map[key] = node;
-            _residentBytes += entry.Bytes;
+            if (_map.TryGetValue(key, out var existing) && ReferenceEquals(existing.Value.Tile, tile))
+            {
+                // This cache already holds the shared tile (it adopted it).
+                _pool.Touch(existing);
+            }
+            else
+            {
+                if (existing is not null)
+                {
+                    Evict(existing.Value, ref evicted);
+                }
 
-            // Evict least-recently-used tiles to fit the budget, but never a
-            // cache's pinned (currently-visible) tiles or the just-inserted node:
-            // a tile in use must survive regardless of budget, or the compositor
-            // would blink between a rendered and a blank tile when the working
-            // set exceeds the budget.
-            _pool.Trim(node, ref evicted);
+                var entry = new Entry(this, key, tile);
+                var node = _pool.AddFirst(entry);
+                _map[key] = node;
+                _residentBytes += entry.Bytes;
+
+                // Evict least-recently-used tiles to fit the budget, but never a
+                // cache's pinned (currently-visible) tiles or the just-inserted node:
+                // a tile in use must survive regardless of budget, or the compositor
+                // would blink between a rendered and a blank tile when the working
+                // set exceeds the budget.
+                _pool.Trim(node, ref evicted);
+            }
         }
 
+        duplicate?.Dispose();
         DisposeAll(evicted);
+    }
+
+    /// <summary>
+    /// Takes a hold on the tile another sharing cache holds for
+    /// <paramref name="key"/> (at <paramref name="pixelSize"/>, when given),
+    /// replacing any tile of another raster scale this cache holds for it.
+    /// Must be called under the pool's lock.
+    /// </summary>
+    /// <returns>The new entry, or <see langword="null"/> when there is no such tile.</returns>
+    private Entry? Adopt(TileKey key, int? pixelSize)
+    {
+        if (_shareScope is not { } scope
+            || !_pool.TryGetShared(scope, key, out var tile)
+            || (pixelSize is { } px && tile.Image.Width != px))
+        {
+            return null;
+        }
+
+        if (_map.TryGetValue(key, out var existing))
+        {
+            if (ReferenceEquals(existing.Value.Tile, tile))
+            {
+                return existing.Value;
+            }
+
+            // Only a tile of another raster scale is replaced, and that tile
+            // is this cache's own: dispose it inline rather than keep a list.
+            List<SKImage>? inline = null;
+            Evict(existing.Value, ref inline);
+            DisposeAll(inline);
+        }
+
+        var entry = new Entry(this, key, tile);
+        _map[key] = _pool.AddFirst(entry);
+        _residentBytes += entry.Bytes;
+        return entry;
     }
 
     /// <summary>
@@ -324,15 +461,25 @@ internal sealed class TileCache : IDisposable
     /// </summary>
     private void RetireImage(Entry entry, ref List<SKImage>? evictedInline)
     {
-        var image = entry.Image;
-        if (entry.Readers > 0)
+        var tile = entry.Tile;
+        var image = tile.Image;
+        if (tile.Holders > 0)
+        {
+            // Another sharing cache still holds the tile.
+            return;
+        }
+
+        if (tile.Readers > 0)
         {
             // A snapshot is copying it outside the lock; it disposes the image.
-            entry.Retired = true;
+            tile.Retired = true;
         }
         else if (_deferDisposal)
         {
-            _pool.Retire(this, image);
+            // A tile only this cache held is freed at its next frame; one
+            // another cache held too waits out the orphan delay, since that
+            // cache may have drawn it in the frame still in flight.
+            _pool.Retire(tile.Shared ? null : this, image);
         }
         else
         {

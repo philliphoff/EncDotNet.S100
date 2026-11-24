@@ -41,4 +41,10 @@ internal enum SignatureStatus
     /// supported yet, so the set may be signed or not.
     /// </summary>
     NotChecked,
+
+    /// <summary>
+    /// Every signature is valid, but at least one signer chains only to the
+    /// IHO testing root: test data, not for navigation.
+    /// </summary>
+    VerifiedTest,
 }

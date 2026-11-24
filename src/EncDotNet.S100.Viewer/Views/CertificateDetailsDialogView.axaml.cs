@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -10,4 +11,6 @@ public partial class CertificateDetailsDialogView : UserControl
     {
         InitializeComponent();
     }
+
+    private void OnCopy(object? sender, RoutedEventArgs e) => KeysCopyChip.OnClick(sender, e);
 }

@@ -13,6 +13,13 @@ month. For package versions and release assets, see
   started from. They now go in your profile's folders, which are created
   when needed, as the `s100` CLI's files already do.
 
+- **Datasets from a list file.** `render`, `tiles export`, `tiles serve`,
+  `identify` and `mcp serve` take `--layers-from <file>`: a text file with one
+  dataset path per line, read as if each were given with `--layer`. Use it
+  when there are more datasets than fit on a Windows command line, which
+  stops at 32,767 characters
+  ([#1713](https://github.com/philliphoff/EncDotNet.S100/issues/1713)).
+
 - **The `s100` CLI keeps its files in your data folder on a new Linux
   account.** When the local application data folder didn't exist yet, such
   as `~/.local/share` for a new Linux user or in a container, the tide

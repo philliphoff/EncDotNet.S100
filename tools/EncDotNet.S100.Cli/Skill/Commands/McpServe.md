@@ -23,7 +23,7 @@ datasets without a GUI. It hosts:
   items are opened into the same catalog, so the query tools see them.
 
 Datasets to open up front: one positional dataset, exchange set or plain folder
-of datasets (searched recursively), repeated `--layer` values, and an exchange
+of datasets (searched recursively), repeated `--layer` values or `--layers-from` lists, and an exchange
 set via `--from`/`--exchange-set`, in any combination. None are required: the
 server can start empty and open datasets or Library items later. The process is
 the session — spawn another `serve` process to serve a different set.

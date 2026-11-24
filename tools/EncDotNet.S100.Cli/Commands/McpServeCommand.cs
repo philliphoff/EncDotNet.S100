@@ -83,7 +83,14 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
 
         [CommandOption("--layer <PATH>")]
         [Description("Add a dataset to serve (repeatable).")]
-        public string[] Layers { get; init; } = [];
+        public string[] Layers { get => _layers; init => _layers = value; }
+
+        private string[] _layers = [];
+        private bool _layerListsRead;
+
+        [CommandOption(LayerListFile.Template)]
+        [Description(LayerListFile.Description)]
+        public string[] LayersFrom { get; init; } = [];
 
         [CommandOption("--from|--exchange-set <PATH>")]
         [Description("Serve every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one.")]
@@ -178,6 +185,14 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (!_layerListsRead)
+            {
+                var lists = LayerListFile.Expand(ref _layers, LayersFrom);
+                if (!lists.Successful)
+                    return lists;
+                _layerListsRead = true;
+            }
+
             var hasExchangeSet = !string.IsNullOrWhiteSpace(ExchangeSet);
             var hasInput = !string.IsNullOrWhiteSpace(Input);
 

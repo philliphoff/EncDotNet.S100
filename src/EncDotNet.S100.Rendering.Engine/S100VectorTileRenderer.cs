@@ -2628,6 +2628,7 @@ public static partial class S100VectorTileRenderer
                 state.GpuTextures = null;
                 state.GpuContext = null;
                 state.GpuEntry = null;
+                state.GpuShareScope = null;
             }
 
             return;
@@ -2642,6 +2643,7 @@ public static partial class S100VectorTileRenderer
             }
 
             state.GpuTextures = new TileCache(TileMemoryPool.Gpu, owner: null, deferDisposal: true);
+            state.GpuShareScope = null;
             state.GpuEntry = RegisterGpuCache(layer, state.GpuTextures, grContext);
             state.GpuContext = grContext;
             state.GpuGeneration = state.Generation;
@@ -2650,6 +2652,16 @@ public static partial class S100VectorTileRenderer
         {
             state.GpuTextures!.Clear();
             state.GpuGeneration = state.Generation;
+        }
+
+        // A chart layer's textures are uploads of content-addressed raster
+        // tiles, so every map's chart layer drawing through this context
+        // shares them (a texture belongs to the context that made it).
+        var scope = state.Chart is not null ? grContext : null;
+        if (!ReferenceEquals(state.GpuShareScope, scope))
+        {
+            state.GpuTextures!.ShareScope = scope;
+            state.GpuShareScope = scope;
         }
     }
 
@@ -2785,6 +2797,16 @@ public static partial class S100VectorTileRenderer
 
         return sizes;
     }
+
+    /// <summary>
+    /// Test-only seam: the image resident in <paramref name="layer"/>'s hot
+    /// cache for <paramref name="key"/>, without adopting one another layer
+    /// holds, or <see langword="null"/>.
+    /// </summary>
+    internal static SKImage? CachedTileForTest(object layer, TileKey key) =>
+        States.TryGetValue(layer, out var state) && state.Cache.SnapshotKeys().Contains(key)
+            ? state.Cache.TryGet(key)
+            : null;
 
     /// <summary>
     /// Test-only seam: whether <paramref name="layer"/> still has visible tiles
@@ -3217,6 +3239,7 @@ public static partial class S100VectorTileRenderer
         var images = new Dictionary<TileKey, SKImage>();
         var rasterized = new HashSet<TileKey>();
         var discardedBeforeRaster = new HashSet<TileKey>();
+        var adopted = new HashSet<TileKey>();
         var activeKeys = new List<TileKey>(job.Keys.Count);
         using var activity = StartTileJobActivity(job);
 
@@ -3227,6 +3250,7 @@ public static partial class S100VectorTileRenderer
                 activity?.SetTag(
                     "s100.render.tile.viewport_epoch.current",
                     state.ViewportEpoch);
+                var jobPx = TilePixelSize(job.DeviceScale);
                 foreach (var key in job.Keys)
                 {
                     if (GetTileRelevance(state, key, job.Generation)
@@ -3234,6 +3258,13 @@ public static partial class S100VectorTileRenderer
                     {
                         state.InFlight.Remove(key);
                         discardedBeforeRaster.Add(key);
+                    }
+                    else if (job.Plans is not null && state.Cache.Contains(key, jobPx))
+                    {
+                        // Another map's chart layer published this tile since
+                        // the job was queued: the cache adopted it, so there is
+                        // nothing to read or rasterise.
+                        adopted.Add(key);
                     }
                     else
                     {
@@ -3399,6 +3430,17 @@ public static partial class S100VectorTileRenderer
                         state,
                         key,
                         job.Generation);
+                    if (adopted.Contains(key))
+                    {
+                        if (relevance != TileRelevance.Irrelevant)
+                        {
+                            published++;
+                            publishedVisible |= relevance == TileRelevance.Visible;
+                        }
+
+                        continue;
+                    }
+
                     if (images.Remove(key, out var image)
                         && relevance != TileRelevance.Irrelevant
                         && !SupersededByLiveScale(state, key, image))
@@ -4367,6 +4409,9 @@ public static partial class S100VectorTileRenderer
         public readonly WeakReference<object> Owner;
 
         public readonly object Sync = new();
+
+        /// <summary>The share scope last given <see cref="GpuTextures"/>: the context, for a chart layer. Render thread only.</summary>
+        public object? GpuShareScope;
 
         // The session options this layer's tiles follow: the process-wide
         // options for a layer bound to one scene, its session's for a chart

@@ -40,6 +40,12 @@ command offers it, and treat paths as local filesystem paths.
   otherwise. `identify` takes separate latitude and longitude options;
   `render --bbox`, `tiles export --bbox` and `--center` use longitude before
   latitude.
+- Every command that takes repeated `--layer` also takes `--layers-from
+  <FILE>`: a UTF-8 list of dataset paths, one per line, with blank lines and
+  `#` lines skipped and relative paths resolved against the list's folder. The
+  listed datasets follow any `--layer` values and are treated exactly like
+  them. Use it when there are more datasets than fit on the command line
+  (Windows stops at 32,767 characters). A list is read once, at start.
 - S-101 sibling sequential updates (`.001`, `.002`, and so on) are normally
   discovered beside a base `.000` cell. Read each command's guidance because
   composite rendering deliberately handles updates differently.

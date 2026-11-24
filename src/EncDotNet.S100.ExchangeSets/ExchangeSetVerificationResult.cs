@@ -1,3 +1,5 @@
+using System.Security.Cryptography.X509Certificates;
+
 namespace EncDotNet.S100.ExchangeSets;
 
 /// <summary>
@@ -79,6 +81,20 @@ public sealed class ExchangeSetVerificationResult
     public bool HasUnverifiedSigners =>
         FileResults.Any(r => r.Outcome == VerificationOutcome.SignatureValidUntrusted)
         || CatalogueSignature?.Outcome == VerificationOutcome.SignatureValidUntrusted;
+
+    /// <summary>
+    /// The distinct roots from <see cref="TrustAnchorOptions.TrustedRoots"/>
+    /// that verified signers chained to, across the files and the catalogue.
+    /// Empty when no signature was <see cref="VerificationOutcome.Ok"/>.
+    /// </summary>
+    public IReadOnlyList<X509Certificate2> TrustedRootsUsed =>
+        FileResults
+            .SelectMany(r => r.SignatureResults)
+            .Select(r => r.TrustedRoot)
+            .Append(CatalogueSignature?.TrustedRoot)
+            .OfType<X509Certificate2>()
+            .Distinct()
+            .ToList();
 
     /// <summary>
     /// Returns <c>true</c> when at least one file, or the catalogue, has

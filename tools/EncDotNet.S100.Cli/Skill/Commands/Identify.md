@@ -1,7 +1,7 @@
 #### Agent guidance
 
-Choose one input form: one positional dataset, repeated `--layer` values, or an
-exchange set via `--from`/`--exchange-set` (also auto-detected positionally).
+Choose one input form: one positional dataset, repeated `--layer` values (or
+`--layers-from` lists), or an exchange set via `--from`/`--exchange-set` (also auto-detected positionally).
 Always supply `--lat` and `--lon`.
 
 Prefer `--format json`. Vector matches are ranked in ECDIS draw order; coverage

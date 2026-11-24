@@ -59,12 +59,13 @@ internal sealed class TileMemoryPool
     private readonly Func<long> _clock;
     private readonly LinkedList<TileCache.Entry> _lru = new();
     private readonly HashSet<TileCache> _members = [];
+    private readonly Dictionary<(object Scope, TileKey Key), TileCache.Tile> _shared = [];
     private readonly List<PendingDisposal> _pending = [];
     private long _residentBytes;
     private long _newestPin = long.MinValue;
     private long _lastReap;
 
-    private readonly record struct PendingDisposal(TileCache Owner, SKImage Image, long RetiredAt);
+    private readonly record struct PendingDisposal(TileCache? Owner, SKImage Image, long RetiredAt);
 
     /// <summary>Creates a pool whose limit is read from <paramref name="limitBytes"/> on every insert.</summary>
     /// <param name="limitBytes">The native-byte limit; values below <see cref="TileCache.MinBudgetBytes"/> are raised to it.</param>
@@ -124,7 +125,16 @@ internal sealed class TileMemoryPool
 
     internal LinkedListNode<TileCache.Entry> AddFirst(TileCache.Entry entry)
     {
-        _residentBytes += entry.Bytes;
+        // A tile shared by several caches is charged once, by its first holder.
+        if (entry.Tile.Holders++ == 0)
+        {
+            _residentBytes += entry.Bytes;
+        }
+        else
+        {
+            entry.Tile.Shared = true;
+        }
+
         return _lru.AddFirst(entry);
     }
 
@@ -136,8 +146,45 @@ internal sealed class TileMemoryPool
 
     internal void Remove(LinkedListNode<TileCache.Entry> node)
     {
-        _residentBytes -= node.Value.Bytes;
+        var entry = node.Value;
         _lru.Remove(node);
+        if (--entry.Tile.Holders > 0)
+        {
+            return;
+        }
+
+        _residentBytes -= entry.Bytes;
+        if (entry.Tile.IndexedIn is { } scope)
+        {
+            entry.Tile.IndexedIn = null;
+            _shared.Remove((scope, entry.Key));
+        }
+    }
+
+    /// <summary>
+    /// The tile a cache of <paramref name="scope"/> holds for
+    /// <paramref name="key"/>, the latest one put when caches hold it at
+    /// different raster scales.
+    /// </summary>
+    internal bool TryGetShared(object scope, TileKey key, out TileCache.Tile tile) =>
+        _shared.TryGetValue((scope, key), out tile!);
+
+    /// <summary>Lists <paramref name="tile"/> as the shared tile for <paramref name="key"/> in <paramref name="scope"/>.</summary>
+    internal void Index(object scope, TileKey key, TileCache.Tile tile)
+    {
+        if (_shared.TryGetValue((scope, key), out var previous))
+        {
+            previous.IndexedIn = null;
+        }
+
+        tile.IndexedIn = scope;
+        _shared[(scope, key)] = tile;
+    }
+
+    /// <summary>The tiles content-sharing caches can adopt. For tests.</summary>
+    internal int SharedCount
+    {
+        get { lock (Sync) { return _shared.Count; } }
     }
 
     internal void NotePin(long stamp)
@@ -152,9 +199,11 @@ internal sealed class TileMemoryPool
     internal bool PinHolds(long stamp) => stamp >= _newestPin - PinLapseTicks;
 
     /// <summary>
-    /// Queues a GPU texture for disposal on the render thread. Must be called under <see cref="Sync"/>.
+    /// Queues a GPU texture for disposal on the render thread: at
+    /// <paramref name="owner"/>'s next drain, or, without an owner, once it has
+    /// waited past <see cref="OrphanDisposalDelay"/>. Must be called under <see cref="Sync"/>.
     /// </summary>
-    internal void Retire(TileCache owner, SKImage image) =>
+    internal void Retire(TileCache? owner, SKImage image) =>
         _pending.Add(new PendingDisposal(owner, image, _clock()));
 
     /// <summary>

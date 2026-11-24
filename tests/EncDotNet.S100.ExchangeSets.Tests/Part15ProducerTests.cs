@@ -307,6 +307,51 @@ public sealed class Part15ProducerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_verified_signature_names_the_trusted_root_it_chained_to()
+    {
+        using var other = new TestScheme();
+        var (source, catalogue) = SignedDataset(_scheme, "dataset"u8.ToArray());
+        var roots = other.TrustAnchors.TrustedRoots.Concat(_scheme.TrustAnchors.TrustedRoots).ToList();
+        var ct = TestContext.Current.CancellationToken;
+
+        var result = await new ExchangeSetVerifier().VerifyAsync(
+            source, catalogue, new TrustAnchorOptions { TrustedRoots = roots }, ct);
+
+        var signature = Assert.Single(Assert.Single(result.FileResults).SignatureResults);
+        Assert.Same(_scheme.TrustAnchors.TrustedRoots[0], signature.TrustedRoot);
+        Assert.Same(_scheme.TrustAnchors.TrustedRoots[0], Assert.Single(result.TrustedRootsUsed));
+    }
+
+    [Fact]
+    public async Task An_unverified_signature_names_no_trusted_root()
+    {
+        using var other = new TestScheme();
+        var (source, catalogue) = SignedDataset(other, "dataset"u8.ToArray());
+        var ct = TestContext.Current.CancellationToken;
+
+        var result = await new ExchangeSetVerifier().VerifyAsync(
+            source,
+            catalogue,
+            new TrustAnchorOptions { TrustedRoots = _scheme.TrustAnchors.TrustedRoots, AllowUntrustedCertificates = true },
+            ct);
+
+        Assert.Null(Assert.Single(Assert.Single(result.FileResults).SignatureResults).TrustedRoot);
+        Assert.Empty(result.TrustedRootsUsed);
+    }
+
+    [Fact]
+    public async Task A_verified_catalogue_signature_names_its_trusted_root()
+    {
+        var source = SignedCatalogue(_scheme, "<catalogue/>"u8.ToArray());
+
+        var result = await CatalogueSignatureVerifier.VerifyAsync(
+            source, _scheme.TrustAnchors, TestContext.Current.CancellationToken);
+
+        Assert.Equal(VerificationOutcome.Ok, result.Outcome);
+        Assert.Same(_scheme.TrustAnchors.TrustedRoots[0], result.TrustedRoot);
+    }
+
+    [Fact]
     public async Task A_dataset_signed_by_an_unknown_scheme_is_never_ok()
     {
         // A signer that chains to nothing the caller trusts must not look

@@ -169,7 +169,7 @@ internal sealed class FileDialogService : IFileDialogService
         OpenOneAsync(topLevel, Strings.FilePicker_SecomIdentityTitle, Strings.FilePicker_SecomIdentityType, ["*.p12", "*.pfx", "*.pem"]);
 
     public Task<string?> OpenCertificateAsync(TopLevel? topLevel) =>
-        OpenOneAsync(topLevel, Strings.FilePicker_CertificateTitle, Strings.FilePicker_CertificateType, ["*.pem", "*.crt", "*.cer"]);
+        OpenOneAsync(topLevel, Strings.FilePicker_CertificateTitle, Strings.FilePicker_CertificateType, ["*.pem", "*.crt", "*.cer", "*.der"]);
 
     public Task<string?> OpenRouteAsync(TopLevel? topLevel, IReadOnlyList<string> patterns) =>
         OpenOneAsync(topLevel, Strings.FilePicker_RouteTitle, Strings.FilePicker_RouteType, patterns.ToArray());

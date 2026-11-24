@@ -25,6 +25,9 @@ public static partial class S100VectorTileRenderer
     /// <summary>The disk-cache namespace chart tiles share: their keys are content-addressed.</summary>
     internal const string ChartDiskNamespace = "chart";
 
+    /// <summary>The share scope of every chart layer's raster tile cache.</summary>
+    private static readonly object ChartTileScope = new();
+
     private const int SlotMemoCapacity = 8192;
     private const int PlanCapacity = 8192;
 
@@ -51,6 +54,11 @@ public static partial class S100VectorTileRenderer
             state.Options = options;
             state.Planner = planner;
             state.Chart = resolved;
+
+            // Chart tile keys are content-addressed (the stack slice hashes
+            // what a tile draws), so every map's chart layer shares one set
+            // of tiles in memory.
+            state.Cache.ShareScope = ChartTileScope;
             state.DiskNamespace = options.TileDiskCacheEnabled ? ChartDiskNamespace : null;
             state.SlotContents.Clear();
             state.PlanMemo.Clear();

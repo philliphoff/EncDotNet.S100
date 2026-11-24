@@ -75,6 +75,16 @@ internal sealed class KeysRow
     /// <summary>True for a trusted authority (shield icon); false for an identity (id card).</summary>
     public bool IsAuthority { get; init; }
 
+    /// <summary>True for a Scheme Administrator root (certificate icon).</summary>
+    public bool IsSchemeAdministrator { get; init; }
+
+    /// <summary>An extra warning line under the sub-line, e.g. that a root is for testing only.</summary>
+    public string? WarningNote { get; init; }
+
+    public bool HasWarningNote => WarningNote is not null;
+    public bool ShowsIdentityIcon => !IsAuthority && !IsSchemeAdministrator;
+    public bool ShowsAuthorityIcon => IsAuthority && !IsSchemeAdministrator;
+
     /// <summary>True for a turned-off authority, drawn faded.</summary>
     public bool IsDimmed { get; init; }
 
@@ -89,8 +99,8 @@ internal sealed class KeysRow
     public double Opacity => IsDimmed ? 0.5 : 1;
 }
 
-/// <summary>A label and value in the import check or a details dialog.</summary>
-internal sealed record KeysField(string Label, string Value, bool IsMono = false, KeysTone Tone = KeysTone.Neutral, bool ShowsCheck = false)
+/// <summary>A label and value in the import check or a details dialog; <paramref name="CanCopy"/> adds a Copy chip.</summary>
+internal sealed record KeysField(string Label, string Value, bool IsMono = false, KeysTone Tone = KeysTone.Neutral, bool ShowsCheck = false, bool CanCopy = false)
 {
     public bool IsWarning => Tone == KeysTone.Warning;
     public bool IsSuccess => Tone == KeysTone.Success;

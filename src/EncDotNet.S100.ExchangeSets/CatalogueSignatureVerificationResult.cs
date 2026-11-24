@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using EncDotNet.S100.ExchangeSets.Protection;
 
 namespace EncDotNet.S100.ExchangeSets;
@@ -13,14 +14,17 @@ public sealed class CatalogueSignatureVerificationResult
     /// <param name="outcome">The outcome of the check.</param>
     /// <param name="detail">Additional detail when the check didn't succeed.</param>
     /// <param name="signature">The parsed <c>CATALOG.SIGN</c>, when it could be read.</param>
+    /// <param name="trustedRoot">The trusted root the signer chained to, when it did.</param>
     public CatalogueSignatureVerificationResult(
         VerificationOutcome outcome,
         string? detail = null,
-        StandaloneDigitalSignature? signature = null)
+        StandaloneDigitalSignature? signature = null,
+        X509Certificate2? trustedRoot = null)
     {
         Outcome = outcome;
         Detail = detail;
         Signature = signature;
+        TrustedRoot = trustedRoot;
     }
 
     /// <summary>
@@ -39,6 +43,13 @@ public sealed class CatalogueSignatureVerificationResult
 
     /// <summary>The parsed <c>CATALOG.SIGN</c>, when it could be read.</summary>
     public StandaloneDigitalSignature? Signature { get; }
+
+    /// <summary>
+    /// The certificate from <see cref="TrustAnchorOptions.TrustedRoots"/> that
+    /// the signer chained to, when <see cref="Outcome"/> is
+    /// <see cref="VerificationOutcome.Ok"/>; otherwise <see langword="null"/>.
+    /// </summary>
+    public X509Certificate2? TrustedRoot { get; }
 
     /// <summary>
     /// Whether the catalogue signature is valid and its certificate chains to a

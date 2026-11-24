@@ -264,6 +264,17 @@ error or an invalid signature.
   it was signed, but anyone can make such a signature. The chain is still
   checked against `TrustedRoots` first, so a trusted signer is still `Ok`.
 
+`SchemeAdministratorRoots.LoadFile` reads root certificates from a DER file or
+a PEM file with one or more certificates. It rejects a certificate that isn't
+a certificate authority. `SchemeAdministratorRoots.Sha256Fingerprint` gives the
+fingerprint to check against the one the Scheme Administrator publishes:
+
+```csharp
+var roots = SchemeAdministratorRoots.LoadFile("iho-sa.crt");
+Console.WriteLine(SchemeAdministratorRoots.Sha256Fingerprint(roots[0]));
+var trust = new TrustAnchorOptions { TrustedRoots = roots };
+```
+
 `AllValid` is `true` only when every signer is trusted. `AllSignaturesIntact`
 is `true` when every signature matches, trusted or not, and
 `HasUnverifiedSigners` says whether any signer wasn't trusted.
@@ -289,10 +300,16 @@ code for findings) when any file fails. A file fails on `ChecksumMismatch`,
 `FileMissing`, `Error` or an invalid signature. With `--strict`, `NotSigned`
 and `NoChecksum` also fail.
 
-`s100 validate` doesn't take trust roots yet, so it allows untrusted signers.
-A correct signature shows as `SignatureValidUntrusted` in yellow and the
-summary says the signer isn't verified, never `Verified`. With `--strict`,
-`SignatureValidUntrusted` also fails.
+Pass a Scheme Administrator root certificate with `--trust-root <path>`
+(repeatable) to verify signers against it. Without one, `s100 validate` trusts
+no root but still allows untrusted signers: a correct signature shows as
+`SignatureValidUntrusted` in yellow and the summary says the signer isn't
+verified, never `Verified`. With `--strict`, `SignatureValidUntrusted` also
+fails.
+
+```bash
+s100 validate ./exchangeset --trust-root iho-sa.crt --strict
+```
 
 The same command verifies S-57 and S-63 exchange sets: pass a folder that
 contains a `CATALOG.031`, or the file itself. It checks each file's CRC-32 (S-63
