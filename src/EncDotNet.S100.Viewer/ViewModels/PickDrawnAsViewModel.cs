@@ -39,11 +39,16 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     private readonly Func<PickHit, PickDrawing?> _read;
     private readonly Func<SpecRef, ChartReferenceArtwork?> _artwork;
     private readonly Action<Action> _post;
+    private readonly Func<string, string?> _setting;
+    private readonly Func<string, string?>? _settingText;
+    private readonly Action<string>? _changeSetting;
     private PickHit? _hit;
+    private bool _whyExpanded;
     private PickDrawing? _drawing;
     private IImage? _glyph;
     private string? _glyphName;
     private int _version;
+    private int _explainVersion;
     private Task _loading = Task.CompletedTask;
 
     /// <summary>Creates the section.</summary>
@@ -51,11 +56,21 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     /// <param name="terms">The chart reference behind the parts' terms, whose glyph cache draws the glyphs.</param>
     /// <param name="artwork">A product's artwork reader (<see cref="ChartReferenceService.GetArtwork"/>).</param>
     /// <param name="post">Runs an action on the UI thread.</param>
+    /// <param name="setting">
+    /// A portrayal context parameter's current value, as the rules compare it
+    /// (<see cref="ReferenceTargets.Value"/>), for Why this symbol (R11, #1680);
+    /// <see langword="null"/> when the viewer doesn't set it.
+    /// </param>
+    /// <param name="changeSetting">Opens Settings › Chart at a context parameter's switch, or <see langword="null"/>.</param>
+    /// <param name="settingText">A context parameter's current value in words ("30 m"), as Settings shows it, or <see langword="null"/>.</param>
     public PickDrawnAsViewModel(
         Func<PickHit, PickDrawing?> read,
         ReferenceTerms terms,
         Func<SpecRef, ChartReferenceArtwork?> artwork,
-        Action<Action> post)
+        Action<Action> post,
+        Func<string, string?>? setting = null,
+        Action<string>? changeSetting = null,
+        Func<string, string?>? settingText = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(terms);
@@ -65,6 +80,9 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         Terms = terms;
         _artwork = artwork;
         _post = post;
+        _setting = setting ?? (static _ => null);
+        _changeSetting = changeSetting;
+        _settingText = settingText;
         Glyphs.PaletteChanged += OnPaletteChanged;
     }
 
@@ -101,6 +119,19 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         private set => SetProperty(ref _glyphName, value);
     }
 
+    /// <summary>
+    /// Whether <b>Why this symbol</b> is unfolded (R11, #1680). Folded by
+    /// default; the choice holds from pick to pick.
+    /// </summary>
+    public bool WhyExpanded
+    {
+        get => _whyExpanded;
+        set => SetProperty(ref _whyExpanded, value);
+    }
+
+    /// <summary>Whether a part has a reason, so <b>Why this symbol</b> shows.</summary>
+    public bool HasReasons => Parts.Any(p => p.HasReason);
+
     /// <summary>The tile glyphs sit on: the palette's chart background, as on the map.</summary>
     public IBrush Tile => Glyphs.Tile;
 
@@ -133,7 +164,13 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     private void Apply(PickDrawing? drawing, bool force)
     {
         if (!force && Same(_drawing, drawing))
+        {
+            // The same parts, but a display setting may have changed why.
+            if (_drawing is { } held && _hit is { } same)
+                _loading = ExplainAsync(held, same);
             return;
+        }
+
         _drawing = drawing;
         var version = ++_version;
         Parts.Clear();
@@ -142,14 +179,46 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         if (drawing is not null)
         {
             foreach (var part in drawing.Parts)
-                Parts.Add(new PickDrawnPartViewModel(part, Tile));
+                Parts.Add(new PickDrawnPartViewModel(part, Tile) { IsMain = part == drawing.Main });
             GlyphName = NameOf(drawing);
         }
 
         OnPropertyChanged(nameof(HasParts));
+        OnPropertyChanged(nameof(HasReasons));
         OnPropertyChanged(nameof(Drawing));
         OnPropertyChanged(nameof(Tile));
-        _loading = drawing is null ? Task.CompletedTask : LoadAsync(drawing, version);
+        _loading = drawing is null || _hit is not { } hit
+            ? Task.CompletedTask
+            : Task.WhenAll(LoadAsync(drawing, version), ExplainAsync(drawing, hit));
+    }
+
+    // Why this symbol (R11, #1680): each part's reason, from the feature
+    // type's cases for it, matched against the pick's values and the current
+    // display settings.
+    private async Task ExplainAsync(PickDrawing drawing, PickHit hit)
+    {
+        var version = ++_explainVersion;
+        var parts = Parts.ToList();
+        try
+        {
+            var index = await Terms.IndexAsync(drawing.Spec).ConfigureAwait(false);
+            if (index is null || PickTerms.FeatureType(index, hit.FeatureType) is not { } feature)
+                return;
+            var facts = new PickFacts(hit.Attributes, hit.Geometry, _setting, _settingText);
+            var reasons = parts.Select(p => PickReasons.Explain(p.Part, feature, index, facts)).ToList();
+            _post(() =>
+            {
+                if (version != _explainVersion || !ReferenceEquals(drawing, _drawing))
+                    return;
+                for (int i = 0; i < parts.Count; i++)
+                    parts[i].Reason = new PickReasonViewModel(reasons[i], index, _setting, _changeSetting);
+                OnPropertyChanged(nameof(HasReasons));
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A catalogue that can't be read: no reasons, and Why this symbol stays hidden.
+        }
     }
 
     private string? NameOf(PickDrawing drawing)
@@ -244,6 +313,8 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
     private string _label;
     private IImage? _glyph;
     private IBrush _tile;
+    private PickReasonViewModel? _reason;
+    private bool _reasonExpanded;
 
     /// <summary>Creates the part's row.</summary>
     /// <param name="part">The drawn part.</param>
@@ -315,6 +386,44 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
         private set => SetProperty(ref _tile, value);
     }
 
+    /// <summary>
+    /// Whether this is the main part (<see cref="PickDrawing.Main"/>), whose
+    /// reason Why this symbol gives in full (D5). Each other part is one line
+    /// naming it, with its reason folded underneath.
+    /// </summary>
+    public bool IsMain { get; init; }
+
+    /// <summary>Why the part was drawn (R11, #1680), or <see langword="null"/> while it is read or when it can't be.</summary>
+    public PickReasonViewModel? Reason
+    {
+        get => _reason;
+        internal set
+        {
+            if (SetProperty(ref _reason, value))
+            {
+                OnPropertyChanged(nameof(HasReason));
+                OnPropertyChanged(nameof(ShowsReasonInFull));
+                OnPropertyChanged(nameof(ShowsReasonFolded));
+            }
+        }
+    }
+
+    /// <summary>Whether <see cref="Reason"/> is read.</summary>
+    public bool HasReason => _reason is not null;
+
+    /// <summary>Whether Why this symbol gives the reason in full: the main part's.</summary>
+    public bool ShowsReasonInFull => IsMain && HasReason;
+
+    /// <summary>Whether Why this symbol gives the part one line, its reason folded underneath: a topmark, a light, text.</summary>
+    public bool ShowsReasonFolded => !IsMain && HasReason;
+
+    /// <summary>Whether an other part's reason is unfolded; folded by default.</summary>
+    public bool ReasonExpanded
+    {
+        get => _reasonExpanded;
+        set => SetProperty(ref _reasonExpanded, value);
+    }
+
     /// <summary>Follows a palette change.</summary>
     /// <param name="tile">The new palette's chart background.</param>
     internal void SetTile(IBrush tile) => Tile = tile;
@@ -370,4 +479,102 @@ internal sealed class PickDrawnPartViewModel : ViewModelBase
     // water", "Deep water"), else its token.
     private static string ColourOf(PickDrawnPart part, string? name) =>
         CatalogueSymbolKey.Label(part.Colour ?? string.Empty, name);
+}
+
+/// <summary>
+/// One part's reason in <b>Why this symbol</b> (R11, #1680): the conditions
+/// that held, a line each, with the names of attributes, values and display
+/// settings as terms, and a link to each display setting it names.
+/// </summary>
+internal sealed class PickReasonViewModel
+{
+    /// <summary>Creates the reason's view.</summary>
+    /// <param name="reason">The reason.</param>
+    /// <param name="index">The index that names the display settings.</param>
+    /// <param name="setting">A context parameter's current value; a setting the viewer doesn't set has no link.</param>
+    /// <param name="changeSetting">Opens Settings › Chart at a setting's switch, or <see langword="null"/>: no links.</param>
+    public PickReasonViewModel(
+        PickReason reason,
+        ChartReferenceIndex index,
+        Func<string, string?> setting,
+        Action<string>? changeSetting)
+    {
+        ArgumentNullException.ThrowIfNull(reason);
+        ArgumentNullException.ThrowIfNull(index);
+        ArgumentNullException.ThrowIfNull(setting);
+        Reason = reason;
+        Settings = changeSetting is null
+            ? []
+            :
+            [
+                .. reason.Settings
+                    .Where(k => setting(k.Code) is not null && index.TryGet(k, out _))
+                    .Select(k =>
+                    {
+                        index.TryGet(k, out var entry);
+                        return new PickReasonSettingViewModel(k.Code, RuleConditionText.SentenceCase(entry!.Name), changeSetting);
+                    }),
+            ];
+    }
+
+    /// <summary>The reason.</summary>
+    public PickReason Reason { get; }
+
+    /// <summary>How sure it is.</summary>
+    public PickReasonKind Kind => Reason.Kind;
+
+    /// <summary>Whether it is a match that isn't sure: "Likely: …".</summary>
+    public bool IsLikely => Reason.Kind == PickReasonKind.Likely;
+
+    /// <summary>The reason's lines, with their terms.</summary>
+    public IReadOnlyList<TermText> Lines => Reason.Lines;
+
+    /// <summary>The reason as plain text, its lines joined by line breaks.</summary>
+    public string Text => Reason.Text;
+
+    /// <summary>The reason as one line, for its accessible help text.</summary>
+    public string HelpText => string.Join(". ", Reason.Lines.Select(l => l.Text.TrimEnd(':')).Append(Reason.Note).OfType<string>());
+
+    /// <summary>"Also depends on values the rule works out", or <see langword="null"/>.</summary>
+    public string? Note => Reason.Note;
+
+    /// <summary>Whether <see cref="Note"/> shows.</summary>
+    public bool HasNote => Reason.Note is not null;
+
+    /// <summary>A link to each display setting the reason names that the viewer sets.</summary>
+    public IReadOnlyList<PickReasonSettingViewModel> Settings { get; }
+
+    /// <summary>Whether <see cref="Settings"/> has a link.</summary>
+    public bool HasSettings => Settings.Count > 0;
+}
+
+/// <summary>
+/// "Change Simplified symbols in Display settings" under a reason (R11, #1680):
+/// opens Settings › Chart at the switch, as the Reference tab's <b>Change in
+/// Display settings</b> does.
+/// </summary>
+internal sealed class PickReasonSettingViewModel
+{
+    /// <summary>Creates the link.</summary>
+    /// <param name="code">The context parameter id, e.g. <c>SimplifiedSymbols</c>.</param>
+    /// <param name="name">The setting's name, "Simplified symbols".</param>
+    /// <param name="change">Opens Settings at the switch.</param>
+    public PickReasonSettingViewModel(string code, string name, Action<string> change)
+    {
+        ArgumentNullException.ThrowIfNull(code);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(change);
+        Code = code;
+        Label = string.Format(CultureInfo.CurrentCulture, Strings.Pick_Why_ChangeSettingFormat, name);
+        ChangeCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => change(code));
+    }
+
+    /// <summary>The context parameter id.</summary>
+    public string Code { get; }
+
+    /// <summary>"Change Simplified symbols in Display settings".</summary>
+    public string Label { get; }
+
+    /// <summary>Opens Settings at the switch.</summary>
+    public System.Windows.Input.ICommand ChangeCommand { get; }
 }

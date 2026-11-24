@@ -1108,6 +1108,74 @@
     <value>Drawn as {0}</value>
     <comment>Accessible name of the pick header's glyph: {0} the main drawn part</comment>
   </data>
+  <data name="Pick_WhyThisSymbol" xml:space="preserve">
+    <value>Why this symbol</value>
+    <comment>Heading of the fold under Drawn as in Object information that explains each drawn part from the rule's conditions (R11)</comment>
+  </data>
+  <data name="Pick_Why_Always" xml:space="preserve">
+    <value>Always drawn for this feature type</value>
+    <comment>A drawn part whose rule case has no conditions</comment>
+  </data>
+  <data name="Pick_Why_Likely" xml:space="preserve">
+    <value>Likely</value>
+    <comment>A reason none of whose conditions could be checked, when more than one case of the rule is possible</comment>
+  </data>
+  <data name="Pick_Why_LikelyFormat" xml:space="preserve">
+    <value>Likely: {0}</value>
+    <comment>A reason when more than one case of the rule is still possible but they say the same: Likely: Colour is red</comment>
+  </data>
+  <data name="Pick_Why_LikelyOneOf" xml:space="preserve">
+    <value>Likely, one of these:</value>
+    <comment>Leads the cases of a reason when more than one case of the rule holds</comment>
+  </data>
+  <data name="Pick_Why_AlsoDepends" xml:space="preserve">
+    <value>Also depends on values the rule works out</value>
+    <comment>A quiet line under a reason when the rule also tests values it computes itself, which were left out</comment>
+  </data>
+  <data name="Pick_Why_ValueFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>An attribute or setting with its value inline: Surrounding depth (10 m)</comment>
+  </data>
+  <data name="Pick_Why_SettingValueFormat" xml:space="preserve">
+    <value>the {0} ({1})</value>
+    <comment>A display setting compared with, with its value: the safety contour (30 m)</comment>
+  </data>
+  <data name="Pick_Why_SettingFormat" xml:space="preserve">
+    <value>the {0}</value>
+    <comment>A display setting compared with, when its value is unknown: the safety contour</comment>
+  </data>
+  <data name="Pick_Why_NoMatch" xml:space="preserve">
+    <value>No case of the rule matches this feature's values and the display settings</value>
+    <comment>Said when none of the rule's cases for a drawn part holds; nothing is guessed</comment>
+  </data>
+  <data name="Pick_Why_Fallback" xml:space="preserve">
+    <value>Nothing else in the rule matched, so the catalogue's fallback symbol is drawn</value>
+    <comment>The reason for the catalogue's fallback symbol (BCNDEF13)</comment>
+  </data>
+  <data name="Pick_Why_MissingFormat" xml:space="preserve">
+    <value>Not given: {0}</value>
+    <comment>After the fallback reason: the attributes the rule tests that the feature doesn't have. {0} is their names</comment>
+  </data>
+  <data name="Pick_Why_NotRead" xml:space="preserve">
+    <value>The rule draws this in a way the reference doesn't read</value>
+    <comment>A drawn part the rule reader found no case for, such as a symbol name the rule assembles</comment>
+  </data>
+  <data name="Pick_Why_Text" xml:space="preserve">
+    <value>The rule writes this text; the reference doesn't read its conditions</value>
+    <comment>The reason line for a text part</comment>
+  </data>
+  <data name="Pick_Why_ChangeSettingFormat" xml:space="preserve">
+    <value>Change {0} in Display settings</value>
+    <comment>A link under a reason that opens the named switch in Settings, Chart. {0} is the setting's name</comment>
+  </data>
+  <data name="Pick_Why_PartFold" xml:space="preserve">
+    <value>Why this part</value>
+    <comment>Accessible name of a drawn part's own fold of its reason, under Why this symbol</comment>
+  </data>
+  <data name="Pick_Why_ReasonName" xml:space="preserve">
+    <value>Reason</value>
+    <comment>Accessible name of a reason in Why this symbol; its text is the help text</comment>
+  </data>
   <data name="Pick_LegendKeyLineFormat" xml:space="preserve">
     <value>{0} · {1}</value>
     <comment>A key line in Object information; {0} is the product ("S-102", "Wave height"), {1} the legend row ("2–10 m")</comment>

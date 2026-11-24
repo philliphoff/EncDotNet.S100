@@ -44,8 +44,22 @@ internal static class ReferenceTargets
     public static string? CurrentValue(ViewerSettingsService settings, string parameter)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        return CurrentValue(settings.BuildMarinerSettings(), parameter);
+    }
+
+    /// <summary>
+    /// The value <paramref name="mariner"/> gives a portrayal context
+    /// parameter, in words: "On", "Off", "30 m"; <see langword="null"/> for a
+    /// parameter the viewer doesn't set.
+    /// </summary>
+    /// <param name="mariner">The mariner settings the chart is drawn with.</param>
+    /// <param name="parameter">The context parameter id, e.g. <c>SafetyContour</c>.</param>
+    /// <returns>The value, or <see langword="null"/>.</returns>
+    public static string? CurrentValue(EncDotNet.S100.Pipelines.MarinerSettings mariner, string parameter)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
         ArgumentNullException.ThrowIfNull(parameter);
-        var m = settings.BuildMarinerSettings();
+        var m = mariner;
         return parameter switch
         {
             "SafetyContour" => Metres(m.SafetyContour.TotalMetres),
@@ -63,6 +77,42 @@ internal static class ReferenceTargets
             _ => null,
         };
     }
+
+    /// <summary>
+    /// The value the viewer gives a portrayal context parameter now, as the
+    /// rules compare it: "true", "false", or a depth in metres, "30"; for
+    /// Why this symbol (R11, #1680). <see langword="null"/> for a parameter
+    /// the viewer doesn't set, so the catalogue's default holds.
+    /// </summary>
+    /// <param name="mariner">The mariner settings the chart is drawn with.</param>
+    /// <param name="parameter">The context parameter id, e.g. <c>SimplifiedSymbols</c>.</param>
+    /// <returns>The value, invariant, or <see langword="null"/>.</returns>
+    public static string? Value(EncDotNet.S100.Pipelines.MarinerSettings mariner, string parameter)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
+        ArgumentNullException.ThrowIfNull(parameter);
+        var m = mariner;
+        return parameter switch
+        {
+            "SafetyContour" => Number(m.SafetyContour.TotalMetres),
+            "SafetyDepth" => Number(m.SafetyDepth.TotalMetres),
+            "ShallowContour" => Number(m.ShallowContour.TotalMetres),
+            "DeepContour" => Number(m.DeepContour.TotalMetres),
+            "FourShades" => Bool(m.FourShades),
+            "ShallowWaterDangers" => Bool(m.ShallowWaterDangers),
+            "PlainBoundaries" => Bool(m.PlainBoundaries),
+            "SimplifiedSymbols" => Bool(m.SimplifiedSymbols),
+            "FullLightLines" => Bool(m.FullLightLines),
+            "RadarOverlay" => Bool(m.RadarOverlay),
+            "IgnoreScaleMinimum" => Bool(m.IgnoreScaleMinimum),
+            "NationalLanguage" => string.IsNullOrWhiteSpace(m.NationalLanguage) ? null : m.NationalLanguage,
+            _ => null,
+        };
+    }
+
+    private static string Bool(bool value) => value ? "true" : "false";
+
+    private static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 
     private static string OnOff(bool value) => value ? Strings.Reference_On : Strings.Reference_Off;
 

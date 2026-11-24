@@ -17,6 +17,26 @@ month. For package versions and release assets, see
   `TideStationMirrorUrl` in `settings.json` sets another mirror
   ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
 
+- **Why this symbol in Object information.** Under **Drawn as**, a folded
+  **Why this symbol** says why the map drew each part, from the rule's cases
+  for it that hold for the picked feature's values and the current display
+  settings: "Simplified symbols is on · Colour is red · Beacon shape is a
+  stake, pole, perch or post". The names of settings, attributes and values
+  are terms, and each display setting the reason depends on has a link that
+  opens Settings › Chart at its switch. The main symbol's reason is given in full;
+  each other part, such as a topmark or text, is a line of its own with its
+  reason folded underneath. Each condition is checked against the feature's
+  values and the display settings, and what held is said with the values:
+  "Surrounding depth (10 m) is less than the safety contour (30 m) · Water
+  level effect is always under water/submerged". This is a match, not a trace
+  of the rule: tests of values the rule works out itself are left out, with a
+  note that the reason also depends on them; when more than one case is still
+  possible, the reason says "Likely" and lists them; when no case holds, it
+  says so. A fallback symbol says that nothing else matched and
+  names the attributes the rule tests that the feature doesn't have. The
+  Reference tab's **Change in Display settings** now opens Settings at the
+  switch too ([#1680](https://github.com/philliphoff/EncDotNet.S100/issues/1680)).
+
 - **`s100 tides update` downloads from the mirror.** With no `--from`, the
   command now downloads NOAA's tide and current station catalogue from the
   EncDotNet.S100 mirror as one file of about 1.2 MB, in a few seconds instead
