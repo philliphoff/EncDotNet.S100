@@ -3,7 +3,8 @@
 Choose exactly one input form:
 
 1. `render <dataset> <output>` for one dataset.
-2. Repeated `--layer <path>` plus an output for an explicit composite.
+2. Repeated `--layer <path>` (or a `--layers-from <file>` list) plus an
+   output for an explicit composite.
 3. A positional exchange set, or `--from`/`--exchange-set`, for automatic
    exchange-set discovery.
 

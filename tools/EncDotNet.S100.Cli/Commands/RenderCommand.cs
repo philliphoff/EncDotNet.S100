@@ -62,7 +62,14 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
         [CommandOption("--layer <PATH>")]
         [Description("Add a dataset as a composite layer (repeatable). When any --layer is given, several products are composited into one image. Note: the S-98 authority orders layers by display plane, so --layer order is only a within-plane tiebreak.")]
-        public string[] Layers { get; init; } = [];
+        public string[] Layers { get => _layers; init => _layers = value; }
+
+        private string[] _layers = [];
+        private bool _layerListsRead;
+
+        [CommandOption(LayerListFile.Template)]
+        [Description(LayerListFile.Description)]
+        public string[] LayersFrom { get; init; } = [];
 
         [CommandOption("--exchange-set|--from <PATH>")]
         [Description("Composite every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one. A directory/CATALOG.XML/.zip passed positionally is also auto-detected. Mutually exclusive with --layer. The composite applies no S-101 updates; data-protected and unsupported datasets are skipped with a warning.")]
@@ -222,6 +229,14 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (!_layerListsRead)
+            {
+                var lists = LayerListFile.Expand(ref _layers, LayersFrom);
+                if (!lists.Successful)
+                    return lists;
+                _layerListsRead = true;
+            }
+
             if (Quality is < 1 or > 100)
                 return ValidationResult.Error("--quality must be between 1 and 100.");
 
