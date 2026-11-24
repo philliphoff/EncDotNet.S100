@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -33,16 +32,18 @@ internal sealed class SharedSceneCache
     /// </summary>
     /// <param name="renderer">The renderer configured for the sub-layer.</param>
     /// <param name="layerKey">The sub-layer's key.</param>
-    /// <param name="instructions">The sub-layer's drawing instructions.</param>
+    /// <param name="diskCacheKey">
+    /// The sub-layer's tile disk namespace, from
+    /// <see cref="MapsuiDisplayListRenderer.DiskCacheKey"/>.
+    /// </param>
     /// <returns>The key, or <see langword="null"/>.</returns>
     public static SharedSceneKey? KeyFor(
         MapsuiDisplayListRenderer renderer,
         string layerKey,
-        IReadOnlyList<DrawingInstruction> instructions)
+        (string? ProductLayerSet, string? StyleStateHash) diskCacheKey)
     {
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(layerKey);
-        ArgumentNullException.ThrowIfNull(instructions);
 
         if (!renderer.DrawsTiled)
             return null;
@@ -55,7 +56,7 @@ internal sealed class SharedSceneCache
         // cache. (The providers themselves are new delegates on every
         // portrayal, so they can't be compared.) The rest of the key is what
         // the scene builder reads besides those.
-        var (productLayerSet, styleStateHash) = renderer.DiskCacheKey(instructions);
+        var (productLayerSet, styleStateHash) = diskCacheKey;
         if (productLayerSet is null || styleStateHash is null)
             return null;
 
