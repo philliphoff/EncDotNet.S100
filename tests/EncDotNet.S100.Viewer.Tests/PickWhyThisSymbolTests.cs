@@ -264,12 +264,10 @@ public sealed class PickWhyThisSymbolTests
         var reason = main.Reason!;
         Assert.Equal(PickReasonKind.Matched, reason.Kind);
         Assert.Single(reason.Lines);
-        var held = reason.Lines[0].Text;
-        Assert.Contains("Shallow water dangers is on", held, StringComparison.Ordinal);
-        Assert.Contains("Surrounding depth (10 m) is less than the safety contour (30 m)", held, StringComparison.Ordinal);
-        // What the value is, not what it isn't.
-        Assert.Contains("Water level effect is always under water/submerged", held, StringComparison.Ordinal);
-        Assert.DoesNotContain("is not", held, StringComparison.Ordinal);
+        // A comparison with zero that holds ("is at least 0") is checked but not said.
+        Assert.Equal(
+            "Shallow water dangers is on · Surrounding depth (10 m) is less than the safety contour (30 m) · Water level effect is always under water/submerged",
+            reason.Lines[0].Text);
         // A quiet note, not a line of the reason.
         Assert.Equal("Also depends on values the rule works out", reason.Note);
         Assert.DoesNotContain("Likely", reason.Text, StringComparison.Ordinal);
@@ -384,6 +382,36 @@ public sealed class PickWhyThisSymbolTests
         Assert.Equal(PickReasonKind.Matched, computedCase.Kind);
         Assert.Equal("Colour is red", Assert.Single(computedCase.Lines).Text);
         Assert.Equal("Also depends on values the rule works out", computedCase.Note);
+    }
+
+    [AvaloniaFact]
+    public async Task A_comparison_with_zero_is_checked_but_not_said()
+    {
+        using var scene = await Scene.CreateAsync();
+        var index = (await scene.Catalogues.Service.GetIndexAsync(new SpecRef("S-101", default)))!;
+        var atLeastZero = new RuleCondition { Kind = RuleConditionKind.Expression, Operator = ConditionOperator.Holds, Text = "feature.surroundingDepth >= scaledDecimalZero" };
+        var structured = new RuleCondition { Kind = RuleConditionKind.Attribute, Operator = ConditionOperator.GreaterThan, Subject = "surroundingDepth", Value = "0" };
+        var shallow = new RuleCondition { Kind = RuleConditionKind.Expression, Operator = ConditionOperator.Holds, Text = "feature.surroundingDepth < contextParameters.SafetyContour" };
+        var feature = new FeatureTypeEntry
+        {
+            Key = new ReferenceKey(index.Spec, ReferenceKind.FeatureType, "Wreck"),
+            Name = "Wreck",
+            PermittedPrimitives = ["Point"],
+            Uses = [new SymbolUse { ItemId = "ISODGR01", ItemKind = ReferenceKind.Symbol, RuleFile = "A", Conditions = [atLeastZero, structured, shallow] }],
+        };
+        var symbol = new PickDrawnPart(PickDrawnPartKind.Symbol, "1", new ReferenceKey(index.Spec, ReferenceKind.Symbol, "ISODGR01"));
+        PickFacts Depth(string metres) => new(
+            [new PickAttribute { Code = "surroundingDepth", RawValue = metres, DisplayValue = metres + " m" }],
+            S100GeometryType.Point,
+            id => id == "SafetyContour" ? "30" : null,
+            id => id == "SafetyContour" ? "30 m" : null);
+
+        var held = PickReasons.Explain(symbol, feature, index, Depth("10"));
+        Assert.Equal(PickReasonKind.Matched, held.Kind);
+        Assert.Equal("Surrounding depth (10 m) is less than the safety contour (30 m)", held.Text);
+
+        // Still checked: below zero, the case doesn't hold.
+        Assert.Equal(PickReasonKind.NoMatch, PickReasons.Explain(symbol, feature, index, Depth("-1")).Kind);
     }
 
     [AvaloniaFact]

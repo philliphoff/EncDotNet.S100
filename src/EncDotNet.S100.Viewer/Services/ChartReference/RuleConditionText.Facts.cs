@@ -153,6 +153,14 @@ internal static partial class RuleConditionText
         }
     }
 
+    // A comparison with zero that holds, as UDWHAZ05's
+    // "surroundingDepth >= scaledDecimalZero": checked, so a case where it
+    // fails is dropped, but it says nothing a mariner needs.
+    private static CheckedCondition Silent { get; } = new(ConditionTruth.Holds, [], AsWritten: false, Partial: false);
+
+    private static bool IsZero(string? value) =>
+        value is not null && Number(value.Trim('\'', '"')) is 0d;
+
     private static CheckedCondition Plain(ConditionTruth truth) =>
         truth == ConditionTruth.Unknown ? CheckedCondition.Unknown : new(truth, [], AsWritten: true, Partial: false);
 
@@ -191,6 +199,8 @@ internal static partial class RuleConditionText
         var result = Test(condition.Operator, value, condition.Value);
         if (result == ConditionTruth.Unknown)
             return CheckedCondition.Unknown;
+        if (result == ConditionTruth.Holds && attribute is not { ListedValues.Count: > 0 } && IsZero(condition.Value))
+            return Silent;
         if (condition.Operator == ConditionOperator.Equal)
             return new(result, [], AsWritten: true, Partial: false);
         if (attribute is { ListedValues.Count: > 0 } || value is null)
@@ -316,6 +326,8 @@ internal static partial class RuleConditionText
 
         if (rhs.Raw is null || first is null || subject.Attribute is { ListedValues.Count: > 0 } || Bool(first) is not null)
             return (result, [ActualValue(subject.Name, subject.Attribute, code, values, facts)], false);
+        if (result == ConditionTruth.Holds && IsZero(rhs.Raw))
+            return (result, [], false);
         return (result, [WithValue(op, subject.Name, facts.ValueText(code) ?? first, rhs.Words)], false);
     }
 
