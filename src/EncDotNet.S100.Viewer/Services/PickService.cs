@@ -94,17 +94,7 @@ internal sealed class PickService : IPickService
         // SphericalMercator → WGS84. Mapsui returns (lon, lat).
         var (lon, lat) = SphericalMercator.ToLonLat(worldPosition.X, worldPosition.Y);
         var location = new PickLocation(lat, lon);
-        double? pickResolution = double.IsFinite(resolution) && resolution > 0 ? resolution : null;
-        var picks = await _loader.PickAsync(new GeographicPickQuery
-        {
-            Latitude = lat,
-            Longitude = lon,
-            // The click tolerance on screen, as ground metres at the pick.
-            RadiusMeters = pickResolution is { } r
-                ? PickTolerancePx * r * Math.Cos(lat * Math.PI / 180.0)
-                : EncDotNet.S100.Renderers.Mapsui.Avalonia.AvaloniaMapsuiMapAdapter.DefaultPickRadiusMeters,
-            Resolution = pickResolution,
-        }).ConfigureAwait(true);
+        var picks = await EnginePickAsync(lat, lon, resolution).ConfigureAwait(true);
 
         var hits = ResolveHits(picks, out var coverageHit);
         if (hits.Count == 0 && overlay.Count == 0)
@@ -131,6 +121,31 @@ internal sealed class PickService : IPickService
         // Data source design note P5: an overlay source's hit (own-ship) is
         // drawn on top, so it comes first.
         Publish(new PickResult([.. overlay, .. hits], location, BuildLocationDepth(hits, lat, lon)));
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PickHit>> QueryAsync(MPoint worldPosition, double resolution)
+    {
+        ArgumentNullException.ThrowIfNull(worldPosition);
+        var (lon, lat) = SphericalMercator.ToLonLat(worldPosition.X, worldPosition.Y);
+        var picks = await EnginePickAsync(lat, lon, resolution).ConfigureAwait(true);
+        return ResolveHits(picks, out _);
+    }
+
+    // The map session's engine pick at a point, with the click tolerance on screen.
+    private Task<IReadOnlyList<S100Pick>> EnginePickAsync(double lat, double lon, double resolution)
+    {
+        double? pickResolution = double.IsFinite(resolution) && resolution > 0 ? resolution : null;
+        return _loader.PickAsync(new GeographicPickQuery
+        {
+            Latitude = lat,
+            Longitude = lon,
+            // The click tolerance on screen, as ground metres at the pick.
+            RadiusMeters = pickResolution is { } r
+                ? PickTolerancePx * r * Math.Cos(lat * Math.PI / 180.0)
+                : EncDotNet.S100.Renderers.Mapsui.Avalonia.AvaloniaMapsuiMapAdapter.DefaultPickRadiusMeters,
+            Resolution = pickResolution,
+        });
     }
 
     /// <summary>The on-screen pick tolerance, in DIP, around the click.</summary>

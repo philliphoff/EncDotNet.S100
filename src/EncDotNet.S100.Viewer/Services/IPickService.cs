@@ -36,6 +36,19 @@ internal interface IPickService
     Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<PickHit>? overlayHits = null);
 
     /// <summary>
+    /// The drawn features at <paramref name="worldPosition"/>, as a pick
+    /// would find them and in its order, without publishing them: the map's
+    /// context menu reads them (symbol dictionary R9b, #1681). Coverage
+    /// samples and overlay sources are left out. Must be called on the UI
+    /// thread.
+    /// </summary>
+    /// <param name="worldPosition">The point in EPSG:3857 metres.</param>
+    /// <param name="resolution">The map resolution, metres per DIP, which sizes the click tolerance.</param>
+    /// <returns>The hits, topmost first; empty when nothing is drawn there.</returns>
+    Task<IReadOnlyList<PickHit>> QueryAsync(MPoint worldPosition, double resolution) =>
+        Task.FromResult<IReadOnlyList<PickHit>>([]);
+
+    /// <summary>
     /// Publishes a pick at a geographic location whose features have already
     /// been resolved elsewhere (the MCP <c>pick_features</c> path), updating
     /// the pick report exactly as a user click would so the Object

@@ -61,7 +61,7 @@ public sealed class CatalogueLegendBuilder
         return new SwatchLegendEntry("#00000000", label) { Outline = outline };
     }
 
-    /// <summary>A point symbol row.</summary>
+    /// <summary>A point symbol row, which names its symbol (<see cref="SymbolLegendEntry.SymbolName"/>).</summary>
     /// <param name="symbolName">The catalogue symbol's name.</param>
     /// <param name="label">The row's label.</param>
     /// <exception cref="InvalidOperationException">The builder has no symbol resolver.</exception>
@@ -69,10 +69,10 @@ public sealed class CatalogueLegendBuilder
     public SymbolLegendEntry Symbol(string symbolName, string label)
     {
         ArgumentNullException.ThrowIfNull(label);
-        return new SymbolLegendEntry(SvgProcessor.Process(RawSymbol(symbolName), _palette), label);
+        return new SymbolLegendEntry(SvgProcessor.Process(RawSymbol(symbolName), _palette), label) { SymbolName = symbolName };
     }
 
-    /// <summary>A line row drawn with a catalogue line style.</summary>
+    /// <summary>A line row drawn with a catalogue line style, which it names (<see cref="LineLegendEntry.LineStyleName"/>).</summary>
     /// <param name="lineStyleName">The catalogue line style's name.</param>
     /// <param name="label">The row's label.</param>
     /// <exception cref="InvalidOperationException">The builder has no line style resolver.</exception>
@@ -85,10 +85,10 @@ public sealed class CatalogueLegendBuilder
             throw new InvalidOperationException($"The legend has no line style resolver to draw '{lineStyleName}' from.");
         var style = _lineStyles(lineStyleName)
             ?? throw new KeyNotFoundException($"The catalogue has no line style '{lineStyleName}'.");
-        return new LineLegendEntry(Sample(style), label);
+        return new LineLegendEntry(Sample(style), label) { LineStyleName = lineStyleName };
     }
 
-    /// <summary>An area fill row: the catalogue's fill pattern tiled in a swatch.</summary>
+    /// <summary>An area fill row: the catalogue's fill pattern tiled in a swatch, which names its fill (<see cref="FillLegendEntry.AreaFillName"/>).</summary>
     /// <param name="areaFillName">The catalogue area fill's name, e.g. <c>"DRGARE01"</c>.</param>
     /// <param name="label">The row's label.</param>
     /// <exception cref="InvalidOperationException">The builder has no area fill resolver, or the fill has a pattern and the builder has no symbol resolver.</exception>
@@ -101,7 +101,7 @@ public sealed class CatalogueLegendBuilder
             throw new InvalidOperationException($"The legend has no area fill resolver to draw '{areaFillName}' from.");
         var fill = _areaFills(areaFillName)
             ?? throw new KeyNotFoundException($"The catalogue has no area fill '{areaFillName}'.");
-        return new FillLegendEntry(Sample(fill), label);
+        return new FillLegendEntry(Sample(fill), label) { AreaFillName = areaFillName };
     }
 
     /// <summary>A catalogue area fill, resolved for the builder's palette.</summary>
