@@ -26,4 +26,38 @@ internal static partial class Strings
     public static string Pick_DrawnAs_PartNameFormat => Get(nameof(Pick_DrawnAs_PartNameFormat));
 
     public static string Pick_DrawnAs_GlyphNameFormat => Get(nameof(Pick_DrawnAs_GlyphNameFormat));
+
+    public static string Pick_WhyThisSymbol => Get(nameof(Pick_WhyThisSymbol));
+
+    public static string Pick_Why_Always => Get(nameof(Pick_Why_Always));
+
+    public static string Pick_Why_LikelyOneOf => Get(nameof(Pick_Why_LikelyOneOf));
+
+    public static string Pick_Why_NoMatch => Get(nameof(Pick_Why_NoMatch));
+
+    public static string Pick_Why_Fallback => Get(nameof(Pick_Why_Fallback));
+
+    public static string Pick_Why_MissingFormat => Get(nameof(Pick_Why_MissingFormat));
+
+    public static string Pick_Why_NotRead => Get(nameof(Pick_Why_NotRead));
+
+    public static string Pick_Why_Text => Get(nameof(Pick_Why_Text));
+
+    public static string Pick_Why_ChangeSettingFormat => Get(nameof(Pick_Why_ChangeSettingFormat));
+
+    public static string Pick_Why_PartFold => Get(nameof(Pick_Why_PartFold));
+
+    public static string Pick_Why_ReasonName => Get(nameof(Pick_Why_ReasonName));
+
+    public static string Pick_Why_AlsoDepends => Get(nameof(Pick_Why_AlsoDepends));
+
+    public static string Pick_Why_ValueFormat => Get(nameof(Pick_Why_ValueFormat));
+
+    public static string Pick_Why_SettingValueFormat => Get(nameof(Pick_Why_SettingValueFormat));
+
+    public static string Pick_Why_SettingFormat => Get(nameof(Pick_Why_SettingFormat));
+
+    public static string Pick_Why_Likely => Get(nameof(Pick_Why_Likely));
+
+    public static string Pick_Why_LikelyFormat => Get(nameof(Pick_Why_LikelyFormat));
 }

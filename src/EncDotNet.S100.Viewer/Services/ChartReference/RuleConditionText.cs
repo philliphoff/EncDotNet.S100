@@ -249,8 +249,9 @@ internal static partial class RuleConditionText
         return string.Join(' ', words);
     }
 
+    // Each part of "Water/Submerged" on its own, so the pair isn't taken for an acronym.
     private static string LowerUnlessAcronym(string word) =>
-        word.Count(char.IsUpper) > 1 ? word : word.ToLowerInvariant();
+        string.Join('/', word.Split('/').Select(part => part.Count(char.IsUpper) > 1 ? part : part.ToLowerInvariant()));
 
     private static TermText Format(string format, params object[] args) => TermText.Format(format, args);
 }
