@@ -59,6 +59,7 @@ internal sealed class TileMemoryPool
     private readonly Func<long> _clock;
     private readonly LinkedList<TileCache.Entry> _lru = new();
     private readonly HashSet<TileCache> _members = [];
+    private readonly Dictionary<TileKey, TileCache.Tile> _shared = [];
     private readonly List<PendingDisposal> _pending = [];
     private long _residentBytes;
     private long _newestPin = long.MinValue;
@@ -124,7 +125,12 @@ internal sealed class TileMemoryPool
 
     internal LinkedListNode<TileCache.Entry> AddFirst(TileCache.Entry entry)
     {
-        _residentBytes += entry.Bytes;
+        // A tile shared by several caches is charged once, by its first holder.
+        if (entry.Tile.Holders++ == 0)
+        {
+            _residentBytes += entry.Bytes;
+        }
+
         return _lru.AddFirst(entry);
     }
 
@@ -136,8 +142,44 @@ internal sealed class TileMemoryPool
 
     internal void Remove(LinkedListNode<TileCache.Entry> node)
     {
-        _residentBytes -= node.Value.Bytes;
+        var entry = node.Value;
         _lru.Remove(node);
+        if (--entry.Tile.Holders > 0)
+        {
+            return;
+        }
+
+        _residentBytes -= entry.Bytes;
+        if (entry.Tile.Indexed)
+        {
+            entry.Tile.Indexed = false;
+            _shared.Remove(entry.Key);
+        }
+    }
+
+    /// <summary>
+    /// The tile a content-sharing cache holds for <paramref name="key"/>, the
+    /// latest one put when caches hold it at different raster scales.
+    /// </summary>
+    internal bool TryGetShared(TileKey key, out TileCache.Tile tile) =>
+        _shared.TryGetValue(key, out tile!);
+
+    /// <summary>Lists <paramref name="tile"/> as the shared tile for <paramref name="key"/>.</summary>
+    internal void Index(TileKey key, TileCache.Tile tile)
+    {
+        if (_shared.TryGetValue(key, out var previous))
+        {
+            previous.Indexed = false;
+        }
+
+        tile.Indexed = true;
+        _shared[key] = tile;
+    }
+
+    /// <summary>The tiles content-sharing caches can adopt. For tests.</summary>
+    internal int SharedCount
+    {
+        get { lock (Sync) { return _shared.Count; } }
     }
 
     internal void NotePin(long stamp)

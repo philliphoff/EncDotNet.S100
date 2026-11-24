@@ -186,6 +186,32 @@ public sealed class ChartTileTests
         Assert.All(a, key => Assert.NotEqual(UInt128.Zero, key.Slice));
     }
 
+    [Fact]
+    public void AnotherMapShowingTheSameStack_AdoptsItsTiles()
+    {
+        var view = MakeView();
+        var cell = BindSource([Square(Blue, 0.5, "a")]);
+        var one = new object();
+        var two = new object();
+        Publish(one, 1, new ChartStackEntry(cell));
+        Publish(two, 1, new ChartStackEntry(cell));
+        using var first = RenderSettled(one, view);
+
+        // The second map's first frame finds every visible tile already
+        // rasterised by the first map: nothing is queued, and both maps hold
+        // the same images.
+        using var second = RenderFrame(two, view);
+        var px = S100VectorTileRenderer.TilePixelSize(1f);
+        Assert.True(S100VectorTileRenderer.IsVisibleSettledForTest(two, px));
+        Assert.False(S100VectorTileRenderer.HasVisibleTileWorkForTest(two));
+        Assert.Equal(Pixels(first), Pixels(second));
+        var keys = S100VectorTileRenderer.CurrentVisibleForTest(two);
+        Assert.NotEmpty(keys);
+        Assert.All(keys, key => Assert.Same(
+            S100VectorTileRenderer.CachedTileForTest(one, key),
+            S100VectorTileRenderer.CachedTileForTest(two, key)));
+    }
+
     // -----------------------------------------------------------------
 
     private static void Publish(object chart, long version, params ChartStackEntry[] entries) =>

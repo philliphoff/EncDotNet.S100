@@ -2787,6 +2787,16 @@ public static partial class S100VectorTileRenderer
     }
 
     /// <summary>
+    /// Test-only seam: the image resident in <paramref name="layer"/>'s hot
+    /// cache for <paramref name="key"/>, without adopting one another layer
+    /// holds, or <see langword="null"/>.
+    /// </summary>
+    internal static SKImage? CachedTileForTest(object layer, TileKey key) =>
+        States.TryGetValue(layer, out var state) && state.Cache.SnapshotKeys().Contains(key)
+            ? state.Cache.TryGet(key)
+            : null;
+
+    /// <summary>
     /// Test-only seam: whether <paramref name="layer"/> still has visible tiles
     /// queued or rasterising, so a headless settle loop can tell "no tile has
     /// published yet" apart from "nothing left to publish". Speculative
@@ -3217,6 +3227,7 @@ public static partial class S100VectorTileRenderer
         var images = new Dictionary<TileKey, SKImage>();
         var rasterized = new HashSet<TileKey>();
         var discardedBeforeRaster = new HashSet<TileKey>();
+        var adopted = new HashSet<TileKey>();
         var activeKeys = new List<TileKey>(job.Keys.Count);
         using var activity = StartTileJobActivity(job);
 
@@ -3227,6 +3238,7 @@ public static partial class S100VectorTileRenderer
                 activity?.SetTag(
                     "s100.render.tile.viewport_epoch.current",
                     state.ViewportEpoch);
+                var jobPx = TilePixelSize(job.DeviceScale);
                 foreach (var key in job.Keys)
                 {
                     if (GetTileRelevance(state, key, job.Generation)
@@ -3234,6 +3246,13 @@ public static partial class S100VectorTileRenderer
                     {
                         state.InFlight.Remove(key);
                         discardedBeforeRaster.Add(key);
+                    }
+                    else if (job.Plans is not null && state.Cache.Contains(key, jobPx))
+                    {
+                        // Another map's chart layer published this tile since
+                        // the job was queued: the cache adopted it, so there is
+                        // nothing to read or rasterise.
+                        adopted.Add(key);
                     }
                     else
                     {
@@ -3399,6 +3418,17 @@ public static partial class S100VectorTileRenderer
                         state,
                         key,
                         job.Generation);
+                    if (adopted.Contains(key))
+                    {
+                        if (relevance != TileRelevance.Irrelevant)
+                        {
+                            published++;
+                            publishedVisible |= relevance == TileRelevance.Visible;
+                        }
+
+                        continue;
+                    }
+
                     if (images.Remove(key, out var image)
                         && relevance != TileRelevance.Irrelevant
                         && !SupersededByLiveScale(state, key, image))
