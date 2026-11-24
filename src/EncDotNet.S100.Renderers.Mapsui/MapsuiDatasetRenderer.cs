@@ -45,6 +45,7 @@ public sealed class MapsuiDatasetRenderer
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S100MapsuiOptions? _options;
     private readonly IPatternClipCache _patternClipCache;
+    private readonly SharedSceneCache _sharedScenes = new();
 
     // The processor's portrayal build holds the processor's own render gate,
     // but the Mapsui conversion below uses a per-processor, non-thread-safe
@@ -111,6 +112,9 @@ public sealed class MapsuiDatasetRenderer
     }
 
     internal long PatternClipCacheHits => _patternClipCache.Hits;
+
+    /// <summary>The scenes this renderer's maps share, per processor. For tests.</summary>
+    internal SharedSceneCache SharedScenes => _sharedScenes;
 
     internal long PatternClipCacheMisses => _patternClipCache.Misses;
 
@@ -279,7 +283,23 @@ public sealed class MapsuiDatasetRenderer
             }
             else
             {
-                layer = renderer.Render(sub.Instructions, result.GeometryProvider);
+                // Another map may already show this portrayal: bind its scene
+                // rather than build a second copy.
+                var sharedKey = SharedSceneCache.KeyFor(renderer, sub.LayerKey, sub.Instructions);
+                if (sharedKey is { } key && _sharedScenes.TryGet(processor, key, out var sharedScene))
+                {
+                    layer = renderer.RenderTiledScene(sharedScene, key.ProductLayerSet, key.StyleStateHash);
+                }
+                else
+                {
+                    layer = renderer.Render(
+                        sub.Instructions,
+                        result.GeometryProvider,
+                        sharedKey is { } built ? (built.ProductLayerSet, built.StyleStateHash) : null);
+                    if (sharedKey is { } fresh && renderer.LastTiledScene is { Scene: { } freshScene })
+                        _sharedScenes.Put(processor, fresh, freshScene);
+                }
+
                 if (sceneLayers is not null
                     && renderer.LastTiledScene is { ProductLayerSet: { } productLayerSet, StyleStateHash: { } styleStateHash } tiled)
                 {

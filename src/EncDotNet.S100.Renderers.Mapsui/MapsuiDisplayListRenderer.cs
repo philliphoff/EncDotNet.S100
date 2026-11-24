@@ -195,7 +195,18 @@ public sealed class MapsuiDisplayListRenderer
     /// </remarks>
     public ILayer Render(
         IReadOnlyList<DrawingInstruction> instructions,
-        IFeatureGeometryProvider geometryProvider)
+        IFeatureGeometryProvider geometryProvider) =>
+        Render(instructions, geometryProvider, diskCacheKey: null);
+
+    /// <summary>
+    /// Renders the display list, keying a tiled layer's disk namespace with
+    /// <paramref name="diskCacheKey"/> when the caller has already computed
+    /// it (see <see cref="DiskCacheKey"/>), so the instructions aren't hashed twice.
+    /// </summary>
+    internal ILayer Render(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider,
+        (string? ProductLayerSet, string? StyleStateHash)? diskCacheKey)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
@@ -240,20 +251,11 @@ public sealed class MapsuiDisplayListRenderer
         InstrumentedMemoryLayer layer;
         if (TiledSceneModeIsTiled)
         {
-            layer = new InstrumentedMemoryLayer(Product)
-            {
-                Name = LayerName,
-                Style = null,
-                CustomLayerRendererName = S100VectorTileRenderer.RendererName,
-                SceneExtent = SceneExtent(scene),
-            };
-
             S100Diag.Telemetry.FrameDuration.Record(
                 (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-            var (productLayerSet, styleStateHash) = DiskCacheKey(instructions);
-            S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
-            LastTiledScene = (scene, productLayerSet, styleStateHash);
+            var (productLayerSet, styleStateHash) = diskCacheKey ?? DiskCacheKey(instructions);
+            layer = RenderTiledScene(scene, productLayerSet, styleStateHash);
         }
         else
         {
@@ -284,7 +286,7 @@ public sealed class MapsuiDisplayListRenderer
     /// <see cref="FeatureRefKey"/> and scale limits.
     /// </summary>
     /// <remarks>
-    /// <see cref="Render"/> paints its layer with the tiled scene renderer and
+    /// <see cref="Render(IReadOnlyList{DrawingInstruction}, IFeatureGeometryProvider)"/> paints its layer with the tiled scene renderer and
     /// keeps the features only for picking. These features draw on their own,
     /// so they can go into any plain <see cref="MemoryLayer"/>, such as a
     /// dynamic source's overlay layer (see
@@ -384,12 +386,45 @@ public sealed class MapsuiDisplayListRenderer
     }
 
     /// <summary>
-    /// The scene the last <see cref="Render"/> bound to a tiled layer, with the
+    /// The scene the last <see cref="Render(IReadOnlyList{DrawingInstruction}, IFeatureGeometryProvider)"/> bound to a tiled layer, with the
     /// pair that keys its tile disk namespace, or <see langword="null"/> when
     /// it drew single-surface. Read by <see cref="MapsuiDatasetRenderer"/> to
     /// store the cell's scene.
     /// </summary>
     internal (Scene.VectorScene Scene, string? ProductLayerSet, string? StyleStateHash)? LastTiledScene { get; private set; }
+
+    /// <summary>
+    /// A tiled layer bound to <paramref name="scene"/>, an already-built scene
+    /// (this renderer's own, or one another map's render of the same portrayal
+    /// built). Every layer bound to one scene shares its planes, indexes and
+    /// chart tile keys.
+    /// </summary>
+    /// <param name="scene">The scene to draw.</param>
+    /// <param name="productLayerSet">The disk namespace's product and layer set, or null.</param>
+    /// <param name="styleStateHash">The disk namespace's style state, or null.</param>
+    /// <returns>The layer.</returns>
+    internal InstrumentedMemoryLayer RenderTiledScene(
+        Scene.VectorScene scene,
+        string? productLayerSet,
+        string? styleStateHash)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        var layer = new InstrumentedMemoryLayer(Product)
+        {
+            Name = LayerName,
+            Style = null,
+            CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+            SceneExtent = SceneExtent(scene),
+        };
+
+        S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
+        LastTiledScene = (scene, productLayerSet, styleStateHash);
+        return layer;
+    }
+
+    /// <summary>Whether <see cref="Render(IReadOnlyList{DrawingInstruction}, IFeatureGeometryProvider)"/> binds a tiled scene.</summary>
+    internal bool DrawsTiled => TiledSceneModeIsTiled;
 
     /// <summary>
     /// The <c>(productLayerSet, styleStateHash)</c> pair that keys this layer's
