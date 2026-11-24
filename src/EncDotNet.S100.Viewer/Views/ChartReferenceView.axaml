@@ -35,12 +35,13 @@
     </UserControl.Styles>
 
     <DockPanel LastChildFill="True">
-        <!-- Controls (§4.5): the product, search, then Features | Symbols. -->
+        <!-- Controls (§4.5): the product, its catalogues (catalogue-panels §6.3, CR4),
+             search, then Features | Symbols. -->
         <Grid DockPanel.Dock="Top"
               Margin="8,6,8,6"
               ColumnDefinitions="*,Auto"
               ColumnSpacing="6"
-              RowDefinitions="Auto,Auto,Auto"
+              RowDefinitions="Auto,Auto,Auto,Auto"
               RowSpacing="6">
             <ComboBox Grid.Row="0"
                       Classes="crProduct"
@@ -83,7 +84,13 @@
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceOpenPage}">
                 <ic:FluentIcon Icon="Open" FontSize="16" />
             </Button>
-            <TextBox Grid.Row="1"
+            <Panel Grid.Row="1"
+                   Grid.ColumnSpan="2"
+                   Margin="2,-2,0,0"
+                   IsVisible="{Binding ProductHeader.IsVisible, FallbackValue=False}">
+                <views:ChartReferenceProductHeaderView DataContext="{Binding ProductHeader}" />
+            </Panel>
+            <TextBox Grid.Row="2"
                      Grid.ColumnSpan="2"
                      AutomationProperties.AutomationId="ChartReference.Query"
                      AutomationProperties.Name="{x:Static loc:Strings.ChartReference_QueryName}"
@@ -103,7 +110,7 @@
                     </Button>
                 </TextBox.InnerRightContent>
             </TextBox>
-            <TabControl Grid.Row="2"
+            <TabControl Grid.Row="3"
                         Classes="segmentTabs"
                         AutomationProperties.AutomationId="ChartReference.Mode"
                         AutomationProperties.Name="{x:Static loc:Strings.ChartReference_ModeName}"
@@ -117,7 +124,7 @@
             </TabControl>
             <!-- In view (#1638, R5): only what is drawn in the map view; follows the map on pan end.
                  An icon toggle, as the Library's Show coverage and At view time (#1657). -->
-            <ToggleButton Grid.Row="2"
+            <ToggleButton Grid.Row="3"
                           Grid.Column="1"
                           Classes="Icon panelIcon coverageToggle"
                           AutomationProperties.AutomationId="ChartReference.InView"

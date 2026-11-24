@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
@@ -32,9 +33,15 @@ public sealed class ReferenceTabTests : IDisposable
     private static readonly SpecRef S101 = new("S-101", default);
 
     private readonly string _settingsPath = Path.Combine(Path.GetTempPath(), $"viewer-tests-{Guid.NewGuid():N}.json");
+    private readonly CultureInfo _culture = CultureInfo.CurrentCulture;
+
+    // The expected texts use English number formats ("1.65 mm"), so the
+    // tests pass on a machine whose locale writes "1,65".
+    public ReferenceTabTests() => CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
     public void Dispose()
     {
+        CultureInfo.CurrentCulture = _culture;
         try { if (File.Exists(_settingsPath)) File.Delete(_settingsPath); }
         catch { /* best effort */ }
     }
