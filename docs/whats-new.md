@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Look up in reference from the map, Feature search and the Legend.**
+  Right-click a feature on the map, or press Shift+F10 with the map
+  focused, and choose **Look up in reference** to open its feature type in
+  the Reference tab; where several features are under the pointer, it lists
+  each feature type, as the pick does. In Feature search, the feature type of
+  each hit is a term, and a hit's context menu has **Open in reference**.
+  The Legend rows of a product's own legend, such as an S-124 warning's,
+  are terms where they name a feature type, symbol, line style or area
+  fill. A type the Chart reference doesn't hold stays plain text, with no
+  menu item.
+
 - **Drawn as in Object information.** A picked feature of a chart drawn from
   a portrayal catalogue (S-101, or an S-57 cell drawn with S-101's) shows what
   the map drew for it. The header shows its main symbol on the chart's

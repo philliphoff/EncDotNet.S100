@@ -66,6 +66,8 @@ internal sealed record LegendSection
     /// For a catalogue key (D7), the portrayal spec whose catalogue its
     /// symbols come from (<c>S-101</c>, also for S-57 cells): each row's
     /// label is a Chart reference term in it (symbol dictionary R8, #1651).
+    /// For a catalogue product's own legend (S-124), the spec its rows'
+    /// feature types, symbols, line styles and fills are in (R9b, #1681).
     /// Null for any other section.
     /// </summary>
     public string? CatalogueSpec { get; init; }
