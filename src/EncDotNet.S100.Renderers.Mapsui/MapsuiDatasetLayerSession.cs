@@ -1269,6 +1269,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
     /// </param>
     /// <param name="removeProcessor">
     /// Whether to retire the corresponding processor from the supplied owner.
+    /// Pass <see langword="false"/> when other maps draw the same processor
+    /// and its owner retires it (see <see cref="DatasetProcessorOwner.Retire"/>).
     /// </param>
     /// <returns><see langword="true"/> when managed state existed.</returns>
     public bool RemoveDataset(
@@ -1392,8 +1394,17 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                     }
 
                     removal.Entry.RenderCts?.Cancel();
-                    if (!preserveState || removeProcessor)
+
+                    // A kept dataset follows its live processor while that
+                    // processor stays registered; one its owner has retired
+                    // (split map, #1728) no longer changes.
+                    if (!preserveState
+                        || removeProcessor
+                        || removal.Entry.LiveProcessor is not IDatasetProcessor live
+                        || !_processorOwner.Owns(removal.DatasetId, live))
+                    {
                         DetachLive(removal.Entry);
+                    }
                 }
                 removed = undo.Count;
             }

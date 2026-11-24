@@ -87,10 +87,10 @@ public static class AvaloniaControlCapture
             return null;
         }
 
-        var requiresSynchronization = await InvokeOnUiThreadAsync(
-            () => RequiresCaptureSynchronization(target))
+        var mapControls = await InvokeOnUiThreadAsync(
+            () => SynchronizedMapControls(target))
             .ConfigureAwait(false);
-        if (!requiresSynchronization)
+        if (mapControls.Count == 0)
         {
             return await InvokeOnUiThreadAsync(
                 () => CaptureOnUiThread(target, scale, cancellationToken))
@@ -104,15 +104,30 @@ public static class AvaloniaControlCapture
         // a concurrent compositor paint — do NOT also hold the gate on a worker
         // thread here, or the UI-thread marker would deadlock waiting on a holder
         // that is itself awaiting this UI-thread render (acquireGate: false).
+        // Every map in the tree drains before the capture (split map, #1728):
+        // each control signals its own coordinator.
         return await CaptureCoordinator.CaptureDrainedAsync(
-            () => InvokeOnUiThreadAsync(target.InvalidateVisual),
+            mapControls.Select(control => control.Capture).ToArray(),
+            () => InvokeOnUiThreadAsync(() =>
+            {
+                target.InvalidateVisual();
+                foreach (var control in mapControls)
+                {
+                    control.InvalidateVisual();
+                }
+            }),
             () => InvokeOnUiThreadAsync(
                 () => CaptureOnUiThread(target, scale, cancellationToken)),
             cancellationToken,
             acquireGate: false).ConfigureAwait(false);
     }
 
-    internal static bool RequiresCaptureSynchronization(Control target)
+    internal static bool RequiresCaptureSynchronization(Control target) =>
+        SynchronizedMapControls(target).Count > 0;
+
+    // The capture-synchronized map controls in the tree; throws for a plain
+    // Mapsui control, whose live paint can't be drained.
+    private static IReadOnlyList<CaptureSynchronizedMapControl> SynchronizedMapControls(Control target)
     {
         var mapControls = target.GetVisualDescendants().OfType<MapControl>().ToList();
         if (target is MapControl mapControl)
@@ -127,7 +142,7 @@ public static class AvaloniaControlCapture
                 "before their control tree can be captured.");
         }
 
-        return mapControls.Count > 0;
+        return mapControls.Cast<CaptureSynchronizedMapControl>().ToList();
     }
 
     private static byte[]? CaptureOnUiThread(

@@ -79,7 +79,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
     [Fact]
     public async Task InViewCell_IsLoaded()
@@ -196,7 +196,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         var cell = Cell("US5ZZ", 40, -75, 41, -74);
         coordinator.Register(new[] { cell });
@@ -235,7 +235,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         var cell = Cell("US5DD", 40, -75, 41, -74);
         coordinator.Register(new[] { cell });
@@ -373,7 +373,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         var cellA = Cell("US5GA", 40, -75, 41, -74);
         var cellB = Cell("US5GB", 40, -75, 41, -74);
@@ -427,7 +427,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             },
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         coordinator.Register(new[] { Cell("US5MA", 40, -75, 41, -74) });
         await Task.Run(() => notifier.Publish(Viewport(40, -75, 41, -74)), TestContext.Current.CancellationToken);
@@ -458,7 +458,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         coordinator.Register(new[] { blocker, far });
 
@@ -500,7 +500,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         var corner = Cell("US5CORNER", 40.0, -75.0, 40.1, -74.9);
         var middle = Cell("US5MIDDLE", 40.4, -74.6, 40.6, -74.4);
@@ -531,7 +531,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         // The blocker takes the only slot; the rest queue behind it.
         coordinator.Register(new[] { blocker });
@@ -570,7 +570,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         coordinator.Register(new[]
         {
@@ -617,7 +617,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
         coordinator.Register(new[] { ahead });
@@ -651,7 +651,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             hasVisibleTileWork: () => Volatile.Read(ref tilesBusy),
             marshal: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         var visible = Cell("US5VIS", 40.4, -74.6, 40.6, -74.4);
         var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
@@ -691,7 +691,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         coordinator.Register(new[] { cell });
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -728,7 +728,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             unloadMany: entries => batches.Enqueue(entries.ToArray()),
             marshal: null,
             hasVisibleTileWork: null,
-            planner: null);
+            planners: null);
 
         var cells = new[]
         {
@@ -811,7 +811,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             hasVisibleTileWork: tilesBusy,
             marshal: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
     [Fact]
     public async Task CoarseCellCoveredByFinerCells_WaitsForThem()
@@ -859,7 +859,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         coordinator.Register(new[] { coarse, west, east });
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -995,7 +995,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             },
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
-            planner: planner,
+            planners: new DemandPlannerSet(planner),
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null);
@@ -1026,6 +1026,80 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     }
 
     [Fact]
+    public async Task Destination_FromEitherMapsPlannerLoadsItsCells()
+    {
+        // Split map (#1728): each map has its own planner, and the coordinator
+        // takes the union of their cell demand.
+        var notifier = new FakeNotifier();
+        var mapA = new DemandPlanner();
+        var mapB = new DemandPlanner();
+        var classes = new ConcurrentDictionary<DatasetEntry, WorkClass>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (entry, _) =>
+            {
+                classes[entry] = WorkDemand.Current!.Priority.Class;
+                return Task.CompletedTask;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            planners: new DemandPlannerSet(mapA, mapB),
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
+
+        var here = Cell("HERE", 47.55, -122.45, 47.65, -122.25);
+        var tacoma = Cell("TACOMA", 47.20, -122.55, 47.30, -122.35);
+        var olympia = Cell("OLYMPIA", 46.95, -123.00, 47.10, -122.80);
+        coordinator.Register(new[] { here, tacoma, olympia });
+        notifier.Publish(Viewport(47.55, -122.45, 47.65, -122.25));
+        Assert.True(await WaitUntilAsync(() => classes.ContainsKey(here)));
+
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        mapA.Observe(ViewAt(47.60, -122.35), now);
+        mapB.Observe(ViewAt(47.60, -122.35), now);
+
+        // Map B animates to Tacoma: its cells load, and map A's motion stays idle.
+        mapB.BeginAnimation(ViewAt(47.25, -122.45), TimeSpan.FromSeconds(2), now);
+        Assert.True(await WaitUntilAsync(() => classes.ContainsKey(tacoma)));
+        Assert.Equal(WorkClass.Predicted, classes[tacoma]);
+        Assert.False(mapA.Motion.HasTarget);
+
+        // Map A then goes to Olympia: both destinations count.
+        mapA.BeginAnimation(ViewAt(47.02, -122.90), TimeSpan.FromSeconds(2), System.Diagnostics.Stopwatch.GetTimestamp());
+        Assert.True(await WaitUntilAsync(() => classes.ContainsKey(olympia)));
+        Assert.Equal(ViewAt(47.25, -122.45), mapB.Motion.Target);
+    }
+
+    [Fact]
+    public void PlannerSet_AddsAndRemovesMapsPlanners()
+    {
+        var mapA = new DemandPlanner();
+        var mapB = new DemandPlanner();
+        var set = new DemandPlannerSet(mapA);
+        var raised = new List<object?>();
+        set.DestinationChanged += (sender, _) => raised.Add(sender);
+
+        Assert.True(set.Add(mapB));
+        Assert.False(set.Add(mapB));
+        Assert.Equal(new[] { mapA, mapB }, set.Planners);
+
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        mapB.Observe(ViewAt(47.60, -122.35), now);
+        mapB.BeginAnimation(ViewAt(47.25, -122.45), TimeSpan.FromSeconds(2), now);
+        Assert.True(set.HasTarget);
+        Assert.Equal(new object?[] { mapB }, raised);
+
+        // A closed map's planner leaves the set and no longer drives it.
+        Assert.True(set.Remove(mapB));
+        Assert.False(set.Remove(mapB));
+        Assert.False(set.HasTarget);
+        mapB.BeginAnimation(ViewAt(47.02, -122.90), TimeSpan.FromSeconds(2), now);
+        Assert.Single(raised);
+        Assert.Equal(new[] { mapA }, set.Planners);
+    }
+
+    [Fact]
     public async Task Arrivals_FollowTheViewsLoads()
     {
         var notifier = new FakeNotifier();
@@ -1041,7 +1115,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             },
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
-            planner: planner,
+            planners: new DemandPlannerSet(planner),
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null);
@@ -1072,7 +1146,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
-            planner: planner,
+            planners: new DemandPlannerSet(planner),
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null);
@@ -1107,7 +1181,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
             hasVisibleTileWork: () => false,
-            planner: planner,
+            planners: new DemandPlannerSet(planner),
             marshal: null,
             unloadMany: null);
         coordinator.Register(new[] { coarse, west, east });

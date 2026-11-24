@@ -57,7 +57,7 @@ public sealed class ExchangeSetServiceSubsetTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
         using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator, metadataReader: null, s57CatalogCache: null);
         var request = new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA52M")]);
         var ct = TestContext.Current.CancellationToken;
@@ -210,7 +210,7 @@ public sealed class ExchangeSetServiceSubsetTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
         using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator, metadataReader: null, s57CatalogCache: null);
 
         await service.OpenAsync(Fixture("Synthetic-S57-Framed"), cancellationToken: TestContext.Current.CancellationToken);

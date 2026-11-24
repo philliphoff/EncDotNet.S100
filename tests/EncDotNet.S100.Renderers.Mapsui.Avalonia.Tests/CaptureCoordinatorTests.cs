@@ -2,11 +2,98 @@ namespace EncDotNet.S100.Renderers.Mapsui.Avalonia.Tests;
 
 public class CaptureCoordinatorTests
 {
+    private readonly CaptureCoordinator _coordinator = new();
+
+    [Fact]
+    public async Task Drain_on_another_control_does_not_release_a_capture()
+    {
+        // Split map (#1728): map B finishing a live paint must not release a
+        // capture of map A that waits for A's drain.
+        var mapB = new CaptureCoordinator();
+        var captured = new TaskCompletionSource();
+        var capture = _coordinator.CaptureDrainedAsync(
+            () =>
+            {
+                Assert.False(mapB.CaptureActive);
+                mapB.NotifyDrained();
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                captured.SetResult();
+                return Task.FromResult<byte[]?>([1]);
+            },
+            TestContext.Current.CancellationToken);
+
+        // B's drain is not A's: the capture waits for A (here, until its
+        // drain timeout) rather than running on B's signal.
+        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        Assert.False(captured.Task.IsCompleted);
+        _coordinator.NotifyDrained();
+        Assert.Equal(new byte[] { 1 }, await capture);
+        Assert.False(_coordinator.CaptureActive);
+    }
+
+    [Fact]
+    public async Task Captures_of_two_controls_do_not_serialize()
+    {
+        var mapB = new CaptureCoordinator();
+        var releaseA = new TaskCompletionSource<byte[]?>();
+        var captureA = _coordinator.CaptureDrainedAsync(
+            () => Task.CompletedTask,
+            () => releaseA.Task,
+            TestContext.Current.CancellationToken,
+            synchronized: false);
+
+        // A is mid-capture; B's capture still runs.
+        var captureB = await mapB.CaptureDrainedAsync(
+            () => Task.CompletedTask,
+            () => Task.FromResult<byte[]?>([2]),
+            TestContext.Current.CancellationToken,
+            synchronized: false);
+        Assert.Equal(new byte[] { 2 }, captureB);
+        Assert.True(_coordinator.CaptureActive);
+        Assert.False(mapB.CaptureActive);
+
+        releaseA.SetResult([1]);
+        Assert.Equal(new byte[] { 1 }, await captureA);
+    }
+
+    [Fact]
+    public async Task Capture_of_several_controls_waits_for_every_drain()
+    {
+        var mapB = new CaptureCoordinator();
+        var captured = false;
+        var capture = CaptureCoordinator.CaptureDrainedAsync(
+            [mapB, _coordinator],
+            () =>
+            {
+                Assert.True(_coordinator.CaptureActive);
+                Assert.True(mapB.CaptureActive);
+                _coordinator.NotifyDrained();
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                captured = true;
+                return Task.FromResult<byte[]?>([3]);
+            },
+            TestContext.Current.CancellationToken,
+            acquireGate: false);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        Assert.False(captured);
+        mapB.NotifyDrained();
+        Assert.Equal(new byte[] { 3 }, await capture);
+        Assert.False(_coordinator.CaptureActive);
+        Assert.False(mapB.CaptureActive);
+    }
+
     [Fact]
     public void RunCapture_returns_capture_result()
     {
         var bytes = new byte[] { 1, 2, 3 };
-        var result = CaptureCoordinator.RunCapture(() => bytes, TimeSpan.FromSeconds(1));
+        var result = _coordinator.RunCapture(() => bytes, TimeSpan.FromSeconds(1));
         Assert.Same(bytes, result);
     }
 
@@ -14,7 +101,7 @@ public class CaptureCoordinatorTests
     public void RunCapture_propagates_exception_and_releases_gate()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            CaptureCoordinator.RunCapture(
+            _coordinator.RunCapture(
                 () => throw new InvalidOperationException("boom"),
                 TimeSpan.FromSeconds(1)));
 
@@ -46,7 +133,7 @@ public class CaptureCoordinatorTests
         // sleep let the capture win the race on slow runners.
         Assert.True(gateHeld.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
-        var captureTask = Task.Run(() => CaptureCoordinator.RunCapture(
+        var captureTask = Task.Run(() => _coordinator.RunCapture(
             () =>
             {
                 captureStarted.Set();
@@ -64,32 +151,32 @@ public class CaptureCoordinatorTests
     [Fact]
     public void Capture_active_is_depth_counted_and_cleared_after_exception()
     {
-        Assert.False(CaptureCoordinator.CaptureActive);
-        CaptureCoordinator.BeginCapture();
-        CaptureCoordinator.BeginCapture();
-        CaptureCoordinator.EndCapture();
-        Assert.True(CaptureCoordinator.CaptureActive);
-        CaptureCoordinator.EndCapture();
-        Assert.False(CaptureCoordinator.CaptureActive);
+        Assert.False(_coordinator.CaptureActive);
+        _coordinator.BeginCapture();
+        _coordinator.BeginCapture();
+        _coordinator.EndCapture();
+        Assert.True(_coordinator.CaptureActive);
+        _coordinator.EndCapture();
+        Assert.False(_coordinator.CaptureActive);
 
         Assert.Throws<InvalidOperationException>(() =>
-            CaptureCoordinator.RunCapture(
+            _coordinator.RunCapture(
                 byte[]? () => throw new InvalidOperationException("boom"),
                 TimeSpan.FromSeconds(1)));
-        Assert.False(CaptureCoordinator.CaptureActive);
+        Assert.False(_coordinator.CaptureActive);
     }
 
     [Fact]
     public async Task Fresh_drain_wait_ignores_stale_signal_and_accepts_new_signal()
     {
-        CaptureCoordinator.NotifyDrained();
+        _coordinator.NotifyDrained();
         Assert.False(
-            CaptureCoordinator.WaitForFreshDrain(TimeSpan.FromMilliseconds(50)));
+            _coordinator.WaitForFreshDrain(TimeSpan.FromMilliseconds(50)));
 
         var waitTask = Task.Run(() =>
-            CaptureCoordinator.WaitForFreshDrain(TimeSpan.FromSeconds(5)));
+            _coordinator.WaitForFreshDrain(TimeSpan.FromSeconds(5)));
         await Task.Delay(50, TestContext.Current.CancellationToken);
-        CaptureCoordinator.NotifyDrained();
+        _coordinator.NotifyDrained();
         Assert.True(await waitTask);
     }
 
@@ -97,24 +184,24 @@ public class CaptureCoordinatorTests
     public async Task CaptureDrained_requests_repaint_before_capture()
     {
         var order = new List<string>();
-        var result = await CaptureCoordinator.CaptureDrainedAsync(
+        var result = await _coordinator.CaptureDrainedAsync(
             () =>
             {
                 order.Add("repaint");
-                CaptureCoordinator.NotifyDrained();
+                _coordinator.NotifyDrained();
                 return Task.CompletedTask;
             },
             () =>
             {
                 order.Add("capture");
-                Assert.True(CaptureCoordinator.CaptureActive);
+                Assert.True(_coordinator.CaptureActive);
                 return Task.FromResult<byte[]?>([7]);
             },
             CancellationToken.None);
 
         Assert.Equal(new byte[] { 7 }, result);
         Assert.Equal(["repaint", "capture"], order);
-        Assert.False(CaptureCoordinator.CaptureActive);
+        Assert.False(_coordinator.CaptureActive);
     }
 
     [Fact]
@@ -124,7 +211,7 @@ public class CaptureCoordinatorTests
         // synchronized: false must skip the repaint + drain wait entirely and
         // capture directly - never stalling on a signal that can never arrive.
         var order = new List<string>();
-        var result = await CaptureCoordinator.CaptureDrainedAsync(
+        var result = await _coordinator.CaptureDrainedAsync(
             () =>
             {
                 order.Add("repaint");
@@ -133,7 +220,7 @@ public class CaptureCoordinatorTests
             () =>
             {
                 order.Add("capture");
-                Assert.True(CaptureCoordinator.CaptureActive);
+                Assert.True(_coordinator.CaptureActive);
                 return Task.FromResult<byte[]?>([9]);
             },
             CancellationToken.None,
@@ -142,7 +229,7 @@ public class CaptureCoordinatorTests
         Assert.Equal(new byte[] { 9 }, result);
         // The repaint request was skipped: only the capture ran.
         Assert.Equal(["capture"], order);
-        Assert.False(CaptureCoordinator.CaptureActive);
+        Assert.False(_coordinator.CaptureActive);
     }
 
     [Fact]
@@ -156,10 +243,10 @@ public class CaptureCoordinatorTests
         // deadlock). acquireGate: false relies on the markers to serialize and
         // must not deadlock.
         var reentered = false;
-        var capture = CaptureCoordinator.CaptureDrainedAsync(
+        var capture = _coordinator.CaptureDrainedAsync(
             () =>
             {
-                CaptureCoordinator.NotifyDrained();
+                _coordinator.NotifyDrained();
                 return Task.CompletedTask;
             },
             () =>
@@ -180,7 +267,7 @@ public class CaptureCoordinatorTests
         Assert.Same(capture, finished); // did not deadlock
         Assert.True(reentered);
         Assert.Equal(new byte[] { 42 }, await capture);
-        Assert.False(CaptureCoordinator.CaptureActive);
+        Assert.False(_coordinator.CaptureActive);
     }
 
     [Fact]
@@ -190,7 +277,7 @@ public class CaptureCoordinatorTests
         var replacementLease = CaptureCoordinator.EnterLivePaint();
 
         CaptureCoordinator.ExitGate(abandonedLease);
-        var result = CaptureCoordinator.RunCapture(
+        var result = _coordinator.RunCapture(
             () => new byte[] { 9 },
             TimeSpan.FromMilliseconds(100));
 

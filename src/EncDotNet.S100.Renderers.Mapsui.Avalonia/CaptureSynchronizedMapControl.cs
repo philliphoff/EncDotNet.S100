@@ -26,6 +26,12 @@ namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 /// </remarks>
 public class CaptureSynchronizedMapControl : MapControl
 {
+    /// <summary>
+    /// This control's capture coordination: its capture slot and drain
+    /// signal (one per control, #1728).
+    /// </summary>
+    internal CaptureCoordinator Capture { get; } = new();
+
     /// <inheritdoc />
     public override void Render(DrawingContext context)
     {
@@ -147,7 +153,7 @@ public class CaptureSynchronizedMapControl : MapControl
                 {
                     try
                     {
-                        if (CaptureCoordinator.CaptureActive)
+                        if (_owner.Capture.CaptureActive)
                         {
                             try
                             {
@@ -155,7 +161,7 @@ public class CaptureSynchronizedMapControl : MapControl
                             }
                             finally
                             {
-                                CaptureCoordinator.NotifyDrained();
+                                _owner.Capture.NotifyDrained();
                             }
                         }
                     }
