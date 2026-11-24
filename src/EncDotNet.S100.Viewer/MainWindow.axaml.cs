@@ -606,6 +606,9 @@ public partial class MainWindow : ShadUI.Window
         {
             DepthBasis = App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
             Viewport = _mapHost,
+            ReferenceMenu = App.Services.GetService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>() is { } terms
+                ? new EncDotNet.S100.Viewer.Services.ChartReference.MapReferenceMenu(terms)
+                : null,
         };
         interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
         interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);

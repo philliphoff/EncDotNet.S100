@@ -1849,7 +1849,13 @@ public partial class App : Application
             UiThread.Post));
         services.AddSingleton<ILibraryTimeSource>(sp => sp.GetRequiredService<LibraryTimeSource>());
         services.AddSingleton<LayerStackViewModel>();
-        services.AddSingleton<FeatureSearchViewModel>();
+        // Each hit's feature type is a Chart reference term (symbol dictionary R9b, #1681).
+        services.AddSingleton(sp => new FeatureSearchViewModel(
+            sp.GetRequiredService<IFeatureSearchService>(),
+            sp.GetRequiredService<IPickService>())
+        {
+            Terms = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>(),
+        });
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
             sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),

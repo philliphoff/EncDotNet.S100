@@ -9930,6 +9930,26 @@
     <value>Symbol</value>
     <comment>Accessible name of the glyph in a term's peek</comment>
   </data>
+  <data name="Search_OpenInReference" xml:space="preserve">
+    <value>Open in reference</value>
+    <comment>Context menu item of a Feature search hit that opens its feature type's entry in the Reference tab</comment>
+  </data>
+  <data name="Tooltip_SearchOpenInReferenceFormat" xml:space="preserve">
+    <value>Open {0} in the Reference tab</value>
+    <comment>Tooltip of a Feature search hit's Open in reference item; {0} is the feature type's name</comment>
+  </data>
+  <data name="Map_LookUpInReference" xml:space="preserve">
+    <value>Look up in reference</value>
+    <comment>Map context menu item that opens the Chart reference entry of the feature under the pointer</comment>
+  </data>
+  <data name="Tooltip_MapLookUpInReferenceFormat" xml:space="preserve">
+    <value>Open {0} in the Reference tab</value>
+    <comment>Tooltip of the map's Look up in reference item, or of one feature in its submenu; {0} is the feature type's name</comment>
+  </data>
+  <data name="Map_ContextMenuName" xml:space="preserve">
+    <value>Map</value>
+    <comment>Accessible name of the map's context menu</comment>
+  </data>
   <data name="Pane_Catalogues" xml:space="preserve">
     <value>Catalogues</value>
     <comment>Title of the Catalogues activity (catalogue-panels D1)</comment>

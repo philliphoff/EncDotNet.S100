@@ -1,5 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -15,4 +18,19 @@ public partial class FeatureSearchView : UserControl
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+
+    // A hit's menu holds only Open in reference: it doesn't open for a
+    // feature type the Chart reference doesn't hold (R9b, #1681).
+    private void OnResultContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is Control { DataContext: FeatureSearchResultItem { IsInReference: true } })
+            return;
+        e.Handled = true;
+    }
+
+    private void OnOpenInReferenceClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: FeatureSearchResultItem item } && DataContext is FeatureSearchViewModel vm)
+            vm.OpenInReferenceCommand.Execute(item);
+    }
 }
