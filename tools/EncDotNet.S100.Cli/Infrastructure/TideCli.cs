@@ -39,7 +39,7 @@ internal static class TideCli
     /// <summary>What to say when the catalogue file isn't there.</summary>
     public static string MissingHint(string path) =>
         string.Equals(Path.GetFullPath(path), Path.GetFullPath(DefaultCataloguePath), StringComparison.Ordinal)
-            ? $"Run 's100 tides update' to download NOAA's stations (about 10 minutes) into {path}, or pass --catalogue."
+            ? $"Run 's100 tides update' to download NOAA's stations into {path} (one file from the EncDotNet.S100 mirror), or pass --catalogue."
             : $"There's no catalogue at {path}. Run 's100 tides update --catalogue {path}' to download NOAA's stations there.";
 
     /// <summary>The catalogue's provenance and age, in a line.</summary>

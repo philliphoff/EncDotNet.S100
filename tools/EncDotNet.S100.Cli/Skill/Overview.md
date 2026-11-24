@@ -14,7 +14,7 @@ command offers it, and treat paths as local filesystem paths.
 | Check an RTZ or S-421 route against datasets (land, depths, dangers, areas, S-124 warnings, UKC) | `s100 route check` |
 | Find tide stations near a point | `s100 tides stations` |
 | Predict the tide at a station (series, highs and lows, CSV, JSON or S-104) | `s100 tides predict` |
-| Download or check the offline tide station catalogue (from NOAA, or `--from mirror` for one file) | `s100 tides update` |
+| Download or check the offline tide station catalogue (one file from the mirror; `--from noaa` for NOAA itself) | `s100 tides update` |
 | Prepare a tide station catalogue and manifest for a mirror | `s100 tides publish` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
 | Write XYZ raster tiles (folder, PMTiles, MBTiles or GeoPackage) or one GeoTIFF for a web map or GIS | `s100 tiles export` |

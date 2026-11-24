@@ -13,8 +13,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 tides update</c>: downloads NOAA CO-OPS's tide stations into the
 /// offline catalogue the other <c>s100 tides</c> commands and
 /// <c>s100 mcp serve</c> read, or with <c>--check</c> asks whether there's
-/// newer data than the catalogue: from NOAA itself, or from a mirror that
-/// publishes NOAA's catalogue as one file (#1674).
+/// newer data than the catalogue. By default it reads the EncDotNet.S100
+/// mirror, which publishes NOAA's catalogue as one file, and falls back to
+/// NOAA's metadata API when the mirror can't be used (#1674).
 /// </summary>
 internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Settings>
 {
@@ -30,7 +31,7 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
     internal sealed class Settings : CommandSettings
     {
         [CommandOption("--check")]
-        [Description("Only check whether there's newer data than the catalogue (a few requests, or one from a mirror); download nothing. Exits with 0 when it's current and 8 when there's newer data.")]
+        [Description("Only check whether there's newer data than the catalogue (one request to the mirror, or a few to NOAA); download nothing. Exits with 0 when it's current and 8 when there's newer data.")]
         public bool Check { get; init; }
 
         [CommandOption("--catalogue <FILE>")]
@@ -38,62 +39,91 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
         public string? Catalogue { get; init; }
 
         [CommandOption("--from <SOURCE>")]
-        [Description("Where to download from: 'noaa' (NOAA's metadata API, about 10 minutes; the default), 'mirror' (the EncDotNet.S100 mirror of NOAA's catalogue, one file), or the URL of a mirror's tide-stations.manifest.json.")]
-        public string From { get; init; } = FromNoaa;
+        [Description("Where to download from: 'mirror' (the EncDotNet.S100 mirror of NOAA's catalogue, one file), 'noaa' (NOAA's metadata API, about 10 minutes), or the URL of a mirror's tide-stations.manifest.json. Left out, the mirror, or NOAA when the mirror can't be used.")]
+        public string? From { get; init; }
 
         public override ValidationResult Validate() =>
             TryGetMirrorAddress(From, out _)
                 ? ValidationResult.Success()
-                : ValidationResult.Error($"--from must be '{FromNoaa}', '{FromMirror}' or an http(s) URL of a mirror's manifest, not '{From}'.");
+                : ValidationResult.Error($"--from must be '{FromMirror}', '{FromNoaa}' or an http(s) URL of a mirror's manifest, not '{From}'.");
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var path = TideCli.CataloguePath(settings.Catalogue);
+        TideStationCatalogue? local = null;
+        if (settings.Check && (local = await LoadForCheckAsync(path, cancellationToken).ConfigureAwait(false)) is null)
+            return 2;
+
         using var http = HttpFactory();
         http.Timeout = TimeSpan.FromMinutes(2);
         http.DefaultRequestHeaders.UserAgent.TryParseAdd("EncDotNet.S100.Cli");
         TryGetMirrorAddress(settings.From, out var mirror);
 
+        // Only the default falls back: a mirror named with --from that fails is an error.
+        var fallBack = string.IsNullOrWhiteSpace(settings.From);
+        if (mirror is not null)
+        {
+            var again = fallBack ? "s100 tides update" : $"s100 tides update --from {settings.From}";
+            var client = new TideCatalogueMirrorClient(http, new TideCatalogueMirrorClientOptions { ManifestAddress = mirror });
+            try
+            {
+                var result = local is not null
+                    ? await CheckMirrorAsync(client, local, again, fallBack, cancellationToken).ConfigureAwait(false)
+                    : await DownloadMirrorAsync(client, mirror, path, cancellationToken).ConfigureAwait(false);
+                if (result is { } exit)
+                    return exit;
+            }
+            catch (Exception ex) when (IsMirrorFailure(ex, cancellationToken))
+            {
+                var reason = ex is HttpRequestException ? $"didn't answer: {ex.Message}" : $"has a catalogue that can't be used: {ex.Message}";
+                if (!fallBack)
+                {
+                    Console.Error.WriteLine($"Error: The mirror at {mirror} {reason}");
+                    return 1;
+                }
+
+                Console.Error.WriteLine($"The mirror at {mirror} {reason}");
+                Console.Error.WriteLine(local is not null ? "Checking NOAA instead." : "Downloading from NOAA instead.");
+            }
+        }
+
+        var noaa = new NoaaTideStationClient(http);
         try
         {
-            if (mirror is not null)
-            {
-                var client = new TideCatalogueMirrorClient(http, new TideCatalogueMirrorClientOptions { ManifestAddress = mirror });
-                return settings.Check
-                    ? await CheckMirrorAsync(client, path, cancellationToken).ConfigureAwait(false)
-                    : await DownloadMirrorAsync(client, mirror, path, cancellationToken).ConfigureAwait(false);
-            }
-
-            var noaa = new NoaaTideStationClient(http);
-            return settings.Check
-                ? await CheckNoaaAsync(noaa, path, cancellationToken).ConfigureAwait(false)
+            return local is not null
+                ? await CheckNoaaAsync(noaa, local, cancellationToken).ConfigureAwait(false)
                 : await DownloadNoaaAsync(noaa, path, cancellationToken).ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
-            Console.Error.WriteLine(mirror is null
-                ? $"Error: NOAA's metadata API didn't answer: {ex.Message}"
-                : $"Error: The mirror at {mirror} didn't answer: {ex.Message}");
-            return 1;
-        }
-        catch (Exception ex) when (mirror is not null && ex is InvalidDataException or NotSupportedException or FormatException)
-        {
-            Console.Error.WriteLine($"Error: The mirror's catalogue can't be used: {ex.Message}");
+            Console.Error.WriteLine($"Error: NOAA's metadata API didn't answer: {ex.Message}");
             return 1;
         }
     }
 
-    /// <summary>The mirror manifest a <c>--from</c> value names; <c>null</c> for NOAA.</summary>
+    /// <summary>Whether an exception means the mirror can't be used, rather than that the command was cancelled or the local file is bad.</summary>
+    private static bool IsMirrorFailure(Exception ex, CancellationToken cancellationToken) => ex switch
+    {
+        HttpRequestException or InvalidDataException or NotSupportedException or FormatException => true,
+        TaskCanceledException => !cancellationToken.IsCancellationRequested,
+        _ => false,
+    };
+
+    /// <summary>
+    /// The mirror manifest a <c>--from</c> value names: the EncDotNet.S100
+    /// mirror when it's left out or <c>mirror</c>, a URL's address, or
+    /// <c>null</c> for NOAA.
+    /// </summary>
     /// <returns><c>false</c> when the value is neither NOAA, the mirror nor an http(s) URL.</returns>
     internal static bool TryGetMirrorAddress(string? from, out Uri? address)
     {
         address = null;
         var value = from?.Trim() ?? string.Empty;
-        if (value.Length == 0 || string.Equals(value, FromNoaa, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(value, FromNoaa, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (string.Equals(value, FromMirror, StringComparison.OrdinalIgnoreCase))
+        if (value.Length == 0 || string.Equals(value, FromMirror, StringComparison.OrdinalIgnoreCase))
         {
             address = TideCatalogueMirrorClientOptions.DefaultManifestAddress;
             return true;
@@ -128,7 +158,7 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
         return 0;
     }
 
-    private static async Task<int> DownloadMirrorAsync(TideCatalogueMirrorClient client, Uri mirror, string path, CancellationToken cancellationToken)
+    private static async Task<int?> DownloadMirrorAsync(TideCatalogueMirrorClient client, Uri mirror, string path, CancellationToken cancellationToken)
     {
         Console.Error.WriteLine($"Downloading the tide station catalogue from {mirror} into {path}.");
         var download = await client.DownloadCatalogueAsync(path, cancellationToken).ConfigureAwait(false);
@@ -138,11 +168,8 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
         return 0;
     }
 
-    private static async Task<int> CheckNoaaAsync(NoaaTideStationClient client, string path, CancellationToken cancellationToken)
+    private static async Task<int> CheckNoaaAsync(NoaaTideStationClient client, TideStationCatalogue catalogue, CancellationToken cancellationToken)
     {
-        if (await LoadForCheckAsync(path, cancellationToken).ConfigureAwait(false) is not { } catalogue)
-            return 2;
-
         var check = await client.CheckForUpdatesAsync(catalogue, cancellationToken).ConfigureAwait(false);
         if (!check.HasNewerData)
         {
@@ -150,7 +177,7 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
             return 0;
         }
 
-        Console.Out.WriteLine("NOAA has newer data: run 's100 tides update' to download it.");
+        Console.Out.WriteLine($"NOAA has newer data: run 's100 tides update --from {FromNoaa}' to download it.");
         if (check.NewDatumEpoch is { } epoch)
             Console.Out.WriteLine($"  New tidal datum epoch: {epoch}");
         Report("Added", check.AddedStationIds);
@@ -160,16 +187,21 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
         return 8;
     }
 
-    private static async Task<int> CheckMirrorAsync(TideCatalogueMirrorClient client, string path, CancellationToken cancellationToken)
+    /// <summary>Checks the mirror; <c>null</c> when it's in a newer format and NOAA should be checked instead.</summary>
+    private static async Task<int?> CheckMirrorAsync(
+        TideCatalogueMirrorClient client, TideStationCatalogue catalogue, string again, bool fallBack, CancellationToken cancellationToken)
     {
-        if (await LoadForCheckAsync(path, cancellationToken).ConfigureAwait(false) is not { } catalogue)
-            return 2;
-
         var check = await client.CheckForUpdatesAsync(catalogue, cancellationToken).ConfigureAwait(false);
         var manifest = check.Manifest;
         var mirrored = $"{manifest.Provider ?? "unknown provider"}, retrieved {TideCli.FormatDate(manifest.Retrieved)}, checked {TideCli.FormatDate(manifest.Checked)}";
         if (!manifest.IsSupported)
         {
+            if (fallBack)
+            {
+                Console.Error.WriteLine($"The mirror's catalogue ({mirrored}) is in a newer format than this version of s100 reads. Checking NOAA instead.");
+                return null;
+            }
+
             Console.Out.WriteLine($"The mirror's catalogue ({mirrored}) is in a newer format than this version of s100 reads: update s100.");
             return 0;
         }
@@ -180,7 +212,7 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
             return 0;
         }
 
-        Console.Out.WriteLine($"The mirror has newer data ({mirrored}): run 's100 tides update --from {FromMirror}' to download it.");
+        Console.Out.WriteLine($"The mirror has newer data ({mirrored}): run '{again}' to download it.");
         return 8;
     }
 
