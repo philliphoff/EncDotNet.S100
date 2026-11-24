@@ -335,6 +335,7 @@ public partial class App : Application
         {
             _services.GetService<CataloguesViewModel>()?.RefreshExaminerAvailability();
             _services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
+            _services.GetService<EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceViewModel>()?.ProductHeader?.Refresh();
         };
         _ = mcpHost.Apply().ContinueWith(t =>
         {
@@ -1998,6 +1999,16 @@ public partial class App : Application
                 () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferencePageCommand.Execute(null));
             // Selecting a row opens its entry in the Reference tab (R7, #1650).
             reference.OpenEntry = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceNavigator>().Open;
+            // The product header (catalogue-panels D8, D9, CR4): the catalogues
+            // in use, Catalogues… at the product, and the eXaminer link. The
+            // Catalogues activity is resolved on click, since it resolves this
+            // view model for Open in Chart reference.
+            reference.ProductHeader = new EncDotNet.S100.Viewer.ViewModels.ChartReference.ChartReferenceProductHeaderViewModel(
+                reference,
+                sp.GetRequiredService<CatalogueRegistry>(),
+                sp.GetRequiredService<ExaminerLinks>(),
+                spec => sp.GetRequiredService<CataloguesViewModel>().ShowProduct(spec),
+                UiThread.RunOrPost);
             return reference;
         });
         // The Reference tab's trail (R7, #1650): one entry at a time, with

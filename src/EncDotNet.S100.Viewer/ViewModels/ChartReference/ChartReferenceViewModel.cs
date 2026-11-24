@@ -68,6 +68,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     private bool _disposed;
     private bool _isActive;
     private ICommand? _openPageCommand;
+    private ChartReferenceProductHeaderViewModel? _productHeader;
     private bool _selectingQuietly;
 
     /// <summary>
@@ -299,6 +300,18 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
     /// <summary>Whether the activity shows Open as page.</summary>
     public bool CanOpenPage => _openPageCommand is not null;
 
+    /// <summary>
+    /// The product header (catalogue-panels D8, D9, CR4): the selected
+    /// product's catalogues in use, Catalogues… and the eXaminer link; the
+    /// activity and its page share it. <see langword="null"/>, without the
+    /// app's catalogue registry, hides it.
+    /// </summary>
+    public ChartReferenceProductHeaderViewModel? ProductHeader
+    {
+        get => _productHeader;
+        set => SetProperty(ref _productHeader, value);
+    }
+
     /// <summary>The latest load of an index; tests wait on it.</summary>
     internal Task Loading { get; private set; } = Task.CompletedTask;
 
@@ -469,6 +482,7 @@ internal sealed partial class ChartReferenceViewModel : ViewModelBase, IChartRef
         if (_disposed)
             return;
         _disposed = true;
+        _productHeader?.Dispose();
         _debounceTimer?.Stop();
         _service.Changed -= OnCataloguesChanged;
         _glyphs.PaletteChanged -= OnPaletteChanged;

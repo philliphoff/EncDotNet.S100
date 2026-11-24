@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:cr="using:EncDotNet.S100.Viewer.ViewModels.ChartReference"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.ChartReferenceProductHeaderView"
+             x:DataType="cr:ChartReferenceProductHeaderViewModel">
+    <UserControl.Styles>
+        <!-- Links as in About: accent text, underlined on hover; the keyboard focus ring shows. -->
+        <Style Selector="Button.crHeaderLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Background="Transparent"
+                                      Foreground="{DynamicResource AccentBrush}"
+                                      VerticalAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.crHeaderLink TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontSize" Value="{StaticResource SecondaryFontSize}" />
+        </Style>
+        <Style Selector="Button.crHeaderLink:pointerover TextBlock">
+            <Setter Property="TextDecorations" Value="Underline" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- The product header (catalogue-panels D8, D9, §6.3, CR4): the catalogues in
+         use and their source, then Catalogues… and, where it applies, the eXaminer.
+         Shared by the Chart reference activity and its page. -->
+    <StackPanel Spacing="2"
+                AutomationProperties.AutomationId="ChartReferenceHeader"
+                AutomationProperties.Name="{x:Static loc:Strings.ChartReference_HeaderName}">
+        <TextBlock Text="{Binding IdentityText}"
+                   ToolTip.Tip="{Binding IdentityText}"
+                   AutomationProperties.AutomationId="ChartReferenceHeader.Identity"
+                   FontSize="{StaticResource SecondaryFontSize}"
+                   Opacity="0.7"
+                   TextWrapping="Wrap" />
+        <WrapPanel Orientation="Horizontal" ItemSpacing="16">
+            <Button Classes="crHeaderLink"
+                    IsVisible="{Binding CanShowCatalogues}"
+                    Command="{Binding ShowCataloguesCommand}"
+                    AutomationProperties.AutomationId="ChartReferenceHeader.Catalogues"
+                    AutomationProperties.Name="{x:Static loc:Strings.ChartReference_Header_Catalogues}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ChartReferenceHeaderCatalogues}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ChartReferenceHeaderCatalogues}">
+                <TextBlock Text="{x:Static loc:Strings.ChartReference_Header_Catalogues}" />
+            </Button>
+            <!-- D9: only where the eXaminer hosts the product; it names the published
+                 edition when the feature catalogue in use is custom. -->
+            <Button Classes="crHeaderLink"
+                    IsVisible="{Binding CanOpenInExaminer}"
+                    Command="{Binding OpenInExaminerCommand}"
+                    AutomationProperties.AutomationId="ChartReferenceHeader.Examiner"
+                    AutomationProperties.Name="{Binding ExaminerLabel}"
+                    AutomationProperties.HelpText="{Binding ExaminerTooltip}"
+                    ToolTip.Tip="{Binding ExaminerTooltip}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="{Binding ExaminerLabel}" />
+                    <ic:FluentIcon Icon="Open" FontSize="12" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </WrapPanel>
+    </StackPanel>
+</UserControl>
