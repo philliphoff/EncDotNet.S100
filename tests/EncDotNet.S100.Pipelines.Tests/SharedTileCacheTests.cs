@@ -8,7 +8,9 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// Caches whose keys are content-addressed (chart tiles) share tiles through
 /// their pool: one adopts a tile another holds instead of rasterising it, an
 /// equal tile put twice is kept once, the pool charges a shared tile once, and
-/// its image lives until the last holder lets it go.
+/// its image lives until the last holder lets it go. Caches share only within
+/// one scope (texture caches: one graphics context), and a texture another
+/// cache held waits out the orphan delay before it is freed.
 /// </summary>
 public class SharedTileCacheTests
 {
@@ -31,8 +33,10 @@ public class SharedTileCacheTests
         return new TileMemoryPool(() => limitBytes, "test", () => ticks += Stopwatch.Frequency);
     }
 
-    private static TileCache Sharing(TileMemoryPool pool) =>
-        new(pool, owner: null) { ShareContent = true };
+    private static readonly object Scope = new();
+
+    private static TileCache Sharing(TileMemoryPool pool, object? scope = null) =>
+        new(pool, owner: null) { ShareScope = scope ?? Scope };
 
     [Fact]
     public void ACacheAdoptsATileAnotherSharingCacheHolds()
@@ -50,7 +54,7 @@ public class SharedTileCacheTests
     }
 
     [Fact]
-    public void ACacheThatDoesNotShareAdoptsNothing()
+    public void ACacheWithoutAShareScopeAdoptsNothing()
     {
         var pool = Pool();
         using var first = Sharing(pool);
@@ -158,5 +162,64 @@ public class SharedTileCacheTests
         Assert.False(second.Contains(Key(0)));
         Assert.Equal(nint.Zero, shared.Handle);
         Assert.Equal(2 * bytes, pool.ResidentBytes);
+    }
+
+    [Fact]
+    public void CachesOfDifferentScopesShareNothing()
+    {
+        // Texture caches are scoped to their graphics context.
+        var pool = Pool();
+        using var first = Sharing(pool, scope: new object());
+        using var second = Sharing(pool, scope: new object());
+        first.Put(Key(0), MakeImage());
+
+        Assert.False(second.Contains(Key(0)));
+        second.Put(Key(0), MakeImage());
+        Assert.Equal(2 * TileBytes, pool.ResidentBytes);
+    }
+
+    [Fact]
+    public void ADeferredCacheFreesItsOwnTextureAtItsNextDrain()
+    {
+        var clock = new FakeClock();
+        var pool = new TileMemoryPool(() => TileCache.MinBudgetBytes, "test", () => clock.Ticks);
+        using var cache = new TileCache(pool, owner: null, deferDisposal: true) { ShareScope = Scope };
+        var texture = MakeImage();
+        cache.Put(Key(0), texture);
+
+        cache.Clear();
+        Assert.NotEqual(nint.Zero, texture.Handle);
+        cache.DrainPendingDisposals();
+        Assert.Equal(nint.Zero, texture.Handle);
+    }
+
+    [Fact]
+    public void ADeferredSharedTextureWaitsOutTheOrphanDelay()
+    {
+        // The other cache may have drawn it in the frame still in flight, so
+        // the last holder's next frame is too soon to free it.
+        var clock = new FakeClock();
+        var pool = new TileMemoryPool(() => TileCache.MinBudgetBytes, "test", () => clock.Ticks);
+        using var first = new TileCache(pool, owner: null, deferDisposal: true) { ShareScope = Scope };
+        using var second = new TileCache(pool, owner: null, deferDisposal: true) { ShareScope = Scope };
+        var texture = MakeImage();
+        first.Put(Key(0), texture);
+        Assert.Same(texture, second.TryGet(Key(0)));
+
+        second.Clear();
+        first.Clear();
+        first.DrainPendingDisposals();
+        Assert.NotEqual(nint.Zero, texture.Handle);
+
+        clock.Advance(TileMemoryPool.OrphanDisposalDelay);
+        second.DrainPendingDisposals();
+        Assert.Equal(nint.Zero, texture.Handle);
+    }
+
+    private sealed class FakeClock
+    {
+        public long Ticks = 1;
+
+        public void Advance(TimeSpan by) => Ticks += (long)(by.TotalSeconds * Stopwatch.Frequency);
     }
 }

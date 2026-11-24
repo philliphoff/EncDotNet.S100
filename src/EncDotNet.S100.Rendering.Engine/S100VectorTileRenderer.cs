@@ -2628,6 +2628,7 @@ public static partial class S100VectorTileRenderer
                 state.GpuTextures = null;
                 state.GpuContext = null;
                 state.GpuEntry = null;
+                state.GpuShareScope = null;
             }
 
             return;
@@ -2642,6 +2643,7 @@ public static partial class S100VectorTileRenderer
             }
 
             state.GpuTextures = new TileCache(TileMemoryPool.Gpu, owner: null, deferDisposal: true);
+            state.GpuShareScope = null;
             state.GpuEntry = RegisterGpuCache(layer, state.GpuTextures, grContext);
             state.GpuContext = grContext;
             state.GpuGeneration = state.Generation;
@@ -2650,6 +2652,16 @@ public static partial class S100VectorTileRenderer
         {
             state.GpuTextures!.Clear();
             state.GpuGeneration = state.Generation;
+        }
+
+        // A chart layer's textures are uploads of content-addressed raster
+        // tiles, so every map's chart layer drawing through this context
+        // shares them (a texture belongs to the context that made it).
+        var scope = state.Chart is not null ? grContext : null;
+        if (!ReferenceEquals(state.GpuShareScope, scope))
+        {
+            state.GpuTextures!.ShareScope = scope;
+            state.GpuShareScope = scope;
         }
     }
 
@@ -4397,6 +4409,9 @@ public static partial class S100VectorTileRenderer
         public readonly WeakReference<object> Owner;
 
         public readonly object Sync = new();
+
+        /// <summary>The share scope last given <see cref="GpuTextures"/>: the context, for a chart layer. Render thread only.</summary>
+        public object? GpuShareScope;
 
         // The session options this layer's tiles follow: the process-wide
         // options for a layer bound to one scene, its session's for a chart
