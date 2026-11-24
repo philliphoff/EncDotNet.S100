@@ -1,6 +1,7 @@
 # Split map: design pass
 
-Status: **Proposed** (2026-11-24). Answers Q1–Q12 of the
+Status: **Accepted** (2026-11-24). The user resolved O1–O4 the same day
+(see the end). Answers Q1–Q12 of the
 [brief](dual-map-brief.md). The services and engine side is in
 [dual-map-architecture.md](dual-map-architecture.md); its §2.4 and §3
 now follow the decisions below.
@@ -224,8 +225,7 @@ where they are in view.** *(Frame 5a.)*
   lands, and the rubber band follows the pointer in that pane. The brief
   expected "probably not". But with an overview and a detail it is the
   natural way to measure from far away to an exact point, and the state
-  is already geographic, so it costs nothing extra. This is open for the
-  user (O2).
+  is already geographic, so it costs nothing extra. Accepted (O2).
 - There is still one measurement and one range and bearing, with one
   card at the top left of the map area.
 - **Routes are drawn in every pane.** In Edit route mode a waypoint can
@@ -256,8 +256,7 @@ zooms the others by the same factor. One rule covers both uses
 
 "Centre only" breaks the comparison case, because the scales drift
 apart. "Centre and scale" breaks overview and detail, because linking
-would jump one pane to the other's scale. Whether the ratio or the same
-scale is better is open for the user (O1).
+would jump one pane to the other's scale. Accepted (O1).
 
 **D15. A pane outlines the extent of any other pane that lies inside it
 and is much smaller** (less than a quarter of its width), with that
@@ -353,8 +352,8 @@ Map n*, *Next low water* and *Next high water*.** The tide station is the
 one water level adjustment uses in that pane's view; here it is Seattle
 9447130. This covers the skipper's case: this pane at the next low water,
 that one at the next high water. The jumps are one-shot. After them,
-stepping with the times linked keeps the offset. Whether stepping should
-instead move both panes to the next low/high pair is open (O4).
+stepping with the times linked keeps the fixed offset; it doesn't re-pair
+low and high water (O4).
 *(Frame 9b.)*
 
 ## 10. Display settings
@@ -456,20 +455,17 @@ frame)*:
 | D27 | Overlays per the table in §11 | Q10–Q12 |
 | D28 | MCP: `list_maps`, `set_active_map`, `set_split_map`, `set_map_link`, `set_map_name`, optional `map` on map tools, `shownIn` on picks | Q10–Q12 |
 
-## Open for the user
+## Resolved questions
 
-- **O1. Link: scale ratio or same scale (D14).** Keeping the ratio serves
-  overview and detail as well as comparison. Forcing the same scale is
-  simpler to explain, but linking an overview to a detail would then jump
-  one of them.
-- **O2. Measuring across panes (D12).** The brief expected "probably
-  not". It is recommended here because it is free (the state is in
-  positions) and useful with an overview and a detail. Say no and a click
-  in another pane would finish the measurement first.
-- **O3. The split button in the title bar (D1).** It is the first map
-  control in the title bar. The alternative on Windows and Linux is only
-  a keyboard shortcut and MCP, because there is no View menu there.
-- **O4. Stepping in step 3 (D25).** After "next low water / next high
-  water", should ← → step both panes to the next low/high pair, or keep
-  the fixed offset? The pair drifts by about 50 minutes a day, so a fixed
-  offset slowly stops being "low against high".
+Answered by the user on 2026-11-24.
+
+- **O1. Link: scale ratio or same scale (D14).** The ratio. Linked panes
+  keep the centre and the scale ratio from the moment of linking.
+- **O2. Measuring across panes (D12).** Yes. A measurement's points can
+  come from different panes.
+- **O3. The split button in the title bar (D1).** Accepted.
+- **O4. Stepping in step 3 (D25).** A fixed offset. After the low/high
+  water jumps, stepping with the times linked keeps the offset; it
+  doesn't move to the next low/high pair. A fixed offset slowly stops
+  being "low against high" (the pair drifts about 50 minutes a day); the
+  user re-jumps from the time chip when needed.

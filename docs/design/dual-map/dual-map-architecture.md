@@ -27,8 +27,10 @@
    how it is shown and what follows it.
 
 The design pass (2026-11-24) settled the behaviour questions; see
-[dual-map-design.md](dual-map-design.md). Its open questions O1–O4 are
-still the user's.
+[dual-map-design.md](dual-map-design.md). The user resolved its open
+questions O1–O4 the same day: the link keeps the scale ratio, a
+measurement may span panes, the split button goes in the title bar, and
+step 3 steps with a fixed offset.
 
 ## 0. Goal and steps
 
@@ -350,7 +352,7 @@ Each slice ships on its own and keeps one map working.
    bearing and route-edit clicks from any pane; extent boxes; cursor echo
    (D10–D12, D15, D16).
 7. **Viewport link.** The header chain, the split-menu item and ⌘⇧\\,
-   centre plus scale ratio (D13, D14). Needs §5 question 1 here and the design note's O1 answered.
+   centre plus scale ratio (D13, D14). Needs §5 question 1 here answered.
 8. **MCP.** Add the `map` parameter, `list_maps`, `set_active_map`,
    `set_split_map`, `set_map_link`, `set_map_name`, `shownIn` on picks,
    and per-pane settle (D28).
@@ -398,7 +400,7 @@ same view using no more than about 1.1× the memory of one pane.
 
 The behaviour questions (picks, tools, the active map, linking, per-pane
 subsets and time) are answered in [dual-map-design.md](dual-map-design.md).
-Its open questions O1–O4 are the user's.
+Its questions O1–O4 were resolved by the user on 2026-11-24.
 
 Engineering questions that remain:
 
