@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:diag="using:EncDotNet.S100.Viewer.Diagnostics"
+             x:Class="EncDotNet.S100.Viewer.Views.MapPane"
+             x:DataType="vm:MainViewModel">
+    <!--
+      One map pane (#1729, dual-map design note §2.1): the map control and the
+      chrome that belongs to this map. The window-level overlays (mode column,
+      tool cards, Time HUD, chips) stay in MainWindow, placed over the whole
+      map area. The DataContext is the window's MainViewModel.
+    -->
+    <Panel>
+        <diag:InstrumentedMapControl x:Name="MapControl" />
+        <diag:GpuAccelerationProbe />
+        <views:ScaleBarView x:Name="ScaleBar"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top"
+                            Margin="0,4,0,0" />
+        <!-- Map stamp (#713 B4): the view time over the map while the
+             Timeline tab is shown in the dock, so the map (and any
+             screenshot of it) says which time it shows; the Time HUD
+             takes over otherwise, never both (design note
+             time-overlays D1). Green dot Live, accent Pinned. With
+             date-dependent data loaded and the time pinned it starts
+             "Display Not Real Time" (S-98 §12.7.2; #993), as the HUD
+             does. -->
+        <Panel HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               Margin="12,12,0,0"
+               IsHitTestVisible="False"
+               AutomationProperties.AutomationId="Map.TimeStamp"
+               IsVisible="{Binding Layout.IsMapStampVisible}">
+            <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
+                    CornerRadius="6" />
+            <StackPanel Orientation="Horizontal"
+                        Spacing="6"
+                        Margin="8,4">
+                <Panel VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7"
+                             IsVisible="{Binding Timeline.IsLive}"
+                             Fill="{DynamicResource SuccessColor}" />
+                    <Ellipse Width="7" Height="7"
+                             IsVisible="{Binding !Timeline.IsLive}"
+                             Fill="{DynamicResource AccentBrush}" />
+                    <!-- Grey while the map is still drawing the new time (#709). -->
+                    <Ellipse Width="7" Height="7"
+                             IsVisible="{Binding Timeline.IsDrawing}"
+                             Fill="#A1A1AA" />
+                </Panel>
+                <TextBlock Text="{Binding Timeline.StampText}"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11.5"
+                           Foreground="{DynamicResource ForegroundColor}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Panel>
+    </Panel>
+</UserControl>
