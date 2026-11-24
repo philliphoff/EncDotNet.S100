@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Viewer;
 internal sealed partial class ViewerSettings
 {
     private static readonly string DefaultSettingsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        ViewerUserFolders.ApplicationData,
         "EncDotNet.S100.Viewer");
 
     private static readonly string DefaultSettingsPath = Path.Combine(DefaultSettingsDir, "settings.json");

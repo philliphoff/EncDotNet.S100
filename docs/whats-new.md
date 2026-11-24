@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **SoundCharts keeps its files in your profile on a new Linux account.**
+  When `~/.config` or `~/.local/share` didn't exist yet, or `XDG_CONFIG_HOME`
+  or `XDG_DATA_HOME` named a new folder, SoundCharts' settings, Library,
+  caches, crash markers and basemap tiles were kept under the folder it was
+  started from. They now go in your profile's folders, which are created
+  when needed, as the `s100` CLI's files already do.
+
 - **The `s100` CLI keeps its files in your data folder on a new Linux
   account.** When the local application data folder didn't exist yet, such
   as `~/.local/share` for a new Linux user or in a container, the tide
