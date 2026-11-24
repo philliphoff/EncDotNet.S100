@@ -53,6 +53,29 @@
   </ItemGroup>
 
   <!--
+    Tide station snapshot (#1674, stage 5). The release and nightly builds
+    download the tide-stations mirror's catalogue and manifest into a folder
+    and pass it as `-p:TideStationsSnapshotDirectory=<folder>`. A project that
+    sets `<ShipTideStationsSnapshot>true</ShipTideStationsSnapshot>` (the viewer
+    and the CLI) then copies both files to `TideStations/` beside its
+    executable, where TideCatalogueSnapshot.DefaultDirectory finds them, so
+    predictions work on first launch with no network. Without the property, or
+    when the folder lacks either file, nothing is shipped and the app downloads
+    the list on first use as before.
+  -->
+  <ItemGroup Condition="'$(ShipTideStationsSnapshot)' == 'true'
+                        And '$(TideStationsSnapshotDirectory)' != ''
+                        And Exists('$(TideStationsSnapshotDirectory)/tide-stations.json.gz')
+                        And Exists('$(TideStationsSnapshotDirectory)/tide-stations.manifest.json')">
+    <None Include="$(TideStationsSnapshotDirectory)/tide-stations.json.gz;$(TideStationsSnapshotDirectory)/tide-stations.manifest.json"
+          Link="TideStations/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true"
+          Visible="false" />
+  </ItemGroup>
+
+  <!--
     Public API baselines. A test project sets
     `<EnablePublicApiBaseline>true</EnablePublicApiBaseline>` to get the shared
     PublicApiBaseline helper and the generator it uses, then adds one test that

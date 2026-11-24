@@ -213,6 +213,105 @@ public static partial class TideStationCatalogueFile
         }
     }
 
+    /// <summary>
+    /// Reads a file's provider and retrieval time without reading its
+    /// stations, when they come before the stations as this library writes
+    /// them; otherwise reads the whole file.
+    /// </summary>
+    /// <param name="path">The file, gzip-compressed or not.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The provider and retrieval time; either is <c>null</c> when the file has none.</returns>
+    /// <exception cref="FormatException">The file isn't a valid tide station file.</exception>
+    internal static async Task<(string? Provider, DateTimeOffset? Retrieved)> ReadHeaderAsync(string path, CancellationToken cancellationToken)
+    {
+        const int headerBytes = 16 * 1024;
+        var buffer = new byte[headerBytes];
+        int length;
+        var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        await using (file.ConfigureAwait(false))
+        {
+            var magic = new byte[2];
+            var read = await file.ReadAtLeastAsync(magic, 2, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+            file.Position = 0;
+            Stream body = read == 2 && magic[0] == 0x1f && magic[1] == 0x8b ? new GZipStream(file, CompressionMode.Decompress, leaveOpen: true) : file;
+            await using (body.ConfigureAwait(false))
+            {
+                length = await body.ReadAtLeastAsync(buffer, headerBytes, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        if (TryReadHeader(buffer.AsSpan(0, length), out var provider, out var retrieved))
+        {
+            return (provider, retrieved);
+        }
+
+        var catalogue = await LoadAsync(path, cancellationToken).ConfigureAwait(false);
+        return (catalogue.Provider, catalogue.Retrieved);
+    }
+
+    /// <summary>Reads the top-level members before the stations; <c>false</c> when it can't tell from these bytes.</summary>
+    private static bool TryReadHeader(ReadOnlySpan<byte> json, out string? provider, out DateTimeOffset? retrieved)
+    {
+        provider = null;
+        retrieved = null;
+        var format = false;
+        var reader = new Utf8JsonReader(json, isFinalBlock: false, new JsonReaderState(new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip }));
+        try
+        {
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return false;
+            }
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                if (reader.ValueTextEquals("stations"u8) || reader.ValueTextEquals("currentStations"u8))
+                {
+                    // Members after the stations aren't read: trust what came before only if it's complete.
+                    return format && retrieved is not null;
+                }
+
+                if (reader.ValueTextEquals("format"u8))
+                {
+                    if (!reader.Read() || reader.TokenType != JsonTokenType.String || !reader.ValueTextEquals(FormatName))
+                    {
+                        return false;
+                    }
+
+                    format = true;
+                }
+                else if (reader.ValueTextEquals("provider"u8))
+                {
+                    if (!reader.Read())
+                    {
+                        return false;
+                    }
+
+                    provider = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+                }
+                else if (reader.ValueTextEquals("retrieved"u8))
+                {
+                    if (!reader.Read() || reader.TokenType != JsonTokenType.String || !reader.TryGetDateTimeOffset(out var time))
+                    {
+                        return false;
+                    }
+
+                    retrieved = time;
+                }
+                else if (!reader.TrySkip())
+                {
+                    return false;
+                }
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>A tide station as the file writes it: two stations are the same data when these are equal.</summary>
     /// <param name="station">The station.</param>
     internal static string ToJson(TideStationEntry station) =>

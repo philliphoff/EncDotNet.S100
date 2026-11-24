@@ -1,4 +1,5 @@
 using EncDotNet.S100.Tides.Stations;
+using EncDotNet.S100.Tides.Stations.Mirror;
 
 namespace EncDotNet.S100.Mcp.Tools.Tides;
 
@@ -20,22 +21,28 @@ public interface ITideCatalogueSource
 /// <summary>
 /// A catalogue kept in a <see cref="TideStationCatalogueFile"/> file, such as
 /// the offline cache <c>s100 tides update</c> writes. It is loaded on first
-/// use and again whenever the file changes.
+/// use and again whenever the file changes. Given a snapshot folder
+/// (<see cref="TideCatalogueSnapshot"/>), the first use fills the file from
+/// it when the file is missing or older.
 /// </summary>
 public sealed class TideCatalogueFileSource : ITideCatalogueSource
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly string? _snapshot;
+    private bool _seeded;
     private TideStationCatalogue? _catalogue;
     private DateTime _loadedWriteTimeUtc;
 
     /// <param name="path">The catalogue file (<c>.json</c>, or <c>.json.gz</c> for gzip).</param>
     /// <param name="missingHint">What to say when the file isn't there.</param>
-    public TideCatalogueFileSource(string path, string missingHint)
+    /// <param name="snapshot">A shipped snapshot's folder to fill the file from on first use; <see langword="null"/> for none.</param>
+    public TideCatalogueFileSource(string path, string missingHint, string? snapshot = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(missingHint);
         Path = System.IO.Path.GetFullPath(path);
         MissingHint = missingHint;
+        _snapshot = snapshot;
     }
 
     /// <summary>The catalogue file's full path.</summary>
@@ -48,6 +55,7 @@ public sealed class TideCatalogueFileSource : ITideCatalogueSource
     /// <exception cref="FormatException">The file isn't a valid catalogue.</exception>
     public async Task<TideStationCatalogue?> GetAsync(CancellationToken cancellationToken)
     {
+        await SeedOnceAsync(cancellationToken).ConfigureAwait(false);
         var file = new FileInfo(Path);
         if (!file.Exists)
         {
@@ -64,6 +72,36 @@ public sealed class TideCatalogueFileSource : ITideCatalogueSource
             }
 
             return _catalogue;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Fills the file from the snapshot, once, when it's missing or older. A snapshot that can't be copied is ignored.</summary>
+    private async Task SeedOnceAsync(CancellationToken cancellationToken)
+    {
+        if (_snapshot is null || Volatile.Read(ref _seeded))
+        {
+            return;
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!_seeded)
+            {
+                _seeded = true;
+                try
+                {
+                    await TideCatalogueSnapshot.SeedAsync(_snapshot, Path, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or InvalidDataException)
+                {
+                    // The snapshot only saves a download; without it the file is used, or missing, as before.
+                }
+            }
         }
         finally
         {

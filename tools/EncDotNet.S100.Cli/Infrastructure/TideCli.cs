@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Tools.Tides;
 using EncDotNet.S100.Tides.Stations;
+using EncDotNet.S100.Tides.Stations.Mirror;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
@@ -33,12 +34,45 @@ internal static class TideCli
     public static string CataloguePath(string? option) =>
         Path.GetFullPath(string.IsNullOrWhiteSpace(option) ? DefaultCataloguePath : option);
 
-    /// <summary>The catalogue source for a path, saying how to get one when it's missing.</summary>
-    public static TideCatalogueFileSource Source(string path) => new(path, MissingHint(path));
+    /// <summary>
+    /// The catalogue source for a path, saying how to get one when it's
+    /// missing. The default cache is filled from the snapshot shipped with
+    /// s100 when it's missing or older; a path given with an option is
+    /// never written.
+    /// </summary>
+    public static TideCatalogueFileSource Source(string path) =>
+        new(path, MissingHint(path), IsDefault(path) ? SnapshotDirectory : null);
+
+    /// <summary>The snapshot of NOAA's catalogue shipped with s100 (#1674); replaced by tests.</summary>
+    internal static string SnapshotDirectory { get; set; } = TideCatalogueSnapshot.DefaultDirectory;
+
+    /// <summary>Whether a path is the default cache.</summary>
+    public static bool IsDefault(string path) =>
+        string.Equals(Path.GetFullPath(path), Path.GetFullPath(DefaultCataloguePath), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Fills the default cache from the snapshot shipped with s100 when it's
+    /// missing or older; does nothing for another path, or when the snapshot
+    /// can't be copied.
+    /// </summary>
+    public static async Task SeedAsync(string path, CancellationToken cancellationToken)
+    {
+        if (!IsDefault(path))
+            return;
+
+        try
+        {
+            await TideCatalogueSnapshot.SeedAsync(SnapshotDirectory, path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or InvalidDataException)
+        {
+            // Without the snapshot the cache is used, or missing, as before.
+        }
+    }
 
     /// <summary>What to say when the catalogue file isn't there.</summary>
     public static string MissingHint(string path) =>
-        string.Equals(Path.GetFullPath(path), Path.GetFullPath(DefaultCataloguePath), StringComparison.Ordinal)
+        IsDefault(path)
             ? $"Run 's100 tides update' to download NOAA's stations into {path} (one file from the EncDotNet.S100 mirror), or pass --catalogue."
             : $"There's no catalogue at {path}. Run 's100 tides update --catalogue {path}' to download NOAA's stations there.";
 

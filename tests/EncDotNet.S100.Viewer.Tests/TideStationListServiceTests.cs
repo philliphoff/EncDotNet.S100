@@ -144,6 +144,39 @@ public sealed class TideStationListServiceTests : IDisposable
         Assert.All(mirror.Requests, uri => Assert.Equal("api.tidesandcurrents.noaa.gov", uri.Host));
     }
 
+    [Fact]
+    public async Task The_list_shipped_with_SoundCharts_needs_no_download()
+    {
+        var content = await PublishedAsync(Retrieved);
+        var snapshot = Path.Combine(_folder, TideCatalogueSnapshot.DirectoryName);
+        Directory.CreateDirectory(snapshot);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(snapshot, TideCatalogueManifest.DefaultCatalogueFileName), content.Bytes, Token);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(snapshot, TideCatalogueManifest.DefaultFileName), ManifestFor(content.Bytes, content.Catalogue), Token);
+        var host = new MirrorHost();
+        var list = Service(host, snapshot: snapshot);
+
+        var catalogue = await list.EnsureAvailableAsync();
+
+        Assert.Equal(Retrieved, catalogue?.Retrieved);
+        Assert.Equal(content.Bytes, await System.IO.File.ReadAllBytesAsync(ListPath, Token));
+        Assert.Empty(host.Requests);
+    }
+
+    [Fact]
+    public async Task A_newer_cached_list_is_kept_over_the_shipped_one()
+    {
+        var shipped = await PublishedAsync(Retrieved);
+        var snapshot = Path.Combine(_folder, TideCatalogueSnapshot.DirectoryName);
+        Directory.CreateDirectory(snapshot);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(snapshot, TideCatalogueManifest.DefaultCatalogueFileName), shipped.Bytes, Token);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(snapshot, TideCatalogueManifest.DefaultFileName), ManifestFor(shipped.Bytes, shipped.Catalogue), Token);
+        await System.IO.File.WriteAllBytesAsync(ListPath, (await PublishedAsync(Retrieved.AddDays(7))).Bytes, Token);
+
+        var catalogue = await Service(new MirrorHost(), snapshot: snapshot).EnsureLoadedAsync();
+
+        Assert.Equal(Retrieved.AddDays(7), catalogue?.Retrieved);
+    }
+
     [Theory]
     [InlineData(null, "https://github.com/philliphoff/EncDotNet.S100/releases/download/tide-stations/tide-stations.manifest.json")]
     [InlineData("https://example.org/m.json", "https://example.org/m.json")]
@@ -154,14 +187,15 @@ public sealed class TideStationListServiceTests : IDisposable
     public void The_mirror_setting_names_the_default_another_mirror_or_none(string? setting, string? expected) =>
         Assert.Equal(expected, TideStationsServiceCollectionExtensions.MirrorOptions(setting)?.ManifestAddress.AbsoluteUri);
 
-    private TideStationListService Service(MirrorHost host, bool withMirror = true) => new(
+    private TideStationListService Service(MirrorHost host, bool withMirror = true, string? snapshot = null) => new(
         ListPath,
         () => new HttpClient(host),
         TimeProvider.System,
         action => action(),
         logger: null,
         withMirror ? new TideCatalogueMirrorClientOptions { ManifestAddress = Manifest, MaxRetries = 0, RetryDelay = TimeSpan.Zero } : null,
-        new NoaaTideStationClientOptions { MaxRetries = 0, RetryDelay = TimeSpan.Zero, RequestInterval = TimeSpan.Zero });
+        new NoaaTideStationClientOptions { MaxRetries = 0, RetryDelay = TimeSpan.Zero, RequestInterval = TimeSpan.Zero },
+        snapshot);
 
     /// <summary>Every source the list downloads from, as it changes.</summary>
     private static List<TideStationListSource> Record(TideStationListService list)

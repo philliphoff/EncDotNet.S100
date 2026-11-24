@@ -101,12 +101,47 @@ jobs:
             echo "dmg=SoundCharts-$VERSION.dmg" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fetch the tide station snapshot
+        # #1674 stage 5: ship the tide-stations mirror's NOAA catalogue
+        # (about 1.2 MB) with the viewer and the CLI, so tide predictions work
+        # on first launch with no network. The file must match its manifest's
+        # SHA-256. A mirror that can't be reached, a mismatch, or any other
+        # failure here only warns (continue-on-error): the build then ships
+        # without it, and the apps download the list on first use as before.
+        id: tides
+        continue-on-error: true
+        shell: bash
+        env:
+          MIRROR: https://github.com/${{ github.repository }}/releases/download/tide-stations
+          SNAPSHOT: ${{ github.workspace }}/tide-stations-snapshot
+        run: |
+          # sha256sum on Linux and Git Bash on Windows; shasum on macOS.
+          sha256() {
+            if command -v sha256sum > /dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+          }
+          mkdir -p "$SNAPSHOT"
+          cd "$SNAPSHOT"
+          if curl -fsSL --retry 3 -o tide-stations.manifest.json "$MIRROR/tide-stations.manifest.json" \
+            && curl -fsSL --retry 3 -o tide-stations.json.gz "$MIRROR/tide-stations.json.gz"; then
+            expected="$(jq -r '.sha256' tide-stations.manifest.json)"
+            actual="$(sha256 tide-stations.json.gz)"
+            if [ "$expected" = "$actual" ]; then
+              echo "Shipping the tide station snapshot retrieved $(jq -r '.retrieved' tide-stations.manifest.json)."
+              echo "dir=$SNAPSHOT" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::warning::The tide station snapshot doesn't match its manifest; building without it."
+          else
+            echo "::warning::The tide station mirror can't be reached; building without the snapshot."
+          fi
+
       - name: Publish Viewer
         run: >
           dotnet publish src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
           -p:Version=${{ inputs.version }}
+          ${{ steps.tides.outputs.dir && format('"-p:TideStationsSnapshotDirectory={0}"', steps.tides.outputs.dir) || '' }}
           ${{ matrix.rid == 'osx-arm64' && '-p:PublishSingleFile=false' || '' }}
 
       - name: Publish s100 CLI
@@ -122,6 +157,7 @@ jobs:
           --runtime ${{ matrix.rid }}
           --self-contained true
           -p:Version=${{ inputs.version }}
+          ${{ steps.tides.outputs.dir && format('"-p:TideStationsSnapshotDirectory={0}"', steps.tides.outputs.dir) || '' }}
           --output src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli
 
       - name: Disable NuGet source mapping for signing

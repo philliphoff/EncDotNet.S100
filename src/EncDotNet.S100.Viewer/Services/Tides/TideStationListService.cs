@@ -51,6 +51,11 @@ internal enum TideStationListSource
 /// mirror has nothing newer, the list is kept and
 /// <see cref="IsUpToDate"/> says so.
 /// </para>
+/// <para>
+/// SoundCharts ships a copy of the list (<see cref="TideCatalogueSnapshot"/>).
+/// Reading the list first fills the cache from that copy when the cache is
+/// missing or older, so predictions work on first launch with no network.
+/// </para>
 /// </remarks>
 internal sealed class TideStationListService
 {
@@ -58,6 +63,7 @@ internal sealed class TideStationListService
     private readonly Func<HttpClient> _httpFactory;
     private readonly TideCatalogueMirrorClientOptions? _mirror;
     private readonly NoaaTideStationClientOptions? _noaa;
+    private readonly string? _snapshot;
     private readonly TimeProvider _time;
     private readonly Action<Action> _post;
     private readonly ILogger? _logger;
@@ -75,6 +81,11 @@ internal sealed class TideStationListService
     /// <param name="logger">Logs a list that can't be read or downloaded; <c>null</c> for none.</param>
     /// <param name="mirror">The mirror to download from first; <c>null</c> to download from NOAA only.</param>
     /// <param name="noaa">The options for downloads from NOAA; <c>null</c> for the defaults.</param>
+    /// <param name="snapshot">
+    /// The folder of the station list shipped with SoundCharts
+    /// (<see cref="TideCatalogueSnapshot"/>), which fills the cache when it's
+    /// missing or older; <c>null</c> for none.
+    /// </param>
     public TideStationListService(
         string path,
         Func<HttpClient> httpFactory,
@@ -82,7 +93,8 @@ internal sealed class TideStationListService
         Action<Action> post,
         ILogger<TideStationListService>? logger,
         TideCatalogueMirrorClientOptions? mirror = null,
-        NoaaTideStationClientOptions? noaa = null)
+        NoaaTideStationClientOptions? noaa = null,
+        string? snapshot = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(httpFactory);
@@ -95,6 +107,7 @@ internal sealed class TideStationListService
         _logger = logger;
         _mirror = mirror;
         _noaa = noaa;
+        _snapshot = snapshot;
     }
 
     /// <summary>The cached list's path.</summary>
@@ -423,6 +436,21 @@ internal sealed class TideStationListService
     {
         Raise(() => Activity = Activity == TideStationListActivity.Idle ? TideStationListActivity.Loading : Activity);
         TideStationCatalogue? catalogue = null;
+        if (_snapshot is not null)
+        {
+            try
+            {
+                if (await TideCatalogueSnapshot.SeedAsync(_snapshot, _path).ConfigureAwait(false))
+                {
+                    _logger?.LogInformation("Filled the tide station list {Path} from the copy shipped with SoundCharts", _path);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidDataException)
+            {
+                _logger?.LogWarning(ex, "The tide station list shipped with SoundCharts can't be copied to {Path}", _path);
+            }
+        }
+
         try
         {
             if (File.Exists(_path))

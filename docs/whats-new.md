@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tide predictions work on first launch.** SoundCharts and the `s100` CLI
+  now ship a copy of NOAA's tide and current station list, taken from the
+  mirror when they're built. When there's no list yet, or the one there is
+  older, they use the copy, so predictions and the `tides` commands work with
+  no network and no download. A newer list, an undated one or your own
+  stations are never replaced. In `EncDotNet.S100.Tides.Stations`,
+  `TideCatalogueSnapshot.SeedAsync` does the same for any app
+  ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
 - **Chart reference names its catalogues.** Under the product, Chart
   reference (and its Open-as-page view) shows which catalogues it reads,
   for example "S-101 · Feature 2.0.0 · Portrayal 2.1.0-draft (custom)", or

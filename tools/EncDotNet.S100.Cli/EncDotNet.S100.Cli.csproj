@@ -8,6 +8,8 @@
     <Version>0.0.0-dev</Version>
     <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+    <!-- See Directory.Build.targets: ship the tide station snapshot when the build is given one (#1674). -->
+    <ShipTideStationsSnapshot>true</ShipTideStationsSnapshot>
     <!--
       Distributed as standalone, self-contained, per-RID release archives
       (`s100-<version>-<rid>.{zip,tar.gz}`) attached to each GitHub Release, not

@@ -13,8 +13,9 @@ or more. They aren't a forecast and aren't for navigation.
 ## Prerequisites
 
 - The `s100` command-line tool. See [Install](../cli.md#install).
-- Network access the first time, to download NOAA's tide stations as one file
-  of about 1.2 MB. After that, everything works offline.
+- Released builds of `s100` include a copy of NOAA's tide stations, so this
+  works offline. Step 1 refreshes it, or downloads it for a build from source:
+  one file of about 1.2 MB.
 
 ## Steps
 

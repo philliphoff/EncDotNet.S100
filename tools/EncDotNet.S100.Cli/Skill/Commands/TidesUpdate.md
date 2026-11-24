@@ -10,3 +10,6 @@ you need data newer than the mirror's. A `--from` value never falls back.
 Run it once, then again when `--check` exits with code 8 (there's newer data)
 or the catalogue is over 12 months old. `--check` downloads nothing: against
 the mirror it makes one request, against NOAA a few.
+s100 ships a copy of the catalogue from the mirror at build time, used when
+the default cache is missing or older, so the other `tides` commands work on
+first use; run `tides update` only to get anything newer.

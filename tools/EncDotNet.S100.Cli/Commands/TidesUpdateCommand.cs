@@ -218,6 +218,7 @@ internal sealed class TidesUpdateCommand : AsyncCommand<TidesUpdateCommand.Setti
 
     private static async Task<TideStationCatalogue?> LoadForCheckAsync(string path, CancellationToken cancellationToken)
     {
+        await TideCli.SeedAsync(path, cancellationToken).ConfigureAwait(false);
         if (!File.Exists(path))
         {
             Console.Error.WriteLine($"Error: No tide station catalogue. {TideCli.MissingHint(path)}");
