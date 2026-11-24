@@ -9,6 +9,7 @@ using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services.ChartReference;
@@ -98,8 +99,9 @@ public sealed class PickWhyThisSymbolTests
                 Terms,
                 Catalogues.Service.GetArtwork,
                 action => action(),
-                parameter => parameter == "SimplifiedSymbols" ? (Simplified ? "true" : "false") : null,
-                Changed.Add);
+                parameter => ReferenceTargets.Value(Mariner, parameter),
+                Changed.Add,
+                parameter => ReferenceTargets.CurrentValue(Mariner, parameter));
             Report = TestPickReport.Create();
             Report.Terms = Terms;
             Report.AttachLegend(Service);
@@ -132,8 +134,15 @@ public sealed class PickWhyThisSymbolTests
 
         public PickReportViewModel Report { get; }
 
+        /// <summary>The display settings the reasons read: the defaults, with Simplified symbols on.</summary>
+        public MarinerSettings Mariner { get; set; } = MarinerSettings.Default with { SimplifiedSymbols = true };
+
         /// <summary>The Simplified symbols switch the reasons read.</summary>
-        public bool Simplified { get; set; } = true;
+        public bool Simplified
+        {
+            get => Mariner.SimplifiedSymbols;
+            set => Mariner = Mariner with { SimplifiedSymbols = value };
+        }
 
         /// <summary>The settings a reason's link asked Settings to show.</summary>
         public List<string> Changed { get; } = [];
@@ -237,20 +246,53 @@ public sealed class PickWhyThisSymbolTests
     }
 
     [AvaloniaFact]
-    public async Task A_case_with_a_computed_value_says_likely()
+    public async Task The_wreck_gives_its_one_case_with_its_values_and_the_safety_contour_changes_it()
     {
         using var scene = await Scene.CreateAsync();
+        scene.Simplified = false;
         scene.Show(scene.Cells.Real);
         var wreck = scene.Hit(scene.Cells.Real, "Wreck");
 
         await scene.PickAsync(wreck);
 
+        // UDWHAZ05 has two cases for ISODGR01. The first needs the surrounding
+        // depth not given or at least the safety contour: 10 m against 30 m,
+        // so it doesn't hold, and one case is left. Its test of the depth the
+        // rule works out (DEPTH_VALUE) is left out, with a note.
         var main = scene.Main;
         Assert.Equal("ISODGR01", main.Part.ItemId);
-        Assert.Equal(PickReasonKind.Likely, main.Reason!.Kind);
-        Assert.StartsWith("Likely", main.Reason.Text, StringComparison.Ordinal);
-        // A case that holds only for want of a condition that could be checked says what wasn't checked.
-        Assert.DoesNotContain("Always", main.Reason.Text, StringComparison.Ordinal);
+        var reason = main.Reason!;
+        Assert.Equal(PickReasonKind.Matched, reason.Kind);
+        Assert.Single(reason.Lines);
+        var held = reason.Lines[0].Text;
+        Assert.Contains("Shallow water dangers is on", held, StringComparison.Ordinal);
+        Assert.Contains("Surrounding depth (10 m) is less than the safety contour (30 m)", held, StringComparison.Ordinal);
+        // What the value is, not what it isn't.
+        Assert.Contains("Water level effect is always under water/submerged", held, StringComparison.Ordinal);
+        Assert.DoesNotContain("is not", held, StringComparison.Ordinal);
+        // A quiet note, not a line of the reason.
+        Assert.Equal("Also depends on values the rule works out", reason.Note);
+        Assert.DoesNotContain("Likely", reason.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Not checked", reason.Text, StringComparison.Ordinal);
+        // The settings it depends on are terms with links.
+        Assert.Equal(
+            ["Change Shallow water dangers in Display settings", "Change Safety contour in Display settings"],
+            reason.Settings.Select(s => s.Label));
+
+        // A safety contour of 5 m: 10 m is at or above it, so the other case holds.
+        scene.Mariner = scene.Mariner with { SafetyContour = Depth.FromMetres(5) };
+        await scene.RefreshAsync();
+
+        reason = scene.Main.Reason!;
+        Assert.Equal(PickReasonKind.Matched, reason.Kind);
+        Assert.Contains("Surrounding depth (10 m) is at least the safety contour (5 m)", reason.Lines[0].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Shallow water dangers", reason.Lines[0].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Not checked", reason.Text, StringComparison.Ordinal);
+
+        // With shallow-water dangers off and the contour back at 30 m, no case holds.
+        scene.Mariner = scene.Mariner with { SafetyContour = Depth.FromMetres(30), ShallowWaterDangers = false };
+        await scene.RefreshAsync();
+        Assert.Equal(PickReasonKind.NoMatch, scene.Main.Reason!.Kind);
     }
 
     [AvaloniaFact]
@@ -334,11 +376,14 @@ public sealed class PickWhyThisSymbolTests
             ["Likely, one of these:", "When colour is red:", "Simplified symbols is on", "With no further condition"],
             several.Lines.Select(l => l.Text));
 
-        // A condition that can't be checked: likely, with what holds and what wasn't checked.
+        Assert.DoesNotContain("Not checked", several.Text, StringComparison.Ordinal);
+
+        // One case with a condition on a value the rule works out: that case,
+        // plainly, with a quiet note that the rest isn't checked.
         var computedCase = PickReasons.Explain(symbol with { Key = new ReferenceKey(index.Spec, ReferenceKind.Symbol, "BCNLAT15") }, feature, index, facts);
-        Assert.Equal(PickReasonKind.Likely, computedCase.Kind);
-        Assert.Equal("Likely: Colour is red", computedCase.Lines[0].Text);
-        Assert.StartsWith("Not checked: ", computedCase.Lines[1].Text, StringComparison.Ordinal);
+        Assert.Equal(PickReasonKind.Matched, computedCase.Kind);
+        Assert.Equal("Colour is red", Assert.Single(computedCase.Lines).Text);
+        Assert.Equal("Also depends on values the rule works out", computedCase.Note);
     }
 
     [AvaloniaFact]

@@ -1118,19 +1118,31 @@
   </data>
   <data name="Pick_Why_Likely" xml:space="preserve">
     <value>Likely</value>
-    <comment>A reason none of whose conditions could be checked</comment>
+    <comment>A reason none of whose conditions could be checked, when more than one case of the rule is possible</comment>
   </data>
   <data name="Pick_Why_LikelyFormat" xml:space="preserve">
     <value>Likely: {0}</value>
-    <comment>A reason that is a match, not a trace: a condition couldn't be checked. {0} is the conditions that hold: Likely: Colour is red</comment>
+    <comment>A reason when more than one case of the rule is still possible but they say the same: Likely: Colour is red</comment>
   </data>
   <data name="Pick_Why_LikelyOneOf" xml:space="preserve">
     <value>Likely, one of these:</value>
     <comment>Leads the cases of a reason when more than one case of the rule holds</comment>
   </data>
-  <data name="Pick_Why_NotCheckedFormat" xml:space="preserve">
-    <value>Not checked: {0}</value>
-    <comment>The conditions of a reason that couldn't be checked, such as a value the rule computes</comment>
+  <data name="Pick_Why_AlsoDepends" xml:space="preserve">
+    <value>Also depends on values the rule works out</value>
+    <comment>A quiet line under a reason when the rule also tests values it computes itself, which were left out</comment>
+  </data>
+  <data name="Pick_Why_ValueFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>An attribute or setting with its value inline: Surrounding depth (10 m)</comment>
+  </data>
+  <data name="Pick_Why_SettingValueFormat" xml:space="preserve">
+    <value>the {0} ({1})</value>
+    <comment>A display setting compared with, with its value: the safety contour (30 m)</comment>
+  </data>
+  <data name="Pick_Why_SettingFormat" xml:space="preserve">
+    <value>the {0}</value>
+    <comment>A display setting compared with, when its value is unknown: the safety contour</comment>
   </data>
   <data name="Pick_Why_NoMatch" xml:space="preserve">
     <value>No case of the rule matches this feature's values and the display settings</value>

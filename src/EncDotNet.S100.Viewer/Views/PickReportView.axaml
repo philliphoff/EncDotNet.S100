@@ -1546,6 +1546,13 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
+                                            <TextBlock Text="{Binding Note}"
+                                                       IsVisible="{Binding HasNote}"
+                                                       AutomationProperties.AutomationId="PickReport.WhyThisSymbol.Note"
+                                                       FontSize="11"
+                                                       FontStyle="Italic"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap" />
                                             <ItemsControl ItemsSource="{Binding Settings}" IsVisible="{Binding HasSettings}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:PickReasonSettingViewModel">

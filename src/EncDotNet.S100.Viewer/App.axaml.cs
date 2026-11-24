@@ -186,7 +186,8 @@ public partial class App : Application
             _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>().GetArtwork,
             UiThread.RunOrPost,
             parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.Value(drawnAsSettings.BuildMarinerSettings(), parameter),
-            code => ShowChartSetting(drawnAsServices, code)));
+            code => ShowChartSetting(drawnAsServices, code),
+            parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.CurrentValue(drawnAsSettings, parameter)));
         // Links to the Catalogues activity (catalogue-panels D10, CR3): the
         // Datasets version warning, the inspector's Drawn with line and the
         // missing-catalogue toast. The activity is resolved when first used.

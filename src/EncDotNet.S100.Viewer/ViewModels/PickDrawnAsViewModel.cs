@@ -40,6 +40,7 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     private readonly Func<SpecRef, ChartReferenceArtwork?> _artwork;
     private readonly Action<Action> _post;
     private readonly Func<string, string?> _setting;
+    private readonly Func<string, string?>? _settingText;
     private readonly Action<string>? _changeSetting;
     private PickHit? _hit;
     private bool _whyExpanded;
@@ -61,13 +62,15 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     /// <see langword="null"/> when the viewer doesn't set it.
     /// </param>
     /// <param name="changeSetting">Opens Settings › Chart at a context parameter's switch, or <see langword="null"/>.</param>
+    /// <param name="settingText">A context parameter's current value in words ("30 m"), as Settings shows it, or <see langword="null"/>.</param>
     public PickDrawnAsViewModel(
         Func<PickHit, PickDrawing?> read,
         ReferenceTerms terms,
         Func<SpecRef, ChartReferenceArtwork?> artwork,
         Action<Action> post,
         Func<string, string?>? setting = null,
-        Action<string>? changeSetting = null)
+        Action<string>? changeSetting = null,
+        Func<string, string?>? settingText = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(terms);
@@ -79,6 +82,7 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         _post = post;
         _setting = setting ?? (static _ => null);
         _changeSetting = changeSetting;
+        _settingText = settingText;
         Glyphs.PaletteChanged += OnPaletteChanged;
     }
 
@@ -200,7 +204,7 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
             var index = await Terms.IndexAsync(drawing.Spec).ConfigureAwait(false);
             if (index is null || PickTerms.FeatureType(index, hit.FeatureType) is not { } feature)
                 return;
-            var facts = new PickFacts(hit.Attributes, hit.Geometry, _setting);
+            var facts = new PickFacts(hit.Attributes, hit.Geometry, _setting, _settingText);
             var reasons = parts.Select(p => PickReasons.Explain(p.Part, feature, index, facts)).ToList();
             _post(() =>
             {
@@ -529,7 +533,13 @@ internal sealed class PickReasonViewModel
     public string Text => Reason.Text;
 
     /// <summary>The reason as one line, for its accessible help text.</summary>
-    public string HelpText => string.Join(". ", Reason.Lines.Select(l => l.Text.TrimEnd(':')));
+    public string HelpText => string.Join(". ", Reason.Lines.Select(l => l.Text.TrimEnd(':')).Append(Reason.Note).OfType<string>());
+
+    /// <summary>"Also depends on values the rule works out", or <see langword="null"/>.</summary>
+    public string? Note => Reason.Note;
+
+    /// <summary>Whether <see cref="Note"/> shows.</summary>
+    public bool HasNote => Reason.Note is not null;
 
     /// <summary>A link to each display setting the reason names that the viewer sets.</summary>
     public IReadOnlyList<PickReasonSettingViewModel> Settings { get; }

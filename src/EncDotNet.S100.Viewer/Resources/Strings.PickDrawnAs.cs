@@ -31,13 +31,7 @@ internal static partial class Strings
 
     public static string Pick_Why_Always => Get(nameof(Pick_Why_Always));
 
-    public static string Pick_Why_Likely => Get(nameof(Pick_Why_Likely));
-
-    public static string Pick_Why_LikelyFormat => Get(nameof(Pick_Why_LikelyFormat));
-
     public static string Pick_Why_LikelyOneOf => Get(nameof(Pick_Why_LikelyOneOf));
-
-    public static string Pick_Why_NotCheckedFormat => Get(nameof(Pick_Why_NotCheckedFormat));
 
     public static string Pick_Why_NoMatch => Get(nameof(Pick_Why_NoMatch));
 
@@ -54,4 +48,16 @@ internal static partial class Strings
     public static string Pick_Why_PartFold => Get(nameof(Pick_Why_PartFold));
 
     public static string Pick_Why_ReasonName => Get(nameof(Pick_Why_ReasonName));
+
+    public static string Pick_Why_AlsoDepends => Get(nameof(Pick_Why_AlsoDepends));
+
+    public static string Pick_Why_ValueFormat => Get(nameof(Pick_Why_ValueFormat));
+
+    public static string Pick_Why_SettingValueFormat => Get(nameof(Pick_Why_SettingValueFormat));
+
+    public static string Pick_Why_SettingFormat => Get(nameof(Pick_Why_SettingFormat));
+
+    public static string Pick_Why_Likely => Get(nameof(Pick_Why_Likely));
+
+    public static string Pick_Why_LikelyFormat => Get(nameof(Pick_Why_LikelyFormat));
 }

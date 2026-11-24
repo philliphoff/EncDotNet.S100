@@ -4,7 +4,6 @@ using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Legends;
-using EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
 namespace EncDotNet.S100.Viewer.Services.ChartReference;
 
@@ -35,10 +34,14 @@ internal enum PickReasonKind
 /// <param name="Kind">How sure the reason is.</param>
 /// <param name="Lines">The reason, a line each, with the names of attributes, values and settings as terms.</param>
 /// <param name="Settings">The display settings the reason names, each once, in order.</param>
-internal sealed record PickReason(PickReasonKind Kind, IReadOnlyList<TermText> Lines, IReadOnlyList<ReferenceKey> Settings)
+/// <param name="Note">
+/// A quiet note under the reason, "Also depends on values the rule works
+/// out", when tests of values the rule computes were left out; or <see langword="null"/>.
+/// </param>
+internal sealed record PickReason(PickReasonKind Kind, IReadOnlyList<TermText> Lines, IReadOnlyList<ReferenceKey> Settings, string? Note = null)
 {
-    /// <summary>The reason as plain text, its lines joined by line breaks.</summary>
-    public string Text => string.Join('\n', Lines.Select(l => l.Text));
+    /// <summary>The reason as plain text, its lines and note joined by line breaks.</summary>
+    public string Text => string.Join('\n', Lines.Select(l => l.Text).Append(Note).OfType<string>());
 }
 
 /// <summary>What a reason is matched against: the picked feature's values and the display settings.</summary>
@@ -49,7 +52,12 @@ internal sealed record PickReason(PickReasonKind Kind, IReadOnlyList<TermText> L
 /// <see langword="null"/> when the viewer doesn't set it, so the
 /// catalogue's default holds.
 /// </param>
-internal sealed record PickFacts(IReadOnlyList<PickAttribute> Attributes, S100GeometryType Geometry, Func<string, string?> Setting);
+/// <param name="SettingText">A context parameter's current value in words ("30 m", "On"), or null for <paramref name="Setting"/>'s.</param>
+internal sealed record PickFacts(
+    IReadOnlyList<PickAttribute> Attributes,
+    S100GeometryType Geometry,
+    Func<string, string?> Setting,
+    Func<string, string?>? SettingText = null);
 
 /// <summary>
 /// Matches a picked feature against the conditions the rule reader recorded
@@ -76,13 +84,6 @@ internal static class PickReasons
     /// <summary>The most cases a Likely reason lists before "and N more cases".</summary>
     public const int MaxCases = 4;
 
-    private enum Truth
-    {
-        Holds,
-        Fails,
-        Unknown,
-    }
-
     /// <summary>Explains one drawn part.</summary>
     /// <param name="part">The part.</param>
     /// <param name="feature">The picked feature's type in <paramref name="index"/>.</param>
@@ -106,79 +107,106 @@ internal static class PickReasons
             return new PickReason(PickReasonKind.NotRead, [Strings.Pick_Why_NotRead], []);
 
         var context = new Context(feature, index, facts);
+        bool geometry = feature.PermittedPrimitives.Count != 1;
         var candidates = new List<Candidate>();
         foreach (var use in uses)
         {
             var held = new List<RuleCondition>();
-            var unknown = new List<RuleCondition>();
-            bool fails = false;
-            foreach (var condition in use.Conditions)
-            {
-                switch (context.Evaluate(condition))
-                {
-                    case Truth.Holds:
-                        held.Add(condition);
-                        break;
-                    case Truth.Unknown:
-                        unknown.Add(condition);
-                        break;
-                    default:
-                        fails = true;
-                        break;
-                }
+            var words = new List<TermText>();
+            var asWritten = new List<RuleCondition>();
+            bool partial = false, fails = false;
 
-                if (fails)
-                    break;
+            // Conditions said as they are written ("Colour is red", "Simplified
+            // symbols is on") are said together, so the bands of one attribute
+            // read as one run; the others say what the value is.
+            void Flush()
+            {
+                words.AddRange(RuleConditionText.DescribeParts(asWritten, index, geometry));
+                asWritten.Clear();
             }
 
-            if (!fails)
-                candidates.Add(new Candidate(use, held, unknown));
+            foreach (var condition in use.Conditions)
+            {
+                var check = RuleConditionText.Check(condition, index, context);
+                if (check.Truth == ConditionTruth.Fails)
+                {
+                    fails = true;
+                    break;
+                }
+
+                partial |= check.Partial;
+                if (check.Truth == ConditionTruth.Unknown && check.Held.Count == 0)
+                    continue;
+                held.Add(condition);
+                if (check.AsWritten)
+                {
+                    asWritten.Add(condition);
+                }
+                else
+                {
+                    Flush();
+                    words.AddRange(check.Held);
+                }
+            }
+
+            if (fails)
+                continue;
+            Flush();
+            candidates.Add(new Candidate(use, held, partial, [.. words.Distinct()]));
         }
 
         candidates = Distinct(candidates);
         if (candidates.Count == 0)
             return new PickReason(PickReasonKind.NoMatch, [Strings.Pick_Why_NoMatch], []);
 
-        bool geometry = feature.PermittedPrimitives.Count != 1;
-        var settings = SettingsOf(candidates.SelectMany(c => c.Held), index);
+        var depends = candidates.Any(c => c.Partial);
+        var lines = new List<TermText>();
+        PickReasonKind kind;
+        var cases = candidates.Select(c => c.Words).Where(w => w.Count > 0).DistinctBy(Key).ToList();
         if (candidates.Count == 1)
         {
-            var only = candidates[0];
-            var held = TermText.Join(RuleConditionText.Separator, RuleConditionText.DescribeParts(only.Held, index, geometry));
-            if (only.Unknown.Count == 0)
-                return new PickReason(PickReasonKind.Matched, [held.IsEmpty ? Strings.Pick_Why_Always : held], settings);
-
-            var lines = new List<TermText>
-            {
-                held.IsEmpty ? Strings.Pick_Why_Likely : TermText.Format(Strings.Pick_Why_LikelyFormat, held),
-            };
-            var unknown = TermText.Join(RuleConditionText.Separator, RuleConditionText.DescribeParts(only.Unknown, index, geometry));
-            if (!unknown.IsEmpty)
-                lines.Add(TermText.Format(Strings.Pick_Why_NotCheckedFormat, unknown.LowerFirst()));
-            return new PickReason(PickReasonKind.Likely, lines, settings);
+            kind = PickReasonKind.Matched;
+            lines.Add(cases.Count == 0 ? Strings.Pick_Why_Always : TermText.Join(RuleConditionText.Separator, cases[0]));
         }
-
-        // Several cases hold: what each says, with what they share said once
-        // ("When simplified symbols is on:"), as the Reference tab says them.
-        // A case with a condition that couldn't be checked says so, rather than
-        // reading "Always" for want of a condition that held.
-        var checkedCases = candidates.Where(c => c.Unknown.Count == 0).ToList();
-        var cases = checkedCases.Count == 0
-            ? []
-            : FeatureTypeEntryViewModel.CasesOf(
-                checkedCases.Select(c => new HeldCase { RuleFile = c.Use.RuleFile, Line = c.Use.Line, Conditions = c.Held }),
-                index,
-                geometry,
-                MaxCases);
-        foreach (var partial in candidates.Where(c => c.Unknown.Count > 0))
+        else if (cases.Count <= 1)
         {
-            var unknown = TermText.Join(RuleConditionText.Separator, RuleConditionText.DescribeParts(partial.Unknown, index, geometry));
-            var notChecked = TermText.Format(Strings.Pick_Why_NotCheckedFormat, unknown.LowerFirst());
-            cases.Add(TermText.Join(RuleConditionText.Separator, [.. RuleConditionText.DescribeParts(partial.Held, index, geometry), notChecked]));
+            // Several cases, one thing to say: "Likely: …".
+            kind = PickReasonKind.Likely;
+            lines.Add(cases.Count == 0 ? Strings.Pick_Why_Likely : TermText.Format(Strings.Pick_Why_LikelyFormat, TermText.Join(RuleConditionText.Separator, cases[0])));
+        }
+        else
+        {
+            // Several cases are still possible: what each says, with what they
+            // share said once ("When simplified symbols is on:"), as the
+            // Reference tab says them. A case whose conditions can't be checked
+            // stays possible but says nothing.
+            kind = PickReasonKind.Likely;
+            lines.Add(Strings.Pick_Why_LikelyOneOf);
+            lines.AddRange(Factor(cases));
         }
 
-        return new PickReason(PickReasonKind.Likely, [Strings.Pick_Why_LikelyOneOf, .. cases], settings);
+        return new PickReason(kind, lines, SettingsOf(lines), depends ? Strings.Pick_Why_AlsoDepends : null);
     }
+
+    // The cases' words, with the parts every case shares said once first.
+    private static List<TermText> Factor(List<List<TermText>> cases)
+    {
+        var lines = new List<TermText>();
+        var common = cases.Count > 1 ? cases[0].Where(p => cases.All(c => c.Contains(p))).ToList() : [];
+        if (common.Count > 0)
+            lines.Add(TermText.Format(Strings.Reference_CasesWhen, TermText.Join(RuleConditionText.Separator, common).LowerFirst()));
+        var rest = cases
+            .Select(c => TermText.Join(RuleConditionText.Separator, c.Where(p => !common.Contains(p))))
+            .Select(c => c.IsEmpty ? (TermText)Strings.Reference_NoFurtherCondition : c)
+            .Distinct()
+            .ToList();
+        if (rest.Count > MaxCases)
+            rest = [.. rest.Take(MaxCases), string.Format(CultureInfo.CurrentCulture, Strings.ChartReference_MoreCases, rest.Count - MaxCases)];
+        lines.AddRange(rest);
+        return lines;
+    }
+
+    private static string Key(List<TermText> words) => string.Join(RuleConditionText.Separator, words.Select(w => w.Text));
 
     /// <summary>
     /// The rule's uses of the part: the cases that draw the symbol, line
@@ -233,7 +261,7 @@ internal static class PickReasons
             .Where(c => c.Kind == RuleConditionKind.Attribute && c.Subject is { Length: > 0 })
             .Select(c => c.Subject!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(code => context.ValuesOf(code).Count == 0)
+            .Where(code => context.Values(code).Count == 0)
             .Select(code => index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.Attribute, code), out var entry)
                 ? TermText.Term(RuleConditionText.SentenceCase(entry.Name), entry.Key)
                 : TermText.Plain(code))
@@ -248,64 +276,59 @@ internal static class PickReasons
     // holds as surely.
     private static List<Candidate> Distinct(List<Candidate> candidates)
     {
-        var distinct = candidates.DistinctBy(c => string.Join('|', c.Held.Concat(c.Unknown).Select(Identity))).ToList();
+        var distinct = candidates.DistinctBy(c => string.Join('|', c.Held.Select(Identity)) + (c.Partial ? "?" : string.Empty)).ToList();
         return
         [
             .. distinct.Where(c => !distinct.Any(other =>
                 !ReferenceEquals(other, c)
-                && other.Unknown.Count == 0
-                && other.Held.Count > c.Held.Count + c.Unknown.Count
-                && c.Held.Concat(c.Unknown).All(x => other.Held.Any(o => Identity(o) == Identity(x))))),
+                && !other.Partial
+                && other.Held.Count > c.Held.Count
+                && c.Held.All(x => other.Held.Any(o => Identity(o) == Identity(x))))),
         ];
     }
 
     private static string Identity(RuleCondition c) =>
         string.Create(CultureInfo.InvariantCulture, $"{c.Kind}:{c.Subject}:{c.Index}:{c.Operator}:{c.Value}:{c.Text}");
 
-    private static IReadOnlyList<ReferenceKey> SettingsOf(IEnumerable<RuleCondition> conditions, ChartReferenceIndex index) =>
+    // The display settings the reason says held, each once: what it links to.
+    private static IReadOnlyList<ReferenceKey> SettingsOf(IEnumerable<TermText> lines) =>
     [
-        .. conditions
-            .Where(c => c.Kind == RuleConditionKind.ContextParameter && c.Subject is { Length: > 0 })
-            .Select(c => new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, c.Subject!))
-            .Where(k => index.TryGet(k, out _))
+        .. lines
+            .SelectMany(l => l.Runs)
+            .Where(r => r.Key is { Kind: ReferenceKind.DisplaySetting })
+            .Select(r => r.Key!.Value)
             .Distinct(),
     ];
 
-    private sealed record Candidate(RuleUse Use, List<RuleCondition> Held, List<RuleCondition> Unknown);
+    private sealed record Candidate(RuleUse Use, List<RuleCondition> Held, bool Partial, List<TermText> Words);
 
-    // A case as it holds for the feature: its conditions that were checked.
-    private sealed class HeldCase : RuleUse
+    // One pick's values and the display settings, as the conditions read them.
+    private sealed class Context(FeatureTypeEntry feature, ChartReferenceIndex index, PickFacts facts) : IRuleFacts
     {
-    }
-
-    // Checks conditions against one pick.
-    private sealed class Context(FeatureTypeEntry feature, ChartReferenceIndex index, PickFacts facts)
-    {
-        public Truth Evaluate(RuleCondition condition) => condition.Kind switch
+        public string? Primitive => facts.Geometry switch
         {
-            RuleConditionKind.Attribute => Attribute(condition),
-            RuleConditionKind.ContextParameter => Setting(condition),
-            RuleConditionKind.FeatureType => Same(condition, condition.Value is { } code
-                && (string.Equals(code, feature.Code, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(code, feature.Alias, StringComparison.OrdinalIgnoreCase))),
-            RuleConditionKind.Primitive => Primitive(condition),
-            // A computed value, an 'or', an else after several cases: not checked.
-            _ => Truth.Unknown,
+            S100GeometryType.Point => "Point",
+            S100GeometryType.Curve => "Curve",
+            S100GeometryType.Surface => "Surface",
+            // A feature type drawn one way only is drawn that way.
+            _ when feature.PermittedPrimitives.Count == 1 => feature.PermittedPrimitives[0],
+            _ => null,
         };
+
+        public bool IsFeatureType(string code) =>
+            string.Equals(code, feature.Code, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(code, feature.Alias, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// The pick's values of an attribute: one per repeated row, and a
         /// listed value's codes from a comma-separated list ("3,4,3"). Empty
         /// when the feature doesn't have it.
         /// </summary>
-        public IReadOnlyList<string> ValuesOf(string code)
+        public IReadOnlyList<string> Values(string code)
         {
-            var rows = Rows(facts.Attributes, code, topLevel: true).ToList();
-            if (rows.Count == 0)
-                rows = [.. Rows(facts.Attributes, code, topLevel: false)];
             var entry = PickTerms.Attribute(index, code);
             var values = new List<string>();
-            foreach (var row in rows)
+            foreach (var row in RowsOf(code))
             {
                 if (string.IsNullOrWhiteSpace(row.RawValue))
                     continue;
@@ -316,6 +339,28 @@ internal static class PickReasons
             }
 
             return values;
+        }
+
+        public string? ValueText(string code) =>
+            RowsOf(code).ToList() is [{ } only] && !string.IsNullOrWhiteSpace(only.RawValue) ? only.DisplayText : null;
+
+        public string? Setting(string id)
+        {
+            if (facts.Setting(id) is { } value)
+                return value;
+            // A parameter the viewer doesn't set: the catalogue's default holds.
+            return index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, id), out var entry) && entry is DisplaySettingEntry setting
+                ? setting.Default
+                : null;
+        }
+
+        public string? SettingText(string id) => facts.SettingText?.Invoke(id) ?? Setting(id);
+
+        // Top-level rows first; a sub-attribute's rows when no top-level row names it.
+        private IEnumerable<PickAttribute> RowsOf(string code)
+        {
+            var rows = Rows(facts.Attributes, code, topLevel: true).ToList();
+            return rows.Count > 0 ? rows : Rows(facts.Attributes, code, topLevel: false);
         }
 
         private IEnumerable<PickAttribute> Rows(IEnumerable<PickAttribute> rows, string code, bool topLevel)
@@ -336,130 +381,5 @@ internal static class PickReasons
         private bool Names(string pickCode, string ruleCode) =>
             string.Equals(pickCode, ruleCode, StringComparison.Ordinal)
             || (PickTerms.Attribute(index, pickCode) is { } entry && string.Equals(entry.Code, ruleCode, StringComparison.Ordinal));
-
-        private Truth Attribute(RuleCondition condition)
-        {
-            if (condition.Subject is not { Length: > 0 } code)
-                return Truth.Unknown;
-            var values = ValuesOf(code);
-            switch (condition.Operator)
-            {
-                case ConditionOperator.Present:
-                    return Of(values.Count > 0);
-                case ConditionOperator.Absent:
-                    return Of(values.Count == 0);
-                case ConditionOperator.Holds:
-                case ConditionOperator.DoesNotHold:
-                    return Truth.Unknown;
-            }
-
-            string? value;
-            if (condition.Index is { } i)
-                value = i >= 1 && i <= values.Count ? values[i - 1] : null;
-            else if (values.Count <= 1)
-                value = values.Count == 0 ? null : values[0];
-            else
-                return Truth.Unknown; // A list compared as a whole.
-
-            return Compare(condition, value);
-        }
-
-        private Truth Setting(RuleCondition condition)
-        {
-            if (condition.Subject is not { Length: > 0 } id)
-                return Truth.Unknown;
-            var value = facts.Setting(id);
-            if (value is null
-                && index.TryGet(new ReferenceKey(index.Spec, ReferenceKind.DisplaySetting, id), out var entry)
-                && entry is DisplaySettingEntry setting)
-            {
-                // A parameter the viewer doesn't set: the catalogue's default holds.
-                value = setting.Default;
-            }
-
-            if (value is null)
-                return Truth.Unknown;
-            return condition.Operator switch
-            {
-                ConditionOperator.Present => Of(value.Length > 0),
-                ConditionOperator.Absent => Of(value.Length == 0),
-                ConditionOperator.Holds or ConditionOperator.DoesNotHold => Truth.Unknown,
-                _ => Compare(condition, value),
-            };
-        }
-
-        private Truth Primitive(RuleCondition condition)
-        {
-            var primitive = facts.Geometry switch
-            {
-                S100GeometryType.Point => "Point",
-                S100GeometryType.Curve => "Curve",
-                S100GeometryType.Surface => "Surface",
-                // A feature type drawn one way only is drawn that way.
-                _ when feature.PermittedPrimitives.Count == 1 => feature.PermittedPrimitives[0],
-                _ => null,
-            };
-            if (primitive is null || condition.Value is not { } value)
-                return Truth.Unknown;
-            return Same(condition, string.Equals(primitive, value, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static Truth Same(RuleCondition condition, bool same) => condition.Operator switch
-        {
-            ConditionOperator.Equal or ConditionOperator.Holds => Of(same),
-            ConditionOperator.NotEqual or ConditionOperator.DoesNotHold => Of(!same),
-            _ => Truth.Unknown,
-        };
-
-        // A comparison with the feature's value, or with nothing when it has
-        // none: Lua's nil equals nothing and is false.
-        private static Truth Compare(RuleCondition condition, string? value)
-        {
-            switch (condition.Operator)
-            {
-                case ConditionOperator.IsTrue:
-                    return value is null ? Truth.Fails : Bool(value) is { } on ? Of(on) : Truth.Unknown;
-                case ConditionOperator.IsFalse:
-                    return value is null ? Truth.Holds : Bool(value) is { } off ? Of(!off) : Truth.Unknown;
-            }
-
-            if (value is null)
-                return condition.Operator == ConditionOperator.NotEqual ? Truth.Holds : Truth.Fails;
-            if (condition.Value is not { } other)
-                return Truth.Unknown;
-
-            int order;
-            if (Number(value) is { } a && Number(other) is { } b)
-                order = a.CompareTo(b);
-            else if (Bool(value) is { } x && Bool(other) is { } y)
-                order = x.CompareTo(y);
-            else if (condition.Operator is ConditionOperator.Equal or ConditionOperator.NotEqual)
-                order = string.Compare(value, other.Trim('\'', '"'), StringComparison.OrdinalIgnoreCase);
-            else
-                return Truth.Unknown;
-
-            return condition.Operator switch
-            {
-                ConditionOperator.Equal => Of(order == 0),
-                ConditionOperator.NotEqual => Of(order != 0),
-                ConditionOperator.LessThan => Of(order < 0),
-                ConditionOperator.LessThanOrEqual => Of(order <= 0),
-                ConditionOperator.GreaterThan => Of(order > 0),
-                ConditionOperator.GreaterThanOrEqual => Of(order >= 0),
-                _ => Truth.Unknown,
-            };
-        }
-
-        private static double? Number(string text) =>
-            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : null;
-
-        private static bool? Bool(string text) => text.Trim().ToLowerInvariant() switch
-        {
-            "true" or "on" => true,
-            "false" or "off" => false,
-            _ => null,
-        };
-
-        private static Truth Of(bool holds) => holds ? Truth.Holds : Truth.Fails;
     }
 }

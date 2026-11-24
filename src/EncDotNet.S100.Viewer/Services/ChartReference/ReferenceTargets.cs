@@ -44,8 +44,22 @@ internal static class ReferenceTargets
     public static string? CurrentValue(ViewerSettingsService settings, string parameter)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        return CurrentValue(settings.BuildMarinerSettings(), parameter);
+    }
+
+    /// <summary>
+    /// The value <paramref name="mariner"/> gives a portrayal context
+    /// parameter, in words: "On", "Off", "30 m"; <see langword="null"/> for a
+    /// parameter the viewer doesn't set.
+    /// </summary>
+    /// <param name="mariner">The mariner settings the chart is drawn with.</param>
+    /// <param name="parameter">The context parameter id, e.g. <c>SafetyContour</c>.</param>
+    /// <returns>The value, or <see langword="null"/>.</returns>
+    public static string? CurrentValue(EncDotNet.S100.Pipelines.MarinerSettings mariner, string parameter)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
         ArgumentNullException.ThrowIfNull(parameter);
-        var m = settings.BuildMarinerSettings();
+        var m = mariner;
         return parameter switch
         {
             "SafetyContour" => Metres(m.SafetyContour.TotalMetres),
