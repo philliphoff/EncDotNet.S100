@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Datasets from a list file.** `render`, `tiles export`, `tiles serve`,
+  `identify` and `mcp serve` take `--layers-from <file>`: a text file with one
+  dataset path per line, read as if each were given with `--layer`. Use it
+  when there are more datasets than fit on a Windows command line, which
+  stops at 32,767 characters
+  ([#1713](https://github.com/philliphoff/EncDotNet.S100/issues/1713)).
+
 - **Tide predictions work on first launch.** SoundCharts and the `s100` CLI
   now ship a copy of NOAA's tide and current station list, taken from the
   mirror when they're built. When there's no list yet, or the one there is
