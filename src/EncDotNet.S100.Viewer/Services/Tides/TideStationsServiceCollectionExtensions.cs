@@ -1,3 +1,4 @@
+using EncDotNet.S100.Tides.Stations.Mirror;
 using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,8 @@ internal static class TideStationsServiceCollectionExtensions
             },
             sp.GetRequiredService<TimeProvider>(),
             UiThread.RunOrPost,
-            sp.GetService<ILogger<TideStationListService>>()));
+            sp.GetService<ILogger<TideStationListService>>(),
+            MirrorOptions(sp.GetRequiredService<ViewerSettings>().TideStationMirrorUrl)));
 
         services.AddSingleton(sp => new TideStationsOverlay(
             sp.GetRequiredService<TideStationListService>(),
@@ -84,5 +86,22 @@ internal static class TideStationsServiceCollectionExtensions
 
         services.AddSingleton(sp => new TideStationListViewModel(sp.GetRequiredService<TideStationListService>()));
         return services;
+    }
+
+    /// <summary>
+    /// The station list mirror for <see cref="ViewerSettings.TideStationMirrorUrl"/>:
+    /// the default mirror when it's not set, none (NOAA only) when it's empty
+    /// or not an http(s) URL.
+    /// </summary>
+    internal static TideCatalogueMirrorClientOptions? MirrorOptions(string? url)
+    {
+        if (url is null)
+        {
+            return new TideCatalogueMirrorClientOptions();
+        }
+
+        return Uri.TryCreate(url.Trim(), UriKind.Absolute, out var address) && (address.Scheme == Uri.UriSchemeHttps || address.Scheme == Uri.UriSchemeHttp)
+            ? new TideCatalogueMirrorClientOptions { ManifestAddress = address }
+            : null;
     }
 }

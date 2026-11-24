@@ -234,6 +234,15 @@ internal sealed partial class ViewerSettings
     public bool? UseTidePredictions { get; set; }
 
     /// <summary>
+    /// The manifest of the mirror the tide station list is downloaded from
+    /// (#1674), such as
+    /// <c>https://github.com/philliphoff/EncDotNet.S100/releases/download/tide-stations/tide-stations.manifest.json</c>.
+    /// Null (the default) is that mirror; an empty value, or one that isn't
+    /// an http(s) URL, downloads from NOAA only. Not shown in Settings.
+    /// </summary>
+    public string? TideStationMirrorUrl { get; set; }
+
+    /// <summary>
     /// Check route's wind limit in knots for the weather check (#1093), or
     /// null when wind isn't checked (the default).
     /// </summary>

@@ -400,7 +400,9 @@ Proposed, for #1453 (tides) and #1454 (currents) to cite once confirmed.
     Library (directory and auto-added on first use) with date, counts, size
     and **Refresh**. A date line under the switch. A stale notice in the
     flyout when NOAA has published newer data (a new datum epoch or station
-    revisions) than the cached list; offline, after 12 months.
+    revisions) than the cached list; offline, after 12 months. Since #1674 the list
+    is downloaded from a mirror of NOAA's catalogue (one file) and checked
+    against its manifest, falling back to NOAA's metadata API.
 16. **D16 Current stations.** A **Current stations · predicted** row, off by
     default, with its key as a section in the Legend tab (as D4). S-111 arrow and speed colours from a dashed frame, speed label,
     slack bar with turn time. Hidden where S-111 covers. Pick card with

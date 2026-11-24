@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **SoundCharts downloads the tide station list from the mirror.** The NOAA
+  station list that tide predictions and the predicted tide and current
+  station feeds use now comes from the EncDotNet.S100 mirror as one file of
+  about 1.2 MB, in a few seconds instead of about 10 minutes. When the mirror
+  can't be used, SoundCharts downloads the list from NOAA itself, as before.
+  **Refresh** keeps the list when the mirror has nothing newer and says it's
+  up to date, and the stale notice checks the mirror first.
+  `get_tide_display` adds `downloadingFrom` and `upToDate`, and
+  `TideStationMirrorUrl` in `settings.json` sets another mirror
+  ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
 - **`s100 tides update` downloads from the mirror.** With no `--from`, the
   command now downloads NOAA's tide and current station catalogue from the
   EncDotNet.S100 mirror as one file of about 1.2 MB, in a few seconds instead

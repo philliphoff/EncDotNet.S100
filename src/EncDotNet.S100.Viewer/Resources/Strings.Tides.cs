@@ -80,6 +80,7 @@ internal static partial class Strings
     public static string Tides_List_Stale => Get(nameof(Tides_List_Stale));
     public static string Tides_List_Download => Get(nameof(Tides_List_Download));
     public static string Tides_List_Refresh => Get(nameof(Tides_List_Refresh));
+    public static string Tides_List_UpToDate => Get(nameof(Tides_List_UpToDate));
     public static string Tides_List_Cancel => Get(nameof(Tides_List_Cancel));
     public static string TimelinePanel_PredictionsOnlyTooltip => Get(nameof(TimelinePanel_PredictionsOnlyTooltip));
     public static string TimelinePanel_TideLane => Get(nameof(TimelinePanel_TideLane));
