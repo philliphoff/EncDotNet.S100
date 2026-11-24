@@ -6,6 +6,7 @@
              xmlns:svc="using:EncDotNet.S100.Viewer.Services"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:crs="using:EncDotNet.S100.Viewer.Services.ChartReference"
              xmlns:conv="using:EncDotNet.S100.Viewer"
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
@@ -680,6 +681,32 @@
             <Setter Property="Padding" Value="9,4" />
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="FontSize" Value="12" />
+        </Style>
+        <!-- A display setting's link under a reason in Why this symbol (#1680): text only, blue as actions are. -->
+        <Style Selector="Button.whyLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}" Background="Transparent" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.whyLink:pointerover">
+            <Setter Property="Opacity" Value="0.8" />
+        </Style>
+        <Style Selector="Button.whyLink:focus-visible">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="2">
+                        <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}" Background="Transparent" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
         </Style>
     </UserControl.Styles>
 
@@ -1460,6 +1487,86 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <!--
+                            Why this symbol (symbol dictionary R11, #1680): each part's
+                            reason, the rule's conditions that hold for the feature's
+                            values and the display settings, folded by default. The
+                            main part's reason is in full; each other part is one line
+                            naming it, its reason folded underneath (D5).
+                        -->
+                        <Expander IsVisible="{Binding DrawnAs.HasReasons, FallbackValue=False}"
+                                  IsExpanded="{Binding DrawnAs.WhyExpanded, Mode=TwoWay, FallbackValue=False}"
+                                  Header="{x:Static loc:Strings.Pick_WhyThisSymbol}"
+                                  AutomationProperties.AutomationId="PickReport.WhyThisSymbol"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Pick_WhyThisSymbol}"
+                                  HorizontalAlignment="Stretch">
+                            <ItemsControl ItemsSource="{Binding DrawnAs.Parts, FallbackValue={x:Null}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PickDrawnPartViewModel">
+                                        <StackPanel Spacing="2" Margin="0,2">
+                                            <StackPanel Spacing="2" IsVisible="{Binding ShowsReasonInFull}">
+                                                <views:ReferenceTerm Text="{Binding Label}"
+                                                                     Key="{Binding Key}"
+                                                                     FontSize="12"
+                                                                     FontWeight="SemiBold"
+                                                                     AutomationProperties.AutomationId="Reference.Term"
+                                                                     TextWrapping="Wrap" />
+                                                <ContentControl Content="{Binding Reason}" />
+                                            </StackPanel>
+                                            <Expander IsVisible="{Binding ShowsReasonFolded}"
+                                                      IsExpanded="{Binding ReasonExpanded, Mode=TwoWay}"
+                                                      AutomationProperties.AutomationId="PickReport.WhyThisSymbol.Part"
+                                                      AutomationProperties.Name="{x:Static loc:Strings.Pick_Why_PartFold}"
+                                                      AutomationProperties.HelpText="{Binding Label}"
+                                                      HorizontalAlignment="Stretch">
+                                                <Expander.Header>
+                                                    <views:ReferenceTerm Text="{Binding Label}"
+                                                                         Key="{Binding Key}"
+                                                                         FontSize="12"
+                                                                         AutomationProperties.AutomationId="Reference.Term"
+                                                                         TextWrapping="Wrap" />
+                                                </Expander.Header>
+                                                <ContentControl Content="{Binding Reason}" />
+                                            </Expander>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                <ItemsControl.DataTemplates>
+                                    <DataTemplate DataType="vm:PickReasonViewModel">
+                                        <StackPanel Spacing="1"
+                                                    AutomationProperties.AutomationId="PickReport.WhyThisSymbol.Reason"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Pick_Why_ReasonName}"
+                                                    AutomationProperties.HelpText="{Binding HelpText}">
+                                            <ItemsControl ItemsSource="{Binding Lines}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="crs:TermText">
+                                                        <views:ReferenceTermText Terms="{Binding}"
+                                                                                 FontSize="11.5"
+                                                                                 TextWrapping="Wrap" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <ItemsControl ItemsSource="{Binding Settings}" IsVisible="{Binding HasSettings}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:PickReasonSettingViewModel">
+                                                        <Button Classes="whyLink"
+                                                                AutomationProperties.AutomationId="PickReport.WhyThisSymbol.ChangeSetting"
+                                                                AutomationProperties.Name="{Binding Label}"
+                                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceChangeInSettings}"
+                                                                Command="{Binding ChangeCommand}">
+                                                            <TextBlock Text="{Binding Label}"
+                                                                       FontSize="11.5"
+                                                                       TextWrapping="Wrap"
+                                                                       Foreground="{DynamicResource AccentBrush}" />
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.DataTemplates>
+                            </ItemsControl>
+                        </Expander>
                     </StackPanel>
                 </Border>
 

@@ -127,7 +127,7 @@ internal static class SyntheticS57Cell
     {
         const ushort wrecks = 159;
         const ushort lateralBeacon = 7;
-        const ushort colour = 75, beaconShape = 4, categoryOfLateralMark = 36, objectName = 116;
+        const ushort colour = 75, beaconShape = 2, categoryOfLateralMark = 36, objectName = 116;
         const byte fieldTerminator = 0x1E;
         var document = Iso8211DocumentReader.ReadFromFile(FixturePath());
 

@@ -6,6 +6,22 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Why this symbol in Object information.** Under **Drawn as**, a folded
+  **Why this symbol** says why the map drew each part, from the rule's cases
+  for it that hold for the picked feature's values and the current display
+  settings: "Simplified symbols is on · Colour is red · Beacon shape is a
+  stake, pole, perch or post". The names of settings, attributes and values
+  are terms, and each display setting the reason names has a link that opens
+  Settings › Chart at its switch. The main symbol's reason is given in full;
+  each other part, such as a topmark or text, is a line of its own with its
+  reason folded underneath. This is a match, not a trace of the rule: when
+  more than one case holds, or a condition rests on a value the rule
+  computes, the reason says "Likely" and lists what holds; when no case
+  holds, it says so. A fallback symbol says that nothing else matched and
+  names the attributes the rule tests that the feature doesn't have. The
+  Reference tab's **Change in Display settings** now opens Settings at the
+  switch too ([#1680](https://github.com/philliphoff/EncDotNet.S100/issues/1680)).
+
 - **Drawn as in Object information.** A picked feature of a chart drawn from
   a portrayal catalogue (S-101, or an S-57 cell drawn with S-101's) shows what
   the map drew for it. The header shows its main symbol on the chart's
