@@ -21,7 +21,7 @@ internal static class TideCli
     /// <c>s100 mcp serve</c> read.
     /// </summary>
     public static string DefaultCataloguePath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        CliPaths.LocalApplicationData,
         "EncDotNet.S100",
         "Tides",
         "noaa-tide-stations.json.gz");

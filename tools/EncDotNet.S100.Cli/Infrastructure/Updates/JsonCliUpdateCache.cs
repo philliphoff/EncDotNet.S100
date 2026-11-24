@@ -16,7 +16,7 @@ internal sealed partial class JsonCliUpdateCache : ICliUpdateCache
 
     /// <summary>The cache file in the user's local application data.</summary>
     public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        CliPaths.LocalApplicationData,
         "EncDotNet.S100.Cli",
         "update-cache.json");
 

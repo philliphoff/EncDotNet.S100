@@ -2041,7 +2041,7 @@ folder in your local application data:
 |---|---|
 | Windows | `%LOCALAPPDATA%\EncDotNet.S100\Tides` |
 | macOS | `~/Library/Application Support/EncDotNet.S100/Tides` |
-| Linux | `~/.local/share/EncDotNet.S100/Tides` |
+| Linux | `$XDG_DATA_HOME/EncDotNet.S100/Tides`, or `~/.local/share/EncDotNet.S100/Tides` when `XDG_DATA_HOME` isn't set |
 
 `--catalogue` keeps it somewhere else. The file format is documented in the
 [station catalogue README](../src/EncDotNet.S100.Tides.Stations/README.md#bring-your-own-stations),
