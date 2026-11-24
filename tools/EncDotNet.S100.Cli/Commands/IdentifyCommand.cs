@@ -58,7 +58,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
 
         [CommandOption("--layer <PATH>")]
         [Description("Add a dataset as a pick layer (repeatable). Mutually exclusive with the exchange-set form.")]
-        public string[] Layers { get; init; } = [];
+        public string[] Layers { get => _layers; init => _layers = value; }
+
+        private string[] _layers = [];
+        private bool _layerListsRead;
+
+        [CommandOption(LayerListFile.Template)]
+        [Description(LayerListFile.Description)]
+        public string[] LayersFrom { get; init; } = [];
 
         [CommandOption("--from|--exchange-set <PATH>")]
         [Description("Pick across every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one. Mutually exclusive with --layer.")]
@@ -111,6 +118,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (!_layerListsRead)
+            {
+                var lists = LayerListFile.Expand(ref _layers, LayersFrom);
+                if (!lists.Successful)
+                    return lists;
+                _layerListsRead = true;
+            }
+
             if (string.IsNullOrWhiteSpace(Latitude) || string.IsNullOrWhiteSpace(Longitude))
                 return ValidationResult.Error("Both --lat and --lon are required.");
 
@@ -125,13 +140,13 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
             var hasInput = !string.IsNullOrWhiteSpace(Input);
 
             if (hasLayers && hasExchangeSet)
-                return ValidationResult.Error("--layer and --from are mutually exclusive.");
+                return ValidationResult.Error("--layer/--layers-from and --from are mutually exclusive.");
 
             if (hasInput && (hasLayers || hasExchangeSet))
-                return ValidationResult.Error("A positional dataset cannot be combined with --layer or --from.");
+                return ValidationResult.Error("A positional dataset cannot be combined with --layer, --layers-from or --from.");
 
             if (!hasLayers && !hasExchangeSet && !hasInput && Sources.Length == 0)
-                return ValidationResult.Error("Provide a dataset, one or more --layer options, an exchange set (--from or positional), or a --source.");
+                return ValidationResult.Error("Provide a dataset, one or more --layer or --layers-from options, an exchange set (--from or positional), or a --source.");
 
             if (!double.IsFinite(SourceTimeoutSeconds) || SourceTimeoutSeconds < 0)
                 return ValidationResult.Error("--source-timeout must be a number of seconds, 0 or more.");

@@ -1,7 +1,7 @@
 #### Agent guidance
 
 `tiles export` takes the same input forms as `render`: one dataset, repeated
-`--layer`, or an exchange set (positional, `--from` or `--exchange-set`). It
+`--layer` (or `--layers-from` lists), or an exchange set (positional, `--from` or `--exchange-set`). It
 also takes a plain folder of datasets, searched recursively as `mcp serve`
 searches one; an S-57 exchange set (`ENC_ROOT` with `CATALOG.031`, positional
 or `--from`) is read that way. In a folder, loose S-101 cells get their sibling

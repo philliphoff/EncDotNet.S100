@@ -53,6 +53,10 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            var lists = ReadLayerLists();
+            if (!lists.Successful)
+                return lists;
+
             var render = ValidateRender();
             if (!render.Successful)
                 return render;

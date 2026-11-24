@@ -102,6 +102,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
 
         public override ValidationResult Validate()
         {
+            var lists = ReadLayerLists();
+            if (!lists.Successful)
+                return lists;
+
             if (ServesTileSet && Overview)
                 return ValidationResult.Error("--overview applies only when rendering datasets, not when serving a built tile set.");
             if (ServesTileSet && CacheDirectory is not null)
