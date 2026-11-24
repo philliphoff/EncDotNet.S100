@@ -6,10 +6,12 @@
 > approach at low water and at high water). Step 1 is narrower: a second
 > map with its own viewport that shows the same datasets at the same time.
 >
-> How the split map looks and behaves is set by a design pass from
-> [dual-map-brief.md](dual-map-brief.md). This note covers the services
-> and engine changes underneath it. Where they disagree, the design pass
-> decides the behaviour and this note changes to match.
+> How the split map looks and behaves is set by the design pass in
+> [dual-map-design.md](dual-map-design.md) (from
+> [dual-map-brief.md](dual-map-brief.md)); its decisions are cited here
+> as D1–D28. This note covers the services and engine changes underneath
+> it. §2.1, §2.2, §2.4–§2.6 and §3 were updated to match the design pass
+> on 2026-11-24.
 
 ## Decisions so far (2026-11-23)
 
@@ -24,11 +26,15 @@
 3. **There is an active map, chosen by last use.** The design pass decides
    how it is shown and what follows it.
 
+The design pass (2026-11-24) settled the behaviour questions; see
+[dual-map-design.md](dual-map-design.md). Its open questions O1–O4 are
+still the user's.
+
 ## 0. Goal and steps
 
 | Step | What the user gets | What differs between maps |
 |---|---|---|
-| 1 | View › Split map: two panes, each panned and zoomed on its own | Viewport only |
+| 1 | Split map (title bar, View menu, MCP): two panes, each panned and zoomed on its own | Viewport only |
 | 2 | Each pane shows its own subset of the loaded datasets | Viewport, dataset visibility |
 | 3 | Each pane has its own timeline time | Viewport, visibility, time |
 | Later | Per-pane display settings (palette, viewing groups), linked viewports | Presentation |
@@ -151,32 +157,41 @@ Add a `MapView` that owns everything that belongs to one map:
 - the render-activity and settle probes
 - `IDisposable` teardown
 
-A `MapPane` user control holds the map and its own chrome: scale bar,
-compass, zoom buttons and the Time HUD. The mode buttons, the top-left
-tool cards and the right-dock overlay stay at window level. Most of this
+A `MapPane` user control holds the map and its own chrome (D8, D9): the
+pane header (number, name, link toggle, close; shown only while split),
+the scale bar, the zoom buttons, the compass and the map stamp. The mode
+column, the Display settings and Legend buttons, the View pill, the
+top-left tool cards, the route-check and AML chips and the right-dock
+overlay stay at window level, placed against the whole map area. There is
+one Time HUD, also window level, drawn in the active pane. Most of this
 is extracted from `MainWindow.axaml.cs` and `MainWindow.axaml:630-1270`.
 
 `MapView` gets a stable `MapViewId`, which MCP and settings use. Ids are
 opaque, such as `map-1` and `map-2`. They aren't positional names like
 "left" or "secondary", because a later layout can arrange the panes
-differently. One view is the *first* view, which can't be closed. It is
-the readiness gate and the session that `ProjectSessionState` reads. It
-isn't special in any other way.
+differently. Any view can be closed (D3), so no view is permanently
+"first". The registry keeps a *primary* role that moves to a surviving
+view when its holder closes. The primary view is the readiness gate and
+the session `ProjectSessionState` reads; it isn't special in any other
+way. The number shown to the user ("Map 1", "Map 2") comes from the
+layout's reading order (D19) and isn't the id.
 
 ### 2.2 `MapViews`: the registry and the active map
 
 Add a singleton `MapViews` with `All`, `Active`, `ActiveChanged`,
 `Add`/`Remove`, and a union viewport.
 
-- The active map is the last one the user clicked, scrolled or focused.
-  The pane shows a thin accent edge when there are two.
+- The active map is the last one the user pressed in, scrolled or
+  pinched, moved keyboard focus into, or used a tool in. Hover doesn't
+  count, and an MCP call with a `map` argument doesn't either (D4). The
+  active pane's header shows an accent line and a filled number (D5).
 - On `ActiveChanged`, the existing `MapCapabilityAccessor<T>.Current`
   values and the window-level `MapViewportNotifier` are rebound. So every
   current consumer follows the active map without changes.
 - The lazy-load coordinator and the hosted-source gate read the union
   viewport, and take the planners from every view.
-- The status bar reads lat/lon from the hovered pane, and scale from the
-  active one.
+- The status bar reads lat/lon from the hovered pane, prefixed with its
+  number, and scale, overscale and DEPTHS from the active one (D6, D7).
 - The keyboard-scope checks (`ReferenceEquals(visual, MapControl)` at
   `MainWindow.axaml.cs:151-173,1829`) become "is inside any `MapPane`".
 
@@ -208,19 +223,35 @@ duplicate all of it.
 
 ### 2.4 Tools, picks and overlays
 
+From the design pass (D10–D16, D27):
+
 | Thing | Step 1 behaviour |
 |---|---|
-| Pick and Object Information | One report. The highlight is drawn in the pane the pick came from. |
-| Measure, range & bearing | Drawn and edited in the active pane. State stays single. |
-| Routes and route-check overlay | Drawn in both panes, because a route is data and not a tool. Editing happens in the active pane. |
-| Dynamic sources (AIS, own ship) | Drawn in both panes. The visibility settings are shared. |
-| Library coverage, extent indicators, overscale curtain | Per pane, from the pane's own notifier. Library coverage registers one legend source, not one per pane. |
+| Pick and Object information | One report. The highlight is drawn in **every pane that draws the feature**, not only the one picked in. A pane whose view contains the location but doesn't draw the feature draws a dashed grey **ghost** with a reason tag. In step 1 all panes draw the same features, so a ghost appears only from step 2 (dataset hidden) and step 3 (not at that time). The pick result carries `shownIn` per map. |
+| Measure, Range & bearing | Window modes with single state, as today. Clicks from **any pane** add points (state is geographic), so a measurement can span panes. Results are drawn in every pane where in view. The click makes its pane active. |
+| Routes and route-check overlay | Drawn in every pane. In Edit route mode, waypoints are added and dragged in any pane. |
+| Dynamic sources (AIS, own ship) | Drawn in every pane. The visibility settings are shared. |
+| Library coverage, extent indicators, overscale curtain, adjusted-area edge | Per pane, from the pane's own notifier. Library coverage registers one legend source, not one per pane. |
+| Legend hover-to-find rings | Every pane that draws matching features. The Legend lists the active pane's products. |
+| Extent boxes (new) | A pane outlines any other pane whose extent lies inside it and is less than a quarter of its width, with that pane's number. Linked or not. |
+| Cursor echo (new) | A ghost crosshair at the pointer's position in every other pane whose view contains it, while split. |
+| Map stamp | Per pane. In step 3 only panes not at real time show it. |
+
+Each pane's pick-highlight controller asks the pick model whether its own
+session draws the feature (dataset visible in that session and, in step
+3, present at that session's time). It draws the outline, the ghost or
+nothing from the answer. The extent boxes and the cursor echo read the
+other views' viewports and the hovered position from `MapViews`.
 
 ### 2.5 MCP
 
 - Each map tool gets an optional `map` parameter. The default is the
-  active map. `ICapabilityAccessor<T>` gains `Get(MapViewId)`.
-- Add `list_maps` and `set_active_map`, plus a `set_split_map` toggle.
+  active map, and the call never changes the active map (D4).
+  `ICapabilityAccessor<T>` gains `Get(MapViewId)`.
+- Add `list_maps` (`id`, `label`, `name`, `active`, `linked`, `viewport`,
+  `folded`), `set_active_map` and `set_split_map { open }`, plus
+  `set_map_link { linked }` and `set_map_name { map, name }` (D28).
+- Pick results gain `shownIn: [{ map, shown, reason }]`.
 - `await_settled` and `await_render_idle` wait for every pane.
   `get_render_stats` reports per pane. `RenderActivityHub` becomes an
   instance that `MapView` owns.
@@ -228,13 +259,24 @@ duplicate all of it.
 
 ### 2.6 Layout and settings
 
-- View › Split map (and MCP) adds or removes a second view. A window-level
-  layout arranges the views. Step 1 has one layout, side by side in a
-  `Grid` with a splitter. Adding a layout changes only the window.
+- The title-bar split button, View › Split Map (⌘\\) on macOS, and MCP add
+  or remove a second view (D1). Closing a pane from its header removes
+  that view; turning the split off keeps the active view (D3). A
+  window-level layout arranges the views. Step 1 has one layout, side by
+  side in a `Grid` with a splitter. Adding a layout changes only the
+  window.
+- Panes are at least 320 px wide. When the map area is narrower than
+  644 px, panes that aren't active fold to a 28 px strip and keep their
+  state; clicking a strip swaps which pane is folded (D17). The right dock
+  keeps opening over the map.
+- The viewport link (D13, D14) is one window-wide state in step 1, off by
+  default. It keeps the centre and the scale ratio captured when it was
+  turned on. The driving pane is the one being used; the others follow
+  through `SetViewportToCenterAndResolution` (see open question 1).
 - Settings store the layout, the sizes of the panes, and each view's
   viewport, keyed by `MapViewId`. They don't store a "left" and "right".
 - `ShellLayoutViewModel.MapWidth` becomes the width of the whole map area.
-  Each Time HUD reads its own pane's width.
+  The one Time HUD reads the active pane's width for its compact rules.
 - When the split opens, the new pane starts at the active pane's view.
 
 ### 2.7 Sharing between maps
@@ -298,13 +340,25 @@ Each slice ships on its own and keeps one map working.
    viewport. Ships with one view, so it is inert.
 4. **Fan the loader out to multiple sessions.** Ship with tests that use
    two fake sessions.
-5. **Add the Split map toggle.** This covers the second pane, active-pane
-   focus, settings, and the status bar and keyboard scope.
-6. **MCP.** Add the `map` parameter, `list_maps`/`set_active_map`, and
-   per-pane settle.
+5. **Add the split.** The title-bar button and menu, View › Split Map,
+   the second pane at the active pane's view, closing any pane, the pane
+   header with the active accent, active-pane focus rules (D4), the status
+   bar badge and lat/lon rule, the keyboard scope, folding below 644 px,
+   and settings (D1–D9, D17).
+6. **Picks, tools and echo across panes.** The pick outline in every
+   pane, with the ghost path in place for steps 2 and 3; measure, range and
+   bearing and route-edit clicks from any pane; extent boxes; cursor echo
+   (D10–D12, D15, D16).
+7. **Viewport link.** The header chain, the split-menu item and ⌘⇧\\,
+   centre plus scale ratio (D13, D14). Needs §5 question 1 here and the design note's O1 answered.
+8. **MCP.** Add the `map` parameter, `list_maps`, `set_active_map`,
+   `set_split_map`, `set_map_link`, `set_map_name`, `shownIn` on picks,
+   and per-pane settle (D28).
 
 Slices 1 and 2 can run in parallel. Slice 3 needs slice 2, slice 4
-needs slices 1 and 3, and slice 5 needs slice 4.
+needs slices 1 and 3, and slice 5 needs slice 4. Slices 6 and 7 need
+slice 5 and can run in parallel. Slice 8 needs slice 5; its link and pick
+parts follow slices 6 and 7.
 
 The sharing work (§2.7) is a separate track in the engine. It doesn't
 block the slices above, but it should land before slice 5 ships:
@@ -343,9 +397,8 @@ same view using no more than about 1.1× the memory of one pane.
 ## 5. Open questions
 
 The behaviour questions (picks, tools, the active map, linking, per-pane
-subsets and time) are passed to the design pass
-([brief](dual-map-brief.md) §5). §2.4 is a placeholder until the design
-pass answers them.
+subsets and time) are answered in [dual-map-design.md](dual-map-design.md).
+Its open questions O1–O4 are the user's.
 
 Engineering questions that remain:
 
