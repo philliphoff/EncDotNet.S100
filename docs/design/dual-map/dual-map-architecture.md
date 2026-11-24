@@ -362,21 +362,32 @@ needs slices 1 and 3, and slice 5 needs slice 4. Slices 6 and 7 need
 slice 5 and can run in parallel. Slice 8 needs slice 5; its link and pick
 parts follow slices 6 and 7.
 
-The sharing work (§2.7) is a separate track in the engine. It doesn't
-block the slices above, but it should land before slice 5 ships:
+The sharing work (§2.7) is a separate engine track. It has landed (or is
+in review) ahead of slice 5:
 
-- **S1. Scene cache.** Reference-counted and keyed by content, with a key
-  that covers viewing groups, hidden features and portrayal time.
-- **S2. Shared memory tile cache.** Keyed by `ChartTileKey`, with
-  in-flight deduplication. The per-owner `TileCache` becomes a view onto
-  it.
-- **S3. Shared GPU residency.** Keyed by (`GRContext`, `ChartTileKey`),
-  after checking that the panes share a context.
-- **S4. LRU processor portrayal cache.** Needed for step 3.
+- **S1. Shared vector scenes** (#1706). The renderer keeps the scenes it
+  built per processor, keyed like the tile disk cache, and a second map
+  binds the first map's scene; the engine derives a scene's planes and
+  indexes once. Measured on 4 NOAA Puget Sound cells: the second map
+  renders in about 40 ms instead of 2.75 s.
+- **S4. Shared portrayal results** (#1707). A fresh result equal to one
+  another map shows is dropped in favour of the shared one. With S1, the
+  second map's heap cost fell from +62 MB to +1.8 MB. The processor still
+  portrays per render, so its own single-slot cache is unchanged; an LRU
+  for step 3 is still open.
+- **S2. Shared chart tiles in memory** (#1716). Chart-layer tile caches
+  share through `TileMemoryPool`: adopt on miss, keep one copy of an equal
+  put, charge once. A second map over the same view settles in about 4 ms
+  instead of 60 ms and adds about 1 MB instead of 12 MB. In-flight
+  deduplication was left out: a queued job only skips tiles published
+  since it was queued, so two panes asking for the same tile at the same
+  moment can both draw it (only one copy is kept).
+- **S3. Shared GPU textures** (#1717). Texture caches share per
+  `GRContext`; a texture another cache held waits out the orphan delay
+  before it is freed. Not yet measured: check it with slice 5.
 
-Measure each one with the Puget Sound harness, with one pane and with two
-headless sessions over the same owner. The target is two panes on the
-same view using no more than about 1.1× the memory of one pane.
+The stable-scene-key caveat in §2.7 still applies: slots with viewing
+groups, hidden features or a portrayal time fall back to per-map tiles.
 
 ## 4. Costs and risks
 
