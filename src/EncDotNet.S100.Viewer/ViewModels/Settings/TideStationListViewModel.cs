@@ -56,10 +56,12 @@ internal sealed class TideStationListViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Why the last download failed, or the stale notice; empty when neither.</summary>
+    /// <summary>Why the last download failed, the stale notice, or that a refresh found nothing newer; empty when none.</summary>
     public string Note => _list.LastError is { } error
         ? string.Format(CultureInfo.CurrentCulture, Strings.Tides_List_FailedFormat, error)
-        : _list.IsStale ? Strings.Tides_List_Stale : string.Empty;
+        : _list.IsStale ? Strings.Tides_List_Stale
+        : _list.IsUpToDate ? Strings.Tides_List_UpToDate
+        : string.Empty;
 
     /// <summary>Whether <see cref="Note"/> has text.</summary>
     public bool HasNote => Note.Length > 0;
@@ -70,7 +72,7 @@ internal sealed class TideStationListViewModel : ViewModelBase
     /// <summary>"Download" with no list, else "Refresh".</summary>
     public string DownloadLabel => _list.Catalogue is null ? Strings.Tides_List_Download : Strings.Tides_List_Refresh;
 
-    /// <summary>Downloads NOAA's list (about ten minutes).</summary>
+    /// <summary>Downloads NOAA's list: from the mirror in a few seconds, or from NOAA in about ten minutes when the mirror can't be used.</summary>
     public IAsyncRelayCommand DownloadCommand { get; }
 
     /// <summary>Stops a download.</summary>

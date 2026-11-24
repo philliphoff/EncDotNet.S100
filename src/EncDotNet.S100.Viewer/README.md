@@ -663,6 +663,29 @@ Select the pill to see:
   also says whether the datums agree and lists any depth source that isn't
   adjusted.
 
+### Tide station list
+
+**Use tide predictions where there's no S-104** and the **Tide stations ·
+predicted** and **Current stations · predicted** live feeds predict from
+NOAA CO-OPS's station list, `tide-stations.json.gz` next to `settings.json`
+(or under `--data-dir` or `S100_DATA_DIR`). SoundCharts downloads it the
+first time one of them is turned on, and the line under the setting shows
+its date and counts with **Download** or **Refresh**.
+
+The list comes from the EncDotNet.S100 mirror of NOAA's catalogue: one file
+of about 1.2 MB, checked against the mirror's manifest, in a few seconds.
+When the mirror can't be reached, or its file is damaged or in a newer
+format, SoundCharts downloads the list from NOAA itself, which takes about
+10 minutes and shows its progress. **Refresh** never replaces the list with
+an older one: when the mirror has nothing newer, it keeps the list and says
+"The station list is up to date." The stale notice says when the mirror, or
+NOAA when the mirror can't be reached, has newer data; the mirror can be up
+to a week behind NOAA.
+
+To use another mirror, set `TideStationMirrorUrl` in `settings.json` to the
+address of its `tide-stations.manifest.json`. An empty value downloads from
+NOAA only. There's no setting for it in **Settings**.
+
 ## Control the layer stack
 
 The **Layer stack** panel lists every visible layer in its S-98 display
