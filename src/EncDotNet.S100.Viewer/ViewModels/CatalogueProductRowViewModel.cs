@@ -94,11 +94,8 @@ internal sealed class CatalogueProductRowViewModel : ViewModelBase
         ? string.Format(CultureInfo.CurrentCulture, Strings.Catalogues_Row_LoadedFormat, _loadedCount)
         : string.Empty;
 
-    /// <summary>Whether a catalogue failed to load: the row's red bar.</summary>
+    /// <summary>Whether a catalogue failed to load.</summary>
     public bool IsError => ErrorCount > 0;
-
-    /// <summary>Whether a catalogue is missing and none failed: the row's amber bar.</summary>
-    public bool IsMissingOnly => IsMissing && !IsError;
 
     /// <summary>Whether a catalogue the product needs is missing.</summary>
     public bool IsMissing => _state.Feature.Status == CatalogueStatus.Missing || _state.Portrayal.Status == CatalogueStatus.Missing;

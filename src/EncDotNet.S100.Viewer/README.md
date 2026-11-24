@@ -1724,8 +1724,8 @@ Each product is drawn with a feature catalogue and a portrayal catalogue. The
 product the viewer knows, with both its catalogues on one row: "Feature 2.0.0
 · Portrayal 2.0.0" and how many of its datasets are loaded. Tags show only
 what isn't the default: *Custom*, *Command line*, *Not built in*, a problem
-count, or *Missing*. A red bar marks a catalogue that failed to load; an amber
-bar, one that is missing. Filter by product or name, or use the pills: **All**,
+count in red, or *Missing* in amber. Rows select and highlight like the
+other lists in the viewer. Filter by product or name, or use the pills: **All**,
 **Loaded**, **Changed** (anything not built in) and **Problems**, which shows
 only while there are some. The activity's badge counts the products with a
 problem.

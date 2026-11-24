@@ -162,8 +162,9 @@ Each pill shows its count. The selected pill is remembered.
 the product's pair: the spec, the name, tags only when something isn't the
 default (*Custom*, *Command line*, *Not built in*, *1 problem*, *Missing*),
 then "Feature 2.0.0 · Portrayal 2.1.0-draft" and how many datasets are
-loaded. A red bar marks Error, an amber bar Missing, as dataset rows mark
-their state. The details pane shows, for each catalogue, the one source in
+loaded. The problem tag is red and *Missing* amber; the row has no state bar
+of its own, because the left edge is the viewer's selection bar (accent
+lists). The details pane shows, for each catalogue, the one source in
 use (*Built-in*, *Custom* with its path, or *Command line, this session*)
 and what it overrides as a muted line ("Overrides built-in 2.0.0"). A product
 never has two rows (fixes A6, A7, A8). States: **In use**, **Error**
