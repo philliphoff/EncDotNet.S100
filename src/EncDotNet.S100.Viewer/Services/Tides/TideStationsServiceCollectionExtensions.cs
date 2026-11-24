@@ -32,7 +32,8 @@ internal static class TideStationsServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>(),
             UiThread.RunOrPost,
             sp.GetService<ILogger<TideStationListService>>(),
-            MirrorOptions(sp.GetRequiredService<ViewerSettings>().TideStationMirrorUrl)));
+            MirrorOptions(sp.GetRequiredService<ViewerSettings>().TideStationMirrorUrl),
+            snapshot: TideCatalogueSnapshot.DefaultDirectory));
 
         services.AddSingleton(sp => new TideStationsOverlay(
             sp.GetRequiredService<TideStationListService>(),

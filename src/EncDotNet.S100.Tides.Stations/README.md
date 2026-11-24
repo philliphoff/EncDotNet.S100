@@ -355,7 +355,22 @@ publish:
   can predict on MLLW, of its current stations, or of those it can predict.
   Its result is empty when the catalogue may be published.
 
-Upload the catalogue file before the manifest. The EncDotNet.S100 mirror does this with `s100 tides publish`, in the
+Upload the catalogue file before the manifest.
+
+To ship a catalogue with your app, so it works on first launch with no
+network, put a mirror's two files in a folder beside your executable and
+call `TideCatalogueSnapshot.SeedAsync` before you load your cache:
+
+```csharp
+await TideCatalogueSnapshot.SeedAsync(TideCatalogueSnapshot.DefaultDirectory, "noaa-tide-stations.json.gz");
+```
+
+It fills the cache from the folder when the cache is missing, or when the
+cache was retrieved from the same provider before the snapshot was. It keeps
+any other cache: a newer one, an undated one, one from another provider, or
+one it can't read. `DefaultDirectory` is `TideStations` beside the app.
+
+The EncDotNet.S100 mirror does this with `s100 tides publish`, in the
 repository's `tide-stations.yml` workflow. See the
 [CLI reference](../../docs/cli.md#tides-publish).
 

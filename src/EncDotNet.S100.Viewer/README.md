@@ -668,9 +668,12 @@ Select the pill to see:
 **Use tide predictions where there's no S-104** and the **Tide stations ·
 predicted** and **Current stations · predicted** live feeds predict from
 NOAA CO-OPS's station list, `tide-stations.json.gz` next to `settings.json`
-(or under `--data-dir` or `S100_DATA_DIR`). SoundCharts downloads it the
-first time one of them is turned on, and the line under the setting shows
-its date and counts with **Download** or **Refresh**.
+(or under `--data-dir` or `S100_DATA_DIR`). SoundCharts ships a copy of the
+list, taken from the mirror when it was built, and uses it when there's no
+list yet or the one there is older, so predictions work on first launch with
+no network. A build without the copy downloads the list the first time one
+of them is turned on. The line under the setting shows the list's date and
+counts with **Download** or **Refresh**.
 
 The list comes from the EncDotNet.S100 mirror of NOAA's catalogue: one file
 of about 1.2 MB, checked against the mirror's manifest, in a few seconds.

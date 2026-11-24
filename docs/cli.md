@@ -1997,6 +1997,12 @@ says so and downloads from NOAA instead.
 - A URL downloads from another mirror: the address of its
   `tide-stations.manifest.json` (see [`tides publish`](#tides-publish)).
 
+`s100` ships a copy of the catalogue, taken from the mirror when it was
+built. The `tides` commands and `s100 mcp serve` use it when there's no
+catalogue yet, or when the one there was retrieved earlier, so they work on
+first use with no network; run `tides update` for anything newer. A
+catalogue given with `--catalogue` is never replaced.
+
 The catalogue is `noaa-tide-stations.json.gz` in an `EncDotNet.S100/Tides`
 folder in your local application data:
 
