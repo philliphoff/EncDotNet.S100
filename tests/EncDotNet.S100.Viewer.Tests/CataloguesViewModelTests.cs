@@ -275,7 +275,6 @@ public sealed class CataloguesViewModelTests : IDisposable
         var row = Row(vm, "S-199");
         Assert.Contains(row.Tags, t => t.Text == Strings.Catalogues_Tag_NotBuiltIn);
         Assert.Contains(row.Tags, t => t.IsWarning && t.Text == Strings.Catalogues_Tag_Missing);
-        Assert.True(row.IsMissingOnly);
         Assert.True(row.IsPortrayalMissing);
         Assert.True(row.CanRemoveProduct);
         Assert.False(row.CanRevert);

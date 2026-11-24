@@ -52,19 +52,6 @@
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
         </Style>
 
-        <!-- The state bar at a row's left edge: red for Error, amber for Missing, as dataset rows mark theirs. -->
-        <Style Selector="Border.stateBar">
-            <Setter Property="Width" Value="3" />
-            <Setter Property="CornerRadius" Value="2" />
-            <Setter Property="Background" Value="Transparent" />
-        </Style>
-        <Style Selector="Border.stateBar.error">
-            <Setter Property="Background" Value="{DynamicResource ErrorColor}" />
-        </Style>
-        <Style Selector="Border.stateBar.missing">
-            <Setter Property="Background" Value="{DynamicResource WarningColor}" />
-        </Style>
-
         <Style Selector="TextBlock.catalogueGroupHeader">
             <Setter Property="FontSize" Value="11.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -232,14 +219,16 @@
                      ItemsSource="{Binding Rows}"
                      SelectedItem="{Binding SelectedRow}"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     Background="Transparent">
+                     Classes="accentList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:CatalogueProductRowViewModel">
-                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                            <Border Grid.Column="0" Classes="stateBar" Classes.error="{Binding IsError}" Classes.missing="{Binding IsMissingOnly}" />
-                            <StackPanel Grid.Column="1" Spacing="2">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <StackPanel Grid.Column="0" Spacing="2">
                                 <WrapPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                    <TextBlock Classes="accentListTitle" Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                                VerticalAlignment="Center" Margin="0,0,6,0" />
                                     <ItemsControl ItemsSource="{Binding Tags}" IsVisible="{Binding HasTags}">
                                         <ItemsControl.ItemsPanel>
@@ -261,7 +250,7 @@
                                     <TextBlock Grid.Column="1" Text="{Binding LoadedText}" FontSize="12" Opacity="0.7" />
                                 </Grid>
                             </StackPanel>
-                            <Button Grid.Column="2" Classes="Icon" Padding="4" VerticalAlignment="Center"
+                            <Button Grid.Column="1" Classes="Icon" Padding="4" VerticalAlignment="Center"
                                     AutomationProperties.AutomationId="Catalogues.Row.Menu"
                                     AutomationProperties.Name="{Binding MenuName}"
                                     ToolTip.Tip="{Binding MenuName}">
