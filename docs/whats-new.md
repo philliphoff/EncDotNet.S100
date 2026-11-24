@@ -16,6 +16,17 @@ month. For package versions and release assets, see
   the feature catalogue in use is custom, the link reads **Published edition
   in eXaminer**, because the website has only the published edition.
 
+- **SoundCharts downloads the tide station list from the mirror.** The NOAA
+  station list that tide predictions and the predicted tide and current
+  station feeds use now comes from the EncDotNet.S100 mirror as one file of
+  about 1.2 MB, in a few seconds instead of about 10 minutes. When the mirror
+  can't be used, SoundCharts downloads the list from NOAA itself, as before.
+  **Refresh** keeps the list when the mirror has nothing newer and says it's
+  up to date, and the stale notice checks the mirror first.
+  `get_tide_display` adds `downloadingFrom` and `upToDate`, and
+  `TideStationMirrorUrl` in `settings.json` sets another mirror
+  ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
 - **Why this symbol in Object information.** Under **Drawn as**, a folded
   **Why this symbol** says why the map drew each part, from the rule's cases
   for it that hold for the picked feature's values and the current display

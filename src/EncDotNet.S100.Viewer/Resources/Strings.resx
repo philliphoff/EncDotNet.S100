@@ -8770,7 +8770,7 @@
     <comment>{0} = stations downloaded, {1} = stations in all.</comment>
   </data>
   <data name="Tides_FeedStatus_DownloadingDetail" xml:space="preserve">
-    <value>The first time, SoundCharts downloads NOAA's tide and current stations. It takes about 10 minutes; the stations appear when it's done. Keep SoundCharts open until then.</value>
+    <value>The first time, SoundCharts downloads NOAA's tide and current stations, usually in a few seconds. When the station list mirror can't be reached, it downloads them from NOAA itself, which takes about 10 minutes. The stations appear when it's done; keep SoundCharts open until then.</value>
   </data>
   <data name="Tides_FeedStatus_ReadingList" xml:space="preserve">
     <value>Reading the station list</value>
@@ -8988,10 +8988,10 @@
     <value>{0} station list · {1} · {2:N0} tide and {3:N0} current stations</value>
   </data>
   <data name="Tides_List_None" xml:space="preserve">
-    <value>No station list yet. It's downloaded from NOAA the first time predictions or a station overlay are turned on (about 10 minutes).</value>
+    <value>No station list yet. It's downloaded the first time predictions or a station overlay are turned on.</value>
   </data>
   <data name="Tides_List_Downloading" xml:space="preserve">
-    <value>Downloading NOAA's station list…</value>
+    <value>Downloading the station list…</value>
   </data>
   <data name="Tides_List_DownloadingProgressFormat" xml:space="preserve">
     <value>Downloading NOAA's station list · {0:N0} of {1:N0} stations</value>
@@ -9010,6 +9010,9 @@
   </data>
   <data name="Tides_List_Refresh" xml:space="preserve">
     <value>Refresh</value>
+  </data>
+  <data name="Tides_List_UpToDate" xml:space="preserve">
+    <value>The station list is up to date.</value>
   </data>
   <data name="Tides_List_Cancel" xml:space="preserve">
     <value>Cancel</value>

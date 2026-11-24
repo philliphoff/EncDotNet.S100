@@ -14,11 +14,13 @@ internal sealed record TideStationListDto(
     [property: Description("When it was downloaded (UTC); null when not known.")] DateTimeOffset? Date,
     [property: Description("The number of tide stations.")] int TideStations,
     [property: Description("The number of tidal current stations (per depth bin).")] int CurrentStations,
-    [property: Description("True when NOAA has published newer data than the list holds, or, when no check could run, the list is over 12 months old (D21).")] bool Stale,
+    [property: Description("True when the station list mirror, or NOAA when the mirror can't be reached, has newer data than the list holds, or, when no check could run, the list is over 12 months old (D21).")] bool Stale,
     [property: Description("What it's doing: idle, loading, downloading or checking.")] string Activity,
-    [property: Description("While downloading, the stations read so far; null otherwise.")] int? DownloadedStations,
-    [property: Description("While downloading, the stations to read; null otherwise.")] int? TotalStations,
-    [property: Description("Why the last download failed; null when it didn't.")] string? LastError);
+    [property: Description("While downloading from NOAA, the stations read so far; null otherwise, and for a download from the mirror, which is one file.")] int? DownloadedStations,
+    [property: Description("While downloading from NOAA, the stations to read; null otherwise.")] int? TotalStations,
+    [property: Description("Why the last download failed; null when it didn't.")] string? LastError,
+    [property: Description("While downloading, where from: mirror (the mirror of NOAA's catalogue, one file, a few seconds) or noaa (NOAA's metadata API, about 10 minutes, when the mirror can't be used); null otherwise.")] string? DownloadingFrom = null,
+    [property: Description("True when the last refresh found nothing newer than the list on the mirror, so kept it.")] bool UpToDate = false);
 
 /// <summary>The tide prediction display state (#1453, design D17).</summary>
 [Description("Tide predictions in SoundCharts: the 'Tide stations · predicted' overlay, the 'Use tide predictions where there's no S-104' water-level source, and the station list.")]
@@ -160,7 +162,9 @@ internal sealed class TideDisplayTools
                 _list.Activity.ToString().ToLowerInvariant(),
                 progress?.CompletedStations,
                 progress?.TotalStations,
-                _list.LastError),
+                _list.LastError,
+                _list.DownloadingFrom?.ToString().ToLowerInvariant(),
+                _list.IsUpToDate),
             _overlay.AreCurrentsVisible,
             _overlay.Currents.StationsInView.Count,
             _overlay.Currents.CurrentFeatures.Count);
@@ -191,7 +195,7 @@ internal static class TideDisplayMcpAdapters
         var del = (
             [Description("The 'Tide stations · predicted' overlay on or off; omit to leave it.")] bool? tideStations = null,
             [Description("'Use tide predictions where there's no S-104' on or off; omit to leave it.")] bool? usePredictions = null,
-            [Description("True to download NOAA's station list again (about 10 minutes, in the background); watch stationList.activity.")] bool? refreshStationList = null,
+            [Description("True to refresh NOAA's station list in the background: from the mirror in a few seconds, or from NOAA in about 10 minutes when the mirror can't be used. A mirror with nothing newer keeps the list (stationList.upToDate). Watch stationList.activity.")] bool? refreshStationList = null,
             [Description("The 'Current stations · predicted' overlay on or off; omit to leave it.")] bool? currentStations = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.SetAsync(tideStations, usePredictions, refreshStationList, currentStations, ct));
