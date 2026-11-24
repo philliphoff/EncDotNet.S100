@@ -10,8 +10,9 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// tiles nobody has drawn for longest go first, whichever layer holds them.
 /// Decoded <see cref="SKImage"/> pixels live in native memory, which is the
 /// out-of-memory risk the design calls out (§3.4). Caches whose keys are
-/// content-addressed (<see cref="ShareContent"/>, the chart layers of every
-/// map) share one copy of each tile through the pool.
+/// content-addressed and that name one <see cref="ShareScope"/> (the chart
+/// layers of every map, per pool and, for textures, per graphics context)
+/// share one copy of each tile through the pool.
 /// </summary>
 /// <remarks>
 /// Both the UI/compositor thread (via <see cref="TryGet"/> /
@@ -35,11 +36,11 @@ internal sealed class TileCache : IDisposable
     private long _generation;
     private long _residentBytes;
     private bool _disposed;
-    private bool _shareContent;
+    private object? _shareScope;
 
     /// <summary>
-    /// One rasterised tile image. Caches that share content
-    /// (<see cref="ShareContent"/>) can each hold the same tile, through an
+    /// One rasterised tile image. Caches of one <see cref="ShareScope"/> can
+    /// each hold the same tile, through an
     /// entry of their own; the pool charges its bytes once, and the image is
     /// retired when the last holder lets it go. All fields are guarded by the
     /// pool's lock.
@@ -61,8 +62,18 @@ internal sealed class TileCache : IDisposable
         /// <summary>Let go by its last holder while a snapshot was reading it; the last reader disposes it.</summary>
         public bool Retired;
 
-        /// <summary>Whether the pool's shared index lists this tile, so other caches can adopt it.</summary>
-        public bool Indexed;
+        /// <summary>
+        /// The scope the pool's shared index lists this tile under, so other
+        /// caches of that scope can adopt it; <see langword="null"/> when it isn't listed.
+        /// </summary>
+        public object? IndexedIn;
+
+        /// <summary>
+        /// Whether more than one cache has held this tile. A deferred-disposal
+        /// (GPU) cache can't free such a tile at its own next frame, because
+        /// another cache may have drawn it in the frame still in flight.
+        /// </summary>
+        public bool Shared;
     }
 
     /// <summary>One cache's hold on a resident tile, linked into its pool's recency list.</summary>
@@ -142,17 +153,20 @@ internal sealed class TileCache : IDisposable
     }
 
     /// <summary>
-    /// Whether this cache's tile keys are content-addressed across the pool,
-    /// so caches that set it share tiles: a tile one of them holds is one the
-    /// others can adopt instead of rasterising, and an equal tile put by two
-    /// of them is kept once. Chart tiles set it, because their key's stack
-    /// slice hashes everything a tile draws; a single-scene layer's keys don't
-    /// identify its scene, so its cache must not.
+    /// The scope within which this cache's tile keys are content-addressed,
+    /// or <see langword="null"/> (the default) to share nothing. Caches of one
+    /// scope share tiles: a tile one of them holds is one the others can adopt
+    /// instead of rasterising or uploading, and an equal tile put by two of
+    /// them is kept once. Chart tiles set it, because their key's stack slice
+    /// hashes everything a tile draws; their texture caches scope it to the
+    /// graphics context, since a texture belongs to the context that made it.
+    /// A single-scene layer's keys don't identify its scene, so its caches
+    /// must not set it.
     /// </summary>
-    public bool ShareContent
+    public object? ShareScope
     {
-        get { lock (_sync) { return _shareContent; } }
-        set { lock (_sync) { _shareContent = value; } }
+        get { lock (_sync) { return _shareScope; } }
+        set { lock (_sync) { _shareScope = value; } }
     }
 
     /// <summary>Whether the owner passed at construction is still alive (always, without one).</summary>
@@ -315,8 +329,8 @@ internal sealed class TileCache : IDisposable
             // Another cache may have put an equal tile meanwhile: hold that one
             // and drop this copy.
             Tile tile;
-            if (_shareContent
-                && _pool.TryGetShared(key, out var shared)
+            if (_shareScope is { } scope
+                && _pool.TryGetShared(scope, key, out var shared)
                 && shared.Image.Width == image.Width)
             {
                 tile = shared;
@@ -325,9 +339,9 @@ internal sealed class TileCache : IDisposable
             else
             {
                 tile = new Tile(image, BytesFor(image));
-                if (_shareContent)
+                if (_shareScope is { } listIn)
                 {
-                    _pool.Index(key, tile);
+                    _pool.Index(listIn, key, tile);
                 }
             }
 
@@ -370,8 +384,8 @@ internal sealed class TileCache : IDisposable
     /// <returns>The new entry, or <see langword="null"/> when there is no such tile.</returns>
     private Entry? Adopt(TileKey key, int? pixelSize)
     {
-        if (!_shareContent
-            || !_pool.TryGetShared(key, out var tile)
+        if (_shareScope is not { } scope
+            || !_pool.TryGetShared(scope, key, out var tile)
             || (pixelSize is { } px && tile.Image.Width != px))
         {
             return null;
@@ -462,7 +476,10 @@ internal sealed class TileCache : IDisposable
         }
         else if (_deferDisposal)
         {
-            _pool.Retire(this, image);
+            // A tile only this cache held is freed at its next frame; one
+            // another cache held too waits out the orphan delay, since that
+            // cache may have drawn it in the frame still in flight.
+            _pool.Retire(tile.Shared ? null : this, image);
         }
         else
         {
