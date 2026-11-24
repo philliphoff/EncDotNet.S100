@@ -772,17 +772,9 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             return untrusted;
         }
 
-        using var chain = new X509Chain();
         var intermediates = new List<X509Certificate2>();
         try
         {
-            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            foreach (var root in trustAnchors.TrustedRoots)
-            {
-                chain.ChainPolicy.CustomTrustStore.Add(root);
-            }
-
             if (certificateChain is not null)
             {
                 foreach (var entry in certificateChain)
@@ -795,19 +787,31 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                     }
 
                     intermediates.Add(intermediate);
-                    chain.ChainPolicy.ExtraStore.Add(intermediate);
                 }
             }
 
-            if (!chain.Build(cert))
+            // Some platforms' chain builders (OpenSSL on Linux) try only the
+            // first trusted root with a matching name, so when roots share a
+            // subject, try each one on its own before giving up.
+            var anchor = BuildChain(cert, trustAnchors.TrustedRoots, intermediates);
+            if (anchor is null && trustAnchors.TrustedRoots.Count > 1)
+            {
+                foreach (var root in trustAnchors.TrustedRoots)
+                {
+                    anchor = BuildChain(cert, [root], intermediates);
+                    if (anchor is not null)
+                        break;
+                }
+            }
+
+            if (anchor is null)
             {
                 return untrusted;
             }
 
             // Report the caller's own instance of the root the chain ended at.
-            var anchor = chain.ChainElements[^1].Certificate;
             trustedRoot = trustAnchors.TrustedRoots.FirstOrDefault(
-                root => root.RawData.AsSpan().SequenceEqual(anchor.RawData));
+                root => root.RawData.AsSpan().SequenceEqual(anchor));
             return null;
         }
         catch (CryptographicException)
@@ -821,6 +825,31 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                 intermediate.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Builds <paramref name="cert"/>'s chain to one of <paramref name="roots"/>
+    /// and returns the encoded root it ended at, or <see langword="null"/>.
+    /// </summary>
+    private static byte[]? BuildChain(
+        X509Certificate2 cert,
+        IReadOnlyCollection<X509Certificate2> roots,
+        IReadOnlyList<X509Certificate2> intermediates)
+    {
+        using var chain = new X509Chain();
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        foreach (var root in roots)
+        {
+            chain.ChainPolicy.CustomTrustStore.Add(root);
+        }
+
+        foreach (var intermediate in intermediates)
+        {
+            chain.ChainPolicy.ExtraStore.Add(intermediate);
+        }
+
+        return chain.Build(cert) ? chain.ChainElements[^1].Certificate.RawData : null;
     }
 
     /// <summary>

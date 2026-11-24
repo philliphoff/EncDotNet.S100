@@ -1,7 +1,7 @@
 # Scheme Administrator trust roots — UX decision note
 
-> Status: **Proposed** (2026-11-23). Design only; nothing built.
-> Mock: [`sa-trust-roots-mock.html`](sa-trust-roots-mock.html) (PNG renders
+> Status: **Built** (2026-11-24).
+> Mock: `sa-trust-roots-mock.html` (PNG renders
 > alongside it). Builds on Settings → Keys & certificates (#845) and the
 > signature badge outcomes in `ViewModels/SignatureStatus.cs`.
 
