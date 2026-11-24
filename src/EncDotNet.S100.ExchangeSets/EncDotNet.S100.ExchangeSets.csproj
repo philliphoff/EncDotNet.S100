@@ -5,4 +5,9 @@
     <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="SchemeAdministrators\iho-s100-ed5.2-root.pem" LogicalName="EncDotNet.S100.ExchangeSets.SchemeAdministrators.iho-s100-ed5.2-root.pem" />
+    <EmbeddedResource Include="SchemeAdministrators\iho-s100-ed4.0-sa.pem" LogicalName="EncDotNet.S100.ExchangeSets.SchemeAdministrators.iho-s100-ed4.0-sa.pem" />
+  </ItemGroup>
+
 </Project>

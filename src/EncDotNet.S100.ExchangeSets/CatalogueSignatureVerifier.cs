@@ -92,7 +92,7 @@ public static class CatalogueSignatureVerifier
                 standalone);
         }
 
-        var (outcome, detail) = ExchangeSetVerifier.EvaluateSignature(
+        var (outcome, detail, trustedRoot) = ExchangeSetVerifier.EvaluateSignature(
             standalone.Signature,
             DigitalSignatureAlgorithm.ECDSA,
             SHA384.HashData(catalogueBytes.Span),
@@ -108,6 +108,6 @@ public static class CatalogueSignatureVerifier
             detail ??= $"'{signedFileName}' doesn't match {SignatureFileName}.";
         }
 
-        return new(outcome, detail, standalone);
+        return new(outcome, detail, standalone, trustedRoot);
     }
 }

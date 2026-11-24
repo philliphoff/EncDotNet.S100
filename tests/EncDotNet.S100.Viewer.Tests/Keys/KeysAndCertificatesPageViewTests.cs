@@ -38,4 +38,20 @@ public sealed class KeysAndCertificatesPageViewTests : IDisposable
         Assert.Empty(_keys.Trust.Anchors.Roots);
         Assert.True(host.IsShown("Keys.Row.TurnOn"));
     }
+
+    [AvaloniaFact]
+    public void The_scheme_administrators_tab_lists_the_IHO_roots_and_turns_the_test_root_on()
+    {
+        var store = new EncDotNet.S100.Viewer.Services.SchemeAdministratorStore(_keys.Settings);
+        using var page = new EncDotNet.S100.Viewer.ViewModels.Keys.KeysAndCertificatesViewModel(
+            _keys.Identities, _keys.Authorities, _keys.Dialogs, _keys.Time, post: a => a(), store);
+        using var host = ViewHost.Show(new KeysAndCertificatesSettingsPage { DataContext = page });
+
+        host.Click(host.Find<TabItem>("Keys.Tab.SchemeAdmins"));
+
+        Assert.True(host.IsShown("Keys.SchemeAdmins.Add"));
+        Assert.False(host.IsShown("Keys.SchemeAdmins.NoneOnAction"));
+        host.Click(host.Find<Button>("Keys.Row.TurnOn"));
+        Assert.Equal(2, store.TrustAnchors().TrustedRoots.Count);
+    }
 }

@@ -217,6 +217,25 @@ certificate, from the IHO or your data distributor. Treat it as configuration:
 load it from a file or certificate store, never from the exchange set you're
 checking.
 
+The library includes the IHO's published S-100 Scheme Administrator roots,
+with their SHA-256 fingerprints pinned:
+
+| Method | Certificate |
+|---|---|
+| `SchemeAdministratorRoots.LoadIhoRoot()` | The IHO S-100 Edition 5.2 root (ECDSA P-384), valid 2025 to 2075. |
+| `SchemeAdministratorRoots.LoadIhoTestingRoot()` | The IHO S-100 Edition 4.0 certificate (DSA), which the IHO labels its testing and implementation version. Don't trust it for data used to navigate. |
+
+```csharp
+using var iho = SchemeAdministratorRoots.LoadIhoRoot();
+var trust = new TrustAnchorOptions { TrustedRoots = [iho] };
+```
+
+`SchemeAdministratorRoots.LoadFile` loads any other root from a DER or PEM
+file. In the viewer, Settings → Keys & certificates → Scheme administrators
+lists these roots: the IHO root is on by default and the testing root is off.
+An exchange set whose signer chains only to the testing root shows as
+"Verified (test)".
+
 In **development**, use a test Scheme Administrator that you control, such as
 the one [Create a test exchange set](#create-a-test-exchange-set) generates.
 The IHO also publishes test SA certificates for interoperability testing.

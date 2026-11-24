@@ -765,6 +765,20 @@ internal sealed partial class ViewerSettings
     /// <summary>SHA-256 fingerprints (hex) of built-in trust anchors the user turned off (#845).</summary>
     public List<string> DisabledBuiltInAuthorities { get; set; } = new();
 
+    /// <summary>
+    /// S-100 Part 15 Scheme Administrator roots the user added from files,
+    /// kept apart from the SECOM <see cref="TrustedAuthorities"/>: public
+    /// certificates, no secrets.
+    /// </summary>
+    public List<TrustedAuthorityReference> SchemeAdministrators { get; set; } = new();
+
+    /// <summary>
+    /// Built-in Scheme Administrator roots the user turned on or off, by
+    /// SHA-256 fingerprint (hex). A root not listed keeps its default: the
+    /// IHO root on, the IHO testing root off.
+    /// </summary>
+    public Dictionary<string, bool> BuiltInSchemeAdministrators { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
     public const int MaxRecentDatasets = 10;
 
@@ -1093,7 +1107,7 @@ public sealed class TrustedAuthorityReference
     /// <summary>The name the user gave it, reported as the anchor of what chains to it.</summary>
     public string Name { get; set; } = "";
 
-    /// <summary>What it is trusted for: <c>Secom</c> (Part 15 authorities come later).</summary>
+    /// <summary>What it is trusted for: <c>Secom</c>, or <c>SchemeAdministrator</c> for S-100 Part 15 roots.</summary>
     public string Kind { get; set; } = "Secom";
 
     /// <summary>The PEM certificates: the root and any intermediates.</summary>

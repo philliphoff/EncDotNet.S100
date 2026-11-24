@@ -1408,6 +1408,20 @@ internal sealed class DatasetsViewModel : ViewModelBase
     private CatalogueRegistry? _catalogueRegistry;
     private Action<string>? _showCatalogueProduct;
 
+    private Action? _openSchemeAdministrators;
+
+    /// <summary>Opens Settings → Keys &amp; certificates on the Scheme administrators tab (the inspector's link).</summary>
+    public ICommand OpenSchemeAdministratorsCommand => _openSchemeAdministratorsCommand ??= new RelayCommand(() => _openSchemeAdministrators?.Invoke());
+
+    private RelayCommand? _openSchemeAdministratorsCommand;
+
+    /// <summary>Connects <see cref="OpenSchemeAdministratorsCommand"/> to Settings.</summary>
+    internal void AttachSchemeAdministrators(Action open)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        _openSchemeAdministrators = open;
+    }
+
     /// <summary>
     /// Connects <see cref="ShowCataloguesCommand"/> and the Drawn with line
     /// to the catalogues in effect.

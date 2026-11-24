@@ -22,9 +22,11 @@
                     <Border Classes="keysIconTile" Width="30" Height="30" CornerRadius="7" VerticalAlignment="Top">
                         <Panel>
                             <ic:FluentIcon Icon="ContactCard" IconVariant="Regular" FontSize="15"
-                                           IsVisible="{Binding !IsAuthority}" />
+                                           IsVisible="{Binding ShowsIdentityIcon}" />
                             <ic:FluentIcon Icon="Shield" IconVariant="Regular" FontSize="15"
-                                           IsVisible="{Binding IsAuthority}" />
+                                           IsVisible="{Binding ShowsAuthorityIcon}" />
+                            <ic:FluentIcon Icon="Certificate" IconVariant="Regular" FontSize="15"
+                                           IsVisible="{Binding IsSchemeAdministrator}" />
                         </Panel>
                     </Border>
                     <StackPanel Grid.Column="1" Spacing="3">
@@ -67,6 +69,8 @@
                         <SelectableTextBlock Text="{Binding Mono}" IsVisible="{Binding HasMono}"
                                              FontFamily="{StaticResource MonoFontFamily}" FontSize="12" TextWrapping="Wrap" />
                         <TextBlock Classes="keysSub" Text="{Binding Sub}" />
+                        <TextBlock Classes="keysStatus warning" Text="{Binding WarningNote}" IsVisible="{Binding HasWarningNote}"
+                                   FontSize="12" FontWeight="Normal" TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReference}">
                             <TextBlock Classes="keysSub" FontSize="11" VerticalAlignment="Center"
                                        Text="{x:Static loc:Strings.Keys_ReferenceLabel}" />
@@ -486,6 +490,74 @@
                         </Border>
 
                         <TextBlock Classes="keysNote" Text="{x:Static loc:Strings.Keys_Authorities_Note}" />
+                    </StackPanel>
+                </TabItem>
+
+                <!-- Scheme administrators: S-100 Part 15 roots that vouch for chart data, apart from SECOM. -->
+                <TabItem AutomationProperties.AutomationId="Keys.Tab.SchemeAdmins"
+                         AutomationProperties.Name="{x:Static loc:Strings.Keys_Tab_SchemeAdmins}"
+                         IsVisible="{Binding HasSchemeAdministrators}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <TextBlock Text="{x:Static loc:Strings.Keys_Tab_SchemeAdmins}" />
+                            <TextBlock Classes="keysCount" Classes.error="{Binding SchemeAdministratorsHasError}" Text="{Binding SchemeAdministratorsCount}" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <StackPanel Spacing="16">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <TextBlock Classes="keysIntro" Text="{x:Static loc:Strings.Keys_SchemeAdmins_Intro}" />
+                            <Button Grid.Column="1" Classes="Outline keysToolbar"
+                                    Content="{x:Static loc:Strings.Keys_AddSchemeAdmin}"
+                                    Command="{Binding AddSchemeAdministratorCommand}"
+                                    AutomationProperties.AutomationId="Keys.SchemeAdmins.Add"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Keys_AddSchemeAdmin_Help}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Keys_AddSchemeAdmin_Help}" />
+                        </Grid>
+
+                        <!-- An expired root that's on -->
+                        <Panel IsVisible="{Binding HasExpiredSchemeAdministratorBanner}">
+                            <Border Classes="keysBannerTint" />
+                            <Border Classes="keysBannerEdge" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11" Margin="14,12">
+                                <Border Classes="keysBannerDisc">
+                                    <TextBlock Text="!" Foreground="White" FontSize="11" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_SchemeAdmin_Expired_Title}" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding ExpiredSchemeAdministratorBannerBody}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="Outline keysToolbar" VerticalAlignment="Center"
+                                        Content="{x:Static loc:Strings.Keys_ExpiredAuthority_Action}"
+                                        Command="{Binding AddSchemeAdministratorCommand}"
+                                        AutomationProperties.AutomationId="Keys.SchemeAdmins.Replace"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Keys_AddSchemeAdmin_Help}" />
+                            </Grid>
+                        </Panel>
+
+                        <!-- Nothing on: nothing can be verified -->
+                        <Border IsVisible="{Binding HasNoSchemeAdministratorBanner}"
+                                BorderBrush="{DynamicResource WarningColor}" BorderThickness="1" CornerRadius="8" Padding="14,12">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                                <ic:FluentIcon Icon="Warning" IconVariant="Regular" FontSize="16" VerticalAlignment="Top"
+                                               Classes="keysTone warning" />
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_SchemeAdmin_NoneOnTitle}" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_SchemeAdmin_NoneOnBody}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="Outline keysToolbar" VerticalAlignment="Center"
+                                        Content="{Binding NoSchemeAdministratorActionLabel}"
+                                        Command="{Binding NoSchemeAdministratorActionCommand}"
+                                        AutomationProperties.AutomationId="Keys.SchemeAdmins.NoneOnAction"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Keys_SchemeAdmin_NoneOnAction_Help}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Classes="keysList">
+                            <ItemsControl ItemsSource="{Binding SchemeAdministratorRows}" ItemTemplate="{StaticResource KeysRowTemplate}" />
+                        </Border>
+
+                        <TextBlock Classes="keysNote" Text="{x:Static loc:Strings.Keys_SchemeAdmins_Note}" />
                     </StackPanel>
                 </TabItem>
 

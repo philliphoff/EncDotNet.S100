@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using EncDotNet.S100.Cli.Infrastructure;
@@ -53,6 +54,14 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
             "more-likely-real findings.")]
         public string? Suppress { get; init; }
 
+        [CommandOption("--trust-root <PATH>")]
+        [Description(
+            "Trust a Scheme Administrator root certificate (DER or PEM file; repeatable) when " +
+            "verifying an S-100 exchange set. Signatures count as verified only when their signer " +
+            "chains to one of these roots. Check the root's SHA-256 fingerprint against the one " +
+            "its Scheme Administrator publishes.")]
+        public string[] TrustRoots { get; init; } = [];
+
         public override ValidationResult Validate()
         {
             if (string.IsNullOrWhiteSpace(DatasetPath))
@@ -69,6 +78,12 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
             if (Suppress is not null && !TryParseSuppressPatterns(Suppress, out _))
                 return ValidationResult.Error(
                     "--suppress must be a comma-separated list of one or more rule ids or patterns.");
+
+            foreach (var trustRoot in TrustRoots)
+            {
+                if (!File.Exists(trustRoot))
+                    return ValidationResult.Error($"Trust root not found: {trustRoot}");
+            }
 
             return ValidationResult.Success();
         }
@@ -161,8 +176,12 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
     private static int VerifyExchangeSet(Settings settings, OutputFormat format)
     {
         IAssetSource? source = null;
+        var trustedRoots = new List<X509Certificate2>();
         try
         {
+            foreach (var trustRoot in settings.TrustRoots)
+                trustedRoots.AddRange(SchemeAdministratorRoots.LoadFile(trustRoot));
+
             string cataloguePath;
             string kind;
             (source, cataloguePath, kind) = ExchangeSetInput.Open(settings.DatasetPath);
@@ -175,13 +194,17 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
                 .VerifyAsync(
                     exchangeSet.Source,
                     exchangeSet.Catalogue,
-                    new TrustAnchorOptions { AllowUntrustedCertificates = true })
+                    new TrustAnchorOptions
+                    {
+                        TrustedRoots = trustedRoots,
+                        AllowUntrustedCertificates = true,
+                    })
                 .GetAwaiter()
                 .GetResult();
 
             return format == OutputFormat.Json
                 ? EmitVerifyJson(result, settings.Strict)
-                : EmitVerifyText(result, kind, settings.Strict);
+                : EmitVerifyText(result, kind, settings.Strict, trustRootsGiven: trustedRoots.Count > 0);
         }
         catch (Exception ex)
         {
@@ -191,6 +214,8 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         finally
         {
             source?.Dispose();
+            foreach (var root in trustedRoots)
+                root.Dispose();
         }
     }
 
@@ -254,7 +279,7 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         return signatureFailed || checksumFailed;
     }
 
-    private static int EmitVerifyText(ExchangeSetVerificationResult result, string kind, bool strict)
+    private static int EmitVerifyText(ExchangeSetVerificationResult result, string kind, bool strict, bool trustRootsGiven = false)
     {
         if (result.FileResults.Count == 0)
         {
@@ -296,6 +321,8 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         {
             AnsiConsole.MarkupLine(
                 "[yellow]Signer not verified[/] — signatures match the content, but no signer chains to a trusted Scheme Administrator.");
+            if (!trustRootsGiven)
+                AnsiConsole.MarkupLine("[grey]Pass --trust-root with the Scheme Administrator's root certificate to verify signers.[/]");
             return 0;
         }
 
