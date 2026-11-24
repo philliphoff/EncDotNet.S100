@@ -279,11 +279,12 @@
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate x:DataType="lg:LegendRowViewModel">
                                                                     <!-- D19 (#1412): hover or focus rings the row's features on the map.
-                                                                         A catalogue key row's label is a term (D7, R8), which takes the
-                                                                         row's keyboard focus; its peek doesn't stop the rings. -->
+                                                                         A row that names a catalogue item is a term (D7, R8, R9b), which
+                                                                         takes the row's keyboard focus once it resolves; its peek doesn't
+                                                                         stop the rings. A name the index doesn't hold leaves the row focusable. -->
                                                                     <Border Classes="legendRow"
                                                                             Classes.highlighted="{Binding IsHighlighted}"
-                                                                            Focusable="{Binding IsRowFocusable}"
+                                                                            Focusable="{Binding !#RowTerm.IsTerm}"
                                                                             Background="Transparent"
                                                                             PointerEntered="OnRowPointerEntered"
                                                                             PointerExited="OnRowPointerExited"
@@ -325,7 +326,8 @@
                                                                                        AutomationProperties.AutomationId="Legend.Row.Label"
                                                                                        VerticalAlignment="Center"
                                                                                        TextTrimming="CharacterEllipsis" />
-                                                                            <views:ReferenceTerm Grid.Column="1"
+                                                                            <views:ReferenceTerm x:Name="RowTerm"
+                                                                                                 Grid.Column="1"
                                                                                                  IsVisible="{Binding HasTerm}"
                                                                                                  Text="{Binding Label}"
                                                                                                  Key="{Binding TermKey}"

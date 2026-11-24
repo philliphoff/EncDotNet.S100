@@ -899,6 +899,22 @@ prefix, then other text: definitions, symbol descriptions and the labels of
 the values the rule conditions test. Building the S-101 index takes about
 100 ms. The design is in `docs/design/symbol-dictionary.md`.
 
+S-57 cells are drawn with the S-101 catalogue. `FindFeatureTypeByS57Alias`,
+`FindAttributeByS57Alias` and `S57Aliases`, built with the index, map a code
+left as an S-57 acronym to its S-101 entry through the feature catalogue's
+aliases. An acronym that no entry has, or that more than one entry shares,
+maps to nothing. S-101 splits `LIGHTS` into three feature types, for
+example:
+
+```csharp
+index.FindFeatureTypeByS57Alias("BCNLAT");        // Lateral Beacon
+index.FindAttributeByS57Alias("COLOUR");          // Colour
+index.S57Aliases.ListedValues("COLOUR", "3,1");   // Colour, with Red and White
+```
+
+`AttributeEntry.ListedValuesOf` reads a value such as `3,1` as listed
+values.
+
 ## S-101 render caching
 
 This section describes internals, for contributors.

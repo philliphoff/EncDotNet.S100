@@ -154,6 +154,9 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
     /// <summary>The S-124 catalogue's symbol for an approximate position.</summary>
     public const string ApproximatePositionSymbol = "ApproximatePosition";
 
+    /// <summary>The S-124 feature type whose parts the catalogue draws: the warning area row names it.</summary>
+    public const string WarningFeatureType = "NavwarnPart";
+
     /// <summary>The S-124 catalogue's line style for a warning line or restricted area.</summary>
     public const string WarningLineStyle = "NavigationalWarningFeaturePartLine";
 
@@ -188,7 +191,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
         var rows = new List<LegendEntry>();
         if (lines.FirstOrDefault(l =>
                 l.LineColor is not null && l.LineStyleReference is null or LineInstruction.SimpleLineStyleReference) is { } outline)
-            rows.Add(CatalogueLegendBuilder.Area("Warning area", legend.Sample(outline)));
+            rows.Add(CatalogueLegendBuilder.Area("Warning area", legend.Sample(outline)) with { FeatureType = WarningFeatureType });
         if (lines.Any(l => l.LineStyleReference == WarningLineStyle))
             TryAdd(() => legend.Line(WarningLineStyle, "Warning line or restricted area"));
         if (symbols.Contains(WarningSymbol))

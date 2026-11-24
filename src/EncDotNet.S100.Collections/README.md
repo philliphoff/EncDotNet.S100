@@ -75,6 +75,21 @@ Indexing never loads the datasets.
 - A folder holding several GRIB2 files: one model run, one file per forecast
   hour. When the probe reads the folder as one dataset, it's one item whose
   location is the folder; otherwise each file is its own item.
+- NHC tropical cyclone advisories (`TC`). A forecast zip
+  (`al092022_5day_020.zip`) is one item, read with the wind radii
+  (`_fcst_`) and best track zips beside it. A folder holding one storm's zips
+  is one item located at the folder, as the CLI's folder input reads it. In a
+  folder that is also a GRIB2 run, or holds several storms, each storm's
+  latest forecast zip is the item instead. The wind radii, best track and older
+  forecast zips aren't items, but a change to any of them re-indexes the
+  source, so the advisory's item is refreshed. Advisories are recognised by
+  NHC's file names (`NhcAdvisoryFiles`) and read through the probe.
+- Any other ZIP is offered to the probe before it's read for exchange-set
+  catalogues, so a zipped dataset the probe recognises under another name
+  (a renamed forecast zip, for example) is one item.
+
+A source holding no advisory keeps the fingerprint it had before advisories
+were indexed, so its cached index isn't rebuilt.
 
 ### Local collection manifests
 

@@ -45,6 +45,8 @@ public sealed class MapsuiDatasetRenderer
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S100MapsuiOptions? _options;
     private readonly IPatternClipCache _patternClipCache;
+    private readonly SharedSceneCache _sharedScenes = new();
+    private readonly SharedPortrayalCache _sharedPortrayals = new();
 
     // The processor's portrayal build holds the processor's own render gate,
     // but the Mapsui conversion below uses a per-processor, non-thread-safe
@@ -111,6 +113,12 @@ public sealed class MapsuiDatasetRenderer
     }
 
     internal long PatternClipCacheHits => _patternClipCache.Hits;
+
+    /// <summary>The scenes this renderer's maps share, per processor. For tests.</summary>
+    internal SharedSceneCache SharedScenes => _sharedScenes;
+
+    /// <summary>The portrayal results maps rendered through this renderer share.</summary>
+    internal SharedPortrayalCache SharedPortrayals => _sharedPortrayals;
 
     internal long PatternClipCacheMisses => _patternClipCache.Misses;
 
@@ -234,42 +242,33 @@ public sealed class MapsuiDatasetRenderer
             }
         }
 
-        foreach (var sub in result.SubLayers)
+        // Each sub-layer's tile disk namespace, hashed once: it keys the
+        // shared portrayal, the shared scene and the stored-scene match.
+        var diskKeys = new (string? ProductLayerSet, string? StyleStateHash)[result.SubLayers.Count];
+        for (var i = 0; i < diskKeys.Length; i++)
+            diskKeys[i] = CreateRenderer(result, result.SubLayers[i], assetCache).DiskCacheKey(result.SubLayers[i].Instructions);
+
+        // Another map may already show an equal portrayal: keep that one, so
+        // the maps share its instruction slices, geometry and feature tags
+        // instead of each holding a copy.
+        if (SharedPortrayalCache.KeyFor(result, Array.ConvertAll(diskKeys, static k => k.StyleStateHash)) is { } portrayalKey)
         {
-            var renderer = new MapsuiDisplayListRenderer
-            {
-                LayerName = sub.LayerName,
-                Product = result.Product,
-                ContentScope = result.ContentScope,
-                Palette = result.Palette,
-                AssetCache = assetCache,
-                PatternClipCache = sub.PatternClipCacheKey is not null
-                    ? _patternClipCache
-                    : null,
-                PatternClipCacheKey = sub.PatternClipCacheKey is not null
-                    ? QualifyPatternClipKey(sub.PatternClipCacheKey)
-                    : null,
-                SymbolScale = result.SymbolScale,
-                TextScale = result.TextScale,
-                SymbolProvider = result.SymbolProvider,
-                AreaFillProvider = result.AreaFillProvider,
-                LineStyleProvider = result.LineStyleProvider,
-                Options = _options,
-                // The out-of-scale-band cap goes onto the VectorScene IR, so
-                // features lacking their own SCAMIN are hidden out of band in
-                // both the rendered plane and the session pick. The
-                // single-surface arm also picks through its Mapsui features, so
-                // ApplyOutOfScaleBandCap below stamps the cap onto those too.
-                OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
-                    ? result.OutOfBandMinDisplayScale
-                    : null,
-                PreferLiveDrawing = result.PreferLiveDrawing,
-            };
+            if (_sharedPortrayals.TryGet(processor, portrayalKey, result, out var sharedResult))
+                result = sharedResult;
+            else
+                _sharedPortrayals.Put(processor, portrayalKey, result);
+        }
+
+        for (var index = 0; index < result.SubLayers.Count; index++)
+        {
+            var sub = result.SubLayers[index];
+            var diskKey = diskKeys[index];
+            var renderer = CreateRenderer(result, sub, assetCache);
 
             ILayer layer;
             if (storedByKey is not null
                 && storedByKey.TryGetValue(sub.LayerKey, out var candidate)
-                && MatchesStored(renderer, sub, candidate.Stored))
+                && MatchesStored(renderer, sub, diskKey, candidate.Stored))
             {
                 // The stored scene is the one this portrayal builds: keep the
                 // layer (and its bound scene and tile keys) as it is.
@@ -279,7 +278,20 @@ public sealed class MapsuiDatasetRenderer
             }
             else
             {
-                layer = renderer.Render(sub.Instructions, result.GeometryProvider);
+                // Another map may already show this portrayal: bind its scene
+                // rather than build a second copy.
+                var sharedKey = SharedSceneCache.KeyFor(renderer, sub.LayerKey, diskKey);
+                if (sharedKey is { } key && _sharedScenes.TryGet(processor, key, out var sharedScene))
+                {
+                    layer = renderer.RenderTiledScene(sharedScene, key.ProductLayerSet, key.StyleStateHash);
+                }
+                else
+                {
+                    layer = renderer.Render(sub.Instructions, result.GeometryProvider, diskKey);
+                    if (sharedKey is { } fresh && renderer.LastTiledScene is { Scene: { } freshScene })
+                        _sharedScenes.Put(processor, fresh, freshScene);
+                }
+
                 if (sceneLayers is not null
                     && renderer.LastTiledScene is { ProductLayerSet: { } productLayerSet, StyleStateHash: { } styleStateHash } tiled)
                 {
@@ -368,6 +380,40 @@ public sealed class MapsuiDatasetRenderer
         };
     }
 
+    private MapsuiDisplayListRenderer CreateRenderer(
+        VectorPortrayalResult result,
+        VectorSubLayer sub,
+        MapsuiRenderAssetCache assetCache) =>
+        new()
+        {
+            LayerName = sub.LayerName,
+            Product = result.Product,
+            ContentScope = result.ContentScope,
+            Palette = result.Palette,
+            AssetCache = assetCache,
+            PatternClipCache = sub.PatternClipCacheKey is not null
+                ? _patternClipCache
+                : null,
+            PatternClipCacheKey = sub.PatternClipCacheKey is not null
+                ? QualifyPatternClipKey(sub.PatternClipCacheKey)
+                : null,
+            SymbolScale = result.SymbolScale,
+            TextScale = result.TextScale,
+            SymbolProvider = result.SymbolProvider,
+            AreaFillProvider = result.AreaFillProvider,
+            LineStyleProvider = result.LineStyleProvider,
+            Options = _options,
+            // The out-of-scale-band cap goes onto the VectorScene IR, so
+            // features lacking their own SCAMIN are hidden out of band in
+            // both the rendered plane and the session pick. The
+            // single-surface arm also picks through its Mapsui features, so
+            // ApplyOutOfScaleBandCap below stamps the cap onto those too.
+            OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
+                ? result.OutOfBandMinDisplayScale
+                : null,
+            PreferLiveDrawing = result.PreferLiveDrawing,
+        };
+
     // Layers FromStoredScene built, with what they were built from, so a
     // render after the parse can reuse them.
     private static readonly ConditionalWeakTable<ILayer, StoredSceneLayer> StoredLayers = new();
@@ -378,7 +424,11 @@ public sealed class MapsuiDatasetRenderer
     /// disk namespace (which hashes the portrayal, palette and scales), the
     /// same out-of-band cap and drawing hint, and a tiled rendering.
     /// </summary>
-    private static bool MatchesStored(MapsuiDisplayListRenderer renderer, VectorSubLayer sub, StoredSceneLayer stored)
+    private static bool MatchesStored(
+        MapsuiDisplayListRenderer renderer,
+        VectorSubLayer sub,
+        (string? ProductLayerSet, string? StyleStateHash) diskCacheKey,
+        StoredSceneLayer stored)
     {
         if (!string.Equals(sub.LayerName, stored.LayerName, StringComparison.Ordinal)
             || (renderer.Options?.SceneMode ?? ChartEngine.Options.SceneMode) != VectorSceneMode.Tiled
@@ -388,7 +438,7 @@ public sealed class MapsuiDatasetRenderer
             return false;
         }
 
-        var (productLayerSet, styleStateHash) = renderer.DiskCacheKey(sub.Instructions);
+        var (productLayerSet, styleStateHash) = diskCacheKey;
         return string.Equals(productLayerSet, stored.ProductLayerSet, StringComparison.Ordinal)
             && string.Equals(styleStateHash, stored.StyleStateHash, StringComparison.Ordinal);
     }

@@ -143,7 +143,6 @@ internal static partial class Strings
     public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
     public static string Tooltip_OpenFeatureInExaminer => Get(nameof(Tooltip_OpenFeatureInExaminer));
-    public static string Tooltip_OpenAttributeInExaminer => Get(nameof(Tooltip_OpenAttributeInExaminer));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_ToggleDatasetVisibility => Get(nameof(Tooltip_ToggleDatasetVisibility));
     public static string Tooltip_DatasetOpacity => Get(nameof(Tooltip_DatasetOpacity));
@@ -184,6 +183,8 @@ internal static partial class Strings
     public static string Tooltip_SignatureUnsigned => Get(nameof(Tooltip_SignatureUnsigned));
     public static string Tooltip_SignatureInvalid => Get(nameof(Tooltip_SignatureInvalid));
     public static string Tooltip_SignatureUntrusted => Get(nameof(Tooltip_SignatureUntrusted));
+    public static string Tooltip_SignatureUnverified => Get(nameof(Tooltip_SignatureUnverified));
+    public static string Tooltip_SignatureNotChecked => Get(nameof(Tooltip_SignatureNotChecked));
     public static string Tooltip_SignatureMixed => Get(nameof(Tooltip_SignatureMixed));
     public static string Tooltip_SignatureChecking => Get(nameof(Tooltip_SignatureChecking));
     public static string Tooltip_SignatureError => Get(nameof(Tooltip_SignatureError));

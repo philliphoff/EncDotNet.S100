@@ -176,9 +176,6 @@
   <data name="Tooltip_OpenFeatureInExaminer" xml:space="preserve">
     <value>View this feature in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
   </data>
-  <data name="Tooltip_OpenAttributeInExaminer" xml:space="preserve">
-    <value>View this attribute in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
-  </data>
   <data name="Tooltip_RemoveDataset" xml:space="preserve">
     <value>Remove this dataset</value>
   </data>
@@ -340,6 +337,12 @@
   </data>
   <data name="Tooltip_SignatureUntrusted" xml:space="preserve">
     <value>The signing certificate is not trusted</value>
+  </data>
+  <data name="Tooltip_SignatureNotChecked" xml:space="preserve">
+    <value>Signatures weren't checked: S-63 signature checking isn't supported yet</value>
+  </data>
+  <data name="Tooltip_SignatureUnverified" xml:space="preserve">
+    <value>Signatures match the data, but the signer isn't from a trusted Scheme Administrator</value>
   </data>
   <data name="Tooltip_SignatureMixed" xml:space="preserve">
     <value>Mixed signature verification results</value>
@@ -1056,6 +1059,122 @@
   <data name="Pick_LegendKeyHeading" xml:space="preserve">
     <value>KEY · WHAT YOU SEE HERE</value>
     <comment>Header above the picked features' legend rows in Object information (legends design note D3, D16)</comment>
+  </data>
+  <data name="Pick_DrawnAsHeading" xml:space="preserve">
+    <value>DRAWN AS</value>
+    <comment>Header above the parts the renderer drew for the picked feature in Object information (symbol dictionary R10)</comment>
+  </data>
+  <data name="Pick_DrawnAsName" xml:space="preserve">
+    <value>Drawn as</value>
+    <comment>Accessible name of Object information's Drawn as section (symbol dictionary R10)</comment>
+  </data>
+  <data name="Pick_DrawnAs_ItemFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A drawn symbol, line style or area fill: {0} its id (BCNLAT21), {1} what the catalogue says it shows</comment>
+  </data>
+  <data name="Pick_DrawnAs_ColourFillFormat" xml:space="preserve">
+    <value>Colour fill: {0}</value>
+    <comment>A drawn plain colour fill: {0} its colour token (DEPMS)</comment>
+  </data>
+  <data name="Pick_DrawnAs_LineFormat" xml:space="preserve">
+    <value>Line: {0}</value>
+    <comment>A drawn solid simple line: {0} its colour token (CSTLN)</comment>
+  </data>
+  <data name="Pick_DrawnAs_DashedLineFormat" xml:space="preserve">
+    <value>Line: {0}, dashed</value>
+    <comment>A drawn dashed simple line: {0} its colour token</comment>
+  </data>
+  <data name="Pick_DrawnAs_DottedLineFormat" xml:space="preserve">
+    <value>Line: {0}, dotted</value>
+    <comment>A drawn dotted simple line: {0} its colour token</comment>
+  </data>
+  <data name="Pick_DrawnAs_ColourTokenFormat" xml:space="preserve">
+    <value>Colour token: {0}</value>
+    <comment>Tooltip and accessible help text of a drawn colour fill or line, whose label names the colour: {0} the colour token (DEPVS)</comment>
+  </data>
+  <data name="Pick_DrawnAs_TextFormat" xml:space="preserve">
+    <value>Text: {0}</value>
+    <comment>A drawn text label: {0} its words</comment>
+  </data>
+  <data name="Pick_DrawnAs_Fallback" xml:space="preserve">
+    <value>The catalogue's fallback symbol: nothing else matched</value>
+    <comment>Said under a drawn part that is the catalogue's fallback symbol, the magenta ? (BCNDEF13)</comment>
+  </data>
+  <data name="Pick_DrawnAs_PartNameFormat" xml:space="preserve">
+    <value>{0}. {1}</value>
+    <comment>Accessible name of a fallback drawn part: {0} the part, {1} the fallback note</comment>
+  </data>
+  <data name="Pick_DrawnAs_GlyphNameFormat" xml:space="preserve">
+    <value>Drawn as {0}</value>
+    <comment>Accessible name of the pick header's glyph: {0} the main drawn part</comment>
+  </data>
+  <data name="Pick_WhyThisSymbol" xml:space="preserve">
+    <value>Why this symbol</value>
+    <comment>Heading of the fold under Drawn as in Object information that explains each drawn part from the rule's conditions (R11)</comment>
+  </data>
+  <data name="Pick_Why_Always" xml:space="preserve">
+    <value>Always drawn for this feature type</value>
+    <comment>A drawn part whose rule case has no conditions</comment>
+  </data>
+  <data name="Pick_Why_Likely" xml:space="preserve">
+    <value>Likely</value>
+    <comment>A reason none of whose conditions could be checked, when more than one case of the rule is possible</comment>
+  </data>
+  <data name="Pick_Why_LikelyFormat" xml:space="preserve">
+    <value>Likely: {0}</value>
+    <comment>A reason when more than one case of the rule is still possible but they say the same: Likely: Colour is red</comment>
+  </data>
+  <data name="Pick_Why_LikelyOneOf" xml:space="preserve">
+    <value>Likely, one of these:</value>
+    <comment>Leads the cases of a reason when more than one case of the rule holds</comment>
+  </data>
+  <data name="Pick_Why_AlsoDepends" xml:space="preserve">
+    <value>Also depends on values the rule works out</value>
+    <comment>A quiet line under a reason when the rule also tests values it computes itself, which were left out</comment>
+  </data>
+  <data name="Pick_Why_ValueFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>An attribute or setting with its value inline: Surrounding depth (10 m)</comment>
+  </data>
+  <data name="Pick_Why_SettingValueFormat" xml:space="preserve">
+    <value>the {0} ({1})</value>
+    <comment>A display setting compared with, with its value: the safety contour (30 m)</comment>
+  </data>
+  <data name="Pick_Why_SettingFormat" xml:space="preserve">
+    <value>the {0}</value>
+    <comment>A display setting compared with, when its value is unknown: the safety contour</comment>
+  </data>
+  <data name="Pick_Why_NoMatch" xml:space="preserve">
+    <value>No case of the rule matches this feature's values and the display settings</value>
+    <comment>Said when none of the rule's cases for a drawn part holds; nothing is guessed</comment>
+  </data>
+  <data name="Pick_Why_Fallback" xml:space="preserve">
+    <value>Nothing else in the rule matched, so the catalogue's fallback symbol is drawn</value>
+    <comment>The reason for the catalogue's fallback symbol (BCNDEF13)</comment>
+  </data>
+  <data name="Pick_Why_MissingFormat" xml:space="preserve">
+    <value>Not given: {0}</value>
+    <comment>After the fallback reason: the attributes the rule tests that the feature doesn't have. {0} is their names</comment>
+  </data>
+  <data name="Pick_Why_NotRead" xml:space="preserve">
+    <value>The rule draws this in a way the reference doesn't read</value>
+    <comment>A drawn part the rule reader found no case for, such as a symbol name the rule assembles</comment>
+  </data>
+  <data name="Pick_Why_Text" xml:space="preserve">
+    <value>The rule writes this text; the reference doesn't read its conditions</value>
+    <comment>The reason line for a text part</comment>
+  </data>
+  <data name="Pick_Why_ChangeSettingFormat" xml:space="preserve">
+    <value>Change {0} in Display settings</value>
+    <comment>A link under a reason that opens the named switch in Settings, Chart. {0} is the setting's name</comment>
+  </data>
+  <data name="Pick_Why_PartFold" xml:space="preserve">
+    <value>Why this part</value>
+    <comment>Accessible name of a drawn part's own fold of its reason, under Why this symbol</comment>
+  </data>
+  <data name="Pick_Why_ReasonName" xml:space="preserve">
+    <value>Reason</value>
+    <comment>Accessible name of a reason in Why this symbol; its text is the help text</comment>
   </data>
   <data name="Pick_LegendKeyLineFormat" xml:space="preserve">
     <value>{0} · {1}</value>
@@ -9824,6 +9943,14 @@
     <value>Open in reference</value>
     <comment>Peek link that opens the term's entry in the Reference tab</comment>
   </data>
+  <data name="Label_OpenInReference" xml:space="preserve">
+    <value>Open in reference</value>
+    <comment>Object information action that opens the picked feature type's entry in the Reference tab (R9, #1678)</comment>
+  </data>
+  <data name="Tooltip_OpenInReference" xml:space="preserve">
+    <value>Open this feature type in the Reference tab (F1)</value>
+    <comment>Tooltip of Object information's Open in reference action</comment>
+  </data>
   <data name="Tooltip_ReferencePeekOpen" xml:space="preserve">
     <value>Open this entry in the Reference tab</value>
     <comment>Tooltip of a peek's Open in reference link</comment>
@@ -9839,6 +9966,26 @@
   <data name="Reference_PeekGlyphName" xml:space="preserve">
     <value>Symbol</value>
     <comment>Accessible name of the glyph in a term's peek</comment>
+  </data>
+  <data name="Search_OpenInReference" xml:space="preserve">
+    <value>Open in reference</value>
+    <comment>Context menu item of a Feature search hit that opens its feature type's entry in the Reference tab</comment>
+  </data>
+  <data name="Tooltip_SearchOpenInReferenceFormat" xml:space="preserve">
+    <value>Open {0} in the Reference tab</value>
+    <comment>Tooltip of a Feature search hit's Open in reference item; {0} is the feature type's name</comment>
+  </data>
+  <data name="Map_LookUpInReference" xml:space="preserve">
+    <value>Look up in reference</value>
+    <comment>Map context menu item that opens the Chart reference entry of the feature under the pointer</comment>
+  </data>
+  <data name="Tooltip_MapLookUpInReferenceFormat" xml:space="preserve">
+    <value>Open {0} in the Reference tab</value>
+    <comment>Tooltip of the map's Look up in reference item, or of one feature in its submenu; {0} is the feature type's name</comment>
+  </data>
+  <data name="Map_ContextMenuName" xml:space="preserve">
+    <value>Map</value>
+    <comment>Accessible name of the map's context menu</comment>
   </data>
   <data name="Pane_Catalogues" xml:space="preserve">
     <value>Catalogues</value>

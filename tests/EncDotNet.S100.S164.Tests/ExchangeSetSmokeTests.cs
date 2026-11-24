@@ -83,9 +83,9 @@ public sealed class ExchangeSetSmokeTests
             ct);
 
         Assert.True(
-            result.AllValid,
+            result.AllSignaturesIntact,
             string.Join(Environment.NewLine, result.FileResults
-                .Where(r => r.Outcome != VerificationOutcome.Ok)
+                .Where(r => r.Outcome != VerificationOutcome.SignatureValidUntrusted)
                 .Select(r => $"{r.FileName}: {r.Outcome} {r.Detail}")));
     }
 }

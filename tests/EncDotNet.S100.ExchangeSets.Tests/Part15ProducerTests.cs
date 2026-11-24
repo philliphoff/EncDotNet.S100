@@ -268,7 +268,133 @@ public sealed class Part15ProducerTests : IDisposable
             source, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
 
         Assert.Equal(VerificationOutcome.CertificateUntrusted, trusted.Outcome);
-        Assert.Equal(VerificationOutcome.Ok, allowed.Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, allowed.Outcome);
+        Assert.False(allowed.IsValid);
+    }
+
+    [Fact]
+    public async Task Catalogue_signature_still_chains_when_untrusted_signers_are_allowed()
+    {
+        using var other = new TestScheme();
+        var ct = TestContext.Current.CancellationToken;
+        var allowing = new TrustAnchorOptions { TrustedRoots = _scheme.TrustAnchors.TrustedRoots, AllowUntrustedCertificates = true };
+
+        var ours = await CatalogueSignatureVerifier.VerifyAsync(SignedCatalogue(_scheme, "<catalogue/>"u8.ToArray()), allowing, ct);
+        var theirs = await CatalogueSignatureVerifier.VerifyAsync(SignedCatalogue(other, "<catalogue/>"u8.ToArray()), allowing, ct);
+
+        Assert.Equal(VerificationOutcome.Ok, ours.Outcome);
+        Assert.Equal(VerificationOutcome.SignatureValidUntrusted, theirs.Outcome);
+    }
+
+    [Fact]
+    public async Task A_dataset_signed_by_the_trusted_scheme_is_ok_whether_or_not_untrusted_signers_are_allowed()
+    {
+        var content = "dataset"u8.ToArray();
+        var (source, catalogue) = SignedDataset(_scheme, content);
+        var ct = TestContext.Current.CancellationToken;
+
+        var strict = await new ExchangeSetVerifier().VerifyAsync(source, catalogue, _scheme.TrustAnchors, ct);
+        var allowing = await new ExchangeSetVerifier().VerifyAsync(
+            source,
+            catalogue,
+            new TrustAnchorOptions { TrustedRoots = _scheme.TrustAnchors.TrustedRoots, AllowUntrustedCertificates = true },
+            ct);
+
+        Assert.Equal(VerificationOutcome.Ok, Assert.Single(strict.FileResults).Outcome);
+        Assert.Equal(VerificationOutcome.Ok, Assert.Single(allowing.FileResults).Outcome);
+        Assert.True(allowing.AllValid);
+        Assert.False(allowing.HasUnverifiedSigners);
+    }
+
+    [Fact]
+    public async Task A_dataset_signed_by_an_unknown_scheme_is_never_ok()
+    {
+        // A signer that chains to nothing the caller trusts must not look
+        // the same as one that does.
+        using var other = new TestScheme();
+        var content = "dataset"u8.ToArray();
+        var (source, catalogue) = SignedDataset(other, content);
+        var ct = TestContext.Current.CancellationToken;
+        var verifier = new ExchangeSetVerifier();
+
+        var strict = await verifier.VerifyAsync(source, catalogue, _scheme.TrustAnchors, ct);
+        var allowingWithRoots = await verifier.VerifyAsync(
+            source,
+            catalogue,
+            new TrustAnchorOptions { TrustedRoots = _scheme.TrustAnchors.TrustedRoots, AllowUntrustedCertificates = true },
+            ct);
+        var allowingWithoutRoots = await verifier.VerifyAsync(
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
+
+        Assert.Equal(VerificationOutcome.CertificateUntrusted, Assert.Single(strict.FileResults).Outcome);
+        foreach (var result in new[] { allowingWithRoots, allowingWithoutRoots })
+        {
+            var file = Assert.Single(result.FileResults);
+            Assert.Equal(VerificationOutcome.SignatureValidUntrusted, file.Outcome);
+            Assert.Contains("doesn't chain to a trusted Scheme Administrator", file.Detail);
+            Assert.All(file.SignatureResults, s => Assert.Equal(SignatureFailureReason.None, s.FailureReason));
+            Assert.False(result.AllValid);
+            Assert.True(result.AllSignaturesIntact);
+            Assert.True(result.HasUnverifiedSigners);
+        }
+    }
+
+    [Fact]
+    public async Task An_untrusted_signer_is_still_checked_against_the_content()
+    {
+        using var other = new TestScheme();
+        var (source, catalogue) = SignedDataset(other, "dataset"u8.ToArray());
+        source.AddFile("101AA00000000001.000", "tampered"u8.ToArray());
+
+        var result = await new ExchangeSetVerifier().VerifyAsync(
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(VerificationOutcome.SignatureInvalid, Assert.Single(result.FileResults).Outcome);
+        Assert.False(result.AllSignaturesIntact);
+    }
+
+    [Fact]
+    public void An_unverified_signer_on_the_catalogue_is_not_a_failure_but_not_valid()
+    {
+        var result = new ExchangeSetVerificationResult
+        {
+            FileResults = [new FileVerificationResult { FileName = "a.000", Outcome = VerificationOutcome.Ok }],
+            CatalogueSignature = new CatalogueSignatureVerificationResult(VerificationOutcome.SignatureValidUntrusted),
+        };
+
+        Assert.False(result.CatalogueSignatureFailed);
+        Assert.False(result.AllValid);
+        Assert.True(result.AllSignaturesIntact);
+        Assert.True(result.HasUnverifiedSigners);
+    }
+
+    private static (InMemoryAssetSource Source, ExchangeCatalogue Catalogue) SignedDataset(TestScheme scheme, byte[] content)
+    {
+        const string fileName = "101AA00000000001.000";
+        using var signer = scheme.CreateSigner();
+        var signature = signer.SignData(content, "plain");
+        var catalogue = new ExchangeCatalogue
+        {
+            Identifier = new ExchangeCatalogueIdentifier { Identifier = "TEST", DateTime = "2026-03-01" },
+            Certificates = signer.CreateCertificateBlock(),
+            DatasetDiscoveryMetadata =
+            [
+                new DatasetDiscoveryMetadata
+                {
+                    FileName = fileName,
+                    EditionNumber = 1,
+                    IssueDate = "2026-03-01",
+                    DigitalSignatureReference = "ECDSA-384-SHA2",
+                    DigitalSignatureAlgorithm = DigitalSignatureAlgorithm.ECDSA384SHA2,
+                    DigitalSignatureValue = signature,
+                    DigitalSignatures = [signature],
+                },
+            ],
+        };
+
+        var source = new InMemoryAssetSource();
+        source.AddFile(fileName, content);
+        return (source, catalogue);
     }
 
     [Fact]

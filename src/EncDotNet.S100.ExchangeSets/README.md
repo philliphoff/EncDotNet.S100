@@ -116,11 +116,12 @@ IExchangeSetVerifier verifier = new ExchangeSetVerifier();
 
 var trust = new TrustAnchorOptions
 {
-    // During development, skip certificate chain validation:
-    AllowUntrustedCertificates = true,
+    // The IHO Scheme Administrator root certificates you trust:
+    TrustedRoots = [saRootCert],
 
-    // In production, supply the IHO Scheme Administrator root certificates:
-    // TrustedRoots = [saRootCert],
+    // Report a correct signature from any other signer as
+    // SignatureValidUntrusted instead of failing it:
+    // AllowUntrustedCertificates = true,
 };
 
 ExchangeSetVerificationResult result = await verifier.VerifyAsync(
@@ -135,7 +136,13 @@ if (result.IsUnsigned)
 }
 else if (result.AllValid)
 {
-    // Every file has a valid signature.
+    // Every file has a valid signature from a trusted signer.
+}
+else if (result.AllSignaturesIntact)
+{
+    // Every signature matches, but some signer doesn't chain to TrustedRoots
+    // (SignatureValidUntrusted). The data is unchanged since it was signed,
+    // but who signed it isn't verified.
 }
 else if (result.HasInvalidSignatures)
 {
@@ -246,14 +253,24 @@ error or an invalid signature.
 `TrustAnchorOptions` controls how certificates are trusted:
 
 - `TrustedRoots` is a list of `X509Certificate2` Scheme Administrator (SA)
-  root certificates. The verifier matches a signing certificate's `Issuer`
-  against them.
-- `AllowUntrustedCertificates`, when `true`, still checks that signatures are
-  correct but skips certificate chain validation. Use it during development or
-  for exchange sets from unknown sources.
+  root certificates. The verifier builds a chain from the signing certificate,
+  through any certificates the catalogue carries, to one of them. Only these
+  roots are trusted; the operating system's certificate store isn't used. A
+  signature is `Ok` only when its signer chains to one of these roots.
+- `AllowUntrustedCertificates` decides what happens to a signer that doesn't
+  chain. When it's `false`, the signature fails as `CertificateUntrusted`.
+  When it's `true`, the signature is still checked against the content, and a
+  correct one is `SignatureValidUntrusted`: the content hasn't changed since
+  it was signed, but anyone can make such a signature. The chain is still
+  checked against `TrustedRoots` first, so a trusted signer is still `Ok`.
+
+`AllValid` is `true` only when every signer is trusted. `AllSignaturesIntact`
+is `true` when every signature matches, trusted or not, and
+`HasUnverifiedSigners` says whether any signer wasn't trusted.
 
 The IHO publishes test SA certificates for interoperability testing. In
-production, supply the official IHO SA root certificate.
+production, supply the official IHO SA root certificate. Don't trust the test
+SA for real data: anyone can obtain a certificate under it.
 
 ### Verify from the command line
 
@@ -272,11 +289,17 @@ code for findings) when any file fails. A file fails on `ChecksumMismatch`,
 `FileMissing`, `Error` or an invalid signature. With `--strict`, `NotSigned`
 and `NoChecksum` also fail.
 
+`s100 validate` doesn't take trust roots yet, so it allows untrusted signers.
+A correct signature shows as `SignatureValidUntrusted` in yellow and the
+summary says the signer isn't verified, never `Verified`. With `--strict`,
+`SignatureValidUntrusted` also fails.
+
 The same command verifies S-57 and S-63 exchange sets: pass a folder that
-contains a `CATALOG.031`, or the file itself. It checks each file's CRC-32
+contains a `CATALOG.031`, or the file itself. It checks each file's CRC-32 (S-63
+signatures aren't checked yet, so every file is `SignatureNotChecked`)
 through `EncDotNet.S100.Datasets.S57.S57ExchangeSetVerification`, which maps
 the `EncDotNet.S57` result onto the same `ExchangeSetVerificationResult` model
-and exit codes. `NoChecksum` and `NotSigned` don't fail. See
+and exit codes. `NoChecksum` and `SignatureNotChecked` don't fail, except with `--strict`. See
 [exchange-set integrity verification](../EncDotNet.S100.Datasets.S57/README.md#exchange-set-integrity-verification)
 in the S-57 README.
 

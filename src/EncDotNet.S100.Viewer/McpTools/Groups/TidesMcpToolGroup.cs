@@ -26,7 +26,7 @@ internal sealed class TidesMcpToolGroup : IViewerMcpToolGroup
         var path = paths.TideStationsFilePath;
         return new TideCatalogueFileSource(
             path,
-            $"SoundCharts reads the tide station list from {path}. Download NOAA's stations there with 's100 tides update --catalogue \"{path}\"' (about 10 minutes).");
+            $"SoundCharts reads the tide station list from {path}. Download NOAA's stations there with 's100 tides update --catalogue \"{path}\"' (one file from the EncDotNet.S100 mirror).");
     }
 
     /// <inheritdoc />

@@ -55,6 +55,9 @@ public sealed partial class ChartReferenceIndex
             _entries.TryAdd((entry.Key.Kind, entry.Code), entry);
             _searchRows.Add(SearchRow.For(entry, conditionText.GetValueOrDefault(entry.Code)));
         }
+
+        // Built once, with the index, for picks of S-57 cells (R9, #1678).
+        S57Aliases = new S57Aliases(this);
     }
 
     /// <summary>The product specification the index describes.</summary>
@@ -74,6 +77,29 @@ public sealed partial class ChartReferenceIndex
 
     /// <summary>The display settings (context parameters), in catalogue order.</summary>
     public IReadOnlyList<DisplaySettingEntry> DisplaySettings { get; }
+
+    /// <summary>
+    /// The S-57 acronyms of the feature types and attributes, for S-57 cells
+    /// drawn with this product's catalogue (design note §4.3, R9).
+    /// </summary>
+    public S57Aliases S57Aliases { get; }
+
+    /// <summary>
+    /// The feature type an S-57 object class acronym names through the
+    /// feature catalogue's alias: <c>BCNLAT</c> gives Lateral Beacon.
+    /// </summary>
+    /// <param name="acronym">The acronym; ordinal, without regard to case.</param>
+    /// <returns>The entry, or <see langword="null"/> when no entry, or more than one, has the alias.</returns>
+    public FeatureTypeEntry? FindFeatureTypeByS57Alias(string acronym) => S57Aliases.FeatureType(acronym);
+
+    /// <summary>
+    /// The attribute an S-57 attribute acronym names through the feature
+    /// catalogue's alias: <c>COLOUR</c> gives Colour. Its listed values
+    /// share the S-57 codes (<see cref="AttributeEntry.ListedValuesOf"/>).
+    /// </summary>
+    /// <param name="acronym">The acronym; ordinal, without regard to case.</param>
+    /// <returns>The entry, or <see langword="null"/> when no entry, or more than one, has the alias.</returns>
+    public AttributeEntry? FindAttributeByS57Alias(string acronym) => S57Aliases.Attribute(acronym);
 
     /// <summary>
     /// Builds the index for <paramref name="spec"/> from its catalogues.

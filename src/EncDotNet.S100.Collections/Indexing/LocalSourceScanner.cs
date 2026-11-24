@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using EncDotNet.S100.Datasets.TropicalCyclones;
 using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Collections.Indexing;
@@ -22,9 +23,23 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// S-57 sequential updates (<c>.001</c>, …) attached to their base cell.
 /// </para>
 /// <para>
+/// A zip named as an NHC tropical cyclone forecast zip
+/// (<see cref="NhcAdvisoryFiles"/>) is a dataset, not an exchange set: one
+/// advisory, which reads the storm's wind radii and best track zips beside
+/// it. A folder holding one storm's zips is that advisory, as the CLI's
+/// folder input reads it (#1294, #1677): the folder, or its latest forecast
+/// zip when the folder is also a GRIB2 run. The storm's other zips belong to
+/// the advisory and are not planned on their own (#1688).
+/// </para>
+/// <para>
 /// The fingerprint covers the relative path, length and last-write time of
 /// every file the walk considers, including every file inside exchange-set
-/// roots, so replacing a cell or catalogue invalidates the index.
+/// roots, so replacing a cell or catalogue invalidates the index. An
+/// advisory covers all its storm's zips and its final-advisory marker, so
+/// replacing the wind radii or best track refreshes the advisory's item. A
+/// source holding an advisory also stamps a marker for it, which no other
+/// source has, so its index is rebuilt once by a build that reads advisories
+/// while every other source's fingerprint is unchanged.
 /// </para>
 /// </remarks>
 internal static partial class LocalSourceScanner
@@ -34,6 +49,13 @@ internal static partial class LocalSourceScanner
     /// cached by an older build are rebuilt.
     /// </summary>
     internal const string FingerprintVersion = "local-v5"; // v2: catalogue boxes in dataCoverage, plain-text bounds, LineString coverage; v3: loose HDF5 coverages (#1037); v4: weather files and run folders (#1075); v5: S100_ROOT folders (#1136)
+
+    /// <summary>
+    /// Prefixes the stamp an advisory adds (#1688). Only a source holding one
+    /// has it, so no other source's fingerprint changes and
+    /// <see cref="FingerprintVersion"/> stays as it was.
+    /// </summary>
+    private const string AdvisoryStamp = "nhc-advisory-v1|";
 
     private static readonly string[] LooseExtensions = [".000", ".h5", ".gml", ".nc", ".nc4"];
 
@@ -88,6 +110,12 @@ internal static partial class LocalSourceScanner
         {
             units.Add(new S57FolderUnit(root));
             StampTree(root, root, stamps);
+        }
+        else if (IsForecastZip(fileName) && NhcAdvisoryFiles.Find(fullPath) is { } advisory)
+        {
+            var unit = AdvisoryUnitOf(fullPath, advisory, root);
+            units.Add(unit);
+            StampAdvisory(root, unit, stamps);
         }
         else if (IsZip(fullPath))
         {
@@ -171,9 +199,13 @@ internal static partial class LocalSourceScanner
                 Stamp(sourceRoot, new FileInfo(gribFiles[0]), stamps);
             }
 
+            var advisoryZips = PlanAdvisories(sourceRoot, directory, files, isGribRun: gribFiles.Length > 1, units, stamps);
+
             foreach (var file in files)
             {
                 var name = Path.GetFileName(file);
+                if (advisoryZips.Contains(file))
+                    continue;
                 if (IsZip(file))
                 {
                     units.Add(new ZipUnit(file));
@@ -209,6 +241,79 @@ internal static partial class LocalSourceScanner
                 pending.Push(child);
         }
     }
+
+    /// <summary>
+    /// Plans the NHC advisories among a folder's files and returns the zips
+    /// they claim. A folder of one storm's zips
+    /// (<see cref="NhcAdvisoryFiles.IsAdvisoryFolder"/>) is read from the
+    /// folder, unless the folder is a GRIB2 run, whose item the folder already
+    /// is; then, as for each storm in a folder of several, the advisory is its
+    /// latest forecast zip, which finds the same siblings. A storm with no
+    /// forecast zip here plans nothing, so its zips stay candidate exchange sets.
+    /// </summary>
+    private static HashSet<string> PlanAdvisories(
+        string sourceRoot, string directory, string[] files, bool isGribRun, List<ScanUnit> units, List<string> stamps)
+    {
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        if (!files.Any(f => IsForecastZip(Path.GetFileName(f))))
+            return claimed;
+
+        var storms = files
+            .Select(f => (Path: f, Ok: NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(f), out var kind, out var id, out var advisory), Kind: kind, Id: id, Advisory: advisory))
+            .Where(f => f.Ok)
+            .GroupBy(f => f.Id, StringComparer.Ordinal)
+            .Where(g => g.Any(f => f.Kind == NhcFileKind.Forecast))
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        var readFolder = !isGribRun && storms.Length == 1 && NhcAdvisoryFiles.IsAdvisoryFolder(directory);
+        foreach (var storm in storms)
+        {
+            var latest = storm
+                .Where(f => f.Kind == NhcFileKind.Forecast)
+                .OrderBy(f => NhcAdvisoryFiles.AdvisoryOrder(f.Advisory).Number)
+                .ThenBy(f => NhcAdvisoryFiles.AdvisoryOrder(f.Advisory).Suffix, StringComparer.Ordinal)
+                .Last();
+            if (NhcAdvisoryFiles.Find(latest.Path) is not { } advisory)
+                continue;
+
+            var unit = readFolder
+                ? new AdvisoryUnit(directory, [.. storm.Select(f => f.Path), .. FinalMarker(directory, storm.Key)])
+                : AdvisoryUnitOf(latest.Path, advisory, directory);
+            units.Add(unit);
+            StampAdvisory(sourceRoot, unit, stamps);
+
+            // Older advisories of the storm aren't items: the latest supersedes them, as in the CLI.
+            foreach (var file in storm)
+                claimed.Add(file.Path);
+        }
+
+        return claimed;
+    }
+
+    /// <summary>The unit of the advisory read from its forecast zip: the zip, its siblings and its final marker.</summary>
+    private static AdvisoryUnit AdvisoryUnitOf(string forecastZip, NhcAdvisoryFiles advisory, string directory)
+    {
+        NhcAdvisoryFiles.TryParseFileName(Path.GetFileName(forecastZip), out _, out var atcfId, out _);
+        string?[] members = [forecastZip, advisory.WindRadiiZip, advisory.BestTrackZip];
+        return new AdvisoryUnit(forecastZip, [.. members.OfType<string>(), .. FinalMarker(directory, atcfId)]);
+    }
+
+    private static IEnumerable<string> FinalMarker(string directory, string atcfId)
+    {
+        var marker = Path.Combine(directory, NhcAdvisoryFiles.FinalMarkerName(atcfId));
+        return File.Exists(marker) ? [marker] : [];
+    }
+
+    private static void StampAdvisory(string sourceRoot, AdvisoryUnit unit, List<string> stamps)
+    {
+        stamps.Add(AdvisoryStamp + RelativePath(sourceRoot, unit.Path));
+        foreach (var member in unit.Files)
+            Stamp(sourceRoot, new FileInfo(member), stamps);
+    }
+
+    private static bool IsForecastZip(string fileName) =>
+        NhcAdvisoryFiles.TryParseFileName(fileName, out var kind, out _, out _) && kind == NhcFileKind.Forecast;
 
     /// <summary>
     /// Returns the S-57 sequential update files (<c>.001</c>–<c>.999</c>)
@@ -321,6 +426,14 @@ internal sealed record ZipUnit(string Path) : ScanUnit;
 
 /// <summary>A loose dataset file and its sequential updates.</summary>
 internal sealed record LooseFileUnit(string Path, IReadOnlyList<string> UpdatePaths) : ScanUnit;
+
+/// <summary>
+/// An NHC tropical cyclone advisory (#1688): a forecast zip, or a folder of one
+/// storm's zips, read as one dataset.
+/// </summary>
+/// <param name="Path">The forecast zip or the folder, as the dataset is opened.</param>
+/// <param name="Files">Every file the advisory claims: the storm's zips and its final-advisory marker.</param>
+internal sealed record AdvisoryUnit(string Path, IReadOnlyList<string> Files) : ScanUnit;
 
 /// <summary>A folder holding several GRIB2 files: one model run, indexed and loaded as one dataset (#1075).</summary>
 internal sealed record RunFolderUnit(string Directory, IReadOnlyList<string> Files) : ScanUnit;

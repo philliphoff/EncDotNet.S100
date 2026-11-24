@@ -54,4 +54,34 @@ internal sealed class SettingsViewModel : ViewModelBase
                 SelectedPage = page;
         }
     }
+
+    /// <summary>
+    /// The setting <see cref="ShowSetting"/> last asked for: the automation id
+    /// of its control, "Settings.SimplifiedSymbols", or <see langword="null"/>.
+    /// </summary>
+    public string? RequestedSetting { get; private set; }
+
+    /// <summary>
+    /// Raised when <see cref="ShowSetting"/> asks for a setting: the view
+    /// brings its control into view and focuses it.
+    /// </summary>
+    public event EventHandler<string>? SettingRequested;
+
+    /// <summary>
+    /// Shows <paramref name="category"/>'s page at one setting's control, as a
+    /// display setting in Why this symbol (R11, #1680) or the Reference tab's
+    /// <b>Change in Display settings</b> asks.
+    /// </summary>
+    /// <param name="category">The page.</param>
+    /// <param name="setting">The setting, as its control's automation id ends: <c>SimplifiedSymbols</c>.</param>
+    public void ShowSetting(SettingsCategory category, string setting)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(setting);
+        SelectedCategory = category;
+        RequestedSetting = "Settings." + setting;
+        SettingRequested?.Invoke(this, RequestedSetting);
+    }
+
+    /// <summary>The view has shown <see cref="RequestedSetting"/>; a later view won't show it again.</summary>
+    internal void SettingShown() => RequestedSetting = null;
 }

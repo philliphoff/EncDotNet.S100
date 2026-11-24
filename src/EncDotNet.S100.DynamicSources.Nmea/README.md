@@ -15,10 +15,8 @@ Not for navigation.
 
 ## Install
 
-This package isn't published to NuGet. Reference the project directly:
-
-```xml
-<ProjectReference Include="path/to/src/EncDotNet.S100.DynamicSources.Nmea/EncDotNet.S100.DynamicSources.Nmea.csproj" />
+```bash
+dotnet add package EncDotNet.S100.DynamicSources.Nmea
 ```
 
 ## Example: own-ship wind from a multiplexer

@@ -661,14 +661,18 @@ public static partial class S100VectorTileRenderer
                 ? TileDiskCache.NamespaceFor(productLayerSet, styleStateHash)
                 : null;
 
+        // Every layer bound to this scene shares its planes and indexes, so
+        // two maps showing one cell hold one copy, and their chart tiles key
+        // the same scene (see ScenePlanes).
+        var planes = BoundPlanes.GetValue(scene, static s => ScenePlanes.Build(s));
         var state = States.GetValue(layer, static l => new TileState(l));
         lock (state.Sync)
         {
-            var (baseScene, overlayScene) = PartitionScene(scene);
-            state.Scene = baseScene;
-            state.LiveBase = DrawsLive(scene, baseScene);
-            state.BaseIndex = new BaseSpatialIndex(baseScene);
-            state.Overlay = new OverlaySource(overlayScene);
+            state.SourceScene = scene;
+            state.Scene = planes.Base;
+            state.LiveBase = DrawsLive(scene, planes.Base);
+            state.BaseIndex = planes.BaseIndex;
+            state.Overlay = new OverlaySource(planes.Overlay, planes.OverlayIndex);
             state.Generation++;
             state.DiskNamespace = diskNamespace;
             state.Cache.Clear();
@@ -731,6 +735,35 @@ public static partial class S100VectorTileRenderer
         baseScene = null!;
         overlayScene = null!;
         return false;
+    }
+
+    private static readonly ConditionalWeakTable<VectorScene, ScenePlanes> BoundPlanes = new();
+
+    /// <summary>
+    /// The planes and spatial indexes <see cref="BindScene(object, VectorScene, string?, string?)"/>
+    /// derives from a scene. Built once per scene and shared by every layer
+    /// bound to it. Both indexes are read-only after construction, so layers
+    /// on different maps can query them concurrently.
+    /// </summary>
+    /// <remarks>
+    /// A layer's <see cref="TileState.SourceScene"/> keeps the scene, and so
+    /// this entry, alive while the layer is bound to it.
+    /// </remarks>
+    private sealed class ScenePlanes(VectorScene @base, BaseSpatialIndex baseIndex, VectorScene overlay, OverlaySpatialIndex overlayIndex)
+    {
+        public VectorScene Base { get; } = @base;
+
+        public BaseSpatialIndex BaseIndex { get; } = baseIndex;
+
+        public VectorScene Overlay { get; } = overlay;
+
+        public OverlaySpatialIndex OverlayIndex { get; } = overlayIndex;
+
+        public static ScenePlanes Build(VectorScene scene)
+        {
+            var (baseScene, overlayScene) = PartitionScene(scene);
+            return new ScenePlanes(baseScene, new BaseSpatialIndex(baseScene), overlayScene, new OverlaySpatialIndex(overlayScene));
+        }
     }
 
     /// <summary>
@@ -4352,6 +4385,11 @@ public static partial class S100VectorTileRenderer
         public readonly Dictionary<(int Band, int X, int Y), PlanMemoEntry> PlanMemo = new();
         public readonly Dictionary<TileKey, SlotPlan> Plans = new();
         public readonly Dictionary<(int Band, int X, int Y), TileKey> ShownBySlot = new();
+
+        // The scene BindScene was given, before partitioning. Held so the
+        // shared planes derived from it (BoundPlanes) live as long as a layer
+        // is bound to it.
+        public VectorScene? SourceScene;
 
         public VectorScene? Scene;
 

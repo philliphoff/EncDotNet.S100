@@ -17,11 +17,13 @@ namespace EncDotNet.S100.Renderers.Skia;
 /// </summary>
 /// <remarks>
 /// The colour raster produced by <see cref="SkiaCoverageRenderer"/> is one
-/// pixel per grid cell; it is resampled into the fitted destination rectangle.
-/// Grid rows are mapped linearly in latitude, so the Web-Mercator latitude
-/// non-linearity is approximated across the (typically small) coverage extent —
-/// the same approximation the existing direct-Skia coverage path makes. Arrow
-/// symbols are projected exactly through <see cref="WebMercator"/>.
+/// pixel per grid cell. A geographic grid's rows are evenly spaced in latitude,
+/// which Web Mercator stretches towards the poles, so the raster is drawn in
+/// horizontal bands, each mapped through <see cref="WebMercator"/> at its edges
+/// and short enough that the error inside it stays under a tenth of a pixel
+/// (issue #1691). A grid in a projected CRS is stretched linearly between its
+/// reprojected corners. Arrow symbols are projected exactly through
+/// <see cref="WebMercator"/>.
 /// </remarks>
 public sealed class CoverageHeadlessRenderer
 {
@@ -133,7 +135,7 @@ public sealed class CoverageHeadlessRenderer
             (float)offsetY,
             (float)(offsetX + drawW),
             (float)(offsetY + drawH));
-        DrawCore(canvas, layer, dest, Project);
+        DrawCore(canvas, layer, dest, Project, southLatitude, northLatitude, maxY + offsetY / scale, 1.0 / scale);
 
         canvas.Flush();
         return bitmap;
@@ -246,7 +248,7 @@ public sealed class CoverageHeadlessRenderer
         var (rightPx, bottomPx) = Project((cMaxX, cMinY)); // SE → bottom-right
         var dest = new SKRect(leftPx, topPx, rightPx, bottomPx);
 
-        DrawCore(canvas, layer, dest, Project);
+        DrawCore(canvas, layer, dest, Project, southLatitude, northLatitude, vpMaxY, 1.0 / vpScaleY);
     }
 
     /// <summary>
@@ -289,11 +291,29 @@ public sealed class CoverageHeadlessRenderer
     private readonly Lock _rasterGate = new();
     private (StyledCoverageLayer Layer, SKImage Image)? _raster;
 
+    /// <summary>The largest error, in device pixels, a band of a geographic raster may place a row at.</summary>
+    private const double BandTolerancePixels = 0.1;
+
+    /// <summary>
+    /// Draws the colour raster and arrows of <paramref name="layer"/>.
+    /// </summary>
+    /// <param name="canvas">The target canvas.</param>
+    /// <param name="layer">The styled coverage layer.</param>
+    /// <param name="colorDest">The raster's extent corners projected to canvas pixels.</param>
+    /// <param name="project">Maps Web Mercator metres to canvas pixels.</param>
+    /// <param name="southLatitude">The raster's southern edge, in degrees.</param>
+    /// <param name="northLatitude">The raster's northern edge, in degrees.</param>
+    /// <param name="topWorldY">The Web Mercator Y, in metres, at canvas pixel row 0.</param>
+    /// <param name="metresPerPixelY">Web Mercator metres per canvas pixel, down the canvas.</param>
     private void DrawCore(
         SKCanvas canvas,
         StyledCoverageLayer layer,
         SKRect colorDest,
-        Func<(double X, double Y), (float X, float Y)> project)
+        Func<(double X, double Y), (float X, float Y)> project,
+        double southLatitude,
+        double northLatitude,
+        double topWorldY,
+        double metresPerPixelY)
     {
         if (layer.ColorScheme is not null)
         {
@@ -319,7 +339,11 @@ public sealed class CoverageHeadlessRenderer
                 canvas.ClipPath(landPath, SKClipOperation.Difference, antialias: true);
             }
 
-            canvas.DrawImage(rasterImage, colorDest, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+            var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None);
+            if (NativeToWgs84.IsIdentity)
+                DrawGeographicRaster(canvas, rasterImage, colorDest, sampling, southLatitude, northLatitude, topWorldY, metresPerPixelY);
+            else
+                canvas.DrawImage(rasterImage, colorDest, sampling);
 
             if (landPath is not null)
             {
@@ -332,5 +356,90 @@ public sealed class CoverageHeadlessRenderer
         {
             ArrowRenderer.Draw(canvas, layer, NativeToWgs84, project);
         }
+    }
+
+    /// <summary>
+    /// Draws a raster whose rows are evenly spaced in latitude between
+    /// <paramref name="southLatitude"/> (bottom) and <paramref name="northLatitude"/>
+    /// (top) into Web Mercator canvas space (issue #1691). Stretching it linearly
+    /// between its projected corners would put every row between them too far
+    /// north: by 3.6° at 25°N on a 0–55°N grid. Instead the visible part of
+    /// <paramref name="dest"/> is cut into horizontal bands, each drawn with the
+    /// linear map that is exact at its top and bottom edges; Web Mercator's
+    /// curvature then moves a row inside a band by at most
+    /// <see cref="BandTolerancePixels"/>. Each band samples the whole image, so
+    /// the bilinear filter runs across band edges without a seam.
+    /// </summary>
+    private static void DrawGeographicRaster(
+        SKCanvas canvas,
+        SKImage image,
+        SKRect dest,
+        SKSamplingOptions sampling,
+        double southLatitude,
+        double northLatitude,
+        double topWorldY,
+        double metresPerPixelY)
+    {
+        double latitudeSpan = northLatitude - southLatitude;
+        if (!(latitudeSpan > 0) || !(metresPerPixelY > 0) || dest.Width <= 0 || dest.Height <= 0)
+            return;
+
+        var clip = canvas.LocalClipBounds;
+        float left = Math.Max(dest.Left, clip.Left);
+        float right = Math.Min(dest.Right, clip.Right);
+        double top = Math.Max(dest.Top, clip.Top);
+        double bottom = Math.Min(dest.Bottom, clip.Bottom);
+        if (!(right > left) || !(bottom > top))
+            return;
+
+        // Canvas pixels per radian of latitude at the equator, and the device
+        // pixels each canvas pixel covers (a tile's pixel ratio, a print's DPI).
+        double pixelsPerRadian = WebMercator.EarthRadius / metresPerPixelY;
+        var matrix = canvas.TotalMatrix;
+        double deviceScale = Math.Max(1.0, Math.Sqrt((matrix.ScaleY * matrix.ScaleY) + (matrix.SkewX * matrix.SkewX)));
+        double tolerance = BandTolerancePixels / deviceScale;
+        double rowsPerDegree = image.Height / latitudeSpan;
+
+        double y0 = top;
+        double latitude0 = LatitudeAt(y0);
+        while (y0 < bottom)
+        {
+            // Linear interpolation over a band h pixels tall misplaces a row by
+            // up to h² · |sin φ| / (8 · pixelsPerRadian) pixels.
+            double sine = Math.Abs(Math.Sin(latitude0 * Math.PI / 180.0));
+            double height = BandHeight(sine);
+            double y1 = Math.Min(y0 + height, bottom);
+            double latitude1 = LatitudeAt(y1);
+            double sine1 = Math.Abs(Math.Sin(latitude1 * Math.PI / 180.0));
+            if (sine1 > sine)
+            {
+                y1 = Math.Min(y0 + BandHeight(sine1), bottom);
+                latitude1 = LatitudeAt(y1);
+            }
+
+            double row0 = (northLatitude - latitude0) * rowsPerDegree;
+            double row1 = (northLatitude - latitude1) * rowsPerDegree;
+            if (row1 > row0)
+            {
+                // The whole image under this band's map, clipped to the band.
+                double pixelsPerRow = (y1 - y0) / (row1 - row0);
+                double imageTop = y0 - (row0 * pixelsPerRow);
+                var imageRect = new SKRect(dest.Left, (float)imageTop, dest.Right, (float)(imageTop + (image.Height * pixelsPerRow)));
+
+                canvas.Save();
+                canvas.ClipRect(new SKRect(left, (float)y0, right, (float)y1));
+                canvas.DrawImage(image, imageRect, sampling);
+                canvas.Restore();
+            }
+
+            y0 = y1;
+            latitude0 = latitude1;
+        }
+
+        double LatitudeAt(double y) =>
+            WebMercator.ToLonLat(0, topWorldY - (y * metresPerPixelY), clampLatitude: false).Latitude;
+
+        double BandHeight(double sine) =>
+            Math.Max(1.0, Math.Sqrt(8.0 * tolerance * pixelsPerRadian / Math.Max(sine, 1e-6)));
     }
 }

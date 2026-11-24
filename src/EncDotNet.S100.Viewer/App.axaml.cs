@@ -174,6 +174,20 @@ public partial class App : Application
         var legend = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>();
         _services.GetRequiredService<DatasetsViewModel>().AttachLegend(legend);
         _services.GetRequiredService<PickReportViewModel>().AttachLegend(legend);
+        // Drawn as (symbol dictionary R10, #1679): the picked feature's drawn
+        // parts, read from the stack's display lists, as terms with glyphs.
+        // Why this symbol (R11, #1680) matches each part's rule cases against
+        // the pick's values and the display settings, whose links open Settings.
+        var drawnAsSettings = _services.GetRequiredService<ViewerSettingsService>();
+        var drawnAsServices = _services;
+        _services.GetRequiredService<PickReportViewModel>().AttachDrawnAs(new PickDrawnAsViewModel(
+            legend.DrawnParts,
+            _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>(),
+            _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService>().GetArtwork,
+            UiThread.RunOrPost,
+            parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.Value(drawnAsSettings.BuildMarinerSettings(), parameter),
+            code => ShowChartSetting(drawnAsServices, code),
+            parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.CurrentValue(drawnAsSettings, parameter)));
         // Links to the Catalogues activity (catalogue-panels D10, CR3): the
         // Datasets version warning, the inspector's Drawn with line and the
         // missing-catalogue toast. The activity is resolved when first used.
@@ -670,6 +684,14 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
                 settings),
         ];
+    }
+
+    // Opens Settings > Chart at a display setting's switch (R11, #1680): from a
+    // reason in Why this symbol, or the Reference tab's Change in Display settings.
+    private static void ShowChartSetting(IServiceProvider services, string code)
+    {
+        services.GetRequiredService<ShellLayoutViewModel>().SelectTab("Settings");
+        services.GetRequiredService<SettingsViewModel>().ShowSetting(SettingsCategory.Chart, code);
     }
 
     private static IServiceProvider ConfigureServices()
@@ -1829,7 +1851,13 @@ public partial class App : Application
             UiThread.Post));
         services.AddSingleton<ILibraryTimeSource>(sp => sp.GetRequiredService<LibraryTimeSource>());
         services.AddSingleton<LayerStackViewModel>();
-        services.AddSingleton<FeatureSearchViewModel>();
+        // Each hit's feature type is a Chart reference term (symbol dictionary R9b, #1681).
+        services.AddSingleton(sp => new FeatureSearchViewModel(
+            sp.GetRequiredService<IFeatureSearchService>(),
+            sp.GetRequiredService<IPickService>())
+        {
+            Terms = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>(),
+        });
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
             sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
@@ -1889,6 +1917,10 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ExaminerLinks>(),
                 sp.GetRequiredService<PickWarningCardsViewModel>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ObjectInformationSelection>());
+            // Symbol dictionary R9 (#1678): names and listed values are terms,
+            // and F1 / Open in reference open the feature type's entry.
+            pick.Terms = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTerms>();
+            pick.Post = UiThread.RunOrPost;
             // The depth card's "The chart shows charted depths" line (#1191).
             if (sp.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is { } depthBasis)
             {
@@ -2012,12 +2044,9 @@ public partial class App : Application
             // The layout is resolved on click, since it is built from the tabs, which hold this view model.
             tab.ShowChartReferenceCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
                 () => sp.GetRequiredService<ShellLayoutViewModel>().ShowChartReferenceCommand.Execute(null));
-            // Change in Display settings: the mariner settings are on Settings > Chart.
-            tab.ChangeSetting = _ =>
-            {
-                sp.GetRequiredService<SettingsViewModel>().SelectedCategory = SettingsCategory.Chart;
-                sp.GetRequiredService<ShellLayoutViewModel>().SelectTab("Settings");
-            };
+            // Change in Display settings: the mariner settings are on Settings > Chart,
+            // opened at the setting's switch (#1680).
+            tab.ChangeSetting = code => ShowChartSetting(sp, code);
             return tab;
         });
         // The Chart reference page (#1639, R6): the same view model as the

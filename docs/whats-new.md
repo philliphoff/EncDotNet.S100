@@ -16,6 +16,83 @@ month. For package versions and release assets, see
   the feature catalogue in use is custom, the link reads **Published edition
   in eXaminer**, because the website has only the published edition.
 
+- **Why this symbol in Object information.** Under **Drawn as**, a folded
+  **Why this symbol** says why the map drew each part, from the rule's cases
+  for it that hold for the picked feature's values and the current display
+  settings: "Simplified symbols is on · Colour is red · Beacon shape is a
+  stake, pole, perch or post". The names of settings, attributes and values
+  are terms, and each display setting the reason depends on has a link that
+  opens Settings › Chart at its switch. The main symbol's reason is given in full;
+  each other part, such as a topmark or text, is a line of its own with its
+  reason folded underneath. Each condition is checked against the feature's
+  values and the display settings, and what held is said with the values:
+  "Surrounding depth (10 m) is less than the safety contour (30 m) · Water
+  level effect is always under water/submerged". This is a match, not a trace
+  of the rule: tests of values the rule works out itself are left out, with a
+  note that the reason also depends on them; when more than one case is still
+  possible, the reason says "Likely" and lists them; when no case holds, it
+  says so. A fallback symbol says that nothing else matched and
+  names the attributes the rule tests that the feature doesn't have. The
+  Reference tab's **Change in Display settings** now opens Settings at the
+  switch too ([#1680](https://github.com/philliphoff/EncDotNet.S100/issues/1680)).
+
+- **`s100 tides update` downloads from the mirror.** With no `--from`, the
+  command now downloads NOAA's tide and current station catalogue from the
+  EncDotNet.S100 mirror as one file of about 1.2 MB, in a few seconds instead
+  of about 10 minutes, and `--check` reads the mirror's manifest. When the
+  mirror can't be used, it says so and downloads from, or checks, NOAA
+  instead. `--from noaa` still reads NOAA's metadata API directly, and a
+  `--from` value never falls back
+  ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
+- **Look up in reference from the map, Feature search and the Legend.**
+  Right-click a feature on the map, or press Shift+F10 with the map
+  focused, and choose **Look up in reference** to open its feature type in
+  the Reference tab; where several features are under the pointer, it lists
+  each feature type, as the pick does. In Feature search, the feature type of
+  each hit is a term, and a hit's context menu has **Open in reference**.
+  The Legend rows of a product's own legend, such as an S-124 warning's,
+  are terms where they name a feature type, symbol, line style or area
+  fill. A type the Chart reference doesn't hold stays plain text, with no
+  menu item.
+
+- **Drawn as in Object information.** A picked feature of a chart drawn from
+  a portrayal catalogue (S-101, or an S-57 cell drawn with S-101's) shows what
+  the map drew for it. The header shows its main symbol on the chart's
+  background, in the current palette, in place of the generic icon: a line
+  sample for a line, a colour patch for an area. A new **Drawn as** section
+  lists each part drawn, the symbols, line styles, fills and text, such as
+  "BCNLAT21 · Minor lateral beacon, red, simplified", each a term that opens
+  its Reference entry. A colour fill or line is named by its colour in the
+  catalogue's colour profile, "Colour fill: Very shallow water", with the
+  token (`DEPVS`) in its tooltip. When a part is the catalogue's fallback symbol, the
+  magenta ?, it says so. Products drawn without a portrayal catalogue, such
+  as S-102 and weather fields, keep their key line
+  ([#1679](https://github.com/philliphoff/EncDotNet.S100/issues/1679)).
+
+- **The packages restore from nuget.org again.** Since 0.28.0,
+  `EncDotNet.S100.Datasets.Pipelines`, and so `EncDotNet.S100`, have listed
+  dependencies on packages that were never published, so restoring them
+  from nuget.org failed with NU1101. Those five libraries are now published
+  too: `EncDotNet.S100.DynamicSources.Ais`,
+  `EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo`,
+  `EncDotNet.S100.DynamicSources.Ndbc`, `EncDotNet.S100.DynamicSources.Nmea`
+  and `EncDotNet.S100.Nmea`, with their READMEs and XML documentation. The
+  aisstream.io driver needs your own aisstream.io API key. CI now restores a
+  consumer of the freshly packed packages before a release can publish them
+  ([#1702](https://github.com/philliphoff/EncDotNet.S100/issues/1702)).
+
+- **Tropical cyclone advisories in Library folders.** A Library folder or
+  exchange-set source now lists the NHC advisories it holds. A storm's folder
+  of zips is one `TC` dataset, and a forecast zip
+  (`al092022_5day_020.zip`) beside a GRIB2 run or other data is one dataset,
+  read with its wind radii and best track zips. Those two zips aren't listed
+  on their own, but replacing either refreshes the advisory. Zipped S-100 and
+  S-57 exchange sets are listed as before, and sources that hold no advisory
+  aren't re-indexed. Previously every `.zip` was read as an exchange set, so
+  an advisory listed nothing. This works in SoundCharts and in `s100 mcp
+  serve`'s Library tools.
+
 - **`tiles serve` draws each dataset at a time as the viewer does.** A
   time asked for with `t`, WMS `TIME` or the WMTS `Time` dimension no longer
   snaps to the nearest listed step. Each time-varying dataset picks what it
@@ -87,6 +164,23 @@ month. For package versions and release assets, see
   is still the default. The new `s100 tides publish` prepares a mirror's
   files and exits with code `9` when a catalogue fails its check
   ([#1674](https://github.com/philliphoff/EncDotNet.S100/issues/1674)).
+
+- **Terms in Object information.** The picked feature type's name, each
+  attribute's name and each listed value in Object information are now chart
+  reference terms, named as the feature catalogue names them, with a peek on
+  hover or focus and a click that opens the entry. A cell from an S-57
+  product, drawn with the S-101 catalogue, reads the S-101 chart reference,
+  and a code left as an S-57 acronym maps to its S-101 entry through the
+  catalogue's aliases: `BCNLAT` to Lateral Beacon, `COLOUR` to Colour, and
+  `3,1` to Red, White. A code with no entry stays plain text. Codes and S-57
+  acronyms no longer show in the rows; **Copy identity** copies them. A new
+  **Open in reference** action, and F1 in Object information, open the
+  feature type's entry in the Reference tab, keeping the pick. The
+  per-attribute eXaminer buttons are gone: the eXaminer link is in each
+  term's peek and entry, and **Open in eXaminer** still opens the feature
+  type. In `EncDotNet.S100.Datasets.Pipelines`,
+  `ChartReferenceIndex.S57Aliases` maps S-57 acronyms to entries
+  ([#1678](https://github.com/philliphoff/EncDotNet.S100/issues/1678)).
 
 - **Chart reference terms and peeks.** Names in Reference entries are now
   terms: text with a dotted underline in the text colour. Rest the pointer on

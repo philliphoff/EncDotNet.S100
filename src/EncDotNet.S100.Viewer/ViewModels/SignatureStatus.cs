@@ -29,4 +29,16 @@ internal enum SignatureStatus
 
     /// <summary>An error occurred during verification.</summary>
     Error,
+
+    /// <summary>
+    /// Every signature matches its content, but at least one signer doesn't
+    /// chain to a trusted Scheme Administrator.
+    /// </summary>
+    Unverified,
+
+    /// <summary>
+    /// The signatures couldn't be checked: S-63 signature checking isn't
+    /// supported yet, so the set may be signed or not.
+    /// </summary>
+    NotChecked,
 }

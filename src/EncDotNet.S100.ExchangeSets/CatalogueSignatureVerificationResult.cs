@@ -25,7 +25,9 @@ public sealed class CatalogueSignatureVerificationResult
 
     /// <summary>
     /// The outcome: <see cref="VerificationOutcome.Ok"/> when the catalogue
-    /// matches its signature, <see cref="VerificationOutcome.NotSigned"/> when
+    /// matches its signature and the signer chains to a trusted root,
+    /// <see cref="VerificationOutcome.SignatureValidUntrusted"/> when it matches
+    /// but the signer doesn't, <see cref="VerificationOutcome.NotSigned"/> when
     /// the exchange set has no <c>CATALOG.SIGN</c>, and
     /// <see cref="VerificationOutcome.FileMissing"/> when the signed catalogue
     /// isn't there.
@@ -38,6 +40,10 @@ public sealed class CatalogueSignatureVerificationResult
     /// <summary>The parsed <c>CATALOG.SIGN</c>, when it could be read.</summary>
     public StandaloneDigitalSignature? Signature { get; }
 
-    /// <summary>Whether the catalogue signature and its certificate are valid.</summary>
+    /// <summary>
+    /// Whether the catalogue signature is valid and its certificate chains to a
+    /// trusted root. <see langword="false"/> for
+    /// <see cref="VerificationOutcome.SignatureValidUntrusted"/>.
+    /// </summary>
     public bool IsValid => Outcome == VerificationOutcome.Ok;
 }

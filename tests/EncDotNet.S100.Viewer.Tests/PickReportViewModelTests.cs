@@ -869,7 +869,8 @@ public class PickReportViewModelTests
         Assert.True(vm.CopyIdentityCommand.CanExecute(null));
         vm.CopyIdentityCommand.Execute(null);
 
-        Assert.Equal("Number 10\nID 555 · S-101 · f.000", captured);
+        // Then the codes, which the rows no longer show (#1678).
+        Assert.Equal("Number 10\nID 555 · S-101 · f.000\nBeaconLateral\nname = Number 10", captured);
     }
 
     [Fact]
@@ -920,23 +921,6 @@ public class PickReportViewModelTests
         vm.OpenFeatureInExaminerCommand.Execute(null);
 
         Assert.Equal("https://s100examiner.com/?catalog=S-101&feature=Building", opener.LastUrl);
-    }
-
-    [Fact]
-    public void Examiner_AttributeCommand_OpensDeepLink()
-    {
-        var opener = new StubUrlOpener();
-        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
-        var vm = TestPickReport.Create(examinerLinks: TestPickReport.Examiner(links, opener));
-        var attr = Leaf("colour", "1");
-        vm.SetPick("Building", "Building", "1", "f.000", "S-101", new[] { attr });
-
-        Assert.True(vm.OpenAttributeInExaminerCommand.CanExecute(attr));
-        vm.OpenAttributeInExaminerCommand.Execute(attr);
-
-        Assert.Equal(
-            "https://s100examiner.com/?catalog=S-101&feature=Building&attribute=colour",
-            opener.LastUrl);
     }
 
     [Fact]

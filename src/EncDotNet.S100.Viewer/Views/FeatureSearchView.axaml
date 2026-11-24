@@ -5,7 +5,8 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.FeatureSearchView"
-             x:DataType="vm:FeatureSearchViewModel">
+             x:DataType="vm:FeatureSearchViewModel"
+             views:ReferenceTerm.Terms="{Binding Terms}">
 
     <DockPanel LastChildFill="True">
 
@@ -77,6 +78,10 @@
                 <Style Selector="ListBoxItem" x:DataType="vm:FeatureSearchResultItem">
                     <Setter Property="AutomationProperties.Name" Value="{Binding DisplayType}" />
                 </Style>
+                <!-- A selected row's title keeps the accent when it is a term (App.axaml's accentListTitle). -->
+                <Style Selector="ListBox.accentList ListBoxItem:selected views|ReferenceTerm.accentListTitle">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                </Style>
             </ListBox.Styles>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureSearchResultItem">
@@ -87,10 +92,32 @@
                         pointer events and the row needs multiple clicks
                         to select (same fix as DatasetsView).
                     -->
+                    <!--
+                        The feature type is a Chart reference term (symbol dictionary
+                        R9b, #1681): plain text when the reference doesn't hold it.
+                        Open in reference shows only for a type it holds.
+                    -->
                     <Border Background="Transparent"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}">
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}"
+                            ContextRequested="OnResultContextRequested">
+                        <Border.ContextMenu>
+                            <ContextMenu AutomationProperties.AutomationId="Search.Result.Menu">
+                                <MenuItem Header="{x:Static loc:Strings.Search_OpenInReference}"
+                                          AutomationProperties.AutomationId="Search.Result.OpenInReference"
+                                          AutomationProperties.Name="{x:Static loc:Strings.Search_OpenInReference}"
+                                          ToolTip.Tip="{Binding OpenInReferenceTip}"
+                                          IsVisible="{Binding IsInReference}"
+                                          Click="OnOpenInReferenceClick" />
+                            </ContextMenu>
+                        </Border.ContextMenu>
                         <StackPanel Orientation="Vertical" Spacing="2">
-                            <TextBlock Text="{Binding DisplayType}" Classes="accentListTitle" FontWeight="SemiBold" />
+                            <views:ReferenceTerm Text="{Binding DisplayType}"
+                                                 Key="{Binding TermKey}"
+                                                 Classes="accentListTitle"
+                                                 FontWeight="SemiBold"
+                                                 TextWrapping="NoWrap"
+                                                 TextTrimming="CharacterEllipsis"
+                                                 AutomationProperties.AutomationId="Reference.Term" />
                             <TextBlock Text="{Binding FeatureRef}"
                                        FontSize="11"
                                        Opacity="0.75" />

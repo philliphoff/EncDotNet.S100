@@ -163,14 +163,76 @@ public sealed class TidesMirrorCommandTests : IDisposable
         Assert.Contains("The mirror at https://mirror.example/m.json didn't answer", stderr);
     }
 
+    [Fact]
+    public async Task Update_downloads_from_the_mirror_by_default()
+    {
+        var published = Publish("published", Catalogue, crawled: true);
+        var host = new FolderHost(published, TideCatalogueMirrorClientOptions.DefaultManifestAddress);
+        TidesUpdateCommand.HttpFactory = () => new HttpClient(host);
+        var local = Path.Combine(_directory, "local", "stations.json.gz");
+
+        var (exit, _, stderr) = Run(["tides", "update", "--catalogue", local]);
+
+        Assert.Equal(0, exit);
+        Assert.Contains($"from {TideCatalogueMirrorClientOptions.DefaultManifestAddress}", stderr);
+        Assert.DoesNotContain("NOAA instead", stderr);
+        Assert.All(host.Requests, uri => Assert.Equal("github.com", uri.Host));
+        Assert.Equal(
+            await File.ReadAllBytesAsync(Path.Combine(published, TideCatalogueManifest.DefaultCatalogueFileName), Token),
+            await File.ReadAllBytesAsync(local, Token));
+
+        // The newer-data hint names the plain command, since that's what reads the mirror.
+        var older = await SaveAsync("older.json.gz", c => c, retrieved: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero));
+        var (stale, staleOut, _) = Run(["tides", "update", "--check", "--catalogue", older]);
+        Assert.Equal(8, stale);
+        Assert.Contains("run 's100 tides update' to download it", staleOut);
+    }
+
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Update_falls_back_to_noaa_when_the_default_mirror_fails(bool check)
+    {
+        // Neither the mirror nor NOAA answers: the default tries NOAA after the mirror.
+        var host = new FolderHost(Path.Combine(_directory, "empty"), TideCatalogueMirrorClientOptions.DefaultManifestAddress);
+        TidesUpdateCommand.HttpFactory = () => new HttpClient(host);
+        string[] args = check
+            ? ["tides", "update", "--check", "--catalogue", Catalogue]
+            : ["tides", "update", "--catalogue", Path.Combine(_directory, "x.json.gz")];
+
+        var (exit, _, stderr) = Run(args);
+
+        Assert.Equal(1, exit);
+        Assert.Contains($"The mirror at {TideCatalogueMirrorClientOptions.DefaultManifestAddress} didn't answer", stderr);
+        Assert.Contains(check ? "Checking NOAA instead." : "Downloading from NOAA instead.", stderr);
+        Assert.Contains("Error: NOAA's metadata API didn't answer", stderr);
+        Assert.Contains(host.Requests, uri => uri.Host == "api.tidesandcurrents.noaa.gov");
+    }
+
+    [Fact]
+    public void Update_from_a_named_mirror_does_not_fall_back()
+    {
+        var host = new FolderHost(Path.Combine(_directory, "empty"), TideCatalogueMirrorClientOptions.DefaultManifestAddress);
+        TidesUpdateCommand.HttpFactory = () => new HttpClient(host);
+
+        var (exit, _, stderr) = Run(["tides", "update", "--from", "mirror", "--catalogue", Path.Combine(_directory, "x.json.gz")]);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("Error: The mirror at", stderr);
+        Assert.DoesNotContain("NOAA", stderr);
+        Assert.DoesNotContain(host.Requests, uri => uri.Host == "api.tidesandcurrents.noaa.gov");
+    }
+
+    [Theory]
+    [InlineData(null, true, "https://github.com/philliphoff/EncDotNet.S100/releases/download/tide-stations/tide-stations.manifest.json")]
+    [InlineData("", true, "https://github.com/philliphoff/EncDotNet.S100/releases/download/tide-stations/tide-stations.manifest.json")]
     [InlineData("noaa", true, null)]
     [InlineData("NOAA", true, null)]
     [InlineData("mirror", true, "https://github.com/philliphoff/EncDotNet.S100/releases/download/tide-stations/tide-stations.manifest.json")]
     [InlineData("https://example.org/m.json", true, "https://example.org/m.json")]
     [InlineData("ftp://example.org/m.json", false, null)]
     [InlineData("elsewhere", false, null)]
-    public void From_names_noaa_the_mirror_or_a_manifest_url(string from, bool valid, string? address)
+    public void From_names_noaa_the_mirror_or_a_manifest_url(string? from, bool valid, string? address)
     {
         Assert.Equal(valid, TidesUpdateCommand.TryGetMirrorAddress(from, out var uri));
         Assert.Equal(address, uri?.AbsoluteUri);
@@ -236,12 +298,16 @@ public sealed class TidesMirrorCommandTests : IDisposable
         }
     }
 
-    /// <summary>Serves a mirror's files from a folder, beside the manifest address.</summary>
+    /// <summary>Serves a mirror's files from a folder, beside the manifest address, and answers anything else, NOAA included, with 404.</summary>
     private sealed class FolderHost(string folder, Uri manifest) : HttpMessageHandler
     {
+        public List<Uri> Requests { get; } = [];
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var uri = request.RequestUri!;
+            lock (Requests)
+                Requests.Add(uri);
             var file = uri == manifest
                 ? Path.Combine(folder, TideCatalogueManifest.DefaultFileName)
                 : uri == new Uri(manifest, TideCatalogueManifest.DefaultCatalogueFileName)

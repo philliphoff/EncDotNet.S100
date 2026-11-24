@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <Description>AIS vessel targets as a dynamic feature source: AisDynamicFeatureSource keeps a per-MMSI cache with ITU-R M.1371-aligned ageing and projects targets to DynamicFeature, and IAisMessageSource is the interface AIS drivers implement. Decoder-agnostic; pair it with a driver such as EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo. Not for navigation.</Description>
+    <PackageTags>S-100;AIS;vessel;targets;dynamic;IHO;hydrography</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

@@ -132,7 +132,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`tides predict`](#tides-predict) | Predicts the tide at a station, as heights, highs and lows, or an S-104 dataset. |
 | [`tides currents stations`](#tides-currents-stations) | Lists tidal current stations near a point, from the offline station catalogue. |
 | [`tides currents predict`](#tides-currents-predict) | Predicts the tidal current at a station, as speeds and directions, slacks and maxima, or an S-111 dataset. |
-| [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, from NOAA or a mirror, or checks for newer data. |
+| [`tides update`](#tides-update) | Downloads NOAA's tide and current stations into the offline catalogue, from the EncDotNet.S100 mirror or NOAA, or checks for newer data. |
 | [`tides publish`](#tides-publish) | Prepares a tide station catalogue for a mirror: checks it, and writes it with its manifest. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`sources`](#sources) | Lists the live data sources `--source` takes, with their options and what each still needs. |
@@ -1596,15 +1596,17 @@ translation. Findings from the second pass have rule ids prefixed with
 
 **An exchange set** (a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a
 `.zip`) has each file's digital signature and checksum verified (S-100
-Part 15). An S-57 or S-63 exchange set (`CATALOG.031`) has its CRCs and
-signatures verified. The datasets themselves aren't checked against rule
+Part 15). An S-57 or S-63 exchange set (`CATALOG.031`) has its CRCs
+verified. Its S-63 signatures aren't checked yet: each file shows
+`SignatureNotChecked` rather than `NotSigned`, and the summary says the
+signatures weren't checked. The datasets themselves aren't checked against rule
 packs; validate them one at a time.
 
 | Option | Default | Description |
 |---|---|---|
 | `--format <format>` | `text` | `text` prints a table. `json` prints a report for scripts and CI. |
 | `--suppress <patterns>` | none | Drops findings whose rule id matches, comma-separated, for example `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. |
-| `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files and files without a checksum. |
+| `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files, files without a checksum, and signatures from a signer that isn't verified. |
 | `--no-updates` | off | Validates an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--debug` | off | Prints full stack traces on error. |
 
@@ -1618,6 +1620,11 @@ s100 validate exchange-set/CATALOG.XML
 s100 validate exchange-set.zip --format json
 s100 validate s57-set/CATALOG.031
 ```
+
+`validate` doesn't take trust roots yet. A signature that matches the file but
+whose signer doesn't chain to a trusted IHO Scheme Administrator shows as
+`SignatureValidUntrusted`, and the summary reads "Signer not verified" rather
+than "Verified". The JSON report's `hasUnverifiedSigners` is `true`.
 
 `--suppress` patterns match rule ids without regard to case. `*` matches any
 run of characters and is the only wildcard, so a pattern without `*` matches
@@ -1975,13 +1982,18 @@ offline catalogue. The other `tides` commands and `s100 mcp serve` read the
 catalogue with no network. SoundCharts reads its own station list; pass its
 path with `--catalogue` to fill it.
 
-`--from` says where to download from:
+By default it downloads the catalogue as one file of about 1.2 MB from the
+EncDotNet.S100 mirror, which takes a few seconds. A scheduled workflow
+refreshes the mirror from NOAA every week. The catalogue's provider and
+retrieval date are still NOAA's. If the mirror doesn't answer, or its file is
+damaged or in a newer format than this version of `s100` reads, the command
+says so and downloads from NOAA instead.
 
-- `noaa`, the default, reads NOAA's metadata API: about 3,400 requests at a
-  pace the API accepts, so it takes about 10 minutes.
-- `mirror` downloads the same catalogue as one file of about 1.2 MB from the
-  EncDotNet.S100 mirror. A scheduled workflow refreshes the mirror from NOAA
-  every week. The catalogue's provider and retrieval date are still NOAA's.
+`--from` chooses the source, with no fallback:
+
+- `mirror` downloads from the EncDotNet.S100 mirror only.
+- `noaa` reads NOAA's metadata API: about 3,400 requests at a pace the API
+  accepts, so it takes about 10 minutes.
 - A URL downloads from another mirror: the address of its
   `tide-stations.manifest.json` (see [`tides publish`](#tides-publish)).
 
@@ -1999,24 +2011,25 @@ folder in your local application data:
 so you can also write your own.
 
 `--check` asks whether there's newer data than the catalogue, and downloads
-nothing. With `--from noaa` it asks NOAA with a few requests: a new datum
-epoch, stations added, removed or moved, and datums accepted again. With a
-mirror it reads the mirror's manifest, one request, and there's newer data
-when the mirror's catalogue was retrieved from NOAA later than yours. It
-exits with code `8` when there's newer data. Without a network, a catalogue
-over 12 months old counts as stale.
+nothing. From a mirror, the default, it reads the mirror's manifest, one
+request: there's newer data when the mirror's catalogue was retrieved from
+NOAA later than yours. With `--from noaa`, or when the default mirror can't be
+used, it asks NOAA with a few requests: a new datum epoch, stations added,
+removed or moved, and datums accepted again. NOAA can have newer data for up
+to a week before the mirror does. It exits with code `8` when there's newer
+data. Without a network, a catalogue over 12 months old counts as stale.
 
 | Option | Default | Description |
 |---|---|---|
 | `--check` | off | Only checks for newer data. Exits with `0` when the catalogue is current and `8` when it isn't. |
-| `--from <source>` | `noaa` | `noaa`, `mirror`, or the URL of a mirror's manifest. |
+| `--from <source>` | the mirror, then NOAA | `mirror`, `noaa`, or the URL of a mirror's manifest. Given, there's no fallback. |
 | `--catalogue <file>` | the offline cache | Where to keep the catalogue. |
 
 ```bash
 s100 tides update
 s100 tides update --check
-s100 tides update --from mirror
-s100 tides update --from mirror --check
+s100 tides update --from noaa
+s100 tides update --from noaa --check
 ```
 
 ## tides publish

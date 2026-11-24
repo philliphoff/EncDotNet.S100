@@ -115,6 +115,58 @@ internal static class SyntheticS57Cell
     }
 
     /// <summary>
+    /// Writes a copy of the NOAA fixture into <paramref name="directory"/> whose
+    /// wreck (<c>WRECKS</c>, object class 159) is a red stake lateral beacon
+    /// (<c>BCNLAT</c>, 7) marking the port side: <c>COLOUR</c> 3,
+    /// <c>BCNSHP</c> 1 and <c>CATLAM</c> 1, named "<c>Bn 1</c>". The cell has no
+    /// beacon of its own. Its attributes are rewritten in place, so its
+    /// <c>OBJNAM</c> is padded with spaces to the wreck's attribute field's
+    /// length. Returns the cell's full path.
+    /// </summary>
+    public static string WriteWithLateralBeacon(string directory, string fileName)
+    {
+        const ushort wrecks = 159;
+        const ushort lateralBeacon = 7;
+        const ushort colour = 75, beaconShape = 2, categoryOfLateralMark = 36, objectName = 116;
+        const byte fieldTerminator = 0x1E;
+        var document = Iso8211DocumentReader.ReadFromFile(FixturePath());
+
+        // FRID (binary): RCNM b11, RCID b14, PRIM b11, GRUP b11, OBJL b12, …
+        var record = document.DataRecords.First(r =>
+            r.Fields.FirstOrDefault(f => f.Tag == "FRID") is { } frid && BitConverter.ToUInt16(frid.Data.Span[7..]) == wrecks);
+        var fridData = Writable(record.Fields.First(f => f.Tag == "FRID"));
+        BitConverter.TryWriteBytes(fridData[7..], lateralBeacon);
+
+        // ATTF (binary): repeated ATTL b12 and ATVL, each value closed by a
+        // unit terminator, then the field terminator.
+        var attf = Writable(record.Fields.First(f => f.Tag == "ATTF"));
+        var bytes = new List<byte>();
+        void Add(ushort code, string value)
+        {
+            bytes.AddRange(BitConverter.GetBytes(code));
+            bytes.AddRange(System.Text.Encoding.ASCII.GetBytes(value));
+            bytes.Add(UnitTerminator);
+        }
+
+        Add(colour, "3");
+        Add(beaconShape, "1");
+        Add(categoryOfLateralMark, "1");
+        // The field's data may or may not hold its terminator.
+        var terminated = attf[^1] == fieldTerminator;
+        var padding = attf.Length - bytes.Count - 2 - 1 - (terminated ? 1 : 0);
+        if (padding < "Bn 1".Length)
+            throw new InvalidOperationException($"The wreck's attributes are too short ({attf.Length} bytes) to hold a beacon's.");
+        Add(objectName, "Bn 1".PadRight(padding));
+        if (terminated)
+            bytes.Add(fieldTerminator);
+        bytes.ToArray().CopyTo(attf);
+
+        var path = Path.Combine(directory, fileName);
+        Iso8211DocumentWriter.WriteToFile(path, document);
+        return path;
+    }
+
+    /// <summary>
     /// Locates <c>PRSP</c> in a binary-implementation DSID field (S-57 Edition 3.1
     /// Part 3 §7.3.1.1): RCNM (b11), RCID (b14), EXPP (b11), INTU (b11); the
     /// variable-length DSNM, EDTN and UPDN, each closed by a unit terminator;

@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -337,6 +338,13 @@ internal sealed class LegendService : IDisposable
             if (key.Count > group.Rows.Count)
                 section.ChartReferenceSpec = section.CatalogueSpec;
         }
+        else if (section.Groups.Any(g => g.Rows.Any(NamesCatalogueItem)))
+        {
+            // A catalogue product's own legend (symbol dictionary R9b, #1681):
+            // rows that name a feature type, symbol, line style or fill are
+            // terms in the product's Chart reference.
+            section.CatalogueSpec = section.Datasets.Select(d => d.Entry?.PortrayalSpec).FirstOrDefault(s => s is not null) ?? section.Spec;
+        }
 
         var datasets = section.Datasets;
         var source = datasets.Count == 1
@@ -374,6 +382,16 @@ internal sealed class LegendService : IDisposable
             Groups = [.. section.Groups],
         };
     }
+
+    /// <summary>Whether a sub-layer legend row names a catalogue item, so it can be a Chart reference term.</summary>
+    private static bool NamesCatalogueItem(LegendEntry row) => row switch
+    {
+        { FeatureType: { Length: > 0 } } => true,
+        SymbolLegendEntry { SymbolName: { Length: > 0 } } => true,
+        LineLegendEntry { LineStyleName: { Length: > 0 } } => true,
+        FillLegendEntry { AreaFillName: { Length: > 0 } } => true,
+        _ => false,
+    };
 
     /// <summary>A catalogue product's key (D7): its most drawn symbols, and how many it draws in all.</summary>
     private static (string Caption, LegendGroup Group) CatalogueGroup(SectionBuilder section, CatalogueSymbolKey key)
@@ -499,6 +517,51 @@ internal sealed class LegendService : IDisposable
                 return new LegendRowMatch(section, row);
         }
         return null;
+    }
+
+    /// <summary>
+    /// What the renderer drew for a picked feature of a catalogue-portrayed
+    /// product (S-101, an S-57 cell drawn with S-101's catalogue…): its point
+    /// symbols, line styles, fills and text, read from the display lists of
+    /// the stack entries its dataset draws now (symbol dictionary R10,
+    /// #1679). Null when the feature's product isn't catalogue-portrayed, so
+    /// its key line (<see cref="FindRow"/>) stands instead, or when nothing
+    /// of it is drawn.
+    /// </summary>
+    /// <param name="hit">The picked feature.</param>
+    internal PickDrawing? DrawnParts(PickHit hit)
+    {
+        ArgumentNullException.ThrowIfNull(hit);
+        if (hit.DatasetId is not { } datasetId || string.IsNullOrEmpty(hit.FeatureRef))
+            return null;
+        var dataset = _datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal));
+        if (dataset is { IsVisible: false })
+            return null;
+
+        var scale = ViewScale();
+        var parts = new List<PickDrawnPart>();
+        SpecRef? spec = null;
+        foreach (var item in _loader.CurrentStackEntries)
+        {
+            if (!string.Equals(item.SourceDatasetId, datasetId, StringComparison.Ordinal)
+                || item.Item.Payload is not VectorStackPayload vector
+                || !IsCatalogueProduct(vector))
+            {
+                continue;
+            }
+
+            var portrayedWith = dataset?.PortrayalSpec ?? vector.Result.Spec.Name;
+            if (spec is null)
+            {
+                if (portrayedWith is null || !SpecName.TryNormalize(portrayedWith, out var name))
+                    continue;
+                spec = new SpecRef(name, default);
+            }
+
+            PickDrawnParts.Add(vector, spec.Value, hit.FeatureRef, item.SuppressedFeatures, scale, parts);
+        }
+
+        return spec is { } s && parts.Count > 0 ? new PickDrawing(s, PickDrawnParts.Ordered(parts)) : null;
     }
 
     // Transforms WGS-84 into a grid's CRS for a band row's tint (#1433).

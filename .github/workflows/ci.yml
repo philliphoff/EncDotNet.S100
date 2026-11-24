@@ -134,6 +134,16 @@ jobs:
         # Datasets.SXXX libraries are published automatically with no edit here.
         run: dotnet pack EncDotNet.S100.slnx --no-build --configuration Release --output nupkgs -p:Version=$VERSION
 
+      - name: Check packages restore
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        # A packable project that references an IsPackable=false project lists
+        # an unpublished package as a dependency, and consumers fail with
+        # NU1101 (issue #1702). Check every package's first-party dependencies
+        # were packed, then restore a consumer from nupkgs plus nuget.org.
+        # Runs before publish-nuget, which needs this job.
+        run: tools/package-check/check-package-restore.sh nupkgs "$VERSION"
+
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v7
         with:
