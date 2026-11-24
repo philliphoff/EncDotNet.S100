@@ -362,8 +362,8 @@ needs slices 1 and 3, and slice 5 needs slice 4. Slices 6 and 7 need
 slice 5 and can run in parallel. Slice 8 needs slice 5; its link and pick
 parts follow slices 6 and 7.
 
-The sharing work (§2.7) is a separate engine track. It has landed (or is
-in review) ahead of slice 5:
+The sharing work (§2.7) is a separate engine track. All four slices
+merged on 2026-11-24, ahead of slice 5:
 
 - **S1. Shared vector scenes** (#1706). The renderer keeps the scenes it
   built per processor, keyed like the tile disk cache, and a second map
