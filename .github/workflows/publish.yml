@@ -105,21 +105,26 @@ jobs:
         # #1674 stage 5: ship the tide-stations mirror's NOAA catalogue
         # (about 1.2 MB) with the viewer and the CLI, so tide predictions work
         # on first launch with no network. The file must match its manifest's
-        # SHA-256. A mirror that can't be reached, or a mismatch, only warns:
-        # the build then ships without it, and the apps download the list on
-        # first use as before.
+        # SHA-256. A mirror that can't be reached, a mismatch, or any other
+        # failure here only warns (continue-on-error): the build then ships
+        # without it, and the apps download the list on first use as before.
         id: tides
+        continue-on-error: true
         shell: bash
         env:
           MIRROR: https://github.com/${{ github.repository }}/releases/download/tide-stations
           SNAPSHOT: ${{ github.workspace }}/tide-stations-snapshot
         run: |
+          # sha256sum on Linux and Git Bash on Windows; shasum on macOS.
+          sha256() {
+            if command -v sha256sum > /dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+          }
           mkdir -p "$SNAPSHOT"
           cd "$SNAPSHOT"
           if curl -fsSL --retry 3 -o tide-stations.manifest.json "$MIRROR/tide-stations.manifest.json" \
             && curl -fsSL --retry 3 -o tide-stations.json.gz "$MIRROR/tide-stations.json.gz"; then
             expected="$(jq -r '.sha256' tide-stations.manifest.json)"
-            actual="$(shasum -a 256 tide-stations.json.gz | cut -d' ' -f1)"
+            actual="$(sha256 tide-stations.json.gz)"
             if [ "$expected" = "$actual" ]; then
               echo "Shipping the tide station snapshot retrieved $(jq -r '.retrieved' tide-stations.manifest.json)."
               echo "dir=$SNAPSHOT" >> "$GITHUB_OUTPUT"
