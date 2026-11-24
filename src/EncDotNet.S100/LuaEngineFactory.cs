@@ -24,4 +24,12 @@ public static class LuaEngineFactory
         LuaEngineKind.MoonSharp => new MoonSharpLuaEngine(),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown Lua engine."),
     };
+
+    /// <summary>
+    /// Creates the engine that traces portrayal rules: LuaCSharp, the engine
+    /// with a line hook (<see cref="ILuaContext.TrySetLineHook"/>). Tracing
+    /// and probing use it whichever engine draws the map.
+    /// </summary>
+    /// <returns>A new LuaCSharp engine.</returns>
+    public static ILuaEngine CreateForTracing() => new LuaCSharpLuaEngine();
 }

@@ -14,6 +14,51 @@ public interface ILuaContext : IDisposable
     void Execute(string source);
 
     /// <summary>
+    /// Executes a chunk of Lua source code under a chunk name, as a file
+    /// loaded by Lua would be: error messages and a line hook
+    /// (<see cref="TrySetLineHook"/>) name <paramref name="chunkName"/>
+    /// instead of the source.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation ignores the name and calls
+    /// <see cref="Execute(string)"/>.
+    /// </remarks>
+    /// <param name="source">The Lua source.</param>
+    /// <param name="chunkName">The chunk's name, for example <c>main.lua</c>.</param>
+    void Execute(string source, string chunkName) => Execute(source);
+
+    /// <summary>
+    /// Installs or removes a hook that is called before each new line of Lua
+    /// runs, with the name of the chunk the line is in and its line number,
+    /// both as Lua's error messages give them. A tool that traces which
+    /// lines of a portrayal rule ran installs one; rendering never does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The chunk name is a module's name with its <c>.lua</c> extension
+    /// (<c>require 'TOPMAR02'</c> runs in <c>TOPMAR02.lua</c>), the name
+    /// given to <see cref="Execute(string, string)"/>, or, for a chunk run
+    /// by <see cref="Execute(string)"/>, its source. Lines are numbered from
+    /// 1, counting line feeds in the source the chunk was loaded from.
+    /// </para>
+    /// <para>
+    /// Lines run in coroutines the script creates after the hook is
+    /// installed are reported too. Lines run in coroutines created before
+    /// it might not be. The default implementation supports no hook and
+    /// returns <see langword="false"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="hook">
+    /// The hook, called with the chunk name and line number, or
+    /// <see langword="null"/> to remove the hook.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> if the engine supports a line hook and it was
+    /// installed or removed; <see langword="false"/> if the engine has none.
+    /// </returns>
+    bool TrySetLineHook(Action<string, int>? hook) => false;
+
+    /// <summary>
     /// Registers a callback that resolves module names to Lua source code,
     /// enabling the Lua <c>require()</c> function. When a script calls
     /// <c>require("moduleName")</c>, the callback is invoked with the module

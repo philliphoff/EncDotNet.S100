@@ -89,6 +89,20 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
         MarinerSettings mariner, CancellationToken cancellationToken = default)
         => _inner.OpenSessionAsync(mariner, cancellationToken);
 
+    /// <summary>
+    /// Opens a session that portrays chosen features on
+    /// <paramref name="traceEngine"/> with a line hook, and returns each
+    /// feature's drawing instructions and the rule lines that ran. See
+    /// <see cref="LuaRuleExecutor.OpenTraceSessionAsync"/>.
+    /// </summary>
+    /// <param name="traceEngine">An engine with a line hook (LuaCSharp), whichever engine draws the map.</param>
+    /// <param name="mariner">The mariner settings, for the context parameters.</param>
+    /// <param name="cancellationToken">Cancels loading the rules.</param>
+    /// <returns>The session; the caller disposes it.</returns>
+    public Task<LuaTraceSession> OpenTraceSessionAsync(
+        ILuaEngine traceEngine, MarinerSettings mariner, CancellationToken cancellationToken = default)
+        => _inner.OpenTraceSessionAsync(traceEngine, mariner, cancellationToken);
+
     /// <inheritdoc/>
     public Task<IReadOnlyList<EmittedInstruction>> ExecuteRawAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default)

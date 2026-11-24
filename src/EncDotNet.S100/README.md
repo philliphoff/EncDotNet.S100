@@ -203,7 +203,8 @@ using var factory = BundledDatasetProcessorFactory.Create(LuaEngineKind.MoonShar
 ```
 
 `LuaEngineFactory.Create` returns either engine as an `ILuaEngine`, for a
-`DatasetPipelineFactory` you build yourself. The engines produce the same
+`DatasetPipelineFactory` you build yourself. `LuaEngineFactory.CreateForTracing`
+returns the LuaCSharp engine, whose line hook traces which rule lines ran. The engines produce the same
 portrayal, except where Lua leaves the result to the implementation; see the
 [`EncDotNet.S100.Scripting.LuaCSharp` README](../EncDotNet.S100.Scripting.LuaCSharp/README.md).
 
