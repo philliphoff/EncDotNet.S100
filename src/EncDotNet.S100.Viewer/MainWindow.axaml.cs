@@ -192,7 +192,8 @@ public partial class MainWindow : ShadUI.Window
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
             new ViewerUiController(_viewModel.Layout);
-        _loader.Initialize(mapHost, mapHost, options);
+        // The loader drives every map's dataset session (#1731).
+        _loader.Initialize(mapViews, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
         _viewModel.Datasets.ZoomDispatcher = mapHost.ZoomToExtent;

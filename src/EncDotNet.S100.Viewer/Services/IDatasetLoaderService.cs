@@ -16,18 +16,23 @@ namespace EncDotNet.S100.Viewer.Services;
 internal interface IDatasetLoaderService
 {
     /// <summary>
-    /// Wires the loader to a map host and seeds catalogue/pipeline state
-    /// from the supplied CLI options. Must be called exactly once before
-    /// any <see cref="LoadAsync"/> call.
+    /// Wires the loader to the window's maps and seeds catalogue/pipeline
+    /// state from the supplied CLI options. Must be called exactly once
+    /// before any <see cref="LoadAsync"/> call.
     /// </summary>
-    void Initialize(
-        IMapLayerCollection layerCollection,
-        IMapViewportController viewport,
-        ViewerCommandSettings? options);
+    /// <remarks>
+    /// The loader drives every map's dataset session, and follows
+    /// <paramref name="views"/> as maps are added and removed: a map added
+    /// later catches up to the loaded datasets, and a removed map's session
+    /// is released (split map, #1731).
+    /// </remarks>
+    /// <param name="views">The window's maps.</param>
+    /// <param name="options">The CLI options.</param>
+    void Initialize(MapViews views, ViewerCommandSettings? options);
 
     /// <summary>
     /// <see langword="true"/> once <see cref="Initialize"/> has wired the
-    /// loader to a map host, after which <see cref="LoadAsync"/> /
+    /// loader to the maps and there is at least one, after which <see cref="LoadAsync"/> /
     /// <see cref="RemoveEntry"/> are safe to call. Consumers that may run
     /// before the window has constructed the map host (e.g. the MCP
     /// open/close dataset tools) gate on this to return a clean

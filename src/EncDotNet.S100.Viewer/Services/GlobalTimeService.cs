@@ -3,12 +3,18 @@ using EncDotNet.S100.Renderers.Mapsui;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Projects a <see cref="MapsuiDatasetLayerSession"/>'s aggregate time state into the
-/// Viewer's global timeline model.
+/// Projects the map sessions' aggregate time state into the Viewer's global
+/// timeline model.
 /// </summary>
+/// <remarks>
+/// Several sessions can be attached, one per map (split map, #1731). The
+/// timeline reads the first attached one (the primary); setting the view time
+/// sets every session's clock, so in step 1 the maps share one time. When the
+/// primary is detached the next session becomes primary.
+/// </remarks>
 internal sealed class GlobalTimeService
 {
-    private MapsuiDatasetLayerSession? _session;
+    private readonly List<IMapDatasetSession> _sessions = [];
     private MapsuiMapTimeSnapshot _snapshot = MapsuiMapTimeSnapshot.Empty;
     private bool _openEnded;
     private DateTime _ownTime;
@@ -86,20 +92,61 @@ internal sealed class GlobalTimeService
     /// <summary>Raised whenever the global map clock changes.</summary>
     public event Action<DateTime>? CurrentTimeChanged;
 
-    /// <summary>Attaches this Viewer projection to the reusable map session.</summary>
-    public void AttachTo(MapsuiDatasetLayerSession session)
+    private IMapDatasetSession? Primary => _sessions.Count == 0 ? null : _sessions[0];
+
+    /// <summary>
+    /// Attaches a map session. The first one attached is the primary, which
+    /// the timeline reads; attaching one again does nothing.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    public void AttachTo(IMapDatasetSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        if (ReferenceEquals(_session, session))
+        if (_sessions.Contains(session))
             return;
-        if (_session is not null)
-            throw new InvalidOperationException(
-                "GlobalTimeService is already attached to a map session.");
 
-        _session = session;
-        _session.Clock = Clock;
-        _session.TimeRangeChanged += OnTimeRangeChanged;
-        _session.CurrentTimeChanged += OnCurrentTimeChanged;
+        session.Clock = Clock;
+        _sessions.Add(session);
+        if (_sessions.Count == 1)
+            Follow(session);
+    }
+
+    /// <summary>
+    /// Detaches a map session. Detaching the primary makes the next session
+    /// primary, and the timeline reads it from then on.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    /// <returns><see langword="true"/> when the session was attached.</returns>
+    public bool Detach(IMapDatasetSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var index = _sessions.IndexOf(session);
+        if (index < 0)
+            return false;
+
+        _sessions.RemoveAt(index);
+        if (index == 0)
+        {
+            session.TimeRangeChanged -= OnTimeRangeChanged;
+            session.CurrentTimeChanged -= OnCurrentTimeChanged;
+            if (Primary is { } next)
+            {
+                Follow(next);
+            }
+            else
+            {
+                UpdateSnapshot();
+                RangeChanged?.Invoke();
+            }
+        }
+
+        return true;
+    }
+
+    private void Follow(IMapDatasetSession session)
+    {
+        session.TimeRangeChanged += OnTimeRangeChanged;
+        session.CurrentTimeChanged += OnCurrentTimeChanged;
         UpdateSnapshot();
         RangeChanged?.Invoke();
         if (_snapshot.Current is { } current)
@@ -159,9 +206,11 @@ internal sealed class GlobalTimeService
             return;
         }
 
-        if (_session is not null)
+        if (_sessions.Count > 0)
         {
-            _session.SetCurrentTime(time);
+            // Every map takes the time; the primary's clock event updates the timeline.
+            foreach (var session in _sessions.ToArray())
+                session.SetCurrentTime(time);
             return;
         }
         if (!_snapshot.IsActive || _snapshot.Current == time)
@@ -182,7 +231,7 @@ internal sealed class GlobalTimeService
     internal void ApplySnapshot(MapsuiMapTimeSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        if (_session is not null)
+        if (_sessions.Count > 0)
             throw new InvalidOperationException(
                 "An attached time projection can only be updated by its map session.");
 
@@ -216,7 +265,7 @@ internal sealed class GlobalTimeService
 
     private void UpdateSnapshot()
     {
-        _snapshot = _session?.GetTimeSnapshot() ?? MapsuiMapTimeSnapshot.Empty;
+        _snapshot = Primary?.GetTimeSnapshot() ?? MapsuiMapTimeSnapshot.Empty;
         CoverageSegments = _snapshot.CoverageSegments
             .Select(segment => new CoverageSegment(segment.Start, segment.End))
             .ToArray();

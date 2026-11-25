@@ -97,6 +97,7 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
             services.GetRequiredService<
                 EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
             Planner);
+        DatasetSession = new MapsuiMapDatasetSession(Host.DatasetSession);
 
         // Bind this map's own viewport now, so a view registered with
         // MapViews before Attach already reports where it is: the AIS
@@ -131,6 +132,9 @@ internal sealed class MapView : IMapViewCapabilities, IDisposable
 
     /// <inheritdoc />
     public EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner Planner { get; }
+
+    /// <inheritdoc />
+    public IMapDatasetSession DatasetSession { get; }
 
     /// <summary>
     /// The render-activity monitor fed by this map, or <see langword="null"/>

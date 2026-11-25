@@ -66,7 +66,7 @@ public class GlobalTimeServiceTests
         service.RangeChanged += () => rangeChanged++;
         service.CurrentTimeChanged += current => currentChanged = current;
 
-        service.AttachTo(session);
+        service.AttachTo(new MapsuiMapDatasetSession(session));
 
         Assert.Equal(1, rangeChanged);
         Assert.Equal(time, currentChanged);
@@ -222,7 +222,7 @@ public class GlobalTimeServiceTests
         var run = new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc);
         var now = run.AddHours(4).AddMinutes(34);
         var service = new GlobalTimeService();
-        service.AttachTo(session);
+        service.AttachTo(new MapsuiMapDatasetSession(session));
         // As DatasetLoaderService does: every clock change is re-applied to the session.
         service.CurrentTimeChanged += time => session.SetCurrentTime(time);
         _ = new TimelineViewModel(service, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(now)), action => action(), refresher: null, progress: null, scope: null, library: null);
