@@ -1,9 +1,8 @@
-using EncDotNet.S100.Datasets.Pipelines.Reference;
 
-namespace EncDotNet.S100.Viewer.Services.ChartReference;
+namespace EncDotNet.S100.Datasets.Pipelines.Reference;
 
 /// <summary>What a Chart reference tile shows.</summary>
-internal enum LeadGlyphKind
+public enum LeadGlyphKind
 {
     /// <summary>Nothing: the entry has no symbol of its own.</summary>
     None,
@@ -34,14 +33,14 @@ internal enum LeadGlyphKind
 /// </summary>
 /// <param name="Kind">What the tile shows.</param>
 /// <param name="Key">
-/// The <see cref="ChartReferenceGlyphCache"/> key: the item's own key for a
+/// The key a glyph cache holds it under: the item's own key for a
 /// symbol, line style or area fill, so feature types that lead with the same
 /// symbol share its glyph; the feature type's key for area patches and plain lines.
 /// </param>
 /// <param name="ItemId">The symbol, line style or area fill id, or <see langword="null"/>.</param>
 /// <param name="Tokens">The colour tokens of <see cref="LeadGlyphKind.Area"/>, in order.</param>
 /// <param name="Pen">The plain line of <see cref="LeadGlyphKind.Pen"/>.</param>
-internal sealed record LeadGlyph(
+public sealed record LeadGlyph(
     LeadGlyphKind Kind,
     ReferenceKey Key,
     string? ItemId = null,

@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **The chart reference as a web page.** `s100 reference export --spec S-101
+  --palette day --out <folder>` writes the chart reference as a static HTML
+  site that works offline: an index with a search box, and a page for each
+  feature type, symbol, line style, area fill, attribute and display
+  setting, with the Reference tab's sections, links between them, and
+  glyphs in the chosen palette. With the committed probe results, feature
+  types show their variant tables, attributes what each value draws, and
+  display settings before and after pairs. Exporting the same catalogues
+  again writes the same files
+  ([#1723](https://github.com/philliphoff/EncDotNet.S100/issues/1723)).
+
 - **`s100 --version` prints one line.** A nightly build's version, with its
   "(nightly build, unsupported)" note, is longer than 80 columns, and when
   the output was redirected it wrapped onto a second line, which broke

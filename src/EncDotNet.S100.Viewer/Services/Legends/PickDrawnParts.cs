@@ -67,7 +67,7 @@ internal sealed record PickDrawnPart(
     /// <c>?</c> a rule draws when nothing else fits (<see cref="ChartReference.LeadGlyph.DefaultSymbols"/>).
     /// </summary>
     public bool IsFallback =>
-        Kind == PickDrawnPartKind.Symbol && ItemId is { } id && ChartReference.LeadGlyph.DefaultSymbols.Contains(id);
+        Kind == PickDrawnPartKind.Symbol && ItemId is { } id && EncDotNet.S100.Datasets.Pipelines.Reference.LeadGlyph.DefaultSymbols.Contains(id);
 }
 
 /// <summary>

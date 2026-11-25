@@ -1,5 +1,4 @@
 using EncDotNet.S100.Datasets.Pipelines.Reference;
-using EncDotNet.S100.Viewer.Services.ChartReference;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

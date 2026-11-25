@@ -113,61 +113,36 @@ internal static partial class Strings
 
     public static string Tooltip_ChartReferenceLink => Get(nameof(Tooltip_ChartReferenceLink));
 
-    public static string ChartReference_Condition_Is => Get(nameof(ChartReference_Condition_Is));
 
-    public static string ChartReference_Condition_IsNot => Get(nameof(ChartReference_Condition_IsNot));
 
-    public static string ChartReference_Condition_LessThan => Get(nameof(ChartReference_Condition_LessThan));
 
-    public static string ChartReference_Condition_AtMost => Get(nameof(ChartReference_Condition_AtMost));
 
-    public static string ChartReference_Condition_GreaterThan => Get(nameof(ChartReference_Condition_GreaterThan));
 
-    public static string ChartReference_Condition_AtLeast => Get(nameof(ChartReference_Condition_AtLeast));
 
-    public static string ChartReference_Condition_Given => Get(nameof(ChartReference_Condition_Given));
 
-    public static string ChartReference_Condition_NotGiven => Get(nameof(ChartReference_Condition_NotGiven));
 
     public static string ChartReference_Condition_On => Get(nameof(ChartReference_Condition_On));
 
     public static string ChartReference_Condition_Off => Get(nameof(ChartReference_Condition_Off));
 
-    public static string ChartReference_Condition_Expression => Get(nameof(ChartReference_Condition_Expression));
 
-    public static string ChartReference_Condition_ExpressionFails => Get(nameof(ChartReference_Condition_ExpressionFails));
 
-    public static string ChartReference_Condition_Otherwise => Get(nameof(ChartReference_Condition_Otherwise));
 
-    public static string ChartReference_Condition_FeatureType => Get(nameof(ChartReference_Condition_FeatureType));
 
-    public static string ChartReference_Condition_Geometry => Get(nameof(ChartReference_Condition_Geometry));
 
-    public static string ChartReference_Condition_OrJoin => Get(nameof(ChartReference_Condition_OrJoin));
 
-    public static string ChartReference_Condition_ArticleA => Get(nameof(ChartReference_Condition_ArticleA));
 
-    public static string ChartReference_Condition_ArticleAn => Get(nameof(ChartReference_Condition_ArticleAn));
 
-    public static string ChartReference_Geometry_Point => Get(nameof(ChartReference_Geometry_Point));
 
-    public static string ChartReference_Geometry_MultiPoint => Get(nameof(ChartReference_Geometry_MultiPoint));
 
-    public static string ChartReference_Geometry_Curve => Get(nameof(ChartReference_Geometry_Curve));
 
-    public static string ChartReference_Geometry_Surface => Get(nameof(ChartReference_Geometry_Surface));
 
-    public static string ChartReference_Condition_Includes => Get(nameof(ChartReference_Condition_Includes));
 
-    public static string ChartReference_Condition_Excludes => Get(nameof(ChartReference_Condition_Excludes));
 
-    public static string ChartReference_Condition_OrMore => Get(nameof(ChartReference_Condition_OrMore));
 
     public static string ChartReference_Condition_AndJoin => Get(nameof(ChartReference_Condition_AndJoin));
 
-    public static string ChartReference_Condition_Yes => Get(nameof(ChartReference_Condition_Yes));
 
-    public static string ChartReference_Condition_No => Get(nameof(ChartReference_Condition_No));
 
     public static string ChartReference_HeaderName => Get(nameof(ChartReference_HeaderName));
 

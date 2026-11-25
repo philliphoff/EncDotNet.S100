@@ -185,12 +185,17 @@ internal static class CliApp
 
             config.AddBranch("reference", reference =>
             {
-                reference.SetDescription("Build the chart reference's data from the bundled catalogues.");
+                reference.SetDescription("Build and export the chart reference from the catalogues.");
 
                 reference.AddCommand<ReferenceProbeCommand>("probe")
                     .WithDescription("Run each feature type's portrayal rule over the values it reads and write what each combination draws, and why, next to the bundled portrayal catalogue (content/S101/pc/rule-probes.json), keyed by the catalogue hashes. Run it when a bundled catalogue changes.")
                     .WithExample("reference", "probe", "--spec", "S-101")
                     .WithExample("reference", "probe", "--spec", "S-101", "--feature-type", "LateralBeacon", "-o", "beacon.json");
+
+                reference.AddCommand<ReferenceExportCommand>("export")
+                    .WithDescription("Write a product's chart reference as a static HTML site that works offline: an index with a search box, and a page per feature type, symbol, line style, area fill, attribute and display setting, with glyphs in the chosen palette and, when the rules have been probed, the variant tables.")
+                    .WithExample("reference", "export", "--spec", "S-101", "--palette", "day", "--out", "s101-reference")
+                    .WithExample("reference", "export", "--spec", "S-101", "--palette", "night", "--no-probes", "--out", "s101-night");
             });
 
             config.AddBranch("feed", feed =>

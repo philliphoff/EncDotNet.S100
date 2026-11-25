@@ -977,6 +977,28 @@ it reads the disk cache, or probes and caches the results. Probing S-101 takes
 about 5 seconds on 4 cores. `s100 reference probe` writes the committed file;
 see the [CLI README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/README.md#reference-probe).
 
+### Conditions in words and glyphs
+
+`RuleConditionText` puts a use's conditions into words with the feature
+catalogue's names, such as "Simplified symbols is on · Colour is red · Beacon
+shape is a stake, pole, perch or post". It returns `TermText`, whose runs
+name the attribute, listed value or display setting entry each word stands
+for, so a host can make them links. `LeadGlyph.For` picks the glyph a feature
+type or item leads with, and `ChartReferenceArtwork` reads the catalogue
+artwork and builds its legend row for `LegendGlyphRenderer`. SoundCharts'
+Reference tab and `s100 reference export` both use them, so they say and
+draw the same things.
+
+```csharp
+var beacon = (FeatureTypeEntry)index.FeatureTypes.First(f => f.Code == "LateralBeacon");
+foreach (var use in beacon.Uses)
+    Console.WriteLine($"{use.ItemId}: {RuleConditionText.Describe(use.Conditions, index)}");
+
+var artwork = new ChartReferenceArtwork(portrayal);
+var row = await artwork.BuildAsync(LeadGlyph.For(beacon, index, simplifiedSymbols: true), PaletteType.Day);
+using var bitmap = LegendGlyphRenderer.RenderFitted(row!, 48, 48, deviceScale: 2f, padding: 6.7f);
+```
+
 ## S-101 render caching
 
 This section describes internals, for contributors.

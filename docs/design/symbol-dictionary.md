@@ -511,7 +511,7 @@ written in XSLT keep R11's match.
     sampled either side of the thresholds the rule compares them with and
     of the display settings it reads. A feature type that hits the cap is
     marked partial.
-    - `encdotnet reference probe --spec S-101` writes the results to a file
+    - `s100 reference probe --spec S-101` writes the results to a file
       committed next to the catalogue (`content/S101/pc/`), keyed by the two
       catalogue hashes. It's run when a bundled catalogue changes, not on
       every build; a test fails when the committed file's hashes don't match.
@@ -524,10 +524,13 @@ written in XSLT keep R11's match.
 16. **R13c Value columns and before/after pairs.** Attribute entries opened
     from a feature show each listed value's symbol in both styles (C3);
     display setting entries show before/after pairs (C4).
-17. **R14 HTML export.** `encdotnet reference export --spec S-101 --palette
-    day` writes a static HTML reference: every entry, with the variant
-    tables when the probe file is present. PDF from the study page comes
-    later (§5).
+17. **R14 HTML export.** `s100 reference export --spec S-101 --palette
+    day --out <dir>` writes a static HTML reference: every entry, with the
+    variant tables when the probe file is present. PDF from the study page
+    comes later (§5). Built ([#1723](https://github.com/philliphoff/EncDotNet.S100/issues/1723)):
+    to share the Reference tab's words and glyphs, `RuleConditionText`,
+    `TermText`, `LeadGlyph` and `ChartReferenceArtwork` moved from the viewer
+    to `EncDotNet.S100.Datasets.Pipelines.Reference`.
 
 R12a comes first. R12b and R13a can then run side by side, then R13b and
 R13c side by side. R14 can follow R13a.
