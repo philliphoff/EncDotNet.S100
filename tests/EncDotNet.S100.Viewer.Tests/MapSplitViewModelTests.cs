@@ -354,4 +354,117 @@ public sealed class MapSplitViewModelTests
         Assert.Equal(["map-1"], f.Ids);
         Assert.False(f.Pane("map-1").IsFolded);
     }
+
+    [Fact]
+    public void Folding_a_pane_keeps_it_folded_however_wide_the_map_area()
+    {
+        // A splitter dragged past Map 1's minimum folds it.
+        var f = Split();
+        f.Split.MapAreaWidth = 1400;
+        var saves = f.SaveRequests;
+
+        f.Split.Fold(f.Pane("map-1"));
+
+        Assert.True(f.Pane("map-1").IsFolded);
+        Assert.False(f.Pane("map-1").IsHeaderVisible);
+        Assert.False(f.Pane("map-2").IsFolded);
+        Assert.True(f.Pane("map-2").IsActive);
+        Assert.True(f.SaveRequests > saves);
+
+        f.Split.MapAreaWidth = 2000;
+
+        Assert.True(f.Pane("map-1").IsFolded);
+    }
+
+    [Fact]
+    public void Folding_the_active_pane_makes_the_other_active()
+    {
+        var f = Split();
+        f.Split.MapAreaWidth = 1400;
+
+        f.Split.Fold(f.Pane("map-2"));
+
+        Assert.True(f.Pane("map-2").IsFolded);
+        Assert.True(f.Pane("map-1").IsActive);
+        Assert.Same(f.Pane("map-1").View, f.Views.Active);
+    }
+
+    [Fact]
+    public void The_last_unfolded_pane_does_not_fold()
+    {
+        var f = Split();
+        f.Split.MapAreaWidth = 1400;
+        f.Split.Fold(f.Pane("map-1"));
+
+        f.Split.Fold(f.Pane("map-2"));
+
+        Assert.False(f.Pane("map-2").IsFolded);
+    }
+
+    [Fact]
+    public void Clicking_a_folded_strip_unfolds_it_beside_the_other()
+    {
+        var f = Split();
+        f.Split.MapAreaWidth = 1400;
+        f.Split.Fold(f.Pane("map-1"));
+
+        f.Pane("map-1").ActivateCommand.Execute(null);
+
+        Assert.All(f.Split.Panes, p => Assert.False(p.IsFolded));
+        Assert.True(f.Pane("map-1").IsActive);
+    }
+
+    [Fact]
+    public void A_folded_pane_is_saved_and_restored_folded()
+    {
+        var f = Split();
+        f.Split.Fold(f.Pane("map-1"));
+        var saved = new MapLayoutSettings();
+        f.Split.WriteTo(saved);
+
+        Assert.True(saved.Panes[0].Folded);
+        Assert.False(saved.Panes[1].Folded);
+
+        var restored = new Fixture();
+        restored.Split.Restore(saved, restoreViews: true);
+        restored.Split.MapAreaWidth = 1400;
+
+        Assert.True(restored.Pane("map-1").IsFolded);
+        Assert.False(restored.Pane("map-2").IsFolded);
+        Assert.True(restored.Pane("map-2").IsActive);
+    }
+
+    [Fact]
+    public void A_saved_fold_never_hides_the_active_pane()
+    {
+        var saved = new MapLayoutSettings
+        {
+            ActiveMap = "map-1",
+            Panes =
+            [
+                new() { Id = "map-1", Folded = true },
+                new() { Id = "map-2", Folded = true },
+            ],
+        };
+        var f = new Fixture();
+
+        f.Split.Restore(saved, restoreViews: true);
+
+        Assert.False(f.Pane("map-1").IsFolded);
+        Assert.True(f.Pane("map-1").IsActive);
+    }
+
+    [Fact]
+    public void Turning_the_split_off_forgets_the_fold()
+    {
+        var f = Split();
+        f.Split.Fold(f.Pane("map-1"));
+        f.Pane("map-1").ActivateCommand.Execute(null);
+        f.Split.Fold(f.Pane("map-2"));
+
+        f.Split.CloseSplit();
+        f.Split.OpenSplit();
+
+        Assert.All(f.Split.Panes, p => Assert.False(p.IsFolded));
+    }
 }

@@ -209,6 +209,13 @@ public partial class MainWindow
                 Behaviors.HoverDelay.SetDelayMilliseconds(splitter, 500);
                 Avalonia.Automation.AutomationProperties.SetAutomationId(splitter, $"MapPane.{pane.Id.Value}.Splitter");
                 splitter.DragCompleted += (_, _) => OnPaneSplitterDragged();
+                var before = panes[i - 1];
+                var after = pane;
+                splitter.AddHandler(
+                    PointerMovedEvent,
+                    (_, e) => OnPaneSplitterMoved(splitter, before, after, e),
+                    Avalonia.Interactivity.RoutingStrategies.Bubble,
+                    handledEventsToo: true);
                 Grid.SetColumn(splitter, MapPanesGrid.ColumnDefinitions.Count - 1);
                 MapPanesGrid.Children.Add(splitter);
             }
@@ -223,6 +230,37 @@ public partial class MainWindow
             if (_paneViews.TryGetValue(pane.Id, out var view))
                 Grid.SetColumn(view.Pane, MapPanesGrid.ColumnDefinitions.Count - 1);
         }
+    }
+
+    /// <summary>
+    /// A splitter between panes is being dragged: the panes stop at their
+    /// minimum width, and dragging on, past half the minimum again, folds the
+    /// pane being squeezed to its strip.
+    /// </summary>
+    private void OnPaneSplitterMoved(
+        GridSplitter splitter, MapPaneViewModel before, MapPaneViewModel after, Avalonia.Input.PointerEventArgs e)
+    {
+        if (_paneFoldPending
+            || !e.GetCurrentPoint(splitter).Properties.IsLeftButtonPressed
+            || !_paneViews.TryGetValue(before.Id, out var left)
+            || !_paneViews.TryGetValue(after.Id, out var right))
+            return;
+
+        var x = e.GetPosition(MapPanesGrid).X;
+        var threshold = MapSplitViewModel.MinimumPaneWidth / 2;
+        var fold = x - left.Pane.Bounds.Left < threshold ? before
+            : right.Pane.Bounds.Right - x < threshold ? after
+            : null;
+        if (fold is null)
+            return;
+
+        // Folding removes this splitter: do it after the event.
+        _paneFoldPending = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _paneFoldPending = false;
+            _split.Fold(fold);
+        });
     }
 
     /// <summary>A splitter between panes was dragged: keep each pane's share (saved, D2).</summary>

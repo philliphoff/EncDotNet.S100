@@ -10,7 +10,8 @@ month. For package versions and release assets, see
   panned and zoomed on its own, from the title bar's **Split map** button or
   **View** > **Split Map** (⌘\). Each map has a header with its number and
   a close button, the map last used is the active one, and a map that
-  doesn't fit a narrow window folds to a strip. Both maps show the same
+  doesn't fit a narrow window, or whose splitter you drag past its minimum,
+  folds to a strip. Both maps show the same
   datasets and time, and share their tiles and textures, so a second map on
   the same view costs little memory
   ([#1732](https://github.com/philliphoff/EncDotNet.S100/issues/1732)).

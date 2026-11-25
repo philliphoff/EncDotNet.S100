@@ -589,7 +589,8 @@ says which.
 
 Each map is at least 320 pixels wide. When the window is too narrow for
 both, the map you aren't using folds to a strip with its number; click the
-strip to switch. Object information and the Legend open over the maps while
+strip to switch. To fold a map yourself, drag the splitter on past where
+the map stops shrinking; it stays a strip until you click it. Object information and the Legend open over the maps while
 the map is split. The split and each map's view come back the next time you
 start SoundCharts.
 

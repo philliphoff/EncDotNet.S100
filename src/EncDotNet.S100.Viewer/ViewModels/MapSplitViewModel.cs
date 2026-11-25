@@ -183,11 +183,15 @@ internal sealed class MapSplitViewModel : ViewModelBase
                 && double.IsFinite(x) && double.IsFinite(y) && double.IsFinite(resolution) && resolution > 0
                 ? new MapPaneViewport(x, y, resolution)
                 : null;
-            Open(new MapViewId(pane.Id), viewport, double.IsFinite(pane.Weight) && pane.Weight > 0 ? pane.Weight : 1);
+            var opened = Open(new MapViewId(pane.Id), viewport, double.IsFinite(pane.Weight) && pane.Weight > 0 ? pane.Weight : 1);
+            opened.IsCollapsed = split && pane.Folded;
         }
 
         if (saved!.ActiveMap is { } activeId && Panes.FirstOrDefault(p => p.Id.Value == activeId) is { } active)
             Activate(active.Id);
+        if (ActivePane is { IsCollapsed: true } shown)
+            shown.IsCollapsed = false;
+        UpdateFolding(force: true);
     }
 
     /// <summary>Opens the split: a new pane, at the active pane's view, which becomes active (D2).</summary>
@@ -246,6 +250,27 @@ internal sealed class MapSplitViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Folds a pane to its strip, as dragging its splitter well past the
+    /// pane's minimum width does. The pane stays folded, however wide the
+    /// window, until its strip is clicked; when it was active, the next
+    /// unfolded pane becomes active. The last unfolded pane doesn't fold.
+    /// </summary>
+    /// <param name="pane">The pane.</param>
+    public void Fold(MapPaneViewModel pane)
+    {
+        ArgumentNullException.ThrowIfNull(pane);
+        if (!IsSplit || !Panes.Contains(pane) || pane.IsCollapsed
+            || Panes.FirstOrDefault(p => !ReferenceEquals(p, pane) && !p.IsCollapsed) is not { } other)
+            return;
+
+        pane.IsCollapsed = true;
+        if (pane.IsActive)
+            Activate(other.Id);
+        UpdateFolding(force: true);
+        _requestSave();
+    }
+
+    /// <summary>
     /// Makes a pane active, on a press, scroll, pinch, focus or tool use in it
     /// (D4), or a click on its folded strip (D17).
     /// </summary>
@@ -269,6 +294,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
             {
                 Id = p.Id.Value,
                 Weight = p.Weight,
+                Folded = p.IsCollapsed,
                 CenterX = viewport?.CenterX,
                 CenterY = viewport?.CenterY,
                 Resolution = viewport?.Resolution,
@@ -311,6 +337,8 @@ internal sealed class MapSplitViewModel : ViewModelBase
         {
             Panes[i].Number = i + 1;
             Panes[i].IsSplit = IsSplit;
+            if (!IsSplit)
+                Panes[i].IsCollapsed = false;
         }
 
         OnPropertyChanged(nameof(IsSplit));
@@ -325,7 +353,13 @@ internal sealed class MapSplitViewModel : ViewModelBase
     {
         var active = _views.Active;
         foreach (var pane in Panes)
+        {
             pane.IsActive = ReferenceEquals(pane.View, active);
+            // The pane you work in always shows: activating a folded pane unfolds it.
+            if (pane.IsActive)
+                pane.IsCollapsed = false;
+        }
+
         OnPropertyChanged(nameof(ActivePane));
         UpdateFolding(force: true);
         _requestSave();
@@ -338,7 +372,7 @@ internal sealed class MapSplitViewModel : ViewModelBase
         var changed = false;
         foreach (var pane in Panes)
         {
-            var folded = fold && !pane.IsActive;
+            var folded = pane.IsCollapsed || (fold && !pane.IsActive);
             if (pane.IsFolded != folded)
             {
                 pane.IsFolded = folded;
@@ -430,6 +464,13 @@ internal sealed class MapPaneViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsHeaderVisible));
         }
     }
+
+    /// <summary>
+    /// Whether the user folded the pane (a splitter dragged past its minimum):
+    /// it stays a strip until it's clicked or becomes active, unlike the
+    /// fold of a map area too narrow for every pane (D17).
+    /// </summary>
+    public bool IsCollapsed { get; set; }
 
     /// <summary>Whether the map is split, so the pane has a header (D9).</summary>
     public bool IsSplit

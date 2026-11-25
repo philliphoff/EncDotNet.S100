@@ -33,6 +33,7 @@ public partial class MainWindow : ShadUI.Window, IMapPaneHost
     private readonly MapViews _mapViews;
     private readonly MapSplitViewModel _split;
     private readonly MapStatusFocus _statusFocus;
+    private bool _paneFoldPending;
     private readonly MapViewProbes _mapProbes;
     private readonly DebouncedSettingsSaver _mapLayoutSaver;
     private readonly Dictionary<MapViewId, MapView> _paneViews = [];
