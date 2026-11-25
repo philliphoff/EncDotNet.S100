@@ -165,6 +165,13 @@ internal sealed class ViewerDataPaths
     public string DatasetMetadataCacheDirectory =>
         Path.Combine(CacheStoreDirectory, "DatasetMetadataCache");
 
+    /// <summary>
+    /// Directory for the chart reference's probe results of catalogues the
+    /// user added or changed, keyed by the catalogue hashes (R13a).
+    /// </summary>
+    public string RuleProbeCacheDirectory =>
+        Path.Combine(CacheStoreDirectory, "RuleProbeCache");
+
     /// <summary>Directory for the cross-session S-57 exchange-set catalogue descriptor cache.</summary>
     public string S57CatalogCacheDirectory =>
         Path.Combine(CacheStoreDirectory, "S57CatalogCache");
@@ -269,6 +276,7 @@ internal sealed class ViewerDataPaths
         PortrayalInstructionCacheDirectory,
         DatasetMetadataCacheDirectory,
         S57CatalogCacheDirectory,
+        RuleProbeCacheDirectory,
         CollectionIndexCacheDirectory,
         CollectionFeedCacheDirectory,
         TileDiskCacheDirectory,

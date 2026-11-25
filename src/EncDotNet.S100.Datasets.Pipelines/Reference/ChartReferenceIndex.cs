@@ -34,6 +34,19 @@ public sealed partial class ChartReferenceIndex
     private readonly Dictionary<(ReferenceKind Kind, string Code), ReferenceEntry> _entries;
     private readonly List<SearchRow> _searchRows;
 
+    private ChartReferenceIndex(ChartReferenceIndex other, RuleProbeSet? probes)
+    {
+        Spec = other.Spec;
+        FeatureTypes = other.FeatureTypes;
+        Items = other.Items;
+        Attributes = other.Attributes;
+        DisplaySettings = other.DisplaySettings;
+        S57Aliases = other.S57Aliases;
+        _entries = other._entries;
+        _searchRows = other._searchRows;
+        Probes = probes;
+    }
+
     private ChartReferenceIndex(
         SpecRef spec,
         IReadOnlyList<FeatureTypeEntry> featureTypes,
@@ -77,6 +90,35 @@ public sealed partial class ChartReferenceIndex
 
     /// <summary>The display settings (context parameters), in catalogue order.</summary>
     public IReadOnlyList<DisplaySettingEntry> DisplaySettings { get; }
+
+    /// <summary>
+    /// What each feature type's rule draws for the values it reads, when
+    /// the rules have been probed for these catalogues (design note §7,
+    /// R13a); <see langword="null"/> otherwise. The reference works
+    /// without them, from <see cref="FeatureTypeEntry.Uses"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BuildAsync"/> doesn't probe. A caller attaches results with
+    /// <see cref="WithProbes"/>: those committed with a bundled catalogue
+    /// (<see cref="RuleProbeStore.TryLoadBundledAsync"/>), cached on disk
+    /// (<see cref="RuleProbeStore.TryLoadCached"/>), or from
+    /// <see cref="RuleProber.ProbeAsync"/>.
+    /// </remarks>
+    public RuleProbeSet? Probes { get; }
+
+    /// <summary>
+    /// Returns this index with <paramref name="probes"/> attached. The
+    /// entries are shared, not copied.
+    /// </summary>
+    /// <param name="probes">The probe results for this index's catalogues, or <see langword="null"/> to drop them.</param>
+    /// <returns>The index with the probes.</returns>
+    /// <exception cref="ArgumentException"><paramref name="probes"/> are for another product.</exception>
+    public ChartReferenceIndex WithProbes(RuleProbeSet? probes)
+    {
+        if (probes is not null && !string.Equals(probes.Spec, Spec.Name, StringComparison.Ordinal))
+            throw new ArgumentException($"The probes are for {probes.Spec}, not {Spec.Name}.", nameof(probes));
+        return ReferenceEquals(probes, Probes) ? this : new ChartReferenceIndex(this, probes);
+    }
 
     /// <summary>
     /// The S-57 acronyms of the feature types and attributes, for S-57 cells

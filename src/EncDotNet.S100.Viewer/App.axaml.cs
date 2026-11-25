@@ -1980,7 +1980,12 @@ public partial class App : Application
             return new EncDotNet.S100.Viewer.Services.ChartReference.ChartReferenceService(
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
-                () => datasets.Entries.Where(e => !e.IsSource).Select(e => e.PortrayalSpec));
+                () => datasets.Entries.Where(e => !e.IsSource).Select(e => e.PortrayalSpec),
+                // Probe results (R13a): committed ones for the bundled catalogues;
+                // others are probed in the background on LuaCSharp, whichever
+                // engine draws the map, and cached here.
+                probeCacheDirectory: sp.GetRequiredService<ViewerDataPaths>().RuleProbeCacheDirectory,
+                traceEngine: () => ViewerLuaEngine.Create(EncDotNet.S100.Scripting.LuaEngineKind.LuaCSharp));
         });
         // Chart reference glyphs (#1636, R3): drawn once per entry, palette and
         // size, and drawn again after a palette change.

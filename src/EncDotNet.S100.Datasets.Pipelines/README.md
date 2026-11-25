@@ -944,6 +944,39 @@ no rule file's load-time lines in it. An `else` branch's conditions carry the
 `else` line, where Lua runs nothing, so that line never appears: the use's own
 line shows the branch was taken.
 
+### Probe results
+
+Static reading can't say which symbol a given set of values draws when the
+rule works values out. `RuleProber` runs the rules instead: each feature
+type's rule over synthetic features with the values its conditions test, in
+a LuaCSharp trace session (`LuaRuleExecutor.OpenTraceSessionAsync`),
+whichever engine draws the map. The result is a `RuleProbeSet`: for each
+feature type, the inputs varied (`ProbeInput`: the primitive, attributes and
+display settings, with their values), and for every combination of them a
+`ProbeOutcome` with the drawn parts (`symbol:BCNLAT21`, `line:…`, `colour:…`)
+and the conditions that held, named by rule file and line as `RuleCondition`s
+are. A feature type with more than 512 combinations is cut down and marked
+`IsPartial`. Only S-101 is probed for now.
+
+```csharp
+var probes = await RuleProbeStore.LoadOrProbeAsync(
+    "S-101", featureCatalogueHash, portrayalCatalogueHash, cacheDirectory,
+    ct => RuleProber.ProbeAsync(index, features, portrayal, LuaEngineFactory.CreateForTracing(),
+        featureCatalogueHash, portrayalCatalogueHash, cancellationToken: ct));
+index = index.WithProbes(probes);
+
+var beacon = index.Probes!.Find("LateralBeacon")!;
+foreach (var variant in beacon.GetVariants())
+    Console.WriteLine(string.Join(", ", variant.Outcome.Parts));
+```
+
+The results for the bundled S-101 catalogues are committed next to them, in
+`content/S101/pc/rule-probes.json`, keyed by the two catalogue hashes, and
+`RuleProbeStore.LoadOrProbeAsync` reads them when the hashes match. Otherwise
+it reads the disk cache, or probes and caches the results. Probing S-101 takes
+about 5 seconds on 4 cores. `s100 reference probe` writes the committed file;
+see the [CLI README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/README.md#reference-probe).
+
 ## S-101 render caching
 
 This section describes internals, for contributors.

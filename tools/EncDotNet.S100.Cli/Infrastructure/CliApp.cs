@@ -183,6 +183,16 @@ internal static class CliApp
                     .WithExample("s101", "convert", "--to", "s57", "--no-optional-inform", "--inform-length", "truncate", "-o", "XX5CELL1.000", "101XX00CELL1.000");
             });
 
+            config.AddBranch("reference", reference =>
+            {
+                reference.SetDescription("Build the chart reference's data from the bundled catalogues.");
+
+                reference.AddCommand<ReferenceProbeCommand>("probe")
+                    .WithDescription("Run each feature type's portrayal rule over the values it reads and write what each combination draws, and why, next to the bundled portrayal catalogue (content/S101/pc/rule-probes.json), keyed by the catalogue hashes. Run it when a bundled catalogue changes.")
+                    .WithExample("reference", "probe", "--spec", "S-101")
+                    .WithExample("reference", "probe", "--spec", "S-101", "--feature-type", "LateralBeacon", "-o", "beacon.json");
+            });
+
             config.AddBranch("feed", feed =>
             {
                 feed.SetDescription("Publish datasets to other machines as an S-100 feed.");

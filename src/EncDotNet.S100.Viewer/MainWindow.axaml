@@ -9,7 +9,6 @@
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:notify="using:EncDotNet.S100.Viewer.Views.Notifications"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
-        xmlns:diag="using:EncDotNet.S100.Viewer.Diagnostics"
         xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
         xmlns:conv="using:EncDotNet.S100.Viewer"
         xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
@@ -628,12 +627,9 @@
                     shrinks.
                 -->
                 <Grid x:Name="MapArea" Grid.Row="0" DragDrop.AllowDrop="True" ClipToBounds="True">
-                <diag:InstrumentedMapControl x:Name="MapControl" />
-                <diag:GpuAccelerationProbe />
-                <views:ScaleBarView x:Name="ScaleBar"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Top"
-                                    Margin="0,4,0,0" />
+                <!-- The map pane (#1729): the map control and its own chrome
+                     (scale bar, map stamp); MainWindow wires it to a MapView. -->
+                <views:MapPane x:Name="InitialMapPane" />
                 <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
                      bottom centre of the map while the Timeline tab isn't shown
                      (dock closed, on another tab, or the window too narrow). -->
@@ -677,44 +673,6 @@
                                Foreground="{DynamicResource ForegroundColor}"
                                ToolTip.Tip="{x:Static loc:Strings.Aml_NoDepthChecks}" />
                 </Border>
-                <!-- Map stamp (#713 B4): the view time over the map while the
-                     Timeline tab is shown in the dock, so the map (and any
-                     screenshot of it) says which time it shows; the Time HUD
-                     takes over otherwise, never both (design note
-                     time-overlays D1). Green dot Live, accent Pinned. With
-                     date-dependent data loaded and the time pinned it starts
-                     "Display Not Real Time" (S-98 §12.7.2; #993), as the HUD
-                     does. -->
-                <Panel HorizontalAlignment="Left"
-                       VerticalAlignment="Top"
-                       Margin="12,12,0,0"
-                       IsHitTestVisible="False"
-                       AutomationProperties.AutomationId="Map.TimeStamp"
-                       IsVisible="{Binding Layout.IsMapStampVisible}">
-                    <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
-                            CornerRadius="6" />
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="6"
-                                Margin="8,4">
-                        <Panel VerticalAlignment="Center">
-                            <Ellipse Width="7" Height="7"
-                                     IsVisible="{Binding Timeline.IsLive}"
-                                     Fill="{DynamicResource SuccessColor}" />
-                            <Ellipse Width="7" Height="7"
-                                     IsVisible="{Binding !Timeline.IsLive}"
-                                     Fill="{DynamicResource AccentBrush}" />
-                            <!-- Grey while the map is still drawing the new time (#709). -->
-                            <Ellipse Width="7" Height="7"
-                                     IsVisible="{Binding Timeline.IsDrawing}"
-                                     Fill="#A1A1AA" />
-                        </Panel>
-                        <TextBlock Text="{Binding Timeline.StampText}"
-                                   FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="11.5"
-                                   Foreground="{DynamicResource ForegroundColor}"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </Panel>
                 <!-- The tool cards (#1130 D13) take the slot under the time stamp;
                      the warning note moves down below them (D19). The measure card
                      goes first, then Range & bearing. -->

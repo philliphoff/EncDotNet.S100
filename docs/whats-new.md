@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **`s100 --version` prints one line.** A nightly build's version, with its
+  "(nightly build, unsupported)" note, is longer than 80 columns, and when
+  the output was redirected it wrapped onto a second line, which broke
+  scripts that read it, such as the container image's smoke test. `--version`
+  and `-v` now print the version as one line whatever the width.
+
 - **Why this symbol says the case the rule took.** For S-101 datasets and
   S-57 cells, Object information now runs the picked feature's portrayal rule
   again in the background, with the display settings the map is drawn with,

@@ -406,6 +406,27 @@ public sealed class CliVersionAndUpdateTests
             new FixedTimeProvider(now ?? DateTimeOffset.UtcNow));
     }
 
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    public async Task VersionIsOneLineHoweverNarrowTheConsole(string option)
+    {
+        // A nightly's version is longer than 80 columns, the width of a
+        // redirected console: wrapped, it broke `s100 --version | cut -d+ -f1`
+        // in the container smoke test.
+        var version = new CliVersionInfo("0.30.3-nightly.20261124", "0.30.3-nightly.20261124+336927d3bdafc0c34f35eb098da29dd8f50f4619");
+        var standardOut = new StringWriter();
+        var console = CreateConsole(standardOut);
+        console.Profile.Width = 40;
+
+        var exitCode = await CliRunner.RunAsync([option], version, new FixedUpdateChecker(null), new StringWriter(), console);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(
+            $"0.30.3-nightly.20261124+336927d3bdafc0c34f35eb098da29dd8f50f4619 (nightly build, unsupported){Environment.NewLine}",
+            standardOut.ToString());
+    }
+
     private static IAnsiConsole CreateConsole(TextWriter writer)
     {
         return AnsiConsole.Create(new AnsiConsoleSettings
