@@ -173,11 +173,11 @@ public partial class MainWindow : ShadUI.Window
         // own settings dependencies internally.
         _mapView = new MapView(new MapViewId("map-1"), InitialMapPane, App.Services);
         var mapHost = _mapView.Host;
-        App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = mapHost;
-        App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = mapHost;
-        // The image renderer is the MCP readiness gate, so publish it only after
-        // the coordinate and viewport capabilities used alongside it are attached.
-        App.Services.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>().Current = mapHost;
+        // Registering the view makes it the active map (#1730): the map
+        // capability accessors and the window-level viewport notifier bind
+        // to it, the image renderer (the MCP readiness gate) last.
+        var mapViews = App.Services.GetRequiredService<MapViews>();
+        mapViews.Add(_mapView);
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
@@ -221,9 +221,9 @@ public partial class MainWindow : ShadUI.Window
             // MainViewModel / window are not kept alive after close.
             App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
             App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
-            App.Services.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>().Current = null;
-            App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = null;
-            App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = null;
+            // Removing the last view clears the map capability accessors,
+            // the image renderer first.
+            mapViews.Remove(_mapView);
             // The view detaches its probes, overlays and dynamic sources and
             // disposes the map host.
             _mapView.Dispose();

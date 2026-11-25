@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Viewer.Services.Sources;
 internal sealed class SourceDatasetService : IDisposable
 {
     private readonly SourceRegistry _registry;
-    private readonly IMapViewportNotifier? _notifier;
+    private readonly IMapViewportSet? _viewports;
     private readonly Secrets.ISecretStore? _secrets;
     private readonly ISourceHostExtension[] _extensions;
     private readonly TimeProvider _time;
@@ -32,11 +32,11 @@ internal sealed class SourceDatasetService : IDisposable
 
     /// <summary>Creates the service.</summary>
     /// <param name="registry">The sources on offer.</param>
-    /// <param name="notifier">The map's view, for activation and the area in view.</param>
+    /// <param name="viewports">Every map's view, for activation and the area in view.</param>
     /// <param name="loggerFactory">The loggers.</param>
     public SourceDatasetService(
         SourceRegistry registry,
-        IMapViewportNotifier? notifier = null,
+        IMapViewportSet? viewports = null,
         ILoggerFactory? loggerFactory = null,
         Secrets.ISecretStore? secrets = null,
         IEnumerable<ISourceHostExtension>? extensions = null,
@@ -45,7 +45,7 @@ internal sealed class SourceDatasetService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(registry);
         _registry = registry;
-        _notifier = notifier;
+        _viewports = viewports;
         _secrets = secrets;
         _extensions = extensions?.ToArray() ?? [];
         _time = timeProvider ?? TimeProvider.System;
@@ -113,7 +113,7 @@ internal sealed class SourceDatasetService : IDisposable
             var registration = Find(sourceId);
             var activation = registration?.ActivationFor(entry.SourceOptions) ?? SourceActivation.Always;
             var running = activator = new HostedSourceActivator(
-                hosted, activation, _notifier, entry.IsVisible, logger: _logger);
+                hosted, activation, _viewports, entry.IsVisible, logger: _logger);
             onChanged = (_, e) =>
             {
                 if (e.PropertyName == nameof(DatasetEntry.IsVisible))

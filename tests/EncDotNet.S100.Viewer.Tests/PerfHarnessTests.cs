@@ -164,7 +164,7 @@ public sealed class PerfHarnessTests
     [Fact]
     public async Task VisibleWork_CountsInViewLoadsUntilTheyFinish()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var release = new TaskCompletionSource();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
             notifier,
@@ -195,7 +195,7 @@ public sealed class PerfHarnessTests
     [Fact]
     public async Task VisibleWork_ViewportChangeInsideTheDebounce_IsPending()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
             notifier,
@@ -218,7 +218,7 @@ public sealed class PerfHarnessTests
     [Fact]
     public async Task VisibleWork_AheadCellsDoNotCount()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var release = new TaskCompletionSource();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
             notifier,
@@ -572,18 +572,6 @@ public sealed class PerfHarnessTests
         public void SetRotation(double degrees) { }
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
         public EncDotNet.S100.DataModel.GeoPosition? TryGetViewportCenterWgs84() => null;
-    }
-
-    private sealed class FakeNotifier : IMapViewportNotifier
-    {
-        public MapViewportSnapshot? Current { get; private set; }
-        public event EventHandler<MapViewportSnapshot>? ViewportChanged;
-
-        public void Publish(MapViewportSnapshot snapshot)
-        {
-            Current = snapshot;
-            ViewportChanged?.Invoke(this, snapshot);
-        }
     }
 
     private static DatasetEntry Cell(string name, double south, double west, double north, double east) => new(
