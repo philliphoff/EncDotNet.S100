@@ -288,6 +288,9 @@ public sealed class PickReferenceTermsTests
         Assert.Equal(beacon, pick.Navigator.Current);
         Assert.True(pick.Report.HasPick);
         Assert.Same(hit, pick.Report.SelectedHit);
+        // The picked feature goes with it, so the entry can ring its variant (R13b, #1721).
+        Assert.Equal("LateralBeacon", pick.Navigator.CurrentFeature?.FeatureType);
+        Assert.Same(hit!.Attributes, pick.Navigator.CurrentFeature!.Attributes);
 
         // F1 with Object information focused opens it again.
         pick.Navigator.Open(Key(ReferenceKind.Attribute, "colour"));
@@ -296,6 +299,7 @@ public sealed class PickReferenceTermsTests
 
         Assert.Equal(beacon, pick.Navigator.Current);
         Assert.Same(hit, pick.Report.SelectedHit);
+        Assert.NotNull(pick.Navigator.CurrentFeature);
     }
 
     [AvaloniaFact]

@@ -9801,6 +9801,74 @@
     <value>Drawn by shared rules</value>
     <comment>Heading of the items a shared rule draws</comment>
   </data>
+  <data name="Reference_HowItIsDrawn" xml:space="preserve">
+    <value>How it is drawn</value>
+    <comment>Heading of a feature type entry's variant table</comment>
+  </data>
+  <data name="Reference_Variants_Working" xml:space="preserve">
+    <value>Working out variants…</value>
+    <comment>Quiet note while the feature type's rule is probed in the background</comment>
+  </data>
+  <data name="Reference_Variants_Partial" xml:space="preserve">
+    <value>Partial: the first {0} combinations</value>
+    <comment>Note under a variant table whose probe hit its cap; {0} is the cap, such as 512</comment>
+  </data>
+  <data name="Label_ReferenceVariantsStyle" xml:space="preserve">
+    <value>Symbol style</value>
+    <comment>Accessible name of the variant table's Simplified / Paper chart switch</comment>
+  </data>
+  <data name="Reference_Variants_Simplified" xml:space="preserve">
+    <value>Simplified</value>
+    <comment>Variant table switch: show the simplified symbols</comment>
+  </data>
+  <data name="Reference_Variants_PaperChart" xml:space="preserve">
+    <value>Paper chart</value>
+    <comment>Variant table switch: show the paper chart symbols</comment>
+  </data>
+  <data name="Tooltip_ReferenceVariantsStyle" xml:space="preserve">
+    <value>Shows the variants in this style. The chart's own setting doesn't change.</value>
+    <comment>Tooltip of the variant table's style switch</comment>
+  </data>
+  <data name="Label_ReferenceVariants" xml:space="preserve">
+    <value>Variants</value>
+    <comment>Accessible name of a feature type's variant table</comment>
+  </data>
+  <data name="Reference_Variants_NotGiven" xml:space="preserve">
+    <value>Not given</value>
+    <comment>Variant table label for an attribute the feature doesn't have</comment>
+  </data>
+  <data name="Reference_Variants_Geometry" xml:space="preserve">
+    <value>Geometry</value>
+    <comment>Variant table heading for the feature's geometry</comment>
+  </data>
+  <data name="Reference_Variants_On" xml:space="preserve">
+    <value>On</value>
+    <comment>Variant table label for a display setting that is on</comment>
+  </data>
+  <data name="Reference_Variants_Off" xml:space="preserve">
+    <value>Off</value>
+    <comment>Variant table label for a display setting that is off</comment>
+  </data>
+  <data name="Reference_Variants_EveryCase" xml:space="preserve">
+    <value>Every case</value>
+    <comment>Row label of a variant table whose drawing no attribute changes</comment>
+  </data>
+  <data name="Reference_Variants_NotDrawn" xml:space="preserve">
+    <value>Not drawn</value>
+    <comment>A variant table cell where the rule draws nothing</comment>
+  </data>
+  <data name="Reference_Variants_FallbackDrawn" xml:space="preserve">
+    <value>{0} (nothing else fits)</value>
+    <comment>A cell drawn with the catalogue's fallback symbol; {0} is what is drawn</comment>
+  </data>
+  <data name="Reference_Variants_InputValue" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>An input and its value in a cell's description, as 'Colour: Red'</comment>
+  </data>
+  <data name="Reference_Variants_Picked" xml:space="preserve">
+    <value>The picked feature</value>
+    <comment>Help text of the ringed variant table cell</comment>
+  </data>
   <data name="Reference_Fallback" xml:space="preserve">
     <value>When nothing else fits</value>
     <comment>Heading of the catalogue's fallback symbol</comment>

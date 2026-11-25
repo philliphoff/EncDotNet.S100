@@ -62,6 +62,11 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
         DrawnByShared = shared;
         Fallback = fallback;
         FindCommand = new RelayCommand(Find, () => CanFind);
+
+        // How it is drawn (R13b, #1721): the variant table, when the rule was probed and draws something.
+        if (context.Index.Probes?.Find(feature.Code) is { } probe && probe.Outcomes.Any(o => o.Parts.Count > 0))
+            Variants = new VariantTableViewModel(feature, probe, context);
+        IsWorkingOutVariants = Variants is null && context.ProbesPending;
     }
 
     /// <inheritdoc />
@@ -87,6 +92,22 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
 
     /// <summary>Whether there is a viewing group.</summary>
     public bool HasViewingGroup => ViewingGroup is not null;
+
+    /// <summary>
+    /// How it is drawn as a table of variants, from the rule probe results
+    /// (R13b, #1721); <see langword="null"/> for a product without them (an
+    /// XSLT product, or one still being probed), which keeps <see cref="DrawnWith"/>.
+    /// </summary>
+    public VariantTableViewModel? Variants { get; }
+
+    /// <summary>Whether the entry shows the variant table.</summary>
+    public bool HasVariants => Variants is not null;
+
+    /// <summary>Whether the entry shows Drawn with: there is no variant table, and its own rule draws something listed.</summary>
+    public bool ShowsDrawnWith => !HasVariants && HasDrawnWith;
+
+    /// <summary>Whether the probe results are being worked out in the background: "Working out variants…".</summary>
+    public bool IsWorkingOutVariants { get; }
 
     /// <summary>The items the feature type's own rule draws, each with its cases in words.</summary>
     public IReadOnlyList<ChartReferenceLinkViewModel> DrawnWith { get; }
@@ -167,6 +188,12 @@ internal sealed class FeatureTypeEntryViewModel : ReferenceEntryViewModel
             // The stack changed under the read: the count waits for the next map change.
         }
     }
+
+    /// <inheritdoc />
+    protected override void OnStart() => Variants?.Start();
+
+    /// <inheritdoc />
+    protected override void OnReloadGlyphs() => Variants?.ReloadGlyphs();
 
     /// <inheritdoc />
     public override void Close()

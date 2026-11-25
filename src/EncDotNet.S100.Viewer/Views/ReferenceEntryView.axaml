@@ -71,6 +71,56 @@
             <!-- Back over the toggle's 1 px border. -->
             <Setter Property="Margin" Value="-1,0,0,0" />
         </Style>
+        <!-- A variant table cell (R13b, #1721): the drawn glyph as a term, on the chart's
+             tile, its peek under it; the picked feature's cell is ringed. -->
+        <Style Selector="views|ReferenceTerm.crCell">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="Margin" Value="0,0,2,2" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel>
+                        <Border Name="PART_Border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <Popup Name="PART_Peek"
+                               IsOpen="{TemplateBinding IsPeekOpen, Mode=TwoWay}"
+                               PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                               Placement="BottomEdgeAlignedLeft"
+                               OverlayDismissEventPassThrough="True"
+                               IsLightDismissEnabled="False">
+                            <views:ReferencePeekView Name="PART_PeekView"
+                                                     DataContext="{TemplateBinding Peek}" />
+                        </Popup>
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="views|ReferenceTerm.crCell:term:pointerover /template/ Border#PART_Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="views|ReferenceTerm.crCell:term:focus-visible /template/ Border#PART_Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="views|ReferenceTerm.crCell.ringed /template/ Border#PART_Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- A header of the variant table: small, wrapping inside its column. -->
+        <Style Selector="views|ReferenceTermText.crValue">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
         <!-- An action (Find, Change in Display settings): blue is kept for actions (§4.6). -->
         <Style Selector="Button.crAction">
             <Setter Property="HorizontalAlignment" Value="Left" />
@@ -99,6 +149,150 @@
                 </ItemsControl>
                 <TextBlock Text="{Binding Note}"
                            IsVisible="{Binding HasNote}"
+                           Classes="crCaption"
+                           FontStyle="Italic"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- How it is drawn as a variant table (C1; R13b, #1721). -->
+        <DataTemplate DataType="cr:VariantTableViewModel">
+            <StackPanel Classes="crPart" Spacing="6">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{x:Static loc:Strings.Reference_HowItIsDrawn}"
+                               Classes="crHeading"
+                               VerticalAlignment="Center" />
+                    <!-- Shows the other style without changing the chart's setting. -->
+                    <Border Grid.Column="1"
+                            Classes="segmentTrack"
+                            IsVisible="{Binding HasStyleSwitch}"
+                            AutomationProperties.AutomationId="Reference.Entry.Variants.Style"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_ReferenceVariantsStyle}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReferenceVariantsStyle}">
+                        <UniformGrid Rows="1">
+                            <RadioButton Classes="segment compact"
+                                         IsChecked="{Binding ShowsSimplified}"
+                                         Content="{x:Static loc:Strings.Reference_Variants_Simplified}"
+                                         AutomationProperties.AutomationId="Reference.Entry.Variants.Style.Simplified"
+                                         AutomationProperties.Name="{x:Static loc:Strings.Reference_Variants_Simplified}"
+                                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferenceVariantsStyle}" />
+                            <RadioButton Classes="segment compact"
+                                         IsChecked="{Binding ShowsPaperChart}"
+                                         Content="{x:Static loc:Strings.Reference_Variants_PaperChart}"
+                                         AutomationProperties.AutomationId="Reference.Entry.Variants.Style.PaperChart"
+                                         AutomationProperties.Name="{x:Static loc:Strings.Reference_Variants_PaperChart}"
+                                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReferenceVariantsStyle}" />
+                        </UniformGrid>
+                    </Border>
+                </Grid>
+                <!-- Inputs that change the drawing but aren't rows or columns. -->
+                <ItemsControl ItemsSource="{Binding Filters}" IsVisible="{Binding HasFilters}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="cr:VariantFilterViewModel">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,4">
+                                <TextBlock Text="{Binding Name}"
+                                           Classes="crCaption"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap" />
+                                <ComboBox Grid.Column="1"
+                                          MaxWidth="180"
+                                          ItemsSource="{Binding Options}"
+                                          SelectedIndex="{Binding SelectedIndex}"
+                                          AutomationProperties.AutomationId="Reference.Entry.Variants.Filter"
+                                          AutomationProperties.Name="{Binding Name}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- The table scrolls sideways inside itself; the entry never does. -->
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
+                              AutomationProperties.AutomationId="Reference.Entry.Variants"
+                              AutomationProperties.Name="{x:Static loc:Strings.Label_ReferenceVariants}">
+                    <StackPanel Spacing="2" HorizontalAlignment="Left" Margin="0,0,0,4">
+                        <!-- The column input's name over its values. -->
+                        <StackPanel Orientation="Horizontal" IsVisible="{Binding HasColumnHeading}">
+                            <Border Width="84" />
+                            <views:ReferenceTermText Terms="{Binding ColumnHeading}" Classes="crValue" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <views:ReferenceTermText Terms="{Binding RowHeading}"
+                                                     Classes="crValue"
+                                                     FontWeight="SemiBold"
+                                                     Width="84"
+                                                     Padding="0,0,6,0"
+                                                     VerticalAlignment="Bottom" />
+                            <ItemsControl ItemsSource="{Binding Columns}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="cr:VariantHeaderViewModel">
+                                        <views:ReferenceTermText Terms="{Binding Label}"
+                                                                 Classes="crValue crCaption"
+                                                                 Width="46"
+                                                                 Margin="0,0,2,0"
+                                                                 VerticalAlignment="Bottom" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Rows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="cr:VariantRowViewModel">
+                                    <StackPanel Orientation="Horizontal">
+                                        <views:ReferenceTermText Terms="{Binding Label}"
+                                                                 Classes="crValue"
+                                                                 Width="84"
+                                                                 Padding="0,0,6,0"
+                                                                 VerticalAlignment="Center" />
+                                        <ItemsControl ItemsSource="{Binding Cells}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="cr:VariantCellViewModel">
+                                                    <views:ReferenceTerm Classes="crCell"
+                                                                         Classes.ringed="{Binding IsRinged}"
+                                                                         Background="{Binding $parent[ScrollViewer].((cr:VariantTableViewModel)DataContext).Tile}"
+                                                                         Key="{Binding Key}"
+                                                                         IsKnown="{Binding IsKnown}"
+                                                                         Text="{Binding Name}"
+                                                                         ToolTip.Tip="{Binding Description}"
+                                                                         AutomationProperties.AutomationId="Reference.Entry.Variants.Cell"
+                                                                         AutomationProperties.Name="{Binding Name}"
+                                                                         AutomationProperties.HelpText="{Binding Description}">
+                                                        <Panel>
+                                                            <Image Source="{Binding Glyph}"
+                                                                   Width="32"
+                                                                   Height="32"
+                                                                   Stretch="Fill"
+                                                                   IsVisible="{Binding HasGlyph}" />
+                                                            <TextBlock Text="{Binding Text}"
+                                                                       IsVisible="{Binding HasText}"
+                                                                       FontSize="10"
+                                                                       Opacity="0.75"
+                                                                       TextAlignment="Center"
+                                                                       TextWrapping="Wrap"
+                                                                       MaxWidth="40" />
+                                                        </Panel>
+                                                    </views:ReferenceTerm>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+                <TextBlock Text="{Binding PartialText}"
+                           IsVisible="{Binding IsPartial}"
+                           AutomationProperties.AutomationId="Reference.Entry.Variants.Partial"
                            Classes="crCaption"
                            FontStyle="Italic"
                            TextWrapping="Wrap" />
@@ -147,8 +341,16 @@
                         </Button>
                     </Grid>
                 </StackPanel>
-                <!-- Drawn with stands in for the variant table until rule probing (R13). -->
-                <StackPanel Classes="crPart" IsVisible="{Binding HasDrawnWith}">
+                <!-- How it is drawn (R13b, #1721): the variant table from the rule probe results. -->
+                <ContentControl Content="{Binding Variants}" IsVisible="{Binding HasVariants}" />
+                <!-- Without probe results (an XSLT product, or a probe still running), Drawn with lists
+                     each item with its cases in words. -->
+                <TextBlock Text="{x:Static loc:Strings.Reference_Variants_Working}"
+                           IsVisible="{Binding IsWorkingOutVariants}"
+                           AutomationProperties.AutomationId="Reference.Entry.Variants.Working"
+                           Classes="crCaption"
+                           FontStyle="Italic" />
+                <StackPanel Classes="crPart" IsVisible="{Binding ShowsDrawnWith}">
                     <TextBlock Text="{x:Static loc:Strings.ChartReference_DrawnWith}" Classes="crHeading" />
                     <ItemsControl ItemsSource="{Binding DrawnWith}" AutomationProperties.AutomationId="Reference.Entry.DrawnWith" />
                     <!-- Paper-chart variants fold, so the simplified and always-drawn ones come first. -->

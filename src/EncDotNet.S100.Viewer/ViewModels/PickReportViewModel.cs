@@ -100,7 +100,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         // F1 and Open in reference (R9, #1678): the feature type's entry, in the
         // Reference tab; Object information keeps its pick (D2).
         OpenInReferenceCommand = new RelayCommand(
-            () => { if (FeatureTypeKey is { } key) _terms?.Open(key); },
+            () =>
+            {
+                // The picked feature goes too, so the entry rings its variant (R13b, #1721).
+                if (FeatureTypeKey is { } key)
+                    _terms?.Open(key, _selectedHit is { } hit ? ReferenceFeature.Of(hit) : null);
+            },
             () => FeatureTypeKey is not null && _terms is not null);
 
         // Object Information's selection, for those that follow it without
