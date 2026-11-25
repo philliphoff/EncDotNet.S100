@@ -8,8 +8,11 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services.ChartReference;
@@ -87,7 +90,7 @@ public sealed class PickWhyThisSymbolTests
     /// <summary>A cell on the stack, a legend over it, and Object information with Drawn as and Why this symbol.</summary>
     private sealed class Scene : IDisposable
     {
-        private Scene(Cells cells)
+        private Scene(Cells cells, bool traced)
         {
             Cells = cells;
             Chart = Legend.Add("US5MA1BO.000", "S-57", 42, -71, 43, -70);
@@ -101,7 +104,9 @@ public sealed class PickWhyThisSymbolTests
                 action => action(),
                 parameter => ReferenceTargets.Value(Mariner, parameter),
                 Changed.Add,
-                parameter => ReferenceTargets.CurrentValue(Mariner, parameter));
+                parameter => ReferenceTargets.CurrentValue(Mariner, parameter),
+                traced ? Trace : null);
+            Tracer = new PickRuleTracer(Legend.Loader, () => Mariner, TestLuaEngine.Create(LuaEngineKind.LuaCSharp));
             Report = TestPickReport.Create();
             Report.Terms = Terms;
             Report.AttachLegend(Service);
@@ -109,12 +114,23 @@ public sealed class PickWhyThisSymbolTests
             Show(cells.Simplified);
         }
 
-        public static async Task<Scene> CreateAsync()
+        /// <summary>Creates the scene; with <paramref name="traced"/>, Why this symbol traces Lua rules (R12b, #1719).</summary>
+        public static async Task<Scene> CreateAsync(bool traced = false)
         {
             var path = Fixture("S57", "US5MA1BO", "US5MA1BO.000");
             Assert.SkipUnless(File.Exists(path), $"Test data not found at {path}");
-            return new(await Portrayed.Value);
+            return new(await Portrayed.Value, traced);
         }
+
+        /// <summary>Traces through <see cref="Tracer"/>, or through <see cref="TraceOverride"/> when set.</summary>
+        private Task<LuaFeatureTrace?> Trace(PickHit hit, CancellationToken cancellationToken) =>
+            TraceOverride?.Invoke(hit, cancellationToken) ?? Tracer.TraceAsync(hit, cancellationToken);
+
+        /// <summary>The tracer over the cell on the stack, with <see cref="Mariner"/>.</summary>
+        public PickRuleTracer Tracer { get; }
+
+        /// <summary>Replaces the tracer, to hold a trace in flight.</summary>
+        public Func<PickHit, CancellationToken, Task<LuaFeatureTrace?>>? TraceOverride { get; set; }
 
         public Cells Cells { get; }
 
@@ -147,9 +163,10 @@ public sealed class PickWhyThisSymbolTests
         /// <summary>The settings a reason's link asked Settings to show.</summary>
         public List<string> Changed { get; } = [];
 
-        /// <summary>Puts <paramref name="cell"/>'s display lists on the stack.</summary>
+        /// <summary>Puts <paramref name="cell"/>'s display lists on the stack, and its processor behind the chart.</summary>
         public void Show(Cell cell)
         {
+            ((Dictionary<DatasetEntry, IDatasetProcessor>)Legend.Loader.Processors)[Chart] = cell.Processor;
             Legend.Loader.SetEntries([.. cell.Result.SubLayers.Select(sub => new LayerStackEntry(
                 new MemoryLayer(sub.LayerName),
                 new SubLayerStackItem(new VectorStackPayload(cell.Result, sub), sub.Plane, 0, Chart.Id.Value, sub.SourceFeatureType)))]);
@@ -465,6 +482,159 @@ public sealed class PickWhyThisSymbolTests
         Assert.Equal("Change Simplified symbols in Display settings", AutomationProperties.GetName(link));
         link.Command!.Execute(null);
         Assert.Equal(["SimplifiedSymbols"], scene.Changed);
+    }
+
+    [AvaloniaFact]
+    public async Task The_traced_wreck_gives_one_reason_with_no_note_and_the_safety_contour_changes_it()
+    {
+        using var scene = await Scene.CreateAsync(traced: true);
+        scene.Simplified = false;
+        scene.Show(scene.Cells.Real);
+
+        await scene.PickAsync(scene.Hit(scene.Cells.Real, "Wreck"));
+
+        // The trace shows the case UDWHAZ05 took: its words, as the match
+        // says them, without "Likely" and without the note. The test of the
+        // depth the rule works out (DEPTH_VALUE) is left out quietly.
+        var main = scene.Main;
+        Assert.Equal("ISODGR01", main.Part.ItemId);
+        var reason = main.Reason!;
+        Assert.Equal(PickReasonKind.Traced, reason.Kind);
+        Assert.True(reason.IsTraced);
+        Assert.Equal(
+            "Shallow water dangers is on · Surrounding depth (10 m) is less than the safety contour (30 m) · Water level effect is always under water/submerged",
+            Assert.Single(reason.Lines).Text);
+        Assert.Null(reason.Note);
+        Assert.False(reason.HasNote);
+        Assert.DoesNotContain("Likely", reason.Text, StringComparison.Ordinal);
+        Assert.Equal(
+            ["Change Shallow water dangers in Display settings", "Change Safety contour in Display settings"],
+            reason.Settings.Select(s => s.Label));
+
+        // A safety contour of 5 m: the rule takes its other case.
+        scene.Mariner = scene.Mariner with { SafetyContour = Depth.FromMetres(5) };
+        await scene.RefreshAsync();
+
+        reason = scene.Main.Reason!;
+        Assert.Equal(PickReasonKind.Traced, reason.Kind);
+        Assert.Contains("Surrounding depth (10 m) is at least the safety contour (5 m)", Assert.Single(reason.Lines).Text, StringComparison.Ordinal);
+        Assert.Null(reason.Note);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true, "BCNLAT21", "Simplified symbols is on · " + RedStake)]
+    [InlineData(false, "BCNSTK02", "Simplified symbols is off · Beacon shape is a stake, pole, perch or post")]
+    public async Task The_traced_lateral_beacon_gives_its_exact_case(bool simplified, string symbol, string text)
+    {
+        using var scene = await Scene.CreateAsync(traced: true);
+        scene.Simplified = simplified;
+        var cell = simplified ? scene.Cells.Simplified : scene.Cells.PaperChart;
+        scene.Show(cell);
+
+        await scene.PickAsync(scene.Hit(cell, "LateralBeacon"));
+
+        var main = scene.Main;
+        Assert.Equal(symbol, main.Part.ItemId);
+        Assert.Equal(PickReasonKind.Traced, main.Reason!.Kind);
+        // Paper chart's case is an else: its condition's line never runs, and
+        // the line the branch draws on shows it was taken.
+        Assert.Equal(text, main.Reason.Text);
+        Assert.Null(main.Reason.Note);
+    }
+
+    [AvaloniaFact]
+    public async Task A_part_the_trace_cant_map_keeps_the_match()
+    {
+        using var scene = await Scene.CreateAsync(traced: true);
+        await scene.PickAsync(scene.Hit(scene.Cells.Simplified, "LateralBeacon"));
+        Assert.Equal(PickReasonKind.Traced, scene.Main.Reason!.Kind);
+
+        // The stack still shows BCNLAT21, but with the switch off the traced
+        // portrayal draws the paper-chart stake: the trace can't say why
+        // BCNLAT21 was drawn, so the match stands.
+        scene.Simplified = false;
+        await scene.RefreshAsync();
+        Assert.Equal("BCNLAT21", scene.Main.Part.ItemId);
+        Assert.Equal(PickReasonKind.NoMatch, scene.Main.Reason!.Kind);
+
+        // A trace in which none of the part's uses ran keeps the match, "Likely" and all.
+        var index = (await scene.Catalogues.Service.GetIndexAsync(new SpecRef("S-101", default)))!;
+        var colour = new RuleCondition { Kind = RuleConditionKind.Attribute, Operator = ConditionOperator.Equal, Subject = "colour", Index = 1, Value = "3" };
+        var simplified = new RuleCondition { Kind = RuleConditionKind.ContextParameter, Operator = ConditionOperator.IsTrue, Subject = "SimplifiedSymbols" };
+        var feature = new FeatureTypeEntry
+        {
+            Key = new ReferenceKey(index.Spec, ReferenceKind.FeatureType, "LateralBeacon"),
+            Name = "Lateral Beacon",
+            PermittedPrimitives = ["Point"],
+            Uses =
+            [
+                new SymbolUse { ItemId = "BCNLAT21", ItemKind = ReferenceKind.Symbol, RuleFile = "A", Line = 10, Conditions = [simplified] },
+                new SymbolUse { ItemId = "BCNLAT21", ItemKind = ReferenceKind.Symbol, RuleFile = "B", Line = 20, Conditions = [colour] },
+            ],
+        };
+        var facts = new PickFacts([new PickAttribute { Code = "colour", RawValue = "3" }], S100GeometryType.Point, _ => "true");
+        var symbol = new PickDrawnPart(PickDrawnPartKind.Symbol, "1", new ReferenceKey(index.Spec, ReferenceKind.Symbol, "BCNLAT21"));
+        var drawn = new PointInstruction { FeatureReference = "1", SymbolReference = "BCNLAT21" };
+
+        var unmapped = PickReasons.Explain(symbol, feature, index, facts, new LuaFeatureTrace("1", [drawn], [new LuaTraceLine("A", 9)]));
+        Assert.Equal(PickReasonKind.Likely, unmapped.Kind);
+        Assert.Equal(PickReasons.Explain(symbol, feature, index, facts).Text, unmapped.Text);
+
+        // The line of one use ran: that case, and only it.
+        var mapped = PickReasons.Explain(symbol, feature, index, facts, new LuaFeatureTrace("1", [drawn], [new LuaTraceLine("B", 20)]));
+        Assert.Equal(PickReasonKind.Traced, mapped.Kind);
+        Assert.Equal("Colour is red", mapped.Text);
+
+        // Both ran: the trace doesn't say which drew it, so the match stands.
+        var both = PickReasons.Explain(symbol, feature, index, facts, new LuaFeatureTrace("1", [drawn], [new LuaTraceLine("A", 10), new LuaTraceLine("B", 20)]));
+        Assert.Equal(PickReasonKind.Likely, both.Kind);
+
+        // The trace didn't draw the part: the match.
+        var other = PickReasons.Explain(symbol, feature, index, facts, new LuaFeatureTrace("1", [], [new LuaTraceLine("B", 20)]));
+        Assert.Equal(PickReasonKind.Likely, other.Kind);
+    }
+
+    [AvaloniaFact]
+    public async Task A_pick_change_cancels_the_trace_in_flight_and_shows_the_match_meanwhile()
+    {
+        using var scene = await Scene.CreateAsync(traced: true);
+        var held = new TaskCompletionSource<LuaFeatureTrace?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tokens = new List<CancellationToken>();
+        scene.TraceOverride = (_, token) =>
+        {
+            tokens.Add(token);
+            token.Register(() => held.TrySetCanceled(token));
+            return held.Task;
+        };
+        var beacon = scene.Hit(scene.Cells.Simplified, "LateralBeacon");
+
+        scene.Report.SetPicks([beacon]);
+        // The match shows while the trace runs.
+        await WaitUntilAsync(() => scene.DrawnAs.Parts.Any(p => p is { IsMain: true, Reason: not null }));
+        Assert.Equal(PickReasonKind.Matched, scene.Main.Reason!.Kind);
+        var first = Assert.Single(tokens);
+        Assert.False(first.IsCancellationRequested);
+
+        // Another pick: the trace in flight is cancelled, and nothing it gives is shown.
+        scene.TraceOverride = (hit, token) => scene.Tracer.TraceAsync(hit, token);
+        scene.Report.SetPicks([]);
+        Assert.True(first.IsCancellationRequested);
+        await scene.DrawnAs.Loading;
+        Assert.Empty(scene.DrawnAs.Parts);
+
+        // Picking again traces again.
+        await scene.PickAsync(beacon);
+        Assert.Equal(PickReasonKind.Traced, scene.Main.Reason!.Kind);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < until, "Timed out");
+            await Task.Yield();
+        }
     }
 
     [AvaloniaFact]

@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia.Media;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.ChartReference;
 using EncDotNet.S100.Viewer.Services.Legends;
@@ -42,6 +43,8 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     private readonly Func<string, string?> _setting;
     private readonly Func<string, string?>? _settingText;
     private readonly Action<string>? _changeSetting;
+    private readonly Func<PickHit, CancellationToken, Task<LuaFeatureTrace?>>? _trace;
+    private CancellationTokenSource? _tracing;
     private PickHit? _hit;
     private bool _whyExpanded;
     private PickDrawing? _drawing;
@@ -63,6 +66,11 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     /// </param>
     /// <param name="changeSetting">Opens Settings › Chart at a context parameter's switch, or <see langword="null"/>.</param>
     /// <param name="settingText">A context parameter's current value in words ("30 m"), as Settings shows it, or <see langword="null"/>.</param>
+    /// <param name="trace">
+    /// Traces a picked feature's rule off the UI thread (<see cref="PickRuleTracer.TraceAsync"/>,
+    /// R12b, #1719), or <see langword="null"/>: Why this symbol keeps the match.
+    /// It returns <see langword="null"/> for a feature it can't trace.
+    /// </param>
     public PickDrawnAsViewModel(
         Func<PickHit, PickDrawing?> read,
         ReferenceTerms terms,
@@ -70,7 +78,8 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         Action<Action> post,
         Func<string, string?>? setting = null,
         Action<string>? changeSetting = null,
-        Func<string, string?>? settingText = null)
+        Func<string, string?>? settingText = null,
+        Func<PickHit, CancellationToken, Task<LuaFeatureTrace?>>? trace = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(terms);
@@ -83,6 +92,7 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         _setting = setting ?? (static _ => null);
         _changeSetting = changeSetting;
         _settingText = settingText;
+        _trace = trace;
         Glyphs.PaletteChanged += OnPaletteChanged;
     }
 
@@ -159,7 +169,11 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => Glyphs.PaletteChanged -= OnPaletteChanged;
+    public void Dispose()
+    {
+        Glyphs.PaletteChanged -= OnPaletteChanged;
+        CancelTrace();
+    }
 
     private void Apply(PickDrawing? drawing, bool force)
     {
@@ -172,6 +186,7 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
         }
 
         _drawing = drawing;
+        CancelTrace();
         var version = ++_version;
         Parts.Clear();
         Glyph = null;
@@ -194,11 +209,14 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
 
     // Why this symbol (R11, #1680): each part's reason, from the feature
     // type's cases for it, matched against the pick's values and the current
-    // display settings.
+    // display settings. Then, for a Lua product, the rule's trace (R12b,
+    // #1719): the match shows first, and each part the trace maps is swapped
+    // for the case the rule took. A newer pick or setting cancels the trace.
     private async Task ExplainAsync(PickDrawing drawing, PickHit hit)
     {
         var version = ++_explainVersion;
         var parts = Parts.ToList();
+        var cancel = StartTrace();
         try
         {
             var index = await Terms.IndexAsync(drawing.Spec).ConfigureAwait(false);
@@ -206,19 +224,54 @@ internal sealed class PickDrawnAsViewModel : ViewModelBase, IDisposable
                 return;
             var facts = new PickFacts(hit.Attributes, hit.Geometry, _setting, _settingText);
             var reasons = parts.Select(p => PickReasons.Explain(p.Part, feature, index, facts)).ToList();
-            _post(() =>
+            Post(reasons);
+
+            if (_trace is null || cancel is null)
+                return;
+            var trace = await _trace(hit, cancel.Token).ConfigureAwait(false);
+            if (trace is null || cancel.IsCancellationRequested)
+                return;
+            var traced = parts.Select(p => PickReasons.Trace(p.Part, feature, index, facts, trace)).ToList();
+            if (traced.Any(r => r is not null))
+                Post([.. traced.Select((r, i) => r ?? reasons[i])]);
+
+            void Post(List<PickReason> said) => _post(() =>
             {
                 if (version != _explainVersion || !ReferenceEquals(drawing, _drawing))
                     return;
                 for (int i = 0; i < parts.Count; i++)
-                    parts[i].Reason = new PickReasonViewModel(reasons[i], index, _setting, _changeSetting);
+                    parts[i].Reason = new PickReasonViewModel(said[i], index, _setting, _changeSetting);
                 OnPropertyChanged(nameof(HasReasons));
             });
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
         {
-            // A catalogue that can't be read: no reasons, and Why this symbol stays hidden.
+            // A newer pick or setting: its reasons replace these.
         }
+        catch (Exception)
+        {
+            // A catalogue that can't be read, or a rule that fails when
+            // traced: the match stands, or Why this symbol stays hidden.
+        }
+    }
+
+    // Cancels the trace in flight and starts the next one's token, or none
+    // when nothing traces.
+    private CancellationTokenSource? StartTrace()
+    {
+        CancelTrace();
+        if (_trace is null)
+            return null;
+        var cancel = new CancellationTokenSource();
+        _tracing = cancel;
+        return cancel;
+    }
+
+    private void CancelTrace()
+    {
+        // Not disposed: the trace may still hold the token; it is dropped with it.
+        _tracing?.Cancel();
+        _tracing = null;
     }
 
     private string? NameOf(PickDrawing drawing)
@@ -534,6 +587,9 @@ internal sealed class PickReasonViewModel
 
     /// <summary>The reason as one line, for its accessible help text.</summary>
     public string HelpText => string.Join(". ", Reason.Lines.Select(l => l.Text.TrimEnd(':')).Append(Reason.Note).OfType<string>());
+
+    /// <summary>Whether a rule trace gave the reason (R12b, #1719).</summary>
+    public bool IsTraced => Reason.Kind == PickReasonKind.Traced;
 
     /// <summary>"Also depends on values the rule works out", or <see langword="null"/>.</summary>
     public string? Note => Reason.Note;
