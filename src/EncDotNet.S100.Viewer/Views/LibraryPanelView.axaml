@@ -184,11 +184,26 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
-        <!-- Empty state's large targets. -->
+        <!-- Empty state's large targets. ShadUI's button is one fixed-height line, so
+             let these grow to fit the title and the wrapped subtitle, and stretch
+             the content so the subtitle wraps at the button's width. -->
         <Style Selector="Button.libraryQuickAction">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Height" Value="NaN" />
+            <Setter Property="MinHeight" Value="48" />
             <Setter Property="Padding" Value="12,8" />
+        </Style>
+        <!-- ShadUI lays out the icon and content in a horizontal StackPanel, which
+             measures the content at infinite width so nothing wraps. These buttons
+             have no icon (or loading spinner), so hide those and stack vertically: the
+             content then gets the button's width. -->
+        <Style Selector="Button.libraryQuickAction /template/ StackPanel">
+            <Setter Property="Orientation" Value="Vertical" />
+        </Style>
+        <Style Selector="Button.libraryQuickAction /template/ StackPanel > Viewbox">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
 
         <!-- Non-interactive group headers in the Add menu. -->
@@ -336,7 +351,7 @@
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="DIR" /></Border>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Folder}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Folder}" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_FolderSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
@@ -348,7 +363,7 @@
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="WEB" /></Border>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Online}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Online}" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_OnlineSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
@@ -360,7 +375,7 @@
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="FEED" /></Border>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
@@ -372,13 +387,13 @@
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="kindTag"><TextBlock Text="JSON" /></Border>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Manifest}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Manifest}" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_ManifestSub}" FontSize="{StaticResource SecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
             <TextBlock Text="{x:Static loc:Strings.Library_DropHint}" FontSize="{StaticResource SecondaryFontSize}" Opacity="0.55"
-                       HorizontalAlignment="Center" Margin="0,4,0,0" />
+                       TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,0" />
         </StackPanel>
 
         <Grid x:Name="PanelGrid" IsVisible="{Binding !Tree.IsEmpty}">
