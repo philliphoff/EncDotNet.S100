@@ -127,6 +127,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Enable verbose (Debug-level) logging.")]
     public bool Verbose { get; set; }
 
+    [CommandOption("--no-crash-notice")]
+    [Description("Skip crash detection for this run: don't report an earlier unexpected shutdown and don't leave a crash marker. Implied by --ephemeral and the --mcp options, so automated runs that are force-quit never show the crash-recovery notification.")]
+    public bool NoCrashNotice { get; set; }
+
     [CommandOption("--demo-notifications")]
     [Description("Seed a set of sample notification cards on launch to visually exercise the notification overlay (developer aid).")]
     public bool DemoNotifications { get; set; }
@@ -144,6 +148,16 @@ internal sealed class ViewerCommandSettings : CommandSettings
     /// </summary>
     public bool McpRequested =>
         Mcp || McpPort.HasValue || McpBind is not null || McpPortFile is not null || McpTestHooks || McpToolsets is not null;
+
+    /// <summary>
+    /// True when this run takes part in unclean-shutdown detection: it
+    /// reports earlier crashed sessions and leaves its own crash marker.
+    /// False for automated runs (<c>--ephemeral</c>, any MCP option) and
+    /// when <c>--no-crash-notice</c> is given, since those runs are often
+    /// force-quit on purpose and must neither show the crash-recovery
+    /// notification nor leave a marker for the user's next launch.
+    /// </summary>
+    public bool CrashDetectionEnabled => !(Ephemeral || McpRequested || NoCrashNotice);
 
     /// <summary>
     /// True when the user supplied an explicit viewport (center+zoom or

@@ -2653,9 +2653,11 @@ public partial class App : Application
     {
         var options = StartupOptions;
 
-        // Skip ephemeral automation runs: they must leave no marker behind
-        // and must not surface a stale crash.
-        var enabled = !(options?.Ephemeral == true);
+        // Skip automation runs (--ephemeral, --mcp…, --no-crash-notice):
+        // they are force-quit on purpose, so they leave no marker behind and
+        // don't surface a stale crash. A crash a normal run left behind stays
+        // in place for the next normal launch to report.
+        var enabled = options?.CrashDetectionEnabled ?? true;
 
         var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0";
 

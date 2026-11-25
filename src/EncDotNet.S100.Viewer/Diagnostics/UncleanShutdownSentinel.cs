@@ -87,7 +87,9 @@ internal static partial class UncleanShutdownSentinel
 
     /// <summary>
     /// Configures the sentinel. When <paramref name="enabled"/> is
-    /// <see langword="false"/> (e.g. an <c>--ephemeral</c> automation run)
+    /// <see langword="false"/> (an automation run: <c>--ephemeral</c>, any
+    /// MCP option, or <c>--no-crash-notice</c>; see
+    /// <see cref="ViewerCommandSettings.CrashDetectionEnabled"/>)
     /// <see cref="BeginSession"/> and
     /// <see cref="MarkCleanExit"/> become no-ops so automation runs never
     /// write a marker or report a stale one.

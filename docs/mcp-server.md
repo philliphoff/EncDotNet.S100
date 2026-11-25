@@ -63,6 +63,12 @@ own settings untouched, and to let parallel runs avoid each other, add
 or `--data-dir <path>` (settings and all disk caches under one folder, the most
 isolated option).
 
+A run started with any `--mcp` option, or with `--ephemeral`, skips crash
+detection, so killing it never makes the next run show the **Viewer recovered
+from an unexpected shutdown** notification and tests don't need to call
+`dismiss_notification` for it. For other scripted runs, add
+`--no-crash-notice`.
+
 The **Automation / agent control** section of the
 [viewer guide](../src/EncDotNet.S100.Viewer/README.md#automation--agent-control)
 lists the other startup options, such as viewport, palette, time step and
