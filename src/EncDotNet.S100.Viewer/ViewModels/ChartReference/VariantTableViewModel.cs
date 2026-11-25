@@ -32,6 +32,12 @@ internal sealed class VariantTableViewModel : ViewModelBase
     /// <summary>A cell glyph's size, in logical pixels.</summary>
     public const int CellGlyphSize = 32;
 
+    /// <summary>The row headers' width, in logical pixels: with five 46 px columns the table fits the 328 px inside the entry.</summary>
+    public const double RowHeaderWidth = 96;
+
+    /// <summary>A cell's width and height, in logical pixels.</summary>
+    public const double CellWidth = 44;
+
     private readonly FeatureTypeEntry _feature;
     private readonly FeatureTypeProbe _probe;
     private readonly ReferenceEntryContext _context;
@@ -79,11 +85,11 @@ internal sealed class VariantTableViewModel : ViewModelBase
         _rows = two.Count > 0 ? two[0] : -1;
         _columns = two.Count > 1 ? two[1] : -1;
 
-        RowHeading = _rows < 0 ? null : NameOf(_rows);
-        ColumnHeading = _columns < 0 ? null : NameOf(_columns);
+        RowHeading = _rows < 0 ? null : VariantLabel.Of(NameOf(_rows));
+        ColumnHeading = _columns < 0 ? null : VariantLabel.Of(NameOf(_columns));
         Columns = _columns < 0
-            ? [new VariantHeaderViewModel(TermText.Empty)]
-            : [.. probe.Inputs[_columns].Values.Select(v => new VariantHeaderViewModel(ValueOf(_columns, v)))];
+            ? [VariantLabel.Of(TermText.Empty)]
+            : [.. probe.Inputs[_columns].Values.Select(v => VariantLabel.Of(ValueOf(_columns, v)))];
         Filters = [.. axes.Skip(2).Select(i => new VariantFilterViewModel(
             NameOf(i).Text,
             [.. probe.Inputs[i].Values.Select(v => ValueOf(i, v).Text)],
@@ -103,16 +109,16 @@ internal sealed class VariantTableViewModel : ViewModelBase
     }
 
     /// <summary>The row input's name ("Beacon shape"), or <see langword="null"/> when nothing splits the variants.</summary>
-    public TermText? RowHeading { get; }
+    public VariantLabel? RowHeading { get; }
 
     /// <summary>The column input's name ("Colour"), or <see langword="null"/> for a single column.</summary>
-    public TermText? ColumnHeading { get; }
+    public VariantLabel? ColumnHeading { get; }
 
     /// <summary>Whether there is a column heading.</summary>
     public bool HasColumnHeading => ColumnHeading is not null;
 
     /// <summary>The column headers: each value of the column input, or one blank header for a single column.</summary>
-    public IReadOnlyList<VariantHeaderViewModel> Columns { get; }
+    public IReadOnlyList<VariantLabel> Columns { get; }
 
     /// <summary>The rows, each with its cells; rebuilt when the style or a filter changes.</summary>
     public IReadOnlyList<VariantRowViewModel> Rows
@@ -214,7 +220,7 @@ internal sealed class VariantTableViewModel : ViewModelBase
             }
 
             var label = _rows < 0 ? (TermText)Strings.Reference_Variants_EveryCase : ValueOf(_rows, _probe.Inputs[_rows].Values[r]);
-            rows.Add(new VariantRowViewModel(label, cells));
+            rows.Add(new VariantRowViewModel(VariantLabel.Of(label), cells));
         }
 
         Rows = rows;
@@ -397,14 +403,28 @@ internal sealed class VariantTableViewModel : ViewModelBase
     }
 }
 
-/// <summary>A column header of a variant table: a value of the column input.</summary>
-/// <param name="Label">The value in words, with its terms.</param>
-internal sealed record VariantHeaderViewModel(TermText Label);
+/// <summary>
+/// A heading or value of a variant table, shown as one term that wraps in
+/// its column: an attribute, a setting or a single listed value is a term;
+/// a list of values ("Red, green, red") is plain text.
+/// </summary>
+/// <param name="Text">The words.</param>
+/// <param name="Key">The entry the words name, or <see langword="null"/> for plain text.</param>
+/// <param name="Value">A listed value's code, when the words name one.</param>
+internal sealed record VariantLabel(string Text, ReferenceKey? Key = null, string? Value = null)
+{
+    /// <summary>The label of words with terms: a term when they are one term alone.</summary>
+    /// <param name="words">The words.</param>
+    public static VariantLabel Of(TermText words) =>
+        words.Runs is [{ IsTerm: true } only]
+            ? new VariantLabel(only.Text, only.Key, only.Value)
+            : new VariantLabel(words.Text);
+}
 
 /// <summary>A row of a variant table: a value of the row input, and its cells.</summary>
-/// <param name="Label">The value in words, with its terms.</param>
+/// <param name="Label">The value.</param>
 /// <param name="Cells">A cell per column.</param>
-internal sealed record VariantRowViewModel(TermText Label, IReadOnlyList<VariantCellViewModel> Cells);
+internal sealed record VariantRowViewModel(VariantLabel Label, IReadOnlyList<VariantCellViewModel> Cells);
 
 /// <summary>
 /// A cell of a variant table: the glyph of what the rule draws for one

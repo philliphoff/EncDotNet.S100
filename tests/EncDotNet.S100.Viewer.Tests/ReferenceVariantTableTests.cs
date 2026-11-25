@@ -57,13 +57,14 @@ public sealed class ReferenceVariantTableTests : IDisposable
         Assert.False(entry.IsWorkingOutVariants);
         Assert.Equal("Beacon shape", table.RowHeading?.Text);
         Assert.Equal("Colour", table.ColumnHeading?.Text);
-        // The headings and values are terms: the attribute, and each listed value.
-        Assert.Equal(Key(ReferenceKind.Attribute, "beaconShape"), table.RowHeading!.Runs.Single().Key);
+        // The headings and values are terms: the attribute, and a listed value.
+        Assert.Equal(Key(ReferenceKind.Attribute, "beaconShape"), table.RowHeading!.Key);
         Assert.Equal(8, table.Rows.Count);
         Assert.Equal(5, table.Columns.Count);
-        Assert.Equal(["Red, green, red", "Green, red, green", "Red", "Green", "Not given"], table.Columns.Select(c => c.Label.Text));
-        Assert.Equal(Key(ReferenceKind.Attribute, "colour"), table.Columns[2].Label.Runs.Single(r => r.IsTerm).Key);
-        Assert.Equal("3", table.Columns[2].Label.Runs.Single(r => r.IsTerm).Value);
+        Assert.Equal(["Red, green, red", "Green, red, green", "Red", "Green", "Not given"], table.Columns.Select(c => c.Text));
+        Assert.Equal(Key(ReferenceKind.Attribute, "colour"), table.Columns[2].Key);
+        Assert.Equal("3", table.Columns[2].Value);
+        Assert.Null(table.Columns[0].Key); // A list of values is plain words, so it wraps in its column.
         Assert.StartsWith("Stake", table.Rows[0].Label.Text, StringComparison.Ordinal);
 
         // The inputs left over are filters; the switch is never one.

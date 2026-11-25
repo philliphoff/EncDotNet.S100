@@ -74,8 +74,8 @@
         <!-- A variant table cell (R13b, #1721): the drawn glyph as a term, on the chart's
              tile, its peek under it; the picked feature's cell is ringed. -->
         <Style Selector="views|ReferenceTerm.crCell">
-            <Setter Property="Width" Value="46" />
-            <Setter Property="Height" Value="46" />
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
             <Setter Property="Margin" Value="0,0,2,2" />
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="BorderThickness" Value="2" />
@@ -116,10 +116,13 @@
         <Style Selector="views|ReferenceTerm.crCell.ringed /template/ Border#PART_Border">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <!-- A header of the variant table: small, wrapping inside its column. -->
-        <Style Selector="views|ReferenceTermText.crValue">
+        <!-- A heading or value of the variant table: one term, small, wrapping inside its column. -->
+        <Style Selector="ContentControl.crValueLabel views|ReferenceTerm, ContentControl.crHeadingLabel views|ReferenceTerm">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="ContentControl.crHeadingLabel views|ReferenceTerm">
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <!-- An action (Find, Change in Display settings): blue is kept for actions (§4.6). -->
         <Style Selector="Button.crAction">
@@ -153,6 +156,14 @@
                            FontStyle="Italic"
                            TextWrapping="Wrap" />
             </StackPanel>
+        </DataTemplate>
+
+        <!-- A variant table's heading or value: a term, or plain words for a list of values. -->
+        <DataTemplate DataType="cr:VariantLabel">
+            <views:ReferenceTerm Text="{Binding Text}"
+                                 Key="{Binding Key}"
+                                 Value="{Binding Value}"
+                                 AutomationProperties.AutomationId="Reference.Term" />
         </DataTemplate>
 
         <!-- How it is drawn as a variant table (C1; R13b, #1721). -->
@@ -212,16 +223,15 @@
                     <StackPanel Spacing="2" HorizontalAlignment="Left" Margin="0,0,0,4">
                         <!-- The column input's name over its values. -->
                         <StackPanel Orientation="Horizontal" IsVisible="{Binding HasColumnHeading}">
-                            <Border Width="84" />
-                            <views:ReferenceTermText Terms="{Binding ColumnHeading}" Classes="crValue" FontWeight="SemiBold" />
+                            <Border Width="{x:Static cr:VariantTableViewModel.RowHeaderWidth}" />
+                            <ContentControl Content="{Binding ColumnHeading}" Classes="crHeadingLabel" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <views:ReferenceTermText Terms="{Binding RowHeading}"
-                                                     Classes="crValue"
-                                                     FontWeight="SemiBold"
-                                                     Width="84"
-                                                     Padding="0,0,6,0"
-                                                     VerticalAlignment="Bottom" />
+                            <ContentControl Content="{Binding RowHeading}"
+                                            Classes="crHeadingLabel"
+                                            Width="{x:Static cr:VariantTableViewModel.RowHeaderWidth}"
+                                            Padding="0,0,6,0"
+                                            VerticalAlignment="Bottom" />
                             <ItemsControl ItemsSource="{Binding Columns}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -229,12 +239,12 @@
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="cr:VariantHeaderViewModel">
-                                        <views:ReferenceTermText Terms="{Binding Label}"
-                                                                 Classes="crValue crCaption"
-                                                                 Width="46"
-                                                                 Margin="0,0,2,0"
-                                                                 VerticalAlignment="Bottom" />
+                                    <DataTemplate x:DataType="cr:VariantLabel">
+                                        <ContentControl Content="{Binding}"
+                                                        Classes="crValueLabel"
+                                                        Width="{x:Static cr:VariantTableViewModel.CellWidth}"
+                                                        Margin="0,0,2,0"
+                                                        VerticalAlignment="Bottom" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -243,11 +253,11 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="cr:VariantRowViewModel">
                                     <StackPanel Orientation="Horizontal">
-                                        <views:ReferenceTermText Terms="{Binding Label}"
-                                                                 Classes="crValue"
-                                                                 Width="84"
-                                                                 Padding="0,0,6,0"
-                                                                 VerticalAlignment="Center" />
+                                        <ContentControl Content="{Binding Label}"
+                                                        Classes="crValueLabel"
+                                                        Width="{x:Static cr:VariantTableViewModel.RowHeaderWidth}"
+                                                        Padding="0,0,6,0"
+                                                        VerticalAlignment="Center" />
                                         <ItemsControl ItemsSource="{Binding Cells}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
