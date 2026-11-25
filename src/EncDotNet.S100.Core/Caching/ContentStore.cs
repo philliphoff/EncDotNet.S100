@@ -225,10 +225,27 @@ public sealed class ContentStore : IDisposable
     }
 
     /// <summary>Runs <paramref name="work"/> as a background IO job, never throwing.</summary>
+    /// <remarks>
+    /// The store counts the job as done on the worker, as soon as
+    /// <paramref name="work"/> returns. The job's completion runs its
+    /// continuations on the thread pool, which a busy process can hold up for
+    /// seconds, so ending there kept <see cref="WaitForWritesIdle"/> waiting
+    /// after the work was done. The continuation still ends a job that never
+    /// ran, and disposes the interest.
+    /// </remarks>
     /// <returns>Whether the job was scheduled.</returns>
     internal bool RunBackground(WorkKey key, Action work)
     {
         BeginWrite();
+        var ended = 0;
+        void End()
+        {
+            if (Interlocked.Exchange(ref ended, 1) == 0)
+            {
+                EndWrite();
+            }
+        }
+
         WorkInterest<bool> interest;
         try
         {
@@ -246,24 +263,28 @@ public sealed class ContentStore : IDisposable
                     {
                         // Best-effort: a failed cache write or cleanup is dropped.
                     }
+                    finally
+                    {
+                        End();
+                    }
 
                     return ValueTask.FromResult(true);
                 });
         }
         catch
         {
-            EndWrite();
+            End();
             return false;
         }
 
         interest.Result.ContinueWith(
             static (_, state) =>
             {
-                var (store, owned) = ((ContentStore, WorkInterest<bool>))state!;
+                var (owned, end) = ((WorkInterest<bool>, Action))state!;
                 owned.Dispose();
-                store.EndWrite();
+                end();
             },
-            (this, interest),
+            (interest, (Action)End),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
