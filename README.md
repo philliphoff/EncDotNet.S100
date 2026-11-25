@@ -15,13 +15,16 @@ IHO [S-100](https://iho.int/en/s-100-edition-5-2-0) Universal
 Hydrographic Data Model for .NET. In plain terms, it reads and draws
 **electronic nautical charts and related marine data layers** —
 depths, currents, water levels, navigational warnings, aids to
-navigation, and more — and it runs on macOS, Windows, and Linux. It
+navigation, and more — and draws weather forecasts, warnings and
+observations over them. It runs on macOS, Windows, and Linux. It
 provides:
 
 - A set of **reusable libraries** for reading, portraying, rendering,
   and **validating** S-100 product data — from ISO 8211 ENC cells to
   HDF5 coverage grids to GML feature collections — behind a common
-  pipeline abstraction.
+  pipeline abstraction, plus managed readers for weather data that isn't
+  S-100 (GRIB2, NetCDF-CF, CAP warnings, NHC tropical cyclone advisories
+  and WPC surface analyses).
 - A **cross-platform desktop viewer** (Avalonia + Mapsui) that loads
   any combination of supported products from an exchange set or as
   loose files and renders them, time-aligned, on an interactive map.
@@ -56,6 +59,11 @@ features.
 **Building on top of the data?** **[docs/getting-started.md](docs/getting-started.md)**
 walks you from zero to a rendered PNG with either the `EncDotNet.S100`
 library facade or the standalone `s100` command-line tool.
+
+**Want wind, waves and weather on the chart?** Open a GRIB2 or NetCDF
+forecast, a CAP warning feed, an NHC advisory or a WPC surface analysis
+like any other dataset, or fetch them from the viewer's Library; see
+[Show wind and waves on the chart](docs/weather.md).
 
 **Serving charts to a web map or GIS?** Point `s100 tiles serve` at a folder
 of charts, or run it in Docker; see
@@ -122,6 +130,29 @@ which layer of the pipeline a finding came from. This is a
 best-effort path for viewing legacy chart collections; it is **not**
 an S-52 implementation.
 
+### Weather data (not S-100)
+
+The same pipeline also reads weather data, opened, time-aligned and picked
+like an S-100 product. None of it is S-100 data, and none of it is for
+navigation: the viewer, `s100` and the MCP server label it so wherever it
+appears. Its portrayal is SoundCharts' own, since none of these formats
+defines one.
+
+| Data | Formats | What's drawn |
+|---|---|---|
+| Forecast and analysis grids | GRIB2; NetCDF-3 and NetCDF-4 with CF conventions | Wave height, wind barbs and speed, isobars, sea surface temperature and isotherms, surface currents, restricted visibility, freezing spray, air temperature, precipitation rate and amount, thunderstorm risk (CAPE) and cloud cover |
+| Marine weather warnings | CAP 1.2 (one alert or an Atom feed), NWS alerts GeoJSON | Warning areas hatched by severity while they're in force |
+| Tropical cyclones | NHC advisory GIS shapefile zips | Cone, forecast and past track, wind radii, and the storm at the view time |
+| Surface analyses | WPC coded surface bulletins (`CODSUS`, and coded forecasts such as `CODSRP`) | Fronts, troughs, highs and lows |
+| Buoy and coastal station observations | NOAA NDBC, fetched live | Wind barb and wave height at each station |
+| Own-ship wind | NMEA 0183 | True wind barb beside own ship |
+
+Route checks compare forecast wind and wave height with the vessel's limits
+along the route and test it against NHC wind radii and cones; see
+[Route checks](docs/route-checks.md#weather-along-the-route).
+[Show wind and waves on the chart](docs/weather.md) lists the parameters,
+where to get the data and what isn't supported.
+
 ## The Viewer
 
 ![SoundCharts showing NOAA charts and S-102 bathymetry over Elliott Bay, Seattle](site/src/assets/shots/H1.png)
@@ -152,14 +183,21 @@ offline basemap (Natural Earth land; OpenStreetMap optional). Headline features:
   and export as RTZ and S-421.
 - **Route checks** against everything loaded — charted dangers, S-102
   depths, S-104 or predicted tide for under-keel clearance at each
-  leg's ETA, regulated areas, navigational warnings and weather — with
+  leg's ETA, regulated areas, navigational warnings, forecast wind and
+  waves, and tropical cyclone wind radii — with
   a findings list and a clearance profile.
 - **Tide and current predictions** at NOAA stations, offline, on the
   map and the Timeline, and to adjust charted depths where no S-104
   covers the area.
-- **Weather overlays** (not for navigation) from GRIB2 and NetCDF
-  forecasts, CAP and S-412 warnings, NHC tropical cyclone advisories,
-  WPC surface analyses, NDBC buoys and own-ship NMEA instruments.
+- **Weather overlays** (not for navigation): wind, waves, pressure, sea
+  temperature, currents, visibility, freezing spray, rain, thunderstorm
+  risk and cloud cover from GRIB2 and NetCDF; CAP and S-412 warnings; NHC
+  tropical cyclone advisories; WPC surface analyses; NDBC buoys and
+  own-ship NMEA instruments. The Library fetches GFS and GFS-Wave
+  forecasts, WAVEWATCH III, sea surface temperature and surface currents
+  (ERDDAP, HYCOM), NWS marine alerts, NHC's active storms and WPC's latest
+  analysis for the map view. See
+  [Show wind and waves on the chart](docs/weather.md).
 - **Measure and range & bearing tools**, S-102 relief shading, and
   predefined display combinations.
 - **Pick / Object Information** for both vector and coverage
@@ -216,6 +254,18 @@ records the datasets and viewer calls behind each one.
 | S-411 Sea Ice | ![S-411 Sea Ice](site/src/assets/shots/P08.png)<br>US National Weather Service ice analysis, Alaska. |
 | S-421 Route Plan | ![S-421 Route Plan](site/src/assets/shots/P09.png)<br>Route plan, Baltic (repo fixture). |
 
+Weather overlays (not for navigation):
+
+| Data | Screenshot |
+|---|---|
+| Wind and waves | ![Hurricane Erin off Cape Hatteras: NOAA GFS-Wave wave height and GFS wind barbs and isobars over the NOAA charts](site/src/assets/shots/W1.png)<br>NOAA GFS-Wave and GFS, Hurricane Erin off Cape Hatteras. |
+| Sea temperature and currents | ![The Gulf Stream in the Florida Straits: MUR sea surface temperature with isotherms and AOML current arrows](site/src/assets/shots/W2.png)<br>NASA JPL MUR SST and NOAA AOML altimetry currents, Florida Straits. |
+| Freezing spray | ![Freezing spray round Kodiak Island with air temperature isotherms and isobars from NOAA GFS](site/src/assets/shots/W3.png)<br>NOAA GFS, Kodiak Island and Shelikof Strait. |
+| Tropical cyclones | ![Hurricane Erin north of Puerto Rico: the NHC cone, forecast track and wind radii](site/src/assets/shots/W4.png)<br>NHC advisory, Hurricane Erin north of Puerto Rico. |
+| Surface analysis | ![WPC surface analysis off the Carolinas: a low and its cold front with GFS isobars](site/src/assets/shots/W5.png)<br>WPC coded surface analysis with GFS isobars, off the Carolinas. |
+| Restricted visibility | ![Sea fog off eastern Maine from NOAA GFS visibility](site/src/assets/shots/W8.png)<br>NOAA GFS, Penobscot Bay. |
+| Rain and thunderstorms | ![Rain and thunderstorm risk over south Florida from NOAA GFS](site/src/assets/shots/W9.png)<br>NOAA GFS, south Florida. |
+
 <sup>1</sup> The S-101 chart of Quebec City was made by the EncDotNet.S100 project and contains intellectual property of the Canadian Hydrographic Service (CHS) of the Department of Fisheries and Oceans. This product does not meet the requirements of the Navigation Safety Regulations, 2020 under the Canada Shipping Act, 2001. Charts and publications issued by or on the authority of CHS must be used to meet the requirements of those regulations. The copyright in the data are and remain the property of His Majesty the King in Right of Canada and shall not be sold, licensed, leased, assigned or given to a third party. The incorporation of CHS data in this product does not constitute an endorsement or an approval of this product by the Canadian Hydrographic Service, the Department of Fisheries and Oceans or His Majesty the King in Right of Canada.
 
 ## Command-line tool
@@ -226,6 +276,7 @@ renderer, with no UI. It renders any supported product to an image or a
 tile set, **validates** datasets and exchange sets against the normative
 rule packs, checks routes, converts between S-57 and S-101, predicts
 tides, and **serves** datasets to web maps, GIS desktops and AI agents.
+It reads the same weather files as the viewer.
 
 ```sh
 s100 render dataset.h5 out.png --palette night -w 2048 -h 1536
@@ -233,6 +284,7 @@ s100 validate exchange-set/          # normative rules + exchange-set integrity
 s100 info dataset.h5                 # detected spec, edition, and time steps
 s100 route check route.rtz charts/ --draft 9.5
 s100 tides predict 9447130           # NOAA station, offline after `tides update`
+s100 render --layer chart.000 --layer gfswave.grib2 waves.png --time-step 2
 s100 tiles export charts/ -o charts.pmtiles
 s100 tiles serve charts/             # XYZ tiles, TileJSON, WMTS and WMS
 s100 mcp serve charts/ --transport http
@@ -260,7 +312,9 @@ docker run --rm -p 8200:8200 -v "$PWD/charts:/data:ro" \
 [Run s100 in Docker](docs/docker.md) covers Docker Compose, health
 checks, memory limits, prebuilt tiles for small computers, and the MCP
 server in a container. See [docs/cli.md](docs/cli.md) for the full
-command and option reference.
+command and option reference, and
+[Use the command line](docs/weather.md#use-the-command-line) for weather
+files.
 
 ## Libraries
 
@@ -313,19 +367,19 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S412** | S-412 marine weather warnings reader (draft specification), typed warnings model, XSLT portrayal, validation pack. |
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model; pre-translation rules + delegation to the S-101 validation pack. |
-| **EncDotNet.S100.Datasets.Grib** | Managed GRIB2 decoder for wind and wave grids: regular latitude/longitude grids, analysis, forecast and time-interval products, and simple, complex, spatially differenced and PNG packing with bitmaps. Indexes fields on open, decodes on demand, and reads a whole file (or appended files) into a weather grid set. Drawn by `GribDatasetProcessor` in Datasets.Pipelines. No native dependencies. Not for navigation. |
-| **EncDotNet.S100.Datasets.Weather** | Shared in-memory model for GRIB2 and NetCDF-CF wind and wave grids: the canonical parameter table, normalisation to the coverage grid order, and an `ICoverageSource` with lazily decoded time steps, overview levels and wind speed and direction derived from U and V. Not for navigation. |
+| **EncDotNet.S100.Datasets.Grib** | Managed GRIB2 decoder for wind and wave grids: regular latitude/longitude grids, analysis, forecast and time-interval products, and simple, complex, spatially differenced, JPEG 2000 and PNG packing with bitmaps. Indexes fields on open, decodes on demand, and reads a whole file (or appended files) into a weather grid set. Drawn by `GribDatasetProcessor` in Datasets.Pipelines. No native dependencies. Not for navigation. |
+| **EncDotNet.S100.Datasets.NetCdf** | Managed NetCDF-CF reader for wind and wave grids: NetCDF-3 (classic, 64-bit offset) and NetCDF-4 (on PureHDF, deflate and shuffle), with the CF interpretation that builds a weather grid set. Drawn by `NetCdfDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
+| **EncDotNet.S100.Datasets.Weather** | Shared in-memory model for GRIB2 and NetCDF-CF weather grids: the canonical parameter table, normalisation to the coverage grid order, an `ICoverageSource` with lazily decoded time steps, overview levels and speed and direction derived from U and V, and the code-defined weather styles (fills, barbs, arrows, isobars and isotherms). Also holds the WPC coded surface bulletin (`CODSUS`) reader and surface analysis model, and the styles for surface analyses and tropical cyclones. Not for navigation. |
 | **EncDotNet.S100.Datasets.Cap** | CAP 1.2 marine weather warnings: one CAP alert, an Atom feed of them, or the NWS GeoJSON from `api.weather.gov/alerts`. Polygons, circles and NWS marine zone codes (resolved against a bundled, simplified NWS marine zone layer) become outlines, drawn while in force with hatching and outlines by severity. Drawn by `CapDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 | **EncDotNet.S100.Datasets.TropicalCyclones** | Tropical cyclone advisories from NHC's GIS shapefile zips: the storm, the advisory, every forecast point with its intensity and 34/50/64 kt radii by quadrant, the cone (split at 72 hours) and the past track. Loaded by `TropicalCycloneDatasetProcessor` in Datasets.Pipelines under the format name `TC`. Not for navigation. |
 | **EncDotNet.S100.Datasets.Aml** | SoundCharts' own portrayal of NATO Additional Military Layers (AML) cells read with EncDotNet.S57: dash-dot lines on a halo, unfilled ticked areas, framed point symbols and italic labels in four colour families (air, operational, seabed, environmental), on the *Additional military layers* display plane. Draws the RAL air and operational classes so far. Not the official AML portrayal; never used for depths or route checks. Not for navigation. |
-| **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. |
-| **EncDotNet.S100.Datasets.NetCdf** | Managed NetCDF-CF reader for wind and wave grids: NetCDF-3 (classic, 64-bit offset) and NetCDF-4 (on PureHDF, deflate and shuffle), with the CF interpretation that builds a weather grid set. Drawn by `NetCdfDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
+| **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. Also registers the weather formats (`WeatherProducts`: GRIB2, NetCDF, CAP, `CODSUS` surface analyses and `TC` tropical cyclones) with their processors. |
 
 ### Navigation
 
 | Package | Description |
 |---|---|
-| **EncDotNet.S100.Navigation** | Leg ETAs and an under-keel clearance check along a route: charted depth (S-102, S-101 fallback) plus S-104 water level, minus draft and squat, at each sample's ETA. Depends only on Core. |
+| **EncDotNet.S100.Navigation** | Leg ETAs and `RouteChecker`, which checks a route against the chart, navigational warnings, regulated areas, the under-keel clearance (charted depth from S-102 or S-101 plus S-104 or predicted water level, minus draft and squat, at each sample's ETA), and forecast wind, waves and tropical cyclone wind radii. Depends only on Core. |
 | **EncDotNet.S100.Routes.Rtz** | RTZ route plan reader and writer (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2), keeping unknown attributes and vendor extensions for round trips. Depends only on Core. |
 | **EncDotNet.S100.Tides** | Harmonic tide prediction at a station: height at a time, a series at a fixed step, and high and low waters, for NOAA's 37 standard constituents and the 83 further ones it lists at some stations. Equilibrium arguments and node factors from Schureman (SP 98). No dependencies. Not for navigation. |
 | **EncDotNet.S100.Tides.Stations** | Tide station catalogue for `EncDotNet.S100.Tides`: NOAA CO-OPS reference and subordinate stations with constituents, offsets and datums (MLLW, MLW, MHW, MHHW, LAT, HAT), a cheap check for newer NOAA data, an offline JSON cache that is also the format for your own stations, stations near a point or in a box, and predictions on an S-100 vertical datum with their provenance. Not for navigation. |

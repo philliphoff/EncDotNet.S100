@@ -43,6 +43,20 @@ It includes:
 | **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — | [Specifications/content/S401](../src/EncDotNet.S100.Specifications/content/S401/README.md) |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) | [Datasets.S57](../src/EncDotNet.S100.Datasets.S57/README.md) |
 
+The same pipeline reads weather data that isn't S-100 and isn't for
+navigation, and draws it with its own styles. See
+[Show wind and waves on the chart](weather.md).
+
+| Data | Formats | Library |
+|---|---|---|
+| Forecast and analysis grids | GRIB2 | [Datasets.Grib](../src/EncDotNet.S100.Datasets.Grib/README.md) |
+| Forecast and analysis grids | NetCDF-3 and NetCDF-4 with CF conventions | [Datasets.NetCdf](../src/EncDotNet.S100.Datasets.NetCdf/README.md) |
+| Marine weather warnings | CAP 1.2, NWS alerts GeoJSON | [Datasets.Cap](../src/EncDotNet.S100.Datasets.Cap/README.md) |
+| Tropical cyclones | NHC advisory GIS shapefile zips | [Datasets.TropicalCyclones](../src/EncDotNet.S100.Datasets.TropicalCyclones/README.md) |
+| Surface analyses | WPC coded surface bulletins (`CODSUS`) | [Datasets.Weather](../src/EncDotNet.S100.Datasets.Weather/README.md#surface-analyses) |
+| Buoy and coastal station observations | NOAA NDBC, fetched live | [DynamicSources.Ndbc](../src/EncDotNet.S100.DynamicSources.Ndbc/README.md) |
+| Own-ship wind | NMEA 0183 | [DynamicSources.Nmea](../src/EncDotNet.S100.DynamicSources.Nmea/README.md) |
+
 ## How the pieces fit
 
 Each dataset goes through the same stages. A product-specific reader decodes
@@ -79,7 +93,8 @@ flowchart LR
 - [SoundCharts for ArcGIS](../external/EncDotNet.ArcGIS/docs/index.md): show
   S-100 charts in ArcGIS Pro, with the add-in built on these libraries.
 - [Route checks and under-keel clearance](route-checks.md): what each route
-  finding means, UKC and confidence, and the RTZ and S-421 route formats.
+  finding means, UKC and confidence, wind, wave and tropical cyclone checks,
+  and the RTZ and S-421 route formats.
 
 **Tasks**
 
@@ -91,7 +106,8 @@ flowchart LR
 - [Serve charts to a web map or GIS](scenarios/serve-chart-tiles.md): XYZ
   tiles, WMTS and WMS from a folder of charts, for MapLibre, Leaflet and QGIS.
 - [Show wind and waves on the chart](weather.md): GRIB2 and NetCDF forecasts,
-  CAP warnings, NDBC buoys and own-ship wind, which aren't for navigation.
+  CAP warnings, NHC tropical cyclones, WPC surface analyses, NDBC buoys and
+  own-ship wind, which aren't for navigation.
 - [Run s100 in Docker](docker.md): serve tiles from a mounted folder, prebuilt
   tiles on a small computer, and the MCP tools over standard input and output
   or HTTP.

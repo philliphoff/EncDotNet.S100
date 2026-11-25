@@ -1,8 +1,10 @@
 # EncDotNet.S100.Navigation
 
 `EncDotNet.S100.Navigation` holds passage-planning calculations that combine
-S-100 products: leg distances and ETAs, and an under-keel clearance (UKC)
-check along a route. The check computes, at each sample's ETA:
+S-100 products and weather data: leg distances and ETAs, and `RouteChecker`,
+which checks a route against the chart, navigational warnings, restricted
+and protected areas, the under-keel clearance (UKC), and forecast wind, waves
+and tropical cyclones. The UKC check computes, at each sample's ETA:
 
 ```text
 UKC = charted depth + water level − draft − squat
