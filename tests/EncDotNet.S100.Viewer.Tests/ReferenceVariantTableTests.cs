@@ -199,7 +199,50 @@ public sealed class ReferenceVariantTableTests : IDisposable
         Assert.Equal(1, values[At("categoryOfLateralMark")]);
         Assert.Equal(1, values[At("visualProminence")]); // Not given.
         Assert.Equal(1, values[At(ProbeValues.SimplifiedSymbols)]);
-        Assert.Equal("BCNSTK02", ProbeValues.KeyOf(S101, ProbeValues.LeadPart(ProbeValues.OutcomeFor(probe, values)!)!)?.Code);
+        Assert.Equal("BCNSTK02", ProbeValues.KeyOf(S101, ProbeValues.MainPart(ProbeValues.OutcomeFor(probe, values)!)!)?.Code);
+    }
+
+    [Fact]
+    public async Task Listed_values_match_exactly_and_numbers_match_the_nearest_value_probed()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        var index = (await f.Service.GetIndexAsync(S101, TestContext.Current.CancellationToken))!;
+        var beacon = index.Probes!.Find("LateralBeacon")!;
+        int At(FeatureTypeProbe probe, string code) => probe.Inputs.Select((x, i) => (x, i)).Single(p => p.x.Code == code).i;
+
+        // Colour 5 (yellow) wasn't probed: it doesn't read as the nearest code, 4 (green).
+        var yellow = ProbeValues.IndexesOf(beacon, index, new ReferenceFeature("LateralBeacon", [Leaf("colour", "5")], S100GeometryType.Point));
+        Assert.Null(yellow[At(beacon, "colour")]);
+        // Beacon shape is left out of the feature, as one of the values probed is.
+        Assert.Null(beacon.Inputs[At(beacon, "beaconShape")].Values[yellow[At(beacon, "beaconShape")]!.Value]);
+
+        // A depth between those probed takes the nearest one.
+        var depthArea = index.Probes.Find("DepthArea")!;
+        var drval1 = depthArea.Inputs[At(depthArea, "depthRangeMinimumValue")];
+        var deepest = drval1.Values.OfType<string>().MaxBy(v => double.Parse(v, CultureInfo.InvariantCulture))!;
+        var target = (double.Parse(deepest, CultureInfo.InvariantCulture) + 0.01).ToString(CultureInfo.InvariantCulture);
+        var area = ProbeValues.IndexesOf(depthArea, index, new ReferenceFeature("DepthArea", [Leaf("depthRangeMinimumValue", target)], S100GeometryType.Surface));
+        Assert.Equal(deepest, drval1.Values[area[At(depthArea, "depthRangeMinimumValue")]!.Value]);
+
+        // A feature type alone takes each attribute's first value probed.
+        var typeOnly = ProbeValues.IndexesOf(beacon, index, ReferenceFeature.TypeOnly("LateralBeacon"));
+        Assert.Equal(0, typeOnly[At(beacon, "colour")]);
+        Assert.Equal(0, typeOnly[At(beacon, "beaconShape")]);
+    }
+
+    [Fact]
+    public async Task The_main_part_of_a_depth_area_is_its_colour()
+    {
+        using var f = new ChartReferenceServiceTests.Fixture("S-101");
+        var index = (await f.Service.GetIndexAsync(S101, TestContext.Current.CancellationToken))!;
+        var depthArea = index.Probes!.Find("DepthArea")!;
+
+        Assert.All(
+            depthArea.Outcomes.Where(o => o.Parts.Any(p => p.StartsWith("colour:", StringComparison.Ordinal))),
+            o => Assert.StartsWith("colour:", ProbeValues.MainPart(o), StringComparison.Ordinal));
+        // The fallback symbol comes after anything else drawn.
+        Assert.Equal("line:LINE1", ProbeValues.MainPart(new ProbeOutcome { Parts = ["symbol:QUESMRK1", "line:LINE1"] }));
+        Assert.Equal("symbol:QUESMRK1", ProbeValues.MainPart(new ProbeOutcome { Parts = ["symbol:QUESMRK1", "line:_simple_"] }));
     }
 
     [Fact]

@@ -264,11 +264,14 @@ internal sealed class ReferenceViewModel : ViewModelBase, IActivityTabContentSig
         var from = _navigator.Current;
 
         // A link inside an entry opened from a pick keeps the pick for the
-        // entries that show its values: its attributes, and its own feature type.
+        // entries that show its values: its attributes, and its own feature
+        // type. A feature type entry without a pick passes the feature type
+        // alone to its attributes.
+        var context = feature ?? (from is { Kind: ReferenceKind.FeatureType } type ? ReferenceFeature.TypeOnly(type.Code) : null);
         void Open(ReferenceKey key) => _navigator.Open(
             key,
-            feature is not null && (key.Kind == ReferenceKind.Attribute || (from is { } f && f.Kind == key.Kind && string.Equals(f.Code, key.Code, StringComparison.OrdinalIgnoreCase)))
-                ? feature
+            context is not null && (key.Kind == ReferenceKind.Attribute || (from is { } f && f.Kind == key.Kind && string.Equals(f.Code, key.Code, StringComparison.OrdinalIgnoreCase)))
+                ? context
                 : null);
 
         return new()

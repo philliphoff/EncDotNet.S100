@@ -20,11 +20,19 @@ internal static class ProbeValues
     /// input's <see cref="ProbeInput.Values"/>; <see langword="null"/> for an
     /// input whose value the feature doesn't have among those probed.
     /// </summary>
+    /// <remarks>
+    /// Listed and enumerated values, and display settings that are on or off,
+    /// match exactly: colour 5 never maps to a probed 4. A real or integer
+    /// attribute, or a numeric display setting, without an exact match takes
+    /// the nearest value probed. A feature type alone, without a pick
+    /// (<see cref="ReferenceFeature.IsPick"/> false), takes each attribute's
+    /// first value probed, so nothing reads as left out.
+    /// </remarks>
     /// <param name="probe">The feature type's probe.</param>
     /// <param name="index">The index, which maps a pick's S-57 acronyms to the rule's codes.</param>
-    /// <param name="feature">The picked feature.</param>
+    /// <param name="feature">The picked feature, or the feature type alone.</param>
     /// <param name="setting">
-    /// A display setting's current value, invariant (<c>true</c>), or
+    /// A display setting's current value, invariant (<c>true</c>, <c>30</c>), or
     /// <see langword="null"/> to leave display settings unmatched.
     /// </param>
     /// <returns>An entry per input, in <see cref="FeatureTypeProbe.Inputs"/> order.</returns>
@@ -40,8 +48,11 @@ internal static class ProbeValues
             indexes[i] = input.Kind switch
             {
                 ProbeInputKind.Primitive => Find(input, PrimitiveOf(feature.Geometry), Same),
-                ProbeInputKind.ContextParameter => setting?.Invoke(input.Code) is { } value ? Find(input, value, Same) : null,
-                _ => FindAttribute(input, Values(index, feature, input.Code)),
+                ProbeInputKind.ContextParameter => setting?.Invoke(input.Code) is { } value
+                    ? Find(input, value, Same) ?? Nearest(input, value)
+                    : null,
+                _ when !feature.IsPick => input.Values.Count > 0 ? 0 : null,
+                _ => MatchAttribute(index, input, Values(index, feature, input.Code)),
             };
         }
 
@@ -115,22 +126,28 @@ internal static class ProbeValues
     }
 
     /// <summary>
-    /// The part an outcome is shown by: its first point symbol, else its
-    /// first area fill, line style or plain colour fill, else its first part;
-    /// <see langword="null"/> when it draws nothing.
+    /// The part an outcome is shown by: its first point symbol other than the
+    /// catalogue's fallback, else its first plain colour fill, area fill or
+    /// line style, else the fallback symbol or its first part;
+    /// <see langword="null"/> when it draws nothing. DepthArea's safety
+    /// contour pair is told apart by colour alone (<c>colour:DEPMD</c>,
+    /// <c>colour:DEPDW</c>).
     /// </summary>
     /// <param name="outcome">The outcome.</param>
-    public static string? LeadPart(ProbeOutcome outcome)
+    public static string? MainPart(ProbeOutcome outcome)
     {
         ArgumentNullException.ThrowIfNull(outcome);
-        foreach (var kind in (string[])["symbol", "fill", "colour", "line"])
+        var symbol = outcome.Parts.FirstOrDefault(p => Split(p) is ("symbol", var id) && !LeadGlyph.DefaultSymbols.Contains(id));
+        if (symbol is not null)
+            return symbol;
+        foreach (var kind in (string[])["colour", "fill", "line"])
         {
             var part = outcome.Parts.FirstOrDefault(p => Split(p).Kind == kind && !IsPlainLine(p));
             if (part is not null)
                 return part;
         }
 
-        return outcome.Parts.Count > 0 ? outcome.Parts[0] : null;
+        return outcome.Parts.FirstOrDefault(p => Split(p).Kind == "symbol") ?? (outcome.Parts.Count > 0 ? outcome.Parts[0] : null);
     }
 
     /// <summary>The entry a part names: a symbol, line style or area fill; <see langword="null"/> for colour, pen and text.</summary>
@@ -162,11 +179,13 @@ internal static class ProbeValues
     {
         ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(feature);
+        if (feature.Attributes is not { } attributes)
+            return null;
         var listed = PickTerms.Attribute(index, code) is { ListedValues.Count: > 0 };
         var values = new List<string>();
-        var rows = Rows(index, feature.Attributes, code, topLevel: true).ToList();
+        var rows = Rows(index, attributes, code, topLevel: true).ToList();
         if (rows.Count == 0)
-            rows = [.. Rows(index, feature.Attributes, code, topLevel: false)];
+            rows = [.. Rows(index, attributes, code, topLevel: false)];
         foreach (var row in rows)
         {
             if (string.IsNullOrWhiteSpace(row.RawValue))
@@ -202,15 +221,42 @@ internal static class ProbeValues
         return null;
     }
 
-    // A value left out matches the feature without the attribute; a number matches by value ("2" and "2.0").
-    private static int? FindAttribute(ProbeInput input, string? value) =>
-        Find(input, value, (probed, actual) =>
-            probed is null || actual is null
-                ? probed is null && actual is null
-                : string.Equals(probed, actual, StringComparison.Ordinal)
-                    || (double.TryParse(probed, NumberStyles.Float, CultureInfo.InvariantCulture, out var a)
-                        && double.TryParse(actual, NumberStyles.Float, CultureInfo.InvariantCulture, out var b)
-                        && a == b));
+    // A value left out matches the feature without the attribute. A listed or
+    // enumerated value matches exactly; a real or integer one ("2" and "2.0")
+    // by value, else the nearest value probed.
+    private static int? MatchAttribute(ChartReferenceIndex index, ProbeInput input, string? value)
+    {
+        var exact = Find(input, value, (probed, actual) => probed is null || actual is null
+            ? probed is null && actual is null
+            : string.Equals(probed, actual, StringComparison.Ordinal));
+        if (exact is not null || value is null)
+            return exact;
+        var attribute = PickTerms.Attribute(index, input.Code);
+        bool numeric = attribute is { ListedValues.Count: 0 }
+            && attribute.ValueType.ToLowerInvariant() is "real" or "integer";
+        return numeric ? Nearest(input, value) : null;
+    }
+
+    // The probed number nearest the value; null for a value that isn't a number.
+    private static int? Nearest(ProbeInput input, string value)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var target))
+            return null;
+        int? best = null;
+        var distance = double.PositiveInfinity;
+        for (int i = 0; i < input.Values.Count; i++)
+        {
+            if (input.Values[i] is { } probed
+                && double.TryParse(probed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                && Math.Abs(number - target) < distance)
+            {
+                distance = Math.Abs(number - target);
+                best = i;
+            }
+        }
+
+        return best;
+    }
 
     private static bool Same(string? a, string? b) => a is not null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 

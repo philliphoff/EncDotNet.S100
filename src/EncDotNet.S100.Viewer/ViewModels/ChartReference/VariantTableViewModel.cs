@@ -66,7 +66,7 @@ internal sealed class VariantTableViewModel : ViewModelBase
         var index = context.Index;
 
         _style = ProbeValues.StyleInput(probe);
-        _picked = context.Feature is { } picked
+        _picked = context.Feature is { IsPick: true } picked
             ? ProbeValues.IndexesOf(probe, index, picked)
             : new int?[probe.Inputs.Count];
         _held = [.. _picked.Select(v => v ?? 0)];
@@ -232,7 +232,7 @@ internal sealed class VariantTableViewModel : ViewModelBase
     // The cell whose values are the picked feature's, for every input the table shows.
     private bool IsPicked(int[] values)
     {
-        if (_context.Feature is null)
+        if (_context.Feature is not { IsPick: true })
             return false;
         foreach (var i in ShownInputs())
         {
@@ -261,7 +261,7 @@ internal sealed class VariantTableViewModel : ViewModelBase
         var where = string.Join(
             RuleConditionText.Separator,
             ShownInputs().Select(i => string.Format(CultureInfo.CurrentCulture, Strings.Reference_Variants_InputValue, NameOf(i).Text, ValueOf(i, _probe.Inputs[i].Values[values[i]]).Text)));
-        if (outcome is null || ProbeValues.LeadPart(outcome) is not { } lead)
+        if (outcome is null || ProbeValues.MainPart(outcome) is not { } lead)
             return new VariantCellViewModel(null, null, Strings.Reference_Variants_NotDrawn, Strings.Reference_Variants_NotDrawn, where, ringed, isFallback: false);
 
         var key = ProbeValues.KeyOf(spec, lead);
