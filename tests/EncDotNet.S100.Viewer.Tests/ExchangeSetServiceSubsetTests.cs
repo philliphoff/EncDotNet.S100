@@ -52,7 +52,7 @@ public sealed class ExchangeSetServiceSubsetTests
         var loader = new CountingLoader();
         var datasets = new DatasetsViewModel(loader);
         using var coordinator = new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
-            new SilentNotifier(), (_, _) => Task.CompletedTask, _ => { },
+            new FakeViewportSet(), (_, _) => Task.CompletedTask, _ => { },
             options: null,
             marshal: null,
             hasVisibleTileWork: null,
@@ -205,7 +205,7 @@ public sealed class ExchangeSetServiceSubsetTests
         var loader = new CountingLoader();
         var datasets = new DatasetsViewModel(loader);
         using var coordinator = new Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
-            new SilentNotifier(), (_, _) => Task.CompletedTask, _ => { },
+            new FakeViewportSet(), (_, _) => Task.CompletedTask, _ => { },
             new Services.LazyLoading.LazyLoadOptions { CellThreshold = 1 },
             marshal: null,
             hasVisibleTileWork: null,
@@ -224,12 +224,6 @@ public sealed class ExchangeSetServiceSubsetTests
         Assert.Equal(2, datasets.ExchangeSetHeaders.Count);
         Assert.True(subset[0].IsDeferred);
         Assert.Equal(0, loader.Loads);
-    }
-
-    private sealed class SilentNotifier : IMapViewportNotifier
-    {
-        public MapViewportSnapshot? Current => null;
-        public event EventHandler<MapViewportSnapshot>? ViewportChanged { add { } remove { } }
     }
 
     private sealed class CountingLoader : IDatasetLoaderService

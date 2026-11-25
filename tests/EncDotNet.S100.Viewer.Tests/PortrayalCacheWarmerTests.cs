@@ -86,7 +86,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
             candidates: () => { lock (Cells) return Cells.ToList(); },
             portrayAsync: (entry, ct) => Portray is { } p ? p(entry, ct) : Default(entry),
             isBusy: () => Busy,
-            view: () => View,
+            views: () => View is { } view ? [new MapViewViewport(FakeViewportSet.First, view)] : [],
             isEnabled: () => Enabled,
             hasCacheRoom: () => Room,
             isCached: key => { lock (Cached) return Cached.Contains(key); },
@@ -473,28 +473,17 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
 /// <summary><see cref="ViewportActivity"/>: the map counts as moving for a while after each viewport change.</summary>
 public sealed class ViewportActivityTests
 {
-    private sealed class Notifier : IMapViewportNotifier
-    {
-        public MapViewportSnapshot? Current { get; private set; }
-        public event EventHandler<MapViewportSnapshot>? ViewportChanged;
-        public void Move()
-        {
-            Current = new MapViewportSnapshot { MinLatitude = 0, MaxLatitude = 1, MinLongitude = 0, MaxLongitude = 1 };
-            ViewportChanged?.Invoke(this, Current);
-        }
-    }
-
     [Fact]
     public void MovedWithin_FollowsTheLastViewportChange()
     {
         var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
-        var notifier = new Notifier();
+        var notifier = new FakeViewportSet();
         using var activity = new ViewportActivity(notifier, time);
         var window = TimeSpan.FromMilliseconds(750);
 
         Assert.False(activity.MovedWithin(window));
 
-        notifier.Move();
+        notifier.Publish(new MapViewportSnapshot { MinLatitude = 0, MaxLatitude = 1, MinLongitude = 0, MaxLongitude = 1 });
         time.Advance(TimeSpan.FromMilliseconds(500));
         Assert.True(activity.MovedWithin(window));
 

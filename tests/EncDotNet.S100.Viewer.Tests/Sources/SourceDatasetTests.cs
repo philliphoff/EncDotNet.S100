@@ -75,7 +75,7 @@ public sealed class SourceDatasetTests
     [Fact]
     public void The_activator_starts_a_shown_source_and_tells_it_the_view()
     {
-        var notifier = new FakeNotifier { Current = Harbour };
+        var notifier = new FakeViewportSet { View = Harbour };
         var processor = new FakeHostedProcessor();
 
         using var activator = new HostedSourceActivator(processor, SourceActivation.Always, notifier, visible: true);
@@ -90,7 +90,7 @@ public sealed class SourceDatasetTests
     public void A_hidden_source_isnt_started_until_its_shown_and_pauses_when_hidden_again()
     {
         var processor = new FakeHostedProcessor();
-        using var activator = new HostedSourceActivator(processor, SourceActivation.Always, new FakeNotifier { Current = Harbour }, visible: false);
+        using var activator = new HostedSourceActivator(processor, SourceActivation.Always, new FakeViewportSet { View = Harbour }, visible: false);
 
         Assert.Equal(0, processor.Starts);
         Assert.False(processor.IsActive);
@@ -107,7 +107,7 @@ public sealed class SourceDatasetTests
     [Fact]
     public async Task A_source_with_a_span_limit_runs_only_when_zoomed_in()
     {
-        var notifier = new FakeNotifier { Current = Ocean };
+        var notifier = new FakeViewportSet { View = Ocean };
         var processor = new FakeHostedProcessor();
         using var activator = new HostedSourceActivator(
             processor, SourceActivation.BelowViewportSpan(5), notifier, visible: true, debounce: TimeSpan.Zero);
@@ -127,11 +127,53 @@ public sealed class SourceDatasetTests
     }
 
     [Fact]
+    public async Task With_two_maps_a_source_runs_while_either_is_in_range_and_is_told_only_those_views()
+    {
+        // Split map (#1730): the gate serves every map, not just the active one.
+        var second = new MapViewId("map-2");
+        var bay = new MapViewportSnapshot { MinLatitude = 41.0, MinLongitude = -72.0, MaxLatitude = 41.5, MaxLongitude = -71.5 };
+        var views = new FakeViewportSet { View = Ocean };
+        var processor = new FakeHostedProcessor();
+        using var activator = new HostedSourceActivator(
+            processor, SourceActivation.BelowViewportSpan(5), views, visible: true, debounce: TimeSpan.Zero);
+        Assert.False(processor.IsActive);
+
+        // The second map zooms in: the source runs for it alone, even though
+        // the first map is still zoomed out.
+        views.Publish(second, Harbour);
+        await WaitUntilAsync(() => processor.IsActive && processor.Starts == 1);
+        Assert.Equal(new GeographicBounds(-71.0, 42.0, -70.5, 42.5), processor.Area);
+
+        // Both zoomed in: it's told the box around both views.
+        views.Publish(bay);
+        await WaitUntilAsync(() => processor.Area == new GeographicBounds(-72.0, 41.0, -70.5, 42.5));
+        Assert.Equal(new GeographicBounds(-72.0, 41.0, -70.5, 42.5), processor.Area);
+
+        // Both zoomed out: it waits.
+        views.Publish(Ocean);
+        views.Publish(second, Ocean);
+        await WaitUntilAsync(() => !processor.IsActive);
+        Assert.Equal(SourceRunState.WaitingForZoom, activator.State);
+    }
+
+    [Fact]
+    public void With_no_map_only_a_source_that_always_runs_is_in_range()
+    {
+        var always = HostedSourceActivator.AreaInRange(SourceActivation.Always, [], out var alwaysInRange);
+        var limited = HostedSourceActivator.AreaInRange(SourceActivation.BelowViewportSpan(5), [], out var limitedInRange);
+
+        Assert.True(alwaysInRange);
+        Assert.Null(always);
+        Assert.False(limitedInRange);
+        Assert.Null(limited);
+    }
+
+    [Fact]
     public void The_service_runs_a_loaded_entry_following_its_visibility()
     {
         var registry = new SourceRegistry();
         registry.Register(Registration());
-        using var service = new SourceDatasetService(registry, new FakeNotifier { Current = Harbour });
+        using var service = new SourceDatasetService(registry, new FakeViewportSet { View = Harbour });
         var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
         var processor = (FakeHostedProcessor)service.CreateProcessor("test.feed", options: null);
 
@@ -173,7 +215,7 @@ public sealed class SourceDatasetTests
         var registry = new SourceRegistry();
         registry.Register(Registration());
         var extension = new StatusExtension("test.feed");
-        using var service = new SourceDatasetService(registry, new FakeNotifier { Current = Harbour }, extensions: [extension]);
+        using var service = new SourceDatasetService(registry, new FakeViewportSet { View = Harbour }, extensions: [extension]);
         var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
 
         service.Attach(entry, service.CreateProcessor("test.feed", options: null));
@@ -231,7 +273,7 @@ public sealed class SourceDatasetTests
         var processor = new FakeHostedProcessor();
         var registry = new SourceRegistry();
         registry.Register(Registration() with { StaleAfter = TimeSpan.FromMinutes(5), Create = _ => processor, Group = SourceGroup.Observations });
-        using var service = new SourceDatasetService(registry, new FakeNotifier { Current = Harbour }, timeProvider: time);
+        using var service = new SourceDatasetService(registry, new FakeViewportSet { View = Harbour }, timeProvider: time);
         var entry = DatasetEntry.ForSource(registry.Resolve("test.feed"));
 
         service.Attach(entry, service.CreateProcessor("test.feed", options: null));
@@ -392,19 +434,6 @@ public sealed class SourceDatasetTests
 
         public void Dispose()
         {
-        }
-    }
-
-    private sealed class FakeNotifier : IMapViewportNotifier
-    {
-        public MapViewportSnapshot? Current { get; set; }
-
-        public event EventHandler<MapViewportSnapshot>? ViewportChanged;
-
-        public void Publish(MapViewportSnapshot snapshot)
-        {
-            Current = snapshot;
-            ViewportChanged?.Invoke(this, snapshot);
         }
     }
 

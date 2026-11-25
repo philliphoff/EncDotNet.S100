@@ -74,7 +74,7 @@ internal sealed record PortrayalWarmOptions
 /// every running cell is cancelled within a
 /// <see cref="PortrayalWarmOptions.PollInterval"/> of that changing (or of
 /// the cell starting to load for real); the Lua run stops at its next
-/// feature. Cells nearest the view go first.
+/// feature. Cells nearest a map's view go first.
 /// </para>
 /// <para>
 /// While the map is idle, several cells are portrayed at once, each as a
@@ -107,7 +107,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     private readonly Func<IReadOnlyList<DatasetEntry>> _candidates;
     private readonly Func<DatasetEntry, CancellationToken, Task<IReadOnlyList<string>?>> _portrayAsync;
     private readonly Func<bool> _isBusy;
-    private readonly Func<MapViewportSnapshot?> _view;
+    private readonly Func<IReadOnlyList<MapViewViewport>> _views;
     private readonly Func<bool> _isEnabled;
     private readonly Func<bool> _hasCacheRoom;
     private readonly Func<string, bool> _isCached;
@@ -138,7 +138,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     /// used, or <see langword="null"/> when the cell does not apply.
     /// </param>
     /// <param name="isBusy">Whether the map still has something visible to load or draw.</param>
-    /// <param name="view">The current map view, to put nearby cells first; <see langword="null"/> before the map exists.</param>
+    /// <param name="views">Every map's current view (#1730), to put cells near any of them first; empty before a map exists.</param>
     /// <param name="isEnabled">Whether pre-warming is switched on; read every pass, so a change applies at once.</param>
     /// <param name="hasCacheRoom">Whether the disk caches have room for more pre-warmed entries.</param>
     /// <param name="isCached">Whether a cache key from <paramref name="portrayAsync"/> still has an entry.</param>
@@ -152,7 +152,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         Func<IReadOnlyList<DatasetEntry>> candidates,
         Func<DatasetEntry, CancellationToken, Task<IReadOnlyList<string>?>> portrayAsync,
         Func<bool> isBusy,
-        Func<MapViewportSnapshot?> view,
+        Func<IReadOnlyList<MapViewViewport>> views,
         Func<bool> isEnabled,
         Func<bool> hasCacheRoom,
         Func<string, bool> isCached,
@@ -166,7 +166,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(portrayAsync);
         ArgumentNullException.ThrowIfNull(isBusy);
-        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(views);
         ArgumentNullException.ThrowIfNull(isEnabled);
         ArgumentNullException.ThrowIfNull(hasCacheRoom);
         ArgumentNullException.ThrowIfNull(isCached);
@@ -179,7 +179,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         _candidates = candidates;
         _portrayAsync = portrayAsync;
         _isBusy = isBusy;
-        _view = view;
+        _views = views;
         _isEnabled = isEnabled;
         _hasCacheRoom = hasCacheRoom;
         _isCached = isCached;
@@ -477,7 +477,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         return true;
     }
 
-    /// <summary>Removes and returns the pending cell whose footprint is nearest the view's centre; cells with no footprint go last.</summary>
+    /// <summary>Removes and returns the pending cell whose footprint is nearest any map view's centre; cells with no footprint go last.</summary>
     private DatasetEntry TakeNearest(List<DatasetEntry> pending)
     {
         var index = NearestIndex(pending);
@@ -488,26 +488,30 @@ internal sealed class PortrayalCacheWarmer : IDisposable
 
     private int NearestIndex(List<DatasetEntry> pending)
     {
-        if (_view() is not { } view)
+        var views = _views();
+        if (views.Count == 0)
             return 0;
 
-        var lat = (view.MinLatitude + view.MaxLatitude) / 2.0;
-        var lon = (view.MinLongitude + view.MaxLongitude) / 2.0;
-        var cosLat = Math.Cos(lat * Math.PI / 180.0);
         var best = 0;
         var bestDistance = double.MaxValue;
-        for (var i = 0; i < pending.Count; i++)
+        foreach (var (_, view) in views)
         {
-            if (pending[i].GeographicBounds is not { } b)
-                continue;
-            // Distance from the view centre to the nearest point of the footprint.
-            var dLat = Math.Max(0, Math.Max(b.SouthBoundLatitude - lat, lat - b.NorthBoundLatitude));
-            var dLon = Math.Max(0, Math.Max(b.WestBoundLongitude - lon, lon - b.EastBoundLongitude)) * cosLat;
-            var distance = (dLat * dLat) + (dLon * dLon);
-            if (distance < bestDistance)
+            var lat = (view.MinLatitude + view.MaxLatitude) / 2.0;
+            var lon = (view.MinLongitude + view.MaxLongitude) / 2.0;
+            var cosLat = Math.Cos(lat * Math.PI / 180.0);
+            for (var i = 0; i < pending.Count; i++)
             {
-                bestDistance = distance;
-                best = i;
+                if (pending[i].GeographicBounds is not { } b)
+                    continue;
+                // Distance from the view centre to the nearest point of the footprint.
+                var dLat = Math.Max(0, Math.Max(b.SouthBoundLatitude - lat, lat - b.NorthBoundLatitude));
+                var dLon = Math.Max(0, Math.Max(b.WestBoundLongitude - lon, lon - b.EastBoundLongitude)) * cosLat;
+                var distance = (dLat * dLat) + (dLon * dLon);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = i;
+                }
             }
         }
 

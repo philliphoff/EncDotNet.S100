@@ -1175,11 +1175,13 @@ public partial class App : Application
             var clips = sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.DiskPatternClipCache>();
             var recorder = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder>();
             var portrayer = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetCellPortrayer>();
-            var notifier = sp.GetRequiredService<IMapViewportNotifier>();
+            // Every map's viewport (#1730): any map moving counts as busy, and
+            // cells near any map warm first.
+            var viewports = sp.GetRequiredService<IMapViewportSet>();
             var projection = sp.GetRequiredService<MapPresentationStateProjection>();
             var paths = sp.GetRequiredService<ViewerDataPaths>();
             var viewMoves = new EncDotNet.S100.Viewer.Services.LazyLoading.ViewportActivity(
-                notifier, sp.GetRequiredService<TimeProvider>());
+                viewports, sp.GetRequiredService<TimeProvider>());
             var options = EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmOptions.Default;
             var prewarmOverride = sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>();
             return new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer(
@@ -1190,7 +1192,7 @@ public partial class App : Application
                 isBusy: () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.HasVisibleTileWork
                     || viewMoves.MovedWithin(options.QuietPeriod)
                     || datasets.Entries.Any(e => e.IsLoading),
-                view: () => notifier.Current,
+                views: () => viewports.Current,
                 // The perf harness can switch it off for a session (portrayal_prewarm).
                 isEnabled: () => prewarmOverride.Enabled ?? settings.PortrayalPrewarmEnabled,
                 // Pre-warming stops short of the cap, so it never makes the cache
@@ -1409,7 +1411,9 @@ public partial class App : Application
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Sources.SourceDatasetService(
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.SourceRegistry>(),
-            sp.GetService<IMapViewportNotifier>(),
+            // Every map's viewport: a hosted source runs while any map is in
+            // its activation range (#1730).
+            sp.GetService<IMapViewportSet>(),
             sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.Secrets.ISecretStore>(),
             sp.GetServices<EncDotNet.S100.Viewer.Services.Sources.ISourceHostExtension>(),
@@ -1463,10 +1467,12 @@ public partial class App : Application
         {
             var datasets = sp.GetRequiredService<DatasetsViewModel>();
             var loader = sp.GetRequiredService<IDatasetLoaderService>();
-            var notifier = sp.GetRequiredService<
-                EncDotNet.S100.Viewer.Services.IMapViewportNotifier>();
+            // Every map's viewport, so a map the user isn't working in still
+            // gets its cells (#1730).
+            var viewports = sp.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.IMapViewportSet>();
             return new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
-                notifier,
+                viewports,
                 (entry, ct) => datasets.RequestLoadAsync(entry, ct),
                 loader.UnloadEntry,
                 logger: sp.GetService<ILogger<
@@ -1531,13 +1537,25 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
 
-        // Map-viewport notifier (singleton). Inert until MainWindow
-        // calls Bind(navigator) once the MapControl exists. Used by
-        // the AIS overlay's zoom-gated decorator (see
-        // docs/design/ais-zoom-gated-subscription.md).
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.MapViewportNotifier>();
+        // The maps in the window and the active one (split map, #1730). Each
+        // MapView registers itself from MainWindow; registering or activating
+        // a map rebinds the map capability accessors to it. The window-level
+        // IMapViewportNotifier is the active map's viewport (legends, depth
+        // basis, the AIS overlay's zoom-gated decorator — see
+        // docs/design/ais-zoom-gated-subscription.md — and the rest), and
+        // IMapViewportSet is every map's viewport, for the consumers that
+        // serve all maps: lazy loading, pre-warm and hosted sources.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.MapViews(
+            sp.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>(),
+            sp.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>(),
+            sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlannerSet>()));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportSet>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>());
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.ActiveMapViewportNotifier(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViews>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ActiveMapViewportNotifier>());
 
         // Own-ship symbology: the code-defined VesselPortrayal, drawn through
         // the portrayal renderer under the "ownship" key the own-ship source

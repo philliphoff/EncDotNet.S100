@@ -44,17 +44,6 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             MercatorResolution = resolution,
         };
 
-    private sealed class FakeNotifier : IMapViewportNotifier
-    {
-        public MapViewportSnapshot? Current { get; private set; }
-        public event EventHandler<MapViewportSnapshot>? ViewportChanged;
-        public void Publish(MapViewportSnapshot snapshot)
-        {
-            Current = snapshot;
-            ViewportChanged?.Invoke(this, snapshot);
-        }
-    }
-
     private static async Task<bool> WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
@@ -67,7 +56,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     }
 
     private static ExchangeSetLazyLoadCoordinator Create(
-        FakeNotifier notifier,
+        FakeViewportSet notifier,
         ConcurrentBag<DatasetEntry> loaded,
         ConcurrentBag<DatasetEntry> unloaded,
         LazyLoadOptions? options = null)
@@ -84,7 +73,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task InViewCell_IsLoaded()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, unloaded);
@@ -100,7 +89,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task OutOfViewCell_IsNotLoaded()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, unloaded);
@@ -117,7 +106,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task Register_MarksEntriesDeferred()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var coordinator = Create(notifier, new(), new());
 
         var cell = Cell("US5C", 40, -75, 41, -74);
@@ -132,7 +121,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task ZoomedOut_LargeScaleBandCells_NotLoaded()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, new());
 
@@ -150,7 +139,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task RetentionBudget_EvictsOffScreenColdCells()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, unloaded,
@@ -174,7 +163,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task LoadCompletingAfterUnregister_IsUnwound()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
 
@@ -216,7 +205,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task DisposeDuringInFlightLoad_DoesNotThrow()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
 
@@ -263,7 +252,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task UnregisterLoadedCell_IsNotReTouchedByLaterEvaluate()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, unloaded);
@@ -289,7 +278,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task DebouncedRapidViewportChanges_EvaluateOnlyLatestSnapshot()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, unloaded,
@@ -318,7 +307,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task Register_AlreadyLoadedCell_IsNotReMarkedDeferred()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = Create(notifier, loaded, unloaded);
@@ -340,7 +329,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task QueuedLoad_AbandonedWhenUnregisteredBeforeGate()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var unloaded = new ConcurrentBag<DatasetEntry>();
 
@@ -405,7 +394,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         // Mapsui raises viewport changes from animation callbacks that have no
         // synchronisation context; the debounced pass must still reach the UI
         // thread through the injected marshal, not run on the thread pool.
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var marshalled = 0;
         var loadedInsideMarshal = new ConcurrentBag<bool>();
         var inMarshal = new ThreadLocal<bool>();
@@ -440,7 +429,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task QueuedLoad_NoLongerInView_IsSkippedAndStaysDeferred()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var release = new TaskCompletionSource();
         var blocker = Cell("US5AA", 40, -75, 41, -74);
@@ -490,7 +479,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task VisibleCellsLoadNearestTheCentreFirst()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
             notifier,
@@ -514,7 +503,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task VisibleCellLoadsBeforeAheadAndUnboundedCells()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         var release = new TaskCompletionSource();
         var blocker = Cell("US5BLOCK", 40.4, -74.6, 40.6, -74.4);
@@ -551,7 +540,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task SpeculativeLoadsRunOneAtATime()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var running = 0;
         var maxRunning = 0;
         var done = new ConcurrentBag<DatasetEntry>();
@@ -601,7 +590,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task LoadRunsUnderItsDemand_WhichFollowsTheCellIntoView()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         WorkDemand? seen = null;
         var release = new TaskCompletionSource();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
@@ -636,7 +625,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task SpeculativeLoadWaitsWhileTilesAreStillDrawing()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var loaded = new ConcurrentBag<DatasetEntry>();
         var tilesBusy = true;
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
@@ -670,7 +659,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task RunningLoadIsCancelledWhenItsCellLeavesTheAheadWindow()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var started = new TaskCompletionSource();
         var cancelled = new TaskCompletionSource();
         var attempts = 0;
@@ -717,7 +706,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task AnEvictionPassUnloadsItsCellsInOneCall()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var batches = new ConcurrentQueue<DatasetEntry[]>();
         var single = new ConcurrentBag<DatasetEntry>();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
@@ -788,7 +777,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
          RankedCell("US3COARSE", 80_000, 35, -80, 45, -70));
 
     private static ExchangeSetLazyLoadCoordinator CreateLoading(
-        FakeNotifier notifier,
+        FakeViewportSet notifier,
         ConcurrentQueue<DatasetEntry> order,
         Func<bool> tilesBusy,
         Action<DatasetEntry>? onLoaded = null,
@@ -816,7 +805,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task CoarseCellCoveredByFinerCells_WaitsForThem()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         var tilesBusy = true;
         using var coordinator = CreateLoading(notifier, order, () => Volatile.Read(ref tilesBusy));
@@ -841,7 +830,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task CoarseCellWaitsWhileFinerCellsAreStillLoading()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         var release = new TaskCompletionSource();
         var (west, east, coarse) = CoveredView();
@@ -876,7 +865,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task CoarseCellWithAnUncoveredPartOfTheView_LoadsAsVisible()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         using var coordinator = CreateLoading(notifier, order, () => true);
 
@@ -892,7 +881,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task FinerCellsKnownOnlyByBoundingBox_NeverCover()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         using var coordinator = CreateLoading(notifier, order, () => true);
 
@@ -906,7 +895,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task FinerCellThatDoesNotDrawAtThisScale_PromotesTheCoarseCell()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         var (west, east, coarse) = CoveredView();
 
@@ -932,7 +921,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task HiddenFinerCell_DoesNotCover()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         var (west, east, coarse) = CoveredView();
         using var coordinator = CreateLoading(notifier, order, () => true);
@@ -949,7 +938,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task DeferCoveredCellsOff_LoadsCoarseCellAsVisible()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var order = new ConcurrentQueue<DatasetEntry>();
         using var coordinator = CreateLoading(
             notifier,
@@ -983,7 +972,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task Destination_LoadsItsCellsAsPredictedWorkWhenTheGestureStarts()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var planner = new DemandPlanner();
         var classes = new ConcurrentDictionary<DatasetEntry, WorkClass>();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
@@ -1030,7 +1019,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     {
         // Split map (#1728): each map has its own planner, and the coordinator
         // takes the union of their cell demand.
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var mapA = new DemandPlanner();
         var mapB = new DemandPlanner();
         var classes = new ConcurrentDictionary<DatasetEntry, WorkClass>();
@@ -1102,7 +1091,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task Arrivals_FollowTheViewsLoads()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var planner = new DemandPlanner();
         var gate = new TaskCompletionSource();
         var started = 0;
@@ -1138,7 +1127,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task Release_CellsOutsideEveryWindowAreReleased()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var planner = new DemandPlanner();
         var loaded = new ConcurrentBag<DatasetEntry>();
         using var coordinator = new ExchangeSetLazyLoadCoordinator(
@@ -1165,7 +1154,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     [Fact]
     public async Task Destination_CellsStillLoadingThereCoverCoarseCellsOnArrival()
     {
-        var notifier = new FakeNotifier();
+        var notifier = new FakeViewportSet();
         var planner = new DemandPlanner();
         var started = new ConcurrentQueue<DatasetEntry>();
         var release = new TaskCompletionSource();
@@ -1205,6 +1194,87 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         Assert.DoesNotContain(coarse, started);
         Assert.Equal(0, coordinator.GetVisibleWork().QueuedVisible);
 
+        release.SetResult();
+    }
+
+    // Split map (#1730): the coordinator serves every map, each at its own view
+    // and scale, rather than one box around them all.
+    private static readonly MapViewId SecondMap = new("map-2");
+
+    [Fact]
+    public async Task TwoViews_LoadEachViewsCells_NotTheGapBetweenThem()
+    {
+        var views = new FakeViewportSet();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = Create(views, loaded, new());
+
+        var newYork = Cell("US5NY", 40, -75, 41, -74);
+        var channel = Cell("GB5CH", 50, -5, 51, -4);
+        var midAtlantic = Cell("XX5MA", 45, -40, 46, -39);
+        coordinator.Register(new[] { newYork, channel, midAtlantic });
+
+        views.Publish(Viewport(40, -75, 41, -74));
+        views.Publish(SecondMap, Viewport(50, -5, 51, -4));
+
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(newYork) && loaded.Contains(channel)));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(midAtlantic, loaded);
+        Assert.True(midAtlantic.IsDeferred);
+    }
+
+    [Fact]
+    public async Task TwoViews_EachViewGatesCellsAtItsOwnScale()
+    {
+        var views = new FakeViewportSet();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = Create(views, loaded, new());
+
+        // Both harbour cells lie inside the first map's wide, zoomed-out view,
+        // where harbour cells don't draw. The second map is zoomed in on one.
+        var zoomedOn = Cell("US5HA", 40, -75, 41, -74);
+        var onlyInWideView = Cell("US5HB", 35, -80, 36, -79);
+        coordinator.Register(new[] { zoomedOn, onlyInWideView });
+
+        views.Publish(Viewport(30, -85, 50, -65, resolution: 3000.0));
+        views.Publish(SecondMap, Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(zoomedOn)));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(onlyInWideView, loaded);
+    }
+
+    [Fact]
+    public async Task TwoViews_RemovingAView_CancelsTheLoadsOnlyItWanted()
+    {
+        var views = new FakeViewportSet();
+        var tokens = new ConcurrentDictionary<DatasetEntry, CancellationToken>();
+        var release = new TaskCompletionSource();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            views,
+            async (entry, ct) =>
+            {
+                tokens[entry] = ct;
+                await release.Task;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planners: null);
+
+        var newYork = Cell("US5NY", 40, -75, 41, -74);
+        var channel = Cell("GB5CH", 50, -5, 51, -4);
+        coordinator.Register(new[] { newYork, channel });
+        views.Publish(Viewport(40, -75, 41, -74));
+        views.Publish(SecondMap, Viewport(50, -5, 51, -4));
+        Assert.True(await WaitUntilAsync(() => tokens.ContainsKey(newYork) && tokens.ContainsKey(channel)));
+        Assert.Equal(2, coordinator.GetVisibleWork().RunningVisible);
+
+        views.Remove(SecondMap);
+
+        Assert.True(tokens[channel].IsCancellationRequested);
+        Assert.False(tokens[newYork].IsCancellationRequested);
         release.SetResult();
     }
 }

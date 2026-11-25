@@ -34,12 +34,13 @@ namespace EncDotNet.S100.Viewer.Services;
 /// overlays are attached, in the order the window always used: construct
 /// (host only), then <see cref="Attach"/>.
 /// </remarks>
-internal sealed class MapView : IDisposable
+internal sealed class MapView : IMapViewCapabilities, IDisposable
 {
     /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
     private const double CheckHoverRadiusPx = 12;
 
     private readonly IServiceProvider _services;
+    private readonly MapViewportNotifier _viewport = new();
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
 
     private MainViewModel? _viewModel;
@@ -82,6 +83,7 @@ internal sealed class MapView : IDisposable
         Id = id;
         Pane = pane;
         _services = services;
+        Planner = services.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>();
 
         // The host sets up S-100 through the public mapControl.AddS100 entry
         // point (the same one the MapHost sample uses), sharing the DI
@@ -94,7 +96,16 @@ internal sealed class MapView : IDisposable
             services.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
             services.GetRequiredService<
                 EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
-            services.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>());
+            Planner);
+
+        // Bind this map's own viewport now, so a view registered with
+        // MapViews before Attach already reports where it is: the AIS
+        // overlay's zoom-gated decorator (resolved in Attach via
+        // GetServices<IDynamicFeatureSource>) reads the viewport
+        // synchronously in its constructor. See
+        // docs/design/ais-zoom-gated-subscription.md.
+        if (pane.MapControl.Map?.Navigator is { } navigator)
+            _viewport.Bind(navigator);
     }
 
     /// <summary>The view's stable id.</summary>
@@ -105,6 +116,21 @@ internal sealed class MapView : IDisposable
 
     /// <summary>The map host over the pane's control.</summary>
     public MapsuiMapHost Host { get; }
+
+    /// <inheritdoc />
+    public IMapViewportController ViewportController => Host;
+
+    /// <inheritdoc />
+    public IMapCoordinateConverter CoordinateConverter => Host;
+
+    /// <inheritdoc />
+    public EncDotNet.S100.Maps.IImageRenderer ImageRenderer => Host;
+
+    /// <inheritdoc />
+    public IMapViewportNotifier Viewport => _viewport;
+
+    /// <inheritdoc />
+    public EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner Planner { get; }
 
     /// <summary>
     /// The render-activity monitor fed by this map, or <see langword="null"/>
@@ -207,21 +233,12 @@ internal sealed class MapView : IDisposable
         // (wired via MapsuiMapHost from the Avalonia adapter's UI-thread
         // RefreshGraphics), so the view doesn't set process-global hooks.
 
-        // Bind the map-viewport notifier as early as possible so the
-        // AIS overlay's zoom-gated decorator (resolved below via
-        // GetServices<IDynamicFeatureSource>) can read the current
-        // viewport synchronously in its constructor. See
-        // docs/design/ais-zoom-gated-subscription.md.
+        // Clamp zoom in/out so the user cannot zoom to an unbounded,
+        // meaningless scale (e.g. many world copies off the edge of a
+        // cross-antimeridian dataset, or arbitrarily deep past chart
+        // resolution).
         if (mapControl.Map?.Navigator is { } notifierNav)
-        {
-            services.GetRequiredService<MapViewportNotifier>().Bind(notifierNav);
-
-            // Clamp zoom in/out so the user cannot zoom to an unbounded,
-            // meaningless scale (e.g. many world copies off the edge of a
-            // cross-antimeridian dataset, or arbitrarily deep past chart
-            // resolution).
             MapZoomLimits.Apply(notifierNav);
-        }
 
         AttachDynamicSources();
         AttachOverlays(viewModel, loader);
@@ -385,7 +402,7 @@ internal sealed class MapView : IDisposable
             Host,
             services.GetRequiredService<LibraryPanelViewModel>(),
             viewModel.Layout,
-            services.GetRequiredService<IMapViewportNotifier>(),
+            _viewport,
             appearance,
             () => services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current,
             UiThread.RunOrPost);
@@ -405,7 +422,7 @@ internal sealed class MapView : IDisposable
             Host,
             viewModel.Datasets,
             loader,
-            services.GetRequiredService<IMapViewportNotifier>(),
+            _viewport,
             viewerSettingsService,
             UiThread.RunOrPost);
     }
@@ -757,6 +774,7 @@ internal sealed class MapView : IDisposable
         _overscaleCurtainController?.Dispose();
         _overscaleCurtainController = null;
 
+        _viewport.Dispose();
         Host.Dispose();
     }
 }

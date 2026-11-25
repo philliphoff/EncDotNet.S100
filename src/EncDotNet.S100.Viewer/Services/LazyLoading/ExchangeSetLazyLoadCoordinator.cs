@@ -149,7 +149,7 @@ internal sealed record LazyLoadOptions
 /// </remarks>
 internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 {
-    private readonly IMapViewportNotifier _notifier;
+    private readonly IMapViewportSet _viewports;
     private readonly Func<DatasetEntry, CancellationToken, Task> _loadAsync;
     private readonly Action<DatasetEntry> _unload;
     private readonly Action<IReadOnlyList<DatasetEntry>>? _unloadMany;
@@ -166,10 +166,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private readonly LruEvictionPolicy<DatasetEntry> _loaded = new();
 
     private CancellationTokenSource? _debounceCts;
-    private MapViewportSnapshot? _lastSnapshot;
-    private LoadWindow? _lastWindow;
-    private double _lastScaleDenominator = double.NaN;
-    private double _lastResolution = double.NaN;
+    // Each map's last viewport (for the direction it moved) and the frames of
+    // the last evaluation, one per map (split map, #1730). Under _lock.
+    private Dictionary<MapViewId, MapViewportSnapshot> _lastSnapshots = new();
+    private ViewFrame[] _lastFrames = [];
     private bool _speculativeRetryScheduled;
     private bool _disposed;
 
@@ -190,9 +190,13 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private long _lastLoadFinishedTimestamp;
 
     /// <summary>
-    /// Constructs a coordinator bound to <paramref name="notifier"/>.
+    /// Constructs a coordinator bound to <paramref name="viewports"/>.
     /// </summary>
-    /// <param name="notifier">Map-viewport change publisher.</param>
+    /// <param name="viewports">
+    /// Every map's viewport (split map, #1730). A cell is wanted when any
+    /// map wants it: each map is classified against its own view and scale,
+    /// and a cell takes the strongest tier any of them gives it.
+    /// </param>
     /// <param name="loadAsync">
     /// Loads a single registered cell (typically
     /// <c>DatasetsViewModel.RequestLoadAsync</c>). Must not throw for a normal
@@ -238,7 +242,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// is called for each cell.
     /// </param>
     public ExchangeSetLazyLoadCoordinator(
-        IMapViewportNotifier notifier,
+        IMapViewportSet viewports,
         Func<DatasetEntry, CancellationToken, Task> loadAsync,
         Action<DatasetEntry> unload,
         LazyLoadOptions? options,
@@ -248,11 +252,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         DemandPlannerSet? planners,
         ILogger<ExchangeSetLazyLoadCoordinator>? logger = null)
     {
-        ArgumentNullException.ThrowIfNull(notifier);
+        ArgumentNullException.ThrowIfNull(viewports);
         ArgumentNullException.ThrowIfNull(loadAsync);
         ArgumentNullException.ThrowIfNull(unload);
 
-        _notifier = notifier;
+        _viewports = viewports;
         _loadAsync = loadAsync;
         _unload = unload;
         _unloadMany = unloadMany;
@@ -262,7 +266,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         _hasVisibleTileWork = hasVisibleTileWork;
         _planners = planners;
 
-        _notifier.ViewportChanged += OnViewportChanged;
+        _viewports.ViewportsChanged += OnViewportsChanged;
         if (_planners is not null)
             _planners.DestinationChanged += OnDestinationChanged;
     }
@@ -308,7 +312,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             }
         }
 
-        if (_notifier.Current is { } seed)
+        if (_viewports.Current is { Count: > 0 } seed)
             Evaluate(seed);
     }
 
@@ -339,7 +343,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         }
     }
 
-    private void OnViewportChanged(object? sender, MapViewportSnapshot snapshot)
+    private void OnViewportsChanged(object? sender, IReadOnlyList<MapViewViewport> snapshot)
     {
         if (_disposed) return;
 
@@ -406,7 +410,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// </summary>
     private void OnDestinationChanged(object? sender, EventArgs e)
     {
-        if (_disposed || _notifier.Current is not { } snapshot)
+        if (_disposed || _viewports.Current is not { Count: > 0 } snapshot)
             return;
 
         if (_marshal is not null)
@@ -416,26 +420,22 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     }
 
     /// <summary>
-    /// Evaluates <paramref name="snapshot"/> against every registered cell:
+    /// Evaluates every map's viewport in <paramref name="snapshot"/> against every registered cell:
     /// rebuilds the load queue from the deferred cells' tiers, cancels running
     /// loads whose cells no longer have a tier, touches the LRU for in-view
     /// loaded cells, evicts the coldest off-screen cells beyond the retention
     /// budget, and starts as many queued loads as the slots allow. Exposed to
     /// tests via the zero-debounce path.
     /// </summary>
-    internal void Evaluate(MapViewportSnapshot snapshot) => Evaluate(snapshot, change: null);
+    internal void Evaluate(IReadOnlyList<MapViewViewport> snapshot) => Evaluate(snapshot, change: null);
 
     /// <summary>
-    /// <see cref="Evaluate(MapViewportSnapshot)"/> for the viewport change
+    /// <see cref="Evaluate(IReadOnlyList{MapViewViewport})"/> for the viewport change
     /// numbered <paramref name="change"/>, which it marks as caught up with.
     /// </summary>
-    private void Evaluate(MapViewportSnapshot snapshot, long? change)
+    private void Evaluate(IReadOnlyList<MapViewViewport> snapshot, long? change)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-
-        var centreLat = (snapshot.MinLatitude + snapshot.MaxLatitude) / 2.0;
-        var scaleDenominator = LazyCellGate.ScaleDenominator(
-            snapshot.MercatorResolution, centreLat);
 
         List<DatasetEntry> victims;
         lock (_lock)
@@ -445,16 +445,28 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             if (change is { } caughtUp && caughtUp > _evaluatedChanges)
                 _evaluatedChanges = caughtUp;
 
-            var window = LoadWindow.From(snapshot, _lastSnapshot, _options.AheadMarginFraction);
-            _lastSnapshot = snapshot;
-            _lastWindow = window;
-            _lastScaleDenominator = scaleDenominator;
-            _lastResolution = snapshot.MercatorResolution;
+            // No map has a viewport (they were all removed): keep what is
+            // loaded and wait for one.
+            if (snapshot.Count == 0)
+                return;
+
+            var frames = new ViewFrame[snapshot.Count];
+            var lastSnapshots = new Dictionary<MapViewId, MapViewportSnapshot>(snapshot.Count);
+            for (var i = 0; i < snapshot.Count; i++)
+            {
+                var (view, viewport) = snapshot[i];
+                frames[i] = ViewFrame.From(
+                    viewport, _lastSnapshots.GetValueOrDefault(view), _options.AheadMarginFraction);
+                lastSnapshots[view] = viewport;
+            }
+
+            _lastSnapshots = lastSnapshots;
+            _lastFrames = frames;
             _predicted = PredictedWindows();
 
-            // Rebuild the queue: a cell that left the view drops out now, and
-            // the rest are re-ranked for this view.
-            RebuildQueue(window, scaleDenominator, snapshot.MercatorResolution);
+            // Rebuild the queue: a cell that left every view drops out now,
+            // and the rest are re-ranked for these views.
+            RebuildQueue(frames);
 
             // Cancel running loads this view no longer wants. The ahead margin
             // keeps a small pan from cancelling a cell that is nearly in view.
@@ -462,13 +474,13 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             // that the view has reached becomes visible work.
             foreach (var (entry, running) in _running)
             {
-                if (ClassifyAll(entry, scaleDenominator, window) is not { } ranked)
+                if (ClassifyAll(entry, frames) is not { } ranked)
                 {
                     running.Cancellation.Cancel();
                     continue;
                 }
 
-                running.Demand.Update(PriorityFor(ranked.Tier, ranked.Rank, snapshot.MercatorResolution));
+                running.Demand.Update(PriorityFor(ranked.Tier, ranked.Rank, ranked.Resolution));
 
                 // A cell loading ahead that the view has reached is one the
                 // view now waits for.
@@ -476,24 +488,21 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                     ForEachPlanner(p => p.Arrivals.Expect(running.Demand));
             }
 
-            CountCellsInView(snapshot, scaleDenominator);
+            CountCellsInView(frames);
 
             // Warm the LRU for cells that remain in view so eviction favours
             // off-screen cells.
             var protectedKeys = new HashSet<DatasetEntry>();
             foreach (var loadedEntry in _loadedEntries)
             {
-                if (LazyCellGate.IntersectsViewport(
-                        loadedEntry.GeographicBounds,
-                        snapshot.MinLatitude, snapshot.MinLongitude,
-                        snapshot.MaxLatitude, snapshot.MaxLongitude))
+                if (frames.Any(f => f.Intersects(loadedEntry)))
                 {
                     _loaded.Touch(loadedEntry);
                     protectedKeys.Add(loadedEntry);
                 }
             }
 
-            UpdateReleased(window, scaleDenominator);
+            UpdateReleased(frames);
             victims = _loaded
                 .SelectEvictions(_options.RetentionBudget, protectedKeys, _released)
                 .ToList();
@@ -528,20 +537,32 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds <see cref="_queued"/> from the deferred cells for a view. Called
-    /// under <see cref="_lock"/>.
+    /// Rebuilds <see cref="_queued"/> from the deferred cells for every map's
+    /// view. Called under <see cref="_lock"/>.
     /// </summary>
-    private void RebuildQueue(LoadWindow window, double scaleDenominator, double resolution)
+    private void RebuildQueue(IReadOnlyList<ViewFrame> frames)
     {
         _queued.Clear();
-        List<DatasetEntry>? inView = null;
+        Dictionary<ViewFrame, List<DatasetEntry>>? inView = null;
         Dictionary<PredictedWindow, List<DatasetEntry>>? atDestination = null;
         foreach (var entry in _deferred)
         {
             if (_running.ContainsKey(entry)) continue;
-            if (ClassifyAll(entry, scaleDenominator, window) is not { } ranked) continue;
+            if (ClassifyAll(entry, frames) is not { } ranked) continue;
             if (ranked.Tier == LoadTier.Visible && _options.DeferCoveredCells)
-                (inView ??= new()).Add(entry);
+            {
+                // Coverage is judged in each view it's visible in, against
+                // that view's own window and scale; the cell keeps the best.
+                inView ??= new();
+                foreach (var frame in frames)
+                {
+                    if (Classify(entry, frame) != LoadTier.Visible)
+                        continue;
+                    if (!inView.TryGetValue(frame, out var cells))
+                        inView[frame] = cells = new();
+                    cells.Add(entry);
+                }
+            }
             else if (ranked.Tier == LoadTier.Destination && _options.DeferCoveredCells && ranked.Window is { } destination)
             {
                 atDestination ??= new();
@@ -550,19 +571,21 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 cells.Add(entry);
             }
             else
-                _queued[entry] = new QueuedLoad(ranked.Tier, ranked.Rank);
+                _queued[entry] = new QueuedLoad(ranked.Tier, ranked.Rank, ranked.Resolution);
         }
 
         // A coarse cell that finer cells cover at a destination is deferred
         // there too (#1265), against the destination's own view and scale.
         if (atDestination is not null)
         {
+            var resolution = frames[0].Resolution;
             foreach (var (destination, cells) in atDestination)
             {
                 foreach (var (entry, tier) in RankCoverage(
                              cells, destination.ToLoadWindow(), destination.Resolution, LoadTier.Destination))
                 {
-                    _queued[entry] = new QueuedLoad(tier, LoadPrioritizer.RankPredicted(entry.GeographicBounds, destination));
+                    _queued[entry] = new QueuedLoad(
+                        tier, LoadPrioritizer.RankPredicted(entry.GeographicBounds, destination), resolution);
                 }
             }
         }
@@ -571,19 +594,35 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             return;
 
         List<string>? covered = null;
+        var inViewCount = 0;
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        foreach (var (entry, tier) in RankCoverage(inView, window, resolution, LoadTier.Visible))
+        foreach (var (frame, cells) in inView)
         {
-            if (tier == LoadTier.Covered)
+            inViewCount += cells.Count;
+            foreach (var (entry, tier) in RankCoverage(cells, frame.Window, frame.Resolution, LoadTier.Visible))
+            {
+                var load = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, frame.Window), frame.Resolution);
+                if (_queued.TryGetValue(entry, out var other)
+                    && (other.Tier < load.Tier || (other.Tier == load.Tier && other.Rank <= load.Rank)))
+                {
+                    continue;
+                }
+
+                _queued[entry] = load;
+            }
+        }
+
+        foreach (var (entry, load) in _queued)
+        {
+            if (load.Tier == LoadTier.Covered)
                 (covered ??= new()).Add(entry.DisplayName);
-            _queued[entry] = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, window));
         }
 
         if (covered is not null && _logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
                 "Lazy load deferred {Deferred} of {InView} in-view cells covered by finer cells in {Elapsed} ms: {Cells}.",
-                covered.Count, inView.Count, watch.ElapsedMilliseconds, string.Join(", ", covered));
+                covered.Count, inViewCount, watch.ElapsedMilliseconds, string.Join(", ", covered));
         }
     }
 
@@ -660,32 +699,57 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// <summary>Whether the user has the cell switched on at full opacity.</summary>
     private static bool IsShown(DatasetEntry entry) => entry.IsVisible && entry.Opacity >= 1.0;
 
-    private static LoadTier? Classify(DatasetEntry entry, double scaleDenominator, LoadWindow window) =>
+    private static LoadTier? Classify(DatasetEntry entry, ViewFrame frame) =>
         LoadPrioritizer.Classify(
-            entry.GeographicBounds, entry.UsageBand, entry.MinimumDisplayScale, scaleDenominator, window);
+            entry.GeographicBounds, entry.UsageBand, entry.MinimumDisplayScale, frame.ScaleDenominator, frame.Window);
+
+    /// <summary>Whether <paramref name="entry"/> is visible in any of <paramref name="frames"/>.</summary>
+    private static bool IsVisibleInAny(DatasetEntry entry, IReadOnlyList<ViewFrame> frames)
+    {
+        foreach (var frame in frames)
+        {
+            if (Classify(entry, frame) == LoadTier.Visible)
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
-    /// The tier and rank of <paramref name="entry"/> for the view and the
-    /// planner's predicted windows: visible beats everything; otherwise the
-    /// strongest of the ahead margin and the predicted windows (a destination
-    /// before ahead, ahead before history). Called under <see cref="_lock"/>.
+    /// The tier and rank of <paramref name="entry"/> for every map's view and
+    /// the planners' predicted windows: visible in any view beats everything;
+    /// otherwise the strongest of the views' ahead margins and the predicted
+    /// windows (a destination before ahead, ahead before history), nearest
+    /// first within a tier. <c>Resolution</c> is the resolution of the view
+    /// that ranked it, or of the first view for a predicted window. Called
+    /// under <see cref="_lock"/>.
     /// </summary>
-    private (LoadTier Tier, double Rank, PredictedWindow? Window)? ClassifyAll(
-        DatasetEntry entry, double scaleDenominator, LoadWindow window)
+    private (LoadTier Tier, double Rank, PredictedWindow? Window, double Resolution)? ClassifyAll(
+        DatasetEntry entry, IReadOnlyList<ViewFrame> frames)
     {
-        var tier = Classify(entry, scaleDenominator, window);
-        if (tier == LoadTier.Visible)
-            return (LoadTier.Visible, LoadPrioritizer.Rank(entry.GeographicBounds, LoadTier.Visible, window), null);
+        (LoadTier Tier, double Rank, ViewFrame Frame)? best = null;
+        foreach (var frame in frames)
+        {
+            if (Classify(entry, frame) is not { } t)
+                continue;
+            var rank = LoadPrioritizer.Rank(entry.GeographicBounds, t, frame.Window);
+            if (best is not { } b || t < b.Tier || (t == b.Tier && rank < b.Rank))
+                best = (t, rank, frame);
+        }
+
+        if (best is { Tier: LoadTier.Visible } visible)
+            return (LoadTier.Visible, visible.Rank, null, visible.Frame.Resolution);
 
         if (_predicted.Count > 0
             && LoadPrioritizer.ClassifyPredicted(
                 entry.GeographicBounds, entry.UsageBand, entry.MinimumDisplayScale, _predicted) is { } predicted
-            && (tier is null || predicted.Tier < tier.Value))
+            && (best is null || predicted.Tier < best.Value.Tier))
         {
-            return (predicted.Tier, LoadPrioritizer.RankPredicted(entry.GeographicBounds, predicted.Window), predicted.Window);
+            return (predicted.Tier, LoadPrioritizer.RankPredicted(entry.GeographicBounds, predicted.Window),
+                predicted.Window, frames.Count > 0 ? frames[0].Resolution : double.NaN);
         }
 
-        return tier is { } t ? (t, LoadPrioritizer.Rank(entry.GeographicBounds, t, window), null) : null;
+        return best is { } found ? (found.Tier, found.Rank, null, found.Frame.Resolution) : null;
     }
 
     /// <summary>
@@ -714,18 +778,19 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// that draw at this scale and that the view loads count (covered ones
     /// wait by design). Called under <see cref="_lock"/>.
     /// </summary>
-    private void CountCellsInView(MapViewportSnapshot snapshot, double scaleDenominator)
+    private void CountCellsInView(IReadOnlyList<ViewFrame> frames)
     {
         var inView = new HashSet<DatasetEntry>();
         foreach (var entry in _loadedEntries)
         {
-            if (LazyCellGate.IsScaleEligible(entry.UsageBand, entry.MinimumDisplayScale, scaleDenominator)
-                && LazyCellGate.IntersectsViewport(
-                    entry.GeographicBounds,
-                    snapshot.MinLatitude, snapshot.MinLongitude,
-                    snapshot.MaxLatitude, snapshot.MaxLongitude))
+            foreach (var frame in frames)
             {
-                inView.Add(entry);
+                if (LazyCellGate.IsScaleEligible(entry.UsageBand, entry.MinimumDisplayScale, frame.ScaleDenominator)
+                    && frame.Intersects(entry))
+                {
+                    inView.Add(entry);
+                    break;
+                }
             }
         }
 
@@ -737,8 +802,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
         foreach (var (entry, running) in _running)
         {
-            if (running.Tier == LoadTier.Visible
-                || (_lastWindow is { } w && Classify(entry, scaleDenominator, w) == LoadTier.Visible))
+            if (running.Tier == LoadTier.Visible || IsVisibleInAny(entry, frames))
             {
                 inView.Add(entry);
             }
@@ -781,7 +845,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// ahead window and every predicted window (including recent places) drop
     /// out of demand and are evicted first. Called under <see cref="_lock"/>.
     /// </summary>
-    private void UpdateReleased(LoadWindow window, double scaleDenominator)
+    private void UpdateReleased(IReadOnlyList<ViewFrame> frames)
     {
         if (_planners is null)
             return;
@@ -790,7 +854,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         var newly = 0;
         foreach (var entry in _loadedEntries)
         {
-            if (ClassifyAll(entry, scaleDenominator, window) is not null)
+            if (ClassifyAll(entry, frames) is not null)
                 continue;
             if (entry.GeographicBounds is null)
                 continue;
@@ -896,7 +960,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 var load = new RunningLoad(
                     queued.Tier,
                     new CancellationTokenSource(),
-                    new WorkDemand(PriorityFor(queued.Tier, queued.Rank, _lastResolution)));
+                    new WorkDemand(PriorityFor(queued.Tier, queued.Rank, queued.Resolution)));
                 _running[next] = load;
                 started.Add((next, load));
                 if (queued.Tier is LoadTier.Visible or LoadTier.Destination)
@@ -1001,7 +1065,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                     // used when it comes into view and wasted if it doesn't.
                     // A cell that loaded in view (a covered one, say) is
                     // already counted as in view, not as coming into it.
-                    if (_lastWindow is { } w && Classify(entry, _lastScaleDenominator, w) == LoadTier.Visible)
+                    if (IsVisibleInAny(entry, _lastFrames))
                     {
                         _inView.Add(entry);
                     }
@@ -1020,9 +1084,9 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 // brought it back skipped it while it was still running.
                 // A failed cell isn't queued again at once; the next viewport
                 // evaluation retries it.
-                if (_lastWindow is { } window)
+                if (_lastFrames.Length > 0)
                 {
-                    RebuildQueue(window, _lastScaleDenominator, _lastResolution);
+                    RebuildQueue(_lastFrames);
                     if (failed)
                         _queued.Remove(entry);
                 }
@@ -1075,8 +1139,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             foreach (var (entry, running) in _running)
             {
                 var nowInView = running.Tier is LoadTier.Ahead or LoadTier.Destination or LoadTier.History
-                    && _lastWindow is { } window
-                    && Classify(entry, _lastScaleDenominator, window) == LoadTier.Visible;
+                    && IsVisibleInAny(entry, _lastFrames);
                 if (running.Tier == LoadTier.Visible || nowInView)
                     runningVisible++;
                 else
@@ -1102,7 +1165,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            _notifier.ViewportChanged -= OnViewportChanged;
+            _viewports.ViewportsChanged -= OnViewportsChanged;
             if (_planners is not null)
             {
                 _planners.DestinationChanged -= OnDestinationChanged;
@@ -1145,7 +1208,30 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         return new WorkPriority(workClass, urgency);
     }
 
-    private readonly record struct QueuedLoad(LoadTier Tier, double Rank);
+    private readonly record struct QueuedLoad(LoadTier Tier, double Rank, double Resolution);
+
+    /// <summary>
+    /// One map's view for an evaluation: its viewport, the load window around
+    /// it (ahead in the direction it moved) and its scale.
+    /// </summary>
+    private sealed record ViewFrame(MapViewportSnapshot Snapshot, LoadWindow Window, double ScaleDenominator)
+    {
+        public double Resolution => Snapshot.MercatorResolution;
+
+        public static ViewFrame From(MapViewportSnapshot snapshot, MapViewportSnapshot? previous, double aheadMarginFraction)
+        {
+            var centreLat = (snapshot.MinLatitude + snapshot.MaxLatitude) / 2.0;
+            return new ViewFrame(
+                snapshot,
+                LoadWindow.From(snapshot, previous, aheadMarginFraction),
+                LazyCellGate.ScaleDenominator(snapshot.MercatorResolution, centreLat));
+        }
+
+        public bool Intersects(DatasetEntry entry) => LazyCellGate.IntersectsViewport(
+            entry.GeographicBounds,
+            Snapshot.MinLatitude, Snapshot.MinLongitude,
+            Snapshot.MaxLatitude, Snapshot.MaxLongitude);
+    }
 
     private sealed class RunningLoad(LoadTier tier, CancellationTokenSource cancellation, WorkDemand demand)
     {
