@@ -1,8 +1,6 @@
 using System.Globalization;
-using EncDotNet.S100.Datasets.Pipelines.Reference;
-using EncDotNet.S100.Viewer.Resources;
 
-namespace EncDotNet.S100.Viewer.Services.ChartReference;
+namespace EncDotNet.S100.Datasets.Pipelines.Reference;
 
 /// <summary>
 /// Reads the rule tests the index keeps as source text, as in
@@ -19,7 +17,7 @@ namespace EncDotNet.S100.Viewer.Services.ChartReference;
 /// the caller says "In some cases" instead. A test that fails is read by
 /// negating it: "a or b" fails as "a is not given · b is not given".
 /// </remarks>
-internal static partial class RuleConditionText
+public static partial class RuleConditionText
 {
     /// <summary>The most values a list names before "or N more".</summary>
     private const int MaxListedValues = 4;

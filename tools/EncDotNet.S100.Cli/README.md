@@ -74,8 +74,37 @@ cache the result in the local application-data folder, unless
 | [`Commands/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Commands) | One Spectre.Console.Cli command class for each command, with its settings. |
 | [`Infrastructure/CliApp.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/Infrastructure/CliApp.cs) | Registers each command with its description and examples. |
 | [`Infrastructure/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Infrastructure) | Shared code: input resolution for datasets, layers and exchange sets, the headless MCP session, feed publishing, the tile containers, readers and server (`Tiles/`), the host and token rules the serving commands share and the update check. |
+| [`Reference/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Reference) | The chart reference's HTML export for `reference export`: page writer, glyph files, style sheet and search script. |
 | [`Skill/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Skill) | Guidance that `s100 --skill` adds to the generated command reference. |
 | [`tests/EncDotNet.S100.Cli.Tests`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/EncDotNet.S100.Cli.Tests) | Tests for every command. |
+
+## Chart reference export
+
+`s100 reference export --spec S-101 --palette day --out <dir>` writes the
+chart reference as a static HTML site that works offline (symbol dictionary
+design note §7, R14). It builds the same `ChartReferenceIndex` SoundCharts
+uses, from the bundled catalogues or `--catalogue <path>`, and writes:
+
+- `index.html`, grouped by kind, with a search box (`assets/search.js`);
+- a page per entry under `feature-types/`, `symbols/`, `line-styles/`,
+  `area-fills/`, `attributes/` and `display-settings/`, named by code, such as
+  `feature-types/LateralBeacon.html`;
+- glyphs under `glyphs/<palette>/`, drawn by `LegendGlyphRenderer` with the
+  legend rows `ChartReferenceArtwork` builds, as the viewer's tiles are;
+- `assets/reference.css`, with each palette's chart background (`DEPDW`).
+
+Cases are put into words by `RuleConditionText`, the same reader the
+Reference tab uses, from `EncDotNet.S100.Datasets.Pipelines.Reference`. With
+the committed probe results (`reference probe`), feature types get variant
+tables, attributes the symbol each value gives, and display settings
+before/after pairs.
+
+The output is deterministic: a fixed order, invariant numbers and no
+timestamps. `ReferenceExportCommandTests` exports twice and compares the
+bytes, and checks that every link resolves, with and without probe results.
+A folder holding `.chart-reference` is an earlier export and is emptied
+before a re-run; any other non-empty folder is refused. Every option is in
+[docs/cli.md](../../docs/cli.md#reference-export).
 
 ## Maintainer commands
 
