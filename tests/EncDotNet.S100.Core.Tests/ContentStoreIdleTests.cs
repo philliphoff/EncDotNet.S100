@@ -45,7 +45,10 @@ public sealed class ContentStoreIdleTests : IDisposable
         File.WriteAllBytes(Path.Combine(stale, "a.bin"), [1, 2, 3]);
 
         // Every pool thread, and those the pool adds over the next seconds, waits here.
-        using var release = new ManualResetEventSlim();
+        // Not disposed: blockers still queued when the test ends run after it and
+        // must find the gate set, not disposed (an unhandled exception on a pool
+        // thread is a catastrophic failure of the whole run).
+        var release = new ManualResetEventSlim();
         var blockers = (Environment.ProcessorCount * 16) + 64;
         for (var i = 0; i < blockers; i++)
         {
