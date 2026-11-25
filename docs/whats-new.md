@@ -12,6 +12,20 @@ month. For package versions and release assets, see
   scripts that read it, such as the container image's smoke test. `--version`
   and `-v` now print the version as one line whatever the width.
 
+- **Why this symbol says the case the rule took.** For S-101 datasets and
+  S-57 cells, Object information now runs the picked feature's portrayal rule
+  again in the background, with the display settings the map is drawn with,
+  and records which lines of the rule ran. Each drawn part's reason is then
+  the case the rule actually took, in the same words and with the same values
+  as before, such as "Shallow water dangers is on · Surrounding depth (10 m)
+  is less than the safety contour (30 m) · Water level effect is always under
+  water/submerged". It never says "Likely", and the note that the reason also
+  depends on values the rule works out is gone: tests of those values are
+  left out. The match shows at once and is replaced when the trace is done; a
+  new pick cancels a trace still running. Products whose rules are XSLT, and
+  any part the trace can't account for, keep the match
+  ([#1719](https://github.com/philliphoff/EncDotNet.S100/issues/1719)).
+
 - **SoundCharts keeps its files in your profile on a new Linux account.**
   When `~/.config` or `~/.local/share` didn't exist yet, or `XDG_CONFIG_HOME`
   or `XDG_DATA_HOME` named a new folder, SoundCharts' settings, Library,

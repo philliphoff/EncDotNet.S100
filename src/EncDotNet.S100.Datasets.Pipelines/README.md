@@ -915,6 +915,35 @@ index.S57Aliases.ListedValues("COLOUR", "3,1");   // Colour, with Red and White
 `AttributeEntry.ListedValuesOf` reads a value such as `3,1` as listed
 values.
 
+### Which case a feature took
+
+`IRuleTraceSource`, on `S101DatasetProcessor` and `S57DatasetProcessor`,
+portrays one feature again in its own Lua state with a line hook and returns
+its drawing instructions and the rule lines that ran (`LuaFeatureTrace`). A
+symbol use whose `RuleUse.Line` is among them was drawn by that case, and
+every condition on the way to it held:
+
+```csharp
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Scripting.LuaCSharp;
+
+if (processor is IRuleTraceSource traceable
+    && await traceable.TraceFeatureAsync(featureId, new LuaCSharpLuaEngine(), MarinerSettings.Default) is { } trace)
+{
+    // featureType: the feature's FeatureTypeEntry in the ChartReferenceIndex.
+    var ran = trace.Lines.ToHashSet();
+    var taken = featureType.Uses.Where(u => ran.Contains(new(u.RuleFile, u.Line)));
+}
+```
+
+The trace runs on the engine you pass, which needs a line hook (LuaCSharp),
+whichever engine draws the map, and never touches the render path's state or
+caches. The feature is portrayed once before the traced run, so the trace has
+no rule file's load-time lines in it. An `else` branch's conditions carry the
+`else` line, where Lua runs nothing, so that line never appears: the use's own
+line shows the branch was taken.
+
 ### Probe results
 
 Static reading can't say which symbol a given set of values draws when the

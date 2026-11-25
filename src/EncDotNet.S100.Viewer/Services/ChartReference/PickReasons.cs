@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Legends;
 
@@ -24,6 +25,9 @@ internal enum PickReasonKind
 
     /// <summary>The rule draws the part in a way the reference doesn't read: text, or an item it assembles.</summary>
     NotRead,
+
+    /// <summary>A rule trace showed the case that drew the part (R12b, #1719): no "Likely", no note.</summary>
+    Traced,
 }
 
 /// <summary>
@@ -70,8 +74,8 @@ internal sealed record PickFacts(
 /// conditions are checked against the pick's values, context parameter
 /// conditions against the current display settings. A condition on a value
 /// the rule computes can't be checked; it, or more than one case holding,
-/// makes the reason "Likely". R12's rule trace replaces this for Lua
-/// products and keeps its words.
+/// makes the reason "Likely". For Lua products, a rule trace replaces
+/// the match where it can (R12b, #1719) and keeps its words.
 /// </para>
 /// <para>
 /// A case whose conditions are all among another holding case's is left
@@ -111,48 +115,8 @@ internal static class PickReasons
         var candidates = new List<Candidate>();
         foreach (var use in uses)
         {
-            var held = new List<RuleCondition>();
-            var words = new List<TermText>();
-            var asWritten = new List<RuleCondition>();
-            bool partial = false, fails = false;
-
-            // Conditions said as they are written ("Colour is red", "Simplified
-            // symbols is on") are said together, so the bands of one attribute
-            // read as one run; the others say what the value is.
-            void Flush()
-            {
-                words.AddRange(RuleConditionText.DescribeParts(asWritten, index, geometry));
-                asWritten.Clear();
-            }
-
-            foreach (var condition in use.Conditions)
-            {
-                var check = RuleConditionText.Check(condition, index, context);
-                if (check.Truth == ConditionTruth.Fails)
-                {
-                    fails = true;
-                    break;
-                }
-
-                partial |= check.Partial;
-                if (check.Truth == ConditionTruth.Unknown && check.Held.Count == 0)
-                    continue;
-                held.Add(condition);
-                if (check.AsWritten)
-                {
-                    asWritten.Add(condition);
-                }
-                else
-                {
-                    Flush();
-                    words.AddRange(check.Held);
-                }
-            }
-
-            if (fails)
-                continue;
-            Flush();
-            candidates.Add(new Candidate(use, held, partial, [.. words.Distinct()]));
+            if (Say(use, index, context, geometry, traced: false) is { } candidate)
+                candidates.Add(candidate);
         }
 
         candidates = Distinct(candidates);
@@ -186,6 +150,135 @@ internal static class PickReasons
         }
 
         return new PickReason(kind, lines, SettingsOf(lines), depends ? Strings.Pick_Why_AlsoDepends : null);
+    }
+
+    /// <summary>
+    /// Explains one drawn part from a rule trace (R12b, #1719): the case
+    /// whose line ran, with every condition on the way to it, said as the
+    /// match says them. Not "Likely", and with no note: a test of a value the
+    /// rule works out is left out quietly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A use's line running shows that every enclosing branch was taken. An
+    /// <c>else</c> branch's conditions sit on the <c>else</c> line, where Lua
+    /// runs no instruction, so that line is never in the trace; the use's
+    /// line, in the branch's body, is the evidence instead.
+    /// </para>
+    /// <para>
+    /// A part the trace can't map falls back to <see cref="Explain"/>: the
+    /// fallback symbol and text, which the match already says plainly; a part
+    /// the traced portrayal didn't draw (the map was drawn with other
+    /// settings); a part none of whose uses' lines ran (an item named on a
+    /// line Lua doesn't report); and a part whose uses that ran differ.
+    /// </para>
+    /// </remarks>
+    /// <param name="part">The part.</param>
+    /// <param name="feature">The picked feature's type in <paramref name="index"/>.</param>
+    /// <param name="index">The index of the product the feature is portrayed with.</param>
+    /// <param name="facts">The feature's values and the display settings.</param>
+    /// <param name="trace">The feature's rule trace.</param>
+    /// <returns>The traced reason, or the match.</returns>
+    public static PickReason Explain(PickDrawnPart part, FeatureTypeEntry feature, ChartReferenceIndex index, PickFacts facts, LuaFeatureTrace trace)
+    {
+        ArgumentNullException.ThrowIfNull(trace);
+        return Trace(part, feature, index, facts, trace) ?? Explain(part, feature, index, facts);
+    }
+
+    /// <summary>The traced reason, or <see langword="null"/> when the trace can't be mapped to the part.</summary>
+    internal static PickReason? Trace(PickDrawnPart part, FeatureTypeEntry feature, ChartReferenceIndex index, PickFacts facts, LuaFeatureTrace trace)
+    {
+        ArgumentNullException.ThrowIfNull(part);
+        ArgumentNullException.ThrowIfNull(feature);
+        ArgumentNullException.ThrowIfNull(index);
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(trace);
+        if (part.IsFallback || part.Kind == PickDrawnPartKind.Text)
+            return null;
+
+        // The traced portrayal drew the part, as the map did.
+        var spec = part.Key?.Spec ?? index.Spec;
+        if (!trace.Instructions.SelectMany(i => PickDrawnParts.PartsOf(i, spec)).Any(p => Same(p, part)))
+            return null;
+
+        var ran = new HashSet<LuaTraceLine>(trace.Lines);
+        var taken = UsesOf(part, feature)
+            .Where(u => ran.Contains(new LuaTraceLine(u.RuleFile, u.Line)))
+            .DistinctBy(u => string.Join('|', u.Conditions.Select(Identity)))
+            .ToList();
+        // Several uses ran, by different cases: the trace doesn't say which drew it.
+        if (taken is not [var use])
+            return null;
+
+        var context = new Context(feature, index, facts);
+        var said = Say(use, index, context, feature.PermittedPrimitives.Count != 1, traced: true)!;
+        var line = said.Words.Count == 0 ? (TermText)Strings.Pick_Why_Always : TermText.Join(RuleConditionText.Separator, said.Words);
+        return new PickReason(PickReasonKind.Traced, [line], SettingsOf([line]));
+    }
+
+    // A part the trace drew is the part the map drew: the same item, colour
+    // or line, whatever the feature reference.
+    private static bool Same(PickDrawnPart traced, PickDrawnPart drawn) =>
+        traced.Kind == drawn.Kind
+        && Nullable.Equals(traced.Key, drawn.Key)
+        && string.Equals(traced.Colour, drawn.Colour, StringComparison.Ordinal)
+        && string.Equals(traced.Dash, drawn.Dash, StringComparison.Ordinal);
+
+    /// <summary>
+    /// A use's conditions in words, with the pick's values: what held, said
+    /// as the Reference tab says it. <see langword="null"/> when a condition
+    /// fails, unless <paramref name="traced"/>: the trace shows it held, so
+    /// it is said as it is written.
+    /// </summary>
+    private static Candidate? Say(RuleUse use, ChartReferenceIndex index, Context context, bool geometry, bool traced)
+    {
+        var held = new List<RuleCondition>();
+        var words = new List<TermText>();
+        var asWritten = new List<RuleCondition>();
+        bool partial = false;
+
+        // Conditions said as they are written ("Colour is red", "Simplified
+        // symbols is on") are said together, so the bands of one attribute
+        // read as one run; the others say what the value is.
+        void Flush()
+        {
+            words.AddRange(RuleConditionText.DescribeParts(asWritten, index, geometry));
+            asWritten.Clear();
+        }
+
+        foreach (var condition in use.Conditions)
+        {
+            var check = RuleConditionText.Check(condition, index, context);
+            if (check.Truth == ConditionTruth.Fails)
+            {
+                if (!traced)
+                    return null;
+                // The pick's values disagree with what the rule saw (a value
+                // it works out from them): the condition as written.
+                if (condition.Kind is RuleConditionKind.Expression or RuleConditionKind.Otherwise)
+                    continue;
+                held.Add(condition);
+                asWritten.Add(condition);
+                continue;
+            }
+
+            partial |= check.Partial;
+            if (check.Truth == ConditionTruth.Unknown && check.Held.Count == 0)
+                continue;
+            held.Add(condition);
+            if (check.AsWritten)
+            {
+                asWritten.Add(condition);
+            }
+            else
+            {
+                Flush();
+                words.AddRange(check.Held);
+            }
+        }
+
+        Flush();
+        return new Candidate(use, held, partial, [.. words.Distinct()]);
     }
 
     // The cases' words, with the parts every case shares said once first.

@@ -11,6 +11,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
@@ -44,7 +45,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// in-memory cache is used.
 /// </para>
 /// </remarks>
-public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IDateDependentDatasetProcessor
+public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IRuleTraceSource, IDateDependentDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly S101UpdateReport? _updateReport;
@@ -210,6 +211,22 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             Alerts = AlertPortrayal,
             DrawingPriority = DrawingPriority,
         };
+
+    /// <inheritdoc />
+    public Task<LuaFeatureTrace?> TraceFeatureAsync(
+        string featureReference, ILuaEngine traceEngine, MarinerSettings mariner, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traceEngine);
+        ArgumentNullException.ThrowIfNull(mariner);
+        if (_featureCatalogueManager.GetCatalogue(_catalogueSpec) is not { } fc)
+            return Task.FromResult<LuaFeatureTrace?>(null);
+
+        // Its own executor and Lua state: the render path's state and caches
+        // are left alone, and the catalogue is only read for its rule text.
+        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, _catalogue, fc);
+        return RuleTrace.TraceAsync(
+            ct => executor.OpenTraceSessionAsync(traceEngine, mariner, ct), featureReference, cancellationToken);
+    }
 
     private S101AlertPortrayal? _alertPortrayal;
 

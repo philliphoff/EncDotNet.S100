@@ -177,7 +177,8 @@ public partial class App : Application
         // Drawn as (symbol dictionary R10, #1679): the picked feature's drawn
         // parts, read from the stack's display lists, as terms with glyphs.
         // Why this symbol (R11, #1680) matches each part's rule cases against
-        // the pick's values and the display settings, whose links open Settings.
+        // the pick's values and the display settings, whose links open Settings;
+        // for Lua products, a trace of the rule then gives the case it took.
         var drawnAsSettings = _services.GetRequiredService<ViewerSettingsService>();
         var drawnAsServices = _services;
         _services.GetRequiredService<PickReportViewModel>().AttachDrawnAs(new PickDrawnAsViewModel(
@@ -187,7 +188,11 @@ public partial class App : Application
             UiThread.RunOrPost,
             parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.Value(drawnAsSettings.BuildMarinerSettings(), parameter),
             code => ShowChartSetting(drawnAsServices, code),
-            parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.CurrentValue(drawnAsSettings, parameter)));
+            parameter => EncDotNet.S100.Viewer.Services.ChartReference.ReferenceTargets.CurrentValue(drawnAsSettings, parameter),
+            // R12b (#1719): Lua products' reasons come from a rule trace.
+            new EncDotNet.S100.Viewer.Services.ChartReference.PickRuleTracer(
+                _services.GetRequiredService<IDatasetLoaderService>(),
+                drawnAsSettings.BuildMarinerSettings).TraceAsync));
         // Links to the Catalogues activity (catalogue-panels D10, CR3): the
         // Datasets version warning, the inspector's Drawn with line and the
         // missing-catalogue toast. The activity is resolved when first used.

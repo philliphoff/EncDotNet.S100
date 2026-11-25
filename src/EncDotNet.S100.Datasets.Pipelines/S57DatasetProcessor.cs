@@ -13,6 +13,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
@@ -38,7 +39,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// translation. The raw S-57 document is retained so validation can run
 /// S-57 pre-translation rules against fields the translation drops.
 /// </remarks>
-public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell
+public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IRuleTraceSource
 {
     // Serialises render calls so the catalogue's mutable palette / ECDIS
     // state is not mutated mid-build by a concurrent render.
@@ -143,6 +144,22 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() =>
         new S101DatasetData(_translatedDataset, CompilationScale: S57Dataset.ResolveCompilationScale(_rawS57Document)) { Alerts = AlertPortrayal };
+
+    /// <inheritdoc />
+    public Task<LuaFeatureTrace?> TraceFeatureAsync(
+        string featureReference, ILuaEngine traceEngine, MarinerSettings mariner, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(traceEngine);
+        ArgumentNullException.ThrowIfNull(mariner);
+        if (_featureCatalogueManager.GetCatalogue(_target.Spec) is not { } fc)
+            return Task.FromResult<LuaFeatureTrace?>(null);
+
+        // Its own executor and Lua state: the render path's state and caches
+        // are left alone, and the catalogue is only read for its rule text.
+        var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, _catalogue, fc);
+        return RuleTrace.TraceAsync(
+            ct => executor.OpenTraceSessionAsync(traceEngine, mariner, ct), featureReference, cancellationToken);
+    }
 
     private S101AlertPortrayal? _alertPortrayal;
 
