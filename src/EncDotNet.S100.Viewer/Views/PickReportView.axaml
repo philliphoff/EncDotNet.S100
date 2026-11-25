@@ -6,7 +6,7 @@
              xmlns:svc="using:EncDotNet.S100.Viewer.Services"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
-             xmlns:crs="using:EncDotNet.S100.Viewer.Services.ChartReference"
+             xmlns:crs="using:EncDotNet.S100.Datasets.Pipelines.Reference"
              xmlns:conv="using:EncDotNet.S100.Viewer"
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.PickReportView"

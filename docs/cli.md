@@ -142,6 +142,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools for a set of datasets, over standard input and output or HTTP. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
+| [`reference export`](#reference-export) | Writes a product's chart reference as a static HTML site that works offline. |
 
 These options work without a command:
 
@@ -2449,6 +2450,61 @@ s100 feed export exchange-set.zip -o export --title "Harbour survey"
 
 When some datasets can't be written, they're left out of the feed and the
 command exits with code `1`.
+
+## reference export
+
+```text
+s100 reference export --out <directory> [options]
+```
+
+`reference export` writes a product's chart reference, the one SoundCharts
+shows in its Chart reference activity and Reference tab, as a static HTML
+site. Open `index.html` in any browser. It needs no network: there are no
+external scripts, fonts or images, so it can go on a ship's intranet, a USB
+stick or a static web host.
+
+- **Index.** Every entry, grouped by kind: feature types, symbols, line
+  styles, area fills, attributes and display settings. A search box filters
+  them by name, code and S-57 acronym as you type.
+- **One page per entry**, with the Reference tab's sections:
+  - feature types: definition, display category, Chart 1 section, and Drawn
+    with, the symbols the rule draws and when, in words;
+  - symbols, line styles and area fills: Day, Dusk and Night, where the
+    symbol came from, Used by, Used inside and Places;
+  - attributes: their listed values;
+  - display settings: what they do and their default.
+
+  Names and values in the text link to their own pages.
+- **Variant tables.** When the rules have been probed for the catalogues
+  (`reference probe`; the results are committed for the bundled S-101
+  catalogues), feature type pages show what each combination of values
+  draws, with two inputs as rows and columns. Attribute pages show what each
+  listed value draws, in simplified and paper chart symbols, and display
+  setting pages show before and after pairs. A feature type with more
+  combinations than were probed is marked **Partial**.
+- **Glyphs** are PNG files drawn the way SoundCharts draws its legend, in the
+  chosen palette, on that palette's chart background.
+- **Deterministic.** Exporting the same catalogues again writes the same
+  bytes, so the site can be kept in version control.
+
+For S-101 it takes about 5 seconds and writes about 1,250 pages and 2,400
+glyphs, 10 MB in all.
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--out <directory>` | required | The folder to write the site to. It must be empty or an earlier export, which is replaced. |
+| `--spec <spec>` | `S-101` | The product. Any product with a bundled portrayal catalogue works; only S-101 has probe results. |
+| `--palette <palette>` | `day` | `day`, `dusk` or `night`: the palette glyphs are drawn in. Dusk and Night pages are dark. Symbol pages show all three palettes. |
+| `--catalogue <path>` | the bundled one | A portrayal catalogue folder or `.zip` holding `portrayal_catalogue.xml`, to describe instead. |
+| `--feature-catalogue <file>` | the bundled one | A feature catalogue XML file to use instead. |
+| `--probes <file>` | the committed results | Probe results from `reference probe -o`. They must be for the same catalogues. |
+| `--no-probes` | off | Leaves out the variant tables, value columns and before and after pairs. |
+
+```bash
+s100 reference export --spec S-101 --palette day --out s101-reference
+s100 reference export --spec S-101 --palette night --out s101-night
+s100 reference export --spec S-124 --out s124-reference
+```
 
 ## Lua engine
 

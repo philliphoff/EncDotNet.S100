@@ -1,11 +1,9 @@
 using System.Globalization;
-using EncDotNet.S100.Datasets.Pipelines.Reference;
-using EncDotNet.S100.Viewer.Resources;
 
-namespace EncDotNet.S100.Viewer.Services.ChartReference;
+namespace EncDotNet.S100.Datasets.Pipelines.Reference;
 
 /// <summary>Whether a rule condition holds for one feature (R11, #1680).</summary>
-internal enum ConditionTruth
+public enum ConditionTruth
 {
     /// <summary>It holds.</summary>
     Holds,
@@ -21,7 +19,7 @@ internal enum ConditionTruth
 /// What a condition is checked against: one feature's values and the
 /// current display settings (R11, #1680).
 /// </summary>
-internal interface IRuleFacts
+public interface IRuleFacts
 {
     /// <summary>The feature's values of an attribute, raw: listed value codes, numbers. Empty when it has none.</summary>
     /// <param name="code">The attribute code, as the rules name it.</param>
@@ -59,7 +57,7 @@ internal interface IRuleFacts
 /// </param>
 /// <param name="AsWritten">Whether the condition says what held as it is written, as "Colour is red" does.</param>
 /// <param name="Partial">Whether part of it tests a value the rule works out, which was left out.</param>
-internal sealed record CheckedCondition(ConditionTruth Truth, IReadOnlyList<TermText> Held, bool AsWritten, bool Partial)
+public sealed record CheckedCondition(ConditionTruth Truth, IReadOnlyList<TermText> Held, bool AsWritten, bool Partial)
 {
     /// <summary>A condition that can't be checked.</summary>
     public static CheckedCondition Unknown { get; } = new(ConditionTruth.Unknown, [], false, true);
@@ -70,7 +68,7 @@ internal sealed record CheckedCondition(ConditionTruth Truth, IReadOnlyList<Term
 /// feature's values (symbol dictionary R11, #1680): the same reader and
 /// names as the Reference tab's cases, with the values filled in.
 /// </summary>
-internal static partial class RuleConditionText
+public static partial class RuleConditionText
 {
     /// <summary>Checks one condition against a feature.</summary>
     /// <param name="condition">The condition.</param>

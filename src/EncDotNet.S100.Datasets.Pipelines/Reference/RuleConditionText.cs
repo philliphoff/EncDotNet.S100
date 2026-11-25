@@ -1,9 +1,7 @@
 using System.Globalization;
-using EncDotNet.S100.Datasets.Pipelines.Reference;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Viewer.Resources;
 
-namespace EncDotNet.S100.Viewer.Services.ChartReference;
+namespace EncDotNet.S100.Datasets.Pipelines.Reference;
 
 /// <summary>
 /// Puts a rule's conditions into words with the feature catalogue's labels,
@@ -17,7 +15,7 @@ namespace EncDotNet.S100.Viewer.Services.ChartReference;
 /// setting entries, so they follow the catalogue; a code the index doesn't
 /// know is shown as it is.
 /// </remarks>
-internal static partial class RuleConditionText
+public static partial class RuleConditionText
 {
     /// <summary>What separates conditions that must all hold.</summary>
     public const string Separator = " · ";

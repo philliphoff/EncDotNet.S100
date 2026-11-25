@@ -51,11 +51,8 @@ internal static partial class Strings
 
     public static string Pick_Why_AlsoDepends => Get(nameof(Pick_Why_AlsoDepends));
 
-    public static string Pick_Why_ValueFormat => Get(nameof(Pick_Why_ValueFormat));
 
-    public static string Pick_Why_SettingValueFormat => Get(nameof(Pick_Why_SettingValueFormat));
 
-    public static string Pick_Why_SettingFormat => Get(nameof(Pick_Why_SettingFormat));
 
     public static string Pick_Why_Likely => Get(nameof(Pick_Why_Likely));
 

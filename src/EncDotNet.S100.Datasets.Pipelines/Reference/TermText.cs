@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using EncDotNet.S100.Datasets.Pipelines.Reference;
 
-namespace EncDotNet.S100.Viewer.Services.ChartReference;
+namespace EncDotNet.S100.Datasets.Pipelines.Reference;
 
 /// <summary>
 /// One run of a <see cref="TermText"/>: plain words, or a term that names a
@@ -15,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Services.ChartReference;
 /// For a listed value ("red" in "Colour is red"), its code in the attribute
 /// <paramref name="Key"/> names; otherwise <see langword="null"/>.
 /// </param>
-internal readonly record struct TermRun(string Text, ReferenceKey? Key = null, string? Value = null)
+public readonly record struct TermRun(string Text, ReferenceKey? Key = null, string? Value = null)
 {
     /// <summary>Whether the run is a term.</summary>
     public bool IsTerm => Key is not null;
@@ -30,7 +29,7 @@ internal readonly record struct TermRun(string Text, ReferenceKey? Key = null, s
 /// Two texts are equal when their words are, so cases are said once however
 /// they were read.
 /// </remarks>
-internal sealed partial class TermText : IEquatable<TermText>
+public sealed partial class TermText : IEquatable<TermText>
 {
     private TermText(IReadOnlyList<TermRun> runs, string text)
     {

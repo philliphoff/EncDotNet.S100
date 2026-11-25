@@ -1,7 +1,6 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines.Reference;
-using EncDotNet.S100.Viewer.Services.ChartReference;
 
 namespace EncDotNet.S100.Viewer.ViewModels.ChartReference;
 
