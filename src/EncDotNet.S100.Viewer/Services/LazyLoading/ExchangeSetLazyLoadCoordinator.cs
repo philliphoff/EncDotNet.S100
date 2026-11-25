@@ -157,7 +157,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private readonly ILogger _logger;
     private readonly Action<Action>? _marshal;
     private readonly Func<bool>? _hasVisibleTileWork;
-    private readonly DemandPlanner? _planner;
+    private readonly DemandPlannerSet? _planners;
 
     private readonly object _lock = new();
     private readonly HashSet<DatasetEntry> _deferred = new();
@@ -220,14 +220,15 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// Speculative loads wait while it returns <see langword="true"/>. When
     /// <see langword="null"/>, speculative loads never wait for the renderer.
     /// </param>
-    /// <param name="planner">
-    /// The map's demand planner (map rendering slice&#160;9). Its predicted
-    /// views a few seconds ahead add cell demand: a known destination as
+    /// <param name="planners">
+    /// The demand planners of the maps this coordinator loads cells for (map
+    /// rendering slice&#160;9; one per map since the split map, #1728). The
+    /// union of their predicted views a few seconds ahead adds cell demand: a known destination as
     /// <see cref="LoadTier.Destination"/> the moment the gesture starts, the
     /// motion and route as <see cref="LoadTier.Ahead"/>, and recent places as
     /// <see cref="LoadTier.History"/>. Cells outside every window are released
-    /// (evicted first), the planner's arrival forecast follows the view's
-    /// loads, and its stats count cell hits and waste. When
+    /// (evicted first), every planner's arrival forecast follows the loads the
+    /// views wait for, and their stats count cell hits and waste. When
     /// <see langword="null"/>, only the viewport and its ahead margin count.
     /// </param>
     /// <param name="unloadMany">
@@ -244,7 +245,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         Action<Action>? marshal,
         Func<bool>? hasVisibleTileWork,
         Action<IReadOnlyList<DatasetEntry>>? unloadMany,
-        DemandPlanner? planner,
+        DemandPlannerSet? planners,
         ILogger<ExchangeSetLazyLoadCoordinator>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(notifier);
@@ -259,11 +260,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         _logger = logger ?? NullLogger<ExchangeSetLazyLoadCoordinator>.Instance;
         _marshal = marshal;
         _hasVisibleTileWork = hasVisibleTileWork;
-        _planner = planner;
+        _planners = planners;
 
         _notifier.ViewportChanged += OnViewportChanged;
-        if (_planner is not null)
-            _planner.DestinationChanged += OnDestinationChanged;
+        if (_planners is not null)
+            _planners.DestinationChanged += OnDestinationChanged;
     }
 
     /// <summary>The active tunables.</summary>
@@ -472,7 +473,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 // A cell loading ahead that the view has reached is one the
                 // view now waits for.
                 if (ranked.Tier is LoadTier.Visible or LoadTier.Destination)
-                    _planner?.Arrivals.Expect(running.Demand);
+                    ForEachPlanner(p => p.Arrivals.Expect(running.Demand));
             }
 
             CountCellsInView(snapshot, scaleDenominator);
@@ -502,7 +503,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 _loadedEntries.Remove(victim);
                 _released.Remove(victim);
                 if (_speculative.Remove(victim))
-                    _planner?.Stats.RecordCellWasted();
+                    ForEachPlanner(p => p.Stats.RecordCellWasted());
                 // Return the evicted cell to the deferred pool so it reloads
                 // (from scratch) the next time it enters the viewport.
                 _deferred.Add(victim);
@@ -688,16 +689,16 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     }
 
     /// <summary>
-    /// The planner's cell views as windows, strongest first. Called under
+    /// Every map's cell views as windows, strongest first. Called under
     /// <see cref="_lock"/>.
     /// </summary>
     private IReadOnlyList<PredictedWindow> PredictedWindows()
     {
-        if (_planner is null)
+        if (_planners is null)
             return [];
 
         var windows = new List<PredictedWindow>();
-        foreach (var view in _planner.Plan().CellViews)
+        foreach (var view in _planners.CellViews())
         {
             if (view.Probability >= _options.MinPredictedProbability && PredictedWindow.From(view) is { } w)
                 windows.Add(w);
@@ -750,9 +751,9 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 continue;
 
             var loaded = _loadedEntries.Contains(entry);
-            _planner?.Stats.RecordCellEntered(loaded);
+            ForEachPlanner(p => p.Stats.RecordCellEntered(loaded));
             if (loaded && _speculative.Remove(entry))
-                _planner?.Stats.RecordCellUsed();
+                ForEachPlanner(p => p.Stats.RecordCellUsed());
         }
 
         _inView = inView;
@@ -770,7 +771,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             foreach (var entry in expired)
             {
                 _speculative.Remove(entry);
-                _planner?.Stats.RecordCellWasted();
+                ForEachPlanner(p => p.Stats.RecordCellWasted());
             }
         }
     }
@@ -782,7 +783,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// </summary>
     private void UpdateReleased(LoadWindow window, double scaleDenominator)
     {
-        if (_planner is null)
+        if (_planners is null)
             return;
 
         var released = new HashSet<DatasetEntry>();
@@ -800,16 +801,16 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
         _released = released;
         if (newly > 0)
-            _planner.Stats.RecordCellsReleased(newly);
+            ForEachPlanner(p => p.Stats.RecordCellsReleased(newly));
     }
 
     /// <summary>
-    /// Tells the planner how many cells the view still waits for that haven't
+    /// Tells the planners how many cells the views still wait for that haven't
     /// started loading. Called under <see cref="_lock"/>.
     /// </summary>
     private void ReportQueuedArrivals()
     {
-        if (_planner is null)
+        if (_planners is null)
             return;
 
         var queued = 0;
@@ -819,7 +820,22 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 queued++;
         }
 
-        _planner.Arrivals.SetQueued(queued);
+        ForEachPlanner(p => p.Arrivals.SetQueued(queued));
+    }
+
+    /// <summary>
+    /// Applies <paramref name="action"/> to every map's planner. The loads are
+    /// shared, so each map's arrival forecast and stats follow all of them:
+    /// a cell one map waits for holds the other map's stack for at most the
+    /// load, and the stats describe the shared loader.
+    /// </summary>
+    private void ForEachPlanner(Action<DemandPlanner> action)
+    {
+        if (_planners is null)
+            return;
+
+        foreach (var planner in _planners.Planners)
+            action(planner);
     }
 
     // Mirror of the LRU membership for enumeration: the LRU is the authority for
@@ -869,7 +885,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                     // the destination's own cells and tiles come first, and a
                     // speculative load started now would still be running
                     // when the view arrives (map rendering slice 9).
-                    if (_hasVisibleTileWork?.Invoke() == true || _planner?.Motion.HasTarget == true)
+                    if (_hasVisibleTileWork?.Invoke() == true || _planners?.HasTarget == true)
                     {
                         retry = true;
                         break;
@@ -884,7 +900,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 _running[next] = load;
                 started.Add((next, load));
                 if (queued.Tier is LoadTier.Visible or LoadTier.Destination)
-                    _planner?.Arrivals.Expect(load.Demand);
+                    ForEachPlanner(p => p.Arrivals.Expect(load.Demand));
             }
 
             ReportQueuedArrivals();
@@ -989,10 +1005,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                     {
                         _inView.Add(entry);
                     }
-                    else if (_planner is not null && !_inView.Contains(entry))
+                    else if (_planners is not null && !_inView.Contains(entry))
                     {
                         _speculative[entry] = System.Diagnostics.Stopwatch.GetTimestamp();
-                        _planner.Stats.RecordCellPredicted();
+                        ForEachPlanner(p => p.Stats.RecordCellPredicted());
                     }
                 }
 
@@ -1014,7 +1030,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             }
         }
         load.Cancellation.Dispose();
-        _planner?.Arrivals.Resolve(load.Demand);
+        ForEachPlanner(p => p.Arrivals.Resolve(load.Demand));
 
         // Unwind a load the viewport still wanted but whose exchange set was
         // closed mid-flight. When the whole coordinator is disposing, skip
@@ -1087,10 +1103,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             if (_disposed) return;
             _disposed = true;
             _notifier.ViewportChanged -= OnViewportChanged;
-            if (_planner is not null)
+            if (_planners is not null)
             {
-                _planner.DestinationChanged -= OnDestinationChanged;
-                _planner.Arrivals.Clear();
+                _planners.DestinationChanged -= OnDestinationChanged;
+                foreach (var planner in _planners.Planners)
+                    planner.Arrivals.Clear();
             }
             _debounceCts?.Cancel();
             _debounceCts?.Dispose();

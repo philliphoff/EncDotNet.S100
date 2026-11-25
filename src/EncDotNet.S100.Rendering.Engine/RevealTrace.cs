@@ -19,33 +19,43 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// while <see cref="S100VectorTileRenderer.SettleTrackingEnabled"/>, so a
 /// viewer without the perf harness does no extra work.
 /// </summary>
+/// <remarks>
+/// Slots are kept per map (split map, #1728): two maps over one chart engine
+/// draw the same tile slots, and one map's tile landing must not count as a
+/// reveal on the other.
+/// </remarks>
 internal static class RevealTrace
 {
     private static readonly long FrameTicks = Stopwatch.Frequency * 8 / 1000;
     private static readonly long ViewTicks = Stopwatch.Frequency / 2;
     private static readonly long FlashTicks = Stopwatch.Frequency * 150 / 1000;
     private static readonly Lock Sync = new();
-    private static readonly Dictionary<(int Band, int X, int Y), Slot> Slots = new();
+    private static readonly Dictionary<(int Map, int Band, int X, int Y), Slot> Slots = new();
 
     /// <summary>
     /// Reports that <paramref name="owner"/> drew <paramref name="shown"/> (or
-    /// nothing) at <paramref name="slot"/> this frame.
+    /// nothing) at <paramref name="slot"/> of <paramref name="map"/> this frame.
     /// </summary>
-    public static void Report(object owner, (int Band, int X, int Y) slot, TileKey? shown)
+    /// <param name="map">The map the owner draws on (its demand planner, or the owner itself outside a chart session).</param>
+    /// <param name="owner">The tiled layer owner.</param>
+    /// <param name="slot">The tile slot.</param>
+    /// <param name="shown">The tile drawn there, or null.</param>
+    public static void Report(object map, object owner, (int Band, int X, int Y) slot, TileKey? shown)
     {
         var now = Stopwatch.GetTimestamp();
         var ownerId = RuntimeHelpers.GetHashCode(owner);
+        var key = (RuntimeHelpers.GetHashCode(map), slot.Band, slot.X, slot.Y);
         lock (Sync)
         {
-            if (!Slots.TryGetValue(slot, out var state) || now - state.LastSeen > ViewTicks)
+            if (!Slots.TryGetValue(key, out var state) || now - state.LastSeen > ViewTicks)
             {
                 // A slot not seen for a while belongs to another view.
                 state = new Slot();
-                Slots[slot] = state;
+                Slots[key] = state;
                 if (Slots.Count > 16384)
                 {
                     Slots.Clear();
-                    Slots[slot] = state;
+                    Slots[key] = state;
                 }
             }
 

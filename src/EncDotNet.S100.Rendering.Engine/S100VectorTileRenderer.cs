@@ -2309,13 +2309,14 @@ public static partial class S100VectorTileRenderer
 
         if (pinVisible && _settleTracking && state.Owner.TryGetTarget(out var owner))
         {
+            // Slots are per map (#1728); a chart layer's map is its planner.
             for (var i = 0; i < copies.Count; i++)
             {
                 var targets = copies[i].Tiles;
                 for (var j = 0; j < targets.Count; j++)
                 {
                     var shown = copyTargets[i][j];
-                    RevealTrace.Report(owner, targets[j].Slot, state.Cache.Contains(shown) ? shown : null);
+                    RevealTrace.Report(state.Planner ?? owner, owner, targets[j].Slot, state.Cache.Contains(shown) ? shown : null);
                 }
             }
         }

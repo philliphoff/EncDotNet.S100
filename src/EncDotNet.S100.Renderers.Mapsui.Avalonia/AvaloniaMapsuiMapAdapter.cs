@@ -30,6 +30,10 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
 {
     private readonly MapControl _mapControl;
     private readonly Map _map;
+
+    // Serializes captures over a plain map control, which has no coordinator
+    // of its own.
+    private readonly CaptureCoordinator _unsynchronizedCapture = new();
     private volatile bool _disposed;
 
     private AvaloniaMapsuiMapAdapter(
@@ -312,7 +316,8 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return await CaptureCoordinator.CaptureDrainedAsync(
+        var synchronizedControl = _mapControl as CaptureSynchronizedMapControl;
+        return await (synchronizedControl?.Capture ?? _unsynchronizedCapture).CaptureDrainedAsync(
             () => InvokeOnUiThreadAsync(_mapControl.InvalidateVisual),
             () => InvokeOnUiThreadAsync(
                 () => RenderCurrentViewToPngOnUiThread(
@@ -324,7 +329,7 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
             // Only a capture-synchronized control drains the live paint through
             // its render markers; over a plain control there is no drain to wait
             // for, so capture unsynchronized (best-effort) rather than stalling.
-            synchronized: _mapControl is CaptureSynchronizedMapControl).ConfigureAwait(false);
+            synchronized: synchronizedControl is not null).ConfigureAwait(false);
     }
 
     /// <summary>

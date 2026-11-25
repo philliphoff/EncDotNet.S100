@@ -174,7 +174,7 @@ public sealed class PerfHarnessTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         coordinator.Register([Cell("A", 40, -75, 41, -74.5), Cell("B", 40, -74.5, 41, -74)]);
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -205,7 +205,7 @@ public sealed class PerfHarnessTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
         coordinator.Register([Cell("A", 40, -75, 41, -74)]);
 
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -228,7 +228,7 @@ public sealed class PerfHarnessTests
             marshal: null,
             hasVisibleTileWork: null,
             unloadMany: null,
-            planner: null);
+            planners: null);
 
         // Just east of the view, inside the ahead margin.
         coordinator.Register([Cell("Ahead", 40, -73.9, 41, -73.6)]);

@@ -122,7 +122,38 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
         int? maximumDisplayScale = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Removes a dataset's layers, state, and processor.</summary>
+    /// <summary>
+    /// Draws a dataset whose processor is already registered in this session's
+    /// <see cref="DatasetProcessorOwner"/>, typically by another map's session
+    /// over the same owner (split map, #1728). Records the dataset state and
+    /// renders its layers, but never registers or retires the processor:
+    /// <see cref="RemoveDataset"/> takes the dataset off this map only, and the
+    /// processor's owner retires it (see <see cref="DatasetProcessorOwner.Retire"/>).
+    /// </summary>
+    /// <param name="dataset">The renderer-neutral dataset state.</param>
+    /// <param name="minimumDisplayScale">Optional coarsest catalogue scale.</param>
+    /// <param name="maximumDisplayScale">Optional finest catalogue scale.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// <see langword="true"/> when the dataset was attached, or
+    /// <see langword="false"/> when no processor is registered under its
+    /// identity or this session already draws it.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// The processor was retired before the layers were installed.
+    /// </exception>
+    Task<bool> AttachDatasetAsync(
+        MapDataset dataset,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes a dataset's layers and state, and its processor when this
+    /// session registered it through <see cref="AddDatasetAsync"/>. A dataset
+    /// attached with <see cref="AttachDatasetAsync"/> leaves its processor
+    /// registered, so other maps keep drawing it.
+    /// </summary>
     /// <param name="datasetId">The dataset identity.</param>
     /// <returns><see langword="true"/> when a dataset was removed.</returns>
     bool RemoveDataset(MapDatasetId datasetId);

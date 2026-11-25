@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Mapsui;
 using Mapsui.Extensions;
@@ -180,7 +179,6 @@ public class AvaloniaMapsuiMapAdapterTests
         var png = await AvaloniaControlCapture.CapturePngAsync(target);
 
         Assert.NotNull(png);
-        Assert.False(target.CaptureWasActive);
     }
 
     [AvaloniaFact]
@@ -443,12 +441,5 @@ public class AvaloniaMapsuiMapAdapterTests
 
     private sealed class CaptureProbeControl : Control
     {
-        public bool CaptureWasActive { get; private set; }
-
-        public override void Render(DrawingContext context)
-        {
-            CaptureWasActive = CaptureCoordinator.CaptureActive;
-            base.Render(context);
-        }
     }
 }

@@ -2,39 +2,53 @@ using System.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 
-internal static class CaptureCoordinator
+/// <summary>
+/// Serializes captures of one map control against its live paint (split map,
+/// #1728: one instance per control, so a drain on one map never releases a
+/// capture waiting on another).
+/// </summary>
+/// <remarks>
+/// Each control has its own capture slot, capture-active flag and drain
+/// signal. The live-paint gate stays shared: every map control in the process
+/// paints through the same Skia GPU context and shares its textures (#1717),
+/// so a capture that renders offscreen must exclude every live paint.
+/// </remarks>
+internal sealed class CaptureCoordinator
 {
     internal static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
     internal static readonly TimeSpan CaptureDrainTimeout = TimeSpan.FromMilliseconds(750);
 
     private static readonly object GateState = new();
-    private static readonly SemaphoreSlim CaptureSequence = new(1, 1);
-    private static readonly SemaphoreSlim DrainSignal = new(0);
-    private static int _captureDepth;
     private static int _gateDepth;
     private static int _gateOwnerThreadId;
     private static long _gateGeneration;
+    private static long _nextId;
 
-    internal static bool CaptureActive => Volatile.Read(ref _captureDepth) > 0;
+    private readonly SemaphoreSlim _captureSequence = new(1, 1);
+    private readonly SemaphoreSlim _drainSignal = new(0);
+    private readonly long _id = Interlocked.Increment(ref _nextId);
+    private int _captureDepth;
 
-    internal static void BeginCapture() => Interlocked.Increment(ref _captureDepth);
+    internal bool CaptureActive => Volatile.Read(ref _captureDepth) > 0;
 
-    internal static void EndCapture() => Interlocked.Decrement(ref _captureDepth);
+    internal void BeginCapture() => Interlocked.Increment(ref _captureDepth);
 
-    internal static void NotifyDrained() => DrainSignal.Release();
+    internal void EndCapture() => Interlocked.Decrement(ref _captureDepth);
 
-    internal static bool WaitForFreshDrain(TimeSpan timeout)
+    internal void NotifyDrained() => _drainSignal.Release();
+
+    internal bool WaitForFreshDrain(TimeSpan timeout)
     {
         DiscardStaleDrainSignals();
-        return DrainSignal.Wait(timeout);
+        return _drainSignal.Wait(timeout);
     }
 
-    internal static async Task<bool> WaitForFreshDrainAsync(
+    internal async Task<bool> WaitForFreshDrainAsync(
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
         DiscardStaleDrainSignals();
-        return await DrainSignal.WaitAsync(timeout, cancellationToken)
+        return await _drainSignal.WaitAsync(timeout, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -83,11 +97,11 @@ internal static class CaptureCoordinator
         }
     }
 
-    internal static byte[]? RunCapture(Func<byte[]?> capture, TimeSpan timeout)
+    internal byte[]? RunCapture(Func<byte[]?> capture, TimeSpan timeout)
     {
         ArgumentNullException.ThrowIfNull(capture);
 
-        CaptureSequence.Wait();
+        _captureSequence.Wait();
         BeginCapture();
         try
         {
@@ -104,14 +118,35 @@ internal static class CaptureCoordinator
         finally
         {
             EndCapture();
-            CaptureSequence.Release();
+            _captureSequence.Release();
         }
     }
 
     /// <summary>
     /// Captures the map once any in-flight live paint has drained, serialized
-    /// against other captures.
+    /// against other captures of this control.
     /// </summary>
+    /// <param name="requestRepaintAsync">Requests a repaint of the map control so its render markers signal a drain.</param>
+    /// <param name="captureAsync">Performs the capture and returns the encoded image, or <see langword="null"/> on failure.</param>
+    /// <param name="cancellationToken">Cancels waiting for the capture slot or the drain.</param>
+    /// <param name="acquireGate">See <see cref="CaptureDrainedAsync(IReadOnlyList{CaptureCoordinator}, Func{Task}, Func{Task{byte[]}}, CancellationToken, bool, bool)"/>.</param>
+    /// <param name="synchronized">See <see cref="CaptureDrainedAsync(IReadOnlyList{CaptureCoordinator}, Func{Task}, Func{Task{byte[]}}, CancellationToken, bool, bool)"/>.</param>
+    internal Task<byte[]?> CaptureDrainedAsync(
+        Func<Task> requestRepaintAsync,
+        Func<Task<byte[]?>> captureAsync,
+        CancellationToken cancellationToken,
+        bool acquireGate = true,
+        bool synchronized = true) =>
+        CaptureDrainedAsync(
+            [this], requestRepaintAsync, captureAsync, cancellationToken, acquireGate, synchronized);
+
+    /// <summary>
+    /// Captures once the live paint of every control in
+    /// <paramref name="coordinators"/> has drained, serialized against other
+    /// captures of each of those controls (a capture of a control tree that
+    /// holds several maps).
+    /// </summary>
+    /// <param name="coordinators">The coordinators of the map controls the capture reads.</param>
     /// <param name="requestRepaintAsync">Requests a repaint of the map control so its render markers signal a drain.</param>
     /// <param name="captureAsync">Performs the capture and returns the encoded image, or <see langword="null"/> on failure.</param>
     /// <param name="cancellationToken">Cancels waiting for the capture slot or the drain.</param>
@@ -150,32 +185,49 @@ internal static class CaptureCoordinator
     /// handshake entirely — waiting would only burn <see cref="CaptureDrainTimeout"/>
     /// on a signal that can never arrive — and capture best-effort, unsynchronized
     /// against any concurrent live paint. Captures still serialize against each
-    /// other through <see cref="CaptureSequence"/>.
+    /// other through each control's capture slot.
     /// </para>
     /// </param>
     internal static async Task<byte[]?> CaptureDrainedAsync(
+        IReadOnlyList<CaptureCoordinator> coordinators,
         Func<Task> requestRepaintAsync,
         Func<Task<byte[]?>> captureAsync,
         CancellationToken cancellationToken,
         bool acquireGate = true,
         bool synchronized = true)
     {
+        ArgumentNullException.ThrowIfNull(coordinators);
         ArgumentNullException.ThrowIfNull(requestRepaintAsync);
         ArgumentNullException.ThrowIfNull(captureAsync);
 
         cancellationToken.ThrowIfCancellationRequested();
-        await CaptureSequence.WaitAsync(cancellationToken).ConfigureAwait(false);
-        BeginCapture();
+
+        // Take the controls' capture slots in one global order, so two
+        // captures over overlapping sets of controls can't deadlock.
+        var ordered = coordinators.Distinct().OrderBy(c => c._id).ToArray();
+        var entered = 0;
         try
         {
+            foreach (var coordinator in ordered)
+            {
+                await coordinator._captureSequence.WaitAsync(cancellationToken).ConfigureAwait(false);
+                entered++;
+                coordinator.BeginCapture();
+            }
+
             if (!synchronized)
             {
                 return await captureAsync().ConfigureAwait(false);
             }
 
-            DiscardStaleDrainSignals();
+            foreach (var coordinator in ordered)
+            {
+                coordinator.DiscardStaleDrainSignals();
+            }
+
             await requestRepaintAsync().ConfigureAwait(false);
-            await DrainSignal.WaitAsync(CaptureDrainTimeout, cancellationToken)
+            await Task.WhenAll(ordered.Select(
+                    coordinator => coordinator._drainSignal.WaitAsync(CaptureDrainTimeout, cancellationToken)))
                 .ConfigureAwait(false);
 
             if (!acquireGate)
@@ -197,8 +249,11 @@ internal static class CaptureCoordinator
         }
         finally
         {
-            EndCapture();
-            CaptureSequence.Release();
+            for (var i = entered - 1; i >= 0; i--)
+            {
+                ordered[i].EndCapture();
+                ordered[i]._captureSequence.Release();
+            }
         }
     }
 
@@ -250,9 +305,9 @@ internal static class CaptureCoordinator
         }
     }
 
-    private static void DiscardStaleDrainSignals()
+    private void DiscardStaleDrainSignals()
     {
-        while (DrainSignal.Wait(0))
+        while (_drainSignal.Wait(0))
         {
         }
     }

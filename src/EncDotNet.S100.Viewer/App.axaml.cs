@@ -1452,6 +1452,11 @@ public partial class App : Application
         // from it.
         services.AddSingleton(_ => new EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner());
 
+        // Every map's planner, which the lazy-load coordinator reads the union
+        // of cell demand from (split map, #1728). One map for now.
+        services.AddSingleton(sp => new EncDotNet.S100.Rendering.Engine.Prediction.DemandPlannerSet(
+            sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>()));
+
         // Viewport-driven lazy loading of large exchange sets (issue #458):
         // registers cells without loading them and loads only what is in view.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>(sp =>
@@ -1474,7 +1479,7 @@ public partial class App : Application
                 hasVisibleTileWork: () =>
                     EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.HasVisibleTileWork,
                 unloadMany: loader.UnloadEntries,
-                planner: sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>(),
+                planners: sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlannerSet>(),
                 options: null);
         });
 

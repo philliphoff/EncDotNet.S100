@@ -1517,7 +1517,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         entry.SubLayers.Clear();
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        _mapSession?.RemoveDataset(entry.Id);
+        // The loader owns the processor and retires it once; the map removes
+        // the dataset without retiring it (split map, #1728).
+        _processorOwner.Retire([entry.Id], () => _mapSession?.RemoveDataset(entry.Id, removeProcessor: false));
         _processorEntries.Remove(entry.Id);
         _sessionEntries.Remove(entry.Id);
         _subLayersDecided.RemoveWhere(decided => decided.Dataset == entry.Id);
@@ -1559,8 +1561,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             InvalidateLoad(entry);
 
         // One removal for the whole set, so the S-98 layer stack and time
-        // state are rebuilt once rather than once per evicted cell.
-        _mapSession?.RemoveDatasets(entries.Select(entry => entry.Id).ToArray(), preserveState: true);
+        // state are rebuilt once rather than once per evicted cell. The loader
+        // retires the processors once (#1728).
+        var ids = entries.Select(entry => entry.Id).ToArray();
+        _processorOwner.Retire(ids, () => _mapSession?.RemoveDatasets(ids, preserveState: true, removeProcessor: false));
         foreach (var entry in entries)
         {
             _processorEntries.Remove(entry.Id);
@@ -1590,7 +1594,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // Retire the old processors but keep each dataset's place, active
             // flag and time state, as a lazy-load eviction does, then open
             // them again with the current catalogues.
-            _mapSession?.RemoveDatasets(loaded.Select(entry => entry.Id).ToArray(), preserveState: true);
+            var ids = loaded.Select(entry => entry.Id).ToArray();
+            _processorOwner.Retire(ids, () => _mapSession?.RemoveDatasets(ids, preserveState: true, removeProcessor: false));
             foreach (var entry in loaded)
             {
                 _processorEntries.Remove(entry.Id);

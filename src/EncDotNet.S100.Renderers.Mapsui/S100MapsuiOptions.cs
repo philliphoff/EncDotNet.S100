@@ -134,6 +134,9 @@ public sealed record S100MapsuiOptions
     /// planner's <see cref="DemandPlanner.Arrivals"/> are pending. A host's
     /// cell loader reads cell demand from the same planner. A new planner when
     /// <see langword="null"/>; read it back from <see cref="MapsuiMapNavigator.Planner"/>.
+    /// Give each map its own planner: one planner tracks one view, so two maps
+    /// feeding it corrupt each other's prediction. A loader serving several
+    /// maps reads them through a <see cref="DemandPlannerSet"/> (#1728).
     /// </summary>
     public DemandPlanner? DemandPlanner { get; init; }
 

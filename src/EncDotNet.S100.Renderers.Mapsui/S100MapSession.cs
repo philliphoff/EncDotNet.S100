@@ -17,6 +17,10 @@ internal sealed class S100MapSession : IS100MapSession
     private readonly S100DynamicSourceHost _dynamicSourceHost;
     private readonly S100DatasetLoader _datasets;
     private readonly bool _ownsProcessorOwner;
+
+    // Datasets drawn with a processor another session or host registered:
+    // removing one leaves its processor to that owner (#1728).
+    private readonly HashSet<MapDatasetId> _attached = [];
     private MapPresentationState _presentation = MapPresentationState.Default;
     private bool _disposed;
 
@@ -180,10 +184,69 @@ internal sealed class S100MapSession : IS100MapSession
     }
 
     /// <inheritdoc />
+    public async Task<bool> AttachDatasetAsync(
+        MapDataset dataset,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(dataset);
+
+        if (_session.GetDataset(dataset.Id) is not null
+            || !_processorOwner.TryAcquire(dataset.Id, out var lease))
+        {
+            return false;
+        }
+
+        var processor = lease.Processor;
+        lease.Dispose();
+        lock (_attached)
+        {
+            _attached.Add(dataset.Id);
+        }
+
+        try
+        {
+            _session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
+            var result = await _session.RenderAsync(
+                dataset.Id, CurrentPresentation, cancellationToken).ConfigureAwait(true);
+
+            // As for an add: a null result with the processor no longer owned
+            // means its owner retired it before the layers were installed.
+            if (result is null && !_processorOwner.Owns(dataset.Id, processor))
+            {
+                throw new InvalidOperationException(
+                    $"Dataset '{dataset.Id.Value}' was removed before its layers were installed.");
+            }
+        }
+        catch
+        {
+            // Drop this map's state only; the processor belongs to its owner.
+            _session.RemoveDataset(
+                dataset.Id, preserveState: false, removeProcessor: false);
+            lock (_attached)
+            {
+                _attached.Remove(dataset.Id);
+            }
+
+            throw;
+        }
+
+        return true;
+    }
+
+    /// <inheritdoc />
     public bool RemoveDataset(MapDatasetId datasetId)
     {
         ThrowIfDisposed();
-        return _session.RemoveDataset(datasetId);
+        bool attached;
+        lock (_attached)
+        {
+            attached = _attached.Remove(datasetId);
+        }
+
+        return _session.RemoveDataset(datasetId, removeProcessor: !attached);
     }
 
     /// <inheritdoc />

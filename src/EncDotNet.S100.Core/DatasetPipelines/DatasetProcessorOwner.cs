@@ -147,6 +147,51 @@ public sealed class DatasetProcessorOwner : IDisposable
     }
 
     /// <summary>
+    /// Retires the processors of <paramref name="datasetIds"/> and runs
+    /// <paramref name="detach"/> to take them off every map that draws them,
+    /// disposing each processor only after <paramref name="detach"/> returns.
+    /// </summary>
+    /// <remarks>
+    /// The owner of processors that several maps draw retires them once
+    /// through this call; each map removes the dataset without retiring it
+    /// (split map, #1728). The processors stop being owned before
+    /// <paramref name="detach"/> runs, so a map that cancels an in-flight
+    /// render there already sees the processor gone (#873); they are disposed
+    /// only once <paramref name="detach"/> has returned.
+    /// </remarks>
+    /// <param name="datasetIds">The identities to retire; unknown ones are skipped.</param>
+    /// <param name="detach">Takes the datasets off the maps.</param>
+    /// <returns>The number of processors retired.</returns>
+    public int Retire(IReadOnlyCollection<MapDatasetId> datasetIds, Action detach)
+    {
+        ArgumentNullException.ThrowIfNull(datasetIds);
+        ArgumentNullException.ThrowIfNull(detach);
+
+        var leases = new List<DatasetProcessorLease>();
+        try
+        {
+            foreach (var datasetId in datasetIds)
+            {
+                if (TryAcquire(datasetId, out var lease))
+                {
+                    leases.Add(lease);
+                    Remove(datasetId, lease.Processor);
+                }
+            }
+
+            detach();
+            return leases.Count;
+        }
+        finally
+        {
+            foreach (var lease in leases)
+            {
+                lease.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
     /// Returns a point-in-time list of identities currently available to
     /// acquire.
     /// </summary>
